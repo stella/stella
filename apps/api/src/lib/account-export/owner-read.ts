@@ -1,4 +1,4 @@
-import { asc, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import {
@@ -14,17 +14,17 @@ type ReadAccountExportAnnotationPageOptions = {
   database: Pick<typeof rootDb, "transaction">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  where: SQL | undefined;
+  extraWhere: SQL | undefined;
   limit: number;
 };
 
-/** Private notes use the export owner policy; claim rows also have cleanup
- * owner access, so the caller retains its organization and author predicates. */
+/** Claim rows also have cleanup owner access, so every read binds the
+ * organization and author independently of the caller's extra filters. */
 export const readAccountExportAnnotationPage = async ({
   database,
   organizationId,
   userId,
-  where,
+  extraWhere,
   limit,
 }: ReadAccountExportAnnotationPageOptions) =>
   await withAggregateTransaction(database, async (tx) => {
@@ -34,7 +34,13 @@ export const readAccountExportAnnotationPage = async ({
     return await tx
       .select()
       .from(legalReaderAnnotations)
-      .where(where)
+      .where(
+        and(
+          eq(legalReaderAnnotations.organizationId, organizationId),
+          eq(legalReaderAnnotations.userId, userId),
+          extraWhere,
+        ),
+      )
       .orderBy(asc(legalReaderAnnotations.id))
       .limit(limit);
   });

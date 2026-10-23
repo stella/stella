@@ -334,16 +334,39 @@ describe.skipIf(!enabled)("account export personal data", () => {
         const otherPrivateNote =
           privateNotes.at(1) ?? panic("Other private note required");
 
-        // This query omits authorship deliberately: RLS must enforce it itself.
-        const ownerScopedAnnotations = await readAccountExportAnnotationPage({
-          database: db,
-          organizationId,
-          userId: exportingUserId,
-          where: and(
-            eq(legalReaderAnnotations.organizationId, organizationId),
-            isNull(legalReaderAnnotations.verificationClaimId),
-          ),
-          limit: 10,
+        const ownerAnnotationsWithUnrestrictedFilter =
+          await readAccountExportAnnotationPage({
+            database: db,
+            organizationId,
+            userId: exportingUserId,
+            extraWhere: sql`true`,
+            limit: 10,
+          });
+        expect(
+          ownerAnnotationsWithUnrestrictedFilter.map(({ id }) => id).toSorted(),
+        ).toEqual(
+          [...ownComments.map(({ id }) => id), ownPrivateNote.id].toSorted(),
+        );
+        for (const { id } of [...otherComments, otherPrivateNote]) {
+          expect(
+            ownerAnnotationsWithUnrestrictedFilter.map((row) => row.id),
+          ).not.toContain(id);
+        }
+
+        // Query the policy directly so the module's author bound cannot mask it.
+        const ownerScopedAnnotations = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT
+            set_config('${sql.raw(SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID)}', ${organizationId}, true),
+            set_config('${sql.raw(SETTING_ACCOUNT_EXPORT_USER_ID)}', ${exportingUserId}, true)`);
+          return await tx
+            .select({ id: legalReaderAnnotations.id })
+            .from(legalReaderAnnotations)
+            .where(
+              and(
+                eq(legalReaderAnnotations.organizationId, organizationId),
+                isNull(legalReaderAnnotations.verificationClaimId),
+              ),
+            );
         });
         expect(ownerScopedAnnotations.map(({ id }) => id).toSorted()).toEqual([
           ownPrivateNote.id,

@@ -394,9 +394,7 @@ const readLegalReaderAnnotationsPage = async ({
     organizationId,
     userId,
     limit: ACCOUNT_EXPORT_PAGE_SIZE,
-    where: and(
-      eq(legalReaderAnnotations.organizationId, organizationId),
-      eq(legalReaderAnnotations.userId, userId),
+    extraWhere: and(
       or(
         eq(legalReaderAnnotations.visibility, "private"),
         eq(legalReaderAnnotations.targetType, "verification-claim"),
