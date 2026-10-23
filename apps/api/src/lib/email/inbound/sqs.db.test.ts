@@ -192,7 +192,7 @@ const drainHarness = ({
           persist,
           deleteObject: async (options) => {
             await beforeDelete?.();
-            return await deleteObject(options);
+            await deleteObject(options);
           },
         }),
     });
