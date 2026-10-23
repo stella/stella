@@ -1317,7 +1317,6 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
-        "oxc-transform-react": "catalog:",
       },
     },
     "packages/sha256": {
