@@ -4,8 +4,8 @@ import { t } from "elysia";
 
 import {
   LOOKUP_FORMAT_PREFERENCE,
-  templateLookupFormatUserDefaults,
   templateLookupFormats,
+  templateLookupFormatUserDefaults,
 } from "@/api/db/schema";
 import {
   FORMAT_LIMITS,

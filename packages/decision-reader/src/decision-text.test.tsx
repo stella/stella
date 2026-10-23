@@ -6,8 +6,8 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
-  TEXT_FIELD_TYPE,
   TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
@@ -35,6 +35,7 @@ export const fakeReaderAdapters = {
     "statutes.diffRemoved": "Removed",
     "statutes.diffInserted": "Inserted",
     "common.copyLink": "Copy link",
+    "common.copied": "Copied",
     "common.back": "Back",
     "caseLaw.viewer.legalSentence": "Legal sentence",
     "caseLaw.viewer.abstract": "Abstract",
@@ -85,7 +86,7 @@ export const fakeReaderAdapters = {
     }
   },
   renderBodyUnavailable: ({ reason }) => <p>{reason}</p>,
-  copyPermalink: () => undefined,
+  copyPermalink: async () => true,
   openProvision: () => undefined,
   loadProvisionPreview: async () => ({
     documentId: "act",

@@ -30,8 +30,7 @@ import { detached } from "@/lib/detached";
  *    server-side validation feels inline.
  */
 type InlineRenameState =
-  | { mode: "view" }
-  | { mode: "edit"; draft: string; error?: string };
+  { mode: "view" } | { mode: "edit"; draft: string; error?: string };
 
 type CommitHelpers = {
   /**

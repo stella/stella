@@ -13,8 +13,8 @@ import path from "node:path";
 import { dependencyScope } from "./ci-dependency-scope";
 import {
   markdownChecks,
-  markdownReaders,
   markdownReaderInputNames,
+  markdownReaders,
   requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,

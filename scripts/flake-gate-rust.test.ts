@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   chmodSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   rmSync,
   writeFileSync,
 } from "node:fs";

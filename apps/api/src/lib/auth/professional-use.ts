@@ -12,8 +12,8 @@ import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
-  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   organizationProfessionalUseAcceptances,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
 import {
