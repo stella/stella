@@ -374,6 +374,30 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test.each([
+    ["AuthClientError", undefined],
+    ["ApiError", 403],
+  ])("keeps a user-visible %s", (type, status) => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [{ type, value: "private detail" }],
+        feature: "auth",
+        route_template: "/auth/error",
+        user_visible: true,
+        ...(status === undefined ? {} : { error_status: status }),
+      },
+    });
+
+    expect(sanitized?.properties).toMatchObject({
+      feature: "auth",
+      route_template: "/auth/error",
+      user_visible: true,
+    });
+  });
+
+  test.each([
     "ai_config_provider_validation_failed",
     CHAT_CONTINUATION_REJECTED_ERROR_CODE,
     API_FILE_SECURITY_REJECTED_ERROR_CODE,

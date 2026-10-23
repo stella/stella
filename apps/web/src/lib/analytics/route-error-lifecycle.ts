@@ -1,5 +1,6 @@
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { routeExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import type {
   Analytics,
   RouteErrorLifecycleProperties,
@@ -130,19 +131,21 @@ export const createRouteErrorLifecycleController = (
     shown: (options) => {
       if (capturedReference !== options.reference) {
         capturedReference = options.reference;
-        analytics.captureError(options.error, {
-          fingerprintKey: routeExceptionFingerprintKey(
-            caughtRouteTemplate ?? snapshot.routeTemplate,
-          ),
-          scope: {
-            type: "request",
-            method: "GET",
-            routeTemplate: caughtRouteTemplate ?? snapshot.routeTemplate,
-          },
-          context: {
-            reference: options.reference,
-            type: "recovery",
-          },
+        reportErrorOnce(options.error, (error) => {
+          analytics.captureError(error, {
+            fingerprintKey: routeExceptionFingerprintKey(
+              caughtRouteTemplate ?? snapshot.routeTemplate,
+            ),
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: caughtRouteTemplate ?? snapshot.routeTemplate,
+            },
+            context: {
+              reference: options.reference,
+              type: "recovery",
+            },
+          });
         });
       }
       detached(

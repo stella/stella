@@ -137,7 +137,14 @@ export const capabilityRequestGuard = ({
               declared: outcome.declared,
               routeCapability: outcome.routeCapability,
             }),
-            { request },
+            {
+              request,
+              fingerprintKey: "capabilityRequestGuard.mismatch",
+              scope: {
+                type: "handler",
+                handlerId: "capabilityRequestGuard.mismatch",
+              },
+            },
           );
           set.status = 400;
           return httpError(

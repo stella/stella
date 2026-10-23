@@ -1,20 +1,26 @@
 import { createStellaEdenClient } from "@stll/api-client";
 import type { EdenRoutesApp, StellaEdenClientOptions } from "@stll/api-client";
 
-import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
 import type {
   CorrespondenceRoutes,
   MemoriesRoutes,
   MyTimeEntriesRoutes,
   WebRoutes,
 } from "@/generated/api-routes.gen";
+import { getTranslator } from "@/i18n/translator";
+import { reportUnhandledMeResponse } from "@/lib/account/auth-code-report";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   getApiRequestHeaders,
   waitForSimulatedApiDelay,
 } from "@/lib/api-request-context";
 import { browserApiBaseUrl } from "@/lib/api-url";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { observeActionAdmissionResponse } from "@/lib/errors/action-admission-response";
+import {
+  notifyUserError,
+  reportUserVisibleError,
+} from "@/lib/errors/user-toast";
 
 export type WebApiRoutes = WebRoutes["v1"];
 
@@ -44,14 +50,19 @@ export type {
   ViewTemplateProperty,
 } from "@/generated/api-routes.gen";
 
-const clientOptions = {
+export const webApiClientOptions = {
   async onRequest() {
     await waitForSimulatedApiDelay();
   },
   headers: getApiRequestHeaders,
   async onScopedResponse({ response, scope }) {
+    await reportUnhandledMeResponse(response, reportUserVisibleError);
     await observeActionAdmissionResponse(response, {
-      notifyRefusal: notifyActionAdmissionRefusal,
+      // Only a refusal is announced here; the caller's own handler owns every
+      // other failed response.
+      notifyRefusal: (error) =>
+        actionAdmissionOutcome(error) !== undefined &&
+        notifyUserError(error, getTranslator()("errors.actionFailed")),
       captureError: (error) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "onResponse:failure",
@@ -64,12 +75,12 @@ const clientOptions = {
 
 const eden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   browserApiBaseUrl(),
-  clientOptions,
+  webApiClientOptions,
 );
 const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   browserApiBaseUrl(),
   {
-    ...clientOptions,
+    ...webApiClientOptions,
     async onResponse(response) {
       const mime = response.headers.get("content-type")?.split(";").at(0);
       if (response.ok && (mime === "image/png" || mime === "image/x-icon")) {
@@ -81,14 +92,14 @@ const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
 );
 const memoriesEden = createStellaEdenClient<EdenRoutesApp<MemoriesRoutes>>(
   browserApiBaseUrl(),
-  clientOptions,
+  webApiClientOptions,
 );
 const correspondenceEden = createStellaEdenClient<
   EdenRoutesApp<CorrespondenceRoutes>
->(browserApiBaseUrl(), clientOptions);
+>(browserApiBaseUrl(), webApiClientOptions);
 const myTimeEntriesEden = createStellaEdenClient<
   EdenRoutesApp<MyTimeEntriesRoutes>
->(browserApiBaseUrl(), clientOptions);
+>(browserApiBaseUrl(), webApiClientOptions);
 
 export const api = eden.v1;
 export const linkIconsApi = linkIconsEden.v1.chat["link-icons"];

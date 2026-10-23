@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Windows rezervē sev īsinājumtaustiņus ar Windows taustiņu. Izmantojiet Ctrl vai Alt.",
     "taken": "Cita lietotne jau izmanto {shortcut}. Izvēlieties citu.",
     "unavailable": "Cita lietotne izmanto {shortcut}, tāpēc tas neatver starpliktuvi. Izvēlieties citu īsinājumtaustiņu.",
+    "managed": "Jūsu organizācija ir izslēgusi starpliktuves vēsturi.",
     "action": {
       "copy": "Kopēt",
       "paste": "Ielīmēt",

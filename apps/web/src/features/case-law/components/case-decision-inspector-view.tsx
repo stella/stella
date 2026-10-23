@@ -13,6 +13,7 @@ import { InfoIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
@@ -22,6 +23,7 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
@@ -234,7 +236,10 @@ export const CaseDecisionInspectorView = ({
             its own box. */}
         <ScrollArea axis="vertical" className="h-full" viewportRef={scrollRef}>
           <main
-            className="reader-paper min-h-full px-4 pt-10 pb-6"
+            className={cn(
+              "reader-paper min-h-full px-4 pb-6",
+              VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+            )}
             ref={contentRef}
             {...textScale.rootProps}
           >

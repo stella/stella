@@ -142,3 +142,50 @@ fn bundle_id(object: u32) -> Option<String> {
   let value = unsafe { CFString::wrap_under_create_rule(value) }.to_string();
   (!value.is_empty()).then_some(value)
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  const PROCESS_PID: u32 = four_char_code(b"ppid");
+
+  fn pid(object: u32) -> Option<i32> {
+    let mut pid = 0i32;
+    let mut size = size_of::<i32>() as u32;
+    // SAFETY: the property is a pid_t and `pid` is a writable i32.
+    let status = unsafe {
+      AudioObjectGetPropertyData(
+        object,
+        &address(PROCESS_PID),
+        0,
+        ptr::null(),
+        &mut size,
+        (&raw mut pid).cast(),
+      )
+    };
+    (status == 0).then_some(pid)
+  }
+
+  /// The selectors and struct layout above are written by hand; this proves
+  /// them against the running system. Querying the HAL makes this test a
+  /// CoreAudio client, so it must appear in the process list (macOS 14+),
+  /// not capturing input, and without a bundle identifier.
+  #[test]
+  fn the_process_list_finds_this_test_process_not_capturing() {
+    let objects = process_objects();
+    assert!(!objects.is_empty(), "CoreAudio listed no processes");
+    let me = i32::try_from(std::process::id()).unwrap();
+    let own = objects
+      .iter()
+      .copied()
+      .find(|&object| pid(object) == Some(me))
+      .expect("this test process is listed after querying the HAL");
+    assert!(!is_running_input(own));
+    assert_eq!(bundle_id(own), None);
+    assert!(
+      microphone_input_bundle_ids()
+        .iter()
+        .all(|bundle_id| !bundle_id.is_empty())
+    );
+  }
+}

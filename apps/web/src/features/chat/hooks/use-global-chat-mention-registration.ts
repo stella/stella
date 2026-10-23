@@ -159,10 +159,16 @@ const loadSourceMentions = async ({
     ),
   ]);
   if (Result.isError(catalog)) {
-    getAnalytics().captureError(catalog.error);
+    getAnalytics().captureError(catalog.error, {
+      fingerprintKey: "loadSourceMentions:catalog",
+      scope: { type: "handler", handlerId: "loadSourceMentions:catalog" },
+    });
   }
   if (Result.isError(connections)) {
-    getAnalytics().captureError(connections.error);
+    getAnalytics().captureError(connections.error, {
+      fingerprintKey: "loadSourceMentions:connections",
+      scope: { type: "handler", handlerId: "loadSourceMentions:connections" },
+    });
   }
   const connectorCatalog = Result.isOk(catalog) ? catalog.value : null;
   return buildSourceMentionOptions({

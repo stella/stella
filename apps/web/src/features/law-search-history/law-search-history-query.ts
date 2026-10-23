@@ -6,6 +6,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { useMatch } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -15,6 +16,7 @@ import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title
 import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-title";
 import { Temporal } from "@stll/time";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -34,13 +36,18 @@ import {
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type HistoryInput = Parameters<(typeof api)["search-history"]["post"]>[0];
-type HistoryRecordInput = {
-  [Kind in HistoryInput["kind"]]: Kind extends "search"
-    ? Extract<HistoryInput, { kind: Kind }>
-    : Omit<Extract<HistoryInput, { kind: Kind }>, "title"> & {
-        title: SearchHistoryTitleParts;
-      };
-}[HistoryInput["kind"]];
+type SearchRecordInput = Extract<HistoryInput, { kind: "search" }>;
+type OpenedDocumentKind = Exclude<HistoryInput["kind"], "search">;
+/** A decision or statute opened; the page that renders it supplies its path. */
+type OpenedDocumentInput = {
+  [Kind in OpenedDocumentKind]: Omit<
+    Extract<HistoryInput, { kind: Kind }>,
+    "title" | "path"
+  > & { title: SearchHistoryTitleParts };
+}[OpenedDocumentKind];
+type HistoryRecordInput =
+  | SearchRecordInput
+  | (OpenedDocumentInput & { path: string });
 type LawHistoryScope = {
   userId: string | undefined;
   organizationId: string | null | undefined;
@@ -281,7 +288,7 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
   }
 };
 
-export const useLawHistory = (filter: LawRecentFilter = "all") => {
+const useLawHistoryState = (filter: LawRecentFilter) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const sessionView = useQueryView(useQuery(sessionOptions));
@@ -338,7 +345,12 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
           originatingScope.organizationId
       ) {
         return readQueryResult(
-          Result.err(new APIError({ status: 409, message: t("common.error") })),
+          Result.err(
+            new APIError({
+              status: 409,
+              message: t("lawHome.recentLoadFailed"),
+            }),
+          ),
         );
       }
       const refreshedPage = await readPage();
@@ -349,7 +361,12 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
         })
       ) {
         return readQueryResult(
-          Result.err(new APIError({ status: 409, message: t("common.error") })),
+          Result.err(
+            new APIError({
+              status: 409,
+              message: t("lawHome.recentLoadFailed"),
+            }),
+          ),
         );
       }
       return refreshedPage.items;
@@ -358,7 +375,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
   const view = useQueryView(query);
   useQueryViewError(view, "useLawHistory:query-3");
   const onError = (error: unknown) => {
-    notifyUserError(error, t("common.error"));
+    notifyUserError(error, t("lawHome.recentUpdateFailed"));
   };
   const mutation = useMutation({
     mutationFn: async (write: HistoryWrite) =>
@@ -428,4 +445,34 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
     remove: { mutate: removeEntry, isPending: mutation.isPending },
     clear: { mutate: clearEntries, isPending: mutation.isPending },
   };
+};
+
+/** Opened documents record through `useRecordOpenedLawDocument` only. */
+export const useLawHistory = (filter: LawRecentFilter = "all") => {
+  const { record, ...history } = useLawHistoryState(filter);
+  const searchRecord: { mutate: (entry: SearchRecordInput) => void } = record;
+  return { ...history, record: searchRecord };
+};
+
+/**
+ * Records a decision or statute as opened, under the path of the route match
+ * that renders it. The router's location moves to the next URL as soon as a
+ * navigation starts, while this page is still mounted, so reading it here
+ * would file the document under the page being navigated to.
+ */
+export const useRecordOpenedLawDocument = (entry: OpenedDocumentInput) => {
+  const { enabled, record } = useLawHistoryState("all");
+  const renderedPath = useMatch({
+    strict: false,
+    select: (match) => match.pathname,
+  });
+  const entryKey = JSON.stringify(entry);
+  const recordOpened = useLatestCallback((path: string) => {
+    record.mutate({ ...entry, path });
+  });
+  useExternalSyncEffect(() => {
+    if (enabled) {
+      recordOpened(renderedPath);
+    }
+  }, [enabled, recordOpened, renderedPath, entryKey]);
 };

@@ -187,7 +187,13 @@ export const startSignedInShellRequests = ({
   userId: string;
 }): void => {
   const onPrefetchError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "startSignedInShellRequests:onPrefetchError",
+      scope: {
+        type: "handler",
+        handlerId: "startSignedInShellRequests:onPrefetchError",
+      },
+    });
   };
   detached(
     prefetchRouteQuery(

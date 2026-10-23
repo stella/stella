@@ -60,6 +60,7 @@ import {
 } from "@/components/chat/tool-call-card";
 import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,
@@ -1300,14 +1301,15 @@ const ToolApprovalLeadingIcon = ({
   iconHref?: string | undefined;
   toolName?: ApprovalToolName | undefined;
 }) => {
-  if (iconHref) {
+  const proxiedIconSrc = useProxiedIconSrc(iconHref);
+  if (proxiedIconSrc) {
     return (
       <span className="bg-background flex size-4 shrink-0 items-center justify-center rounded-sm border">
         <img
           alt=""
           className="size-3 rounded-xs object-contain"
           height={12}
-          src={iconHref}
+          src={proxiedIconSrc}
           width={12}
         />
       </span>

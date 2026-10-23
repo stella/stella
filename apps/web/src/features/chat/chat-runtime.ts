@@ -661,6 +661,13 @@ export const createChatRuntime = ({
             message:
               "Chat sent without the browser extension bridge mounted; the browser tool is unavailable for this turn",
           }),
+          {
+            fingerprintKey: "chatRuntime:browserBridgeUnmounted",
+            scope: {
+              type: "handler",
+              handlerId: "chatRuntime:browserBridgeUnmounted",
+            },
+          },
         );
       }
       const prepared = Result.try({
