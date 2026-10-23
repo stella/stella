@@ -21,6 +21,7 @@ import {
   CASE_LAW_COVERAGE_HEALTH,
   CASE_LAW_TOTAL_REPORTER,
 } from "@/api/handlers/case-law/decisions/coverage-health";
+import { CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND } from "@/api/handlers/case-law/decisions/coverage-years";
 import type { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
 import type {
   LatestDecision,
@@ -407,27 +408,50 @@ const countryCoverage = {
         storedDecisions: numberOrNull,
         knownGaps: t.Union([
           t.Object(
-            { type: t.Literal("unknown") },
-            { additionalProperties: false },
-          ),
-          t.Object(
-            { type: t.Literal("none-recorded") },
+            {
+              type: t.Literal("not_reconciled"),
+              reason: boundedString(2048),
+            },
             { additionalProperties: false },
           ),
           t.Object(
             {
-              type: t.Literal("known"),
-              gaps: t.Array(
-                t.Object(
-                  {
-                    from: boundedString(128),
-                    to: boundedString(128),
-                    reason: boundedString(2048),
-                    evidenceRef: boundedString(8192),
-                  },
-                  { additionalProperties: false },
-                ),
-                { maxItems: 100 },
+              type: t.Literal("reconciled"),
+              summary: t.Object(
+                {
+                  missing: t.Number(),
+                  shortSlices: t.Number(),
+                  unlistedSlices: t.Number(),
+                },
+                { additionalProperties: false },
+              ),
+              years: t.Array(
+                t.Union([
+                  t.Object(
+                    { year: t.Number(), type: t.Literal("complete") },
+                    { additionalProperties: false },
+                  ),
+                  t.Object(
+                    {
+                      year: t.Number(),
+                      type: t.Literal("gaps"),
+                      missing: t.Number(),
+                      shortSlices: t.Number(),
+                    },
+                    { additionalProperties: false },
+                  ),
+                  t.Object(
+                    {
+                      year: t.Number(),
+                      type: t.Literal("unlisted"),
+                      missing: t.Number(),
+                      shortSlices: t.Number(),
+                      unlistedSlices: t.Number(),
+                    },
+                    { additionalProperties: false },
+                  ),
+                ]),
+                { maxItems: CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND },
               ),
             },
             { additionalProperties: false },
