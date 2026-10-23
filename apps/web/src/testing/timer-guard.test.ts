@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  isLiveTimer,
   markTimerTestEnded,
   markTimerTestStarted,
   takeLeakedTimers,
@@ -15,7 +16,33 @@ const leaksAtTestEnd = () => {
   return leaks;
 };
 
-test("a timeout still pending when its test ends is cleared and reported with its origin", async () => {
+test("the runtime reports a timer live only until it fires or any path ends it", async () => {
+  const live = setTimeout(() => {}, 10_000);
+  live.unref();
+  expect(isLiveTimer(live)).toBe(true);
+  clearTimeout(live);
+  expect(isLiveTimer(live)).toBe(false);
+  const fired = setTimeout(() => {}, 1);
+  await Bun.sleep(10);
+  expect(isLiveTimer(fired)).toBe(false);
+  for (const end of [
+    (timer: ReturnType<typeof setTimeout>) => timer.close(),
+    (timer: ReturnType<typeof setTimeout>) => timer[Symbol.dispose](),
+    (timer: ReturnType<typeof setTimeout>) => clearInterval(timer),
+  ]) {
+    const timeout = setTimeout(() => {}, 10_000);
+    const interval = setInterval(() => {}, 10_000);
+    end(timeout);
+    end(interval);
+    expect([isLiveTimer(timeout), isLiveTimer(interval)]).toEqual([
+      false,
+      false,
+    ]);
+  }
+  expect(leaksAtTestEnd()).toEqual([]);
+});
+
+test("a timeout still pending when its test ends is cancelled and reported with its origin", async () => {
   let fired = false;
   setTimeout(() => {
     fired = true;
@@ -41,7 +68,7 @@ test("an interval left running is stopped and reported", async () => {
   expect(ticks).toBe(stopped);
 });
 
-test("a timeout its own callback refreshes stays pending and is reported", async () => {
+test("a timeout its own callback refreshes stays live and is reported", async () => {
   let runs = 0;
   const firstRun = Promise.withResolvers<undefined>();
   const handle = setTimeout(() => {
@@ -52,22 +79,25 @@ test("a timeout its own callback refreshes stays pending and is reported", async
   await firstRun.promise;
   const leaks = leaksAtTestEnd();
   expect(leaks).toHaveLength(1);
-  expect(leaks.at(0)).toContain("timeout still pending");
   await Bun.sleep(20);
   expect(runs).toBe(1);
 });
 
-test("timers that fire or are cleared before the test ends are not leaks", async () => {
+test("timers that fire, or end by clear, close or dispose, are not leaks", async () => {
   const fired = Promise.withResolvers<undefined>();
   setTimeout(() => {
     fired.resolve(undefined);
   }, 1);
-  const cleared = setTimeout(() => {}, 10_000);
-  clearTimeout(cleared);
-  const interval = setInterval(() => {}, 10_000);
-  clearInterval(interval);
-  const byId = setTimeout(() => {}, 10_000);
-  clearTimeout(Number(byId));
+  clearTimeout(setTimeout(() => {}, 10_000));
+  clearInterval(setInterval(() => {}, 10_000));
+  setTimeout(() => {}, 10_000).close();
+  setInterval(() => {}, 10_000).close();
+  {
+    using disposedTimeout = setTimeout(() => {}, 10_000);
+    using disposedInterval = setInterval(() => {}, 10_000);
+    expect(isLiveTimer(disposedTimeout)).toBe(true);
+    expect(isLiveTimer(disposedInterval)).toBe(true);
+  }
   await fired.promise;
   expect(leaksAtTestEnd()).toEqual([]);
 });

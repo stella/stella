@@ -6,8 +6,12 @@ import { panic } from "better-result";
  * it reports through process-wide singletons (analytics, toasts) that test is
  * asserting on: an unattributed flake far from its cause. The guard records
  * every timer first-party code starts during a test and, when the test ends,
- * clears whatever is still pending and fails that test with each timer's
+ * cancels whichever is still live and fails that test with each timer's
  * creation stack.
+ *
+ * Liveness is the runtime's own record (`_destroyed`), never a mirror of the
+ * calls that end a timer: a timer can fire, be cleared, closed, disposed or
+ * refreshed from its callback, and only the runtime sees every path.
  *
  * Timers started inside dependencies are left to them: a library owns its
  * own scheduling (query caches, toasts), and its timers are not ours to
@@ -16,24 +20,34 @@ import { panic } from "better-result";
  *
  * The test preload installs the guard and owns the lifecycle hooks.
  */
-type PendingTimer = {
+type RuntimeTimer = ReturnType<typeof setTimeout>;
+type StartedTimer = {
   kind: "timeout" | "interval";
   stack: string;
-  clear: () => void;
+  handle: RuntimeTimer;
 };
 
-const pending = new Map<unknown, PendingTimer>();
+const started: StartedTimer[] = [];
 const leakedTimers: string[] = [];
 let testRunning = false;
 
 const realSetTimeout = globalThis.setTimeout;
 const realSetInterval = globalThis.setInterval;
-const realClearTimeout = globalThis.clearTimeout;
-const realClearInterval = globalThis.clearInterval;
 
 const DEPENDENCY_FRAME = /[/\\]node_modules[/\\]/u;
 const RUNTIME_FRAME = /\((?:native|internal:)|at (?:native|internal:)/u;
 const GUARD_FRAME = /[/\\]testing[/\\]timer-guard\.ts/u;
+
+/** Whether the runtime still has this timer scheduled. */
+export const isLiveTimer = (handle: RuntimeTimer): boolean => {
+  const destroyed: unknown = Reflect.get(handle, "_destroyed");
+  if (typeof destroyed !== "boolean") {
+    return panic(
+      "The runtime's timers no longer expose `_destroyed`; the timer guard cannot tell a live timer from a finished one.",
+    );
+  }
+  return !destroyed;
+};
 
 // The stack of the code that started the timer, or null when a dependency or
 // the runtime started it (its first caller frame is not first-party source).
@@ -51,103 +65,27 @@ const firstPartyStack = (): string | null => {
   return frames.join("\n");
 };
 
-const track = (
-  handle: unknown,
-  kind: PendingTimer["kind"],
-  clear: () => void,
-): PendingTimer | null => {
+const record = (handle: RuntimeTimer, kind: StartedTimer["kind"]) => {
   if (!testRunning) {
-    return null;
-  }
-  const stack = firstPartyStack();
-  if (stack === null) {
-    return null;
-  }
-  const timer = { kind, stack, clear };
-  pending.set(handle, timer);
-  return timer;
-};
-
-const forget = (handle: unknown) => {
-  if (pending.delete(handle)) {
     return;
   }
-  // Callers may clear by the numeric id the handle converts to.
-  for (const key of pending.keys()) {
-    if (Number(key) === Number(handle)) {
-      pending.delete(key);
-      return;
-    }
+  const stack = firstPartyStack();
+  if (stack !== null) {
+    started.push({ kind, stack, handle });
   }
 };
 
-const guardedSetTimeout = ((
-  callback: (...args: unknown[]) => void,
-  delay?: number,
-  ...args: unknown[]
-) => {
-  // A timeout stays tracked until it is cleared or its callback returns
-  // without re-arming it: refresh() re-arms the native timer directly, so the
-  // handle's refresh registers it again.
-  let firing = false;
-  let rearmed = false;
-  const handle = realSetTimeout(
-    (...callbackArgs: unknown[]) => {
-      firing = true;
-      rearmed = false;
-      try {
-        return callback(...callbackArgs);
-      } finally {
-        firing = false;
-        if (!rearmed) {
-          forget(handle);
-        }
-      }
-    },
-    delay,
-    ...args,
-  );
-  const timer = track(handle, "timeout", () => {
-    realClearTimeout(handle);
-  });
-  const refresh = handle.refresh.bind(handle);
-  Object.defineProperty(handle, "refresh", {
-    value: () => {
-      refresh();
-      if (firing) {
-        rearmed = true;
-      } else if (timer !== null && testRunning) {
-        pending.set(handle, timer);
-      }
-      return handle;
-    },
-  });
+const guardedSetTimeout = ((...args: Parameters<typeof setTimeout>) => {
+  const handle = realSetTimeout(...args);
+  record(handle, "timeout");
   return handle;
 }) as typeof setTimeout;
 
-const guardedSetInterval = ((
-  callback: (...args: unknown[]) => void,
-  delay?: number,
-  ...args: unknown[]
-) => {
-  const handle = realSetInterval(callback, delay, ...args);
-  track(handle, "interval", () => {
-    realClearInterval(handle);
-  });
+const guardedSetInterval = ((...args: Parameters<typeof setInterval>) => {
+  const handle = realSetInterval(...args);
+  record(handle, "interval");
   return handle;
 }) as typeof setInterval;
-
-const guardedClearTimeout = ((handle?: Parameters<typeof clearTimeout>[0]) => {
-  forget(handle);
-  realClearTimeout(handle);
-}) as typeof clearTimeout;
-
-const guardedClearInterval = ((
-  handle?: Parameters<typeof clearInterval>[0],
-) => {
-  forget(handle);
-  realClearInterval(handle);
-}) as typeof clearInterval;
 
 /** Records first-party timers from now on against the running test. */
 export const markTimerTestStarted = () => {
@@ -155,18 +93,20 @@ export const markTimerTestStarted = () => {
 };
 
 /**
- * Ends the running test: clears every first-party timer it left pending and
- * records each one, so they can neither fire into later tests nor pass.
+ * Ends the running test: cancels every first-party timer it started that is
+ * still live and records each one, so none can fire into later tests or pass.
  */
 export const markTimerTestEnded = () => {
   testRunning = false;
-  for (const timer of pending.values()) {
-    timer.clear();
+  for (const timer of started.splice(0)) {
+    if (!isLiveTimer(timer.handle)) {
+      continue;
+    }
+    timer.handle.close();
     leakedTimers.push(
       `${timer.kind} still pending, started at:\n${timer.stack}`,
     );
   }
-  pending.clear();
 };
 
 /**
@@ -186,12 +126,10 @@ export const reportLeakedTimers = () => {
   );
 };
 
-/** Routes the global timer functions through the guard. */
+/** Routes the global timer constructors through the guard. */
 export const installTimerGuard = () => {
   Object.assign(globalThis, {
     setTimeout: guardedSetTimeout,
     setInterval: guardedSetInterval,
-    clearTimeout: guardedClearTimeout,
-    clearInterval: guardedClearInterval,
   });
 };
