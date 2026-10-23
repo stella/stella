@@ -256,7 +256,6 @@ export const ciExpressionContext = ({
   for (const [id, outputs] of Object.entries(stepOutputs)) {
     steps[id] ??= { outputs: { ...outputs } };
   }
-  steps["target-base"] = { outputs: { sha: "" } };
   steps["changed-files"] = {
     outputs: { ...steps["changed-files"]?.outputs, ...planOverrides },
   };

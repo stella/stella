@@ -23,8 +23,11 @@ const QUEUE_BASE_EXPRESSION = `${String.fromCodePoint(36)}{{ github.event.merge_
 
 type WorkflowRecord = Record<string, unknown>;
 
+const isWorkflowRecord = (value: unknown): value is WorkflowRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const asRecord = (value: unknown, context: string): WorkflowRecord => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isWorkflowRecord(value)) {
     throw new TypeError(`Expected ${context} to be a mapping`);
   }
   return value;
