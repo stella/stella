@@ -901,6 +901,9 @@ const conditionTokens = (condition: string) =>
     )
     .trim()
     .replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
+const QUICK_GATED_NEEDS = ["ci-plan", "generated-sources", "pr-heavy-gate"];
+const QUICK_CHECK_GATE =
+  "!cancelled() && needs.ci-plan.result == 'success' && needs.generated-sources.result == 'success' && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success') && ";
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
@@ -913,8 +916,22 @@ const expectScope = ({
   job,
   releaseHoldRemoved,
 }: ScopeOptions) => {
-  const { if: condition, ...scope } = current;
-  const { if: originalCondition, ...originalScope } = base;
+  const { if: gatedCondition, ...scope } = current;
+  const { if: gatedOriginalCondition, ...originalScope } = base;
+  // A leg that waits for the quick checks names their gate and, running past
+  // `!cancelled()`, states its prerequisites itself. Compare the scope under
+  // that exact prefix; a gated leg without it fails.
+  const ungate = (target: Record<string, unknown>, value: unknown) => {
+    if (!isDeepStrictEqual(target["needs"], QUICK_GATED_NEEDS)) {
+      return value;
+    }
+    target["needs"] = ["ci-plan", "generated-sources"];
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    expect(tokens.startsWith(QUICK_CHECK_GATE), tokens).toBe(true);
+    return tokens.slice(QUICK_CHECK_GATE.length);
+  };
+  const condition = ungate(scope, gatedCondition);
+  const originalCondition = ungate(originalScope, gatedOriginalCondition);
   // The generated-source producer is a job of its own, so its consumers
   // name both. A merge base may name the plan alone, the current producer, or
   // the retired producer that ran after the plan.
@@ -1565,6 +1582,28 @@ test("scope comparisons preserve queued certification and the underlying trust g
   }
 });
 
+test("a leg that waits for the quick checks keeps its scope and every prerequisite", () => {
+  const scope =
+    "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true )";
+  const base = { if: scope, needs: ["ci-plan", "generated-sources"] };
+  const gated = { if: `${QUICK_CHECK_GATE}${scope}`, needs: QUICK_GATED_NEEDS };
+  expectScope({ base, current: gated });
+  expectScope({ base: gated, current: gated });
+  for (const condition of [
+    gated.if.replace(" && needs.generated-sources.result == 'success'", ""),
+    gated.if.replace("needs.ci-plan.result == 'success' && ", ""),
+    gated.if.replace("!cancelled() && ", "always() && "),
+    scope,
+  ]) {
+    expect(() =>
+      expectScope({ base, current: { ...gated, if: condition } }),
+    ).toThrow("Expected:");
+  }
+  expect(() =>
+    expectScope({ base, current: { ...gated, needs: ["ci-plan"] } }),
+  ).toThrow("toEqual");
+});
+
 test("package scope narrows check legs while retaining baseline trust and completion gates", () => {
   const trust =
     "inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' )";
@@ -1702,6 +1741,8 @@ test("producer scope regression rejects a mutation that normalizes an already-ow
         v,
         isDeepStrictEqual,
         conditionTokens,
+        QUICK_CHECK_GATE,
+        QUICK_GATED_NEEDS,
         options: { current: handoff, base: handoff },
       }),
     ),

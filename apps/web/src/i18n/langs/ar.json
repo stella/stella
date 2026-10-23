@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
     "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
+    "diagramUnavailable": "تعذّر عرض هذا المخطط. تظهر شيفرته المصدرية أدناه.",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",
       "autoDirectDescription": "تُطبَّق تعديلات الذكاء الاصطناعي فورًا بإعادة كتابة المستند مباشرةً (من دون تعقّب التغييرات).",
@@ -4198,7 +4199,9 @@
     "prompt": "عمّ تبحث؟",
     "recent": "الأخيرة",
     "recentCasesFilter": "الأحكام",
+    "recentLoadFailed": "تعذّر تحميل النشاط الحديث.",
     "recentSearchFilter": "عمليات البحث",
+    "recentUpdateFailed": "تعذّر تحديث النشاط الحديث.",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",

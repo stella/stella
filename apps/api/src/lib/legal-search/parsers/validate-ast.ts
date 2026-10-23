@@ -1,6 +1,6 @@
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
-// parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.
+// parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.
 // parser-output-unchanged: Paragraph input is a new optional entry point used only by cz-us; the HTML path and its results are unchanged for every other caller.
 /**
  * AST sanity checker.
@@ -17,10 +17,11 @@ import { type AnyNode, isTag } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
+
+import { visibleHtmlText } from "./visible-html-text";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -290,6 +291,8 @@ export const validateAst = (
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
     sourcePolicy?: ValidationSourcePolicy;
+    /** Already-parsed source document; subtree sources must omit this. */
+    document?: cheerio.CheerioAPI;
   },
 ): ValidationResult => {
   const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
@@ -316,7 +319,7 @@ export const validateAst = (
       }
     }
   } else {
-    const $ = cheerio.load(source);
+    const $ = options?.document ?? cheerio.load(source);
     $("div[style*='-aw-headerfooter-type']").remove();
     // <br> is a word boundary in the rendered document, but cheerio's
     // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →

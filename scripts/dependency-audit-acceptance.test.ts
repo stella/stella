@@ -1,6 +1,21 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { check, type Advisory, type Baseline } from "./dependency-audit";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  AuditCommandError,
+  BaselineError,
+  check,
+  checkRelease,
+  collectGatedAdvisories,
+  readBaseline,
+  runDependencyAuditCli,
+  type Advisory,
+  type Baseline,
+} from "./dependency-audit";
 import {
   expiringAcceptances,
   lapsedAcceptances,
@@ -23,6 +38,7 @@ const auditBaseline = (expiresOn?: string): Baseline => ({
       severity: "high",
       package: "pkg",
       title: "test advisory",
+      owner: "test owner",
       reason: "test acceptance",
       ...(expiresOn === undefined ? {} : { expiresOn }),
     },
@@ -57,6 +73,98 @@ const runCheck = async (
   }
 };
 
+const runReleaseCheck = async (
+  advisories: Advisory[],
+  baseline: Baseline,
+  today = "2026-10-02",
+) => {
+  const output: { error: string[]; warn: string[] } = { error: [], warn: [] };
+  const info = spyOn(console, "info").mockImplementation(() => undefined);
+  const warn = spyOn(console, "warn").mockImplementation((message) => {
+    output.warn.push(String(message));
+  });
+  const error = spyOn(console, "error").mockImplementation((message) => {
+    output.error.push(String(message));
+  });
+  try {
+    const status = await checkRelease(advisories, {
+      baseline,
+      latestVersion: async () => "1.4.0",
+      now: () => new Date(`${today}T00:00:00Z`),
+      warningFormat: "plain",
+    });
+    return { ...output, status };
+  } finally {
+    info.mockRestore();
+    warn.mockRestore();
+    error.mockRestore();
+  }
+};
+
+describe("release audit acceptance", () => {
+  test("unexpired baselined advisories pass with one release warning each", async () => {
+    const second = {
+      ...currentAdvisory,
+      id: "GHSA-dddd-eeee-ffff",
+      package: "second-pkg",
+    };
+    const baseline = auditBaseline("2026-11-01");
+    baseline.accepted.push({
+      ...baseline.accepted[0]!,
+      id: second.id,
+      package: second.package,
+    });
+    const result = await runReleaseCheck([currentAdvisory, second], baseline);
+
+    expect(result.status).toBe(0);
+    expect(
+      result.warn.filter((line) =>
+        line.startsWith(
+          "::warning title=Release dependency audit accepted advisory::",
+        ),
+      ),
+    ).toHaveLength(2);
+    expect(result.warn.join("\n")).toContain(
+      "GHSA-aaaa-bbbb-cccc for pkg is accepted by test owner until 2026-11-01",
+    );
+  });
+
+  test("a new advisory fails", async () => {
+    const result = await runReleaseCheck([currentAdvisory], {
+      ...auditBaseline("2026-11-01"),
+      accepted: [],
+    });
+    expect(result.status).toBe(1);
+  });
+
+  test("an expired acceptance fails", async () => {
+    const result = await runReleaseCheck(
+      [currentAdvisory],
+      auditBaseline("2026-10-01"),
+    );
+    expect(result.status).toBe(2);
+    expect(result.error.join("\n")).toContain(advisory.id);
+  });
+
+  test("an untilPatched-only acceptance fails naming the advisory", async () => {
+    const baseline = auditBaseline();
+    baseline.accepted[0]!.untilPatched = true;
+    const result = await runReleaseCheck([currentAdvisory], baseline);
+    expect(result.status).toBe(2);
+    expect(result.error.join("\n")).toContain(advisory.id);
+    expect(result.error.join("\n")).toContain("must have expiresOn");
+  });
+
+  test("a placeholder owner fails naming the advisory", async () => {
+    const baseline = auditBaseline("2026-11-01");
+    baseline.accepted[0]!.owner = "TODO: owner";
+    const result = await runReleaseCheck([currentAdvisory], baseline);
+    expect(result.status).toBe(2);
+    expect(result.error.join("\n")).toContain(advisory.id);
+    expect(result.error.join("\n")).toContain("non-placeholder owner");
+  });
+});
+
 describe("audit acceptance expiry", () => {
   test("an accepted advisory is reported without failing", async () => {
     const result = await runCheck(
@@ -68,6 +176,9 @@ describe("audit acceptance expiry", () => {
     expect(
       result.info.some((line) => line.includes("accepted until 2026-11-01")),
     ).toBe(true);
+    expect(result.info.some((line) => line.includes("owner: test owner"))).toBe(
+      true,
+    );
   });
 
   test("a new advisory is reported and fails", async () => {
@@ -122,7 +233,7 @@ describe("audit acceptance expiry", () => {
       auditBaseline("2026-10-01"),
       "2026-10-02",
     );
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.info.some((line) => line.endsWith("LAPSED"))).toBe(true);
   });
 
@@ -290,4 +401,162 @@ describe("audit acceptance expiry", () => {
       );
     }
   });
+
+  test.each([
+    {
+      field: "owner",
+      owner: "  TODO: owner",
+      reason: "test acceptance",
+    },
+    {
+      field: "owner",
+      owner: " TODO_owner",
+      reason: "test acceptance",
+    },
+    {
+      field: "reason",
+      owner: "test owner",
+      reason: "todo: document why this is accepted.",
+    },
+    {
+      field: "reason",
+      owner: "test owner",
+      reason: "todoreason",
+    },
+  ])(
+    "a baseline entry with a placeholder $field fails closed",
+    async (entry) => {
+      const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+      const baselinePath = path.join(temporary, "baseline.json");
+      await Bun.write(
+        baselinePath,
+        JSON.stringify({
+          note: "test",
+          auditLevel: "high",
+          accepted: [
+            {
+              id: advisory.id,
+              severity: "high",
+              package: "pkg",
+              title: "test advisory",
+              owner: entry.owner,
+              reason: entry.reason,
+            },
+          ],
+        }),
+      );
+      try {
+        expect(await rejectionOf(readBaseline(baselinePath))).toHaveProperty(
+          "message",
+          expect.stringContaining(
+            `${advisory.id} must have a non-placeholder ${entry.field}`,
+          ),
+        );
+      } finally {
+        rmSync(temporary, { force: true, recursive: true });
+      }
+    },
+  );
+
+  test("a baseline entry with a real owner and reason is accepted", async () => {
+    const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+    const baselinePath = path.join(temporary, "baseline.json");
+    const baseline = auditBaseline();
+    await Bun.write(baselinePath, JSON.stringify(baseline));
+    try {
+      expect(await readBaseline(baselinePath)).toEqual(baseline);
+    } finally {
+      rmSync(temporary, { force: true, recursive: true });
+    }
+  });
 });
+
+const auditJson = JSON.stringify({
+  advisories: {
+    pkg: [
+      {
+        github_advisory_id: advisory.id,
+        severity: "high",
+        title: "test advisory",
+        vulnerable_versions: "<=1.4.0",
+      },
+    ],
+  },
+});
+
+describe("advisory service retries", () => {
+  test("a 503 followed by success returns advisories", async () => {
+    const results = [
+      { exitCode: 1, stderr: "POST advisory bulk - 503", stdout: "" },
+      { exitCode: 0, stderr: "", stdout: auditJson },
+    ];
+    const delays: number[] = [];
+    const advisories = await collectGatedAdvisories({
+      delay: async (milliseconds) => {
+        delays.push(milliseconds);
+      },
+      run: async () => results.shift() ?? panicUnexpectedAttempt(),
+    });
+    expect(advisories).toEqual([currentAdvisory]);
+    expect(delays).toEqual([10_000]);
+  });
+
+  test("three 503 responses raise the final audit error", async () => {
+    let attempts = 0;
+    expect(
+      await rejectionOf(
+        collectGatedAdvisories({
+          delay: async () => undefined,
+          run: async () => {
+            attempts += 1;
+            return {
+              exitCode: 1,
+              stderr: "POST advisory bulk - 503",
+              stdout: "",
+            };
+          },
+        }),
+      ),
+    ).toBeInstanceOf(AuditCommandError);
+    expect(attempts).toBe(3);
+  });
+
+  test("non-transient failures do not retry", async () => {
+    for (const result of [
+      { exitCode: 0, stderr: "", stdout: "not JSON" },
+      { exitCode: 1, stderr: "permission denied", stdout: "" },
+    ]) {
+      let attempts = 0;
+      expect(
+        await rejectionOf(
+          collectGatedAdvisories({
+            delay: async () => undefined,
+            run: async () => {
+              attempts += 1;
+              return result;
+            },
+          }),
+        ),
+      ).toBeInstanceOf(AuditCommandError);
+      expect(attempts).toBe(1);
+    }
+  });
+});
+
+describe("CLI exit codes", () => {
+  test.each([
+    { error: new BaselineError("invalid baseline"), status: 2 },
+    { error: new AuditCommandError("audit failed"), status: 3 },
+    { error: new Error("unexpected failure"), status: 4 },
+  ])("maps $error.name to exit $status", async ({ error, status }) => {
+    expect(
+      await runDependencyAuditCli(async () => {
+        throw error;
+      }),
+    ).toBe(status);
+  });
+});
+
+const panicUnexpectedAttempt = (): never => {
+  throw new Error("unexpected extra audit attempt");
+};
