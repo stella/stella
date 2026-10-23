@@ -66,6 +66,8 @@ test("confirmed capability and role observations survive failed background refre
   const aiKey = aiAvailabilityOptions({ organizationId }).queryKey;
   client.setQueryData(aiKey, {
     available: true,
+    unavailableReason: null,
+    providerConfiguration: "allowed",
     deferredServiceTierAvailable: false,
     instanceProvisioned: false,
     mockAnswers: false,
