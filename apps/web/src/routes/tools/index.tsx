@@ -6,6 +6,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import { routeSearchSchema } from "@/lib/route-search-params";
 import {
   TOOLS_KIND_FILTERS,
   type ToolsKindFilter,
@@ -16,7 +17,7 @@ import { PublicToolsIndex } from "@/routes/tools/-components/public-tools-index"
 // to the default "all" filter, not throw into the router's default error
 // boundary. `v.fallback` swallows the parse failure and yields "all",
 // rendering the page as if the param were absent.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   kind: v.fallback(v.optional(v.picklist(TOOLS_KIND_FILTERS), "all"), "all"),
 });
 

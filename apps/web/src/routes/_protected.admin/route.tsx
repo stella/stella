@@ -1,5 +1,4 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import * as v from "valibot";
 
 import { SettingsShell } from "@/components/settings-shell/settings-shell";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
@@ -9,10 +8,11 @@ import { detached } from "@/lib/detached";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import { routeSearchSchema } from "@/lib/route-search-params";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 
-const searchSchema = v.strictObject({
+const searchSchema = routeSearchSchema({
   q: optionalSearchStringSchema(),
 });
 

@@ -8,6 +8,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { detached } from "@/lib/detached";
+import { routeSearchSchema } from "@/lib/route-search-params";
 import { useQueryView } from "@/lib/use-query-view";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
 import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail";
@@ -20,7 +21,7 @@ import { RunsList } from "@/routes/_protected.workspaces/$workspaceId/-component
  * and the back button all move by changing it, so history and a later link
  * agree on what is shown.
  */
-const workflowsSearchSchema = v.object({
+const workflowsSearchSchema = routeSearchSchema({
   run: v.optional(v.string()),
 });
 

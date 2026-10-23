@@ -3,7 +3,6 @@ import { lazy, Suspense } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
-import * as v from "valibot";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -14,6 +13,7 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
+import { routeSearchSchema } from "@/lib/route-search-params";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
 import {
@@ -65,7 +65,7 @@ const isCalendarView = (view: WorkspaceView): view is CalendarWorkspaceView =>
   view.layout.type === "calendar";
 
 // `run` opens one verification in an AVT view.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   run: optionalSearchStringSchema(),
 });
 

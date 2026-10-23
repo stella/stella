@@ -42,6 +42,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routeSearchSchema } from "@/lib/route-search-params";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import {
   workspacesKeys,
@@ -69,7 +70,7 @@ import {
 } from "@/routes/_protected.workspaces/-utils";
 import { useConfigStore } from "@/stores/config-store";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   // Client id to scroll into view and flash on arrival (set by the matter
   // breadcrumb's company link). Cleared by the route once consumed.
   focusClient: v.optional(v.string()),

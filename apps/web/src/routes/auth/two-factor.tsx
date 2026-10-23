@@ -4,10 +4,12 @@ import * as v from "valibot";
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
 import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
 import { redirectToSchema } from "@/lib/redirect";
+import { routeSearchSchema } from "@/lib/route-search-params";
+import { optionalFlagSearchSchema } from "@/lib/schema";
 
-const searchSchema = v.strictObject({
+const searchSchema = routeSearchSchema({
   linkProvider: v.optional(socialProviderSchema),
-  devQuickStart: v.optional(v.boolean()),
+  devQuickStart: optionalFlagSearchSchema,
   redirectTo: redirectToSchema,
 });
 

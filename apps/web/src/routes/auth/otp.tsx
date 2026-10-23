@@ -4,10 +4,11 @@ import * as v from "valibot";
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { fetchDevOtp } from "@/lib/dev-otp";
 import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
+import { routeSearchSchema } from "@/lib/route-search-params";
 import { emailSchema } from "@/lib/schema";
 
-const searchSchema = v.strictObject({
-  email: emailSchema(),
+const searchSchema = routeSearchSchema({
+  email: v.optional(emailSchema()),
   redirectTo: redirectToSchema,
 });
 
@@ -22,16 +23,27 @@ export const Route = createFileRoute("/auth/otp")({
         replace: true,
       });
     }
+    // A code goes to an address; without one there is nothing to enter
+    // here, so the reader starts the sign-in again.
+    if (search.email === undefined) {
+      throw redirect({
+        to: "/auth",
+        search: { redirectTo: search.redirectTo },
+        replace: true,
+      });
+    }
+    return { otpEmail: search.email };
   },
-  loader: async ({ deps }) => ({ devOtp: await fetchDevOtp(deps.email) }),
+  loader: async ({ context }) => ({
+    devOtp: await fetchDevOtp(context.otpEmail),
+  }),
   component: OTP,
 });
 
 function OTP() {
   const navigate = useNavigate();
-  const { email, redirectTo } = Route.useSearch({
-    select: (s) => ({ email: s.email, redirectTo: s.redirectTo }),
-  });
+  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
+  const email = Route.useRouteContext({ select: (c) => c.otpEmail });
   const devOtp = Route.useLoaderData({ select: (d) => d.devOtp });
 
   const handleVerified = async () => {

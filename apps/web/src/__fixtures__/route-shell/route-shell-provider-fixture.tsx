@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { parseTimeZoneId } from "@stll/time";
 
+import { routeSearchRefusals } from "@/__fixtures__/route-shell/route-search-totality";
 import {
   authFixtureBeforeLoadData,
   authFixtureLoaderData,
@@ -33,7 +34,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
-  suite?: "leaf-shells" | "law-hosts";
+  suite?: "leaf-shells" | "law-hosts" | "route-search";
 };
 
 const FIXTURE_AUDIENCE = { anonymous: "anonymous", member: "member" } as const;
@@ -52,6 +53,7 @@ const fixtureRouteSchema = v.object({
       ),
     ),
     loader: v.optional(v.unknown()),
+    validateSearch: v.optional(v.unknown()),
     staticData: v.optional(
       v.looseObject({
         appFrame: v.optional(v.picklist(["none", "member", "knowledge"])),
@@ -531,6 +533,8 @@ const loadFixtureRuntime = async (
   const { noopAnalytics } = await import("@/lib/analytics/noop");
   const { createRouteErrorLifecycleController } =
     await import("@/lib/analytics/route-error-lifecycle");
+  const { parseRouteSearch, stringifyRouteSearch } =
+    await import("@/lib/route-search-params");
 
   const createFixtureRouter = (initialEntry: string) => {
     const queryClient = createAppQueryClient();
@@ -540,6 +544,8 @@ const loadFixtureRuntime = async (
     const caughtErrors: Error[] = [];
     const router = createRouter({
       routeTree,
+      parseSearch: parseRouteSearch,
+      stringifySearch: stringifyRouteSearch,
       defaultOnCatch: (error) => {
         caughtErrors.push(
           error instanceof Error ? error : new Error(String(error)),
@@ -581,11 +587,11 @@ const loadFixtureRuntime = async (
     (route) => !hasChildren(route) && route.options.component !== undefined,
   );
   const selectedLeaves =
-    suite === "law-hosts"
-      ? []
-      : uiLeaves.filter(
+    suite === "leaf-shells"
+      ? uiLeaves.filter(
           (route) => isLegacyTool(route) === (mode === "legacy-tools"),
-        );
+        )
+      : [];
   const exercised = new Set<string>();
   const expectedCases: string[] = [];
   const usedExceptions = new Set<string>();
@@ -704,6 +710,15 @@ const declareCensus = (fixture: FixtureRuntime) => {
     selectedLeaves,
     hasUi,
   } = fixture;
+  if (suite === "route-search") {
+    test("every route opens whatever its URL's search carries", () => {
+      expect(
+        routeSearchRefusals(registeredRoutes, (routeId) =>
+          fixtureSearch(routeId, "reader@example.com"),
+        ),
+      ).toEqual([]);
+    });
+  }
   if (suite === "leaf-shells") {
     test(`${mode}: every top-level UI section declares its runtime frame scope`, () => {
       expect(
