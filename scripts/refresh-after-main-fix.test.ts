@@ -475,7 +475,7 @@ test("main is red while any main workflow's latest verdict is not green", () => 
 describe("the recheck right before an update", () => {
   const HEAD = "a".repeat(40);
   // The pull request as selected; each case changes one fact after selection.
-  const recheck = (
+  const recheck = async (
     change: { labels?: string[]; head?: string; draft?: boolean },
     queued: number[] = [],
   ) => {
