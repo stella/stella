@@ -102,7 +102,7 @@
   "candidate:.github/workflows/bundle-size-nightly.yml/report": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "3a80b5e2d038209420ad8e09b91e1e7511613f0dc462d29b01106a905fee533b"
+    "reviewedDigest": "ab338849fc0cad65b199c078766a8b00b66e48b625a022e8997cdac7cd4b49cf"
   },
   "candidate:.github/workflows/cancel-stale-merge-groups.yml/cancel": {
     "kind": "ordinary",
@@ -557,7 +557,7 @@
   "candidate:.github/workflows/network-baseline-record.yml/build": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "7c88441dd0cf0d306cb5fa7d123e98748f02418b412a00ccc4dac92158136e36"
+    "reviewedDigest": "908329ee14bddc37d5196c6635901dbd70c9c9f05126b2bb405ecc24d102019d"
   },
   "candidate:.github/workflows/network-baseline-record.yml/record": {
     "kind": "ordinary",
