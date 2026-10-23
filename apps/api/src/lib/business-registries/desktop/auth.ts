@@ -12,9 +12,9 @@ import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
 import {
   API_KEY_REFUSAL_REASON,
+  type ApiKeyRefusalReason,
   apiKeyVerificationRefusalReason,
   logApiKeyRefusal,
-  type ApiKeyRefusalReason,
 } from "@/api/lib/auth/api-key-refusal-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -24,8 +24,8 @@ import {
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
 import {
-  VerifiedDesktopDeviceProof,
   desktopProofRequestUrl,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { probeDesktopCredential } from "@/api/lib/business-registries/desktop/renewal";

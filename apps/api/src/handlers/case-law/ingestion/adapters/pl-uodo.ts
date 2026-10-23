@@ -1,13 +1,13 @@
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
-import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
+import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -64,9 +64,9 @@ import {
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
-  STORED_RAW_REPARSE_REJECTION,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {

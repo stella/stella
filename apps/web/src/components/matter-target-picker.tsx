@@ -36,9 +36,9 @@ import { filterMatterPickerItems } from "@/components/matter-picker-search.logic
 import {
   canMoveMatterFolder,
   discardPendingMatterFolder,
-  MAX_FOLDER_NAME_LENGTH,
-  matterFolderPath,
   matterFolderMoveDestinations,
+  matterFolderPath,
+  MAX_FOLDER_NAME_LENGTH,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,

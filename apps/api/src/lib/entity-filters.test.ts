@@ -16,9 +16,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   applyFilters,
   applySorts,
-  buildSortExpressions,
   buildFilterConditions,
   buildFindConditions,
+  buildSortExpressions,
   FIELD_FIND_SUPPORT,
   FINDABLE_FIELD_TYPES,
 } from "./entity-filters";

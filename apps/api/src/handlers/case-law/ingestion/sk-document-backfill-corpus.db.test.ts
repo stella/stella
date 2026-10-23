@@ -24,12 +24,12 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
-  caseLawDecisions,
   caseLawCorpusPackRefs,
-  corpusIndexProjectionStates,
+  caseLawDecisions,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
+  corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";

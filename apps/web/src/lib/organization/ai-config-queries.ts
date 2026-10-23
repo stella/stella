@@ -94,7 +94,7 @@ export const aiAvailabilityOptions = ({
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-type OrganizationAIAvailability = InferDataFromTag<
+export type OrganizationAIAvailability = InferDataFromTag<
   unknown,
   ReturnType<typeof aiAvailabilityOptions>["queryKey"]
 >;
@@ -129,6 +129,10 @@ export const updateCachedAIAvailability = ({
   return {
     ...current,
     available: nextInstanceProvisioned || orgConfigured,
+    unavailableReason:
+      nextInstanceProvisioned || orgConfigured
+        ? null
+        : "provider_not_configured",
     instanceProvisioned: nextInstanceProvisioned,
     orgConfigured,
   };

@@ -32,21 +32,21 @@ import {
   type ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
+  type CorpusIndexGroupContract,
   corpusIndexGroupContractForJurisdiction,
+  type CorpusIndexReadTarget,
   corpusIndexReadTarget,
   enrolledCorpusIndexGroupContracts,
-  registeredCorpusIndexGroups,
-  type CorpusIndexGroupContract,
-  type CorpusIndexReadTarget,
   type RegisteredCorpusIndexGroup,
+  registeredCorpusIndexGroups,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexContractDigest,
   corpusIndexGenerationField,
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
-  type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";

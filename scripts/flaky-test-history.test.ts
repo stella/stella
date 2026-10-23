@@ -5,36 +5,36 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
-import type { FailureRecord } from "./ci-failure-digest";
+import { digestFile, type FailureRecord } from "./ci-failure-digest";
 import {
   buildHistory,
   collectEvidence,
+  type Evidence,
   fetchLatestHistory,
   findFlakyChecks,
+  type Gh,
   GhCommandError,
   HISTORY_ARTIFACT,
   HISTORY_FILE,
   HISTORY_WINDOW_DAYS,
+  jobFamily,
   jobSummary,
+  type Observation,
   PROPOSAL_THRESHOLD,
-  PROPOSED_QUARANTINE_DAYS,
   proposalBody,
+  PROPOSED_QUARANTINE_DAYS,
   proposeQuarantine,
   quarantineArtifactName,
   quarantineCandidates,
-  jobFamily,
   resolveOwners,
   resolveTestFile,
-  type Evidence,
-  type Gh,
-  type Observation,
 } from "./flaky-test-history";
 import {
   DAY_MS,
   parseRegistry,
-  serializeRegistry,
   type QuarantineEntry,
   type Registry,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const NOW = new Date("2026-10-17T12:00:00.000Z");
@@ -600,7 +600,11 @@ describe("evidence collection", () => {
         // Run 2 predates structured test identities.
         writeFileSync(
           path.join(dir, "ci-failures.json"),
-          JSON.stringify(rest.at(1) === "1" ? digest : [{ job: "x" }]),
+          JSON.stringify(
+            rest.at(1) === "1"
+              ? digestFile(digest, { GITHUB_RUN_ID: "1" })
+              : { version: 1, failures: [{ job: "x" }] },
+          ),
         );
         return Result.ok("");
       }

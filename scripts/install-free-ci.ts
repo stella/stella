@@ -737,6 +737,34 @@ const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 const isRetryHelper = (word: string | undefined): boolean =>
   word === "retry.sh" || word?.endsWith("/retry.sh") === true;
 
+/**
+ * The release gate recorder (`scripts/release-gate.sh`, or its copy in the
+ * runner's temp directory): `run <gate>` runs the rest of its words as the
+ * command, so it is unwrapped like the retry helper.
+ */
+const isReleaseGateRun = (words: readonly string[]): boolean => {
+  const helper = words.at(1);
+  return (
+    (helper === "release-gate.sh" ||
+      helper?.endsWith("/release-gate.sh") === true) &&
+    words.at(2) === "run" &&
+    words.at(3) !== undefined
+  );
+};
+
+/** The command a repository wrapper run through bash hands its words to. */
+const bashWrapperCommand = (
+  words: readonly string[],
+): readonly string[] | undefined => {
+  if (words.at(0) !== "bash") {
+    return undefined;
+  }
+  if (isRetryHelper(words.at(1))) {
+    return words.slice(2);
+  }
+  return isReleaseGateRun(words) ? words.slice(4) : undefined;
+};
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
 export const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
@@ -792,10 +820,12 @@ export const programWords = (words: readonly string[]): readonly string[] => {
         return words;
       }
       rest = rest.slice(1); // Duration precedes the wrapped command.
-    } else if (first === "bash" && isRetryHelper(rest.at(1))) {
-      rest = rest.slice(2);
     } else {
-      return rest;
+      const wrapped = bashWrapperCommand(rest);
+      if (wrapped === undefined) {
+        return rest;
+      }
+      rest = wrapped;
     }
   }
 };

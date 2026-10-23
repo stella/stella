@@ -1,7 +1,7 @@
 import {
+  panic,
   Result,
   TaggedError,
-  panic,
   type TaggedErrorClass,
 } from "better-result";
 import { randomBytes, randomUUID } from "node:crypto";

@@ -58,8 +58,8 @@ import {
 } from "@/api/lib/scheduler/tasks/memory-extractor-queue";
 import {
   EXTRACTABLE_MEMORY_KINDS,
-  resolveExtractedMemoryScope,
   type ExtractableMemoryKind,
+  resolveExtractedMemoryScope,
 } from "@/api/lib/scheduler/tasks/memory-extractor-scope";
 import type {
   SchedulerDb,

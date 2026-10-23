@@ -3,8 +3,8 @@
 // in-process; it takes keys, never a connection.
 
 import {
-  coordinationSetArguments,
   type CoordinationKey,
+  coordinationSetArguments,
 } from "@/api/lib/redis-keys";
 
 // Atomically verifies that a job still belongs to the active workflow, records

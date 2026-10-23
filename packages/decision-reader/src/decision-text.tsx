@@ -47,8 +47,8 @@ import {
   FulltextFallback,
   HighlightedText,
   InlineContent,
-  WrappedParagraphRun,
   rangesForPiece,
+  WrappedParagraphRun,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
 import { locateExternalCjeuCitations } from "./fallback-legal-anchors";
@@ -66,8 +66,8 @@ import type {
   CitationAnchorSource,
   CitedProvisionTarget,
   DecisionProvisionAnchor,
-  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
   ReaderDecision,
 } from "./reader-types";
 import { sanitizeHref } from "./sanitize-href";

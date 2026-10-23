@@ -10,10 +10,10 @@ import {
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  type CorpusSearchPhase,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
-  type CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import {
