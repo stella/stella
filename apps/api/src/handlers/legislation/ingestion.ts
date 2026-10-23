@@ -4,8 +4,8 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import {
-  LEGISLATION_IDENTITY_MODES,
   isEligibleLegislationExpression,
+  LEGISLATION_IDENTITY_MODES,
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 
@@ -14,8 +14,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import {
-  LegislationRevision,
   LEGISLATION_CORPUS_DEPENDENCIES,
+  LegislationRevision,
 } from "@/api/handlers/legislation/revision";
 import type {
   LegislationAmendmentObservation,

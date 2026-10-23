@@ -59,9 +59,7 @@ export type SystemOneEntry =
 
 /** What the model evaluates: a passage, or an object of named parts. */
 export type SystemOneState =
-  | string
-  | SystemOneEntry[]
-  | Record<string, SystemOneEntry>;
+  string | SystemOneEntry[] | Record<string, SystemOneEntry>;
 
 type QuestionRequirements = {
   /** Tools must run before this question can be answered. */
@@ -342,8 +340,7 @@ export type SystemOneClientOptions = {
   fetcher?: Fetcher | undefined;
   /** Injected by tests to skip the backoff wait. */
   sleep?:
-    | ((ms: number, abortSignal?: AbortSignal) => Promise<void>)
-    | undefined;
+    ((ms: number, abortSignal?: AbortSignal) => Promise<void>) | undefined;
 };
 
 const abortError = (signal: AbortSignal): Error =>

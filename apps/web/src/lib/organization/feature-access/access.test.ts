@@ -4,8 +4,8 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  organizationSettingsKeys,
   optionalOrganizationSettingsOptions,
+  organizationSettingsKeys,
 } from "@/queries/organization-settings";
 
 import { loadCallerFeature } from "./access";

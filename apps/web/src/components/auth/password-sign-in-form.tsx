@@ -19,7 +19,7 @@ import {
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import { LastUsedFieldBadge } from "./last-used-sign-in";
 import { SIGN_IN_METHOD, signInMethodVariant } from "./sign-in-panel.logic";

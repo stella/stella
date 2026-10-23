@@ -116,10 +116,7 @@ export type McpSessionInitializedProperties = {
  * are three different facts.
  */
 export type FeedbackDeliveryOutcome =
-  | "delivered"
-  | "failed"
-  | "not_configured"
-  | "skipped_duplicate";
+  "delivered" | "failed" | "not_configured" | "skipped_duplicate";
 
 /**
  * One filed report, as telemetry. Content never appears here: the event says

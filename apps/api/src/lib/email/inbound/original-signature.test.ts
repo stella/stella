@@ -9,8 +9,8 @@ import {
   createOriginalSignatureVerifier,
 } from "./authentication";
 import {
-  ingestInboundMail,
   type InboundDeliveryOutcome,
+  ingestInboundMail,
   type PersistInboundDeliveryOptions,
 } from "./ingest";
 import { INBOUND_MAIL_LIMITS } from "./limits";

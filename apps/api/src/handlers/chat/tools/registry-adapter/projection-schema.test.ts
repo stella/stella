@@ -4,8 +4,8 @@ import {
   beforeEach,
   describe,
   expect,
-  test,
   expectTypeOf,
+  test,
 } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -24,9 +24,9 @@ import {
   contentText,
   deriveRefMediationEntry,
   passthroughId,
+  projectForChat,
   PROJECTION_SCHEMA_FAILURE_MESSAGE,
   projectionBranch,
-  projectForChat,
   publicUrl,
   renderProjectionShape,
   strippedField,

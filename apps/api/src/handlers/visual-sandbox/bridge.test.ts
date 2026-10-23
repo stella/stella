@@ -4,8 +4,8 @@ import { VISUAL_SANDBOX_LIMITS } from "@stll/api-contract/visual-sandbox";
 
 import {
   createVisualMessageHandler,
-  visualGuestPortFrom,
   type VisualGuestPort,
+  visualGuestPortFrom,
 } from "./bridge";
 
 const createFakePort = () => {

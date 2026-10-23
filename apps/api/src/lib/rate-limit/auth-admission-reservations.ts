@@ -5,8 +5,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { AuthRateLimitRedisClient } from "@/api/lib/rate-limit/auth-storage";
 import {
-  withCommandTimeout,
   type ScheduleTimeout,
+  withCommandTimeout,
 } from "@/api/lib/rate-limit/redis-command-timeout";
 import { coordinationKey } from "@/api/lib/redis-keys";
 
