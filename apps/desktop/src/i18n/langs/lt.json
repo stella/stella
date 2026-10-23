@@ -378,6 +378,9 @@
     "browserAppNameOnly": "Šiai naršyklei nustatyta įrašyti tik programos pavadinimą.",
     "captureDetails": "Taip pat įrašyti langų pavadinimus ir atvertus dokumentus",
     "captureDetailsDescription": "Išjungus nebeįrašomos naujos detalės. Ankstesnės lieka iki saugojimo laikotarpio pabaigos arba ištrynimo.",
+    "detectCalls": "Registruoti skambučius",
+    "detectCallsDescription": "Kai Teams, Zoom ar naršyklė naudoja mikrofoną, tas laikas skaičiuojamas kaip skambutis, net jei tik klausotės ar dirbate kitoje programoje. Garsas niekada neįrašomas.",
+    "callIn": "Skambutis: {app}",
     "accessibilityRequired": "Norėdami įrašyti detales, suteikite pritaikymo neįgaliesiems prieigą. Programų pavadinimai ir toliau įrašomi.",
     "openAccessibilitySettings": "Atverti pritaikymo neįgaliesiems nustatymus",
     "detailsUnavailable": "Šiame įrenginyje detalės nepasiekiamos. Programų pavadinimai ir toliau įrašomi.",
@@ -504,6 +507,7 @@
     "windowsKeyReserved": "Sparčiuosius klavišus su „Windows“ klavišu „Windows“ pasilieka sau. Naudokite Ctrl arba Alt.",
     "taken": "Kita programa jau naudoja {shortcut}. Pasirinkite kitą.",
     "unavailable": "Kita programa naudoja {shortcut}, todėl jis neatidaro iškarpinės. Pasirinkite kitą spartųjį klavišą.",
+    "managed": "Jūsų organizacija išjungė iškarpinės istoriją.",
     "action": {
       "copy": "Kopijuoti",
       "paste": "Įklijuoti",

@@ -6,9 +6,10 @@
 // high/critical advisory is recorded in scripts/dependency-audit-baseline.json
 // with a reason, and the --check mode fails only when a NEW high/critical
 // advisory appears that is not in the baseline. Known-and-accepted advisories
-// (transitive, non-reachable) are tracked, not silently ignored, and the guard
-// warns when a baselined advisory has been resolved so the baseline can be
-// ratcheted down.
+// (transitive, non-reachable) are tracked, not silently ignored. A baselined
+// advisory that is no longer reported only warns and flags the scheduled
+// remediation, which opens a pull request removing the stale entry: an advisory
+// disappearing is a state change, never a reason to fail main.
 //
 // This is a supply-chain complement to the 5-day `minimumReleaseAge` quarantine
 // in bunfig.toml (which blocks freshly published — potentially malicious —
@@ -19,13 +20,19 @@
 //   bun scripts/dependency-audit.ts                 report current high/critical advisories
 //   bun scripts/dependency-audit.ts --check         full-tree gate: exit 1 on a new high/critical advisory
 //   bun scripts/dependency-audit.ts --check-diff REF PR gate: audit only resolutions changed since REF
-//   bun scripts/dependency-audit.ts --release       release gate: exit 1 on any high/critical advisory
+//   bun scripts/dependency-audit.ts --release       release gate: apply baseline with stricter acceptance metadata
 //   bun scripts/dependency-audit.ts --write-baseline regenerate the baseline from the current audit
+//   bun scripts/dependency-audit.ts --prune-baseline remove acceptances whose advisory is no longer reported
 //   bun scripts/dependency-audit.ts --self-test     prove the comparison logic fires
 //
+// Every mode uses the same closed exit-code contract:
+//   0 pass, 1 new advisory, 2 baseline problem, 3 audit failure,
+//   4 unexpected error.
+//
 // A baseline entry may be temporary: `expiresOn` and `untilPatched` make the
-// acceptance lapse (and --check fail) after a date or once a patched release
-// is published; see scripts/dependency-audit-acceptance.ts.
+// acceptance of a still-reported advisory lapse (and --check fail) after a
+// date or once a patched release is published; see
+// scripts/dependency-audit-acceptance.ts.
 
 import { panic, Result } from "better-result";
 import { appendFileSync } from "node:fs";
@@ -47,10 +54,11 @@ const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_PATHS.dependencyAudit);
 const GATED_SEVERITIES = new Set(["high", "critical"]);
 
-const markAdvisoryFailure = (): void => {
+// Flags read by the workflow's remediation job.
+const markOutput = (name: "advisory_failure" | "stale_acceptance"): void => {
   const output = process.env["GITHUB_OUTPUT"];
   if (output !== undefined && output !== "") {
-    appendFileSync(output, "advisory_failure=true\n");
+    appendFileSync(output, `${name}=true\n`);
   }
 };
 
@@ -75,6 +83,13 @@ export type Baseline = {
   auditLevel: string;
   accepted: BaselineEntry[];
 };
+
+export class BaselineError extends Error {
+  override readonly name = "BaselineError";
+}
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -138,21 +153,25 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
 export const readBaseline = async (
   baselinePath: string = BASELINE_PATH,
 ): Promise<Baseline> => {
-  const file = Bun.file(baselinePath);
-  if (!(await file.exists())) {
-    return { note: "", auditLevel: "high", accepted: [] };
+  try {
+    const file = Bun.file(baselinePath);
+    if (!(await file.exists())) {
+      return { note: "", auditLevel: "high", accepted: [] };
+    }
+    const parsed: unknown = await file.json();
+    const accepted = isRecord(parsed) ? parsed["accepted"] : undefined;
+    return {
+      note: isRecord(parsed) ? asText(parsed["note"]) : "",
+      auditLevel: isRecord(parsed) ? asText(parsed["auditLevel"]) : "high",
+      accepted: Array.isArray(accepted)
+        ? accepted
+            .map(toBaselineEntry)
+            .filter((entry): entry is BaselineEntry => entry !== null)
+        : [],
+    };
+  } catch (error) {
+    throw new BaselineError(errorMessage(error), { cause: error });
   }
-  const parsed: unknown = await file.json();
-  const accepted = isRecord(parsed) ? parsed["accepted"] : undefined;
-  return {
-    note: isRecord(parsed) ? asText(parsed["note"]) : "",
-    auditLevel: isRecord(parsed) ? asText(parsed["auditLevel"]) : "high",
-    accepted: Array.isArray(accepted)
-      ? accepted
-          .map(toBaselineEntry)
-          .filter((entry): entry is BaselineEntry => entry !== null)
-      : [],
-  };
 };
 
 const GHSA_ID = /GHSA-[a-z0-9-]+/iu;
@@ -342,6 +361,38 @@ const report = (advisories: Advisory[]): void => {
   }
 };
 
+const saveBaseline = async (
+  baseline: Baseline,
+  baselinePath: string = BASELINE_PATH,
+): Promise<void> => {
+  await Bun.write(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+};
+
+// Drops only the acceptances whose advisory is no longer reported; it never
+// adds an entry, so it cannot accept a new advisory.
+export const pruneBaseline = async (
+  advisories: Advisory[],
+  baselinePath: string = BASELINE_PATH,
+): Promise<void> => {
+  const baseline = await readBaseline(baselinePath);
+  const { resolved } = diffAgainstBaseline(advisories, baseline);
+  if (resolved.length === 0) {
+    console.info("No stale acceptances to remove.");
+    return;
+  }
+  const resolvedIds = new Set(resolved.map(({ id }) => id));
+  await saveBaseline(
+    {
+      ...baseline,
+      accepted: baseline.accepted.filter(({ id }) => !resolvedIds.has(id)),
+    },
+    baselinePath,
+  );
+  console.info(
+    `Removed ${resolved.length} stale acceptance(s): ${[...resolvedIds].join(", ")}.`,
+  );
+};
+
 const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
   const existing = await readBaseline();
   const existingById = new Map(existing.accepted.map((e) => [e.id, e]));
@@ -364,7 +415,7 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
       };
     }),
   };
-  await Bun.write(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
+  await saveBaseline(baseline);
   console.info(
     `Wrote ${advisories.length} advisory(ies) to ${repoRelativePath(REPO_ROOT, BASELINE_PATH)}. Replace all TODO placeholders before committing the baseline.`,
   );
@@ -455,6 +506,20 @@ type WarnBeforeExpiryOptions = {
   format: WarningFormat;
 };
 
+const warn = (format: WarningFormat, title: string, message: string): void => {
+  switch (format) {
+    case "github":
+      console.warn(`::warning title=${title}::${githubCommandValue(message)}`);
+      break;
+    case "plain":
+      console.warn(`WARNING: ${message}`);
+      break;
+    default:
+      format satisfies never;
+      panic("unhandled warning format");
+  }
+};
+
 const warnBeforeExpiry = ({
   advisories,
   baseline,
@@ -466,20 +531,11 @@ const warnBeforeExpiry = ({
     current: advisories,
     today,
   })) {
-    const message = `${entry.id} for ${entry.package} is accepted until ${entry.expiresOn}; review or remediate it before expiry.`;
-    switch (format) {
-      case "github":
-        console.warn(
-          `::warning title=Dependency audit acceptance expiring::${githubCommandValue(message)}`,
-        );
-        break;
-      case "plain":
-        console.warn(`WARNING: ${message}`);
-        break;
-      default:
-        format satisfies never;
-        panic("unhandled warning format");
-    }
+    warn(
+      format,
+      "Dependency audit acceptance expiring",
+      `${entry.id} for ${entry.package} is accepted until ${entry.expiresOn}; review or remediate it before expiry.`,
+    );
   }
 };
 
@@ -492,10 +548,16 @@ type CheckOptions = {
   warningFormat?: WarningFormat;
 };
 
-export const check = async (
+type CheckResult = {
+  lapsed: LapsedAcceptance[];
+  newlyIntroduced: Advisory[];
+  status: number;
+};
+
+const checkResult = async (
   advisories: Advisory[],
   options: CheckOptions = {},
-): Promise<number> => {
+): Promise<CheckResult> => {
   const completeBaseline = options.baseline ?? (await readBaseline());
   const baseline =
     options.packages === undefined
@@ -513,14 +575,10 @@ export const check = async (
   );
   // UTC calendar date; an acceptance holds through its expiresOn day.
   const today = (options.now?.() ?? new Date()).toISOString().slice(0, 10);
-  warnBeforeExpiry({
-    advisories,
-    baseline,
-    today,
-    format:
-      options.warningFormat ??
-      (process.env["GITHUB_ACTIONS"] === "true" ? "github" : "plain"),
-  });
+  const warningFormat =
+    options.warningFormat ??
+    (process.env["GITHUB_ACTIONS"] === "true" ? "github" : "plain");
+  warnBeforeExpiry({ advisories, baseline, today, format: warningFormat });
   const lapsed = await checkLapsedAcceptances(
     advisories,
     baseline,
@@ -545,12 +603,12 @@ export const check = async (
   }
 
   if (resolved.length > 0) {
-    console.warn(
-      `${resolved.length} baselined advisory(ies) are no longer present — ratchet the baseline down (bun scripts/dependency-audit.ts --write-baseline):`,
+    warn(
+      warningFormat,
+      "Dependency audit acceptance stale",
+      `${resolved.map(({ id, package: pkg }) => `${id} for ${pkg}`).join(", ")} is accepted but no longer reported; the scheduled remediation removes the acceptance (bun scripts/dependency-audit.ts --prune-baseline).`,
     );
-    for (const advisory of resolved) {
-      console.warn(`  ${advisory.id}  ${advisory.package}`);
-    }
+    markOutput("stale_acceptance");
   }
 
   if (newlyIntroduced.length === 0) {
@@ -558,9 +616,13 @@ export const check = async (
       `No new high/critical advisories (${baseline.accepted.length} known and accepted).`,
     );
     if (lapsed.length > 0) {
-      markAdvisoryFailure();
+      markOutput("advisory_failure");
     }
-    return lapsed.length > 0 ? 1 : 0;
+    return {
+      lapsed,
+      newlyIntroduced,
+      status: lapsed.length > 0 ? 2 : 0,
+    };
   }
 
   console.error(
@@ -572,9 +634,18 @@ export const check = async (
   console.error(
     "\nFix the dependency (bun update / override), or, if it is genuinely not reachable, add it to scripts/dependency-audit-baseline.json with a reason.",
   );
-  markAdvisoryFailure();
-  return 1;
+  markOutput("advisory_failure");
+  return {
+    lapsed,
+    newlyIntroduced,
+    status: lapsed.length > 0 ? 2 : 1,
+  };
 };
+
+export const check = async (
+  advisories: Advisory[],
+  options: CheckOptions = {},
+): Promise<number> => (await checkResult(advisories, options)).status;
 
 // Prove the gate fires without waiting for a real new advisory: inject a
 // synthetic advisory that is absent from the baseline and assert it is caught,
@@ -590,8 +661,7 @@ const selfTest = async (): Promise<number> => {
   };
   const { newlyIntroduced } = diffAgainstBaseline([synthetic], baseline);
   if (!newlyIntroduced.some((a) => a.id === synthetic.id)) {
-    console.error("Self-test FAILED: synthetic advisory was not detected.");
-    return 1;
+    panic("Self-test FAILED: synthetic advisory was not detected.");
   }
 
   // A failing `bun audit` (nonzero exit, no parseable JSON) must be surfaced as
@@ -607,10 +677,7 @@ const selfTest = async (): Promise<number> => {
     auditFailureFailedClosed = error instanceof AuditCommandError;
   }
   if (!auditFailureFailedClosed) {
-    console.error(
-      "Self-test FAILED: a failing audit command was treated as clean.",
-    );
-    return 1;
+    panic("Self-test FAILED: a failing audit command was treated as clean.");
   }
 
   console.info(
@@ -658,20 +725,47 @@ const checkDiff = async (baseRevision: string): Promise<number> => {
   return check(advisories, { packages });
 };
 
-const checkRelease = async (): Promise<number> => {
-  const advisories = await collectGatedAdvisories();
-  if (advisories.length === 0) {
-    console.info("Release dependency audit found no high/critical advisories.");
-    return 0;
+export const checkRelease = async (
+  advisories: Advisory[],
+  options: CheckOptions = {},
+): Promise<number> => {
+  const baseline = options.baseline ?? (await readBaseline());
+  const result = await checkResult(advisories, { ...options, baseline });
+  const currentIds = new Set(advisories.map(({ id }) => id));
+  const invalidAcceptanceIds = new Set<string>();
+
+  for (const acceptance of baseline.accepted) {
+    if (!currentIds.has(acceptance.id)) {
+      continue;
+    }
+    console.warn(
+      `::warning title=Release dependency audit accepted advisory::${githubCommandValue(`${acceptance.id} for ${acceptance.package} is accepted by ${acceptance.owner} until ${acceptance.expiresOn ?? "missing"}.`)}`,
+    );
+    if (acceptance.expiresOn === undefined) {
+      invalidAcceptanceIds.add(acceptance.id);
+      console.error(
+        `Release dependency audit acceptance ${acceptance.id} must have expiresOn; untilPatched alone is not sufficient.`,
+      );
+    }
+    const owner = acceptance.owner.trim();
+    if (owner === "" || owner.toUpperCase().startsWith("TODO")) {
+      invalidAcceptanceIds.add(acceptance.id);
+      console.error(
+        `Release dependency audit acceptance ${acceptance.id} must have a non-placeholder owner.`,
+      );
+    }
   }
-  console.error("Release dependency audit found high/critical advisories:");
-  for (const advisory of advisories) {
-    console.error(formatAdvisory(advisory));
+
+  if (invalidAcceptanceIds.size > 0 || result.lapsed.length > 0) {
+    return 2;
   }
-  return 1;
+  return result.status;
 };
 
-const main = async (): Promise<void> => {
+const runReleaseCheck = async (): Promise<number> =>
+  checkRelease(await collectGatedAdvisories());
+
+const main = async (): Promise<number> => {
   const arg = process.argv[2];
 
   if (arg === "--check-diff") {
@@ -681,41 +775,54 @@ const main = async (): Promise<void> => {
         "--check-diff requires a merge-base revision",
       );
     }
-    process.exit(await checkDiff(baseRevision));
+    return checkDiff(baseRevision);
   }
 
   if (arg === "--release") {
-    process.exit(await checkRelease());
+    return runReleaseCheck();
   }
 
   if (arg === "--self-test") {
-    process.exit(await selfTest());
+    return selfTest();
   }
 
   if (arg === "--write-baseline") {
     await writeBaseline(await collectGatedAdvisories());
-    return;
+    return 0;
+  }
+
+  if (arg === "--prune-baseline") {
+    await pruneBaseline(await collectGatedAdvisories());
+    return 0;
   }
 
   const advisories = await collectGatedAdvisories();
 
   if (arg === "--check") {
-    process.exit(await check(advisories));
+    return check(advisories);
   }
 
   report(advisories);
+  return 0;
+};
+
+export const runDependencyAuditCli = async (
+  run: () => Promise<number> = main,
+): Promise<number> => {
+  try {
+    return await run();
+  } catch (error) {
+    console.error(errorMessage(error));
+    if (error instanceof BaselineError) {
+      return 2;
+    }
+    if (error instanceof AuditCommandError) {
+      return 3;
+    }
+    return 4;
+  }
 };
 
 if (import.meta.main) {
-  try {
-    await main();
-  } catch (error) {
-    if (error instanceof AuditCommandError) {
-      // Fail closed: the audit tool itself failed, so we cannot assert the
-      // lockfile is clean. Surface the reason and exit nonzero to block the gate.
-      console.error(error.message);
-      process.exit(1);
-    }
-    throw error;
-  }
+  process.exit(await runDependencyAuditCli());
 }

@@ -378,6 +378,9 @@
     "browserAppNameOnly": "Este navegador está configurado para registrar apenas o nome do aplicativo.",
     "captureDetails": "Registrar também títulos de janelas e documentos abertos",
     "captureDetailsDescription": "Desativar esta opção interrompe o registro de novos detalhes. Os anteriores permanecem até o fim do prazo de retenção ou a exclusão.",
+    "detectCalls": "Registrar chamadas",
+    "detectCallsDescription": "Enquanto o Teams, o Zoom ou um navegador usa seu microfone, esse tempo conta como a chamada, mesmo que você só esteja ouvindo ou trabalhando em outro app. O áudio nunca é gravado.",
+    "callIn": "Chamada no {app}",
     "accessibilityRequired": "Permita o acesso de Acessibilidade para registrar detalhes. Os nomes dos aplicativos continuam sendo registrados.",
     "openAccessibilitySettings": "Abrir ajustes de Acessibilidade",
     "detailsUnavailable": "Os detalhes não estão disponíveis neste dispositivo. Os nomes dos aplicativos continuam sendo registrados.",
@@ -504,6 +507,7 @@
     "windowsKeyReserved": "O Windows reserva para si os atalhos com a tecla Windows. Use Ctrl ou Alt.",
     "taken": "Outro app já usa {shortcut}. Escolha outro.",
     "unavailable": "Outro app usa {shortcut}, então ele não abre a área de transferência. Escolha outro atalho.",
+    "managed": "Sua organização desativou o histórico da área de transferência.",
     "action": {
       "copy": "Copiar",
       "paste": "Colar",

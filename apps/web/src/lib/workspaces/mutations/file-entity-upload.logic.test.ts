@@ -135,7 +135,7 @@ describe("file entity upload retries", () => {
     });
   });
 
-  test("a finalize the server refused for good starts a fresh upload on retry", async () => {
+  test("a finalize the server refused for good cannot be retried", async () => {
     const script = scriptedSteps([
       { type: "throw", error: httpError(422) },
       { type: "ok" },
@@ -147,9 +147,9 @@ describe("file entity upload retries", () => {
     queue.retryFailed();
     await flush();
 
-    expect(script.reservations).toEqual(["upload-1", "upload-2"]);
-    expect(script.finalizes).toEqual(["upload-1", "upload-2"]);
-    expect(done.at(-1)).toMatchObject({ completed: ["entity-for-upload-2"] });
+    expect(script.reservations).toEqual(["upload-1"]);
+    expect(script.finalizes).toEqual(["upload-1"]);
+    expect(done.at(-1)).toMatchObject({ completed: [], failed: 1 });
   });
 
   test("cancelling during finalize releases the staged upload", async () => {

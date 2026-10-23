@@ -4,6 +4,8 @@ import { detached } from "@/lib/detached";
 import { transformUnknownError } from "@/lib/errors/client";
 
 const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_REQUEST_TIMEOUT = 408;
+const HTTP_CONFLICT = 409;
 const HTTP_SERVER_ERROR_MIN = 500;
 const DEFAULT_RETRY_AFTER_S = 60;
 const MAX_RETRIES = 3;
@@ -19,9 +21,12 @@ type UploadState =
 
 type UploadFn<T> = (file: File, signal: AbortSignal) => Promise<T>;
 
-type FailedUpload = {
+export type UploadFailureDisposition = "permanent" | "retryable";
+
+export type FailedUpload = {
   file: File;
   error: Error;
+  disposition: UploadFailureDisposition;
 };
 
 /**
@@ -222,9 +227,15 @@ export class UploadQueue<T> {
     if (this.state !== "done" && this.state !== "cancelled") {
       return;
     }
+    const retryable = this.failed.filter(
+      ({ disposition }) => disposition === "retryable",
+    );
+    if (retryable.length === 0 && this.state === "done") {
+      return;
+    }
     this.runId++;
     this.fileRunIds.clear();
-    this.pending = this.failed.map(({ file }) => ({ file, attempt: 0 }));
+    this.pending = retryable.map(({ file }) => ({ file, attempt: 0 }));
     this.total = this.pending.length;
     this.failed = [];
     this.completed = [];
@@ -319,7 +330,8 @@ export class UploadQueue<T> {
         return;
       }
 
-      if (isTransientUploadStatus(status) && attempt < MAX_RETRIES) {
+      const isRetryable = uploadFailureDisposition(error) === "retryable";
+      if (isRetryable && status !== HTTP_CONFLICT && attempt < MAX_RETRIES) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 4000;
         this.retrying++;
 
@@ -365,10 +377,10 @@ export class UploadQueue<T> {
         return;
       }
 
-      // 4xx (not 429) or exhausted retries: permanent failure
       this.failed.push({
         file,
         error: transformUnknownError(error),
+        disposition: uploadFailureDisposition(error),
       });
       this.emitProgress();
       this.pump();
@@ -431,7 +443,44 @@ export const uploadErrorStatus = (error: unknown): number => {
   ) {
     return error.status;
   }
+  if (
+    error !== null &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response instanceof Response
+  ) {
+    return error.response.status;
+  }
   return 0;
+};
+
+/**
+ * Classify upload failures for both automatic and manual retry. HTTP client
+ * rejections are permanent, while failures that may clear without changing
+ * the file can be attempted again by the user after automatic retries end.
+ */
+export const uploadFailureDisposition = (
+  error: unknown,
+): UploadFailureDisposition => {
+  const status = uploadErrorStatus(error);
+  if (status !== 0) {
+    return status === HTTP_REQUEST_TIMEOUT ||
+      status === HTTP_CONFLICT ||
+      status === HTTP_TOO_MANY_REQUESTS ||
+      status >= HTTP_SERVER_ERROR_MIN
+      ? "retryable"
+      : "permanent";
+  }
+  if (
+    error instanceof DOMException &&
+    (error.name === "TimeoutError" || error.name === "NetworkError")
+  ) {
+    return "retryable";
+  }
+  if (error instanceof TypeError) {
+    return "retryable";
+  }
+  return "permanent";
 };
 
 /**

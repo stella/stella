@@ -18,10 +18,9 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { withActiveUpload } from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
@@ -29,6 +28,7 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { validateUploadFileNotEmpty } from "@/lib/files/upload-file-validation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -44,19 +44,8 @@ import {
   createFileEntityUploader,
   type FileEntityUploadGrant,
 } from "@/lib/workspaces/mutations/file-entity-upload.logic";
+import { showUploadFailureToast } from "@/lib/workspaces/mutations/upload-failure-toast";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-
-const MAX_DISPLAYED_FAILURES = 5;
-
-const formatFailedFiles = (names: readonly string[]): string => {
-  const shown = names.slice(0, MAX_DISPLAYED_FAILURES);
-  const remaining = names.length - shown.length;
-  const list = shown.join(", ");
-  if (remaining > 0) {
-    return `${list} (+${remaining})`;
-  }
-  return list;
-};
 
 type UploadResult = {
   entityId: string;
@@ -88,6 +77,9 @@ const prepareFolderTreeUpload = async ({
   propertyId,
   plan,
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
+  for (const placement of plan.files) {
+    readQueryResult(validateUploadFileNotEmpty(placement.file.size));
+  }
   const reservable = folderReservableFiles(plan);
   const files = [];
   for (const { key, placement } of reservable) {
@@ -241,14 +233,16 @@ const prepareSingleFileEntityUpload = async ({
     workspaceId: toSafeId<"workspace">(workspaceId),
   });
   const presign = await wsClient.presign.post(
-    buildEntityCreatePresignPayload({
-      propertyId,
-      parentId,
-      name: file.name,
-      mimeType: file.type || "application/octet-stream",
-      size: file.size,
-      sha256Hex,
-    }),
+    readQueryResult(
+      buildEntityCreatePresignPayload({
+        propertyId,
+        parentId,
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        sha256Hex,
+      }),
+    ),
     { fetch: { signal } },
   );
   if (presign.error) {
@@ -308,12 +302,9 @@ const putFileEntity = async ({
     });
   }
   if (!putResponse.ok) {
-    const detail = await putResponse.text().catch(() => "");
-    const error = new ClientOperationError({
-      action: "upload-file-to-s3",
-      message: `S3 rejected upload (${putResponse.status}${
-        detail ? `: ${detail.slice(0, 200)}` : ""
-      })`,
+    const error = toAPIError({
+      status: putResponse.status,
+      value: await putResponse.text().catch(() => undefined),
     });
     attachResponseForRetry(error, putResponse);
     await abortUpload(workspaceId, uploadId);
@@ -373,6 +364,7 @@ type BatchUploadLabels = {
   rateLimited: (seconds: number) => string;
   cancel: string;
   retryFailed: (count: number) => string;
+  additionalFailures: (count: number) => string;
 };
 
 export const useBatchUploadLabels = (): BatchUploadLabels => {
@@ -399,6 +391,7 @@ export const useBatchUploadLabels = (): BatchUploadLabels => {
     rateLimited: (seconds) => t("workspaces.files.rateLimited", { seconds }),
     cancel: t("common.cancel"),
     retryFailed: (count) => t("workspaces.files.retryFailed", { count }),
+    additionalFailures: (count) => t("chat.historyContext.unnamed", { count }),
   };
 };
 
@@ -535,8 +528,7 @@ const runUploadBatch = async ({
         );
       }
 
-      const failedNames = failed.map((f) => f.file.name);
-      const failedCount = failedNames.length;
+      const failedCount = failed.length;
       const successCount = completed.length;
 
       if (cancelled) {
@@ -557,31 +549,31 @@ const runUploadBatch = async ({
           actionProps: undefined,
         });
       } else if (successCount > 0) {
-        stellaToast.update(toastId, {
-          type: "warning",
+        showUploadFailureToast({
+          toastId,
           title: labels.partial(failedCount, total),
-          description: formatFailedFiles(failedNames),
-          timeout: 0,
-          actionProps: {
-            children: labels.retryFailed(failedCount),
-            onClick: () => queue.retryFailed(),
+          type: "warning",
+          failures: failed,
+          labels: {
+            reasonFallback: labels.uploadFailed,
+            additionalFailures: labels.additionalFailures,
+            retryFailed: labels.retryFailed,
           },
+          onRetry: () => queue.retryFailed(),
         });
       } else {
-        notifyUserError(
-          failed.find(({ error }) => !actionAdmissionOutcome(error))?.error ??
-            failed.at(0)?.error,
-          labels.uploadFailed,
-          {
-            toastId,
-            description: formatFailedFiles(failedNames),
-            timeout: 0,
-            actionProps: {
-              children: labels.retryFailed(failedCount),
-              onClick: () => queue.retryFailed(),
-            },
+        showUploadFailureToast({
+          toastId,
+          title: labels.uploadFailed,
+          type: "error",
+          failures: failed,
+          labels: {
+            reasonFallback: labels.uploadFailed,
+            additionalFailures: labels.additionalFailures,
+            retryFailed: labels.retryFailed,
           },
-        );
+          onRetry: () => queue.retryFailed(),
+        });
       }
 
       if (renamedCount > 0) {
@@ -868,7 +860,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   };
 
   const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
-    if (isPending || !hasUploadInputItems(input)) {
+    if (!hasUploadInputItems(input)) {
       return;
     }
     detached(
