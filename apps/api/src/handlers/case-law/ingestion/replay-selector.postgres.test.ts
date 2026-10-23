@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_RAW_GENERATION_UNKNOWN,
   caseLawDecisions,
   caseLawReplayBlocked,
   caseLawSources,
@@ -106,6 +107,7 @@ if (!databaseUrl || !enabled) {
         });
         if (fixture.blockedVersion !== undefined) {
           await db.insert(caseLawReplayBlocked).values({
+            sourceHash: CASE_LAW_RAW_GENERATION_UNKNOWN,
             sourceId,
             decisionId: fixture.id,
             parserVersionFrom: fixture.parserVersion,

@@ -9,6 +9,7 @@ import { DAY_IN_MS } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  CASE_LAW_RAW_GENERATION_UNKNOWN,
   caseLawDecisions,
   caseLawReplayBatches,
   caseLawReplayDailyRows,
@@ -916,6 +917,13 @@ if (!databaseUrl || !enabled) {
       if (reserved.type !== "reserved") {
         return;
       }
+      const replayedHash =
+        (
+          await db
+            .select({ sourceHash: caseLawDecisions.sourceHash })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+        ).at(0)?.sourceHash ?? panic("Expected replayed raw generation");
       const completion = {
         report: {
           id: reserved.batch.decisionId,
@@ -983,12 +991,12 @@ if (!databaseUrl || !enabled) {
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual(reserved);
       await store.completeBatch(reserved.batch, completion);
       await store.completeBatch(reserved.batch, completion);
-      expect(
-        await db
-          .select()
-          .from(caseLawReplayBlocked)
-          .where(eq(caseLawReplayBlocked.sourceId, source.id)),
-      ).toHaveLength(1);
+      const terminalReceipts = await db
+        .select()
+        .from(caseLawReplayBlocked)
+        .where(eq(caseLawReplayBlocked.sourceId, source.id));
+      expect(terminalReceipts).toHaveLength(1);
+      expect(terminalReceipts.at(0)?.sourceHash).toBe(replayedHash);
       expect(
         await db
           .select()
@@ -1330,6 +1338,22 @@ if (!databaseUrl || !enabled) {
           },
         }),
       ).toBeNull();
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceHash: "f".repeat(64) })
+        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      expect(
+        await selectScopeEnd({
+          scopedDb,
+          sourceId: source.id,
+          scope,
+          selection: {
+            type: "background",
+            currentParserVersion: 2,
+            mode: "enrolled",
+          },
+        }),
+      ).toBe(reserved.batch.decisionId);
       expect(
         await selectScopeEnd({
           scopedDb,
@@ -1354,6 +1378,52 @@ if (!databaseUrl || !enabled) {
           )
       ).at(0);
       expect(checkpoint?.cursor).toBe(reserved.batch.decisionId);
+    });
+
+    test("a raw-less terminal receipt records the unknown-generation sentinel", async () => {
+      const { source, store } = await fixture(1);
+      const decision = (
+        await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, source.id))
+          .limit(1)
+      ).at(0);
+      if (!decision) {
+        throw new TypeError("Expected raw-less replay fixture");
+      }
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceHash: null })
+        .where(eq(caseLawDecisions.id, decision.id));
+      const reserved = await store.reserveBatch(
+        source,
+        "2026-10-01",
+        verdict(),
+      );
+      if (reserved.type !== "reserved") {
+        throw new TypeError("Expected raw-less replay reservation");
+      }
+      await store.completeBatch(reserved.batch, {
+        report: {
+          id: reserved.batch.decisionId,
+          caseNumber: "fixture",
+          language: "cs",
+          outcome: REPLAY_ROW_OUTCOME.REJECTED,
+          rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+          detail: "fixture identity changed",
+        },
+        durationMs: 1,
+        verdict: verdict(),
+      });
+      expect(
+        (
+          await db
+            .select({ sourceHash: caseLawReplayBlocked.sourceHash })
+            .from(caseLawReplayBlocked)
+            .where(eq(caseLawReplayBlocked.decisionId, decision.id))
+        ).at(0)?.sourceHash,
+      ).toBe(CASE_LAW_RAW_GENERATION_UNKNOWN);
     });
     test("an incomplete reported write stays reserved until the persisted stamp proves recovery", async () => {
       const { source } = await fixture(10);
@@ -2715,8 +2785,8 @@ if (!databaseUrl || !enabled) {
               SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${sourceId}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
                 CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
               FROM generate_series(1, 1000) AS series(n)`);
-            await tx.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, outcome, reason, detail)
-              SELECT ${sourceId}, id, 1, 2, 'rejected', 'missing-payload', 'synthetic blocked fixture'
+            await tx.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, source_hash, parser_version_from, parser_version_to, outcome, reason, detail)
+              SELECT ${sourceId}, id, coalesce(source_hash, ${CASE_LAW_RAW_GENERATION_UNKNOWN}), 1, 2, 'rejected', 'missing-payload', 'synthetic blocked fixture'
               FROM case_law_decisions WHERE source_id = ${sourceId} AND case_number LIKE 'plan-%'`);
             // Enrolment will ship these corpus indexes; the dormant feature
             // creates them only inside this rolled-back planner fixture.

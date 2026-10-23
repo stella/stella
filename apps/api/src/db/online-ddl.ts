@@ -153,6 +153,34 @@ export const validateConstraint = ({
     `ALTER TABLE public.${quoteIdentifier(tableName)} VALIDATE CONSTRAINT ${quoteIdentifier(constraintName)}`,
   );
 
+export const addNotNullCheckNotValid = ({
+  tableName,
+  constraintName,
+  columnName,
+}: OnlineConstraintValidation & { columnName: string }): LockTakingStatement =>
+  lockTaking(
+    tableName,
+    `ALTER TABLE public.${quoteIdentifier(tableName)} ADD CONSTRAINT ${quoteIdentifier(constraintName)} CHECK (${quoteIdentifier(columnName)} IS NOT NULL) NOT VALID`,
+  );
+
+export const finalizeNotNullPrimaryKey = ({
+  tableName,
+  columnName,
+  checkName,
+  primaryKeyName,
+  indexName,
+}: {
+  tableName: string;
+  columnName: string;
+  checkName: string;
+  primaryKeyName: string;
+  indexName: string;
+}): LockTakingStatement =>
+  lockTaking(
+    tableName,
+    `BEGIN; ALTER TABLE public.${quoteIdentifier(tableName)} ALTER COLUMN ${quoteIdentifier(columnName)} SET NOT NULL; ALTER TABLE public.${quoteIdentifier(tableName)} DROP CONSTRAINT ${quoteIdentifier(primaryKeyName)}; ALTER TABLE public.${quoteIdentifier(tableName)} ADD CONSTRAINT ${quoteIdentifier(primaryKeyName)} PRIMARY KEY USING INDEX ${quoteIdentifier(indexName)}; ALTER TABLE public.${quoteIdentifier(tableName)} DROP CONSTRAINT ${quoteIdentifier(checkName)}; COMMIT`,
+  );
+
 /** Takes SHARE UPDATE EXCLUSIVE, the same lock as a validation. */
 export const analyzeTable = (tableName: string): LockTakingStatement =>
   lockTaking(tableName, `ANALYZE public.${quoteIdentifier(tableName)}`);

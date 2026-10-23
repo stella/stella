@@ -307,6 +307,8 @@ export const TRANSITIONS = {
   bilingualTranslationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   billingArrangements: { unmanaged: UNMANAGED_REASONS.configRow },
   bufferObjectCleanupIntents: { unmanaged: UNMANAGED_REASONS.cleanup },
+  caseLawBatchSlotRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawBatchSlotSources: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawCitationResolutionCensusRuns: {
     unmanaged: UNMANAGED_REASONS.workerRun,
   },

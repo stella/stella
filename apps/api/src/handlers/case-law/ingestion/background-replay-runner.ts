@@ -242,7 +242,11 @@ export const createBackgroundReplayRunner = ({
         failureCode: failure.code,
         messageClass: failure.messageClass,
       });
-      const disposition = await recordFailure(batch, failure);
+      const replayedSourceHash = reports.get(batch.id)?.replayedSourceHash;
+      const disposition = await recordFailure(batch, {
+        ...failure,
+        ...(replayedSourceHash === undefined ? {} : { replayedSourceHash }),
+      });
       reports.delete(batch.id);
       return disposition;
     },

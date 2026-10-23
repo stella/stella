@@ -21,6 +21,14 @@ import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import {
+  CASE_LAW_PARSED_SOURCE_HASH_REPAIR,
+  CASE_LAW_PARSE_PENDING_INDEX,
+} from "./case-law-parsed-source-hash-repair";
+import {
+  CASE_LAW_REPLAY_RECEIPT_GENERATION_INDEX,
+  CASE_LAW_REPLAY_RECEIPT_REPAIR,
+} from "./case-law-replay-receipt-repair";
+import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
@@ -731,6 +739,8 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
  */
 export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
   ...ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+  CASE_LAW_PARSE_PENDING_INDEX.name,
+  CASE_LAW_REPLAY_RECEIPT_GENERATION_INDEX.name,
   ...ONLINE_MIGRATION_INDEX_CUTOVERS.flatMap(({ final, staged }) => [
     final.name,
     staged.name,
@@ -745,6 +755,8 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CASE_LAW_PARSED_SOURCE_HASH_REPAIR,
+  CASE_LAW_REPLAY_RECEIPT_REPAIR,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,

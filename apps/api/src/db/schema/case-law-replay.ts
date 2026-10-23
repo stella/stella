@@ -13,6 +13,11 @@ import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-t
 import { caseLawSources } from "./case-law";
 import { jsonb, p, safeUuid, sql, timestamptz } from "./common";
 
+declare const caseLawBatchSlotRunIdBrand: unique symbol;
+type CaseLawBatchSlotRunId = string & {
+  readonly [caseLawBatchSlotRunIdBrand]: true;
+};
+
 const REPLAY_ATTEMPT_STATES = ["idle", "picked-up"] as const;
 
 export const REPLAY_BATCH_STATUSES = [
@@ -39,6 +44,139 @@ export const REPLAY_BLOCKED_REASONS = [
   "missing-payload",
   ...Object.values(STORED_RAW_REPARSE_REJECTION),
 ] as const;
+
+export const CASE_LAW_BATCH_SLOT_STATUSES = [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+] as const;
+export const CASE_LAW_BATCH_SOURCE_STAGES = [
+  "fetch",
+  "parse",
+  "complete",
+] as const;
+export const CASE_LAW_BATCH_SOURCE_STATUSES = [
+  "pending",
+  "leased",
+  "retryable",
+  "completed",
+  "failed",
+] as const;
+export const CASE_LAW_FETCH_RECEIPT_OUTCOMES = [
+  "stored",
+  "unchanged",
+  "retryable",
+  "refused",
+  "absent",
+] as const;
+
+const valuesSql = (values: readonly string[]) =>
+  sql.join(
+    values.map((value) => sql.raw(`'${value}'`)),
+    sql`, `,
+  );
+
+export const caseLawBatchSlotRuns = p.pgTable.withRLS(
+  "case_law_batch_slot_runs",
+  {
+    id: p.uuid().$type<CaseLawBatchSlotRunId>().defaultRandom().primaryKey(),
+    slotDate: p.date("slot_date").notNull().unique(),
+    status: p.text({ enum: CASE_LAW_BATCH_SLOT_STATUSES }).notNull(),
+    targetParserVersions: jsonb("target_parser_versions")
+      .$type<Record<string, number>>()
+      .notNull(),
+    startedAt: timestamptz("started_at"),
+    finishedAt: timestamptz("finished_at"),
+  },
+  (t) => [
+    p.check(
+      "case_law_batch_slot_runs_status_check",
+      sql`${t.status} IN (${valuesSql(CASE_LAW_BATCH_SLOT_STATUSES)})`,
+    ),
+    p.pgPolicy("case_law_batch_slot_runs_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_batch_slot_runs'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_batch_slot_runs'::regclass)`,
+    }),
+  ],
+);
+
+export const caseLawBatchSlotSources = p.pgTable.withRLS(
+  "case_law_batch_slot_sources",
+  {
+    slotRunId: p
+      .uuid("slot_run_id")
+      .$type<CaseLawBatchSlotRunId>()
+      .notNull()
+      .references(() => caseLawBatchSlotRuns.id, { onDelete: "restrict" }),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "restrict" }),
+    stage: p.text({ enum: CASE_LAW_BATCH_SOURCE_STAGES }).notNull(),
+    startingCursor: p.text("starting_cursor"),
+    leaseToken: p.uuid("lease_token"),
+    status: p.text({ enum: CASE_LAW_BATCH_SOURCE_STATUSES }).notNull(),
+    attemptCount: p.integer("attempt_count").default(0).notNull(),
+    retryAt: timestamptz("retry_at"),
+    failureCode: p.text("failure_code"),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.slotRunId, t.sourceId] }),
+    p.check(
+      "case_law_batch_slot_sources_stage_check",
+      sql`${t.stage} IN (${valuesSql(CASE_LAW_BATCH_SOURCE_STAGES)})`,
+    ),
+    p.check(
+      "case_law_batch_slot_sources_status_check",
+      sql`${t.status} IN (${valuesSql(CASE_LAW_BATCH_SOURCE_STATUSES)})`,
+    ),
+    p.check(
+      "case_law_batch_slot_sources_attempt_count_check",
+      sql`${t.attemptCount} >= 0`,
+    ),
+    p.pgPolicy("case_law_batch_slot_sources_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_batch_slot_sources'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_batch_slot_sources'::regclass)`,
+    }),
+  ],
+);
+
+export const caseLawFetchItemReceipts = p.pgTable.withRLS(
+  "case_law_fetch_item_receipts",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "restrict" }),
+    sourceDocumentIdentity: p.text("source_document_identity").notNull(),
+    rawHash: p.varchar("raw_hash", { length: 64 }).notNull(),
+    outcome: p.text({ enum: CASE_LAW_FETCH_RECEIPT_OUTCOMES }).notNull(),
+    attemptCount: p.integer("attempt_count").default(0).notNull(),
+    retryAt: timestamptz("retry_at"),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.sourceDocumentIdentity, t.rawHash],
+    }),
+    p.check(
+      "case_law_fetch_item_receipts_outcome_check",
+      sql`${t.outcome} IN (${valuesSql(CASE_LAW_FETCH_RECEIPT_OUTCOMES)})`,
+    ),
+    p.check(
+      "case_law_fetch_item_receipts_attempt_count_check",
+      sql`${t.attemptCount} >= 0`,
+    ),
+    p.pgPolicy("case_law_fetch_item_receipts_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_fetch_item_receipts'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_fetch_item_receipts'::regclass)`,
+    }),
+  ],
+);
 
 // Unchanged rows consume read+parse work and count toward the daily row budget.
 // Reservations count toward the daily budget before applying a row. A crash
@@ -150,6 +288,9 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
 // Any terminal receipt excludes its target version until the parser advances.
 // This existing table also owns changed and unchanged terminal receipts.
 // Decision IDs intentionally have no FK: receipts survive decision cleanup.
+/** A replay receipt whose decision predates durable raw-generation hashes. */
+export const CASE_LAW_RAW_GENERATION_UNKNOWN = "raw-generation-unknown";
+
 export const caseLawReplayBlocked = p.pgTable.withRLS(
   "case_law_replay_blocked",
   {
@@ -157,6 +298,7 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "restrict" }),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    sourceHash: p.varchar("source_hash", { length: 64 }).notNull(),
     parserVersionFrom: p.integer("parser_version_from"),
     parserVersionTo: p.integer("parser_version_to").notNull(),
     outcome: p.text({ enum: REPLAY_TERMINAL_OUTCOMES }).notNull(),
@@ -165,7 +307,7 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
-    p.primaryKey({ columns: [t.decisionId, t.parserVersionTo] }),
+    p.primaryKey({ columns: [t.decisionId, t.sourceHash, t.parserVersionTo] }),
     p
       .index("case_law_replay_blocked_source_version_idx")
       .on(t.sourceId, t.parserVersionTo, t.decisionId),
