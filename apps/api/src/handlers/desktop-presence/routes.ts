@@ -22,5 +22,6 @@ export const desktopPresenceRoute = new Elysia({
   .guard({ validateAuth: true })
   .get("/", read.handler, {
     permissions: read.config.permissions,
+    accountAccess: read.config.accountAccess,
     response: read.config.response,
   });
