@@ -954,7 +954,8 @@
       "searchable": "Searchable",
       "title": "Case-law coverage",
       "totalFrom": "Total from {date}",
-      "unavailable": "Coverage figures are unavailable right now."
+      "unavailable": "Coverage figures are unavailable right now.",
+      "unreadListingPeriods": "Listing periods not read"
     },
     "decisionNotFound": "Decision not found",
     "decisionTypes": {
