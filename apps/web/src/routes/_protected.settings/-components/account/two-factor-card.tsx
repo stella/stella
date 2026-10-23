@@ -7,11 +7,10 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -34,10 +33,11 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { linkedAccountsOptions } from "@/lib/account/queries";
-import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import {
@@ -47,7 +47,6 @@ import {
 } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -277,16 +276,6 @@ const downloadBackupCodes = (codes: readonly string[]) => {
 const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
   const t = useTranslations();
 
-  const handleCopyAll = async () => {
-    const copied = await copyToClipboard(codes.join("\n"));
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
-
   return (
     <div className="flex flex-col gap-3">
       <div className="bg-muted grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-md p-3 font-mono text-sm">
@@ -295,15 +284,12 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
         ))}
       </div>
       <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            detached(handleCopyAll(), "two-factor-card.copy-all");
-          }}
+        <CopyActionButton
+          label={t("settings.account.twoFactor.copyAllCodes")}
           size="sm"
+          text={codes.join("\n")}
           variant="outline"
-        >
-          {t("settings.account.twoFactor.copyAllCodes")}
-        </Button>
+        />
         <Button
           onClick={() => downloadBackupCodes(codes)}
           size="sm"

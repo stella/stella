@@ -13,7 +13,7 @@ import {
   AddCommentIcon,
   Building2Icon,
   ChevronDownIcon,
-  CopyIcon,
+  CopyFromMenuIcon,
   HighlighterIcon,
   LockIcon,
   SparklesIcon,
@@ -696,7 +696,7 @@ export const AnnotationToolbar = ({
             size="sm"
             variant="ghost"
           >
-            <CopyIcon className="size-3.5" />
+            <CopyFromMenuIcon className="size-3.5" />
             {t("common.copy")}
             <ChevronDownIcon className="size-3" />
           </Button>

@@ -109,6 +109,7 @@ type RunCommand = (
   command: ActivityCommand,
   args?: Record<string, unknown>,
   onSuccess?: () => void,
+  onFailure?: () => void,
 ) => void;
 
 const RETENTION_LABEL_KEYS = {
@@ -627,8 +628,13 @@ const DayContent = ({
       onReviewStatusChange={onReviewStatusChange}
       header={header}
       snapshot={snapshot}
-      onCopy={(text, onSuccess) =>
-        onCommand("activity_copy_text", { text }, onSuccess)
+      onCopy={(text, onSettled) =>
+        onCommand(
+          "activity_copy_text",
+          { text },
+          () => onSettled(true),
+          () => onSettled(false),
+        )
       }
     />
   );
@@ -1267,6 +1273,7 @@ const ActivityApp = () => {
     command: ActivityCommand,
     args: Record<string, unknown> = {},
     onSuccess?: () => void,
+    onFailure?: () => void,
   ) => {
     const pending =
       REVIEW_PENDING[reviewStatusRef.current] ||
@@ -1303,6 +1310,7 @@ const ActivityApp = () => {
           ? t(BLOCKED_DELETION_NOTICE[view.snapshot.deletionStatus])
           : t("pendingActivityProtected"),
       );
+      onFailure?.();
       return;
     }
     setError(null);
@@ -1312,6 +1320,7 @@ const ActivityApp = () => {
         return undefined;
       })
       .catch((error: unknown) => {
+        onFailure?.();
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,

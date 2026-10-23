@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { type Context, type Static, t } from "elysia";
 
+import { dropOriginBoundCors } from "@/api/handlers/public-cors";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -75,6 +76,7 @@ const readMetadata = async function* (
   mode: McpMode,
   set: Context["set"],
 ): SafeHandlerGenerator<DiscoveryMetadata> {
+  dropOriginBoundCors(set);
   for (const [key, value] of createMcpMetadataHeaders()) {
     set.headers[key] = value;
   }
