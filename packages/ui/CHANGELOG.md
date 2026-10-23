@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.49.3
+
+### Patch Changes
+
+- [#6583](https://github.com/stella/stella/pull/6583) [`85cae51`](https://github.com/stella/stella/commit/85cae51c030a8fbb6421dd13456001dd5a9dcdde) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The outline rail opens its panel when the pointer rests on the tick strip, not the moment it crosses it.
+
 ## 0.49.2
 
 ### Patch Changes
