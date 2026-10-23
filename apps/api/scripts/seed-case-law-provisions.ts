@@ -26,9 +26,9 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { section51StatuteAst } from "@stll/legal-ast/fixtures/cz-262-2006-section-51";
 import {
-  PROVISION_SPAN_PROJECTION_REVISION,
   projectionDigest,
   projectionPieces,
+  PROVISION_SPAN_PROJECTION_REVISION,
 } from "@stll/legal-ast/projection-digest";
 import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
