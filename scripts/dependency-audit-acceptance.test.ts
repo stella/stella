@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import {
   AuditCommandError,
   BaselineError,
@@ -21,6 +22,7 @@ import {
   lapsedAcceptances,
 } from "./dependency-audit-acceptance";
 
+const testState = createTestState({ file: import.meta.path, config: {} });
 const advisory = { id: "GHSA-aaaa-bbbb-cccc", vulnerableVersions: "<=1.4.0" };
 const latest = (version: string | undefined) => () => version;
 const currentAdvisory: Advisory = {
@@ -349,25 +351,52 @@ describe("audit acceptance expiry", () => {
     ).toHaveLength(1);
   });
 
-  test("a temporary acceptance lapses once its advisory is no longer reported", () => {
-    for (const terms of [{ untilPatched: true }, { expiresOn: "2026-11-01" }]) {
+  test("an acceptance never lapses once its advisory is no longer reported", () => {
+    for (const terms of [
+      {},
+      { untilPatched: true },
+      { expiresOn: "2026-11-01" },
+      // Expired and stale: nothing is left to fail on.
+      { expiresOn: "2026-10-01", untilPatched: true },
+    ]) {
       expect(
         lapsedAcceptances({
           accepted: [{ id: advisory.id, package: "pkg", ...terms }],
           current: [],
           today: "2026-10-02",
-          latestVersion: latest("1.4.0"),
-        }).map(({ reason }) => reason),
-      ).toEqual(["the advisory is no longer reported; remove the acceptance"]);
+          latestVersion: latest(undefined),
+        }),
+      ).toEqual([]);
     }
-    expect(
-      lapsedAcceptances({
-        accepted: [{ id: advisory.id, package: "pkg" }],
-        current: [],
-        today: "2026-10-02",
-        latestVersion: latest("1.4.0"),
-      }),
-    ).toEqual([]);
+  });
+
+  test("a stale acceptance warns and flags remediation without failing", async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+    const output = path.join(directory, "github-output");
+    testState.setEnv("GITHUB_OUTPUT", output);
+    try {
+      const result = await runCheck(
+        [],
+        auditBaseline("2026-10-01"),
+        "2026-10-02",
+        "github",
+      );
+      expect(result.status).toBe(0);
+      expect(result.warn).toEqual([
+        "::warning title=Dependency audit acceptance stale::GHSA-aaaa-bbbb-cccc for pkg is accepted but no longer reported; the scheduled remediation removes the acceptance (bun scripts/dependency-audit.ts --prune-baseline).",
+      ]);
+      expect(await Bun.file(output).text()).toBe("stale_acceptance=true\n");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("a new advisory still fails next to a stale acceptance", async () => {
+    const other: Advisory = { ...currentAdvisory, id: "GHSA-dddd-eeee-ffff" };
+    const result = await runCheck([other], auditBaseline(), "2026-10-02");
+    expect(result.status).toBe(1);
+    expect(result.info.some((line) => line.endsWith("NEW"))).toBe(true);
+    expect(result.warn).toHaveLength(1);
   });
 
   test("every committed untilPatched acceptance also has an expiry date", async () => {
