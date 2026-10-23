@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import type { SQL, TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -83,9 +84,9 @@ const seedGateFixture = async (client: SQL): Promise<GateFixture> => {
 
   await client`INSERT INTO organization (id, name, slug, created_at)
     VALUES (${fixture.organizationId}, 'Entity gate test', ${fixtureName}, now())`;
-  await client`INSERT INTO workspaces (id, organization_id, name, reference)
-    VALUES (${fixture.workspaceA}, ${fixture.organizationId}, 'Gate matter A', ${`${fixtureName}-a`}),
-      (${fixture.workspaceB}, ${fixture.organizationId}, 'Gate matter B', ${`${fixtureName}-b`})`;
+  await client`INSERT INTO workspaces (id, organization_id, name, reference, visibility)
+    VALUES (${fixture.workspaceA}, ${fixture.organizationId}, 'Gate matter A', ${`${fixtureName}-a`}, ${MATTER_VISIBILITY.adminsAndAssigned}),
+      (${fixture.workspaceB}, ${fixture.organizationId}, 'Gate matter B', ${`${fixtureName}-b`}, ${MATTER_VISIBILITY.adminsAndAssigned})`;
   await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
     VALUES (${fixture.taskA}, ${fixture.workspaceA}, 'task', 'task', 'Ordinary task'),
       (${fixture.factA}, ${fixture.workspaceA}, 'task', 'task', 'Reclassifiable fact'),

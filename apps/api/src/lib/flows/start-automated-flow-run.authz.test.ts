@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * Authorization gate for automated flow runs: an automated run (schedule /
  * file-upload trigger) executes as the definition's author against a root-scoped
@@ -8,9 +9,9 @@
  * there. Driven against a real (PGlite) database so the real
  * `resolveMemberAuthorization` membership rule runs.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -89,6 +90,7 @@ describe("startAutomatedFlowRun authorization gate", () => {
     });
     await testDb.insert(workspaces).values([
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: authorizedWorkspaceId,
         organizationId,
         clientId: null,
@@ -96,6 +98,7 @@ describe("startAutomatedFlowRun authorization gate", () => {
         reference: "AUTHZ-OK",
       },
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: unauthorizedWorkspaceId,
         organizationId,
         clientId: null,

@@ -18,6 +18,7 @@ import {
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withLegacyWorkspaceFixture } from "@/api/tests/helpers/workspace-creation";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -140,14 +141,15 @@ describe.skipIf(!enabled)(
           if (typeof login !== "string") {
             panic("Fixture login required");
           }
-          await client.unsafe(`CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id text);
+          const PRE_VISIBILITY_SCHEMA = `CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id text);
             ALTER TABLE workspaces OWNER TO ${ownerRole};
             CREATE TABLE billing_arrangements (LIKE public.billing_arrangements INCLUDING ALL);
             ALTER TABLE billing_arrangements OWNER TO ${ownerRole};
             ALTER TABLE billing_arrangements ENABLE ROW LEVEL SECURITY;
             ALTER TABLE billing_arrangements FORCE ROW LEVEL SECURITY;
             GRANT SELECT, INSERT, UPDATE, DELETE ON billing_arrangements TO stella;
-            CREATE POLICY reset_census ON billing_arrangements FOR SELECT TO "${login.replaceAll('"', '""')}" USING (true)`);
+            CREATE POLICY reset_census ON billing_arrangements FOR SELECT TO "${login.replaceAll('"', '""')}" USING (true)`;
+          await client.unsafe(PRE_VISIBILITY_SCHEMA);
           const billingMigration = await Bun.file(
             new URL(
               "../../drizzle/20261003122900_billing_modes/migration.sql",
@@ -164,7 +166,11 @@ describe.skipIf(!enabled)(
               await client.unsafe(statement);
             }
           }
-          await client`INSERT INTO workspaces VALUES (${firstWorkspaceId}, ${organizationId}), (${secondWorkspaceId}, ${organizationId})`;
+          await withLegacyWorkspaceFixture({
+            tx: db,
+            insert: async () =>
+              await client`INSERT INTO workspaces VALUES (${firstWorkspaceId}, ${organizationId}), (${secondWorkspaceId}, ${organizationId})`,
+          });
           await createScopedDb(
             markRlsDatabase(db),
             workspaceIds,

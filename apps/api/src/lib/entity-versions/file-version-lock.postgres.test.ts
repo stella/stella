@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -67,6 +68,7 @@ const seedFixture = async (db: GatedTestDb) => {
     email: `${userId}@example.test`,
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Version matter",

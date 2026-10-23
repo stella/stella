@@ -9,6 +9,7 @@ import {
 import { eq } from "drizzle-orm";
 
 import {
+  MATTER_VISIBILITY,
   isResourceType,
   REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
@@ -84,6 +85,7 @@ const createMatter = async (): Promise<MatterFixture> => {
   const takenReference = `TAKEN-${otherWorkspaceId.slice(-6)}`;
   await testDb.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Open in a tab",
@@ -91,6 +93,7 @@ const createMatter = async (): Promise<MatterFixture> => {
       status: "active",
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: otherWorkspaceId,
       organizationId,
       name: "Holds a reference",

@@ -4,6 +4,8 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -165,6 +167,7 @@ const createScope = async (db: GatedTestDb): Promise<Scope> => {
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Tree guard tests",

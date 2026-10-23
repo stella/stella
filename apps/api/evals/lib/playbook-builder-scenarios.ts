@@ -317,6 +317,7 @@ const MATTER_FIXTURES: MatterFixtures = {
         name,
         reference,
         status: "active",
+        visibility: "admins_and_assigned",
         lastActivityAt: MATTER_TIMESTAMP,
         createdAt: MATTER_TIMESTAMP,
       })),

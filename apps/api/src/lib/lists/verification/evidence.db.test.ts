@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
 // The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 /**
  * A verification pins its facts by value when it starts, each with the
@@ -5,10 +6,9 @@
  * then, so a finished run still reads the same after the list or its
  * documents change.
  */
-
-import { afterAll, beforeAll, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -61,6 +61,7 @@ beforeAll(
         email: `${userId}@example.test`,
       });
       await tx.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Evidence matter",

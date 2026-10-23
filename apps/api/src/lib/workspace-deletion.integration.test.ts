@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -184,6 +186,7 @@ beforeAll(async () => {
   ]);
   await testDb.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: targetWorkspaceId,
       organizationId,
       name: "Deleted matter",
@@ -191,6 +194,7 @@ beforeAll(async () => {
       status: "active",
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: retainedWorkspaceId,
       organizationId,
       name: "Retained matter",
@@ -722,6 +726,7 @@ describe("workspace deletion", () => {
   test("rolls back the seal, outbox, and rows when the audit write fails", async () => {
     const workspaceId = createSafeId<"workspace">();
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId: fixture.organizationId,
       name: "Rollback matter",

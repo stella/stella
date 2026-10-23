@@ -3,7 +3,10 @@ import { eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { isDocumentReferenceQuery } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  isDocumentReferenceQuery,
+} from "@stll/api-contract";
 
 import { organization } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
@@ -164,6 +167,7 @@ beforeAll(async () => {
     slug: ORGANIZATION_ID,
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     createdAt: SEED_AT,
     id: workspaceId,
     lastActivityAt: SEED_AT,

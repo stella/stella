@@ -18,6 +18,8 @@ import {
 } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
@@ -678,6 +680,7 @@ describe("review organization seed and reset", () => {
           ...resetDependencies,
           beforeSweep: async () => {
             await testDb.insert(workspaces).values({
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: lateMatterId,
               organizationId: fixture.reviewOrgId,
               name: "Late matter",

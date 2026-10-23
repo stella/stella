@@ -26,6 +26,7 @@ import {
 } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
@@ -297,6 +298,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdAt: new Date(),
     });
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Flow worker test matter",
@@ -1631,10 +1633,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       );
       const removed = await Result.gen(() =>
         removeWorkspaceMemberHandler({
+          organizationId,
           safeDb,
           workspaceId,
           userId: reviewer,
           actorUserId: userId,
+          managesOrganizationMatters: false,
           recordAuditEvent: async () => undefined,
           dependencies: {
             broadcastSessionEvent: () => undefined,

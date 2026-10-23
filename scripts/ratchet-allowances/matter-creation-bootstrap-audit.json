@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The creation owner inserts root bootstrap seed and fixture rows under the stewardship prefix. These bootstrap inserts have no authenticated user action to audit. User-facing creation continues through its audited handler transaction; the helper does not suppress those audit records."
+}

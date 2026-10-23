@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -100,6 +102,7 @@ if (!databaseUrl || !runPostgres) {
           featureId: "time-billing",
         });
         await firstDb.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Rate test matter",

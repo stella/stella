@@ -8,8 +8,9 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
@@ -48,6 +49,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -73,6 +75,8 @@ const orgFull = orgId();
 const ownerInFull = userId();
 const memberInFull = userId();
 const loneMemberInFull = userId();
+const assignedMemberInFull = userId();
+const externalInFull = userId();
 
 const orgEmpty = orgId();
 const ownerInEmpty = userId();
@@ -82,9 +86,20 @@ const strangerUser = userId();
 const clientContactId = toSafeId<"contact">(tid());
 const clientWorkspaceId = workspaceId();
 const memberPersonalWorkspaceId = workspaceId();
+// Visibility is independent of the client: an organization matter without a
+// client, and a private matter with one.
+const clientlessOrganizationWorkspaceId = workspaceId();
+const privateClientWorkspaceId = workspaceId();
+// Open to every internal member of the organization, never to externals.
+const allMembersWorkspaceId = workspaceId();
 const liveOwnerSessionId = tid();
 const expiredOwnerSessionId = tid();
 const liveMemberSessionId = tid();
+const liveLoneMemberSessionId = tid();
+const liveAssignedMemberSessionId = tid();
+const liveExternalSessionId = tid();
+const liveOwnerInEmptySessionId = tid();
+const liveStrangerSessionId = tid();
 
 testState.beforeAll(async () => {
   testDb = await getTestDb();
@@ -94,6 +109,8 @@ testState.beforeAll(async () => {
       ownerInFull,
       memberInFull,
       loneMemberInFull,
+      assignedMemberInFull,
+      externalInFull,
       ownerInEmpty,
       memberInEmpty,
       strangerUser,
@@ -143,6 +160,20 @@ testState.beforeAll(async () => {
     },
     {
       id: tid(),
+      organizationId: orgFull,
+      userId: assignedMemberInFull,
+      role: "member",
+      createdAt: new Date(),
+    },
+    {
+      id: tid(),
+      organizationId: orgFull,
+      userId: externalInFull,
+      role: "external",
+      createdAt: new Date(),
+    },
+    {
+      id: tid(),
       organizationId: orgEmpty,
       userId: ownerInEmpty,
       role: "owner",
@@ -176,6 +207,20 @@ testState.beforeAll(async () => {
       userId: memberInFull,
       expiresAt: new Date("2100-01-01T00:00:00.000Z"),
     },
+    ...(
+      [
+        [liveLoneMemberSessionId, loneMemberInFull],
+        [liveAssignedMemberSessionId, assignedMemberInFull],
+        [liveExternalSessionId, externalInFull],
+        [liveOwnerInEmptySessionId, ownerInEmpty],
+        [liveStrangerSessionId, strangerUser],
+      ] as const
+    ).map(([id, sessionUserId]) => ({
+      id,
+      token: tid(),
+      userId: sessionUserId,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    })),
   ]);
 
   await testDb.insert(contacts).values({
@@ -184,26 +229,71 @@ testState.beforeAll(async () => {
     type: "person",
     displayName: "Client",
   });
-  await testDb.insert(workspaces).values([
-    {
-      id: clientWorkspaceId,
-      organizationId: orgFull,
-      clientId: clientContactId,
-      name: "Client matter",
-      reference: "AUTH-CLIENT",
-    },
-    {
-      id: memberPersonalWorkspaceId,
-      organizationId: orgFull,
-      clientId: null,
-      name: "Member personal matter",
-      reference: "AUTH-PERSONAL",
-    },
-  ]);
-  await testDb.insert(workspaceMembers).values({
-    id: toSafeId<"workspaceMember">(tid()),
-    workspaceId: memberPersonalWorkspaceId,
-    userId: memberInFull,
+  await testDb.transaction(async (tx) => {
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
+        {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
+          id: clientWorkspaceId,
+          organizationId: orgFull,
+          clientId: clientContactId,
+          name: "Client matter",
+          reference: "AUTH-CLIENT",
+        },
+        {
+          id: memberPersonalWorkspaceId,
+          organizationId: orgFull,
+          clientId: null,
+          name: "Member personal matter",
+          reference: "AUTH-PERSONAL",
+          visibility: "assigned_only",
+          leadUserId: memberInFull,
+        },
+        {
+          id: clientlessOrganizationWorkspaceId,
+          organizationId: orgFull,
+          clientId: null,
+          name: "Internal know-how",
+          reference: "AUTH-KNOW-HOW",
+          visibility: "admins_and_assigned",
+        },
+        {
+          id: privateClientWorkspaceId,
+          organizationId: orgFull,
+          clientId: clientContactId,
+          name: "Private client matter",
+          reference: "AUTH-PRIVATE-CLIENT",
+          visibility: "assigned_only",
+          leadUserId: memberInFull,
+        },
+        {
+          id: allMembersWorkspaceId,
+          organizationId: orgFull,
+          clientId: null,
+          name: "Engagement letter templates",
+          reference: "AUTH-ALL-MEMBERS",
+          visibility: "all_members",
+        },
+      ],
+    });
+    await tx.insert(workspaceMembers).values([
+      {
+        id: toSafeId<"workspaceMember">(tid()),
+        workspaceId: memberPersonalWorkspaceId,
+        userId: memberInFull,
+      },
+      {
+        id: toSafeId<"workspaceMember">(tid()),
+        workspaceId: clientlessOrganizationWorkspaceId,
+        userId: assignedMemberInFull,
+      },
+      {
+        id: toSafeId<"workspaceMember">(tid()),
+        workspaceId: privateClientWorkspaceId,
+        userId: memberInFull,
+      },
+    ]);
   });
 });
 
@@ -357,6 +447,48 @@ describe("resolveMemberAuthorization", () => {
       expected: memberPersonalWorkspaceId,
     },
     { actor: memberInFull, target: clientWorkspaceId, expected: null },
+    // An organization matter without a client follows the client-matter rule.
+    {
+      actor: ownerInFull,
+      target: clientlessOrganizationWorkspaceId,
+      expected: clientlessOrganizationWorkspaceId,
+    },
+    {
+      actor: assignedMemberInFull,
+      target: clientlessOrganizationWorkspaceId,
+      expected: clientlessOrganizationWorkspaceId,
+    },
+    {
+      actor: memberInFull,
+      target: clientlessOrganizationWorkspaceId,
+      expected: null,
+    },
+    // A private matter with a client stays closed to an owner who is not on it.
+    { actor: ownerInFull, target: privateClientWorkspaceId, expected: null },
+    {
+      actor: memberInFull,
+      target: privateClientWorkspaceId,
+      expected: privateClientWorkspaceId,
+    },
+    {
+      actor: assignedMemberInFull,
+      target: privateClientWorkspaceId,
+      expected: null,
+    },
+    // An all-members matter reaches every internal member without an
+    // assignment, and never an external one.
+    {
+      actor: memberInFull,
+      target: allMembersWorkspaceId,
+      expected: allMembersWorkspaceId,
+    },
+    {
+      actor: ownerInFull,
+      target: allMembersWorkspaceId,
+      expected: allMembersWorkspaceId,
+    },
+    { actor: externalInFull, target: allMembersWorkspaceId, expected: null },
+    { actor: externalInFull, target: clientWorkspaceId, expected: null },
   ])(
     "worker membership uses the session access rule under RLS: %p",
     async ({ actor, target, expected }) => {
@@ -415,6 +547,11 @@ describe("resolveWorkspaceRealtimeAudience", () => {
       liveOwnerSessionId,
       expiredOwnerSessionId,
       liveMemberSessionId,
+      liveLoneMemberSessionId,
+      liveAssignedMemberSessionId,
+      liveExternalSessionId,
+      liveOwnerInEmptySessionId,
+      liveStrangerSessionId,
     ];
 
     const clientMatterAudience = await resolveWorkspaceRealtimeAudience(
@@ -426,8 +563,70 @@ describe("resolveWorkspaceRealtimeAudience", () => {
       testDb,
     );
 
+    const clientlessOrganizationAudience =
+      await resolveWorkspaceRealtimeAudience(
+        {
+          sessionIds: candidates,
+          workspaceId: clientlessOrganizationWorkspaceId,
+        },
+        testDb,
+      );
+    const privateClientAudience = await resolveWorkspaceRealtimeAudience(
+      { sessionIds: candidates, workspaceId: privateClientWorkspaceId },
+      testDb,
+    );
+
     expect(clientMatterAudience).toEqual(new Set([liveOwnerSessionId]));
     expect(personalMatterAudience).toEqual(new Set([liveMemberSessionId]));
+    expect(clientlessOrganizationAudience).toEqual(
+      new Set([liveOwnerSessionId, liveAssignedMemberSessionId]),
+    );
+    expect(privateClientAudience).toEqual(new Set([liveMemberSessionId]));
+
+    // Every internal member hears about an all-members matter; the external
+    // member, the other organization's owner and a stranger do not.
+    const allMembersAudience = await resolveWorkspaceRealtimeAudience(
+      { sessionIds: candidates, workspaceId: allMembersWorkspaceId },
+      testDb,
+    );
+    expect(allMembersAudience).toEqual(
+      new Set([
+        liveOwnerSessionId,
+        liveMemberSessionId,
+        liveLoneMemberSessionId,
+        liveAssignedMemberSessionId,
+      ]),
+    );
+
+    // Narrowing it to admins and assigned members takes it away from the
+    // unassigned internal members at once.
+    await testDb
+      .update(workspaces)
+      .set({ visibility: "admins_and_assigned" })
+      .where(eq(workspaces.id, allMembersWorkspaceId));
+    try {
+      expect(
+        await resolveWorkspaceRealtimeAudience(
+          { sessionIds: candidates, workspaceId: allMembersWorkspaceId },
+          testDb,
+        ),
+      ).toEqual(new Set([liveOwnerSessionId]));
+      expect(
+        await resolveMemberAuthorization(
+          {
+            organizationId: orgFull,
+            userId: memberInFull,
+            workspaceId: allMembersWorkspaceId,
+          },
+          testDb,
+        ),
+      ).toMatchObject({ workspace: null });
+    } finally {
+      await testDb
+        .update(workspaces)
+        .set({ visibility: "all_members" })
+        .where(eq(workspaces.id, allMembersWorkspaceId));
+    }
   });
 });
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 import { stellaToast } from "@stll/ui/toast";
 
+import { MatterStewardHandoverContent } from "@/components/matter-steward-handover-content";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { toAPIError } from "@/lib/errors/api";
@@ -156,5 +157,29 @@ describe("notifyUserError", () => {
       id: "action_not_enabled",
       type: "info",
     });
+  });
+});
+
+test("handover refusal toast presents authorized matters as corrective links", () => {
+  const add = spyOn(stellaToast, "add").mockReturnValue("handover-toast");
+  const affectedMatters = [
+    { id: "00000000-0000-4000-8000-000000000001", name: "Matter A" },
+  ];
+  const error = toAPIError({
+    status: 409,
+    value: {
+      code: "matter_steward_handover_required",
+      message: "Transport wording",
+      affectedMatters,
+    },
+  });
+  notifyUserError(error, FAILURE);
+  expect(add.mock.calls.at(0)?.[0]).toMatchObject({
+    title: error.message,
+    description: {
+      type: MatterStewardHandoverContent,
+      props: { matters: affectedMatters },
+    },
+    type: "error",
   });
 });

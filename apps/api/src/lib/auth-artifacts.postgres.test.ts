@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getColumns, getTableName, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   apikey,
@@ -179,12 +181,14 @@ if (!databaseUrl || !enabled) {
           await transaction(async (tx) => {
             await tx.insert(workspaces).values([
               {
+                visibility: MATTER_VISIBILITY.adminsAndAssigned,
                 id: workspaceId,
                 organizationId,
                 name: "Matter A",
                 reference: "A",
               },
               {
+                visibility: MATTER_VISIBILITY.adminsAndAssigned,
                 id: otherWorkspaceId,
                 organizationId: otherOrganizationId,
                 name: "Matter B",

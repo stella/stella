@@ -11,6 +11,7 @@
  */
 import { panic } from "better-result";
 import { SQL } from "bun";
+import type { TransactionSQL } from "bun";
 import { afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Logger } from "drizzle-orm";
@@ -18,6 +19,25 @@ import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import { forceClosePool } from "@/api/db/sql-close";
+import { withWorkspaceCreation } from "@/api/lib/workspaces/create-workspace-row";
+import type {
+  NormalizedWorkspaceCreationRow,
+  WorkspaceCreationRow,
+} from "@/api/lib/workspaces/create-workspace-row";
+
+type GatedWorkspaceCreationOptions<T> = {
+  tx: TransactionSQL;
+  rows: readonly WorkspaceCreationRow[];
+  insert: (rows: readonly NormalizedWorkspaceCreationRow[]) => Promise<T>;
+};
+
+/** Keep policy-test statements on their raw transaction under the creation owner. */
+export const withGatedWorkspaceCreation = async <T>({
+  tx,
+  rows,
+  insert,
+}: GatedWorkspaceCreationOptions<T>) =>
+  await withWorkspaceCreation({ tx: drizzle({ client: tx }), rows, insert });
 
 const openDatabase = (client: SQL, logger?: Logger) =>
   drizzle({ client, relations: databaseRelations, logger });

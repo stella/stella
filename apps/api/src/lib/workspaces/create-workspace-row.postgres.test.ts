@@ -2,6 +2,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import {
+  defaultMatterVisibilityFor,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -39,6 +43,7 @@ type Fixture = {
   clientId: SafeId<"contact">;
   adminId: SafeId<"user">;
   memberId: SafeId<"user">;
+  externalId: SafeId<"user">;
 };
 
 const seed = async (db: GatedTestDb): Promise<Fixture> => {
@@ -47,6 +52,7 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
     clientId: createSafeId<"contact">(),
     adminId: mintAuthProviderId<"user">(),
     memberId: mintAuthProviderId<"user">(),
+    externalId: mintAuthProviderId<"user">(),
   };
   await db.insert(organization).values({
     id: fixture.organizationId,
@@ -55,7 +61,7 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
     createdAt: new Date(),
   });
   await db.insert(user).values(
-    [fixture.adminId, fixture.memberId].map((id) => ({
+    [fixture.adminId, fixture.memberId, fixture.externalId].map((id) => ({
       id,
       name: "Create matter fixture",
       email: `${id}@example.test`,
@@ -77,6 +83,13 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
       createdAt: new Date(),
     },
   ]);
+  await db.insert(member).values({
+    id: mintAuthProviderIdValue(),
+    organizationId: fixture.organizationId,
+    userId: fixture.externalId,
+    role: "external",
+    createdAt: new Date(),
+  });
   await db.insert(contacts).values({
     id: fixture.clientId,
     organizationId: fixture.organizationId,
@@ -121,7 +134,13 @@ const withFixture = async (
         .where(eq(organization.id, fixture.organizationId));
       await db
         .delete(user)
-        .where(inArray(user.id, [fixture.adminId, fixture.memberId]));
+        .where(
+          inArray(user.id, [
+            fixture.adminId,
+            fixture.memberId,
+            fixture.externalId,
+          ]),
+        );
     }
   });
 };
@@ -138,8 +157,10 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
         await createWorkspaceInTransaction(tx, {
           id: workspaceId,
           clientId: null,
+          visibility: defaultMatterVisibilityFor({ hasClient: false }),
           name: "Personal matter",
           reference: "NEW-1",
+          leadUserId: fixture.memberId,
         });
         // A dependent row passes the row policies through the access rule
         // alone: unpin the new matter so pinned ids cannot authorize it.
@@ -194,6 +215,7 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
         await createWorkspaceInTransaction(tx, {
           id: workspaceId,
           clientId: fixture.clientId,
+          visibility: defaultMatterVisibilityFor({ hasClient: true }),
           name: "Client matter",
           reference: "NEW-2",
         });
@@ -201,6 +223,85 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
       expect(await assignmentsOf(db, workspaceId)).toEqual([]);
     });
   });
+
+  test.each(["null", "external", "unassigned", "assigned"] as const)(
+    "creation validates a %s lead when the transaction commits",
+    async (candidate) => {
+      await withFixture(async (db, fixture) => {
+        const workspaceId = createSafeId<"workspace">();
+        const leadUserId = {
+          null: null,
+          external: fixture.externalId,
+          unassigned: fixture.memberId,
+          assigned: fixture.memberId,
+        }[candidate];
+        let bodyCompleted = false;
+        const creation = asMember(
+          db,
+          fixture,
+          fixture.adminId,
+        )(async (tx) => {
+          await createWorkspaceInTransaction(tx, {
+            id: workspaceId,
+            clientId: null,
+            name: "Stewarded creation",
+            reference: `STEWARD-${candidate}`,
+            visibility: MATTER_VISIBILITY.assignedOnly,
+            leadUserId,
+          });
+          if (candidate === "assigned" || candidate === "external") {
+            await tx.insert(workspaceMembers).values({
+              workspaceId,
+              userId:
+                candidate === "external"
+                  ? fixture.externalId
+                  : fixture.memberId,
+            });
+          }
+          expect(
+            await tx
+              .select({ id: workspaces.id })
+              .from(workspaces)
+              .where(eq(workspaces.id, workspaceId)),
+          ).toEqual([{ id: workspaceId }]);
+          bodyCompleted = true;
+        });
+        if (candidate !== "assigned") {
+          expect(errorText(await rejectionOf(creation))).toContain(
+            "assigned-only matter requires an assigned internal steward",
+          );
+          expect(bodyCompleted).toBe(true);
+          expect(
+            await db
+              .select({ id: workspaces.id })
+              .from(workspaces)
+              .where(eq(workspaces.id, workspaceId)),
+          ).toEqual([]);
+          expect(await assignmentsOf(db, workspaceId)).toEqual([]);
+          return;
+        }
+        await creation;
+        expect(bodyCompleted).toBe(true);
+        expect(
+          await db
+            .select({
+              leadUserId: workspaces.leadUserId,
+              visibility: workspaces.visibility,
+            })
+            .from(workspaces)
+            .where(eq(workspaces.id, workspaceId)),
+        ).toEqual([
+          {
+            leadUserId: fixture.memberId,
+            visibility: MATTER_VISIBILITY.assignedOnly,
+          },
+        ]);
+        expect(await assignmentsOf(db, workspaceId)).toContain(
+          fixture.memberId,
+        );
+      });
+    },
+  );
 
   test("needs an organization member in the transaction", async () => {
     await withFixture(async (db, fixture) => {
@@ -217,6 +318,7 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
               await createWorkspaceInTransaction(tx, {
                 id: createSafeId<"workspace">(),
                 clientId: null,
+                visibility: defaultMatterVisibilityFor({ hasClient: false }),
                 name: "Service matter",
                 reference: "NEW-3",
               });

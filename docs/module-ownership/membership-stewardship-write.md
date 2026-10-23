@@ -1,0 +1,7 @@
+# Transactional organization role changes under stewardship locks
+
+Generated from `scripts/ownership/membership-stewardship-write.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                       | Owner                     | Enforcement                                                                   | Summary                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `membership-stewardship-write` — Transactional organization role changes under stewardship locks | `apps/api/src/db/root.ts` | import `withMemberRoleStewardship` from `@/api/db/root` (plus 1 allowed file) | Keeps trusted auth-adapter role writes in the transaction that locks and revalidates the target membership and its matters. Only the auth adapter may supply the write callback; the operation exposes no connection outside that boundary. |

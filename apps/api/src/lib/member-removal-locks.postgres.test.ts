@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user, verification } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -152,6 +154,7 @@ const fixture = async (db: GatedTestDb) => {
   ]);
   await db.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Erasure matter",
@@ -159,6 +162,7 @@ const fixture = async (db: GatedTestDb) => {
       leadUserId: leaverId,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: otherWorkspaceId,
       organizationId,
       name: "Unrelated matter",
@@ -726,6 +730,7 @@ const movableMatter = async (db: GatedTestDb, data: Fixture) => {
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: data.organizationId,
     name: "Movable matter",

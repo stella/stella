@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 
 import {
+  MATTER_VISIBILITY,
   newNotificationRealtimeEvent,
   resourceRef,
   resourceUpdatedRealtimeEvent,
@@ -172,6 +173,7 @@ const createMatterWithMember = async (): Promise<MatterFixture> => {
 
   const workspaceId = createSafeId<"workspace">();
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: brandPersistedOrganizationId(organization.id),
     name: "Matter events",
@@ -239,6 +241,7 @@ describe("a matter's event stream when a member is removed", () => {
     });
     const removal = await Result.gen(() =>
       removeWorkspaceMemberHandler({
+        organizationId: identity.organizationId,
         safeDb: createMembershipSafeDb(rlsDb, {
           ...identity,
           serverValidatedWorkspaceIds: [workspaceId],
@@ -246,6 +249,7 @@ describe("a matter's event stream when a member is removed", () => {
         workspaceId,
         userId: brandPersistedUserId(member.userId),
         actorUserId: identity.userId,
+        managesOrganizationMatters: false,
         recordAuditEvent: createAuditRecorder({
           ...identity,
           workspaceId,

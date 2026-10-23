@@ -32,6 +32,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import * as compactionBudget from "@/api/lib/chat/compaction-budget";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { logger } from "@/api/lib/observability/logger";
 import type {
   SchedulerDb,
@@ -241,7 +242,20 @@ describe("chat thread compactor", () => {
 
   test("a thread is not compacted when its owner has left the organization", async () => {
     const threadId = await seedDueThread([ids.wsA1]);
-    await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+    await testDb.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [ids.wsA1, ids.wsA2],
+            membershipUserIds: [ids.userA1],
+          },
+        ],
+        mode: "update",
+      });
+      await tx.delete(member).where(eq(member.id, ids.memberA1org));
+    });
 
     await runCompactor();
 
@@ -267,9 +281,22 @@ describe("chat thread compactor", () => {
   test("a thread is not compacted when its owner no longer has access to one of its matters", async () => {
     const revokedThreadId = await seedDueThread([ids.wsA1, ids.wsA2]);
     const keptThreadId = await seedDueThread([ids.wsA1]);
-    await testDb
-      .delete(workspaceMembers)
-      .where(eq(workspaceMembers.id, ids.memberA1wsA2));
+    await testDb.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [ids.wsA2],
+            userIds: [ids.userA1],
+          },
+        ],
+        mode: "update",
+      });
+      await tx
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.id, ids.memberA1wsA2));
+    });
 
     await runCompactor();
 
@@ -303,7 +330,20 @@ describe("chat thread compactor", () => {
     // The settings load runs after the run's first access check and before
     // the transcript is read.
     settingsSpy.mockImplementation(async () => {
-      await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+      await testDb.transaction(async (tx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(tx),
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [ids.wsA1, ids.wsA2],
+              membershipUserIds: [ids.userA1],
+            },
+          ],
+          mode: "update",
+        });
+        await tx.delete(member).where(eq(member.id, ids.memberA1org));
+      });
       return Result.ok({
         orgAIConfig: null,
         promptCachingEnabled: false,
@@ -332,7 +372,20 @@ describe("chat thread compactor", () => {
   test("an owner removed while the summary is generated gets no checkpoint", async () => {
     const threadId = await seedDueThread([], null);
     modelSpy.mockImplementation(async () => {
-      await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+      await testDb.transaction(async (tx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(tx),
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [ids.wsA1, ids.wsA2],
+              membershipUserIds: [ids.userA1],
+            },
+          ],
+          mode: "update",
+        });
+        await tx.delete(member).where(eq(member.id, ids.memberA1org));
+      });
       return SUMMARY_MARKDOWN;
     });
 

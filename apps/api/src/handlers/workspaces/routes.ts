@@ -39,6 +39,7 @@ import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import readOverviewActivity from "@/api/handlers/workspaces/read-overview-activity";
 import readOverviewActivityActors from "@/api/handlers/workspaces/read-overview-activity-actors";
 import readSearchPreview from "@/api/handlers/workspaces/search-preview/get";
+import recoverMatterSteward from "@/api/handlers/workspaces/steward/update";
 import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
 import updateWorkspace from "@/api/handlers/workspaces/update";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
@@ -172,6 +173,11 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   })
   .get("/active", readActiveWorkspace.handler, {
     permissions: readActiveWorkspace.config.permissions,
+  })
+  .post("/:workspaceId/recover-steward", recoverMatterSteward.handler, {
+    params: recoverMatterSteward.config.params,
+    body: recoverMatterSteward.config.body,
+    permissions: recoverMatterSteward.config.permissions,
   })
   .group(
     "/:workspaceId",

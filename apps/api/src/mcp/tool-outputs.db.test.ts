@@ -6,13 +6,21 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { eq } from "drizzle-orm";
+
+import {
+  DEFAULT_MATTER_VISIBILITY,
+  defaultMatterVisibilityFor,
+} from "@stll/api-contract";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
@@ -486,6 +494,92 @@ describe("every MCP tool's real output passes its output contract", () => {
     expect(
       DEFAULT_MCP_TOOL_DEFINITIONS.map((tool): string => tool.name).toSorted(),
     ).toEqual(Object.keys(TOOL_COVERAGE).toSorted());
+  });
+
+  test("save_matter and list_matters carry visibility both ways, independent of the client", async () => {
+    const caller = await createOrganization();
+    const call = async (toolName: string, args: Record<string, unknown>) => {
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        args,
+        context: await requestContext(caller),
+        toolName,
+      });
+      expect({ toolName, isError: result.isError === true }).toEqual({
+        toolName,
+        isError: false,
+        ...(result.isError === true ? { response: textOf(result) } : {}),
+      });
+      const { structuredContent } = result;
+      if (!isRecord(structuredContent)) {
+        throw new TypeError(`${toolName} returned no structured content`);
+      }
+      return structuredContent;
+    };
+    const visibilityOf = async (matterId: string) => {
+      const listed = await call("list_matters", { matter_id: matterId });
+      const matter = listed["matter"];
+      return isRecord(matter) ? matter["visibility"] : undefined;
+    };
+
+    const created = await call("save_matter", {
+      name: "Engagement letter templates",
+      visibility: "all_members",
+    });
+    const matterId = idAt(created, "matterId");
+    expect(await visibilityOf(matterId)).toBe("all_members");
+
+    const listed = await call("list_matters", {});
+    const rows = Array.isArray(listed["matters"]) ? listed["matters"] : [];
+    expect(
+      rows.find((row) => isRecord(row) && row["id"] === matterId),
+    ).toMatchObject({ visibility: "all_members" });
+
+    // Every level the web app offers can be set through save_matter.
+    for (const visibility of [
+      "assigned_only",
+      "admins_and_assigned",
+      "all_members",
+    ] as const) {
+      await call("save_matter", { matter_id: matterId, visibility });
+      expect(await visibilityOf(matterId)).toBe(visibility);
+    }
+
+    // No client and no visibility: the same default the web app preselects,
+    // a personal matter only its creator sees.
+    const internal = await call("save_matter", { name: "Internal know-how" });
+    expect(await visibilityOf(idAt(internal, "matterId"))).toBe(
+      defaultMatterVisibilityFor({ hasClient: false }),
+    );
+    expect(defaultMatterVisibilityFor({ hasClient: false })).toBe(
+      "assigned_only",
+    );
+    expect(DEFAULT_MATTER_VISIBILITY).toBe("admins_and_assigned");
+    // Its creator leads it, so the assigned-only matter keeps a steward.
+    const internalId = idAt(internal, "matterId");
+    const [internalRow] = await testDb
+      .select({ leadUserId: workspaces.leadUserId })
+      .from(workspaces)
+      .where(eq(workspaces.id, toSafeId<"workspace">(internalId)));
+    expect(internalRow?.leadUserId).toBe(caller.userId);
+
+    // A client matter without a choice follows the client default.
+    const contact = await call("save_contact", {
+      type: "organization",
+      display_name: "Acme s.r.o.",
+    });
+    const clientId = idAt(contact, "contactId");
+    const engagement = await call("save_matter", {
+      name: "Acme engagement",
+      client_id: clientId,
+    });
+    expect(await visibilityOf(idAt(engagement, "matterId"))).toBe(
+      "admins_and_assigned",
+    );
+
+    // Setting a client on the personal matter later never widens it.
+    await call("save_matter", { matter_id: internalId, client_id: clientId });
+    expect(await visibilityOf(internalId)).toBe("assigned_only");
   });
 
   test("a seeded organization drives each runnable tool", async () => {

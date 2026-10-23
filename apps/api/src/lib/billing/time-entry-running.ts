@@ -2,10 +2,15 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import { timeEntries, timeEntryTimerStates } from "@/api/db/schema";
+import { timeEntries, timeEntryTimerStates, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockMatterStewardship,
+  lockTimerOwnerIdentities,
+} from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const RUNNING_TIMER_STATE = "running";
 export const timeEntryIsRunning = () => sql<boolean>`COALESCE((
@@ -58,7 +63,12 @@ export const guardRunningTimeEntries = async (
     selectedEntries,
   );
   const snapshot = await tx
-    .select({ id: timeEntries.id })
+    .select({
+      id: timeEntries.id,
+      organizationId: timeEntries.organizationId,
+      workspaceId: timeEntries.workspaceId,
+      userId: timeEntries.userId,
+    })
     .from(timeEntries)
     .where(condition)
     .limit(LIMITS.timeEntriesPerWorkspace + 1);
@@ -69,32 +79,57 @@ export const guardRunningTimeEntries = async (
     });
   }
   const ids = snapshot.map(({ id }) => id);
-  // Timer transitions acquire the owner lock before touching a matter or entry.
-  // Batch acquisition uses sorted keys so overlapping selections cannot deadlock.
-  await tx.execute(sql`
-    SELECT pg_advisory_xact_lock(owner_locks.lock_key)
-    FROM (
-      SELECT DISTINCT hashtext('timer:' || ${timeEntries.organizationId} || ':' || ${timeEntries.userId}) AS lock_key
-      FROM ${timeEntries}
-      WHERE ${condition}
-        AND ${inArray(timeEntries.id, ids)}
-        AND ${timeEntries.userId} IS NOT NULL
-      ORDER BY lock_key
-    ) AS owner_locks
-    ORDER BY owner_locks.lock_key
-  `);
-  if ("organizationId" in options) {
-    await tx.execute(sql`
-      SELECT pg_advisory_xact_lock(matter_locks.lock_key)
-      FROM (SELECT DISTINCT hashtext(${timeEntries.workspaceId}::text) AS lock_key
-        FROM ${timeEntries} WHERE ${condition} AND ${timeEntries.workspaceId} IS NOT NULL ORDER BY lock_key) AS matter_locks
-      ORDER BY matter_locks.lock_key
-    `);
-  } else {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${options.workspaceId}))`,
-    );
+  const scopedMatter =
+    "workspaceId" in options
+      ? (
+          await tx
+            .select({ organizationId: workspaces.organizationId })
+            .from(workspaces)
+            .where(eq(workspaces.id, options.workspaceId))
+            .limit(1)
+        ).at(0)
+      : undefined;
+  const rowsByOrganization = Map.groupBy(snapshot, (row) => row.organizationId);
+  if (scopedMatter && !rowsByOrganization.has(scopedMatter.organizationId)) {
+    rowsByOrganization.set(scopedMatter.organizationId, []);
   }
+  await lockMatterStewardship({
+    tx,
+    requests: [...rowsByOrganization].map(([organizationId, rows]) => ({
+      organizationId,
+      workspaceIds: [
+        ...new Set([
+          ...(scopedMatter?.organizationId === organizationId &&
+          "workspaceId" in options
+            ? [options.workspaceId]
+            : []),
+          ...rows.flatMap((row) => (row.workspaceId ? [row.workspaceId] : [])),
+        ]),
+      ],
+      userIds: [
+        ...new Set([
+          actorUserId,
+          ...rows.flatMap((row) => (row.userId ? [row.userId] : [])),
+        ]),
+      ],
+    })),
+    mode: "update",
+  });
+  // Lock the discovered owner identities, never a changed owner read below the
+  // prefix. The locked row comparison rejects any changed scope for a retry.
+  await lockTimerOwnerIdentities({
+    tx,
+    owners: snapshot.flatMap((row) =>
+      row.userId
+        ? [
+            {
+              organizationId: row.organizationId,
+              userId: brandPersistedUserId(row.userId),
+            },
+          ]
+        : [],
+    ),
+  });
   const locked = await tx
     .select({ id: timeEntries.id })
     .from(timeEntries)
@@ -102,10 +137,28 @@ export const guardRunningTimeEntries = async (
     .orderBy(asc(timeEntries.id))
     .limit(LIMITS.timeEntriesPerWorkspace + 1)
     .for("update");
-  const snapshotIds = new Set(ids);
+  const currentScope = await tx
+    .select({
+      id: timeEntries.id,
+      organizationId: timeEntries.organizationId,
+      workspaceId: timeEntries.workspaceId,
+      userId: timeEntries.userId,
+    })
+    .from(timeEntries)
+    .where(condition)
+    .limit(LIMITS.timeEntriesPerWorkspace + 1);
+  const snapshotById = new Map(snapshot.map((row) => [row.id, row]));
   if (
     locked.length !== snapshot.length ||
-    locked.some(({ id }) => !snapshotIds.has(id))
+    currentScope.some((row) => {
+      const previous = snapshotById.get(row.id);
+      return (
+        !previous ||
+        previous.organizationId !== row.organizationId ||
+        previous.workspaceId !== row.workspaceId ||
+        previous.userId !== row.userId
+      );
+    })
   ) {
     return new HandlerError({
       status: 409,

@@ -3,6 +3,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { pgTable, text, integer, primaryKey } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
@@ -63,6 +64,7 @@ beforeAll(async () => {
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Transition audit matter",

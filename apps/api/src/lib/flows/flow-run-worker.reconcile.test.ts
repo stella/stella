@@ -1,10 +1,3 @@
-/**
- * Boot-time orphan reconciler: after a restart that lost queued step jobs, every
- * pending/running run must be re-enqueued, not just the first batch. Driven
- * against a real (PGlite) database with a small batch size so the keyset
- * pagination's multi-batch path is exercised without seeding thousands of rows.
- */
-
 import {
   afterAll,
   beforeAll,
@@ -13,6 +6,14 @@ import {
   expect,
   test,
 } from "bun:test";
+/**
+ * Boot-time orphan reconciler: after a restart that lost queued step jobs, every
+ * pending/running run must be re-enqueued, not just the first batch. Driven
+ * against a real (PGlite) database with a small batch size so the keyset
+ * pagination's multi-batch path is exercised without seeding thousands of rows.
+ */
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { organization } from "@/api/db/auth-schema";
 import { flowRuns, workspaces } from "@/api/db/schema";
@@ -71,6 +72,7 @@ describe("reconcileOrphanedFlowRuns", () => {
       createdAt: new Date(),
     });
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Reconcile matter",

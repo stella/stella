@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  dialogMatterVisibility,
   getPossibleDuplicateMatters,
   isPossibleDuplicateMatter,
 } from "@/components/workspaces/create-matter-dialog.logic";
@@ -90,5 +91,27 @@ describe("getPossibleDuplicateMatters", () => {
       "workspace-1",
       "workspace-2",
     ]);
+  });
+});
+
+describe("dialogMatterVisibility", () => {
+  it("defaults a matter without a client to its creator only", () => {
+    expect(dialogMatterVisibility({ chosen: null, hasClient: false })).toBe(
+      "assigned_only",
+    );
+  });
+
+  it("follows the client field until the user chooses", () => {
+    expect(dialogMatterVisibility({ chosen: null, hasClient: true })).toBe(
+      "admins_and_assigned",
+    );
+  });
+
+  it("keeps an explicit choice whether or not a client is set", () => {
+    for (const hasClient of [true, false]) {
+      expect(dialogMatterVisibility({ chosen: "all_members", hasClient })).toBe(
+        "all_members",
+      );
+    }
   });
 });

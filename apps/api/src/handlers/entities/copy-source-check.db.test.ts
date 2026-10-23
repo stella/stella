@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -92,8 +94,20 @@ const seed = async (folder: boolean) => {
   });
   userIds.push(userId);
   await db.insert(workspaces).values([
-    { id: sourceWorkspaceId, organizationId, name: "Source", reference: "SRC" },
-    { id: targetWorkspaceId, organizationId, name: "Target", reference: "TGT" },
+    {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
+      id: sourceWorkspaceId,
+      organizationId,
+      name: "Source",
+      reference: "SRC",
+    },
+    {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
+      id: targetWorkspaceId,
+      organizationId,
+      name: "Target",
+      reference: "TGT",
+    },
   ]);
   await db.insert(properties).values([
     {

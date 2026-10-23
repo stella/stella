@@ -11,8 +11,10 @@ import {
   timerDetails,
   timerItem,
   timerNotFound,
+  timerScopeChanged,
   timerParams,
 } from "@/api/lib/billing/time-timers";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
@@ -39,10 +41,39 @@ const updateTimer = createSafeRootHandler(
     };
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        const preliminary = await readOwnedTimer({
+          tx,
+          owner,
+          id: params.id,
+          lock: "advisory",
+        });
+        if (!preliminary) {
+          return Result.err(timerNotFound());
+        }
+        await lockMatterStewardship({
+          tx,
+          requests: [
+            {
+              ...owner,
+              workspaceIds: [
+                ...new Set(
+                  [preliminary.workspaceId, body.matterId].filter(
+                    (value) => value !== null && value !== undefined,
+                  ),
+                ),
+              ],
+              userIds: [owner.userId],
+            },
+          ],
+          mode: "share",
+        });
         await lockTimerOwner(tx, owner);
         const timer = await readOwnedTimer({ tx, owner, id: params.id });
         if (!timer) {
           return Result.err(timerNotFound());
+        }
+        if (timer.workspaceId !== preliminary.workspaceId) {
+          return Result.err(timerScopeChanged());
         }
         if (
           body.matterId &&

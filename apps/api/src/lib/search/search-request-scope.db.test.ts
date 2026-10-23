@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -257,6 +259,7 @@ beforeAll(async () => {
   );
   await testDb.insert(workspaces).values(
     [openMatter, secondMatter, closedMatter].map((id, index) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id,
       organizationId,
       name: `Matter ${index}`,

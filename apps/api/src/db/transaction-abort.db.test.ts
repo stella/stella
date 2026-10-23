@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -92,6 +94,7 @@ const insertWorkspace = async (
   organizationId: SafeId<"organization">,
 ) => {
   await tx.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: toSafeId<"workspace">(Bun.randomUUIDv7()),
     organizationId,
     name: "Abort matter",
@@ -149,12 +152,14 @@ test("a database failure is not mistaken for an abort", async () => {
     // the caller as the database error it is, not as a handler rejection.
     const duplicateId = toSafeId<"workspace">(Bun.randomUUIDv7());
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: duplicateId,
       organizationId,
       name: "Abort matter",
       reference: Bun.randomUUIDv7().slice(0, 8),
     });
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: duplicateId,
       organizationId,
       name: "Abort matter",

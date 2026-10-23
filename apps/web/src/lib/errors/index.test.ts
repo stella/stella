@@ -676,3 +676,55 @@ test("a fill override refusal points to the current override without an empty id
   expect(error.message).not.toContain("()");
   expect(shouldRetryAPIRequest(0, error)).toBe(false);
 });
+
+describe("matter steward handover refusals", () => {
+  const affectedMatters = [
+    { id: "00000000-0000-4000-8000-000000000001", name: "Matter A" },
+  ];
+  const body = {
+    code: "matter_steward_handover_required",
+    message: "Transport wording",
+    affectedMatters,
+  };
+
+  test("HTTP and auth refusals share localized guidance and authorized matter links", () => {
+    const http = toAPIError({ status: 409, value: body });
+    const auth = toAuthClientError({
+      ...body,
+      status: 409,
+      statusText: "Conflict",
+    });
+    for (const error of [http, auth]) {
+      expect(APIError.is(error)).toBe(true);
+      if (!APIError.is(error)) {
+        throw new TypeError("Expected an API refusal");
+      }
+      expect(error.message).toBe(
+        messages.errors.apiCodes.matterStewardHandoverRequired,
+      );
+      expect(error.affectedMatters).toEqual(affectedMatters);
+      expect(shouldRetryAPIRequest(0, error)).toBe(false);
+    }
+  });
+  test("an inaccessible blocker carries generic guidance without a matter list", () => {
+    const error = toAPIError({
+      status: 409,
+      value: { ...body, affectedMatters: [] },
+    });
+    expect(error.affectedMatters).toEqual([]);
+    expect(error.message).toBe(
+      messages.errors.apiCodes.matterStewardHandoverRequired,
+    );
+  });
+  test("malformed affected matter identifiers fail at the transport boundary", () => {
+    expect(() =>
+      toAPIError({
+        status: 409,
+        value: {
+          ...body,
+          affectedMatters: [{ id: "invalid-workspace-id", name: "Invalid" }],
+        },
+      }),
+    ).toThrow("Invalid matter handover response");
+  });
+});

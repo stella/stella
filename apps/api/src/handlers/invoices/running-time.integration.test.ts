@@ -11,6 +11,8 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -585,6 +587,7 @@ describe("invoice mutations respect running time ownership", () => {
 test("concurrent invoice creation respects the final available matter slot", async () => {
   const workspaceId = createSafeId<"workspace">();
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: ids.orgA,
     name: "Invoice capacity",

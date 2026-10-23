@@ -81,28 +81,33 @@ describe("removeWorkspaceMember", () => {
     let deleteCalled = false;
 
     const { safeDb } = createScopedDbMock({
-      select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            limit: () => ({
-              for: async () =>
-                table === timeEntries ? [{ id: "timer_test" }] : [],
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        return {
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: () => ({
+                for: async () =>
+                  table === timeEntries ? [{ id: "timer_test" }] : [],
+              }),
+              for: async () => {
+                if (table === workspaces) {
+                  return [{ leadUserId: null }];
+                }
+                if (table === workspaceMembers) {
+                  return [
+                    { id: "wm_timer", userId },
+                    { id: "wm_other", userId: "user_other_test" },
+                  ];
+                }
+                return [];
+              },
             }),
-            for: async () => {
-              if (table === workspaces) {
-                return [{ leadUserId: null }];
-              }
-              if (table === workspaceMembers) {
-                return [
-                  { id: "wm_timer", userId },
-                  { id: "wm_other", userId: "user_other_test" },
-                ];
-              }
-              return [];
-            },
           }),
-        }),
-      }),
+        };
+      },
       delete: () => {
         deleteCalled = true;
         return {};
@@ -111,10 +116,12 @@ describe("removeWorkspaceMember", () => {
 
     const result = await Result.gen(() =>
       removeWorkspaceMemberHandler({
+        organizationId: toSafeId<"organization">("org_timer_test"),
         safeDb,
         workspaceId,
         userId,
         actorUserId,
+        managesOrganizationMatters: false,
         recordAuditEvent: async () => undefined,
       }),
     );
@@ -137,34 +144,51 @@ describe("removeWorkspaceMember", () => {
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: () => ({
-        from: (table: unknown) => ({
-          innerJoin: () => ({
-            ...createSelectQueryMock([]).from(),
+      execute: async () => [],
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        return {
+          from: (table: unknown) => ({
             innerJoin: () => ({
-              where: () => ({ as: () => ({}) }),
+              ...createSelectQueryMock([]).from(),
+              innerJoin: () => ({
+                where: () => ({ as: () => ({}) }),
+              }),
+            }),
+            where: () => ({
+              orderBy: () => ({
+                limit: () => ({
+                  for: async () =>
+                    table === workspaces ? [{ id: "ws_test123" }] : [],
+                }),
+              }),
+              limit: () => ({
+                for: async () => [],
+              }),
+              for: async () => {
+                if (table === workspaces) {
+                  return [
+                    {
+                      id: "ws_test123",
+                      leadUserId: "user_lead",
+                      organizationId: "org_test123",
+                    },
+                  ];
+                }
+                if (table === workspaceMembers) {
+                  return [
+                    { id: "wm_lead", userId: "user_lead" },
+                    { id: "wm_other", userId: "user_other" },
+                  ];
+                }
+                return [];
+              },
             }),
           }),
-          where: () => ({
-            orderBy: async () => await createSelectQueryMock([]).from().where(),
-            limit: () => ({
-              for: async () => [],
-            }),
-            for: async () => {
-              if (table === workspaces) {
-                return [{ leadUserId: "user_lead" }];
-              }
-              if (table === workspaceMembers) {
-                return [
-                  { id: "wm_lead", userId: "user_lead" },
-                  { id: "wm_other", userId: "user_other" },
-                ];
-              }
-              return [];
-            },
-          }),
-        }),
-      }),
+        };
+      },
       delete: (table: unknown) => ({
         where: () => ({
           returning: async () => {
@@ -205,6 +229,7 @@ describe("removeWorkspaceMember", () => {
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
     // Signing transitions require a held session; this fixture has none.
     expect(updates).toEqual([
+      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
         table: getTableName(desktopEditSessions),
         value: { takeoverRequestedBy: null, takeoverRequestedAt: null },
@@ -217,7 +242,6 @@ describe("removeWorkspaceMember", () => {
         table: getTableName(correspondence),
         value: { assigneeId: null, updatedAt: expect.any(Date) },
       },
-      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
         table: getTableName(desktopEditSessions),
         value: { status: "cancelled", closedAt: expect.any(Date) },

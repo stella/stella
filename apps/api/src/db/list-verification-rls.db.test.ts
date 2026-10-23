@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, getColumns } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
@@ -33,6 +34,7 @@ import {
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
+import { withWorkspaceCreation } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
@@ -88,7 +90,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
           CREATE TABLE "user" (id text PRIMARY KEY, email text, email_verified boolean, deleted_at timestamptz);
           CREATE TABLE member (id text PRIMARY KEY, user_id text, organization_id varchar(128), role text);
           CREATE TABLE workspace_members (id uuid PRIMARY KEY, workspace_id uuid, user_id text);
-          CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), status text, client_id uuid, UNIQUE (id, organization_id));
+          CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), status text, client_id uuid, visibility text NOT NULL, UNIQUE (id, organization_id));
           CREATE TABLE legal_list_items (entity_id uuid, list_id uuid, workspace_id uuid, UNIQUE (entity_id, list_id, workspace_id));
           CREATE TABLE fields (id uuid, workspace_id uuid, entity_version_id uuid, content jsonb);
           GRANT SELECT ON fields TO stella;
@@ -173,7 +175,31 @@ describe.skipIf(!enabled)("list verification row security", () => {
         await client`INSERT INTO "user" VALUES (${userId}, 'member@example.test', true, null)`;
         await client`INSERT INTO member VALUES ('verification_member', ${userId}, ${organizationId}, 'owner')`;
         await client`INSERT INTO workspace_members VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${userId})`;
-        await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId}, 'active', null)`;
+        await db.transaction(
+          async (tx) =>
+            await withWorkspaceCreation({
+              tx,
+              rows: [
+                {
+                  id: workspaceId,
+                  organizationId,
+                  name: "Verification fixture",
+                  reference: workspaceId,
+                  visibility: MATTER_VISIBILITY.assignedOnly,
+                  leadUserId: userId,
+                },
+              ],
+              insert: async (normalizedRows) => {
+                const row =
+                  normalizedRows.at(0) ??
+                  panic("Missing verification matter creation row");
+                await tx.execute(
+                  sql`INSERT INTO workspaces (id, organization_id, status, client_id, visibility)
+                    VALUES (${row.id}, ${row.organizationId}, 'active', null, ${row.visibility})`,
+                );
+              },
+            }),
+        );
         const runFixture = {
           id: runId,
           organizationId,

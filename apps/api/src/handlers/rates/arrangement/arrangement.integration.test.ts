@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -91,6 +93,7 @@ beforeAll(async () => {
     .onConflictDoNothing();
   await db.insert(workspaces).values(
     testWorkspaceIds.map((id) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id,
       organizationId: ids.orgA,
       name: "Billing arrangement test",

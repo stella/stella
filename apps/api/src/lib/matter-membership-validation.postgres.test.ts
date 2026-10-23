@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -48,8 +50,9 @@ describePostgres("matter membership validation (postgres)", () => {
           CREATE TABLE audit_logs (LIKE public.audit_logs INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES);
         `)
           .simple();
-        await session`INSERT INTO workspaces (id, organization_id, name, reference)
-          VALUES (${workspaceId}, 'validation-org', 'Matter', ${workspaceId})`;
+        await session`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
+          VALUES (${workspaceId}, 'validation-org', 'Matter', ${workspaceId},
+            ${MATTER_VISIBILITY.adminsAndAssigned}, 'retained-user')`;
         await session`INSERT INTO workspace_members (id, workspace_id, user_id)
           VALUES (${orphanId}, ${workspaceId}, 'departed-user'),
                  (${secondOrphanId}, ${workspaceId}, 'departed-user-2'),

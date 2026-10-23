@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -54,12 +55,14 @@ test("legal list fixtures keep live in-matter provenance and converge on replay"
     });
     await db.insert(workspaces).values([
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Synthetic source matter",
         reference: "SAMPLE-1",
       },
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: emptyWorkspaceId,
         organizationId,
         name: "Synthetic empty matter",

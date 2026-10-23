@@ -6,6 +6,7 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 
+import type { workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -30,14 +31,16 @@ type PracticeJurisdictionRow = {
   practiceJurisdictions: { countryCode: string; isPrimary: boolean }[];
 };
 
-type MattersRow = {
-  createdAt: Date;
-  id: string;
-  lastActivityAt: Date;
-  name: string;
-  reference: string | null;
-  status: string;
-};
+type MattersRow = Pick<
+  typeof workspaces.$inferSelect,
+  | "createdAt"
+  | "id"
+  | "lastActivityAt"
+  | "name"
+  | "reference"
+  | "status"
+  | "visibility"
+>;
 
 type SelectChain = {
   select: () => SelectChain;
@@ -460,11 +463,12 @@ describe("empty-result onboarding next step", () => {
         matters: [
           {
             createdAt: new Date("2026-01-01T00:00:00Z"),
-            id: "ws_1",
+            id: toSafeId<"workspace">("ws_1"),
             lastActivityAt: new Date("2026-02-01T00:00:00Z"),
             name: "Matter Alpha",
             reference: "M-001",
             status: "active",
+            visibility: "admins_and_assigned",
           },
         ],
         practiceJurisdictions: [],

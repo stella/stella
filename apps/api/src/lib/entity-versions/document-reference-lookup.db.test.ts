@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
@@ -104,6 +106,7 @@ beforeAll(
         email: `${userId}@example.test`,
       });
       await tx.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Document reference matter",

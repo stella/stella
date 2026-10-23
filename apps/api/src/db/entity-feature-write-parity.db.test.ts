@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 test("scalar gate writes and propagation match graph-derived visibility across scopes", async () => {
@@ -35,8 +37,13 @@ test("scalar gate writes and propagation match graph-derived visibility across s
       [organizationId],
     );
     await client.query(
-      "INSERT INTO workspaces (id, organization_id, name, reference) VALUES ($1, $3, 'Gate A', 'gate-a'), ($2, $3, 'Gate B', 'gate-b')",
-      [workspaceId, otherWorkspaceId, organizationId],
+      "INSERT INTO workspaces (id, organization_id, name, reference, visibility) VALUES ($1, $3, 'Gate A', 'gate-a', $4), ($2, $3, 'Gate B', 'gate-b', $4)",
+      [
+        workspaceId,
+        otherWorkspaceId,
+        organizationId,
+        MATTER_VISIBILITY.adminsAndAssigned,
+      ],
     );
     await client.query(
       "INSERT INTO entities (id, workspace_id, kind, name) VALUES ($1, $2, 'task', 'Gate parity')",

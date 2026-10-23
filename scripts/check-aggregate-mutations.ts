@@ -9,6 +9,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { BASELINE_PATHS } from "./baseline-paths";
+import matterStewardRecovery from "./ownership/matter-steward-recovery";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const API = "apps/api/src/";
@@ -800,7 +801,12 @@ type HandlerImplementationOptions = {
   visited?: Set<string>;
 };
 type HandlerImplementation =
-  | { body: ts.Node; source: ts.SourceFile; file: string }
+  | {
+      body: ts.Node;
+      source: ts.SourceFile;
+      file: string;
+      factoryCalls?: readonly ts.CallExpression[];
+    }
   | undefined;
 /** The handler constructor call a local factory returns, as its arrow body or only statement. */
 const factoryReturn = (
@@ -871,13 +877,19 @@ const handlerImplementation = ({
         return undefined;
       }
       visited.add(key);
-      return handlerImplementation({
+      const implementation = handlerImplementation({
         handler: returned,
         source,
         file,
         access,
         visited,
       });
+      return implementation === undefined
+        ? undefined
+        : {
+            ...implementation,
+            factoryCalls: [...(implementation.factoryCalls ?? []), handler],
+          };
     }
     const callback = handler.arguments.at(1);
     if (
@@ -1375,8 +1387,8 @@ const JOINING_RUNNERS = {
     handles: { module: `${API}db/root.ts`, exported: ["rootDb", "rlsDb"] },
   },
   /**
-   * Followed callees only: better-result `Result.tryPromise({ try })`. It
-   * joins `try` but passes it no transaction.
+   * Better-result `Result.tryPromise({ try })` joins `try` in handlers and
+   * followed callees, but passes it no transaction.
    */
   calleeResultProperties: [
     { method: "tryPromise", property: "try", suppliesTransaction: false },
@@ -1699,7 +1711,9 @@ const awaitedAggregateNames = ({
             implementation,
             access,
             handlerSafeDb: true,
-          }))
+          }) ||
+          resultPropertyCredit({ callback: node, implementation, access }) !==
+            undefined)
     ) {
       return;
     }
@@ -1709,6 +1723,16 @@ const awaitedAggregateNames = ({
       ts.isIdentifier(node.expression.expression)
     ) {
       const options = node.expression.arguments.at(0);
+      if (
+        isTrustedImport({
+          identifier: node.expression.expression,
+          access,
+          module: REGISTRY,
+          exported: ["lockMatterStewardship"],
+        })
+      ) {
+        names.add("workspace");
+      }
       if (
         isTrustedImport({
           identifier: node.expression.expression,
@@ -1807,6 +1831,94 @@ const isDirectNamedExport = (source: ts.SourceFile, name: string) => {
   return declared;
 };
 
+/** Only the ownership-declared root operation may cross an injected factory seam. */
+const trustedRecoveryDependency = ({
+  binding,
+  implementation,
+  access,
+}: {
+  binding: Extract<TrustedBinding, { kind: "parameter" }>;
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+}): TrustedBinding | undefined => {
+  if (
+    !matterStewardRecovery.enforcement.allowed.some(
+      ({ path: allowedPath }) => allowedPath === implementation.file,
+    ) ||
+    binding.element === undefined
+  ) {
+    return undefined;
+  }
+  const key = binding.element.propertyName ?? binding.element.name;
+  if (!ts.isIdentifier(key)) {
+    return undefined;
+  }
+  for (const call of implementation.factoryCalls ?? []) {
+    if (!ts.isIdentifier(call.expression)) {
+      continue;
+    }
+    const factory = trustedBinding({ identifier: call.expression, access });
+    if (factory?.kind !== "function" || factory.node !== binding.scope) {
+      continue;
+    }
+    const options = call.arguments.at(binding.index);
+    if (options === undefined || !ts.isObjectLiteralExpression(options)) {
+      continue;
+    }
+    const property = options.properties.find(
+      (item) =>
+        ts.isPropertyAssignment(item) && staticPropertyKey(item) === key.text,
+    );
+    if (
+      property === undefined ||
+      !ts.isPropertyAssignment(property) ||
+      !isFinalProperty(property) ||
+      !ts.isIdentifier(property.initializer)
+    ) {
+      continue;
+    }
+    const dependency = trustedBinding({
+      identifier: property.initializer,
+      access,
+    });
+    if (
+      dependency?.kind === "import" &&
+      dependency.module === matterStewardRecovery.owner[0] &&
+      matterStewardRecovery.enforcement.names.some(
+        (name) => name === dependency.exported,
+      )
+    ) {
+      return dependency;
+    }
+  }
+  return undefined;
+};
+
+const isRootRecoveryTransaction = (
+  implementation: Exclude<HandlerImplementation, undefined>,
+  access: SourceAccess,
+) => {
+  const body = implementation.body;
+  if (!ts.isAwaitExpression(body) || !ts.isCallExpression(body.expression)) {
+    return false;
+  }
+  const call = body.expression;
+  const handle = call.arguments.at(0);
+  return (
+    ts.isIdentifier(call.expression) &&
+    isTrustedImport({
+      identifier: call.expression,
+      access,
+      module: REGISTRY,
+      exported: ["withAggregateTransaction"],
+    }) &&
+    handle !== undefined &&
+    ts.isIdentifier(handle) &&
+    handle.text === "rootDb" &&
+    trustedBinding({ identifier: handle, access })?.kind === "const"
+  );
+};
+
 /**
  * Resolves a direct call to a function defined in the caller's file or in a
  * module of the same package. Both the call's binding and the definition
@@ -1816,14 +1928,26 @@ const isDirectNamedExport = (source: ts.SourceFile, name: string) => {
  */
 const calleeImplementation = ({
   call,
-  implementation: { source, file },
+  implementation,
   access,
 }: CalleeImplementationOptions): HandlerImplementation => {
+  const { source, file } = implementation;
   const root = packageRoot(file);
   if (!ts.isIdentifier(call.expression) || root === undefined) {
     return undefined;
   }
-  const binding = trustedBinding({ identifier: call.expression, access });
+  const originalBinding = trustedBinding({
+    identifier: call.expression,
+    access,
+  });
+  const binding =
+    originalBinding?.kind === "parameter"
+      ? trustedRecoveryDependency({
+          binding: originalBinding,
+          implementation,
+          access,
+        })
+      : originalBinding;
   if (binding?.kind === "function") {
     return isCreditableFunction(binding.node)
       ? { body: binding.body, source, file }
@@ -1850,9 +1974,20 @@ const calleeImplementation = ({
     source: target,
     access,
   });
-  return definition?.kind === "function" &&
-    isCreditableFunction(definition.node)
-    ? { body: definition.body, source: target, file: binding.module }
+  if (
+    definition?.kind !== "function" ||
+    !isCreditableFunction(definition.node)
+  ) {
+    return undefined;
+  }
+  const resolved = {
+    body: definition.body,
+    source: target,
+    file: binding.module,
+  };
+  return originalBinding?.kind !== "parameter" ||
+    isRootRecoveryTransaction(resolved, access)
+    ? resolved
     : undefined;
 };
 

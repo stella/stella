@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
@@ -84,6 +86,7 @@ if (!databaseUrl || !runPostgresTests) {
               featureId: "time-billing",
             });
             await setup.db.insert(workspaces).values({
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: workspaceId,
               organizationId,
               name: "Billing",

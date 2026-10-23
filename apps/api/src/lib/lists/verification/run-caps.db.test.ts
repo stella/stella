@@ -20,9 +20,18 @@ import { startVerificationRun } from "@/api/lib/lists/verification/start-run";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
+import { withLegacyWorkspaceFixture } from "@/api/tests/helpers/workspace-creation";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const PRE_VISIBILITY_SCHEMA = `
+  CREATE TABLE organization (id varchar(128) PRIMARY KEY);
+  CREATE TABLE "user" (id text PRIMARY KEY);
+  CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), UNIQUE(id, organization_id));
+  CREATE TABLE legal_list_items (entity_id uuid, list_id uuid, workspace_id uuid, UNIQUE(entity_id, list_id, workspace_id));
+  CREATE VIEW stella_authorized_workspaces AS SELECT NULL::uuid AS authorized_workspace_id WHERE false;
+  GRANT SELECT ON stella_authorized_workspaces TO stella;
+`;
 
 type CreateFixtureArgs = {
   db: GatedTestDb;
@@ -43,9 +52,13 @@ const createFixture = async ({ db, connect, schema }: CreateFixtureArgs) => {
   await db.execute(
     sql`INSERT INTO organization VALUES (${organizationId}), (${otherOrganizationId})`,
   );
-  await db.execute(sql`INSERT INTO workspaces VALUES
+  await withLegacyWorkspaceFixture({
+    tx: db,
+    insert: async () =>
+      await db.execute(sql`INSERT INTO workspaces VALUES
     (${workspaceId}, ${organizationId}), (${secondWorkspaceId}, ${organizationId}),
-    (${otherWorkspaceId}, ${otherOrganizationId})`);
+    (${otherWorkspaceId}, ${otherOrganizationId})`),
+  });
 
   const run = (workspace = workspaceId, organization = organizationId) => ({
     id: createSafeId<"legalListVerificationRun">(),
@@ -128,14 +141,7 @@ const withFixture = async (
     try {
       await client.unsafe(`SET search_path TO ${schema}`);
       await client.unsafe(`GRANT USAGE ON SCHEMA ${schema} TO stella`);
-      await client.unsafe(`
-        CREATE TABLE organization (id varchar(128) PRIMARY KEY);
-        CREATE TABLE "user" (id text PRIMARY KEY);
-        CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), UNIQUE(id, organization_id));
-        CREATE TABLE legal_list_items (entity_id uuid, list_id uuid, workspace_id uuid, UNIQUE(entity_id, list_id, workspace_id));
-        CREATE VIEW stella_authorized_workspaces AS SELECT NULL::uuid AS authorized_workspace_id WHERE false;
-        GRANT SELECT ON stella_authorized_workspaces TO stella;
-      `);
+      await client.unsafe(PRE_VISIBILITY_SCHEMA);
       for (const migration of [
         "20260925220000_legal_list_verifications",
         "20261005120300_list_verification_access_revoked",
@@ -219,9 +225,13 @@ describe.skipIf(!enabled)(
             await db.execute(
               sql`INSERT INTO organization VALUES ('seeded_org')`,
             );
-            await db.execute(
-              sql`INSERT INTO workspaces VALUES ('00000000-0000-0000-0000-000000000001', 'seeded_org')`,
-            );
+            await withLegacyWorkspaceFixture({
+              tx: db,
+              insert: async () =>
+                await db.execute(
+                  sql`INSERT INTO workspaces VALUES ('00000000-0000-0000-0000-000000000001', 'seeded_org')`,
+                ),
+            });
             await db.execute(sql`INSERT INTO legal_list_verification_runs
               (id, organization_id, workspace_id, entity_id, file_field_id,
                entity_version_id, content_sha256, evidence, status, created_at)

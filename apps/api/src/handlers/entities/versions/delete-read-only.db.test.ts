@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -76,6 +77,7 @@ const seedDocument = async ({ readOnly }: { readOnly: boolean }) => {
   });
   userIds.push(userId);
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Matter",

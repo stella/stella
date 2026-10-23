@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import path from "node:path";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization, member, user } from "@/api/db/auth-schema";
@@ -103,6 +104,7 @@ describe.skipIf(!runPostgresTests)(
         );
         try {
           await db.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId: DEFAULT_ORG_ID,
             name: `route-smoke-${workspaceId.slice(0, 8)}`,

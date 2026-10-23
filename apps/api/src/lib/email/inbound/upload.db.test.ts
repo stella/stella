@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { dkimSign } from "mailauth";
 import { generateKeyPairSync } from "node:crypto";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
@@ -239,12 +240,14 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       await db.insert(workspaces).values([
         {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Matter",
           reference: "UPLOAD-1",
         },
         {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: otherWorkspaceId,
           organizationId,
           name: "Other matter",

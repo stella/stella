@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import {
   billingCodes,
   caseLawMatterLinks,
@@ -491,6 +493,7 @@ describe("workspaces table — correct scope", () => {
     // Not throwing IS the verification.
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       await tx.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: toSafeId<"workspace">(Bun.randomUUIDv7()),
         organizationId: ids.orgA,
         clientId: ids.contactA,

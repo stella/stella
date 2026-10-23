@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { ValiError } from "valibot";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
@@ -53,6 +54,7 @@ const withFixture = async (
     try {
       await db.insert(workspaces).values(
         rows.map(({ organizationId, workspaceId }) => ({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Background scope matter",
@@ -137,6 +139,7 @@ describe.skipIf(!runPostgresTests)(
             scoped(
               async (tx) =>
                 await tx.insert(workspaces).values({
+                  visibility: MATTER_VISIBILITY.adminsAndAssigned,
                   id: createdWorkspaceId,
                   organizationId: actor.organizationId,
                   name: "Denied background matter",

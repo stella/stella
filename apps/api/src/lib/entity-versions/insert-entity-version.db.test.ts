@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
-import { VERIFICATION_CODE_PATTERN } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  VERIFICATION_CODE_PATTERN,
+} from "@stll/api-contract";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -104,6 +107,7 @@ beforeAll(
         email: `${userId}@example.test`,
       });
       await tx.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Verification code matter",

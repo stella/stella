@@ -1,3 +1,4 @@
+// parser-output-unchanged: Optional HTTP matter handover metadata and its leaf import leave ingestion adapter records and stop kinds unchanged.
 // parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
@@ -27,6 +28,7 @@
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { MatterStewardHandoverMatter } from "@stll/api-contract/matter-visibility";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
@@ -176,6 +178,8 @@ export type HandlerErrorProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  /** Only matters the authenticated caller already reaches. */
+  affectedMatters?: MatterStewardHandoverMatter[] | undefined;
 };
 
 // TaggedError(...) cannot reference the class type parameter in the base
@@ -197,6 +201,7 @@ export class HandlerError<
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
+  declare affectedMatters?: HandlerErrorProps["affectedMatters"];
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -213,6 +218,7 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
+    this.affectedMatters = props.affectedMatters;
   }
 }
 

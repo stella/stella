@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -52,6 +54,7 @@ if (!databaseUrl || !runPostgresTests) {
             createdAt: new Date(),
           });
           await setup.db.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId,
             name: "Isolation fixture",
@@ -198,6 +201,7 @@ if (!databaseUrl || !runPostgresTests) {
               createdAt: new Date(),
             });
             await setup.db.insert(workspaces).values({
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: workspaceId,
               organizationId,
               name: "Contact capacity fixture",

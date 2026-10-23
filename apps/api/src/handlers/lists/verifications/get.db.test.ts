@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { PassThrough } from "node:stream";
 import * as v from "valibot";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -74,6 +76,7 @@ const seed = async (db: GatedTestDb) => {
   );
   await db.insert(workspaces).values(
     [workspaceId, otherWorkspaceId].map((id) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id,
       organizationId,
       name: "Read audit matter",

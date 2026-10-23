@@ -3,6 +3,8 @@ import { and, count, eq, ilike, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
+
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
@@ -27,6 +29,7 @@ import {
   tSafeId,
   withDescription,
 } from "@/api/lib/custom-schema";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -42,10 +45,12 @@ import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
+import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
 
-// A request without `clientId` creates a personal matter (initially
-// visible only to the creator). With `clientId`, it's a normal
-// client matter and `memberUserIds` may add additional members.
+// `visibility` decides who can see the matter. Unless the creator chooses,
+// a matter without a client is personal (assigned_only, led by its creator)
+// and a client matter gets the client default (defaultMatterVisibilityFor).
+// `memberUserIds` adds members alongside the creator either way.
 const createWorkspaceBodySchema = t.Object({
   id: tSafeId("workspace"),
   clientId: t.Optional(
@@ -60,6 +65,16 @@ const createWorkspaceBodySchema = t.Object({
   ),
   name: withDescription(tDefaultVarchar, "Matter name"),
   filePropertyName: tDefaultVarchar,
+  visibility: t.Optional(
+    tMatterVisibility({
+      description:
+        "Who can see the matter: all_members (every internal member), " +
+        "admins_and_assigned (owners, admins and assigned members) or " +
+        "assigned_only (assigned members only). Defaults to assigned_only " +
+        "(only assigned members; the creator leads) for a matter without a " +
+        "client, and to admins_and_assigned for a client matter.",
+    }),
+  ),
 });
 
 const config = {
@@ -67,7 +82,14 @@ const config = {
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +
-    "contact). Returns the matter ID.",
+    "contact). visibility decides who can see it: all_members reaches every " +
+    "internal member without an assignment (never external users); " +
+    "admins_and_assigned reaches owners, admins and the assigned members; " +
+    "assigned_only reaches only the assigned members. Without visibility, a " +
+    "matter with a client is admins_and_assigned and one without a client is " +
+    "personal: assigned_only, visible only to its creator. The creator " +
+    "becomes the matter lead. " +
+    "Returns the matter ID.",
   permissions: { workspace: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
@@ -95,20 +117,29 @@ export const createWorkspaceHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateWorkspaceHandlerProps) {
-  if (body.clientId !== undefined && (body.memberUserIds?.length ?? 0) > 0) {
+  if ((body.memberUserIds?.length ?? 0) > 0) {
     yield* checkDemoAccountOperation(userEmail);
   }
+  const visibility =
+    body.visibility ??
+    defaultMatterVisibilityFor({ hasClient: body.clientId !== undefined });
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
-      // New personal matters (no clientId) start with exactly one
-      // member: the creator. Additional members can be attached
-      // through the workspace members endpoint after creation.
+      // The creator is always a member; requested members join them
+      // whether or not the matter has a client.
       const requestedMemberUserIds =
-        body.clientId !== undefined && body.memberUserIds !== undefined
+        body.memberUserIds !== undefined
           ? Array.from(new Set(body.memberUserIds))
           : [];
 
       const grantedUserIds = [...new Set([userId, ...requestedMemberUserIds])];
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          { organizationId, workspaceIds: [body.id], userIds: grantedUserIds },
+        ],
+        mode: "update",
+      });
       const orgFilter = eq(workspaces.organizationId, organizationId);
 
       const [countResult, duplicatedNames, settings, client, orgMembers] =
@@ -153,10 +184,8 @@ export const createWorkspaceHandler = async function* ({
                 inArray(member.userId, grantedUserIds),
               ),
             )
-            // Same order as organization removal's membership locks.
-            .orderBy(member.userId)
-            .limit(grantedUserIds.length)
-            .for("update"),
+            .orderBy(member.id)
+            .limit(grantedUserIds.length),
         ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;
@@ -181,8 +210,7 @@ export const createWorkspaceHandler = async function* ({
 
       // Membership verified above — brand each requested user ID.
       // Combined with the session user.id, this gives a typed list
-      // of org-validated members for the insert below. New personal
-      // matters start with exactly one member: the creator.
+      // of org-validated members for the insert below.
       const workspaceMemberUserIds = Array.from(
         new Set([
           userId,
@@ -230,6 +258,11 @@ export const createWorkspaceHandler = async function* ({
         clientId: body.clientId ?? null,
         name: newName,
         reference,
+        visibility,
+        // The creator leads the matter. Only the lead or an organization
+        // owner/admin may change who can see it or who leads it, so a matter
+        // created by a member is never left without someone who can.
+        leadUserId: userId,
       });
 
       const workspaceId = body.id;
@@ -314,6 +347,7 @@ export const createWorkspaceHandler = async function* ({
               name: newName,
               reference,
               clientId: body.clientId ?? null,
+              visibility,
               memberCount: workspaceMemberUserIds.length,
             },
           },

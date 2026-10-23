@@ -214,9 +214,7 @@ export const createScopedDbMock = (
         ? providedQuery.documentProcessingRuns
         : {};
     const transaction = {
-      execute: async () => {
-        await Promise.resolve();
-      },
+      execute: async () => await Promise.resolve([]),
       ...(options?.authorizedWorkspaceIds === undefined
         ? {}
         : {

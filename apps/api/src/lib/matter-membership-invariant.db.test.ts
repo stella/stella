@@ -5,6 +5,7 @@ import fc from "fast-check";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
@@ -55,8 +56,13 @@ const fixture = async () => {
       [organizationId],
     );
     await client.query(
-      `INSERT INTO workspaces (id, organization_id, name, reference) VALUES ($1, $2, 'Matter', $3)`,
-      [matters[index], organizationId, `matter-${String(matters[index])}`],
+      `INSERT INTO workspaces (id, organization_id, name, reference, visibility) VALUES ($1, $2, 'Matter', $3, $4)`,
+      [
+        matters[index],
+        organizationId,
+        `matter-${String(matters[index])}`,
+        MATTER_VISIBILITY.adminsAndAssigned,
+      ],
     );
   }
   const addMember = async (organizationId: string, userId: string) =>
@@ -69,6 +75,33 @@ const fixture = async () => {
       `INSERT INTO workspace_members (id, workspace_id, user_id) VALUES ($1, $2, $3)`,
       [Bun.randomUUIDv7(), workspaceId, userId],
     );
+  const removeMember = async (organizationId: string, userId: string) => {
+    await client.exec("BEGIN");
+    const outcome = await Result.tryPromise({
+      try: async () => {
+        await client.query(
+          "SELECT public.stella_lock_matter_stewardship($1::text::jsonb, 'update')",
+          [
+            JSON.stringify([
+              {
+                organization_id: organizationId,
+                workspace_ids: [],
+                user_ids: [userId],
+                membership_user_ids: [userId],
+              },
+            ]),
+          ],
+        );
+        return await client.query(
+          "DELETE FROM member WHERE organization_id = $1 AND user_id = $2",
+          [organizationId, userId],
+        );
+      },
+      catch: (error) => error,
+    });
+    await client.exec(outcome.isOk() ? "COMMIT" : "ROLLBACK");
+    return outcome.unwrap();
+  };
   const matterMembers = async () =>
     (
       await client.query<{ workspaceId: string; userId: string }>(
@@ -98,6 +131,7 @@ const fixture = async () => {
     users,
     addMember,
     addMatterMember,
+    removeMember,
     matterMembers,
     orphans,
     cleanUp: async () => {
@@ -125,10 +159,7 @@ const applyStep = async (
   if (kind === "grant") {
     return await data.addMatterMember(ids.workspaceId, ids.userId);
   }
-  return await client.query(
-    `DELETE FROM member WHERE organization_id = $1 AND user_id = $2`,
-    [ids.organizationId, ids.userId],
-  );
+  return await data.removeMember(ids.organizationId, ids.userId);
 };
 
 describe("matter membership requires organization membership", () => {
@@ -169,10 +200,7 @@ describe("matter membership requires organization membership", () => {
         await data.addMatterMember(workspaceId, userId);
       }
       await data.addMatterMember(data.matters[0], colleagueId);
-      await client.query(
-        `DELETE FROM member WHERE organization_id = $1 AND user_id = $2`,
-        [data.organizations[0], userId],
-      );
+      await data.removeMember(data.organizations[0], userId);
       expect(await data.matterMembers()).toEqual(
         [
           { workspaceId: data.matters[0], userId: colleagueId },
@@ -206,6 +234,19 @@ describe("matter membership requires organization membership", () => {
         ),
       ).toMatchObject({ code: "23503", constraint: CONSTRAINT });
       const [, outsiderId] = data.users;
+      await client.exec("BEGIN");
+      await client.query(
+        "SELECT public.stella_lock_matter_stewardship($1::text::jsonb, 'update')",
+        [
+          JSON.stringify([
+            {
+              organization_id: data.organizations[0],
+              workspace_ids: [data.matters[0]],
+              user_ids: [userId, outsiderId],
+            },
+          ]),
+        ],
+      );
       expect(
         await observeFailure(
           client.query(
@@ -214,6 +255,7 @@ describe("matter membership requires organization membership", () => {
           ),
         ),
       ).toMatchObject({ code: "23503", constraint: CONSTRAINT });
+      await client.exec("ROLLBACK");
       expect(await data.matterMembers()).toEqual([
         { workspaceId: data.matters[0], userId },
       ]);
@@ -252,7 +294,26 @@ describe("matter membership requires organization membership", () => {
         throw new Error("fixture orphan");
       }
 
-      await client.exec(VALIDATION_MIGRATION_SQL);
+      // Replaying the older repair against today's triggers requires today's
+      // prefix after its transaction boundary, before its unchanged repair SQL.
+      const repairStart = VALIDATION_MIGRATION_SQL.indexOf(
+        "WITH removed_memberships AS (",
+      );
+      expect(repairStart).toBeGreaterThan(0);
+      await client.exec(VALIDATION_MIGRATION_SQL.slice(0, repairStart));
+      await client.query(
+        "SELECT public.stella_lock_matter_stewardship($1::text::jsonb, 'update')",
+        [
+          JSON.stringify([
+            {
+              organization_id: data.organizations[0],
+              workspace_ids: [data.matters[0]],
+              user_ids: [leaverId, colleagueId],
+            },
+          ]),
+        ],
+      );
+      await client.exec(VALIDATION_MIGRATION_SQL.slice(repairStart));
       await client.exec(`COMMIT`);
       await client.exec(`RESET lock_timeout; RESET statement_timeout`);
 

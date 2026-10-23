@@ -1,3 +1,11 @@
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 /**
  * Which matters a position source may come from.
  *
@@ -7,16 +15,9 @@
  * the matters the caller may use now. A1 is a member of three matters here:
  * `wsA1`, `wsA2`, and one that is sealed (`deleting`) partway through.
  */
-
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -253,6 +254,7 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: SEALED_WORKSPACE_ID,
     organizationId: ids.orgA,
     clientId: ids.contactA,

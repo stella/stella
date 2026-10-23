@@ -14,6 +14,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { lockTimerOwnerIdentities } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnbackedProjectionKeys,
@@ -48,10 +49,15 @@ export const timerNotFound = (caller: "owner" | "admin" = "owner") =>
         : "List your timers before choosing a timer ID.",
   });
 
+export const timerScopeChanged = () =>
+  new HandlerError({
+    status: 409,
+    code: "timer_scope_changed",
+    message: "The timer changed. Reload timers and retry.",
+  });
+
 export const lockTimerOwner = async (tx: Transaction, owner: TimerOwner) => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${`timer:${owner.organizationId}:${owner.userId}`}))`,
-  );
+  await lockTimerOwnerIdentities({ tx, owners: [owner] });
 };
 
 type ReadOwnedTimerOptions = {

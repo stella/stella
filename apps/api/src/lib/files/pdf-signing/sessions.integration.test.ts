@@ -18,6 +18,7 @@ import {
   entityVersions,
   pdfSigningSessions,
   properties,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
@@ -43,6 +44,7 @@ import {
   recordPdfSigningHandoffFailure,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -60,7 +62,7 @@ const createdSessionIds: SafeId<"pdfSigningSession">[] = [];
 
 const MINUTE_MS = 60_000;
 
-/** A matter without a client in tenant A, reached through membership only. */
+/** A matter without a client in tenant A, visible to assigned members only. */
 const personalMatter = {
   baseVersionId: createSafeId<"entityVersion">(),
   entityId: createSafeId<"entity">(),
@@ -159,13 +161,27 @@ beforeAll(async () => {
   db = asTestRaw<typeof rootDb>(testDb);
   tokenDb = testTokenDb();
 
-  await testDb.insert(workspaces).values({
-    id: personalMatter.workspaceId,
-    organizationId: ids.orgA,
-    clientId: null,
-    name: "Personal matter",
-    reference: `REF-${personalMatter.workspaceId}`,
-    status: "active",
+  await testDb.transaction(async (tx) => {
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
+        {
+          id: personalMatter.workspaceId,
+          organizationId: ids.orgA,
+          clientId: null,
+          visibility: "assigned_only",
+          leadUserId: ids.userA2,
+          name: "Personal matter",
+          reference: `REF-${personalMatter.workspaceId}`,
+          status: "active",
+        },
+      ],
+    });
+    await tx.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: personalMatter.workspaceId,
+      userId: ids.userA2,
+    });
   });
   await testDb.insert(entities).values({
     id: personalMatter.entityId,

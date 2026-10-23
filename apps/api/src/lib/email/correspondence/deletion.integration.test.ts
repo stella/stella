@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
@@ -42,6 +44,7 @@ test("organization deletion removes shared-mailbox history", async () => {
         createdAt: new Date(),
       });
       await tx.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Deletion matter",

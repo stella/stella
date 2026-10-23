@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { entities, workspaces } from "@/api/db/schema";
@@ -42,6 +44,7 @@ const assertCapBarrier = async (
         createdAt: new Date(),
       });
       await db.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Entity capacity lock fixture",

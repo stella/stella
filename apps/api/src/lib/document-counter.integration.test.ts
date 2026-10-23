@@ -10,7 +10,10 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  MATTER_REFERENCE_RETIRED_CODE,
+} from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -58,6 +61,7 @@ const createMatter = async (
 ): Promise<SafeId<"workspace">> => {
   const workspaceId = createSafeId<"workspace">();
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: `Matter ${reference}`,
@@ -302,6 +306,10 @@ describe("matter reference change", () => {
     const { safeDb } = scopeFor([workspaceId]);
     return await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: {
+          userId: ids.userA1,
+          managesOrganizationMatters: true,
+        },
         safeDb,
         organizationId: ids.orgA,
         workspaceId,
@@ -629,6 +637,10 @@ describe("client attachment", () => {
       const { safeDb } = scopeFor([workspaceId]);
       const result = await Result.gen(() =>
         updateWorkspaceHandler({
+          actor: {
+            userId: ids.userA1,
+            managesOrganizationMatters: true,
+          },
           safeDb,
           organizationId: ids.orgA,
           workspaceId,

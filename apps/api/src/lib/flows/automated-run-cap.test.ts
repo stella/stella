@@ -1,10 +1,3 @@
-/**
- * Cap guard for automated (schedule / file-upload) flow runs. The count and the
- * insert are one atomic statement, so this exercises the SQL shape / semantics
- * without needing real concurrency (PGlite is single-connection): seed rows for
- * a definition, then assert the gated insert either lands or is refused.
- */
-
 import {
   afterAll,
   beforeAll,
@@ -13,8 +6,16 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+/**
+ * Cap guard for automated (schedule / file-upload) flow runs. The count and the
+ * insert are one atomic statement, so this exercises the SQL shape / semantics
+ * without needing real concurrency (PGlite is single-connection): seed rows for
+ * a definition, then assert the gated insert either lands or is refused.
+ */
 import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
@@ -149,6 +150,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       email: `${userId}@example.com`,
     });
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Automated cap matter",

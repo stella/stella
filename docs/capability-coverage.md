@@ -317,6 +317,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
 | `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
 | `matters.search-preview.get` | read | stella:read | — | covered by `list_matters` |
+| `matters.steward.update` | write | stella:matters_write | — | generic invoke → `stella capability matters steward-update` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
 | `matters.update` | write | stella:matters_write | — | covered by `save_matter` |
 | `matters.workflow.get` | read | stella:read | — | generic invoke → `stella capability matters workflow-get` |

@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { DrizzleQueryError, eq, sql } from "drizzle-orm";
 import { integer, pgTable } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
@@ -364,6 +366,7 @@ if (!databaseUrl || !runPostgresTests) {
             email: `${userId}@example.test`,
           });
           await owner.db.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId: orgId,
             name: "Recorder matter",
