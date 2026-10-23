@@ -41,4 +41,19 @@ describe("pageLengthKeepingMarksWhole", () => {
       ),
     ).toBe(1);
   });
+
+  test("extends only through the mark crossing the requested boundary", () => {
+    const rows = [
+      { groupId: null },
+      { groupId: "first" },
+      { groupId: "first" },
+      { groupId: "second" },
+      { groupId: "second" },
+    ];
+
+    expect(pageLengthKeepingMarksWhole(rows, 2)).toBe(3);
+    expect(pageLengthKeepingMarksWhole(rows, 3)).toBe(3);
+    expect(pageLengthKeepingMarksWhole(rows, 4)).toBe(5);
+    expect(pageLengthKeepingMarksWhole(rows, 5)).toBe(5);
+  });
 });
