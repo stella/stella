@@ -106,6 +106,7 @@ export const ONLINE_WORK_LIFECYCLE = {
   sanctions_contact_screenings_status_check: FINALIZED,
   sanctions_contact_screenings_incomplete_edition_check: FINALIZED,
   "chat-content-v3": FINALIZED,
+  case_law_decisions_republished_ruling_idx: PENDING,
 } as const satisfies Record<OnlineWorkName, OnlineWorkLifecycle>;
 
 declare const finalizedWorkBrand: unique symbol;
