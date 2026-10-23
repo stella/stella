@@ -87,6 +87,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["local:module-loader"],
   },
   {
+    path: "apps/api/scripts/run-postgres-tests.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Creates and drops per-worker test databases on the Postgres server DATABASE_URL names.",
+    transports: ["global:Bun.SQL"],
+  },
+  {
     path: "apps/api/scripts/ai-provider-cassette-probe.ts",
     class: "vendor-sdk",
     reason:
@@ -1272,6 +1279,11 @@ export type OutboundPermitGrantOwner = {
 
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/get-exact.ts",
+    reason:
+      "Authenticated direct boundary for verified public connector and catalogue icon bytes.",
+  },
   {
     path: "apps/api/src/handlers/chat/link-icons/get.ts",
     reason: "Authenticated direct boundary for verified public favicon bytes.",

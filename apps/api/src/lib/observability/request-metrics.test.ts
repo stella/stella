@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import "@/api/tests/setup-env";
+
 import { AI_PROVIDERS } from "@stll/ai-catalog";
 import { compareCodeUnit } from "@stll/collation";
 

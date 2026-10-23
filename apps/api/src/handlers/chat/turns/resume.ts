@@ -1,5 +1,5 @@
 import { toServerSentEventsResponse } from "@tanstack/ai";
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -22,7 +22,10 @@ import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { createChatRunLogReplay } from "@/api/lib/chat/run-log";
+import {
+  ChatRunLogOffsetBeyondTailError,
+  createChatRunLogReplay,
+} from "@/api/lib/chat/run-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withSseHeartbeat } from "@/api/lib/sse";
@@ -178,8 +181,8 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
       );
     }
     const replay = yield* Result.await(
-      Result.tryPromise(
-        async () =>
+      Result.tryPromise({
+        try: async () =>
           await createChatRunLogReplay({
             db: scopedDb,
             organizationId: session.activeOrganizationId,
@@ -187,7 +190,13 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
             resumeOffset,
             waitForStart: true,
           }),
-      ),
+        // A cursor this run never issued is a request error, like a
+        // malformed one; anything else stays an unhandled failure.
+        catch: (cause) =>
+          ChatRunLogOffsetBeyondTailError.is(cause)
+            ? new HandlerError({ status: 400, message: cause.message })
+            : new UnhandledException({ cause }),
+      }),
     );
     if (replay === null) {
       return Result.ok({
