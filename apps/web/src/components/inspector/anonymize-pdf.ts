@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";

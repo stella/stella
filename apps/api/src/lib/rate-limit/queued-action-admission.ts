@@ -9,8 +9,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 import {
   ActionAdmissionError,
-  withActionAdmission,
   reserveQueuedKickoffPeriod,
+  withActionAdmission,
 } from "./action-admission";
 import type {
   ConcurrencyOnlyActionKind,

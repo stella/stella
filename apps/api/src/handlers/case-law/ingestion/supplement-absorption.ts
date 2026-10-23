@@ -34,8 +34,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
 } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {

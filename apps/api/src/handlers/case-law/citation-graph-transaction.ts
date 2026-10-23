@@ -1,4 +1,4 @@
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";

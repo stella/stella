@@ -5,8 +5,8 @@ import * as v from "valibot";
 
 import {
   allApiTests,
-  selectApiTestImpact,
   type ApiTestImpact,
+  selectApiTestImpact,
 } from "./api-test-impact";
 import {
   API_TEST_SHARD_IDS,

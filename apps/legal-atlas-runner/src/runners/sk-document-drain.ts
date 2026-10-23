@@ -25,8 +25,8 @@ import { panic, Result } from "better-result";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
   DOCUMENT_FETCH_EVENT,
-  type DocumentFetchErrorDiagnostic,
   documentErrorDiagnostics,
+  type DocumentFetchErrorDiagnostic,
   documentFetchErrorOutcome,
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";

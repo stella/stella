@@ -11,9 +11,9 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  analyzeModule,
   API_ALL_RULES,
   API_SHARD_SECONDS,
-  analyzeModule,
   selectApiTestImpact,
 } from "./api-test-impact";
 import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
