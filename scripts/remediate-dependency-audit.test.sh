@@ -31,6 +31,11 @@ fi
 if [[ "${TEST_FIX_AVAILABLE:-false}" == true ]]; then
   echo updated >> bun.lock
 fi
+# Bun rewrites an exact pin in a workspace manifest when it fixes it.
+if [[ "${TEST_PIN_REWRITE:-false}" == true ]]; then
+  echo updated >> bun.lock
+  echo rewritten > apps/web/package.json
+fi
 # Bun exits 1 while advisories remain, including after a partial fix.
 [[ "${TEST_ADVISORIES_REMAIN:-false}" != true ]]
 STUB
@@ -74,7 +79,10 @@ git config commit.gpgsign false
 touch bun.lock
 mkdir scripts
 echo baseline > scripts/dependency-audit-baseline.json
-git add bun.lock scripts/dependency-audit-baseline.json
+mkdir -p apps/web
+echo root > package.json
+echo pinned > apps/web/package.json
+git add bun.lock scripts/dependency-audit-baseline.json package.json apps/web/package.json
 git commit -qm initial
 initial_sha="$(git rev-parse HEAD)"
 git init --bare -q "$TEST_REMOTE"
@@ -137,4 +145,14 @@ TEST_OPEN_PRS=0 TEST_STALE=true bash "$subject"
 [[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
 [[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:scripts/dependency-audit-baseline.json)" == pruned ]]
 [[ -z "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" ]]
-echo 'ok   remediation deduplicates pull requests, authenticates remote operations and leases existing branches safely'
+
+# A fix that rewrites a pinned manifest carries the manifest with the lockfile.
+git checkout --detach "$initial_sha"
+git --git-dir="$TEST_REMOTE" update-ref -d refs/heads/automation/dependency-audit-fix
+git update-ref -d refs/remotes/origin/automation/dependency-audit-fix
+: > "$TEST_CALLS"
+TEST_OPEN_PRS=0 TEST_PIN_REWRITE=true bash "$subject"
+[[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
+[[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:apps/web/package.json)" == rewritten ]]
+[[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
+echo 'ok  remediation deduplicates pull requests, authenticates remote operations and leases existing branches safely'

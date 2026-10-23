@@ -18,7 +18,7 @@ fi
 # Runs after the fix so acceptances it resolved are removed in the same pull
 # request; pruning only removes entries, so it never accepts an advisory.
 bun --no-env-file scripts/dependency-audit.ts --prune-baseline
-if ! git diff --quiet -- bun.lock scripts/dependency-audit-baseline.json; then
+if ! git diff --quiet -- bun.lock scripts/dependency-audit-baseline.json ':(glob)**/package.json'; then
   # A source-only checkout has no tracking ref for an abandoned fix branch.
   # Lease the fetched tip explicitly, or require absence when creating it.
   fix_ref="refs/heads/$fix_branch"
@@ -30,7 +30,7 @@ if ! git diff --quiet -- bun.lock scripts/dependency-audit-baseline.json; then
   git config user.name "stella-dependency-audit[bot]"
   git config user.email "stella-dependency-audit[bot]@users.noreply.github.com"
   git checkout -B "$fix_branch"
-  git add bun.lock scripts/dependency-audit-baseline.json
+  git add bun.lock scripts/dependency-audit-baseline.json ':(glob)**/package.json'
   git commit -m "chore(deps): update dependency audit state"
   git -c credential.helper= -c credential.helper='!gh auth git-credential' push "--force-with-lease=$fix_ref:$observed_sha" origin "$fix_branch"
   gh pr create --head "$fix_branch" --base main \
