@@ -12,8 +12,8 @@ import type { discoverOAuthMetadataForApproval } from "@/api/lib/mcp-upstream/oa
 import {
   bindDiscoveredMetadata,
   discoverOAuthMetadata,
-  MCP_OAUTH_INVALID_GRANT_CODE,
   MCP_OAUTH_DISCOVERY_TIMEOUT_CODE,
+  MCP_OAUTH_INVALID_GRANT_CODE,
 } from "@/api/lib/mcp-upstream/oauth";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";

@@ -15,9 +15,9 @@ import {
 } from "./dated-waiver-healing";
 import type { HealingActions } from "./dated-waiver-healing";
 import {
-  type PublishedRemoval,
   listRemovalProposals,
   orphanRemovalProposals,
+  type PublishedRemoval,
   publishRemoval,
   REMOVAL_TITLE,
   retireRemoval,

@@ -14,8 +14,8 @@ import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import type { NormalizedEmail } from "@/api/lib/auth/normalized-email";
 import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import {
-  recordBudgetRejection,
   type BudgetName,
+  recordBudgetRejection,
 } from "@/api/lib/rate-limit/budget-observability";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimitRequestKey } from "@/api/lib/rate-limit/redis-context";

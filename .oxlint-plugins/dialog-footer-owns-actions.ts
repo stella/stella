@@ -40,8 +40,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import {
   elementName,
   everyNode,
-  getImportLocalName,
   getImportedName,
+  getImportLocalName,
   isAstNode,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";

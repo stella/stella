@@ -5,27 +5,27 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
-  SEARCH_TOTAL_NOT_COUNTED,
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
+  SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 
 import {
   caseLawDecisions,
   caseLawProvisionCitations,
-  caseLawSources,
   caseLawSearchDocuments,
+  caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  candidateDecisionRowsQuery,
+  candidateDecisionRowsStatement,
   caseLawSearchPlan,
   decisionHitsPage,
-  candidateDecisionRowsQuery,
   listCaseLawProvisionDecisions,
-  candidateDecisionRowsStatement,
   pageDecisionRowsQuery,
   pageDecisionRowsStatement,
   readCaseLawPageDecisionRows,

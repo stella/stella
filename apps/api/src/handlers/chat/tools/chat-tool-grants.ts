@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { and, eq, or } from "drizzle-orm";
 
 import {
-  isGrantableChatTool,
   type ChatToolGrantScope,
+  isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
 
 import type { Transaction } from "@/api/db/root";

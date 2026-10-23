@@ -4,8 +4,8 @@ import {
   CHAT_EDIT_APPLY_MODE,
   CHAT_EDIT_MODE_OPTION_ID,
   chatEditModeSelectionForOptionId,
-  docxEditRepresentationForSelection,
   DOCX_EDIT_REPRESENTATION,
+  docxEditRepresentationForSelection,
   isChatEditModeOptionId,
   resolveActiveDocxEditModeState,
 } from "@/lib/chat-edit-mode";

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  decisionHasNoDocument,
+  MISSING_BODY_REASON,
   missingBodyReason,
   missingBodyRetryable,
-  MISSING_BODY_REASON,
-  decisionHasNoDocument,
 } from "@stll/decision-reader/decision-body-state.logic";
 
 test("only confirmed document absence changes notice and indexing", () => {

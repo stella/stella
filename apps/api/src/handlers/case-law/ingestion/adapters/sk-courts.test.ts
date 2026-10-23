@@ -28,8 +28,8 @@ import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/p
 import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   assembleSkCourtsDecision,
-  skCourtsAdapter,
   SK_COURTS_SOURCE_FIELD_PATHS,
+  skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {

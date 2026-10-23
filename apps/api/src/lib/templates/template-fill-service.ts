@@ -24,14 +24,14 @@ import {
   getOrganizationRegistryDispatch,
 } from "@/api/lib/business-registries/credentials";
 import {
-  validateClauseBodyDirectives,
   inspectLegacyClauseDirectives,
   unrenderedOverrideWarning,
+  validateClauseBodyDirectives,
 } from "@/api/lib/clauses/clause-directives";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import {
-  discoverTemplateWithClauses,
   clauseBodyToRichPatch,
+  discoverTemplateWithClauses,
   renderedClauseFieldMarkers,
 } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -55,15 +55,15 @@ import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
 import {
   fillTemplate,
-  renderedTemplateMarkers,
   renderedClauseSlotOccurrences,
+  renderedTemplateMarkers,
 } from "@/api/lib/docx/patch-template";
 import type { ClauseSlotVisitor } from "@/api/lib/docx/patch-template";
 import {
   type AiConditionDecider,
   isAiConditionField,
-  type ResolvedAiCondition,
   resolveAiConditions,
+  type ResolvedAiCondition,
 } from "@/api/lib/docx/resolve-ai-conditions";
 import {
   type AiFieldError,
@@ -86,8 +86,8 @@ import type {
   FieldValidation,
   InputType,
   LookupRegistry,
-  TemplateManifest,
   TemplateData,
+  TemplateManifest,
 } from "@/api/lib/docx/types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
