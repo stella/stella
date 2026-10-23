@@ -187,6 +187,7 @@ import {
   answerRequestError,
   completeRequest,
   withFinalResponseCompletion,
+  withDbCountHeaders,
 } from "@/api/lib/observability/request-lifecycle";
 import {
   emitEventLoopDelayMetric,
@@ -755,26 +756,33 @@ const scopeRequestAsyncStores = (): void => {
   api.wrap(
     (handleRequest) => async (request: Request) =>
       runWithRequestScope(async () => {
-        if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-          return handleRequest(request);
+        const finalResponse: unknown = !isDeploymentFeatureEnabled(
+          "FEATURE_ACTION_ADMISSION",
+        )
+          ? await handleRequest(request)
+          : await withFinalResponseCompletion(request, async () =>
+              runTenantHttpAction(request, {
+                handleRequest: async (bounded) => {
+                  // The private HOC types erase the response type; validate the
+                  // framework boundary before applying serialized JSON limits.
+                  const response: unknown = await Promise.resolve(
+                    handleRequest(bounded),
+                  );
+                  if (!(response instanceof Response)) {
+                    return panic(
+                      "The HTTP framework returned an invalid response",
+                    );
+                  }
+                  return response;
+                },
+                isTenantAction,
+                decorateRefusal: decorateActionSizeRefusal,
+              }),
+            );
+        if (!(finalResponse instanceof Response)) {
+          return panic("The HTTP framework returned an invalid response");
         }
-        return withFinalResponseCompletion(request, async () =>
-          runTenantHttpAction(request, {
-            handleRequest: async (bounded) => {
-              // The private HOC types erase the response type; validate the
-              // framework boundary before applying serialized JSON limits.
-              const response: unknown = await Promise.resolve(
-                handleRequest(bounded),
-              );
-              if (!(response instanceof Response)) {
-                return panic("The HTTP framework returned an invalid response");
-              }
-              return response;
-            },
-            isTenantAction,
-            decorateRefusal: decorateActionSizeRefusal,
-          }),
-        );
+        return withDbCountHeaders(finalResponse);
       }),
   );
 };

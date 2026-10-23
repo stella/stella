@@ -17,9 +17,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
+export const DB_TRANSACTION_COUNT_HEADER = "x-db-transactions";
 
 type QueryCounter = {
   count: number;
+  transactions: number;
 };
 
 const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
@@ -45,13 +47,25 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 export const runWithQueryCounter = <TResult>(
   fn: (counter: Readonly<QueryCounter>) => TResult,
 ): TResult => {
-  const counter: QueryCounter = { count: 0 };
+  const counter: QueryCounter = { count: 0, transactions: 0 };
   return queryCounterStore.run(counter, () => fn(counter));
 };
 
 /** Current active store's query count, or `undefined` when no store is active. */
 export const currentQueryCount = (): number | undefined =>
   queryCounterStore.getStore()?.count;
+
+/** Top-level transactions started in the active request; savepoints are excluded. */
+export const currentTransactionCount = (): number | undefined =>
+  queryCounterStore.getStore()?.transactions;
+
+/** Bun SQL starts transactions outside Drizzle's statement logger. */
+export const recordDbTransaction = (): void => {
+  const counter = queryCounterStore.getStore();
+  if (counter) {
+    counter.transactions += 1;
+  }
+};
 
 /**
  * Drizzle-compatible logger that increments the active store's count per query.

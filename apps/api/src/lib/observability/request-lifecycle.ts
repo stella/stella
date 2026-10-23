@@ -15,7 +15,9 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   currentQueryCount,
+  currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
+  DB_TRANSACTION_COUNT_HEADER,
 } from "@/api/lib/db-query-counter";
 import {
   elysiaErrorAnswer,
@@ -63,6 +65,22 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
     return;
   }
   set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
+  set.headers[DB_TRANSACTION_COUNT_HEADER] = String(currentTransactionCount());
+};
+
+/** Mounted handlers can return a Response without running completion hooks. */
+export const withDbCountHeaders = (response: Response): Response => {
+  if (!DB_QUERY_COUNTER_ENABLED || currentQueryCount() === undefined) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  headers.set(DB_QUERY_COUNT_HEADER, String(currentQueryCount()));
+  headers.set(DB_TRANSACTION_COUNT_HEADER, String(currentTransactionCount()));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 };
 
 const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);

@@ -9,7 +9,9 @@ import { expect, request as apiRequestFactory, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import * as v from "valibot";
 
+import { checkRouteScaleLedger } from "../../../../scripts/check-route-scale-ledger";
 import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
@@ -35,6 +37,20 @@ import {
   summarizeCapture,
 } from "../helpers/network";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
+import {
+  createRenderRecorder,
+  readRenderCensus,
+  type RouteRenderMetrics,
+} from "../helpers/render-census";
+import {
+  installRenderCommitHook,
+  RENDER_CENSUS_GLOBAL,
+} from "../helpers/render-census-hook";
+import {
+  parseRouteScaleLedger,
+  routeScaleCensus,
+  type RouteScaleMeasurement,
+} from "../helpers/route-scale";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
   assertSmokeRouteCoverage,
@@ -46,6 +62,7 @@ import {
   type SmokeWorld,
   type RouteExpectation,
 } from "../helpers/smoke-route-defs";
+import { getSmokeWorlds } from "../helpers/smoke-world";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
@@ -54,12 +71,14 @@ import {
   createTestWorkspace,
   deleteTestWorkspace,
 } from "../helpers/workspace";
+import scaleLedger from "../route-scale-ledger.json" with { type: "json" };
 
 // Every route retains the former one-second observation floor so delayed
 // warmups remain visible. After that floor, tracked API activity may finish
 // the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
+const SCALE_LEDGER = parseRouteScaleLedger(JSON.stringify(scaleLedger));
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
 // (seed-test-user.ts writes it there). The route walk owns its API request
@@ -79,6 +98,7 @@ const ROUTE_TREE_PATH = path.resolve(
 type SmokeRoute = {
   template: string;
   path: string;
+  storageState?: Awaited<ReturnType<APIRequestContext["storageState"]>>;
   settleMs?: number;
   // Where the route settles. Defaults to rendering in place (the pathname stays
   // put). `redirectsTo` pins a deterministic beforeLoad/Navigate target and
@@ -108,11 +128,19 @@ const resolveExpectation = (
   };
 };
 
-const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
+const resolveRoute = (
+  def: SmokeRouteDef,
+  world: SmokeWorld & {
+    storageState?: Awaited<ReturnType<APIRequestContext["storageState"]>>;
+  },
+): SmokeRoute => {
   const expectation = resolveExpectation(def, world);
   return {
     template: def.template,
     path: def.path(world),
+    ...(world.storageState === undefined
+      ? {}
+      : { storageState: world.storageState }),
     ...(def.settleMs === undefined ? {} : { settleMs: def.settleMs }),
     ...(expectation === undefined ? {} : { expectation }),
   };
@@ -151,12 +179,13 @@ const declareRouteSmokeGroup = ({
   requireAllRoutes: boolean;
   checkUnenrolledRoutes: boolean;
 }) => {
-  // Serial within one fixture-owning group; separate groups are independent
-  // Playwright scheduling units and can run on different workers or CI shards.
+  // Keep the existing scheduling groups; the single route-smoke worker shares
+  // one pair of worlds across them.
   test.describe.serial(name, () => {
     let apiRequest: APIRequestContext;
     let browserForPages: Browser;
     let world: SmokeWorld | null = null;
+    let worlds: Awaited<ReturnType<typeof getSmokeWorlds>>;
     // Recorded the moment each fixture is created (not only after the whole
     // setup succeeds), so a registry failure still tears down what exists.
     let createdWorkspace: SmokeWorld["workspace"] | null = null;
@@ -164,8 +193,13 @@ const declareRouteSmokeGroup = ({
     let workspaceCleanupRegistered = false;
     let contactCleanupRegistered = false;
     const networkResults = new Map<string, RouteNetworkMetrics>();
+    const smallScaleResults = new Map<string, RouteNetworkMetrics>();
+    const scaleResults = new Map<string, RouteNetworkMetrics>();
+    const smallRenderResults = new Map<string, RouteRenderMetrics>();
+    const largeRenderResults = new Map<string, RouteRenderMetrics>();
 
     test.beforeAll(async ({ browser }, testInfo) => {
+      test.setTimeout(180_000);
       apiRequest = await apiRequestFactory.newContext({
         storageState: STORAGE_STATE,
       });
@@ -198,8 +232,26 @@ const declareRouteSmokeGroup = ({
         request: apiRequest,
         workspace,
       });
-      const correspondenceId = await createTestCorrespondence(workspace.id);
+      const sessionResponse = await apiRequest.get(
+        `${E2E_API_ORIGIN}/api/auth/get-session`,
+      );
+      expect(sessionResponse.ok()).toBe(true);
+      const {
+        session: { activeOrganizationId },
+        user: { email },
+      } = v.parse(
+        v.object({
+          session: v.object({ activeOrganizationId: v.string() }),
+          user: v.object({ email: v.string() }),
+        }),
+        await sessionResponse.json(),
+      );
+      const correspondenceId = await createTestCorrespondence(workspace.id, {
+        organizationId: activeOrganizationId,
+        email,
+      });
       world = { workspace, contactId, documentRoute, correspondenceId };
+      worlds = await getSmokeWorlds(testInfo.project.outputDir);
     });
 
     test.afterAll(async () => {
@@ -240,13 +292,57 @@ const declareRouteSmokeGroup = ({
     // beforeAll.
     const declareRouteTest = (def: SmokeRouteDef) => {
       test(def.template, async () => {
+        test.setTimeout(180_000);
         if (world === null) {
-          throw new Error("route-smoke world was not initialized in beforeAll");
+          throw new Error("route-smoke baseline world was not initialized");
         }
+        // Preserve the main-owned baseline's fixture cardinality.
         await smokeRoute({
           browser: browserForPages,
           results: networkResults,
           route: resolveRoute(def, world),
+        });
+        await smokeRoute({
+          browser: browserForPages,
+          results: smallScaleResults,
+          renderResults: smallRenderResults,
+          route: resolveRoute(def, worlds.small),
+        });
+        await smokeRoute({
+          browser: browserForPages,
+          results: scaleResults,
+          renderResults: largeRenderResults,
+          route: resolveRoute(def, worlds.large),
+        });
+        const key = networkBaselineKey(def);
+        const small = smallScaleResults.get(key);
+        const large = scaleResults.get(key);
+        const smallRenders = smallRenderResults.get(key);
+        const largeRenders = largeRenderResults.get(key);
+        if (
+          small === undefined ||
+          large === undefined ||
+          smallRenders === undefined ||
+          largeRenders === undefined
+        ) {
+          throw new Error(`Missing paired route measurement: ${key}`);
+        }
+        await test.info().attach("matter-scale", {
+          body: JSON.stringify(
+            {
+              route: key,
+              cardinalities: {
+                small: worlds.small.cardinalities,
+                large: worlds.large.cardinalities,
+              },
+              small,
+              large,
+              renders: { small: smallRenders, large: largeRenders },
+            },
+            null,
+            2,
+          ),
+          contentType: "application/json",
         });
       });
     };
@@ -384,6 +480,30 @@ const declareRouteSmokeGroup = ({
       });
     }
 
+    test("route cost stays bounded as the matter grows tenfold", () => {
+      // A route missing either measurement stays absent and fails the census.
+      const measurements = (
+        network: ReadonlyMap<string, RouteNetworkMetrics>,
+        renders: ReadonlyMap<string, RouteRenderMetrics>,
+      ) => {
+        const joined = new Map<string, RouteScaleMeasurement>();
+        for (const [route, metrics] of network) {
+          const routeRenders = renders.get(route);
+          if (routeRenders !== undefined) {
+            joined.set(route, { network: metrics, renders: routeRenders });
+          }
+        }
+        return joined;
+      };
+      const problems = routeScaleCensus({
+        routes: defs.map(networkBaselineKey),
+        small: measurements(smallScaleResults, smallRenderResults),
+        large: measurements(scaleResults, largeRenderResults),
+        ledger: SCALE_LEDGER,
+      });
+      expect(problems).toEqual([]);
+    });
+
     test("network manifest matches the committed baseline", async () => {
       await test.info().attach("observed-network-baseline", {
         body: JSON.stringify(
@@ -404,6 +524,12 @@ declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
+  expect(checkRouteScaleLedger(), "route scale allowances only shrink").toBe(0);
+  const routeKeys = new Set(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
+  expect(
+    SCALE_LEDGER.filter(({ route }) => !routeKeys.has(route)),
+    "scale allowances reference smoke routes",
+  ).toEqual([]);
   // A write run may be adding the missing route entry; check the committed
   // baseline only in comparison mode.
   if (baselineMode !== "write" && baselineMode !== "rewrite") {
@@ -453,10 +579,13 @@ const createContact = async (request: APIRequestContext): Promise<string> => {
 const smokeRoute = async ({
   browser,
   results,
+  renderResults,
   route,
 }: {
   browser: Browser;
   results: Map<string, RouteNetworkMetrics>;
+  // Present on the scale walk: also count React commits per navigation.
+  renderResults?: Map<string, RouteRenderMetrics>;
   route: SmokeRoute;
 }) => {
   const expectation = route.expectation;
@@ -470,8 +599,12 @@ const smokeRoute = async ({
     await smokeRouteTarget({
       browser,
       results,
+      ...(renderResults === undefined ? {} : { renderResults }),
       route: {
         template: networkBaselineKey(route),
+        ...(route.storageState === undefined
+          ? {}
+          : { storageState: route.storageState }),
         path: expectation.to,
         ...(route.settleMs === undefined ? {} : { settleMs: route.settleMs }),
         expectation: { kind: "redirectsTo", to: expectation.to },
@@ -480,32 +613,51 @@ const smokeRoute = async ({
     return;
   }
 
-  await smokeRouteTarget({ browser, results, route });
+  await smokeRouteTarget({
+    browser,
+    results,
+    ...(renderResults === undefined ? {} : { renderResults }),
+    route,
+  });
 };
 
 const smokeRouteTarget = async ({
   browser,
   results,
+  renderResults,
   route,
 }: {
   browser: Browser;
   results: Map<string, RouteNetworkMetrics>;
+  renderResults?: Map<string, RouteRenderMetrics>;
   route: SmokeRoute;
 }) => {
-  const metrics = await measureRouteTarget({ browser, route });
+  const { network, renders } = await measureRouteTarget({
+    browser,
+    route,
+    countRenders: renderResults !== undefined,
+  });
   // Stored under the template it received; redirect targets arrive as
   // "<template> target".
-  results.set(route.template, metrics);
+  results.set(route.template, network);
+  if (renders !== null) {
+    renderResults?.set(route.template, renders);
+  }
 };
 
 const measureRouteTarget = async ({
   browser,
   route,
+  countRenders,
 }: {
   browser: Browser;
   route: SmokeRoute;
-}): Promise<RouteNetworkMetrics> => {
-  const { context, page } = await openCleanPage(browser);
+  countRenders: boolean;
+}): Promise<{
+  network: RouteNetworkMetrics;
+  renders: RouteRenderMetrics | null;
+}> => {
+  const { context, page } = await openCleanPage(browser, route.storageState);
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
@@ -513,8 +665,19 @@ const measureRouteTarget = async ({
   const network = createNetworkCollector();
   const detachNetwork = network.trackPage(page);
 
+  const renders = countRenders
+    ? createRenderRecorder(async () => await readRenderCensus(page))
+    : null;
+
   try {
-    await network.measureRounds(page);
+    if (renders !== null) {
+      // Installed before the first document script so React registers with it.
+      await page.addInitScript(installRenderCommitHook, RENDER_CENSUS_GLOBAL);
+    }
+    await network.measureRounds(
+      page,
+      renders === null ? {} : { beforeRelease: renders.beforeRelease },
+    );
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
       idleMs: NETWORK_QUIET_MS,
@@ -523,6 +686,8 @@ const measureRouteTarget = async ({
       timeoutMs: Math.max(route.settleMs ?? DEFAULT_SETTLE_MS, 10_000),
     });
     network.finishRounds();
+    // Commits until the network went quiet; checks below do not render.
+    const renderMetrics = renders === null ? null : await renders.finish();
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);
@@ -535,7 +700,10 @@ const measureRouteTarget = async ({
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the
     // manifest reflects the fully-rendered route.
-    return summarizeCapture(await network.capture());
+    return {
+      network: summarizeCapture(await network.capture()),
+      renders: renderMetrics,
+    };
   } finally {
     detachNetwork();
     detachPage();
@@ -552,7 +720,7 @@ const assertRedirectRoute = async ({
   route: SmokeRoute;
   expectation: { kind: "redirectsTo"; to: string };
 }) => {
-  const { context, page } = await openCleanPage(browser);
+  const { context, page } = await openCleanPage(browser, route.storageState);
   const redirectRoute = { ...route, expectation };
 
   try {
