@@ -8,8 +8,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
-  TEMPLATE_VERSIONS_PAGE_SIZE_DEFAULT,
   listTemplateVersionsHandler,
+  TEMPLATE_VERSIONS_PAGE_SIZE_DEFAULT,
 } from "../versions";
 
 const listTemplateVersionsParamsSchema = t.Object({

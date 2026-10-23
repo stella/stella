@@ -12,9 +12,9 @@ import { ElysiaCustomStatusResponse } from "elysia/error";
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
+  featureEnrolments,
   timeEntries,
   timeTimers,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";

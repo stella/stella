@@ -10,8 +10,8 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type {
-  ReaderAnswerStreamEvent,
   ReaderAnswer,
+  ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import {
   type DecisionAnalysis,

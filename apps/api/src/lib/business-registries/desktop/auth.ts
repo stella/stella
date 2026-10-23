@@ -17,8 +17,8 @@ import {
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
 import {
-  VerifiedDesktopDeviceProof,
   desktopProofRequestUrl,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { probeDesktopCredential } from "@/api/lib/business-registries/desktop/renewal";

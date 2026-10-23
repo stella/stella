@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import {
   lstatSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   utimesSync,

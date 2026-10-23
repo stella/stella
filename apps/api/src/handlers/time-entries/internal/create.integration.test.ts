@@ -16,9 +16,9 @@ import { Temporal } from "@stll/time";
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  featureEnrolments,
   organizationSettings,
   timeEntries,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, createAuditRecorder } from "@/api/lib/audit-log";

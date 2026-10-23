@@ -19,21 +19,13 @@ import type { AppFrameScope } from "./-app-frame-scope";
  *   ask again with `audience`.
  */
 export type AppFrame =
-  | "none"
-  | "member"
-  | "public"
-  | "checking"
-  | "neutral"
-  | "unresolved";
+  "none" | "member" | "public" | "checking" | "neutral" | "unresolved";
 
 /** Who is visiting, as far as the frame is concerned. A member has a
  *  session and an active organization; anyone else is anonymous, and a
  *  session that could not be read is `unavailable`. */
 export type AppFrameAudience =
-  | "checking"
-  | "anonymous"
-  | "unavailable"
-  | "member";
+  "checking" | "anonymous" | "unavailable" | "member";
 
 // Pages that show the same to every visitor: published catalogue entries.
 const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [

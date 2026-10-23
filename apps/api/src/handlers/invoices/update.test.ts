@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { invoices, timeEntries, INVOICE_STATUS } from "@/api/db/schema";
+import { INVOICE_STATUS, invoices, timeEntries } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
-  createSelectQueryMock,
   createScopedDbMock,
+  createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
 import updateInvoice from "./update";
