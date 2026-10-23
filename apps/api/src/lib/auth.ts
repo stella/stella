@@ -190,7 +190,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
-import { readLiveSseSessions } from "@/api/lib/auth/sse-session-liveness";
+import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -292,7 +292,6 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
-import type { SseSessionLivenessReader } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
 import { isSyntheticSessionPrincipal } from "@/api/lib/synthetic-principal/constants";
 import {
@@ -3020,11 +3019,6 @@ export const resolveWorkspaceRealtimeAudience = async (
 
   return new Set(rows.map((row) => row.sessionId));
 };
-
-// Session revocation is a credential check, independent of matter access.
-export const readCurrentLiveSseSessions: SseSessionLivenessReader = async (
-  sessions,
-) => await readLiveSseSessions(rootDb, sessions);
 
 /**
  * The event stream's connection authorizers, both on the owner connection for
