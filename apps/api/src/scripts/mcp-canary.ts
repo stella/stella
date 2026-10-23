@@ -2,6 +2,7 @@
  * Full mode registers a client; frequent mode uses existing client metadata.
  * Staging mints credentials from its smoke session and revokes them each run.
  */
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
@@ -31,6 +32,7 @@ import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
+import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
 import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
@@ -1593,6 +1595,11 @@ export const runStagingCredentialJourneys = async (
   }
   return results;
 };
+
+const REVIEW_KNOWN_ERROR_CODES: ReadonlySet<string> = new Set([
+  ...MCP_ERROR_CODES,
+  ...Object.keys(BASE_ERROR_CODES),
+]);
 
 const REVIEW_JOURNEY_SCOPE = [
   "stella:read",
