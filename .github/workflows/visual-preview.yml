@@ -27,7 +27,7 @@ concurrency:
 jobs:
   preview:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: read

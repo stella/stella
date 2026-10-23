@@ -54,9 +54,9 @@ jobs:
   # next version commit supersedes it.
   gate:
     name: Check release versioning state
-    timeout-minutes: 5
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read

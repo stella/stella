@@ -30,7 +30,7 @@ jobs:
   mcp-canary:
     name: MCP user journeys
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
     concurrency:
@@ -110,7 +110,7 @@ jobs:
   desktop-transport-canary:
     name: Desktop transport against hosted API
     runs-on: macos-14
-    timeout-minutes: 10
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:

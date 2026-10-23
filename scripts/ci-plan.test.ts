@@ -395,7 +395,7 @@ test("only dedicated helpers end a failed code quality pull request run", () => 
     );
     expect(helper.needs, id).toBe(dependency);
     expect(helper.if, id).toBe(PR_CODE_QUALITY_CANCEL_IF);
-    expect(helper["timeout-minutes"], id).toBe(5);
+    expect(helper["timeout-minutes"], id).toBe(1);
     expect(helper.permissions, id).toEqual({ actions: "write" });
     expect(helper.steps, id).toEqual([PR_CODE_QUALITY_CANCEL_STEP]);
   }
@@ -497,7 +497,7 @@ test("all failure tails and screenshot cancellation use the canonical same-run A
   );
   expect(helper.needs).toBe("marketing-screenshots");
   expect(helper.if).toBe("failure() && github.event_name == 'merge_group'");
-  expect(helper["timeout-minutes"]).toBe(5);
+  expect(helper["timeout-minutes"]).toBe(1);
   expect(helper.permissions).toEqual({ actions: "write" });
   expect(helper.steps).toEqual([CANONICAL_CANCEL_STEP]);
   const cancel = CANONICAL_CANCEL_STEP;
@@ -3008,7 +3008,7 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
   );
   expect(timedOut.exitCode).toBe(1);
   expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
-    "timed out waiting for CI run ",
+    "timed out after 45 min waiting for a code run",
   );
 }, 20_000);
 
@@ -4391,10 +4391,10 @@ test("Postgres service shards bind every matrix leg to a distinct runner partiti
   expect(shards.length).toBeLessThanOrEqual(3);
   expect(shards).toEqual([...POSTGRES_TEST_SHARD_IDS]);
   expect(POSTGRES_SHARD_TEST_BUDGET_SECONDS).toBeLessThanOrEqual(
-    job["timeout-minutes"] * 60,
+    job["timeout-minutes"] * 60 * 0.7,
   );
   expect(job.strategy["fail-fast"]).toBe(false);
-  expect(job["timeout-minutes"]).toBe(10);
+  expect(job["timeout-minutes"]).toBe(15);
   const runner = jobSteps(ciJobs["postgres-service-suites"]).find(
     (step) => step.name === "Run Postgres-gated API suites",
   );

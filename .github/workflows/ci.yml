@@ -98,7 +98,7 @@ jobs:
       || github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     # Bound install attempts and planner execution below this job budget.
-    timeout-minutes: 5
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
@@ -1268,7 +1268,7 @@ jobs:
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 7
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
@@ -1374,7 +1374,7 @@ jobs:
     if: inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.pr_heavy_gate_required == 'true'
     runs-on: ubuntu-24.04
     # ci-quick-checks' own 15-minute budget plus its wait for a runner.
-    timeout-minutes: 13
+    timeout-minutes: 40
     permissions:
       actions: read
     steps:
@@ -1417,7 +1417,7 @@ jobs:
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: read
@@ -1659,7 +1659,7 @@ jobs:
       )
     runs-on: ubuntu-24.04
     # Include uncached API generation and its two-pass determinism check.
-    timeout-minutes: 13
+    timeout-minutes: 105
     permissions:
       contents: read
       actions: write
@@ -1947,7 +1947,7 @@ jobs:
       )
     runs-on: ubuntu-24.04
     # 25m, matching code-quality.
-    timeout-minutes: 13
+    timeout-minutes: 25
     permissions:
       contents: read
       actions: write
@@ -2124,7 +2124,7 @@ jobs:
       )
     runs-on: ubuntu-24.04
     # Retain the repository-check budget after moving optional compiler proofs.
-    timeout-minutes: 23
+    timeout-minutes: 40
     permissions:
       contents: read
       actions: write
@@ -2478,7 +2478,7 @@ jobs:
     # shard pair measurements (p95 18.6, p99 27.4, worst 30.9 min) scaled by
     # 2/3, one shard is about p95 12.4, p99 18.3, worst 20.6 min; 25 min keeps
     # about 20% headroom over that worst case rather than sitting at it.
-    timeout-minutes: 29
+    timeout-minutes: 25
     permissions:
       contents: read
       actions: write
@@ -2746,7 +2746,7 @@ jobs:
       && (needs.postgres-service-suites.result == 'success' || needs.postgres-service-suites.result == 'skipped')
       && needs.ci-plan.outputs.api_test_shards != '0'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       actions: write
       contents: read
@@ -2847,7 +2847,7 @@ jobs:
       (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
       && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 21
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -3084,7 +3084,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 19
+    timeout-minutes: 25
     permissions:
       contents: read
       actions: write
@@ -3173,7 +3173,7 @@ jobs:
     needs: code-quality-api
     if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 1
     permissions:
       actions: write
     steps:
@@ -3242,7 +3242,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 23
+    timeout-minutes: 50
     permissions:
       contents: read
       actions: write
@@ -3416,7 +3416,7 @@ jobs:
     needs: code-quality-web-rest
     if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 1
     permissions:
       actions: write
     steps:
@@ -3454,7 +3454,7 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -3608,7 +3608,7 @@ jobs:
                       && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 13
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: read
@@ -3779,7 +3779,7 @@ jobs:
     runs-on: ubuntu-24.04
     # The rehearsal step's budget plus the setup before it (checkout, install,
     # image pulls); scripts/rehearse-migration-upgrade.test.ts derives both.
-    timeout-minutes: 21
+    timeout-minutes: 42
     permissions:
       contents: read
       packages: read # pull the promoted release's API image
@@ -3891,7 +3891,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 40
     permissions:
       contents: read
       actions: write
@@ -3939,7 +3939,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
     permissions:
       contents: read
       # Reads the pull request body for the skip line at run time, so an
@@ -4032,7 +4032,7 @@ jobs:
       && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
       && needs.ci-plan.outputs.browser_spec_selection_required == 'true'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: write
@@ -4163,7 +4163,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 8
     permissions:
       contents: read
       packages: read
@@ -4268,7 +4268,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: write
@@ -4320,7 +4320,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: write
@@ -4372,7 +4372,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -4423,7 +4423,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 14
+    timeout-minutes: 12
     permissions:
       contents: read
       packages: read
@@ -4545,7 +4545,7 @@ jobs:
     # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
     # + 2m cancellation/post hooks. Playwright uses measured p95/max plus the
     # task registry margin.
-    timeout-minutes: 21
+    timeout-minutes: 43
     permissions:
       contents: read
       packages: read
@@ -4795,7 +4795,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: read
@@ -4870,7 +4870,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 11
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: read
@@ -5093,7 +5093,7 @@ jobs:
       && needs.ci-plan.outputs.coverage_profile == 'normal-v1'
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 9
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: read
@@ -5230,7 +5230,7 @@ jobs:
     needs: marketing-screenshots
     if: failure() && github.event_name == 'merge_group'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 1
     permissions:
       actions: write
     steps:
@@ -5299,7 +5299,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: write
@@ -5367,7 +5367,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.ci-plan.outputs.api_image_platforms) }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 9
+    timeout-minutes: 8
     permissions:
       contents: read
       packages: read
@@ -5542,7 +5542,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: read
@@ -5628,7 +5628,7 @@ jobs:
       )
       )
     runs-on: windows-latest
-    timeout-minutes: 24
+    timeout-minutes: 60
     permissions:
       contents: read
       actions: write
@@ -5763,7 +5763,7 @@ jobs:
       )
       )
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: write
@@ -5816,7 +5816,7 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.scan_engine_wasm_required == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
@@ -5945,7 +5945,7 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 21
+    timeout-minutes: 35
     permissions:
       contents: read
       actions: write
@@ -6127,7 +6127,7 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 12
+    timeout-minutes: 35
     permissions:
       contents: read
       actions: write
@@ -6152,7 +6152,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
@@ -6203,7 +6203,7 @@ jobs:
     needs: ci-plan
     if: ${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || (github.event.pull_request.draft != true && github.event.action != 'enqueued')) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: write
@@ -6372,7 +6372,6 @@ jobs:
     # Every completed workflow run reports the required check. Metadata runs
     # mirror the newest code run for this pull request and exact head.
     name: ci-result
-    timeout-minutes: 55
     if: always()
     needs:
       [
@@ -6420,6 +6419,7 @@ jobs:
       # `ci-required-summary` artifact holds the same record.
       required_summary: ${{ steps.outcome.outputs.required_summary }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 55
     permissions:
       contents: read
       actions: write
@@ -6740,7 +6740,7 @@ jobs:
                 return 1
               fi
               if ((waited >= max_wait_seconds)); then
-                echo "::error::Metadata mirror timed out waiting for CI run $candidate; re-run CI run $candidate or push."
+                echo "::error::Metadata mirror: timed out after 45 min waiting for a code run of head $HEAD_SHA to report. Re-run that code run, or push."
                 return 1
               fi
               sleep "$poll_seconds"

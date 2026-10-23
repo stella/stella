@@ -33,8 +33,8 @@ concurrency:
 jobs:
   audit:
     name: bun audit (high/critical)
-    timeout-minutes: 5
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
     outputs:
@@ -107,7 +107,7 @@ jobs:
     # merges never wait on the advisory database; main and the schedule check it.
     if: github.event_name != 'pull_request'
     runs-on: macos-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -158,10 +158,10 @@ jobs:
 
   remediate:
     name: Open dependency audit remediation
-    timeout-minutes: 5
     needs: audit
     if: always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     # Audit runs are independent, but remediation shares one branch and pull
     # request: runs queue here so each sees the previous run's pull request.
     concurrency:
