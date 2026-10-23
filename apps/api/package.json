@@ -168,6 +168,7 @@
     "@stll/template-conditions": "workspace:*",
     "@stll/template-packs": "workspace:*",
     "@stll/text-normalize": "workspace:*",
+    "@stll/text-search": "catalog:",
     "@stll/time": "0.4.1",
     "@stll/transactional": "workspace:*",
     "@stll/user-agent": "workspace:*",
