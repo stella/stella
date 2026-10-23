@@ -486,7 +486,6 @@ const CONTINUATION_PREFIXES = {
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
-  Format: "affected",
   "Changeset present for published package changes": "policy",
 };
 const preInstallGuards = new Map([
@@ -1136,6 +1135,20 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  // Format checks the tracked tree with `bun fmt --check`; it no longer
+  // filters by affected packages, so it no longer waits on that step.
+  if (step.name === "Format" && fields.run?.includes("turbo run format")) {
+    const { AFFECTED_FLAG: _flag, ...env } = v.parse(
+      v.record(v.string(), v.unknown()),
+      step["env"] ?? {},
+    );
+    return {
+      ...step,
+      env,
+      if: fields.if?.replace(" && steps.affected.outcome == 'success'", ""),
+      run: "bun fmt --check",
+    };
+  }
   // The classification check derives its manifest instead of reading a
   // committed one, and exposes its sensitive-change output by step id.
   if (
