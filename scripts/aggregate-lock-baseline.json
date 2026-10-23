@@ -714,12 +714,6 @@
     "reason": "pg_try_advisory_xact_lock( in apps/api/src/handlers/case-law/citation-graph-transaction.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/erasure.ts",
-    "fingerprint": "830729f6f746ec25dbe7f0cae5d8327816eb909ecc2b3d9c3c525e04bcdc1cdc",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/erasure.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
     "fingerprint": "04e8b4fea43bb82c26d59933af9a640f2dc2e003d38cacfb26bc787b5a96b331",
     "count": 1,
