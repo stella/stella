@@ -152,7 +152,7 @@ export const readCourtFilter = ({
     expected: "a court this corpus holds",
     maxListed: LISTED_COURTS,
   });
-  const received = court;
+  const received = JSON.stringify(court);
   if (read.ok === "absent") {
     return {
       type: "dropped",
@@ -199,7 +199,7 @@ const courtReadWarning = ({
     ? null
     : filterReadWarning({
         filter: "court",
-        received: court,
+        received: JSON.stringify(court),
         values: spellings,
       });
 
