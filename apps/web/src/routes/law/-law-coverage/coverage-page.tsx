@@ -686,13 +686,26 @@ const SourceCoverageDetails = ({
     case "not_reconciled":
       gaps = t("caseLaw.coverage.gapStatusUnknown");
       break;
-    case "reconciled":
+    case "reconciled": {
+      // Decisions and listing periods are different units: each keeps its
+      // own label rather than adding into one number.
+      const { missing, unlistedSlices } = source.knownGaps.summary;
+      const parts = [
+        ...(missing > 0
+          ? [`${t("caseLaw.coverage.knownGaps")}: ${formatter.number(missing)}`]
+          : []),
+        ...(unlistedSlices > 0
+          ? [
+              `${t("caseLaw.coverage.unreadListingPeriods")}: ${formatter.number(unlistedSlices)}`,
+            ]
+          : []),
+      ];
       gaps =
-        source.knownGaps.summary.missing === 0 &&
-        source.knownGaps.summary.unlistedSlices === 0
+        parts.length === 0
           ? t("caseLaw.coverage.noGapsRecorded")
-          : `${t("caseLaw.coverage.knownGaps")}: ${formatter.number(source.knownGaps.summary.missing + source.knownGaps.summary.unlistedSlices)}`;
+          : parts.join(" · ");
       break;
+    }
     default:
       source.knownGaps satisfies never;
       return panic("Unhandled case-law source gap state");

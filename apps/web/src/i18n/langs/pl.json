@@ -953,7 +953,8 @@
       "searchable": "Wyszukiwalne",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne."
+      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
+      "unreadListingPeriods": "Nieodczytane okresy wykazu"
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "decisionTypes": {

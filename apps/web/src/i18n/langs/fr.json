@@ -953,7 +953,8 @@
       "searchable": "Interrogeables",
       "title": "Couverture de la jurisprudence",
       "totalFrom": "Total au {date}",
-      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment."
+      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment.",
+      "unreadListingPeriods": "Périodes de la liste non lues"
     },
     "decisionNotFound": "Décision introuvable",
     "decisionTypes": {

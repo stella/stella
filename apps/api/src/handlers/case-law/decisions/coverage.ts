@@ -297,6 +297,18 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   },
 );
 
+/** The slice ledger read failed: unknown for every source, never "no gaps". */
+const UNREAD_YEAR_COMPLETENESS = {
+  type: "not_reconciled",
+  reason: "Slice completeness could not be read.",
+} as const satisfies CaseLawKnownGaps;
+
+/** The ledger answered but holds no reconciled slices for the source. */
+const NO_YEAR_COMPLETENESS = {
+  type: "not_reconciled",
+  reason: "The source has no slice completeness result.",
+} as const satisfies CaseLawKnownGaps;
+
 /** A source the week's read did not answer for: unknown, never zero. */
 const UNKNOWN_ARRIVALS = {
   addedLastWeek: null,
@@ -375,12 +387,16 @@ export const loadCaseLawCoverage = async ({
   const withheld = new Set<string>(excludedSourceIds.map(String));
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
   const arrivals = await readArrivals(admitted.map(({ id }) => id));
+  // Per-year completeness is a per-source detail: a failed ledger read marks
+  // every source not reconciled and the rest of the page still answers.
   const yearCompleteness = await Result.tryPromise({
     try: async () => await readYearCompleteness(admitted),
     catch: coverageError("reading case-law slice completeness failed"),
   });
   if (Result.isError(yearCompleteness)) {
-    return yearCompleteness;
+    logger.warn("case_law.coverage.slice_completeness_unavailable", {
+      "error.type": errorTag(yearCompleteness.error),
+    });
   }
 
   const reportUnrecognizedSource =
@@ -426,10 +442,10 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
       pendingTextCount: source.pendingTextCount,
-      knownGaps: yearCompleteness.value.get(String(source.id)) ?? {
-        type: "not_reconciled",
-        reason: "The source has no slice completeness result.",
-      },
+      knownGaps: Result.isError(yearCompleteness)
+        ? UNREAD_YEAR_COMPLETENESS
+        : (yearCompleteness.value.get(String(source.id)) ??
+          NO_YEAR_COMPLETENESS),
       completeness: caseLawSourceCompleteness({
         reportedTotal: source.reportedTotal,
         reportedTotalAsOf: source.reportedTotalAsOf,

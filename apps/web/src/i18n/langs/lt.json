@@ -953,7 +953,8 @@
       "searchable": "Prieinami paieškai",
       "title": "Teismų praktikos aprėptis",
       "totalFrom": "Bendras skaičius {date}",
-      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
+      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami.",
+      "unreadListingPeriods": "Neperskaityti sąrašo laikotarpiai"
     },
     "decisionNotFound": "Sprendimas nerastas",
     "decisionTypes": {

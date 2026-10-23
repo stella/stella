@@ -953,7 +953,8 @@
       "searchable": "Consultables",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
-      "unavailable": "Los datos de cobertura no están disponibles ahora mismo."
+      "unavailable": "Los datos de cobertura no están disponibles ahora mismo.",
+      "unreadListingPeriods": "Periodos del listado no leídos"
     },
     "decisionNotFound": "Resolución no encontrada",
     "decisionTypes": {

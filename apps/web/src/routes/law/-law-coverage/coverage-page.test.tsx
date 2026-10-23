@@ -258,6 +258,46 @@ describe("the coverage page states what it counts", () => {
     expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
   });
 
+  test("unread listing periods are never counted as missing decisions", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              sources: [
+                {
+                  ...NEARLY_COMPLETE,
+                  knownGaps: {
+                    type: "reconciled",
+                    summary: { missing: 0, shortSlices: 0, unlistedSlices: 3 },
+                    years: [
+                      {
+                        year: 2004,
+                        type: "unlisted",
+                        missing: 0,
+                        shortSlices: 0,
+                        unlistedSlices: 3,
+                        latestWalkError: "listing walk failed",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(markup).toContain(
+      `${messages.caseLaw.coverage.unreadListingPeriods}: 3`,
+    );
+    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
+    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
+  });
+
   test("freshness is a word, with the dot only beside it", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 

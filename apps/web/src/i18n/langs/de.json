@@ -953,7 +953,8 @@
       "searchable": "Durchsuchbar",
       "title": "Abdeckung der Rechtsprechung",
       "totalFrom": "Gesamtzahl vom {date}",
-      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
+      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar.",
+      "unreadListingPeriods": "Nicht gelesene Zeiträume der Liste"
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "decisionTypes": {
