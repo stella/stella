@@ -11,6 +11,7 @@ import {
   checkLogText,
   continueOnErrorHolds,
   failedCheckAnnotation,
+  partitionChecks,
   planChecks,
   POOL_CONTEXT_ROOTS,
   poolContext,
@@ -61,6 +62,20 @@ test("an exact named subset retains manifest order", () => {
   expect(selectChecks(checks, undefined)).toEqual(checks);
   expect(() => selectChecks(checks, "First,Missing")).toThrow(
     "Unknown check name(s): Missing",
+  );
+});
+
+test("matrix partitions cover every pooled check exactly once", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  const selected = ["1/2", "2/2"].flatMap((partition) =>
+    partitionChecks(checks, partition),
+  );
+  expect(selected.map(({ name }) => name).toSorted()).toEqual(
+    checks.map(({ name }) => name).toSorted(),
+  );
+  expect(new Set(selected).size).toBe(checks.length);
+  expect(() => partitionChecks(checks, "3/2")).toThrow(
+    "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
   );
 });
 

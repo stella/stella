@@ -147,7 +147,7 @@
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "ce95b36ea6bbece33dd2f4248bcfabc703ed35299d05371579263fa27e3176e2"
+    "reviewedDigest": "c284f9326859bdf46f73bb4021ee6a15e74b8636bc3f640ea11c8034f47014f1"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
@@ -162,7 +162,7 @@
   "candidate:.github/workflows/ci.yml/ci-browser": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "59f8e4d8f30eeb5e2d3d1cdb92476f8bdc154b8e8750b6b6229afb9d030e31e3"
+    "reviewedDigest": "392332489f8fb435b6ccd76cd29ab89a6b13d6b61e70da613614d125d1eb47ff"
   },
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "81d0a13968bf4eb47be1abcaa8f10ac437f0e1221d92d281ffdbdc99f8ec1177"
+    "reviewedDigest": "e4ac2e95746621b783e970bcfc0a1400cd3371711bea375b4a0a39d75ea92d05"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "70d2ede4d3c8fc555c77297036967b0b1090e85dd14f722ff85eb43d137665e7"
+    "reviewedDigest": "7c275947af1a648287ddad34f7011a797a9a8f2feb7a6219a87859b89583a877"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
