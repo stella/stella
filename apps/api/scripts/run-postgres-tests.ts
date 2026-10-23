@@ -14,8 +14,8 @@ import {
 import { loadTestEnv } from "./load-test-env";
 import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
-  assertTemplateDatabaseTestsAreExclusive,
   assertSharedTableDdlIsolated,
+  assertTemplateDatabaseTestsAreExclusive,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   needsTemplateDatabase,
 } from "./postgres-test-plan";

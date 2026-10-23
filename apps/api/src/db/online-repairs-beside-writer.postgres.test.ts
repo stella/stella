@@ -328,7 +328,7 @@ const adapter = (connection: ReservedSQL): OnlineMigrationConnection => ({
   execute: async (statement, parameters = []) => {
     await connection.unsafe(statement, [...parameters]);
   },
-  release: () => connection.release(),
+  release: async () => connection.release(),
   terminate: async () => await terminateReserved(connection),
 });
 
