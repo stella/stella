@@ -1125,12 +1125,27 @@ describe("desktop release workflows", () => {
           isRecord(step) && step["name"] === "Install dependencies",
       );
       expect(isRecord(install) ? install["timeout-minutes"] : undefined).toBe(
-        githubExpression("matrix.os == 'windows' && 30 || 5"),
+        githubExpression("matrix.install_timeout_minutes"),
       );
-      const retryBudgetMinutes = (worstAttemptMinutes: number) =>
-        3 * worstAttemptMinutes + (15 + 45) / 60;
-      expect(retryBudgetMinutes(9)).toBeLessThanOrEqual(30);
-      expect(retryBudgetMinutes(0.5)).toBeLessThanOrEqual(5);
+      // The slowest measured uncached install per runner OS, in minutes.
+      const worstInstallMinutes: Record<string, number> = {
+        windows: 9,
+        macos: 0.5,
+      };
+      const strategy = isRecord(build["strategy"]) ? build["strategy"] : {};
+      const matrix = isRecord(strategy["matrix"]) ? strategy["matrix"] : {};
+      const legs = Array.isArray(matrix["include"]) ? matrix["include"] : [];
+      expect(
+        legs.map((leg) => (isRecord(leg) ? leg["os"] : undefined)),
+      ).toEqual(Object.keys(worstInstallMinutes));
+      for (const leg of legs) {
+        const os = isRecord(leg) ? String(leg["os"]) : "";
+        const deadline = isRecord(leg) ? leg["install_timeout_minutes"] : 0;
+        expect(
+          3 * (worstInstallMinutes[os] ?? Infinity) + (15 + 45) / 60,
+          os,
+        ).toBeLessThanOrEqual(Number(deadline));
+      }
     });
 
     // scripts/check-desktop-release-policy.sh matches runs by these names.

@@ -249,8 +249,10 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
+            install_timeout_minutes: 30
           - os: macos
             runner: macos-14
+            install_timeout_minutes: 5
             # Tauri builds a universal binary by lipoing the two
             # native-arch outputs together; rustup needs the two real
             # archs as targets, not the synthetic "universal" name.
@@ -307,7 +309,7 @@ jobs:
         # measured worst install plus backoff. An uncached install takes about
         # 30 s on macOS but up to 9 min on Windows, where a shared 5 min
         # deadline ends the first attempt before retry.sh can start another.
-        timeout-minutes: ${{ matrix.os == 'windows' && 30 || 5 }}
+        timeout-minutes: ${{ matrix.install_timeout_minutes }}
         # The pinned release checkout may predate retry.sh; the workflow
         # revision's copy is kept with the other release tooling.
         run: bash "$RELEASE_TOOLING/scripts/retry.sh" bun ci --ignore-scripts

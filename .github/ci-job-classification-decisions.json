@@ -737,7 +737,7 @@
   "candidate:.github/workflows/release-desktop.yml/build": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "d6a58013cc731cfb313cd219597ff62b633236eeb1d00011038a3927789c65dd"
+    "reviewedDigest": "4011dd1420356e49d4e3291e809502e1897485de130f2fc75c13ef1c22fa76bf"
   },
   "candidate:.github/workflows/release-desktop.yml/verify-production": {
     "kind": "support",
