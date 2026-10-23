@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Back to app",
-    "billingAndUsage": "Billing and usage",
     "billingProfiles": "Billing profiles",
     "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.",
     "deleteOrganization": "Delete organization",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Leave organization",
     "leaveRefusedOnlyOwner": "You are the only owner. Make another member an owner before you leave.",
     "modelsAndProviders": "Models and providers",
-    "noPlan": "No active plan",
     "organizationDeleted": "The organization has been deleted.",
     "organizationId": "Organization ID",
     "organizationLeft": "You have left the organization.",
-    "overviewDescription": "Manage your organization, people and tools.",
-    "people": "People",
     "planAndUsage": "Plan and usage",
     "title": "Organization admin",
     "toolsDescription": "Enable or disable native tools for everyone in this organization."
