@@ -37,7 +37,7 @@ import {
 } from "@/api/lib/auth/microsoft365/crypto";
 import {
   getMicrosoft365OAuthConfig,
-  refreshAccessToken,
+  refreshMicrosoft365AccessToken,
   tokenExpiresAt,
 } from "@/api/lib/auth/microsoft365/graph-oauth";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -124,7 +124,7 @@ const markReconnectRequired = async ({
 
 const TOKEN_REFRESH_DEPENDENCIES = {
   getMicrosoft365OAuthConfig,
-  refreshAccessToken,
+  refreshMicrosoft365AccessToken,
 };
 
 export const ensureMicrosoft365AccessToken = async (
@@ -198,7 +198,7 @@ export const ensureMicrosoft365AccessToken = async (
       }),
     );
 
-    const refreshed = await dependencies.refreshAccessToken({
+    const refreshed = await dependencies.refreshMicrosoft365AccessToken({
       clientId: config.value.clientId,
       clientSecret: config.value.clientSecret,
       refreshToken,

@@ -180,7 +180,7 @@ describe("fetchWithResolvedAddress", () => {
           permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 100,
+          timeoutMs: 100, // timeout under test
           timeoutPolicy: "idle",
           url: new URL(`http://example.test:${port}/stalled`),
         });
@@ -210,7 +210,7 @@ describe("fetchWithResolvedAddress", () => {
           permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 200,
+          timeoutMs: 200, // timeout under test
           timeoutPolicy: "idle",
           url: new URL(`http://example.test:${port}/progressing`),
         });

@@ -423,7 +423,7 @@ test("a token refresh preserves a newer consent grant", async () => {
           clientSecret: "secret",
           tenantId: "tenant",
         }),
-      refreshAccessToken: async () => {
+      refreshMicrosoft365AccessToken: async () => {
         await testDb
           .update(microsoft365Connections)
           .set({
@@ -509,7 +509,7 @@ test("an existing delegated connection refreshes its original ciphertext and ret
           clientSecret: "secret",
           tenantId: "tenant",
         }),
-      refreshAccessToken: async ({ refreshToken }) => {
+      refreshMicrosoft365AccessToken: async ({ refreshToken }) => {
         expect(String(refreshToken)).toBe("legacy-refresh");
         return Result.ok({
           access_token: "renewed-access",
@@ -788,7 +788,7 @@ test("a refreshed scope set change is audited with the credential update", async
           clientSecret: "secret",
           tenantId: "tenant",
         }),
-      refreshAccessToken: async () =>
+      refreshMicrosoft365AccessToken: async () =>
         Result.ok({
           access_token: "reduced-access",
           scope: "User.Read Files.Read.All",
@@ -880,7 +880,7 @@ test("a refreshed calendar connection retains its authorized scope ceiling", asy
           clientSecret: "secret",
           tenantId: "tenant",
         }),
-      refreshAccessToken: async () =>
+      refreshMicrosoft365AccessToken: async () =>
         Result.ok({
           access_token: "refreshed-calendar",
           scope: "User.Read Calendars.Read Files.Read.All Sites.Read.All",
@@ -984,7 +984,7 @@ test("a failed refresh leaves a newer consent connected", async () => {
         }),
       // Another request already stored newer credentials, so this refresh
       // token is no longer accepted.
-      refreshAccessToken: async () => {
+      refreshMicrosoft365AccessToken: async () => {
         await testDb
           .update(microsoft365Connections)
           .set({ accessTokenEncrypted: Buffer.from("newer-consent") })

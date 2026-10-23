@@ -754,8 +754,6 @@
     "apps/api/src/handlers/mcp-connectors/create-connection.ts": 1,
     "apps/api/src/handlers/mcp-connectors/oauth-callback.ts": 1,
     "apps/api/src/handlers/memories/update.ts": 1,
-    "apps/api/src/handlers/microsoft365/graph-client.ts": 2,
-    "apps/api/src/handlers/microsoft365/oauth-callback.ts": 1,
     "apps/api/src/handlers/playbooks/approve.ts": 1,
     "apps/api/src/handlers/playbooks/update-shared.ts": 1,
     "apps/api/src/handlers/playbooks/versions/restore.ts": 1,

@@ -222,7 +222,7 @@ export const exchangeMicrosoft365AuthorizationCode = async ({
     }),
   });
 
-export const refreshAccessToken = async ({
+export const refreshMicrosoft365AccessToken = async ({
   permit,
   ...options
 }: {
