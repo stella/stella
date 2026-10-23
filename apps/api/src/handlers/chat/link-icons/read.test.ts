@@ -7,7 +7,7 @@ import {
   createLinkIconOrigin,
   toRegistrableIconSite,
 } from "@/api/handlers/chat/link-icons/origin";
-import type { RegistrableIconSite } from "@/api/handlers/chat/link-icons/origin";
+import type { LinkIconTarget } from "@/api/handlers/chat/link-icons/origin";
 import type { CacheableLinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
@@ -23,14 +23,14 @@ test("registrable sites share one fetch and invalid hosts never reach origin", a
   const outcomes = new Map<string, CacheableLinkIconOutcome>();
   let requests = 0;
   const cache = {
-    readOrLease: async ({ hostname }: { hostname: RegistrableIconSite }) =>
+    readOrLease: async ({ hostname }: { hostname: LinkIconTarget }) =>
       outcomes.get(hostname.value) ??
       ({ type: "lease", token: "lease" } as const),
     store: async ({
       hostname,
       outcome,
     }: {
-      hostname: RegistrableIconSite;
+      hostname: LinkIconTarget;
       outcome: CacheableLinkIconOutcome;
     }) => {
       outcomes.set(hostname.value, outcome);
