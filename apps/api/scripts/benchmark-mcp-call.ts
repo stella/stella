@@ -18,6 +18,7 @@ import {
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
@@ -37,7 +38,9 @@ import {
 const DEFAULT_ITERATIONS = 500;
 const WARMUP_ITERATIONS = 50;
 const PROTOCOL_VERSION = "2026-07-28";
-const EXPECTED_DEFAULT_TOOL_NAME = DEFAULT_MCP_TOOL_DEFINITIONS[0].name;
+const EXPECTED_DEFAULT_TOOL_NAME =
+  DEFAULT_MCP_TOOL_DEFINITIONS.at(0)?.name ??
+  panic("The default MCP surface has no tools");
 
 const iterations = Number(
   process.argv
@@ -121,17 +124,20 @@ const toolsListRequest = (id: number) =>
     method: "POST",
   });
 
+const toolsListResponseSchema = v.object({
+  result: v.object({ tools: v.array(v.object({ name: v.string() })) }),
+});
+
 const callOnce = async (id: number): Promise<number> => {
   const startedAt = Bun.nanoseconds();
   const response = await handler(toolsListRequest(id));
   const body = await response.text();
   const elapsed = Bun.nanoseconds() - startedAt;
-  const parsed = JSON.parse(body) as {
-    result?: { tools?: { name?: string }[] };
-  };
+  const parsed = v.safeParse(toolsListResponseSchema, JSON.parse(body));
   if (
     response.status !== 200 ||
-    !parsed.result?.tools?.some(
+    !parsed.success ||
+    !parsed.output.result.tools.some(
       ({ name }) => name === EXPECTED_DEFAULT_TOOL_NAME,
     )
   ) {
