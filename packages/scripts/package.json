@@ -32,6 +32,7 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "0.4.1",
     "better-result": "catalog:",
+    "oxc-transform-react": "catalog:",
     "oxfmt": "catalog:",
     "typescript6": "catalog:"
   },
@@ -39,7 +40,6 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:",
-    "oxc-transform-react": "catalog:"
+    "fast-check": "catalog:"
   }
 }
