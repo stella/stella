@@ -554,6 +554,42 @@ describe("reviewed network budgets", () => {
     });
   });
 
+  test("a budget written against older main never lowers a recorded value", () => {
+    const result = prepareComparisonBaseline({
+      base: {
+        "/settings": {
+          depth: 4,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /v1/session"],
+          requestCounts: { "GET /v1/session": 3 },
+          responseSizes: { "GET /v1/session": 4096 },
+        },
+      },
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [
+        {
+          route: "/settings",
+          reason: "Older budget",
+          budget: {
+            depth: 3,
+            requests: ["GET /v1/session"],
+            requestCounts: { "GET /v1/session": 2 },
+            responseSizes: { "GET /v1/session": 1024 },
+          },
+        },
+      ],
+    });
+    expect(result.baseline["/settings"]).toEqual({
+      depth: 4,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: ["GET /v1/session"],
+      requestCounts: { "GET /v1/session": 3 },
+      responseSizes: { "GET /v1/session": 4096 },
+    });
+  });
+
   test.each([
     [null],
     [{ route: "/chat", reason: " ", budget: entry(1) }],
