@@ -1372,7 +1372,8 @@ test("code-quality pool preserves every moved check exactly once", () => {
 
   const withoutPoolMetadata = (step: Record<string, unknown>) => {
     const normalized = { ...step };
-    if (normalized["if"] === ["$", "{{ success() }}"].join("")) {
+    // An ordinary step's implicit success() is `!cancelled()` in the pool.
+    if (normalized["if"] === ["$", "{{ !cancelled() }}"].join("")) {
       delete normalized["if"];
     } else if (typeof normalized["if"] === "string") {
       normalized["if"] = normalized["if"].replace(

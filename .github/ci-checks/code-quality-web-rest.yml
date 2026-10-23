@@ -1,9 +1,12 @@
 # Independent checks from `code-quality-web-rest` in .github/workflows/ci.yml.
 # The pool evaluates their original conditions, runs them concurrently and
 # prints their logs in this manifest order.
+# A check that ran as an ordinary step (implicit `success()`) is `!cancelled()`
+# here: the pool step itself runs only after every earlier step succeeded, and
+# the pool decides `cancelled()` but not `success()`.
 checks:
   - name: Code quality (web)
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     timeout-minutes: 20
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -20,7 +23,7 @@ checks:
       bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
 
   - name: Result consumption (web)
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -34,7 +37,7 @@ checks:
       fi
 
   - name: Code quality (rest)
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     timeout-minutes: 20
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -58,21 +61,21 @@ checks:
     run: bun run check:query-cache-types
 
   - name: Dead columns
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
     run: bun run check:dead-columns
 
   - name: Projection totality
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
     run: bun run check:projection-totality
 
   - name: Aggregate ownership
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
@@ -82,7 +85,7 @@ checks:
       bun run check:write-contracts
 
   - name: Split-button census
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
@@ -91,7 +94,7 @@ checks:
       bun run check:split-buttons
 
   - name: Database awaits in loops
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
@@ -100,7 +103,7 @@ checks:
       bun run check:db-await-in-loop
 
   - name: API timeout mutation guard
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
@@ -109,7 +112,7 @@ checks:
       bun run check:api-timeout-mutations
 
   - name: Result consumption (rest)
-    if: ${{ success() }}
+    if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
