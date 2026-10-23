@@ -10,15 +10,15 @@ import {
   type CompareNode,
   type ConditionNode,
   type ConditionValue,
-  type FoldHandlers,
-  type GroupNode,
-  type Operand,
-  type PredicateNode,
-  type RefOperand,
   evaluateCondition,
   foldCondition,
+  type FoldHandlers,
+  type GroupNode,
   isEffectiveLeaf,
+  type Operand,
+  type PredicateNode,
   pruneIncomplete,
+  type RefOperand,
 } from "@stll/conditions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -26,8 +26,8 @@ import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  entityQueryScopeCondition,
   type EntityQueryScope,
+  entityQueryScopeCondition,
 } from "@/api/lib/entities/query-scope";
 import { escapeLike } from "@/api/lib/escape-like";
 import { typedPgArray } from "@/api/lib/search/sql";

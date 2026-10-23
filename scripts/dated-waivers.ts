@@ -21,9 +21,9 @@ import {
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
 import {
   parseRegistry,
+  type QuarantineEntry,
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   splitTestId,
-  type QuarantineEntry,
 } from "./flaky-test-quarantine";
 import { parseLedger } from "./suppression-waivers";
 

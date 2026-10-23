@@ -74,6 +74,27 @@ export type FailureRecord = {
   readonly tests: readonly FailedTest[];
 };
 
+export const DIGEST_VERSION = 1;
+
+// The `ci-failures.json` artifact. The flaky-test history reads it back, so
+// both sides go through this envelope.
+export type DigestFile = {
+  readonly version: typeof DIGEST_VERSION;
+  readonly run_id: string | null;
+  readonly run_attempt: string | null;
+  readonly failures: readonly FailureRecord[];
+};
+
+export const digestFile = (
+  failures: readonly FailureRecord[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): DigestFile => ({
+  version: DIGEST_VERSION,
+  run_id: env["GITHUB_RUN_ID"] ?? null,
+  run_attempt: env["GITHUB_RUN_ATTEMPT"] ?? null,
+  failures,
+});
+
 // ---------------------------------------------------------------------------
 // Line normalization
 
@@ -918,7 +939,7 @@ export const classify = (
     return "test";
   }
   if (
-    /lint|format|oxlint|oxfmt|biome|prettier|stylelint/u.test(name) ||
+    /lint|format|fmt|oxlint|biome|prettier|stylelint/u.test(name) ||
     LINT_RULE.test(text)
   ) {
     return "lint";
@@ -1129,13 +1150,15 @@ type DigestOptions = {
 };
 
 /**
- * Jobs the result gate fails on: failed or timed-out jobs, and cancelled
- * jobs that contain a failed step (a cancellation can mask a failure).
+ * Jobs the result gate fails on: failed or timed-out jobs, cancelled jobs
+ * that contain a failed step (a cancellation can mask a failure), and the
+ * still-running job with a failed step: the gate running this digest, so a
+ * gate that fails before it evaluates any job still names its own step.
  */
 export const isFailedJob = (job: ApiJob): boolean =>
   job.conclusion === "failure" ||
   job.conclusion === "timed_out" ||
-  (job.conclusion === "cancelled" &&
+  ((job.conclusion === "cancelled" || job.conclusion === null) &&
     (job.steps ?? []).some(({ conclusion }) => conclusion === "failure"));
 
 export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
@@ -1348,19 +1371,7 @@ const main = (args: readonly string[]): number => {
       return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
     },
   });
-  writeFileSync(
-    jsonFile,
-    `${JSON.stringify(
-      {
-        version: 1,
-        run_id: process.env["GITHUB_RUN_ID"] ?? null,
-        run_attempt: process.env["GITHUB_RUN_ATTEMPT"] ?? null,
-        failures: records,
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  writeFileSync(jsonFile, `${JSON.stringify(digestFile(records), null, 2)}\n`);
   const summary = flagValue(rest, "--summary");
   if (summary !== undefined) {
     appendFileSync(summary, summaryMarkdown(records));

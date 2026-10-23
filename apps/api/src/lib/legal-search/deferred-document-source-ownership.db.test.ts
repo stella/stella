@@ -11,9 +11,9 @@ import {
   claimDocumentFetch,
   fetchDecisionDocument,
   markDocumentUnavailable,
+  MAX_DOCUMENT_FETCH_ATTEMPTS,
   parkDocumentFetch,
   storeBackfilledDocument,
-  MAX_DOCUMENT_FETCH_ATTEMPTS,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { BackfilledDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";

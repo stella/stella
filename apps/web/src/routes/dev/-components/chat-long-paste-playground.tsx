@@ -4,6 +4,7 @@ import { createChatPastedTextPart } from "@stll/api-contract/chat";
 
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
+  CHAT_SEND_KEPT,
   ChatEditorProvider,
   useChatEditor,
 } from "@/components/chat-editor-provider";
@@ -45,7 +46,8 @@ const DraftComposer = ({ threadRef }: { threadRef: ChatThreadRef }) => {
   return (
     <ChatInputSurface
       controller={controller}
-      onSubmit={noop}
+      // The playground sends nowhere, so the draft stays for the next look.
+      onSubmit={() => CHAT_SEND_KEPT}
       reservedCommands={{ hasPersistedThread: false }}
       variant="large"
     />

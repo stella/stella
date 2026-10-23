@@ -15,13 +15,13 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type {
-  CaseLawPublicReadTransaction,
   CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import type { CourtRegistry } from "@/api/lib/case-law/court-presentation";
@@ -44,8 +44,8 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 
 import { snippetCitation } from "./snippet-citation";
 import {
-  PROVISION_VERSION_COLUMNS,
   projectProvisionVersion,
+  PROVISION_VERSION_COLUMNS,
 } from "./version-response";
 
 /**

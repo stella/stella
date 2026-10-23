@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Background publisher ingestion maintains derived public legislation work identifiers alongside the public corpus; it has no workspace actor or member-visible action to record in the audit trail."
+}
