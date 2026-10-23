@@ -165,7 +165,7 @@ const createAllowedSender = createSafeRootHandler(
     }
     return Result.ok({
       id: created.id,
-      address,
+      address: String(address),
       kind: "shared_mailbox" as const,
       scope,
       matterIds: workspaceIds,

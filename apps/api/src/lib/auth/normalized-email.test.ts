@@ -79,7 +79,7 @@ const paddingArbitrary = fc.string({
   maxLength: 3,
 });
 const caseVariant = (address: string, flips: readonly boolean[]) =>
-  [...address]
+  Array.from(address)
     .map((character, index) =>
       flips[index % Math.max(flips.length, 1)] === true
         ? character.toUpperCase()
@@ -119,7 +119,7 @@ describe("normalizeEmail", () => {
     ],
     ["Kelvin sign folds to k", "\u212aate@example.com", "kate@example.com"],
   ])("%s", (_name, raw, expected) => {
-    expect(normalizeEmail(raw)).toBe(expected);
+    expect(String(normalizeEmail(raw))).toBe(expected);
   });
 
   test("keeps dotless i and long s distinct from i and s", () => {
@@ -131,7 +131,7 @@ describe("normalizeEmail", () => {
     );
     // The Turkish locale fold would have merged capital I into dotless i.
     expect("I".toLocaleLowerCase("tr")).toBe("\u0131");
-    expect(normalizeEmail("I@example.com")).toBe("i@example.com");
+    expect(String(normalizeEmail("I@example.com"))).toBe("i@example.com");
   });
 
   test("normalization is idempotent and leaves no surrounding whitespace", () => {
@@ -254,11 +254,14 @@ describe("Better Auth parity", () => {
           const stored = await context.internalAdapter.findUserByEmail(address);
           const user =
             stored?.user ??
-            (await context.internalAdapter.createUser({
-              email: address,
-              name: "Account",
-              emailVerified: true,
-            }));
+            (await context.internalAdapter.createUser(
+              {
+                email: address,
+                name: "Account",
+                emailVerified: true,
+              },
+              { method: "admin" },
+            ));
           expect(user.email).toBe(normalizeEmail(address));
           const variant = caseVariant(address, flips);
           const found = await context.internalAdapter.findUserByEmail(variant);
