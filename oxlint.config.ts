@@ -344,6 +344,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
   ]),
+  fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
+    "no-raw-mcp-error-result/no-raw-mcp-error-result",
+  ]),
   fixtureRuleOverride("failure-sink-handle.fixture.ts", [
     "failure-sink-handle/failure-sink-handle",
   ]),
@@ -1515,6 +1518,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
     "./.oxlint-plugins/no-raw-error-output.ts",
+    "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
@@ -4829,6 +4833,12 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-error-output/no-raw-error-output": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: {
+        "no-raw-mcp-error-result/no-raw-mcp-error-result": "error",
       },
     },
     {
