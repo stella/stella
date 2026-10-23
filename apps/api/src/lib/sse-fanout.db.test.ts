@@ -521,9 +521,9 @@ const harnessFor = <C extends RealtimeChannel>(channel: C): ChannelHarness<C> =>
  * audience is one synchronous pass after the batch reauthorization, so a frame
  * meant for a stream is already queued when the audience has read theirs.
  */
-const pendingDelivery = async (
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): Promise<Delivery> =>
+const pendingDelivery = async (reader: {
+  read: () => PromiseLike<{ done: boolean }>;
+}): Promise<Delivery> =>
   await Promise.race([
     reader.read().then(({ done }): Delivery => (done ? "closed" : "frame")),
     Bun.sleep(0).then((): Delivery => "silent"),
@@ -632,9 +632,19 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
     expectDeliveredOnce(many, delivery, LARGE_AUDIENCE);
     const frameBytes = single.frames.map((frame) => frame.byteLength);
     expect(frameBytes.every((bytes) => bytes > 0)).toBe(true);
-    expect(many.frames.map((frame) => frame.byteLength)).toEqual(
-      many.frames.map(() => frameBytes.at(0)),
-    );
+    if (delivery === "closed") {
+      expect(single.frames).toEqual([]);
+      expect(many.frames).toEqual([]);
+    } else {
+      const frameByteLength = frameBytes.at(0);
+      expect(frameByteLength).toBeDefined();
+      if (frameByteLength === undefined) {
+        throw new Error("Expected the single subscriber to receive a frame");
+      }
+      expect(many.frames.map((frame) => frame.byteLength)).toEqual(
+        many.frames.map(() => frameByteLength),
+      );
+    }
   });
 
   test.each(fanoutCases)(
