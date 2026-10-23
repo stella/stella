@@ -59,6 +59,7 @@
     "main-heavy.yml/suites": "main",
     "main-heavy.yml/status": "main",
     "scheduled-run-alerts.yml/notify": "main",
+    "refresh-after-main-fix.yml/refresh": "main",
     "build-api-image.yml/resolve": "main",
     "build-api-image.yml/build": "main",
     "codeql.yml/analyze": "release-pr",

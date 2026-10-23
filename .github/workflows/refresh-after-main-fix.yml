@@ -1,0 +1,201 @@
+name: Refresh pull requests after main fix
+
+defaults:
+  run:
+    shell: bash
+
+# While main is red, every pull request whose CI runs fails the same checks,
+# and a re-run keeps testing the old main. Once main is green again, this
+# updates the branch of each pull request whose latest CI run started while
+# main was red and failed only checks that main failed then
+# (scripts/refresh-after-main-fix.ts). Unknown evidence refreshes nothing.
+# A few at a time, and none while a merge group waits.
+
+on:
+  workflow_run:
+    workflows:
+      - Main PR-depth checks
+      - Main heavy suites
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: refresh-after-main-fix
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Only runs of the listed main workflows of this repository, started by
+    # main's own push or schedule, that concluded success.
+    if: >-
+      github.repository == 'stella/stella'
+      && (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+      || (github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_branch == 'main'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && contains(fromJSON('[".github/workflows/main-pr-depth.yml", ".github/workflows/main-heavy.yml"]'), github.event.workflow_run.path)
+      && contains(fromJSON('["push", "schedule"]'), github.event.workflow_run.event)))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      # workflow_run is privileged: only main's code runs here, never a pull
+      # request's.
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      # Cheap gate before the install: a refresh needs a failed main run in
+      # the window and a later successful one. An incomplete listing proceeds.
+      - name: Look for a fixed main failure
+        id: gate
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          since=$(date -u -d '72 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          proceed=false
+          for workflow in main-pr-depth.yml main-heavy.yml; do
+            listing="$RUNNER_TEMP/gate-$workflow.json"
+            bash "$GH_RETRY_SCRIPT" api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
+              -f branch=main -f status=completed -f "created=>=$since" -f per_page=100 > "$listing"
+            if jq -e '
+              [.workflow_runs[] | select(.event == "push" or .event == "schedule")] as $runs
+              | ([$runs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") | .created_at] | min) as $first
+              | (.total_count > (.workflow_runs | length))
+                or ($first != null and any($runs[]; .conclusion == "success" and .created_at > $first))
+            ' "$listing" > /dev/null; then
+              proceed=true
+            fi
+          done
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+          if [[ "$proceed" != true ]]; then
+            echo "No main failure was fixed in the last 72 hours." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Checkout default branch
+        if: steps.gate.outputs.proceed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Setup Bun
+        if: steps.gate.outputs.proceed == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: source/package.json
+          no-cache: true
+
+      - name: Install dependencies
+        if: steps.gate.outputs.proceed == 'true'
+        timeout-minutes: 20
+        working-directory: source
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Select pull requests to refresh
+        if: steps.gate.outputs.proceed == 'true'
+        id: select
+        timeout-minutes: 10
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bun scripts/refresh-after-main-fix.ts select \
+            --out "$RUNNER_TEMP/refresh.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          if jq -e 'length > 0' "$RUNNER_TEMP/refresh.json" > /dev/null; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint refresh token
+        if: steps.select.outputs.any == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # Each pull request is rechecked right before its update, with the
+      # workflow token: a hold or a merge queue entry can arrive without a
+      # commit. The expected head makes GitHub refuse a branch that moved
+      # since. A refusal (422: moved or conflicting) is never retried.
+      - name: Update pull request branches
+        if: steps.gate.outputs.proceed == 'true' && steps.select.outputs.any == 'true'
+        timeout-minutes: 5
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          refreshed=()
+          failed=0
+          while IFS=$'\t' read -r number head; do
+            if [[ ! "$number" =~ ^[1-9][0-9]*$ || ! "$head" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Refusing an invalid selection entry."
+              failed=1
+              continue
+            fi
+            if ! verdict=$(GH_TOKEN="$READ_TOKEN" bun scripts/refresh-after-main-fix.ts recheck --number "$number" --head "$head"); then
+              echo "::error::Rechecking #$number failed; the next fixed main run tries again."
+              failed=1
+              continue
+            fi
+            if [[ "$verdict" != eligible ]]; then
+              echo "::notice::Skipped #$number: $verdict."
+              continue
+            fi
+            errors="$RUNNER_TEMP/update-$number.err"
+            if bash "$GH_RETRY_SCRIPT" api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$number/update-branch" \
+              -f expected_head_sha="$head" > /dev/null 2> "$errors"; then
+              refreshed+=("#$number@$head")
+            elif grep -q 'HTTP 422' "$errors"; then
+              echo "::notice::Skipped #$number: its head moved or it conflicts with main."
+            elif grep -q 'without .workflows. permission' "$errors"; then
+              # Bringing main's workflow changes into a branch needs a permission this job does not hold.
+              echo "::notice::Skipped #$number: updating it would change workflow files; its owner merges main."
+            else
+              cat "$errors" >&2
+              echo "::error::Updating #$number failed; the next fixed main run tries again."
+              failed=1
+            fi
+          done < <(jq -r '.[] | [.number, .headSha] | @tsv' "$RUNNER_TEMP/refresh.json")
+          {
+            echo ""
+            echo "Refreshed pull requests:"
+            if ((${#refreshed[@]} == 0)); then
+              echo "- none"
+            else
+              printf -- '- %s\n' "${refreshed[@]}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$failed"
