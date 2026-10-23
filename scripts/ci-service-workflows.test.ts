@@ -297,6 +297,56 @@ test("staging promotion treats browser mirror authentication as optional", () =>
   expect(login).toHaveProperty("continue-on-error", true);
 });
 
+test("staging verification consumes concurrent outcomes and retains the web success gate", () => {
+  const jobs = record(
+    readWorkflow(".github/workflows/deploy-staging.yml")["jobs"],
+  );
+  const steps = record(jobs["promote-staging"])["steps"];
+  if (!Array.isArray(steps)) {
+    throw new TypeError("Expected promotion steps");
+  }
+  const checks = steps
+    .map(record)
+    .find((step) => step["id"] === "staging-checks");
+  expect(checks).toHaveProperty(
+    "run",
+    "bash scripts/staging-post-deploy-checks.sh",
+  );
+  expect(checks).toHaveProperty(
+    "if",
+    `\${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}`,
+  );
+  expect(checks).toHaveProperty(
+    "env.RUN_WEB_SMOKE",
+    `\${{ job.status == 'success' }}`,
+  );
+  expect(checks).toHaveProperty(
+    "env.EXPECTED_COMMIT",
+    `\${{ needs.resolve.outputs.sha }}`,
+  );
+  const verification = steps
+    .map(record)
+    .find((step) => step["name"] === "Record staging verification");
+  for (const [variable, output] of Object.entries({
+    WEB_SMOKE: "web-smoke",
+    API_SMOKE: "api-smoke",
+    MCP_SMOKE: "mcp-smoke",
+    CORPUS_PREFLIGHT: "corpus-preflight",
+  })) {
+    expect(verification).toHaveProperty(
+      `env.${variable}`,
+      `\${{ steps.staging-checks.outputs.${output} }}`,
+    );
+  }
+  const upload = steps
+    .map(record)
+    .find((step) => step["name"] === "Upload Playwright report");
+  expect(upload).toHaveProperty(
+    "if",
+    `\${{ always() && steps.staging-checks.outputs.web-smoke != '' && steps.staging-checks.outputs.web-smoke != 'skipped' }}`,
+  );
+});
+
 // Attestations push to GHCR with the job's registry login, so a job logs out
 // only after its last attestation; a login in between re-authenticates.
 test("GHCR attestations run before the job logs out of GHCR", () => {

@@ -10,7 +10,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { evaluate } from "./github-expression";
@@ -104,36 +103,7 @@ const validation = (
       ...overrides,
     },
   );
-const expression = (value: boolean | string | undefined, waived: boolean) => {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (value === undefined) {
-    return false;
-  }
-  const result: unknown = new Script(
-    value
-      .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1")
-      .replaceAll(
-        /steps\.([\w-]+)/gu,
-        (_, id: string) => `steps[${JSON.stringify(id)}]`,
-      ),
-  ).runInNewContext({
-    cancelled: () => false,
-    needs: { resolve: { outputs: { corpus_search_waived: String(waived) } } },
-    steps: {
-      "smoke-deps": { conclusion: "success" },
-      "corpus-preflight": { outcome: "failure", conclusion: "success" },
-    },
-  });
-  return v.parse(v.boolean(), result);
-};
 const assertScope = (candidate = workflow) => {
-  // These existing report-only checks are independent of the named waiver.
-  const reportOnlySteps = new Set([
-    "Run staging response policy checks",
-    "Run staging API model-turn smoke",
-  ]);
   for (const [jobName, job] of Object.entries(candidate.jobs)) {
     for (const step of job.steps ?? []) {
       if (
@@ -150,22 +120,10 @@ const assertScope = (candidate = workflow) => {
         expect(step["continue-on-error"]).toBe(true);
         continue;
       }
-      if (step.id === "corpus-preflight") {
-        expect(jobName).toBe("promote-staging");
-        expect(
-          expression(step["continue-on-error"], false),
-          "unwaived corpus remains blocking",
-        ).toBe(false);
-        expect(
-          expression(step["continue-on-error"], true),
-          "named corpus waiver applies",
-        ).toBe(true);
-        continue;
-      }
       expect(
         step["continue-on-error"] ?? false,
         `${step.name} cannot inherit the corpus waiver`,
-      ).toBe(jobName === "promote-staging" && reportOnlySteps.has(step.name));
+      ).toBe(false);
     }
   }
 };
@@ -267,7 +225,7 @@ test("the sole named waiver validates before checkout and derives its downstream
   );
   expect(recordEnv?.["WAIVE_REASON"]).toBe(`\${{ inputs.waive_reason }}`);
   expect(recordEnv?.["CORPUS_PREFLIGHT"]).toBe(
-    `\${{ steps.corpus-preflight.outcome }}`,
+    `\${{ steps.staging-checks.outputs.corpus-preflight }}`,
   );
   assertValidation();
   expect(
@@ -291,9 +249,9 @@ test("the sole named waiver validates before checkout and derives its downstream
 });
 test("only failed corpus preflight can use the waiver and its MCP dependency remains gated by the actual outcome", () => {
   assertScope();
-  expect(expression(findStep("Run staging MCP user journeys").if, true)).toBe(
-    false,
-  );
+  expect(
+    findStep("Run staging post-deploy checks").env?.["CORPUS_SEARCH_WAIVED"],
+  ).toBe(`\${{ needs.resolve.outputs.corpus_search_waived }}`);
   const result = record();
   expect(result.code, result.stderr).toBe(0);
   const payloads = statuses(result);
@@ -346,11 +304,10 @@ test("unused waiver keeps normal success and every unrelated failure remains blo
 });
 test("waiver scope, required reason and manual-only boundary mutations are rejected", () => {
   const widened = structuredClone(workflow);
-  findStep("Run staging web smoke", widened)["continue-on-error"] =
-    findStep("Check staging corpus search backend")["continue-on-error"] ??
-    panic("Missing corpus waiver");
+  findStep("Run staging post-deploy checks", widened)["continue-on-error"] =
+    true;
   expect(() => assertScope(widened)).toThrow(
-    "Run staging web smoke cannot inherit the corpus waiver",
+    "Run staging post-deploy checks cannot inherit the corpus waiver",
   );
   const optional = parse(
     source
