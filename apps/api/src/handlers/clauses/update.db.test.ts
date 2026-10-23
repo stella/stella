@@ -813,7 +813,7 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       organizationId: ids.orgA,
       name: "Legacy template",
       fileName: "legacy.docx",
-      s3Key: "legacy.docx",
+      s3Key: `${ids.orgA}/legacy.docx`,
       sizeBytes: 1,
       createdBy: ids.userA1,
     });
@@ -902,7 +902,7 @@ test("clause resolution scopes relation reads even without the RLS backstop", as
     organizationId: ids.orgA,
     name: "Scoped template",
     fileName: "scoped.docx",
-    s3Key: "scoped.docx",
+    s3Key: `${ids.orgA}/scoped.docx`,
     sizeBytes: 1,
     createdBy: ids.userA1,
   });
@@ -975,7 +975,7 @@ test("resolved clause provenance names latest, pinned and explicit saved version
     organizationId: ids.orgA,
     name: "Versioned",
     fileName: "versioned.docx",
-    s3Key: "versioned.docx",
+    s3Key: `${ids.orgA}/versioned.docx`,
     sizeBytes: 1,
     createdBy: ids.userA1,
   });

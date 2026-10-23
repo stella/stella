@@ -2061,6 +2061,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const uploadResult = await uploadMessageFiles({
       message: stampedValidatedMessage.message,
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId: thread.data.id,
@@ -2800,6 +2801,7 @@ export const createSendMessage = (
               functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,
             }),
           store: createVisualStore({
+            organizationId: session.activeOrganizationId,
             recordAuditEvent,
             safeDb,
             threadId: body.threadId,
