@@ -129,6 +129,24 @@ test("a failure without an annotation names its last stderr line or exit status"
   ]);
 });
 
+test("a failure reports an error annotation written to stdout", () => {
+  const directory = gateDir();
+  const run = gate(
+    directory,
+    "run",
+    "dependency-audit",
+    "bash",
+    "-c",
+    "echo evidence=value; echo '::error::audit failed'; exit 1",
+  );
+  expect(run.stdout).toBe("evidence=value\n::error::audit failed\n");
+
+  const verdict = gate(directory, "verdict", "dependency-audit");
+  expect(failureLines(verdict.stdout)).toEqual([
+    "::error::RELEASE_GATE_FAILED dependency-audit: audit failed",
+  ]);
+});
+
 test("passing gates give a passing verdict", () => {
   const directory = gateDir();
   for (const name of GATES) {

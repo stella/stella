@@ -15,8 +15,8 @@ valid_gate() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "::error::Invalid re
 
 # The reason a gate failed: its own error annotations, else its last stderr line.
 reason() {
-  local err="$1" status="$2" lines
-  lines=$(sed -n 's/^::error[^:]*:://p' "$err" 2>/dev/null | paste -sd ';' - | sed 's/;/; /g')
+  local out="$1" err="$2" status="$3" lines
+  lines=$(sed -n 's/^::error[^:]*:://p' "$out" "$err" 2>/dev/null | paste -sd ';' - | sed 's/;/; /g')
   [[ -n "$lines" ]] || lines=$(grep -v '^[[:space:]]*$' "$err" 2>/dev/null | tail -n 1 || true)
   printf '%s\n' "${lines:-exit $status}"
 }
@@ -28,9 +28,10 @@ case "${1-}" in
     shift 2
     valid_gate "$gate"
     mkdir -p "$dir"
-    # stdout stays with the caller (step outputs); stderr is kept for the verdict.
+    # Both streams stay with the caller; copies let the verdict find annotations.
     status=0
-    "$@" 2>"$dir/$gate.stderr" || status=$?
+    "$@" >"$dir/$gate.stdout" 2>"$dir/$gate.stderr" || status=$?
+    cat "$dir/$gate.stdout"
     cat "$dir/$gate.stderr" >&2
     printf '%s\n' "$status" >"$dir/$gate.status"
     exit "$status"
@@ -46,7 +47,7 @@ case "${1-}" in
         continue
       fi
       status=$(<"$dir/$gate.status")
-      [[ "$status" == 0 ]] || failures+=("$gate: $(reason "$dir/$gate.stderr" "$status")")
+      [[ "$status" == 0 ]] || failures+=("$gate: $(reason "$dir/$gate.stdout" "$dir/$gate.stderr" "$status")")
     done
     summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
     if [[ ${#failures[@]} -eq 0 ]]; then
