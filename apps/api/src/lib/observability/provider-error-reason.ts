@@ -60,7 +60,7 @@ const PROVIDER_ERROR_TOKEN = /^[\w.:[\]-]{1,64}$/u;
 const PROVIDER_ERROR_FIELDS = ["code", "param", "type"] as const;
 
 const readProviderField = (value: object, field: string): unknown => {
-  const result = Result.try(() => Reflect.get(value, field));
+  const result = Result.try((): unknown => Reflect.get(value, field));
   return Result.isError(result) ? undefined : result.value;
 };
 
