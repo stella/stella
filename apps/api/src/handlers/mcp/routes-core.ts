@@ -141,43 +141,33 @@ export const createMcpRoute = ({
     });
   };
 
+  // Discovery documents are public: routes take only the response schema,
+  // because the handler config's `accountAccess` route macro requires a session.
   return new Elysia()
     .options(MCP_ADVANCED_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(
-      MCP_ADVANCED_DISCOVERY_PATH,
-      readAdvancedMetadata.handler,
-      readAdvancedMetadata.config,
-    )
+    .get(MCP_ADVANCED_DISCOVERY_PATH, readAdvancedMetadata.handler, {
+      response: readAdvancedMetadata.config.response,
+    })
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(
-      ROOT_MCP_DISCOVERY_PATH,
-      readDefaultMetadata.handler,
-      readDefaultMetadata.config,
-    )
+    .get(ROOT_MCP_DISCOVERY_PATH, readDefaultMetadata.handler, {
+      response: readDefaultMetadata.config.response,
+    })
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(
-      MCP_ANONYMIZED_DISCOVERY_PATH,
-      readAnonymizedMetadata.handler,
-      readAnonymizedMetadata.config,
-    )
+    .get(MCP_ANONYMIZED_DISCOVERY_PATH, readAnonymizedMetadata.handler, {
+      response: readAnonymizedMetadata.config.response,
+    })
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(
-      MCP_DISCOVERY_PATH,
-      readDefaultMetadata.handler,
-      readDefaultMetadata.config,
-    )
+    .get(MCP_DISCOVERY_PATH, readDefaultMetadata.handler, {
+      response: readDefaultMetadata.config.response,
+    })
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(
-      MCP_DOCUMENTS_DISCOVERY_PATH,
-      readDocumentsMetadata.handler,
-      readDocumentsMetadata.config,
-    )
+    .get(MCP_DOCUMENTS_DISCOVERY_PATH, readDocumentsMetadata.handler, {
+      response: readDocumentsMetadata.config.response,
+    })
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(
-      MCP_LAW_DISCOVERY_PATH,
-      readLawMetadata.handler,
-      readLawMetadata.config,
-    )
+    .get(MCP_LAW_DISCOVERY_PATH, readLawMetadata.handler, {
+      response: readLawMetadata.config.response,
+    })
     .all(
       MCP_ADVANCED_HTTP_PATH,
       declareAggregateMutation(
