@@ -104,6 +104,8 @@ import {
   markAuthRequestRoute,
 } from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
+import { cimdMetadataValidationStore } from "@/api/lib/auth/cimd-metadata-validation-store";
+import { withStaleIfError } from "@/api/lib/auth/cimd-stale-if-error";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -2276,11 +2278,24 @@ export const createAuth = (
               },
             },
             {
-              clientDiscovery: createCimdClientDiscovery({
-                fetchClientMetadataResource: withOwnClientDocuments(
-                  fetchClientMetadataResource,
-                ),
-              }),
+              clientDiscovery: withStaleIfError(
+                createCimdClientDiscovery({
+                  fetchClientMetadataResource: withOwnClientDocuments(
+                    fetchClientMetadataResource,
+                  ),
+                  onClientCreated: async ({ client }) => {
+                    await cimdMetadataValidationStore.recordValidated(
+                      client.clientId,
+                    );
+                  },
+                  onClientRefreshed: async ({ client }) => {
+                    await cimdMetadataValidationStore.recordValidated(
+                      client.clientId,
+                    );
+                  },
+                }),
+                cimdMetadataValidationStore,
+              ),
             },
           ],
           accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
