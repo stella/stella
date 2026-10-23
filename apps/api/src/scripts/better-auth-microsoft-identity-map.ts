@@ -79,7 +79,7 @@ export const parseBetterAuthMicrosoftIdentityMapArgs = (
   return Result.ok({ outputPath: parsed.output[1] });
 };
 
-const readSources = async (database: ReturnType<typeof drizzle>) => {
+const readSources = async (database: ReturnType<typeof createDatabase>) => {
   const queried = await Result.tryPromise({
     try: async () =>
       await database.transaction(async (transaction) => {

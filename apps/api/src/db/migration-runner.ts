@@ -113,7 +113,7 @@ $$;
 `;
 
 type AdoptionOptions = {
-  database: ReturnType<typeof drizzle>;
+  database: ReturnType<typeof createDatabase>;
   migrations: ReturnType<typeof readMigrationFiles>;
   migrationsSchema: string;
   migrationsTable: string;
