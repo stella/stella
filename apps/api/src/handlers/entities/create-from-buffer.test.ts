@@ -31,6 +31,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -341,7 +342,7 @@ describe("createEntityFromBuffer", () => {
     const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
 
     const recordedAuditEvents: unknown[] = [];
-    let auditTransaction: Transaction | undefined;
+    let auditTransaction: Parameters<AuditRecorder>[0] | undefined;
     const result = await createEntityFromBufferForTest({
       scopedDb,
       organizationId,
