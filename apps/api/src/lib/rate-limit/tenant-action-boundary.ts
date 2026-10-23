@@ -39,8 +39,10 @@ export const createRequestRouteClassifier = ({
   };
   const registry = new Elysia(configuration);
   const matchRoute = registry.router.dynamic.find.bind(registry.router.dynamic);
+  const routeType = (route: InternalRoute) =>
+    classifyRoute(route) ? "included" : "excluded";
   const routeMetadata = (route: InternalRoute) => ({
-    type: classifyRoute(route) ? ("included" as const) : ("excluded" as const),
+    type: routeType(route),
     routeTemplate: route.path,
   });
   const staticMetadata = new Map<
@@ -58,7 +60,7 @@ export const createRequestRouteClassifier = ({
     if (route.method === "WS") {
       hasDynamicWebSocket = true;
     }
-    registry.route(route.method, route.path, routeMetadata(route));
+    registry.route(route.method, route.path, { type: routeType(route) });
   }
   if (aot !== false) {
     // AOT's first static path group owns its encoded/loose aliases, including
@@ -90,11 +92,10 @@ export const createRequestRouteClassifier = ({
     if (match === null) {
       return undefined;
     }
-    const { handle } = match.store;
+    const { handle, route: routeTemplate } = match.store;
     if (
       !isRecord(handle) ||
-      (handle["type"] !== "included" && handle["type"] !== "excluded") ||
-      typeof handle["routeTemplate"] !== "string"
+      (handle["type"] !== "included" && handle["type"] !== "excluded")
     ) {
       return panic("Route classifier registry lost its derived metadata");
     }
@@ -103,7 +104,7 @@ export const createRequestRouteClassifier = ({
         handle["type"] === "included"
           ? ("included" as const)
           : ("excluded" as const),
-      routeTemplate: handle["routeTemplate"],
+      routeTemplate,
     };
   };
   return (request: Request) => {
