@@ -249,17 +249,21 @@ const rangeDecision = {
   updatedAt: "2026-10-18T12:00:00Z",
 } satisfies ComponentProps<typeof DecisionWorkspace>["decision"];
 const rangeAnalysis = {
-  version: 3,
+  version: 4,
   generatedAt: rangeDecision.updatedAt,
   model: "test",
   inputFingerprint: "a".repeat(64),
   tree: [],
   holding: {
-    text: "The cited paragraphs establish the holding.",
+    spans: [
+      {
+        text: "The cited paragraphs establish the holding.",
+        anchors: [{ startAnchorId: "p-2", endAnchorId: "p-4" }],
+      },
+    ],
     language: "en",
-    anchors: [{ startAnchorId: "p-2", endAnchorId: "p-4" }],
   },
-  abstract: { text: "A summary.", language: "en" },
+  abstract: { spans: [{ text: "A summary.", anchors: [] }], language: "en" },
   topics: [],
 } satisfies DecisionAnalysis;
 

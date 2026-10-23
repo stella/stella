@@ -51,11 +51,13 @@ const OUTPUT: AnalysisOutput = {
       annotations: [],
     },
   ],
-  holding: {
-    text: "A limitation period runs from the day the claim could first be brought.",
-    anchors: [{ startAnchorId: "b2", endAnchorId: "b2" }],
-  },
-  abstract: "The court dismissed the appeal.",
+  holding: [
+    {
+      text: "A limitation period runs from the day the claim could first be brought.",
+      anchors: [{ startAnchorId: "b2", endAnchorId: "b2" }],
+    },
+  ],
+  abstract: [{ text: "The court dismissed the appeal.", anchors: [] }],
   topics: ["promlčení"],
 };
 
