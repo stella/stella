@@ -816,7 +816,7 @@ const startServer = async (): Promise<void> => {
   }
 
   startMemoryPressureHandler();
-  startFeatureAccessGrantsRefresh();
+  await startFeatureAccessGrantsRefresh();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing

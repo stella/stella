@@ -1,6 +1,7 @@
-import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { readParameter } from "@stll/parameter-store";
 
 import { envBase } from "@/api/env-base";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -8,10 +9,12 @@ import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema
 import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalTestRun } from "@/api/runtime-mode";
 
 /** Metadata polling bounds grant propagation without adding work to requests. */
-export const FEATURE_ACCESS_REFRESH_INTERVAL_MS = 60_000;
+const FEATURE_ACCESS_REFRESH_INTERVAL_MS = 60_000;
+const FEATURE_ACCESS_REFRESH_TIMEOUT_MS = 5000;
 
 export type FeatureAccessGrantsState = Readonly<{
   grants: FeatureAccessGrants;
@@ -20,8 +23,8 @@ export type FeatureAccessGrantsState = Readonly<{
 }>;
 
 type FeatureAccessGrantSource = {
-  readValue: () => Promise<{ raw: string; version: number }>;
-  readVersion: () => Promise<number>;
+  readValue: (signal: AbortSignal) => Promise<{ raw: string; version: number }>;
+  readVersion: (signal: AbortSignal) => Promise<number>;
 };
 
 type CreateFeatureAccessGrantsOwnerOptions = {
@@ -40,30 +43,46 @@ export const createFeatureAccessGrantsOwner = ({
 
   const read = (): FeatureAccessGrantsState => current;
   const refresh = async (): Promise<void> => {
-    try {
-      const version = await source.readVersion();
-      if (version === current.version) {
-        failureReported = false;
-        return;
-      }
-      const loaded = await source.readValue();
-      const parsed = v.parse(featureAccessGrantsEnvSchema, loaded.raw);
-      if (parsed.unknownGrantCount > 0) {
-        logger.error("feature_access.unknown_grant", {
-          "feature_access.unknown_grant_count": parsed.unknownGrantCount,
-        });
-      }
-      current = Object.freeze({
-        grants: parsed.grants,
-        version: loaded.version,
-      });
-      failureReported = false;
-    } catch (error) {
+    const refreshed = await Result.tryPromise({
+      try: () =>
+        withTimeout(
+          async (signal) => {
+            const version = await source.readVersion(signal);
+            if (version === current.version) {
+              return null;
+            }
+            const loaded = await source.readValue(signal);
+            return {
+              parsed: v.parse(featureAccessGrantsEnvSchema, loaded.raw),
+              version: loaded.version,
+            };
+          },
+          {
+            label: "feature_access.refresh",
+            timeoutMs: FEATURE_ACCESS_REFRESH_TIMEOUT_MS,
+          },
+        ),
+      catch: (error) => error,
+    });
+    if (refreshed.isErr()) {
       if (!failureReported) {
         failureReported = true;
-        onRefreshFailure(error);
+        onRefreshFailure(refreshed.error);
       }
+      return;
     }
+    failureReported = false;
+    if (refreshed.value === null) {
+      return;
+    }
+    const { parsed, version } = refreshed.value;
+    if (parsed.unknownGrantCount > 0) {
+      logger.error("feature_access.unknown_grant", {
+        "feature_access.unknown_grant_count": parsed.unknownGrantCount,
+      });
+    }
+    // Commit only the winning read, never a response arriving after its deadline.
+    current = Object.freeze({ grants: parsed.grants, version });
   };
 
   return { read, refresh };
@@ -106,55 +125,55 @@ if (!isLocalTestRun()) {
   Object.freeze(envFeatureAccess);
 }
 
-/** Starts the refresh when a grant parameter is configured; returns its stop function, or null when off. */
-export const startFeatureAccessGrantsRefresh = ():
-  | (() => Promise<void>)
-  | null => {
-  const parameterName = envBase.API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME;
+const createSsmGrantSource = (
+  parameterName: string,
+): FeatureAccessGrantSource => ({
+  // Ciphertext reads expose the version without requiring decryption.
+  readVersion: async (signal) =>
+    (
+      await readParameter({
+        name: parameterName,
+        decryption: "disabled",
+        signal,
+      })
+    ).unwrap().version,
+  readValue: async (signal) => {
+    const parameter = (
+      await readParameter({
+        name: parameterName,
+        decryption: "enabled",
+        signal,
+      })
+    ).unwrap();
+    return { raw: parameter.value, version: parameter.version };
+  },
+});
+
+type StartFeatureAccessGrantsRefreshOptions = {
+  parameterName?: string;
+  source?: FeatureAccessGrantSource;
+};
+
+/** Loads configured grants before returning, then starts periodic refresh; null when off. */
+export const startFeatureAccessGrantsRefresh = async ({
+  parameterName = envBase.API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME,
+  source,
+}: StartFeatureAccessGrantsRefreshOptions = {}): Promise<
+  (() => Promise<void>) | null
+> => {
   if (parameterName === undefined) {
     return null;
   }
-
-  const client = new SSMClient({});
   const owner = createFeatureAccessGrantsOwner({
     initial: featureAccessGrantsState,
     onRefreshFailure: () => {
       logger.error("feature_access.refresh_failed");
     },
-    source: {
-      // Without decryption the read returns the version without the value, so
-      // the task role needs GetParameter on this one parameter and no
-      // account-wide DescribeParameters.
-      readVersion: async () => {
-        const output = await client.send(
-          new GetParameterCommand({
-            Name: parameterName,
-            WithDecryption: false,
-          }),
-        );
-        return (
-          output.Parameter?.Version ??
-          panic("Feature access grant parameter has no version")
-        );
-      },
-      readValue: async () => {
-        const output = await client.send(
-          new GetParameterCommand({
-            Name: parameterName,
-            WithDecryption: true,
-          }),
-        );
-        return {
-          raw:
-            output.Parameter?.Value ??
-            panic("Feature access grant parameter has no value"),
-          version:
-            output.Parameter?.Version ??
-            panic("Feature access grant parameter has no version"),
-        };
-      },
-    },
+    source: source ?? createSsmGrantSource(parameterName),
   });
+
+  await owner.refresh();
+  featureAccessGrantsState = owner.read();
 
   return startNonOverlappingInterval({
     initialDelayMs: FEATURE_ACCESS_REFRESH_INTERVAL_MS,

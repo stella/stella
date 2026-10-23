@@ -6,6 +6,7 @@ import {
   createFeatureAccessGrantsOwner,
   envFeatureAccess,
   readFeatureAccessGrants,
+  startFeatureAccessGrantsRefresh,
 } from "@/api/env-feature-access";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { logger } from "@/api/lib/observability/logger";
@@ -51,6 +52,13 @@ const createOwner = (client: FakeSsmClient, failures: unknown[]) =>
     source: client.source,
   });
 
+test("the server awaits initial grants before exposing requests", async () => {
+  const server = await Bun.file(new URL("server.ts", import.meta.url)).text();
+  expect(server).toMatch(
+    /await startFeatureAccessGrantsRefresh\(\);[\s\S]*?\n {2}api\.listen\(/u,
+  );
+});
+
 test("test fixtures can replace the snapshot while exercising strict access", () => {
   const initial = readFeatureAccessGrants();
   const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
@@ -68,6 +76,92 @@ test("test fixtures can replace the snapshot while exercising strict access", ()
 });
 
 describe("feature access grant refresh", () => {
+  test.each([
+    { name: "revoked", grants: initialGrants },
+    { name: "unchanged", grants: updatedGrants },
+  ])(
+    "startup publishes $name SSM grants before returning",
+    async ({ grants }) => {
+      const previous = readFeatureAccessGrants();
+      envFeatureAccess.API_FEATURE_ACCESS_GRANTS = updatedGrants;
+      const client = new FakeSsmClient();
+      client.raw = JSON.stringify(grants);
+      const stop = await startFeatureAccessGrantsRefresh({
+        parameterName: "test-grants",
+        source: client.source,
+      });
+      try {
+        expect(readFeatureAccessGrants()).toEqual({ grants, version: 1 });
+        expect(client.valueReads).toBe(1);
+      } finally {
+        await stop?.();
+        envFeatureAccess.API_FEATURE_ACCESS_GRANTS = previous.grants;
+      }
+    },
+  );
+
+  test("unreachable SSM retains environment grants and reports startup failure", async () => {
+    const previous = readFeatureAccessGrants();
+    envFeatureAccess.API_FEATURE_ACCESS_GRANTS = updatedGrants;
+    const client = new FakeSsmClient();
+    client.error = new Error("SSM unavailable");
+    const errors = spyOn(logger, "error").mockImplementation(() => {});
+    const stop = await startFeatureAccessGrantsRefresh({
+      parameterName: "test-grants",
+      source: client.source,
+    });
+    try {
+      expect(readFeatureAccessGrants()).toEqual({
+        grants: updatedGrants,
+        version: null,
+      });
+      expect(errors.mock.calls).toEqual([["feature_access.refresh_failed"]]);
+    } finally {
+      await stop?.();
+      errors.mockRestore();
+      envFeatureAccess.API_FEATURE_ACCESS_GRANTS = previous.grants;
+    }
+  });
+
+  test("a stalled initial read releases startup within five seconds and cannot publish late grants", async () => {
+    const previous = readFeatureAccessGrants();
+    envFeatureAccess.API_FEATURE_ACCESS_GRANTS = updatedGrants;
+    const late = Promise.withResolvers<{ raw: string; version: number }>();
+    let requestSignal: AbortSignal | undefined;
+    const errors = spyOn(logger, "error").mockImplementation(() => {});
+    const started = performance.now();
+    const stop = await startFeatureAccessGrantsRefresh({
+      parameterName: "test-grants",
+      source: {
+        readVersion: async () => 1,
+        readValue: (signal) => {
+          requestSignal = signal;
+          return late.promise;
+        },
+      },
+    });
+    try {
+      expect(performance.now() - started).toBeLessThan(6500);
+      expect(requestSignal?.aborted).toBe(true);
+      expect(readFeatureAccessGrants()).toEqual({
+        grants: updatedGrants,
+        version: null,
+      });
+      expect(errors.mock.calls).toEqual([["feature_access.refresh_failed"]]);
+      expect(stop).toBeFunction();
+      late.resolve({ raw: JSON.stringify(initialGrants), version: 1 });
+      await Bun.sleep(0);
+      expect(readFeatureAccessGrants()).toEqual({
+        grants: updatedGrants,
+        version: null,
+      });
+    } finally {
+      await stop?.();
+      errors.mockRestore();
+      envFeatureAccess.API_FEATURE_ACCESS_GRANTS = previous.grants;
+    }
+  }, 10_000);
+
   test("unknown refreshed grants report only their count once per version", async () => {
     const client = new FakeSsmClient();
     const owner = createOwner(client, []);

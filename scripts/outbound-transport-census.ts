@@ -41,6 +41,12 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "packages/parameter-store/src/read-parameter.ts",
+    class: "vendor-sdk",
+    reason: "Reads one deployment parameter from the configured AWS account.",
+    transports: ["module:@aws-sdk/client-ssm"],
+  },
+  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:
