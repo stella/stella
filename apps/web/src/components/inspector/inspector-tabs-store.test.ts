@@ -123,6 +123,8 @@ class FakeBroadcastChannel {
 afterEach(() => {
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
+  // The next test is a fresh page: this one's pending restore settle ends.
+  startNewPageLoadForTest();
   restoreTemporalNow?.();
   restoreTemporalNow = undefined;
   FakeBroadcastChannel.reset();

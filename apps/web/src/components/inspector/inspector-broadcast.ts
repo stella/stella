@@ -152,11 +152,6 @@ const restorePendingKey = (scope: InspectorBroadcastScope) =>
 // own unsettled restore, which is not a stalled earlier load.
 let pageLoadId = createUuid();
 
-/** Tests model a reload by starting again in a new page load. */
-export const startNewPageLoadForTest = (): void => {
-  pageLoadId = createUuid();
-};
-
 const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
   if (typeof window === "undefined") {
     return false;
@@ -195,6 +190,17 @@ const writeRestorePending = (
 let restoreHolds = 0;
 let settlingScope: InspectorBroadcastScope | null = null;
 let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Tests model a reload by starting again in a new page load: the previous
+ *  page's pending settle goes with it. */
+export const startNewPageLoadForTest = (): void => {
+  pageLoadId = createUuid();
+  if (settleTimer !== null) {
+    clearTimeout(settleTimer);
+    settleTimer = null;
+  }
+  settlingScope = null;
+};
 
 /** Clears the flag once nothing restored is still loading and the page has
  *  stayed responsive for a moment: a busy main thread runs neither the timer
