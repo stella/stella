@@ -31,7 +31,7 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
 
 import {

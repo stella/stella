@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 

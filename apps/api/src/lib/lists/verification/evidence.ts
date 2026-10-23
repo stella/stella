@@ -18,8 +18,8 @@ import type { Transaction } from "@/api/db/root";
 import {
   entities,
   legalListFactDetails,
-  legalListItemSources,
   legalListItems,
+  legalListItemSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";

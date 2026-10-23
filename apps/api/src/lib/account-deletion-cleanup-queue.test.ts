@@ -1,4 +1,4 @@
-import { Result, type Result as BetterResult } from "better-result";
+import { type Result as BetterResult, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { AccountDeletionEffectClaim } from "@/api/lib/account-deletion-effect-store";

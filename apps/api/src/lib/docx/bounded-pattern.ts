@@ -23,8 +23,7 @@ import { Result } from "better-result";
 import { LIMITS } from "@/api/lib/limits";
 
 export type BoundedPattern =
-  | { status: "valid"; regex: RegExp }
-  | { status: "invalid" };
+  { status: "valid"; regex: RegExp } | { status: "invalid" };
 
 /** `{n}`, `{n,}`, `{n,m}`. A `{` that starts nothing else is a literal brace. */
 const BRACE_QUANTIFIER = /^\{\d+(?:,\d*)?\}/u;

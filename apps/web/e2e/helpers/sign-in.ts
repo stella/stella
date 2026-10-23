@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { type APIRequestContext, expect } from "@playwright/test";
 
 import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,

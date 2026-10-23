@@ -12,13 +12,13 @@ import { serializeCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   ArrowLeftIcon,
   CircleHelpIcon,
   DuplicateIcon,
   ListFilterIcon,
   MessageCircleQuestionIcon,
   PlusIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
