@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -47,6 +47,7 @@ import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import Tooltip from "@/components/tooltip";
+import { hasIncomingCitations } from "@/features/case-law/citation-treatment";
 import {
   AiHeadnotes,
   hasAiHeadnotes,
@@ -89,6 +90,7 @@ import { useDecisionProvisionAnchors } from "@/features/case-law/components/case
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -98,6 +100,7 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 import {
@@ -268,6 +271,15 @@ const ReaderStatusNotices = ({
 
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
+  // The citation strip's own summary, already cached for this decision: a
+  // later-treatment note is drawn only once it shows a later citing decision.
+  // The strip reports a failed read; here it only keeps the note hidden.
+  const citationSummary = useQueryView(
+    useQuery(decisionCitationSummaryOptions(decisionId)),
+  );
+  const citedLater =
+    citationSummary.type === "items" &&
+    hasIncomingCitations(citationSummary.items);
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
   const astBlocks = decisionBlocks(ast);
@@ -906,7 +918,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   }
                 >
                   {completeAnalysis !== null && showAiNotes && (
-                    <AnalysisLayers analysis={completeAnalysis} />
+                    <AnalysisLayers
+                      analysis={completeAnalysis}
+                      citedLater={citedLater}
+                    />
                   )}
                   {hasAnalysis &&
                     showAiNotes &&

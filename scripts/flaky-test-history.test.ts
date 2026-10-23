@@ -17,6 +17,7 @@ import {
   HISTORY_ARTIFACT,
   HISTORY_FILE,
   HISTORY_WINDOW_DAYS,
+  jobFamily,
   jobSummary,
   type Observation,
   PROPOSAL_THRESHOLD,
@@ -235,6 +236,162 @@ describe("flake evidence", () => {
       "quarantined-pass",
     ]);
   });
+
+  test("normalises reusable-workflow and shard job names to one family", () => {
+    expect(jobFamily("suites / ci-tests (api-2)")).toBe("ci-tests");
+    expect(jobFamily("ci-tests (api-1)")).toBe("ci-tests");
+  });
+
+  const branchFailure = (
+    commit: number,
+    branch: string,
+    daysAgo: number,
+    fullDepth = false,
+  ): Evidence["digests"][number] => ({
+    ...failure,
+    headSha: sha(commit),
+    headBranch: branch,
+    fullDepth,
+    createdAt: at(daysAgo),
+    url: `https://github.com/stella/stella/actions/runs/${commit}`,
+  });
+
+  test("cross-branch failures with an intervening main pass become evidence", () => {
+    const tests = buildHistory({
+      evidence: evidence({
+        digests: [
+          branchFailure(1, "feature-a", 3),
+          branchFailure(2, "feature-a", 2),
+          branchFailure(3, "feature-b", 1),
+        ],
+        runs: [
+          {
+            headSha: sha(9),
+            headBranch: "main",
+            fullDepth: true,
+            conclusion: "success",
+            startedAt: at(1.5),
+            successfulChecks: [
+              { job: "suites / ci-tests (rest-web-2)", step: "Test web" },
+            ],
+          },
+        ],
+      }),
+      exists,
+    });
+    const candidates = quarantineCandidates({
+      tests,
+      registry: empty,
+      now: NOW,
+      exists,
+    });
+    expect(candidates.at(0)).toMatchObject({
+      evidenceKind: "cross-branch-fail",
+      branches: 2,
+    });
+    expect(candidates.at(0)?.commits).toHaveLength(3);
+    const proposal = proposeQuarantine({
+      registry: empty,
+      candidates,
+      owners: new Map([[FILE, "octocat"]]),
+      now: NOW,
+    });
+    expect(proposal.added.at(0)?.reason).toBe(
+      "Cross-branch failure: failed on 3 commits across 2 branches while main passed it.",
+    );
+    expect(
+      quarantineCandidates({
+        tests,
+        registry: { entries: [entry()] },
+        now: NOW,
+        exists,
+      }),
+    ).toEqual([]);
+  });
+
+  test("cross-branch failures are rejected when main did not pass the step", () => {
+    const digests = [
+      branchFailure(1, "feature-a", 3),
+      branchFailure(2, "feature-a", 2),
+      branchFailure(3, "feature-b", 1),
+    ];
+    for (const successfulChecks of [
+      [],
+      [{ job: "suites / ci-tests (rest-web)", step: "Checkout" }],
+    ]) {
+      expect(
+        buildHistory({
+          evidence: evidence({
+            digests,
+            runs: [
+              {
+                headSha: sha(9),
+                headBranch: "main",
+                fullDepth: true,
+                conclusion: "failure",
+                startedAt: at(1.5),
+                successfulChecks,
+              },
+            ],
+          }),
+          exists,
+        })[ID],
+      ).toBeUndefined();
+    }
+  });
+
+  test("three failures on one branch are not cross-branch evidence", () => {
+    const tests = buildHistory({
+      evidence: evidence({
+        digests: [1, 2, 3].map((commit) =>
+          branchFailure(commit, "feature-a", 4 - commit),
+        ),
+        runs: [
+          {
+            headSha: sha(9),
+            headBranch: "main",
+            fullDepth: true,
+            conclusion: "success",
+            startedAt: at(1.5),
+            successfulChecks: [
+              { job: "suites / ci-tests (rest-web)", step: "Test web" },
+            ],
+          },
+        ],
+      }),
+      exists,
+    });
+    expect(tests[ID]).toBeUndefined();
+  });
+
+  test("a full-depth main fail/pass/fail becomes evidence, but fail/pass does not", () => {
+    const first = branchFailure(10, "main", 3, true);
+    const second = branchFailure(12, "main", 1, true);
+    const pass = {
+      headSha: sha(11),
+      headBranch: "main",
+      fullDepth: true,
+      conclusion: "success",
+      startedAt: at(2),
+      successfulChecks: [
+        { job: "suites / ci-tests (rest-web)", step: "Test web" },
+      ],
+    };
+    expect(
+      buildHistory({
+        evidence: evidence({ digests: [first], runs: [pass] }),
+        exists,
+      })[ID],
+    ).toBeUndefined();
+    const tests = buildHistory({
+      evidence: evidence({ digests: [first, second], runs: [pass] }),
+      exists,
+    });
+    expect(tests[ID]?.map(({ kind }) => kind)).toContain("main-flip");
+    expect(
+      quarantineCandidates({ tests, registry: empty, now: NOW, exists }).at(0),
+    ).toMatchObject({ evidenceKind: "main-flip" });
+  });
 });
 
 describe("quarantine proposals", () => {
@@ -404,6 +561,7 @@ describe("evidence collection", () => {
   const artifacts = (runIds: readonly number[]) =>
     JSON.stringify([
       {
+        total_count: runIds.length,
         artifacts: runIds.map((id) => ({
           expired: false,
           created_at: at(2),
@@ -447,32 +605,44 @@ describe("evidence collection", () => {
         return Result.ok("");
       }
       const url = rest.at(-1) ?? "";
-      if (url.includes("/workflows/ci.yml/runs")) {
+      if (
+        url.includes("/workflows/ci.yml/runs") &&
+        url.includes("created=2026-10-15")
+      ) {
         return Result.ok(
           JSON.stringify([
             {
+              total_count: 3,
               workflow_runs: [
                 {
                   id: 1,
                   head_sha: sha(1),
+                  head_branch: "feature-a",
                   conclusion: "success",
                   run_started_at: at(1),
                 },
                 {
                   id: 2,
                   head_sha: sha(2),
+                  head_branch: "feature-b",
                   conclusion: "success",
                   run_started_at: at(1),
                 },
                 {
                   id: 3,
                   head_sha: sha(3),
+                  head_branch: "feature-c",
                   conclusion: "failure",
                   run_started_at: at(1),
                 },
               ],
             },
           ]),
+        );
+      }
+      if (url.includes("/workflows/")) {
+        return Result.ok(
+          JSON.stringify([{ total_count: 0, workflow_runs: [] }]),
         );
       }
       if (url.includes("/actions/runs/1/jobs?")) {
@@ -506,8 +676,12 @@ describe("evidence collection", () => {
     if (!collected.isOk()) {
       return;
     }
-    expect(downloads).toEqual(["1:ci-failures", "2:ci-failures"]);
-    expect(collected.value.skipped).toBe(1);
+    expect(downloads).toEqual([
+      "1:ci-failures",
+      "2:ci-failures",
+      "3:ci-failures",
+    ]);
+    expect(collected.value.skipped).toBe(2);
     expect(
       buildHistory({ evidence: collected.value.evidence, exists })[ID],
     ).toHaveLength(1);
@@ -518,7 +692,11 @@ describe("evidence collection", () => {
     const gh: Gh = async (args) => {
       const url = args.at(-1) ?? "";
       listed.push(url);
-      return Result.ok(url.includes("/runs?") ? "[]" : artifacts([]));
+      return Result.ok(
+        url.includes("/runs?")
+          ? JSON.stringify([{ total_count: 0, workflow_runs: [] }])
+          : artifacts([]),
+      );
     };
     const collected = await collectEvidence({
       gh,
@@ -536,6 +714,50 @@ describe("evidence collection", () => {
     }
   });
 
+  test("counts workflow runs without a head branch", async () => {
+    const gh: Gh = async (args) => {
+      const url = args.at(-1) ?? "";
+      if (
+        url.includes("/workflows/ci.yml/runs?") &&
+        url.includes("created=2026-10-10")
+      ) {
+        return Result.ok(
+          JSON.stringify([
+            {
+              total_count: 1,
+              workflow_runs: [
+                {
+                  id: 1,
+                  head_sha: sha(1),
+                  head_branch: null,
+                  conclusion: "success",
+                  run_started_at: at(1),
+                },
+              ],
+            },
+          ]),
+        );
+      }
+      return Result.ok(
+        url.includes("/runs?")
+          ? JSON.stringify([{ total_count: 0, workflow_runs: [] }])
+          : artifacts([]),
+      );
+    };
+    const collected = await collectEvidence({
+      gh,
+      repository: "stella/stella",
+      now: NOW,
+      workdir: tmpdir(),
+    });
+    expect(collected.isOk()).toBe(true);
+    if (!collected.isOk()) {
+      return;
+    }
+    expect(collected.value.evidence.runs).toHaveLength(1);
+    expect(collected.value.evidence.runs.at(0)?.headBranch).toBeNull();
+  });
+
   test("a failed GitHub call is returned, not thrown", async () => {
     const gh: Gh = async () =>
       Result.err(new GhCommandError({ message: "offline" }));
@@ -549,6 +771,54 @@ describe("evidence collection", () => {
         })
       ).isErr(),
     ).toBe(true);
+  });
+
+  test("refuses a truncated per-day workflow run listing", async () => {
+    const gh: Gh = async (args) => {
+      const url = args.at(-1) ?? "";
+      if (url.includes("/runs?")) {
+        return Result.ok(
+          JSON.stringify([{ total_count: 2, workflow_runs: [] }]),
+        );
+      }
+      return Result.ok(artifacts([]));
+    };
+    const collected = await collectEvidence({
+      gh,
+      repository: "stella/stella",
+      now: NOW,
+      workdir: tmpdir(),
+    });
+    expect(collected.isErr()).toBe(true);
+    if (collected.isErr()) {
+      expect(collected.error.message).toContain(
+        "Incomplete workflow run listing for ci.yml on 2026-10-10",
+      );
+    }
+  });
+
+  test("refuses a truncated artifact listing", async () => {
+    const gh: Gh = async (args) => {
+      const url = args.at(-1) ?? "";
+      if (url.includes("/runs?")) {
+        return Result.ok(
+          JSON.stringify([{ total_count: 0, workflow_runs: [] }]),
+        );
+      }
+      return Result.ok(JSON.stringify([{ total_count: 1, artifacts: [] }]));
+    };
+    const collected = await collectEvidence({
+      gh,
+      repository: "stella/stella",
+      now: NOW,
+      workdir: tmpdir(),
+    });
+    expect(collected.isErr()).toBe(true);
+    if (collected.isErr()) {
+      expect(collected.error.message).toContain(
+        "Incomplete artifact listing for ci-failures",
+      );
+    }
   });
 
   test("the latest published history is read from its artifact", async () => {
@@ -667,7 +937,13 @@ describe("check flakes", () => {
 
 describe("CODEOWNERS proposals", () => {
   const candidates = [
-    { id: ID, commits: [sha(1)], observations: [retryPass(1)] },
+    {
+      id: ID,
+      commits: [sha(1)],
+      evidenceKind: "same-commit" as const,
+      branches: 0,
+      observations: [retryPass(1)],
+    },
   ];
 
   test("last matching pattern wins, including directory patterns", () => {

@@ -1,10 +1,12 @@
 import { Redis as RedisExtension } from "@hocuspocus/extension-redis";
 import { Hocuspocus } from "@hocuspocus/server";
 import type {
+  Configuration as HocuspocusConfiguration,
   Document as HocuspocusDocument,
+  onStoreDocumentPayload,
   WebSocketLike,
 } from "@hocuspocus/server";
-import { panic, Result, TaggedError } from "better-result";
+import { isPanic, panic, Result, TaggedError } from "better-result";
 import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import * as v from "valibot";
@@ -30,10 +32,26 @@ import { logCollabEvent } from "./log";
 import { createCollabRedisClient } from "./redis-client";
 
 type CollabAuthContext = {
+  join: CollabRoomJoin;
   roomId: string;
   tokenState: CollabRoomTokenState;
   userId: string;
   userName: string;
+};
+
+/**
+ * One authorized join holds one count on its room token state. Hocuspocus
+ * copies the auth context when it merges hook results, so the join keeps its
+ * identity in this object and is released exactly once.
+ */
+type CollabRoomJoin = {
+  released: boolean;
+};
+
+type CollabRoomJoinRelease = {
+  context: CollabAuthContext;
+  documentName: string;
+  socketId: string;
 };
 
 type CollabRoomTokenState = {
@@ -71,7 +89,20 @@ type CreateCollabServerBaseOptions = {
   hostname?: string;
   maxDebounceMs?: number;
   port: number;
+  roomHeartbeatIntervalMs?: number;
   shutdownDrainTimeoutMs?: number;
+  snapshotStoreRetryBaseDelayMs?: number;
+  snapshotStoreRetryMaxDelayMs?: number;
+};
+
+/**
+ * A snapshot store that has not landed. Its edits exist only in this process,
+ * so the document stays loaded until a store lands or the room is retired.
+ */
+type PendingSnapshotStore = {
+  failedAttempts: number;
+  payload: onStoreDocumentPayload<CollabAuthContext>;
+  timer: ReturnType<typeof setTimeout> | null;
 };
 
 type CreateCollabServerOptions = CreateCollabServerBaseOptions &
@@ -132,6 +163,12 @@ const REDIS_LOCK_TIMEOUT_MS = 30_000;
 const REDIS_INITIAL_SYNC_TIMEOUT_MS = 3000;
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
 const SNAPSHOT_REVISION_RETRY_LIMIT = 3;
+const SNAPSHOT_STORE_RETRY_BASE_DELAY_MS = 1000;
+const SNAPSHOT_STORE_RETRY_MAX_DELAY_MS = 30_000;
+/** API answers meaning the room no longer accepts snapshots at all. */
+const ROOM_RETIRING_SNAPSHOT_STORE_STATUSES: ReadonlySet<number> = new Set([
+  403, 404,
+]);
 const FOLIO_COLLABORATOR_COLOR_SPACE = 16_777_215;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
@@ -162,6 +199,40 @@ class CollabTokenExpiryError extends TaggedError("CollabTokenExpiryError")<{
   message: string;
   cause: unknown;
 }> {}
+
+/** The room moved to another generation; its in-memory state must not land. */
+class CollabSnapshotRoomRetiredError extends TaggedError(
+  "CollabSnapshotRoomRetiredError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
+
+class CollabSnapshotPendingError extends TaggedError(
+  "CollabSnapshotPendingError",
+)<{
+  message: string;
+}> {}
+
+/**
+ * Every failed store is retried unless the room itself is retired: a newer
+ * generation or rematerialization replaced it, the API refuses the room, or a
+ * server invariant broke. Size refusals stay retryable, so a room above the
+ * API limit keeps its edits and lands once the limit admits it.
+ */
+const snapshotStoreFailureOutcome = (error: unknown) => {
+  if (error instanceof CollabSnapshotRoomRetiredError || isPanic(error)) {
+    return "retired";
+  }
+  if (
+    error instanceof FetchBoundaryError &&
+    error.status !== undefined &&
+    ROOM_RETIRING_SNAPSHOT_STORE_STATUSES.has(error.status)
+  ) {
+    return "retired";
+  }
+  return "retry";
+};
 
 const parseTokenExpiresAt = (value: string) => {
   const expiresAt = Result.try(() => Temporal.Instant.from(value));
@@ -229,6 +300,37 @@ const postJson = async <TSchema extends v.GenericSchema>({
   return v.parse(schema, await response.json());
 };
 
+/**
+ * Hocuspocus runs `onDisconnect` only for joins that reached a document. A
+ * join whose document load fails never gets a connection, so the failure is
+ * handed back here to release what `onAuthenticate` acquired for it.
+ */
+class CollabHocuspocus extends Hocuspocus<CollabAuthContext> {
+  readonly #releaseJoin: (join: CollabRoomJoinRelease) => void;
+
+  constructor(
+    releaseJoin: (join: CollabRoomJoinRelease) => void,
+    configuration: Partial<HocuspocusConfiguration<CollabAuthContext>>,
+  ) {
+    super(configuration);
+    this.#releaseJoin = releaseJoin;
+  }
+
+  override async createDocument(
+    ...args: Parameters<Hocuspocus<CollabAuthContext>["createDocument"]>
+  ) {
+    try {
+      return await super.createDocument(...args);
+    } catch (error) {
+      const [documentName, , socketId, , context] = args;
+      if (context !== undefined) {
+        this.#releaseJoin({ context, documentName, socketId });
+      }
+      throw error;
+    }
+  }
+}
+
 const createManagedWebSocket = (peer: Peer): ManagedWebSocketLike => {
   let readyState: number = WebSocket.OPEN;
 
@@ -266,8 +368,11 @@ export const createCollabServer = async (
     hostname = "0.0.0.0",
     maxDebounceMs = 10_000,
     port,
+    roomHeartbeatIntervalMs = ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
     serviceToken,
     shutdownDrainTimeoutMs = SHUTDOWN_DRAIN_TIMEOUT_MS,
+    snapshotStoreRetryBaseDelayMs = SNAPSHOT_STORE_RETRY_BASE_DELAY_MS,
+    snapshotStoreRetryMaxDelayMs = SNAPSHOT_STORE_RETRY_MAX_DELAY_MS,
   } = options;
   const mode = options.mode ?? "single-process";
   if (!isSecureStellaApiUrl(apiUrl)) {
@@ -527,6 +632,46 @@ export const createCollabServer = async (
     }
   };
 
+  const releaseRoomJoin = ({
+    context,
+    documentName,
+    socketId,
+  }: CollabRoomJoinRelease) => {
+    if (context.join.released) {
+      return;
+    }
+    context.join.released = true;
+    const { tokenState } = context;
+    tokenState.activeConnections = Math.max(
+      0,
+      tokenState.activeConnections - 1,
+    );
+    if (tokenState.activeConnections === 0) {
+      // A token state without joins renews nothing: stop its activity lease
+      // and its refresh so the room reads as idle.
+      clearRoomHeartbeat(tokenState);
+      clearRoomTokenRefresh(tokenState);
+      if (tokenStates.get(tokenState.token) === tokenState) {
+        tokenStates.delete(tokenState.token);
+      }
+    }
+    tokenStatesBySocketId.delete(socketId);
+    const managedConnection = managedConnectionsBySocketId.get(socketId);
+    const connectionCount =
+      managedConnection?.roomConnectionCounts.get(documentName);
+    if (managedConnection === undefined || connectionCount === undefined) {
+      return;
+    }
+    if (connectionCount === 1) {
+      managedConnection.roomConnectionCounts.delete(documentName);
+      return;
+    }
+    managedConnection.roomConnectionCounts.set(
+      documentName,
+      connectionCount - 1,
+    );
+  };
+
   const scheduleTokenRefresh = (
     state: CollabRoomTokenState,
     delayMs = tokenRefreshDelayMs(state.tokenExpiresAtMs),
@@ -690,7 +835,7 @@ export const createCollabServer = async (
           hocuspocus.closeConnections(state.tokenState.roomName);
           clearRoomTokens(state.tokenState.roomName);
         });
-    }, ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS);
+    }, roomHeartbeatIntervalMs);
   };
 
   const ensureRoomHeartbeat = async (tokenState: CollabRoomTokenState) => {
@@ -718,6 +863,117 @@ export const createCollabServer = async (
       clearRoomHeartbeat(tokenState);
       throw error;
     }
+  };
+
+  const pendingSnapshotStores = new Map<
+    HocuspocusDocument,
+    PendingSnapshotStore
+  >();
+  const shutdownFlushedDocuments = new WeakSet<HocuspocusDocument>();
+  let snapshotStoreRetriesClosed = false;
+
+  const snapshotRoomIdForLog = (document: HocuspocusDocument) =>
+    documentSnapshots.get(document)?.roomId ?? document.name;
+
+  const settleSnapshotStore = (document: HocuspocusDocument) => {
+    const pending = pendingSnapshotStores.get(document);
+    if (pending === undefined) {
+      return;
+    }
+    if (pending.timer !== null) {
+      clearTimeout(pending.timer);
+    }
+    pendingSnapshotStores.delete(document);
+  };
+
+  const scheduleSnapshotStoreRetry = (
+    payload: onStoreDocumentPayload<CollabAuthContext>,
+    failedAttempts: number,
+  ) => {
+    const { document } = payload;
+    const previous = pendingSnapshotStores.get(document);
+    if (previous?.timer) {
+      clearTimeout(previous.timer);
+    }
+    if (snapshotStoreRetriesClosed) {
+      pendingSnapshotStores.delete(document);
+      logCollabEvent({
+        event: "snapshot_store_abandoned",
+        level: "error",
+        roomId: snapshotRoomIdForLog(document),
+      });
+      return null;
+    }
+    // Shutdown gives each pending room one immediate attempt inside the
+    // drain window before the usual backoff resumes.
+    const flushForShutdown =
+      shuttingDown && !shutdownFlushedDocuments.has(document);
+    if (flushForShutdown) {
+      shutdownFlushedDocuments.add(document);
+    }
+    const delayMs = flushForShutdown
+      ? 0
+      : Math.min(
+          snapshotStoreRetryBaseDelayMs * 2 ** Math.max(0, failedAttempts - 1),
+          snapshotStoreRetryMaxDelayMs,
+        );
+    const pending: PendingSnapshotStore = {
+      failedAttempts,
+      payload,
+      timer: null,
+    };
+    pending.timer = setTimeout(() => {
+      retrySnapshotStore(document);
+    }, delayMs);
+    pendingSnapshotStores.set(document, pending);
+    return delayMs;
+  };
+
+  const retrySnapshotStore = (document: HocuspocusDocument) => {
+    const pending = pendingSnapshotStores.get(document);
+    if (pending === undefined) {
+      return;
+    }
+    if (pending.timer !== null) {
+      clearTimeout(pending.timer);
+      pending.timer = null;
+    }
+    if (hocuspocus.documents.get(document.name) !== document) {
+      pendingSnapshotStores.delete(document);
+      logCollabEvent({
+        event: "snapshot_store_abandoned",
+        level: "error",
+        roomId: snapshotRoomIdForLog(document),
+      });
+      return;
+    }
+    void hocuspocus
+      .storeDocumentHooks(document, pending.payload, true)
+      .then(() => {
+        // A coordination lock held by another replica skips the store without
+        // running onStoreDocument; keep the pending store on its backoff.
+        const current = pendingSnapshotStores.get(document);
+        if (current?.timer === null) {
+          scheduleSnapshotStoreRetry(current.payload, current.failedAttempts);
+        }
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        if (snapshotStoreFailureOutcome(error) === "retired") {
+          settleSnapshotStore(document);
+          logCollabEvent({
+            event: "snapshot_store_retired",
+            level: "warn",
+            roomId: snapshotRoomIdForLog(document),
+          });
+          return;
+        }
+
+        const current = pendingSnapshotStores.get(document);
+        if (current?.timer === null) {
+          scheduleSnapshotStoreRetry(current.payload, current.failedAttempts);
+        }
+      });
   };
 
   const storeRoomSnapshot = async (document: HocuspocusDocument) => {
@@ -769,7 +1025,10 @@ export const createCollabServer = async (
             level: "error",
             roomId: snapshot.roomId,
           });
-          throw error;
+          throw new CollabSnapshotRoomRetiredError({
+            message: "Collaboration room generation changed.",
+            cause: error,
+          });
         }
         if (error.status !== 428) {
           throw error;
@@ -794,7 +1053,10 @@ export const createCollabServer = async (
               level: "warn",
               roomId: snapshot.roomId,
             });
-            throw error;
+            throw new CollabSnapshotRoomRetiredError({
+              message: "Collaboration room requires rematerialization.",
+              cause: error,
+            });
           case FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded:
             break;
           default: {
@@ -809,7 +1071,10 @@ export const createCollabServer = async (
             ROOM_GENERATION_CLOSE_REASON,
           );
           clearRoomTokens(document.name);
-          throw error;
+          throw new CollabSnapshotRoomRetiredError({
+            message: "Collaboration room generation changed.",
+            cause: error,
+          });
         }
         if (current.snapshotBase64 !== null) {
           applyUpdate(document, Buffer.from(current.snapshotBase64, "base64"));
@@ -837,11 +1102,23 @@ export const createCollabServer = async (
       }
       return undefined;
     });
-    return await current;
+    const snapshotRevision = await current;
+    // Every store captures the whole document, so any landed store covers
+    // the edits an earlier failed store carried.
+    settleSnapshotStore(document);
+    return snapshotRevision;
   };
 
-  const hocuspocus = new Hocuspocus<CollabAuthContext>({
+  const hocuspocus = new CollabHocuspocus(releaseRoomJoin, {
     debounce: debounceMs,
+    async beforeUnloadDocument({ document }) {
+      await Promise.resolve();
+      if (pendingSnapshotStores.has(document)) {
+        throw new CollabSnapshotPendingError({
+          message: "Collaboration room keeps its document until a store lands.",
+        });
+      }
+    },
     async afterUnloadDocument({ documentName }) {
       cancelRoomCleanup(documentName);
       roomCleanupTimers.set(
@@ -919,6 +1196,7 @@ export const createCollabServer = async (
         tokenStatesBySocketId.set(socketId, tokenState);
 
         return {
+          join: { released: false },
           roomId: authorized.roomId,
           tokenState,
           userId: authorized.userId,
@@ -931,28 +1209,7 @@ export const createCollabServer = async (
     },
     async onDisconnect({ context, documentName, socketId }) {
       await Promise.resolve();
-      context.tokenState.activeConnections = Math.max(
-        0,
-        context.tokenState.activeConnections - 1,
-      );
-      if (context.tokenState.activeConnections === 0) {
-        clearRoomHeartbeat(context.tokenState);
-      }
-      tokenStatesBySocketId.delete(socketId);
-      const managedConnection = managedConnectionsBySocketId.get(socketId);
-      const connectionCount =
-        managedConnection?.roomConnectionCounts.get(documentName);
-      if (managedConnection === undefined || connectionCount === undefined) {
-        return;
-      }
-      if (connectionCount === 1) {
-        managedConnection.roomConnectionCounts.delete(documentName);
-        return;
-      }
-      managedConnection.roomConnectionCounts.set(
-        documentName,
-        connectionCount - 1,
-      );
+      releaseRoomJoin({ context, documentName, socketId });
     },
     async beforeHandleAwareness({ context, document, states }) {
       if (context === undefined) {
@@ -1039,8 +1296,30 @@ export const createCollabServer = async (
         }),
       );
     },
-    async onStoreDocument({ document }) {
-      await queueRoomSnapshotStore(document);
+    async onStoreDocument(payload) {
+      const { document } = payload;
+      try {
+        await queueRoomSnapshotStore(document);
+      } catch (error) {
+        if (snapshotStoreFailureOutcome(error) === "retired") {
+          settleSnapshotStore(document);
+          throw error;
+        }
+        const failedAttempts =
+          (pendingSnapshotStores.get(document)?.failedAttempts ?? 0) + 1;
+        const retryInMs = scheduleSnapshotStoreRetry(payload, failedAttempts);
+        logCollabEvent({
+          attempt: failedAttempts,
+          event: "snapshot_store_failed",
+          level: "error",
+          retryInMs,
+          roomId: snapshotRoomIdForLog(document),
+          status:
+            error instanceof FetchBoundaryError ? (error.status ?? null) : null,
+        });
+        // Returning lets the coordination extension release its store lock;
+        // the pending store keeps the document loaded until a retry lands.
+      }
     },
   });
 
@@ -1178,6 +1457,14 @@ export const createCollabServer = async (
 
       hocuspocus.closeConnections();
       hocuspocus.flushPendingStores();
+      for (const [document, pending] of pendingSnapshotStores) {
+        if (pending.timer === null) {
+          // A retry is running; a failure reschedules it immediately.
+          continue;
+        }
+        shutdownFlushedDocuments.add(document);
+        retrySnapshotStore(document);
+      }
     });
 
     const drained = await Promise.race([
@@ -1192,6 +1479,18 @@ export const createCollabServer = async (
     if (!drained) {
       logCollabEvent({ event: "shutdown_drain_timeout", level: "error" });
     }
+    snapshotStoreRetriesClosed = true;
+    for (const [document, pending] of pendingSnapshotStores) {
+      if (pending.timer !== null) {
+        clearTimeout(pending.timer);
+      }
+      logCollabEvent({
+        event: "snapshot_store_abandoned",
+        level: "error",
+        roomId: snapshotRoomIdForLog(document),
+      });
+    }
+    pendingSnapshotStores.clear();
 
     await hocuspocus.hooks("onDestroy", { instance: hocuspocus });
   };

@@ -267,6 +267,7 @@ export const holdInspectorRestoreSettle = (): (() => void) => {
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
 let failedPersistenceScope: string | null = null;
+let persistenceFailureOccurrence = 0;
 const inspectorScopeOwnership = new WeakMap<
   StoreApi<InspectorTabsStore>,
   string
@@ -737,11 +738,12 @@ const writePersistedInspectorState = (
     return;
   }
   failedPersistenceScope = storageKey;
-  getAnalytics().captureError(writeResult.error, {
-    type: "detached",
-    operation: "inspector-tabs.persist",
-  });
-  notifyUserError(undefined, getTranslator()("inspector.groups.saveFailed"));
+  persistenceFailureOccurrence += 1;
+  notifyUserError(
+    writeResult.error,
+    getTranslator()("inspector.groups.saveFailed"),
+    { occurrence: persistenceFailureOccurrence },
+  );
 };
 
 const subscribeInspectorPersistence = (
