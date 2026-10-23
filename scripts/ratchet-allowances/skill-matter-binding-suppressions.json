@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The SkillBindingScope brand has no runtime representation, so its single mint in binding.ts needs the named no-unsafe-type-assertion directive."
+}

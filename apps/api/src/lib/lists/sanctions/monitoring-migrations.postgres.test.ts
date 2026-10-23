@@ -69,6 +69,30 @@ const withCommittedMonitoring = async (
         await tx.execute(
           sql`DROP TABLE public.sanctions_edition_fanouts, public.sanctions_monitoring_backfills, public.sanctions_contact_marks, public.sanctions_organization_marks, public.sanctions_screening_events, public.sanctions_contact_matches, public.sanctions_contact_screenings`,
         );
+        // Other features may also reference the shared contact key. Detach and
+        // restore their foreign keys while replaying the monitoring prerequisite.
+        const contactForeignKeys = await tx.execute<{
+          schema: string;
+          table: string;
+          name: string;
+          definition: string;
+        }>(sql`
+          SELECT namespace.nspname AS schema, relation.relname AS table,
+            dependent.conname AS name,
+            pg_get_constraintdef(dependent.oid) AS definition
+          FROM pg_constraint dependent
+          JOIN pg_constraint referenced ON referenced.conindid = dependent.conindid
+          JOIN pg_class relation ON relation.oid = dependent.conrelid
+          JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+          WHERE dependent.contype = 'f'
+            AND referenced.conrelid = 'public.contacts'::regclass
+            AND referenced.conname = 'contacts_org_id_unique'
+        `);
+        for (const foreignKey of contactForeignKeys) {
+          await tx.execute(
+            sql`ALTER TABLE ${sql.identifier(foreignKey.schema)}.${sql.identifier(foreignKey.table)} DROP CONSTRAINT ${sql.identifier(foreignKey.name)}`,
+          );
+        }
         await tx.execute(
           sql`ALTER TABLE public.contacts DROP COLUMN sanctions_monitoring_mode, DROP CONSTRAINT contacts_org_id_unique`,
         );
@@ -81,6 +105,11 @@ const withCommittedMonitoring = async (
           sql`CREATE UNIQUE INDEX contacts_org_id_unique ON public.contacts (organization_id, id)`,
         );
         await applyMigration(tx, "20261003122800_sanctions_monitoring");
+        for (const foreignKey of contactForeignKeys) {
+          await tx.execute(
+            sql`ALTER TABLE ${sql.identifier(foreignKey.schema)}.${sql.identifier(foreignKey.table)} ADD CONSTRAINT ${sql.identifier(foreignKey.name)} ${sql.raw(foreignKey.definition)}`,
+          );
+        }
         await tx.execute(
           sql.raw(`CREATE ROLE ${OWNER} NOLOGIN NOSUPERUSER NOBYPASSRLS`),
         );

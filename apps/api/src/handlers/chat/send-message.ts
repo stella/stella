@@ -151,6 +151,7 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
+import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
@@ -226,6 +227,8 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
+import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -2899,6 +2902,7 @@ export const createSendMessage = (
           activeStatute: body.activeStatute,
           activeTemplate: body.activeTemplate,
           contextMatterIds: effectiveContextMatterIds,
+          dataWorkspaceIds: dataScopeAfterIncomingMessage,
           hasReachableMatter: toolWorkspaceIds.length > 0,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
@@ -2998,6 +3002,7 @@ export const createSendMessage = (
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
             skillMetadata: chatContext.skillMetadata,
+            skillBindingScope: chatContext.skillBindingScope,
             activeSkillContext: chatContext.activeSkillContext,
           }),
         });
@@ -3027,6 +3032,7 @@ export const createSendMessage = (
 
         const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
           activeSkillContext: chatContext.activeSkillContext,
+          bindingScope: chatContext.skillBindingScope,
           catalog: chatContext.skillMetadata,
           messages: chatContext.hydratedMessages,
           organizationId: session.activeOrganizationId,
@@ -3492,6 +3498,8 @@ type PrepareChatContextProps = {
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
+  /** Matters whose content the thread embeds (after this message). */
+  dataWorkspaceIds: SafeId<"workspace">[];
   hasReachableMatter: boolean;
   latestMentions: readonly ChatMention[];
   latestUserMessageId: string;
@@ -3525,6 +3533,12 @@ type PrepareChatContextResult = Result<
      */
     systemUntrusted: ChatUntrustedPromptSuffix;
     skillMetadata: ModelOfferedSkills<SkillMetadata>;
+    /**
+     * Where this turn may use a bound skill: the thread's matter, and only
+     * while every pinned and embedded matter is that matter (or shares its
+     * client). The prompt, the skill tools and requested skills all use it.
+     */
+    skillBindingScope: SkillBindingScope;
     activeSkillContext: ActiveChatSkillContext | null;
     /** Court numbers the turn stamps onto the answer's passage citations. */
     decisionPassageNumbers: DecisionPassageNumbers;
@@ -3543,6 +3557,7 @@ const prepareChatContext = async ({
   activeStatute,
   activeTemplate,
   contextMatterIds,
+  dataWorkspaceIds,
   hasReachableMatter,
   latestMentions,
   latestUserMessageId,
@@ -3559,6 +3574,13 @@ const prepareChatContext = async ({
   workspaceId,
 }: PrepareChatContextProps): Promise<PrepareChatContextResult> =>
   await Result.gen(async function* () {
+    const skillBindingScope = yield* Result.await(
+      resolveSkillBindingScope({
+        homeWorkspaceId: workspaceId,
+        otherWorkspaceIds: [...contextMatterIds, ...dataWorkspaceIds],
+        safeDb,
+      }),
+    );
     const orgSettingsRow = yield* Result.await(
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
@@ -3591,6 +3613,7 @@ const prepareChatContext = async ({
         safeDb,
         messages: messageWindow,
         requestedSkillNames: requestedSkillNames(messageWindow),
+        skillBindingScope,
         threadId,
         toolAvailability,
         userContext,
@@ -3638,15 +3661,25 @@ const prepareChatContext = async ({
         safeDb,
       }),
     );
+    const modelMessages = yield* Result.await(
+      enforceLoadedSkillHistoryBindings({
+        messages: messagesWithMentionKinds,
+        organizationId,
+        safeDb,
+        scope: skillBindingScope,
+        userId,
+      }),
+    );
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
+      skillBindingScope,
       activeSkillContext: systemPrompt.activeSkillContext,
       decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
-      hydratedMessages: messagesWithMentionKinds,
+      hydratedMessages: modelMessages,
     });
   });
 

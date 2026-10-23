@@ -10,6 +10,7 @@ import {
 } from "@/api/handlers/chat/chat-prompt";
 import type { ChatRevisionContextChange } from "@/api/handlers/chat/chat-revision-context";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import { toSafeId } from "@/api/lib/branded-types";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -45,6 +46,7 @@ const assemble = async (changes: ChatRevisionContextChange[]) =>
     safeDb: asTestRaw<SafeDb>(async () => Result.ok(changes)),
     messages: [{ id: MESSAGE_ID, role: "assistant" }],
     requestedSkillNames: new Set(),
+    skillBindingScope: NO_SKILL_BINDING_SCOPE,
     threadId: THREAD_ID,
     toolAvailability: {
       docxEditMode: null,

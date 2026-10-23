@@ -34,6 +34,12 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+// parser-output-unchanged: Agent-skill ID validation is unused by legal parsers and cannot alter their output.
+export const parsePersistedAgentSkillId = (
+  id: string,
+): SafeId<"agentSkill"> | null =>
+  isUuid(id) ? toSafeId<"agentSkill">(id) : null;
+
 export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);

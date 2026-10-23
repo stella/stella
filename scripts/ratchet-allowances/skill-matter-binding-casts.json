@@ -1,0 +1,5 @@
+{
+  "metric": "as-casts",
+  "delta": 1,
+  "reason": "The compile-only SkillBindingScope brand is minted once in binding.ts, so no caller can name a matter it did not derive from the conversation."
+}

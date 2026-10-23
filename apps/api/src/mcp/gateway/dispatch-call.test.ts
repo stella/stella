@@ -44,6 +44,7 @@ const resolvedSkill = asTestRaw<ResolvedSkillTool>({
 const loadedSkill = {
   body: "# Alpha skill body",
   compatibility: "stella>=1",
+  contentHash: "0".repeat(64),
   description: "Alpha",
   id: toSafeId<"agentSkill">("skill_alpha"),
   license: "MIT",

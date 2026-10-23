@@ -126,6 +126,11 @@ type CatalogueEntryResponse = LoadedCatalogueEntry extends infer Entry
          * any entry that is not an installed skill.
          */
         invocation: AgentSkillInvocation | null;
+        /**
+         * What an installed skill is bound to: one matter, one client, or
+         * nothing (`null`, also for entries that are not installed skills).
+         */
+        binding: CatalogueSkillBinding | null;
       }
     : never
   : never;
@@ -212,6 +217,8 @@ const listCatalogue = createSafeRootHandler(
             scope: agentSkills.scope,
             enabled: agentSkills.enabled,
             invocation: agentSkills.invocation,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
+            boundClientId: agentSkills.boundClientId,
             name: agentSkills.name,
             description: agentSkills.description,
             license: agentSkills.license,
@@ -422,6 +429,8 @@ const listCatalogue = createSafeRootHandler(
         installedConnectorSlug,
         enabled,
         invocation,
+        // Catalogue installs are never bound; only authored skills are.
+        binding: null,
       });
     }
 
@@ -550,6 +559,7 @@ const buildCustomMcpCatalogueEntry = (
     installedConnectorSlug: connector.slug,
     enabled: null,
     invocation: null,
+    binding: null,
   };
 };
 
@@ -559,9 +569,26 @@ type CustomSkillRow = {
   scope: "team" | "private";
   enabled: boolean;
   invocation: AgentSkillInvocation;
+  boundWorkspaceId: string | null;
+  boundClientId: string | null;
   name: string;
   description: string;
   license: string | null;
+};
+
+type CatalogueSkillBinding = "matter" | "client";
+
+const catalogueSkillBinding = ({
+  boundClientId,
+  boundWorkspaceId,
+}: Pick<
+  CustomSkillRow,
+  "boundClientId" | "boundWorkspaceId"
+>): CatalogueSkillBinding | null => {
+  if (boundWorkspaceId !== null) {
+    return "matter";
+  }
+  return boundClientId === null ? null : "client";
 };
 
 type AppendCustomSkillsArgs = {
@@ -646,6 +673,7 @@ const buildCustomSkillCatalogueEntry = ({
   installedConnectorSlug: null,
   enabled: skill.enabled,
   invocation: skill.invocation,
+  binding: catalogueSkillBinding(skill),
 });
 
 export default listCatalogue;

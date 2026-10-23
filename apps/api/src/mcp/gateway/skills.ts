@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { SafeDbError } from "@/api/db/safe-db";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   narrowModelOfferedSkills,
   offerSkillsToModel,
@@ -73,6 +74,8 @@ const loadSkillTools = async ({
   // `tools/list` fails loudly rather than silently dropping skill tools.
   const skills = throwOnLoadFault(
     await listAvailableChatSkillMetadata({
+      // An MCP session has no conversation matter: unbound skills only.
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: context.organizationId,
       safeDb: context.safeDb,
       userId: context.userId,
@@ -218,6 +221,7 @@ export const readSkillTool = async ({
   skill: ResolvedSkillTool;
 }): Promise<SkillToolRead | null> => {
   const scope = {
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     skillName: skill.name,

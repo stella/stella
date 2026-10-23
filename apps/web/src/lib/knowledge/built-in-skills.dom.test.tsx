@@ -68,6 +68,8 @@ const installedRow = {
   contentHash: "hash",
   enabled: true,
   invocation: "auto",
+  boundClientId: null,
+  boundWorkspaceId: null,
   command: null,
   body: null,
   userId: USER_ID,

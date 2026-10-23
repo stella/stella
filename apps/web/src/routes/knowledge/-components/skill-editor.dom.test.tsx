@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import type { WebApiRoutes } from "@/lib/eden-client";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -18,6 +19,8 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { skillDetailOptions } = await import("@/lib/knowledge/queries");
 const { toSafeId } = await import("@/lib/safe-id");
+const { workspacesNavigationOptions } =
+  await import("@/lib/workspaces/queries");
 const { SkillEditor } = await import("./skill-editor");
 
 const SKILL_ID = "019a0000-0000-7000-8000-000000000101";
@@ -32,28 +35,44 @@ const user = {
   wordEditShortcut: null,
 };
 
-type Invocation = "auto" | "manual";
+type SkillDetail = WebApiRoutes["skills"][":skillId"]["get"]["response"][200];
 
-const skillDetail = (ownerUserId: string, invocation: Invocation) => ({
-  id: toSafeId<"agentSkill">(SKILL_ID),
-  scope: "private" as const,
-  origin: "authored" as const,
-  userId: ownerUserId,
-  slug: "clause-review",
-  name: "Clause review",
-  description: "Checks clauses against the house rules.",
-  version: null,
-  license: null,
-  compatibility: null,
-  sourceUrl: null,
-  contentHash: "hash",
-  enabled: true,
-  invocation,
-  body: "Instructions",
-  command: null,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  resources: [],
-});
+type Invocation = SkillDetail["invocation"];
+
+const BOUND_MATTER_ID = toSafeId<"workspace">(
+  "00000000-0000-7000-8000-0000000000a1",
+);
+
+type Binding = Pick<SkillDetail, "boundClientId" | "boundWorkspaceId">;
+
+const UNBOUND: Binding = { boundClientId: null, boundWorkspaceId: null };
+
+const skillDetail = (
+  ownerUserId: string,
+  invocation: Invocation,
+  binding: Binding = UNBOUND,
+) =>
+  ({
+    id: toSafeId<"agentSkill">(SKILL_ID),
+    scope: "private",
+    origin: "authored",
+    userId: ownerUserId,
+    slug: "clause-review",
+    name: "Clause review",
+    description: "Checks clauses against the house rules.",
+    version: null,
+    license: null,
+    compatibility: null,
+    sourceUrl: null,
+    contentHash: "hash",
+    enabled: true,
+    invocation,
+    ...binding,
+    body: "Instructions",
+    command: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    resources: [],
+  }) satisfies SkillDetail;
 
 type PatchRequest = { method: string; pathname: string; body: unknown };
 
@@ -85,11 +104,14 @@ type MountOptions = {
   ownerUserId?: string;
   /** HTTP status the PATCH answers with. */
   patchStatus?: number;
+  /** What the skill is bound to. */
+  binding?: Binding;
 };
 
 const mount = ({
   ownerUserId = user.id,
   patchStatus = 200,
+  binding = UNBOUND,
 }: MountOptions = {}) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -99,7 +121,29 @@ const mount = ({
   });
   clients.push(client);
   client.setQueryData(roleOptions.queryKey, "member");
-  let current = skillDetail(ownerUserId, "auto");
+  client.setQueryData(
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }).queryKey,
+    {
+      workspaces: [
+        {
+          client: null,
+          clientId: null,
+          color: null,
+          defaultViewId: null,
+          id: toSafeId<"workspace">(BOUND_MATTER_ID),
+          lastActivityAt: new Date("2026-10-11T12:00:00.000Z"),
+          name: "Novák v. Horák",
+          reference: "M-00a1",
+          status: "active",
+        },
+      ],
+      features: { timeBilling: false },
+    },
+  );
+  let current = skillDetail(ownerUserId, "auto", binding);
   client.setQueryData(
     skillDetailOptions(user.activeOrganizationId, user.id, SKILL_ID).queryKey,
     current,
@@ -223,4 +267,25 @@ test("the invocation control is disabled for someone who cannot edit the skill",
   const patches = mount({ ownerUserId: "someone-else" });
   expect(invocationControl().hasAttribute("disabled")).toBe(true);
   expect(patches).toEqual([]);
+});
+
+test("an unbound private skill reads as available only to its author", () => {
+  mount();
+  expect(
+    screen.getByText(messages.knowledge.agentSkills.availabilityLabel),
+  ).toBeTruthy();
+  // Once as the scope chip, once as where the skill is available.
+  expect(
+    screen.getAllByText(messages.knowledge.skills.form.scopePrivate),
+  ).toHaveLength(2);
+  expect(
+    screen.getByText(messages.knowledge.agentSkills.availabilityFixedHelp),
+  ).toBeTruthy();
+});
+
+test("a skill bound to a matter names that matter", () => {
+  mount({
+    binding: { boundClientId: null, boundWorkspaceId: BOUND_MATTER_ID },
+  });
+  expect(screen.getByText("Novák v. Horák")).toBeTruthy();
 });
