@@ -23,15 +23,15 @@ import {
   RESOURCE_TYPE,
   resourceDeletedRealtimeEvent,
   resourceRef,
-  resourceSetUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+  resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   type UserRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
-import { member, organization, user } from "@/api/db/auth-schema";
+import { member, organization, session, user } from "@/api/db/auth-schema";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { realtimeAuthorizers } from "@/api/lib/auth";
@@ -249,7 +249,21 @@ type Audience = {
   workspaceId: SafeId<"workspace">;
 };
 
-/** One organization with one matter and `size` members assigned to it. */
+/** Each seeded member's live sign-in; every stream is opened on it. */
+const sessionOf = new Map<SafeId<"user">, string>();
+
+const sessionFor = (userId: SafeId<"user">): string => {
+  const sessionId = sessionOf.get(userId);
+  if (sessionId === undefined) {
+    throw new Error(`No session was seeded for ${userId}`);
+  }
+  return sessionId;
+};
+
+/**
+ * One organization with one matter and `size` members assigned to it, each
+ * signed in on one live session.
+ */
 const seedAudience = async (size: number): Promise<Audience> => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
   const workspaceId = createSafeId<"workspace">();
@@ -270,6 +284,16 @@ const seedAudience = async (size: number): Promise<Audience> => {
       emailVerified: true,
     })),
   );
+  const sessions = userIds.map((userId) => ({
+    id: `session_${Bun.randomUUIDv7()}`,
+    token: Bun.randomUUIDv7(),
+    userId,
+    expiresAt: new Date(Date.now() + 86_400_000),
+  }));
+  await testDb.insert(session).values(sessions);
+  for (const row of sessions) {
+    sessionOf.set(row.userId, row.id);
+  }
   await testDb.insert(member).values(
     userIds.map((userId) => ({
       id: Bun.randomUUIDv7(),
@@ -334,6 +358,7 @@ const workspaceStreams = (
   Array.from({ length: count }, (_unused, index) =>
     subscribe({
       organizationId: target.organizationId,
+      sessionId: sessionFor(userAt(target, index)),
       signal,
       userId: userAt(target, index),
       workspaceId,
@@ -347,7 +372,12 @@ const userStreams = (
   signal: AbortSignal,
 ) =>
   Array.from({ length: count }, () =>
-    subscribeUser({ organizationId, signal, userId }),
+    subscribeUser({
+      organizationId,
+      sessionId: sessionFor(userId),
+      signal,
+      userId,
+    }),
   );
 
 const sessionDependencies = () => {
