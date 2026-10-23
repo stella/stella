@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
     "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
+    "diagramUnavailable": "Dieses Diagramm konnte nicht dargestellt werden. Der Quelltext steht unten.",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",
       "autoDirectDescription": "KI-Änderungen werden sofort angewendet und überschreiben das Dokument direkt (ohne Änderungsverfolgung).",
@@ -4198,7 +4199,9 @@
     "prompt": "Wonach suchen Sie?",
     "recent": "Zuletzt verwendet",
     "recentCasesFilter": "Entscheidungen",
+    "recentLoadFailed": "Die letzten Aktivitäten konnten nicht geladen werden.",
     "recentSearchFilter": "Suchen",
+    "recentUpdateFailed": "Die letzten Aktivitäten konnten nicht aktualisiert werden.",
     "recentlyInForce": "Kürzlich in Kraft getreten",
     "searchLabel": "Rechtsdatenbank durchsuchen",
     "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",

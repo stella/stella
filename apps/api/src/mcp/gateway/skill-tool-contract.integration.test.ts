@@ -107,7 +107,6 @@ const createContext = ({
   userId?: TestIds["userA1"];
 } = {}): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: "owner",
     organizationId,

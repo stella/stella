@@ -1396,6 +1396,7 @@
     "credentialSendDescription": "Saada see ainult siis, kui soovid seda väärtust vestluses jagada.",
     "credentialSendTitle": "See sõnum võib sisaldada mandaati",
     "deleteThread": "Kustuta vestlus",
+    "diagramUnavailable": "Seda diagrammi ei õnnestunud kuvada. Selle lähtekood on allpool.",
     "editMode": {
       "autoDirect": "Automaatne · kirjuta ümber",
       "autoDirectDescription": "Tehisintellekti muudatused rakendatakse kohe ja dokument kirjutatakse otse ümber (muudatusi ei jälgita).",
@@ -4198,7 +4199,9 @@
     "prompt": "Mida otsite?",
     "recent": "Hiljutised",
     "recentCasesFilter": "Kohtulahendid",
+    "recentLoadFailed": "Hiljutisi tegevusi ei saanud laadida.",
     "recentSearchFilter": "Otsingud",
+    "recentUpdateFailed": "Hiljutisi tegevusi ei saanud uuendada.",
     "recentlyInForce": "Hiljuti jõustunud",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
