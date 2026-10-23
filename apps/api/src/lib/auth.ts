@@ -2681,6 +2681,8 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set">;
+
 /**
  * Account routes confirm the session still exists in storage. Organization
  * routes may serve the cached cookie snapshot because their member lookup runs
@@ -2689,75 +2691,90 @@ const VALIDATE_AUTH_REJECTION_BODY = {
  * The snapshot still supplies the session itself; one indexed read checks it
  * is live, instead of a full uncached session load.
  */
+const resolveSessionAuth = async ({
+  status,
+  request,
+  set,
+}: ResolveSessionAuthOptions) => {
+  const sessionResult = await Result.tryPromise(async () => {
+    const resolved = await getAuth().api.getSession({
+      headers: request.headers,
+      returnHeaders: true,
+    });
+    forwardAuthResponseCookies(set.headers, resolved.headers);
+    return resolved.response;
+  });
+
+  if (Result.isError(sessionResult)) {
+    return status(500, AUTH_REJECTION_BODY[500]);
+  }
+
+  const session = sessionResult.value?.session;
+  const user = sessionResult.value?.user;
+  if (!session || !user) {
+    return status(401, AUTH_REJECTION_BODY[401]);
+  }
+
+  // The signed snapshot may outlive its stored session for its cache
+  // lifetime; one indexed read confirms the session still exists. Signing
+  // out elsewhere deletes the row, and deleting the account cascades.
+  // The read goes through the auth layer's own database adapter, which
+  // only reaches auth tables.
+  const liveResult = await Result.tryPromise(async () => {
+    const { adapter } = await getAuth().$context;
+    return await adapter.findOne<{ id: string }>({
+      model: "session",
+      where: [
+        { field: "id", value: session.id },
+        { field: "userId", value: user.id },
+        { field: "expiresAt", operator: "gt", value: new Date() },
+      ],
+      select: ["id"],
+    });
+  });
+  if (Result.isError(liveResult)) {
+    return status(500, AUTH_REJECTION_BODY[500]);
+  }
+  if (liveResult.value === null) {
+    return status(401, AUTH_REJECTION_BODY[401]);
+  }
+
+  if (session.originConsentId && requiresHandoffStepUpForRequest(request)) {
+    return status(403, {
+      code: MCP_HANDOFF_STEP_UP_REQUIRED,
+      message: "Sign in again to continue.",
+    });
+  }
+
+  const userId = toSafeId<"user">(user.id);
+  enrichRequestContext(request, {
+    posthogDistinctId: userId,
+  });
+
+  return {
+    handoffOriginConsentId: session.originConsentId ?? null,
+    user: {
+      id: userId,
+      email: user.email,
+    },
+  };
+};
+
+// Guards and accountAccess may expand the same resolver more than once.
+const sessionAuthResolutionCache = new WeakMap<
+  Request,
+  ReturnType<typeof resolveSessionAuth>
+>();
+
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
   .macro({
     validateSession: {
-      async resolve({ status, request, set }) {
-        const sessionResult = await Result.tryPromise(async () => {
-          const resolved = await getAuth().api.getSession({
-            headers: request.headers,
-            returnHeaders: true,
-          });
-          forwardAuthResponseCookies(set.headers, resolved.headers);
-          return resolved.response;
-        });
-
-        if (Result.isError(sessionResult)) {
-          return status(500, AUTH_REJECTION_BODY[500]);
-        }
-
-        const session = sessionResult.value?.session;
-        const user = sessionResult.value?.user;
-        if (!session || !user) {
-          return status(401, AUTH_REJECTION_BODY[401]);
-        }
-
-        // The signed snapshot may outlive its stored session for its cache
-        // lifetime; one indexed read confirms the session still exists. Signing
-        // out elsewhere deletes the row, and deleting the account cascades.
-        // The read goes through the auth layer's own database adapter, which
-        // only reaches auth tables.
-        const liveResult = await Result.tryPromise(async () => {
-          const { adapter } = await getAuth().$context;
-          return await adapter.findOne<{ id: string }>({
-            model: "session",
-            where: [
-              { field: "id", value: session.id },
-              { field: "userId", value: user.id },
-              { field: "expiresAt", operator: "gt", value: new Date() },
-            ],
-            select: ["id"],
-          });
-        });
-        if (Result.isError(liveResult)) {
-          return status(500, AUTH_REJECTION_BODY[500]);
-        }
-        if (liveResult.value === null) {
-          return status(401, AUTH_REJECTION_BODY[401]);
-        }
-
-        if (
-          session.originConsentId &&
-          requiresHandoffStepUpForRequest(request)
-        ) {
-          return status(403, {
-            code: MCP_HANDOFF_STEP_UP_REQUIRED,
-            message: "Sign in again to continue.",
-          });
-        }
-
-        const userId = toSafeId<"user">(user.id);
-        enrichRequestContext(request, {
-          posthogDistinctId: userId,
-        });
-
-        return {
-          handoffOriginConsentId: session.originConsentId ?? null,
-          user: {
-            id: userId,
-            email: user.email,
-          },
-        };
+      async resolve(context) {
+        return await memoizePerRequest(
+          sessionAuthResolutionCache,
+          context.request,
+          async () => await resolveSessionAuth(context),
+        );
       },
     },
   })
