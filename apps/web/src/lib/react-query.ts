@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import type {
   InfiniteData,
   InfiniteQueryExecuteOptions,
+  Query,
   QueryExecuteOptions,
   QueryKey,
 } from "@tanstack/react-query";
@@ -271,6 +272,16 @@ export const ensureRouteInfiniteQueryData = async <
     async () => await queryClient.infiniteQuery(routeQueryOptions(options)),
     config,
   );
+
+/**
+ * Which queries a server render hands to the browser. A failed read is left
+ * behind: the SSR payload rebuilds every error as a plain `Error`, so the
+ * browser would hold a failure it can no longer classify (an outage reads
+ * as a crash). The loader already turned the failure into route state, and
+ * the browser reads the query again on its own, with typed errors.
+ */
+export const shouldDehydrateServerQuery = (query: Query): boolean =>
+  query.state.status !== "error";
 
 /** The app's query cache, with the defaults every read shares. */
 export const createAppQueryClient = () =>

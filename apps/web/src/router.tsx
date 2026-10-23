@@ -20,7 +20,10 @@ import {
 } from "@/lib/analytics/route-error-lifecycle";
 import { setUserErrorRouteTemplate } from "@/lib/errors/user-toast";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
-import { createAppQueryClient } from "@/lib/react-query";
+import {
+  createAppQueryClient,
+  shouldDehydrateServerQuery,
+} from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
@@ -120,6 +123,7 @@ export function getRouter() {
     router,
     queryClient,
     wrapQueryClient: false,
+    dehydrateOptions: { shouldDehydrateQuery: shouldDehydrateServerQuery },
   });
 
   return router;
