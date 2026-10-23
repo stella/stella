@@ -13,12 +13,15 @@ export const templateRecipesRoute = new Elysia({
   .guard({ validateAuth: true })
   .get("/", listTemplateRecipes.handler, {
     permissions: listTemplateRecipes.config.permissions,
+    accountAccess: listTemplateRecipes.config.accountAccess,
   })
   .put("/", createTemplateRecipe.handler, {
     body: createTemplateRecipe.config.body,
     permissions: createTemplateRecipe.config.permissions,
+    accountAccess: createTemplateRecipe.config.accountAccess,
   })
   .delete("/:recipeId", deleteTemplateRecipe.handler, {
     params: deleteTemplateRecipe.config.params,
     permissions: deleteTemplateRecipe.config.permissions,
+    accountAccess: deleteTemplateRecipe.config.accountAccess,
   });
