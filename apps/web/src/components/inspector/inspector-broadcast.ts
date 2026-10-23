@@ -14,13 +14,13 @@ import {
   inspectorStateStorageKey,
 } from "@/components/inspector/inspector-storage-keys";
 import {
-  FILE_FACETS,
-  parseSkillResourceSource,
   type ChatTab,
+  FILE_FACETS,
   type FileTab,
   type InspectorTab,
   type InspectorTabGroup,
   type InspectorTabsStore,
+  parseSkillResourceSource,
   type TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import {
@@ -89,8 +89,7 @@ type InspectorBroadcastTab =
   | LegacyDecisionChatTab;
 
 type InspectorBroadcastMessage =
-  | InspectorTabsRequestMessage
-  | InspectorTabsSyncMessage;
+  InspectorTabsRequestMessage | InspectorTabsSyncMessage;
 
 type InspectorBroadcastSession = {
   dispose: () => void;

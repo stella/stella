@@ -9,8 +9,8 @@ import {
   isCapturedFixture,
   LEGACY_CAPTURES,
   parseProvenance,
-  provenancePathOf,
   PROVENANCE_SUFFIX,
+  provenancePathOf,
 } from "./fixture-provenance";
 
 // `apps/api`, two levels up from `src/tests`.

@@ -3,12 +3,12 @@ import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cor
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { McpMode } from "@/api/mcp/constants";
 import {
-  getMcpResourceScopes,
   getMcpProtectedResourceMetadataUrl,
+  getMcpResourceScopes,
   getMcpResourceUrl,
   MCP_ALLOWED_HEADERS,
-  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_DISCOVERY_ALLOW_HEADER,
+  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_EXPOSE_HEADERS,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,

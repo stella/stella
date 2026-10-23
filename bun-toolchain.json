@@ -1,8 +1,8 @@
 {
-  "version": "1.4.3",
+  "version": "1.4.4",
   "artifacts": {
     "darwin-aarch64": {
-      "sha256": "80afd4c069b46a6fa8f3ec520bebc750a7843e4a8d5b9583d29ad436c00a3403"
+      "sha256": "c240d7f0ccb90c263a849fcdb09b7ee62630d921348ed6aafda86b9d577bc510"
     }
   }
 }

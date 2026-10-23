@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ResourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";

@@ -1,8 +1,8 @@
 import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
 import {
-  statusWriteCalls,
   type StatusColumns,
+  statusWriteCalls,
 } from "../scripts/status-write-shapes.ts";
 import { filenameForContext } from "./utils.ts";
 

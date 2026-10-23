@@ -13,7 +13,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { PG_ERROR, getPgErrorCode } from "@/api/lib/pg-error";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -547,7 +547,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("non-locking released savepoint handles retain the driver's nested-savepoint behavior", async () => {
+    test("non-locking released savepoint handles keep the driver's refusal and leave the parent usable", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         await db.transaction(async (tx) => {
@@ -558,22 +558,33 @@ if (!databaseUrl || !enabled) {
             tx,
             async (child) => child,
           );
-          await withAggregateSavepoint(released, async (nested) => {
-            await nested.execute(
-              sql`INSERT INTO released_savepoint_effects (id) VALUES (1)`,
-            );
-          });
-          const committed = await tx.execute(
-            sql`SELECT id FROM released_savepoint_effects`,
+          // The driver refuses a savepoint handle after its savepoint ended,
+          // before sending anything, so the write never happens.
+          const refused = await rejectionOf(
+            withAggregateSavepoint(released, async (nested) => {
+              await nested.execute(
+                sql`INSERT INTO released_savepoint_effects (id) VALUES (1)`,
+              );
+            }),
           );
-          expect(committed.at(0)?.["id"]).toBe(1);
+          const messages: string[] = [];
+          for (
+            let error: unknown = refused;
+            error instanceof Error;
+            error = error.cause
+          ) {
+            messages.push(error.message);
+          }
+          expect(messages).toContain(
+            "cannot run a query after its transaction or savepoint ended",
+          );
           await tx.execute(
             sql`INSERT INTO released_savepoint_effects (id) VALUES (2)`,
           );
           const parent = await tx.execute(
-            sql`SELECT count(*)::int AS count FROM released_savepoint_effects`,
+            sql`SELECT id FROM released_savepoint_effects ORDER BY id`,
           );
-          expect(parent.at(0)?.["count"]).toBe(2);
+          expect(parent.map((row) => row["id"])).toEqual([2]);
         });
       });
     });

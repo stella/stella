@@ -3,8 +3,8 @@ import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
 import type {
-  IngestionResult,
   DecisionSupplement,
+  IngestionResult,
 } from "../apps/api/src/handlers/case-law/ingestion/adapter";
 import {
   buildPlDecision,
@@ -37,8 +37,8 @@ import {
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-tk";
 import {
   assemblePlUodoDecision,
-  normalizePlUodoRow,
   classifyPlUodoRow,
+  normalizePlUodoRow,
   plUodoBodyFrom,
   plUodoRawPartsOf,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo";
@@ -46,9 +46,9 @@ import {
   assemblePlUokikDecision,
   assemblePlUokikRuling,
   parsePlUokikDetail,
-  plUokikRawPartsOf,
   PL_UOKIK_FILE_STATUS,
   PL_UOKIK_LABEL,
+  plUokikRawPartsOf,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   parsePlTkPage,
