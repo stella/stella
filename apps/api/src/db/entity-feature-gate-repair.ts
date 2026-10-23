@@ -162,7 +162,7 @@ const backfillRelation = async (
   return await analyzeAndValidate(tables, tableName);
 };
 
-export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
+export const ENTITY_FEATURE_GATE_REPAIR = {
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const installed = (
@@ -242,4 +242,4 @@ export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
     });
     return { type: "complete" };
   },
-};
+} as const satisfies OnlineRepair;

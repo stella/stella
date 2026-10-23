@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "bun";
 
+import type { OnlineMigrationParam } from "./online-migration-connection";
+
 export const DEDICATED_CONNECTIONS_PER_PROCESS = 8;
 
 const SLOT_WEIGHTS = {
@@ -250,8 +252,10 @@ export const createDedicatedConnectionOwner = <
     }
     const client = opened.value.client;
     return {
-      unsafe: async (statement: string, values: readonly string[] = []) =>
-        await client.unsafe(statement, [...values]),
+      unsafe: async (
+        statement: string,
+        values: readonly OnlineMigrationParam[] = [],
+      ) => await client.unsafe(statement, [...values]),
       end: async () => {
         await client.end();
         releaseSlots();

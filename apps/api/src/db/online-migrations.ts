@@ -67,6 +67,10 @@ import type {
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 import {
+  ONLINE_WORK_LIFECYCLE,
+  type OnlineWorkLifecycle,
+} from "./online-work-lifecycle";
+import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
 } from "./sanctions-monitoring-constraint-validation";
@@ -174,16 +178,21 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE =
   publishedCaseLawDecisionIndexPredicateSql();
 const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
-
-export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
-  ...MONITORING_SESSION_INDEXES,
-  ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
+type ChatContentV3IndexSource =
+  (typeof CHAT_CONTENT_V3_SOURCES)[keyof typeof CHAT_CONTENT_V3_SOURCES];
+const chatContentV3Index = ({ table: tableName }: ChatContentV3IndexSource) =>
+  ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
     definitionBody: `ON public.${tableName} USING btree (id) WHERE ((content -> 'version'::text) IS DISTINCT FROM '3'::jsonb)`,
     isUnique: false,
-    name: `${tableName}_content_v3_pending_idx`,
+    name: `${tableName}_content_v3_pending_idx` as const,
     tableName,
-  })),
+  }) satisfies OnlineIndex;
+
+export const ONLINE_MIGRATION_INDEXES = [
+  ...MONITORING_SESSION_INDEXES,
+  chatContentV3Index(CHAT_CONTENT_V3_SOURCES.message),
+  chatContentV3Index(CHAT_CONTENT_V3_SOURCES.revision),
   CASE_LAW_COVERAGE_INDEX,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
@@ -585,14 +594,14 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "sanctions_contact_marks",
   },
   ...REWRITTEN_MIGRATION_INDEXES,
-];
+] as const satisfies readonly OnlineIndex[];
 
 type OnlineIndexCutover = {
   final: RequiredMigrationIndex;
   staged: OnlineIndex;
 };
 
-export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
+export const ONLINE_MIGRATION_INDEX_CUTOVERS = [
   {
     final: {
       definitionBody:
@@ -611,14 +620,14 @@ export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
       tableName: "case_law_decisions",
     },
   },
-];
+] as const satisfies readonly OnlineIndexCutover[];
 
 type OnlineIndexReplacement = {
   legacyName: string;
   replacementNames: readonly string[];
 };
 
-export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+export const ONLINE_INDEX_REPLACEMENTS = [
   {
     legacyName: "case_law_decisions_country_date_idx",
     replacementNames: ["case_law_decisions_country_date_published_idx"],
@@ -658,7 +667,7 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     legacyName: "account_issuer_account_id_uidx",
     replacementNames: ["account_provider_account_id_uidx"],
   },
-];
+] as const satisfies readonly OnlineIndexReplacement[];
 
 /**
  * Index names a concurrent `IF NOT EXISTS` build may rely on, because this
@@ -685,7 +694,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * self-checkpointing (see `OnlineRepair`); the phase only sequences them,
  * skips the ones already complete, and validates their completion.
  */
-export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+export const ONLINE_MIGRATION_REPAIRS = [
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
@@ -699,6 +708,20 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   // widens the audience set is the one that reconciles them, without an
   // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
+] as const satisfies readonly OnlineRepair[];
+
+export type OnlineWorkName =
+  | (typeof ONLINE_MIGRATION_INDEXES)[number]["name"]
+  | (typeof ONLINE_MIGRATION_INDEX_CUTOVERS)[number]["final"]["name"]
+  | (typeof ONLINE_INDEX_REPLACEMENTS)[number]["legacyName"]
+  | (typeof ONLINE_MIGRATION_REPAIRS)[number]["name"];
+
+/** Every registered unit, in the order a walk visits them. */
+export const ONLINE_WORK_NAMES = [
+  ...ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+  ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final.name),
+  ...ONLINE_INDEX_REPLACEMENTS.map(({ legacyName }) => legacyName),
+  ...ONLINE_MIGRATION_REPAIRS.map(({ name }) => name),
 ];
 
 /**
@@ -737,8 +760,11 @@ type OnlineMigrationMode =
     }
   | { operation: "validate" };
 
+type RepairMode = Extract<OnlineMigrationMode, { operation: "repair" }>;
+
 type OnlineMigrationOptions = {
   repairs?: readonly OnlineRepair[];
+  lifecycle?: Readonly<Record<string, OnlineWorkLifecycle>>;
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -746,9 +772,66 @@ type OnlineMigrationOptions = {
   }) => void;
 };
 
+/**
+ * Which registered work a walk touches. Releases and startup touch finalized
+ * work only; the post-deploy runner touches one pending unit at a time; a
+ * fresh database compared with the declared schema touches all of it.
+ */
+type OnlineWorkScope =
+  | { type: "finalized" }
+  | { type: "all" }
+  | { type: "unit"; name: OnlineWorkName };
+
+export const FINALIZED_SCOPE = {
+  type: "finalized",
+} as const satisfies OnlineWorkScope;
+
+export const ALL_WORK_SCOPE = {
+  type: "all",
+} as const satisfies OnlineWorkScope;
+
+type OnlineWorkInScope = (name: string) => boolean;
+
+type InScopeOptions = {
+  lifecycle: Readonly<Record<string, OnlineWorkLifecycle>>;
+  scope: OnlineWorkScope;
+};
+
+const lifecycleOf = (
+  lifecycle: Readonly<Record<string, OnlineWorkLifecycle>>,
+  name: string,
+): OnlineWorkLifecycle =>
+  lifecycle[name] ?? panic(`Online work ${name} has no lifecycle`);
+
+const onlineWorkInScope =
+  ({ lifecycle, scope }: InScopeOptions): OnlineWorkInScope =>
+  (name) => {
+    const entry = lifecycleOf(lifecycle, name);
+    switch (scope.type) {
+      case "unit":
+        return name === scope.name;
+      case "all":
+        return true;
+      case "finalized":
+        switch (entry.state) {
+          case "pending":
+            return false;
+          case "finalized":
+            return true;
+          default:
+            entry satisfies never;
+            return panic(`Online work ${name} has an invalid lifecycle`);
+        }
+      default:
+        scope satisfies never;
+        return panic("Unknown online work scope");
+    }
+  };
+
 const COMPLETE = { type: "complete" } as const satisfies OnlineMigrationOutcome;
 
 export type OnlineRepairOptions = OnlineMigrationOptions & {
+  scope: OnlineWorkScope;
   indexGate: OnlineIndexGateOptions;
   /** Opens a separate session in the database `pool` reserves from. */
   reserveObserver: () => Promise<OnlineMigrationConnection>;
@@ -759,60 +842,43 @@ export type OnlineRepairOptions = OnlineMigrationOptions & {
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
   {
+    scope,
     indexGate,
     reserveObserver,
     timing = DEFAULT_MIGRATION_TIMING,
     ...options
   }: OnlineRepairOptions,
 ): Promise<OnlineMigrationOutcome> =>
-  await processOnlineMigrations(
+  await processOnlineMigrations({
     pool,
-    { operation: "repair", indexGate, reserveObserver, timing },
+    mode: { operation: "repair", indexGate, reserveObserver, timing },
+    scope,
     options,
-  );
-
-type OnlineValidationOutcome =
-  | { type: "validated" }
-  | { type: "migrator_active" };
-
-const VALIDATED = {
-  type: "validated",
-} as const satisfies OnlineValidationOutcome;
-const MIGRATOR_ACTIVE = {
-  type: "migrator_active",
-} as const satisfies OnlineValidationOutcome;
+  });
 
 /**
- * Startup validation. It never waits on the migrator: a migrate run holds the
- * online lock for a whole index build, longer than any statement timeout, so
- * a waiting boot would fail on the timeout instead. While the migrator holds
- * the lock it owns these objects and may be mid-cutover, so startup leaves
- * them to it rather than read a state between two of its statements.
+ * Startup and release validation of finalized work. It takes no online lock:
+ * the lock's holders (a migrate run, the post-deploy runner) build pending
+ * work, which this never reads, so a build of any length never delays or
+ * skips it.
  */
 export const assertOnlineMigrationsApplied = async (
   pool: OnlineMigrationPool,
   options: OnlineMigrationOptions = {},
-): Promise<OnlineValidationOutcome> => {
+): Promise<void> => {
   const connection = await pool.reserve();
   try {
     const sessionTimeout = await readStatementTimeout(connection);
     await connection.execute(STARTUP_VALIDATION_TIMEOUT_SQL);
     try {
-      if (!(await tryAcquireOnlineMigrationLock(connection))) {
-        return MIGRATOR_ACTIVE;
-      }
-      try {
-        const outcome = await walkOnlineMigrations({
-          connection,
-          mode: { operation: "validate" },
-          options,
-        });
-        if (outcome.type !== "complete") {
-          panic("Online migration validation cannot defer");
-        }
-        return VALIDATED;
-      } finally {
-        await releaseOnlineMigrationLock(connection);
+      const outcome = await walkOnlineMigrations({
+        connection,
+        mode: { operation: "validate" },
+        scope: FINALIZED_SCOPE,
+        options,
+      });
+      if (outcome.type !== "complete") {
+        panic("Online migration validation cannot defer");
       }
     } finally {
       await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [sessionTimeout]);
@@ -822,14 +888,14 @@ export const assertOnlineMigrationsApplied = async (
   }
 };
 
-const processOnlineMigrations = async (
-  pool: OnlineMigrationPool,
-  mode: Extract<OnlineMigrationMode, { operation: "repair" }>,
-  options: OnlineMigrationOptions,
-): Promise<OnlineMigrationOutcome> => {
-  const connection = await pool.reserve();
+/**
+ * Whether the gate has not terminated this session. A terminated session has
+ * already lost its advisory lock, and unlocking on it would fail.
+ */
+const trackTermination = (
+  connection: OnlineMigrationConnection,
+): (() => boolean) => {
   let sessionStatus: "active" | "terminated" = "active";
-  const sessionIsActive = () => sessionStatus === "active";
   const terminate = connection.terminate;
   if (terminate) {
     connection.terminate = async () => {
@@ -837,6 +903,24 @@ const processOnlineMigrations = async (
       await terminate();
     };
   }
+  return () => sessionStatus === "active";
+};
+
+type ProcessOnlineMigrationsOptions = {
+  pool: OnlineMigrationPool;
+  mode: RepairMode;
+  scope: OnlineWorkScope;
+  options: OnlineMigrationOptions;
+};
+
+const processOnlineMigrations = async ({
+  pool,
+  mode,
+  scope,
+  options,
+}: ProcessOnlineMigrationsOptions): Promise<OnlineMigrationOutcome> => {
+  const connection = await pool.reserve();
+  const sessionIsActive = trackTermination(connection);
   let lockAcquired = false;
 
   try {
@@ -844,7 +928,7 @@ const processOnlineMigrations = async (
     lockAcquired = true;
     await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
     await connection.execute("SET statement_timeout = '0'");
-    return await walkOnlineMigrations({ connection, mode, options });
+    return await walkOnlineMigrations({ connection, mode, scope, options });
   } finally {
     try {
       if (lockAcquired && sessionIsActive()) {
@@ -856,9 +940,116 @@ const processOnlineMigrations = async (
   }
 };
 
+/** What a claimed walk ended with: its outcome, or what it threw. */
+type OnlineWorkRunResult = Result<OnlineMigrationOutcome, unknown>;
+
+export type OnlineWorkUnitClaim =
+  | { type: "lock_held" }
+  | {
+      type: "claimed";
+      /**
+       * Walks the unit and hands its result to `record` while the lock is
+       * still held, then releases the lock and the session and returns what
+       * `record` returned. Recording under the lock keeps another process
+       * from claiming the unit between the walk's end and its checkpoint.
+       */
+      run: <Recorded>(
+        record: (result: OnlineWorkRunResult) => Promise<Recorded>,
+      ) => Promise<Recorded>;
+      /** Gives the claim up without walking. */
+      release: () => Promise<void>;
+    };
+
+export type ClaimOnlineWorkUnitOptions = Omit<OnlineRepairOptions, "scope"> & {
+  name: OnlineWorkName;
+};
+
+const LOCK_HELD = { type: "lock_held" } as const satisfies OnlineWorkUnitClaim;
+
+/**
+ * Claims one pending unit for the post-deploy runner. It never waits on the
+ * online lock: its holder (a migrate run, or the runner in another process)
+ * owns the online objects until it finishes, and the next tick tries again.
+ * Claiming and walking are separate so the caller can record the claim before
+ * a walk that may run for hours.
+ */
+export const claimOnlineWorkUnit = async (
+  pool: OnlineMigrationPool,
+  {
+    name,
+    indexGate,
+    reserveObserver,
+    timing = DEFAULT_MIGRATION_TIMING,
+    ...options
+  }: ClaimOnlineWorkUnitOptions,
+): Promise<OnlineWorkUnitClaim> => {
+  const entry = lifecycleOf(options.lifecycle ?? ONLINE_WORK_LIFECYCLE, name);
+  switch (entry.state) {
+    case "pending":
+      break;
+    case "finalized":
+      return panic(`Online work ${name} is finalized; releases own it`);
+    default:
+      entry satisfies never;
+      return panic(`Online work ${name} has an invalid lifecycle`);
+  }
+  const connection = await pool.reserve();
+  const sessionIsActive = trackTermination(connection);
+  let claimed = false;
+  try {
+    claimed = await tryAcquireOnlineMigrationLock(connection);
+  } finally {
+    if (!claimed) {
+      await connection.release();
+    }
+  }
+  if (!claimed) {
+    return LOCK_HELD;
+  }
+  let released = false;
+  const release = async () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    try {
+      if (sessionIsActive()) {
+        await releaseOnlineMigrationLock(connection);
+      }
+    } finally {
+      await connection.release();
+    }
+  };
+  return {
+    type: "claimed",
+    release,
+    run: async (record) => {
+      try {
+        const result = await Result.tryPromise({
+          try: async () => {
+            await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
+            await connection.execute("SET statement_timeout = '0'");
+            return await walkOnlineMigrations({
+              connection,
+              mode: { operation: "repair", indexGate, reserveObserver, timing },
+              scope: { type: "unit", name },
+              options,
+            });
+          },
+          catch: (cause: unknown) => cause,
+        });
+        return await record(result);
+      } finally {
+        await release();
+      }
+    },
+  };
+};
+
 type WalkOnlineMigrationsOptions = {
   connection: OnlineMigrationConnection;
   mode: OnlineMigrationMode;
+  scope: OnlineWorkScope;
   options: OnlineMigrationOptions;
 };
 
@@ -866,24 +1057,38 @@ type WalkOnlineMigrationsOptions = {
 const walkOnlineMigrations = async ({
   connection,
   mode,
+  scope,
   options,
 }: WalkOnlineMigrationsOptions): Promise<OnlineMigrationOutcome> => {
-  const indexes = await processOnlineIndexAt({ connection, mode });
+  const inScope = onlineWorkInScope({
+    lifecycle: options.lifecycle ?? ONLINE_WORK_LIFECYCLE,
+    scope,
+  });
+  const indexes = await processOnlineIndexAt({ connection, inScope, mode });
   if (indexes.type === "deferred") {
     return indexes;
   }
-  const cutovers = await processOnlineIndexCutoverAt({ connection, mode });
+  const cutovers = await processOnlineIndexCutoverAt({
+    connection,
+    inScope,
+    mode,
+  });
   if (cutovers.type === "deferred") {
     return cutovers;
   }
   if (mode.operation === "repair") {
-    const retirements = await retireReplacedIndexAt(connection, mode);
+    const retirements = await retireReplacedIndexAt({
+      connection,
+      inScope,
+      repair: mode,
+    });
     if (retirements.type === "deferred") {
       return retirements;
     }
   }
   return await processOnlineRepairAt({
     connection,
+    inScope,
     mode,
     repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
     log:
@@ -894,12 +1099,14 @@ const walkOnlineMigrations = async ({
 
 type OnlineIndexWalkOptions = {
   connection: OnlineMigrationConnection;
+  inScope: OnlineWorkInScope;
   mode: OnlineMigrationMode;
   offset?: number;
 };
 
 const processOnlineIndexAt = async ({
   connection,
+  inScope,
   mode,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
@@ -908,7 +1115,18 @@ const processOnlineIndexAt = async ({
     return COMPLETE;
   }
 
-  if (mode.operation === "repair") {
+  if (!inScope(index.name)) {
+    return await processOnlineIndexAt({
+      connection,
+      inScope,
+      mode,
+      offset: offset + 1,
+    });
+  }
+
+  if (mode.operation === "validate") {
+    await assertIndexReady(connection, index);
+  } else {
     const step = {
       event: "migrate.online_step_duration",
       kind: "index",
@@ -929,11 +1147,10 @@ const processOnlineIndexAt = async ({
     if (outcome.type === "deferred") {
       return outcome;
     }
-  } else {
-    await assertIndexReady(connection, index);
   }
   return await processOnlineIndexAt({
     connection,
+    inScope,
     mode,
     offset: offset + 1,
   });
@@ -941,6 +1158,7 @@ const processOnlineIndexAt = async ({
 
 const processOnlineIndexCutoverAt = async ({
   connection,
+  inScope,
   mode,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
@@ -949,7 +1167,18 @@ const processOnlineIndexCutoverAt = async ({
     return COMPLETE;
   }
 
-  if (mode.operation === "repair") {
+  if (!inScope(cutover.final.name)) {
+    return await processOnlineIndexCutoverAt({
+      connection,
+      inScope,
+      mode,
+      offset: offset + 1,
+    });
+  }
+
+  if (mode.operation === "validate") {
+    await assertIndexReady(connection, cutover.final);
+  } else {
     const step = {
       event: "migrate.online_step_duration",
       kind: "cutover",
@@ -970,11 +1199,10 @@ const processOnlineIndexCutoverAt = async ({
     if (outcome.type === "deferred") {
       return outcome;
     }
-  } else {
-    await assertIndexReady(connection, cutover.final);
   }
   return await processOnlineIndexCutoverAt({
     connection,
+    inScope,
     mode,
     offset: offset + 1,
   });
@@ -982,6 +1210,7 @@ const processOnlineIndexCutoverAt = async ({
 
 type OnlineRepairWalkOptions = {
   connection: OnlineMigrationConnection;
+  inScope: OnlineWorkInScope;
   mode: OnlineMigrationMode;
   repairs: readonly OnlineRepair[];
   log: NonNullable<OnlineMigrationOptions["log"]>;
@@ -990,6 +1219,7 @@ type OnlineRepairWalkOptions = {
 
 const processOnlineRepairAt = async ({
   connection,
+  inScope,
   mode,
   repairs,
   log,
@@ -998,6 +1228,17 @@ const processOnlineRepairAt = async ({
   const repair = repairs.at(offset);
   if (!repair) {
     return COMPLETE;
+  }
+
+  if (!inScope(repair.name)) {
+    return await processOnlineRepairAt({
+      connection,
+      inScope,
+      mode,
+      repairs,
+      log,
+      offset: offset + 1,
+    });
   }
 
   const completion = await repair.readCompletion(connection);
@@ -1072,6 +1313,7 @@ const processOnlineRepairAt = async ({
   }
   return await processOnlineRepairAt({
     connection,
+    inScope,
     mode,
     repairs,
     log,
@@ -1098,14 +1340,30 @@ const assertRepairDeployable = (
   }
 };
 
-const retireReplacedIndexAt = async (
-  connection: OnlineMigrationConnection,
-  repair: Extract<OnlineMigrationMode, { operation: "repair" }>,
+type RetireReplacedIndexOptions = {
+  connection: OnlineMigrationConnection;
+  inScope: OnlineWorkInScope;
+  repair: RepairMode;
+  offset?: number;
+};
+
+const retireReplacedIndexAt = async ({
+  connection,
+  inScope,
+  repair,
   offset = 0,
-): Promise<OnlineMigrationOutcome> => {
+}: RetireReplacedIndexOptions): Promise<OnlineMigrationOutcome> => {
   const replacement = ONLINE_INDEX_REPLACEMENTS.at(offset);
   if (!replacement) {
     return COMPLETE;
+  }
+  if (!inScope(replacement.legacyName)) {
+    return await retireReplacedIndexAt({
+      connection,
+      inScope,
+      repair,
+      offset: offset + 1,
+    });
   }
 
   const step = {
@@ -1133,7 +1391,12 @@ const retireReplacedIndexAt = async (
   if (outcome.type === "deferred") {
     return outcome;
   }
-  return await retireReplacedIndexAt(connection, repair, offset + 1);
+  return await retireReplacedIndexAt({
+    connection,
+    inScope,
+    repair,
+    offset: offset + 1,
+  });
 };
 
 /** A replaced index lives on the table its replacements cover. */
@@ -1352,7 +1615,9 @@ const assertIndexReady = async (
 ): Promise<void> => {
   const state = await readIndexState(connection, index);
   if (state.type === "missing") {
-    panic(`Required migration index ${index.name} is missing`);
+    panic(
+      `${index.name} is finalized but missing; build it with STELLA_MIGRATE_ONLINE_WORK=build_finalized or let the online work runner finish it`,
+    );
   }
   assertIndexDefinition(index, state);
   if (!state.isValid || !state.isReady) {

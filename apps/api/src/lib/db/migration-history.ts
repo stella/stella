@@ -79,18 +79,134 @@ export const deriveMigrationAliasHistory = (
   return { histories, indexes: [...indexesByName.values()] };
 };
 
-const {
-  histories: rewrittenMigrationHistories,
-  indexes: rewrittenMigrationIndexes,
-} = deriveMigrationAliasHistory(migrationAliasInventory);
+const { histories: rewrittenMigrationHistories } = deriveMigrationAliasHistory(
+  migrationAliasInventory,
+);
 
 export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
   Record<string, RewrittenMigrationHistory>
 > = rewrittenMigrationHistories;
 
-export const REWRITTEN_MIGRATION_INDEXES: readonly RequiredMigrationIndex[] = [
-  ...rewrittenMigrationIndexes,
-];
+export const REWRITTEN_MIGRATION_INDEXES = [
+  {
+    definitionBody:
+      "ON public.case_law_decisions USING btree (slug) WHERE (slug IS NOT NULL)",
+    isUnique: true,
+    name: "case_law_decisions_slug_uidx",
+    tableName: "case_law_decisions",
+  },
+  {
+    definitionBody:
+      "ON public.fields USING btree (workspace_id) WHERE ((content ->> 'type'::text) = 'pending'::text)",
+    isUnique: false,
+    name: "fields_pending_workspace_idx",
+    tableName: "fields",
+  },
+  {
+    definitionBody:
+      "ON public.contacts USING gin (arabic_normalize((display_name)::text) gin_trgm_ops)",
+    isUnique: false,
+    name: "contacts_display_name_arabic_norm_trgm_idx",
+    tableName: "contacts",
+  },
+  {
+    definitionBody:
+      "ON public.contacts USING gin (arabic_normalize((first_name)::text) gin_trgm_ops)",
+    isUnique: false,
+    name: "contacts_first_name_arabic_norm_trgm_idx",
+    tableName: "contacts",
+  },
+  {
+    definitionBody:
+      "ON public.contacts USING gin (arabic_normalize((last_name)::text) gin_trgm_ops)",
+    isUnique: false,
+    name: "contacts_last_name_arabic_norm_trgm_idx",
+    tableName: "contacts",
+  },
+  {
+    definitionBody:
+      "ON public.contacts USING gin (arabic_normalize((organization_name)::text) gin_trgm_ops)",
+    isUnique: false,
+    name: "contacts_organization_name_arabic_norm_trgm_idx",
+    tableName: "contacts",
+  },
+  {
+    definitionBody:
+      "ON public.properties USING btree (workspace_id, playbook_definition_id)",
+    isUnique: false,
+    name: "properties_workspace_playbook_definition_idx",
+    tableName: "properties",
+  },
+  {
+    definitionBody:
+      "ON public.account USING btree (provider_id) WHERE (provider_id = 'credential'::text)",
+    isUnique: true,
+    name: "account_credential_singleton_uidx",
+    tableName: "account",
+  },
+  {
+    definitionBody:
+      "ON public.properties USING btree (workspace_id) WHERE (role = 'document-type-classifier'::text)",
+    isUnique: true,
+    name: "properties_ws_document_type_classifier_unq",
+    tableName: "properties",
+  },
+  {
+    definitionBody:
+      "ON public.usage_events USING btree (organization_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)",
+    isUnique: true,
+    name: "usage_events_org_idempotency_key_uidx",
+    tableName: "usage_events",
+  },
+  {
+    definitionBody:
+      "ON public.report_exports USING btree (created_at, id) WHERE ((notification_status = 'pending'::text) AND (status = ANY (ARRAY['completed'::text, 'failed'::text])))",
+    isUnique: false,
+    name: "report_exports_pending_notification_idx",
+    tableName: "report_exports",
+  },
+  {
+    definitionBody: 'ON public."user" USING btree (created_at, id)',
+    isUnique: false,
+    name: "user_createdAt_idx",
+    tableName: "user",
+  },
+  {
+    definitionBody:
+      "ON public.apikey USING btree ((((metadata)::jsonb ->> 'organizationId'::text))) WHERE (metadata IS NOT NULL)",
+    isUnique: false,
+    name: "apikey_metadata_organization_id_idx",
+    tableName: "apikey",
+  },
+  {
+    definitionBody:
+      "ON public.apikey USING btree ((((metadata)::jsonb ->> 'organizationId'::text)), created_at DESC, id DESC) WHERE (metadata IS NOT NULL)",
+    isUnique: false,
+    name: "apikey_org_keyset_idx",
+    tableName: "apikey",
+  },
+  {
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, source_document_id) WHERE (source_document_id IS NOT NULL)",
+    isUnique: true,
+    name: "case_law_decisions_source_document_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, case_number, language) WHERE (source_document_id IS NULL)",
+    isUnique: true,
+    name: "case_law_decisions_source_case_lang_null_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    definitionBody:
+      "ON public.case_law_citations USING btree (polarity_rule_id) WHERE (polarity_rule_id IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_citations_polarity_rule_idx",
+    tableName: "case_law_citations",
+  },
+] as const satisfies readonly RequiredMigrationIndex[];
 
 export type LocalMigration = { name: string; hash: string };
 export type AppliedMigration = { name: string | null; hash: string };

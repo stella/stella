@@ -17,7 +17,11 @@ import {
   searchCandidateRowWithinBoundsSql,
 } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 
+import type { OnlineIndexDeclaration } from "../online-ddl";
 import { ONLINE_MIGRATION_INDEXES } from "../online-migrations";
+
+const onlineMigrationIndexes: readonly OnlineIndexDeclaration[] =
+  ONLINE_MIGRATION_INDEXES;
 
 const INDEX_NAME = "case_law_decisions_search_candidate_published_idx";
 const BYTE_BOUND_MIGRATION = nodePath.resolve(
@@ -49,7 +53,7 @@ const byteBoundMigrationStatement = (pattern: RegExp): string | undefined =>
     .trim();
 
 const createStatement = (): string | undefined =>
-  ONLINE_MIGRATION_INDEXES.find((candidate) => candidate.name === INDEX_NAME)
+  onlineMigrationIndexes.find((candidate) => candidate.name === INDEX_NAME)
     ?.createSql;
 
 const unqualified = (statement: string): string =>
@@ -73,11 +77,12 @@ const publishedIndexNames = (): string[] => {
         candidate.config.name ?? panic("A publication index has no name"),
     )
     .toSorted();
-  const onlineNames = ONLINE_MIGRATION_INDEXES.filter(
-    (candidate) =>
-      candidate.tableName === "case_law_decisions" &&
-      candidate.createSql?.includes(indexPredicate) === true,
-  )
+  const onlineNames = onlineMigrationIndexes
+    .filter(
+      (candidate) =>
+        candidate.tableName === "case_law_decisions" &&
+        candidate.createSql?.includes(indexPredicate) === true,
+    )
     .map((candidate) => candidate.name)
     .toSorted();
 
@@ -123,7 +128,7 @@ test("the search candidate index is predicated on the reads' own publication gat
     `WHERE ${predicate.sql.replaceAll(`"case_law_decisions".`, "").replaceAll('"metadata"', "metadata").replaceAll('"redacted_at"', "redacted_at")}`,
   );
   expect(
-    ONLINE_MIGRATION_INDEXES.find((candidate) => candidate.name === INDEX_NAME)
+    onlineMigrationIndexes.find((candidate) => candidate.name === INDEX_NAME)
       ?.definitionBody,
   ).toContain(`WHERE ${publishedCaseLawDecisionIndexDefinitionPredicateSql()}`);
 });
@@ -145,7 +150,7 @@ test("public case-law index replacements all use the publication gate", () => {
       schemaIndex.config.where ??
       panic(`The case-law schema index ${name} has no predicate`);
     const onlineIndex =
-      ONLINE_MIGRATION_INDEXES.find((candidate) => candidate.name === name) ??
+      onlineMigrationIndexes.find((candidate) => candidate.name === name) ??
       panic(`The online migrations are missing ${name}`);
     expect(new PgDialect().sqlToQuery(schemaPredicate).sql).toContain(
       queryPredicate,
@@ -186,7 +191,7 @@ test("public case-law online index definitions match PostgreSQL's catalog", asyn
 
   for (const name of publishedIndexNames()) {
     const index =
-      ONLINE_MIGRATION_INDEXES.find((candidate) => candidate.name === name) ??
+      onlineMigrationIndexes.find((candidate) => candidate.name === name) ??
       panic(`The online migrations are missing ${name}`);
     await database.exec(
       index.createSql?.replace(" CONCURRENTLY", "") ??

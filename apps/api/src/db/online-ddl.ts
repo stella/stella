@@ -56,7 +56,7 @@ export type OnlineIndexDeclaration = RequiredMigrationIndex & {
    * The declared build, read only by `createIndexConcurrently`. Without it,
    * the build renders from `definitionBody`, PostgreSQL's own definition.
    */
-  createSql?: string;
+  createSql?: string | undefined;
 };
 
 type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
@@ -65,9 +65,10 @@ type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
  * Whether the online phase may build the index. One without a declared build
  * belongs to a schema migration, so its absence is a broken deploy.
  */
-export const declaresOnlineBuild = ({
-  createSql,
-}: OnlineIndexDeclaration): boolean => createSql !== undefined;
+export const declaresOnlineBuild = (
+  index: OnlineIndexDeclaration,
+): index is OnlineIndexDeclaration & { createSql: string } =>
+  index.createSql !== undefined;
 
 const createSqlTarget =
   /^CREATE (?:UNIQUE )?INDEX CONCURRENTLY "?([A-Za-z_][A-Za-z0-9_]*)"? ON public\."?([A-Za-z_][A-Za-z0-9_]*)"? /u;
