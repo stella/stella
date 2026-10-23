@@ -109,7 +109,7 @@ describe("ToolCallCodeBlock", () => {
     ).toBeDefined();
   });
 
-  test("copies the complete source without line numbers or labels", async () => {
+  test("copies the complete source and confirms in place, without a toast", async () => {
     const write = spyOn(navigator.clipboard, "writeText").mockResolvedValue();
     const toast = spyOn(stellaToast, "add").mockReturnValue("copied");
     mount("result", true);
@@ -117,12 +117,12 @@ describe("ToolCallCodeBlock", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
 
     await waitFor(() =>
-      expect(toast).toHaveBeenCalledWith({
-        title: messages.common.copied,
-        type: "success",
-      }),
+      expect(
+        screen.getByRole("button", { name: messages.common.copied }),
+      ).toBeDefined(),
     );
     expect(write).toHaveBeenCalledWith('{\n  "query": "nájemní smlouva"\n}');
+    expect(toast).not.toHaveBeenCalled();
   });
 
   test("shows a failure when clipboard access is denied", async () => {

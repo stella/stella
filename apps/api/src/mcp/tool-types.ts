@@ -73,6 +73,8 @@ export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
  * `static-tool-definitions.ts` can only reason about known reasons.
  */
 const MCP_ANONYMIZED_EXCLUSION_REASONS = [
+  /** An OAuth grant may create browser session authority only on the ordinary surface. */
+  "credential_authority",
   /** Mutating tool. The anonymized surface is egress-only, so writes never appear. */
   "write",
   /**

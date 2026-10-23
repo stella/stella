@@ -54,7 +54,10 @@ import {
   SET_FIELD_VALUE_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
-import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import type {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
+} from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 
 /**
@@ -74,16 +77,13 @@ type ReadToolDefinition = Extract<
 export type RegistryReadToolName = ReadToolDefinition["name"];
 
 /**
- * The write slice of the MCP registry, derived structurally the same way the
- * read slice is: filtering the single-source `as const` registry array by
- * `{ access: "write" }` yields exactly the write-tool name union. A newly added
- * write tool widens this union, which makes the `satisfies` on
- * `WRITE_TOOL_REF_FIELD_MAP` below fail typecheck until an explicit ref decision
- * is recorded for it, so a future write tool cannot be silently missed from the
- * chat projection.
+ * The model-visible write slice excludes app-only tools through the canonical
+ * visibility owner. A new model-visible write widens this union, which makes
+ * the `satisfies` on `WRITE_TOOL_REF_FIELD_MAP` fail until an explicit ref
+ * decision is recorded for it.
  */
 type WriteToolDefinition = Extract<
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  (typeof MODEL_VISIBLE_MCP_TOOL_DEFINITIONS)[number],
   { access: "write" }
 >;
 
