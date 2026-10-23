@@ -947,6 +947,6 @@
   "candidate:.github/workflows/ci-runner-loss-retry.yml/retry": {
     "kind": "ordinary",
     "qualifier": "Retries failed pull-request jobs once after verified runner loss; no publication or deployment.",
-    "reviewedDigest": "59b08fee0d1fbf12c726bd9d4f09a0121aeee92a13dc3d01165bdd2c47367c90"
+    "reviewedDigest": "ac23f482c903bb669cdd6eabfd183ae4ea97e84dc8bf59e3825e9453d5c98b9a"
   }
 }
