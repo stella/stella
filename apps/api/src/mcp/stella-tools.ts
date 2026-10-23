@@ -35,6 +35,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import {
@@ -74,8 +75,12 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
@@ -85,6 +90,7 @@ import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidan
 import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
+  partialMatchesAppendedWarning,
   provisionCitedWidelyWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
@@ -102,11 +108,10 @@ import {
   SEARCH_CASE_LAW_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   resolveCurrentFileSourceField,
-  selectCurrentExtractedContent,
+  loadCurrentExtractedContents,
   type ExtractedContentSourceProvenance,
 } from "@/api/lib/document-content-provenance";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
@@ -144,6 +149,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
 import {
@@ -782,7 +788,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         ),
       ),
     ),
@@ -950,6 +956,20 @@ const readCaseLawCitationsArgsSchema = nullAsAbsent(
       v.picklist(CITATION_READ_DIRECTIONS),
       v.description(
         "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
+      ),
+    ),
+    doctrine: v.optional(
+      v.pipe(
+        v.picklist(
+          DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated"),
+        ),
+        v.description("Only citations with this reviewed doctrinal finding."),
+      ),
+    ),
+    polarity: v.optional(
+      v.pipe(
+        v.picklist(CITATION_TREATMENTS),
+        v.description("Only citations with this polarity reading."),
       ),
     ),
     limit: v.optional(
@@ -1208,11 +1228,10 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read one page of citations with their citing passages. `cited_by` " +
-      "reads decisions citing this one, `cites` what it cites. `polarity` " +
-      "is a stance: 'unclassified' means none was read, 'mixed' that " +
-      "mentions disagreed. `doctrine` is 'distinguishes' or 'limits' only " +
-      "where a reviewed reading found the court doing so in its own words; " +
+      "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
+      "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
+      "'unclassified' means unread; 'mixed' means mentions disagreed. " +
+      "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
       "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
       "`passage.evidenceQuote` is the verbatim evidence when text is " +
@@ -1840,49 +1859,34 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     });
   }
 
-  const projection =
+  const currentExtracted =
     docxOutcome.kind === "markdown"
       ? null
-      : await context.scopedDb(
-          async (tx) =>
-            await Promise.all([
-              tx.query.extractedContent.findFirst({
-                where: {
-                  entityId: { eq: entityId },
-                  organizationId: { eq: context.organizationId },
-                  workspaceId: { eq: currentDocument.workspaceId },
-                },
-                columns: {
-                  ciphertext: true,
-                  extractedAt: true,
-                  iv: true,
-                  sourceEntityVersionId: true,
-                  sourceFieldId: true,
-                  sourceFileId: true,
-                  sourceSha256Hex: true,
-                },
-              }),
-              // Provenance fence: include tombstones so a rollback cannot make
-              // a withdrawn version's legacy extraction readable again.
-              tx.query.entityVersions.findFirst({
-                where: {
-                  entityId: { eq: entityId },
-                  workspaceId: { eq: currentDocument.workspaceId },
-                },
-                columns: { id: true },
-                orderBy: { versionNumber: "desc", id: "desc" },
-              }),
-            ]),
-        );
-
-  const currentExtracted = selectCurrentExtractedContent({
-    extracted: projection?.[0],
-    allowLegacy: projection?.[1]?.id === currentDocument.currentVersion.id,
-    currentVersionCreatedAt: currentDocument.currentVersion.createdAt,
-    currentVersionId: currentDocument.currentVersion.id,
-    fields: currentDocument.currentVersion.fields,
-  });
-  if (docxOutcome.kind !== "markdown" && !currentExtracted) {
+      : (
+          await context.scopedDb(async (tx) => {
+            const workspaceIds = (
+              await authorizedWorkspaceIds(tx, {
+                organizationId: context.organizationId,
+                workspaceIds: [currentDocument.workspaceId],
+              })
+            ).unwrap("The scoped workspace authorization read must succeed");
+            return await loadCurrentExtractedContents(tx, {
+              entityIds: [entityId],
+              organizationId: context.organizationId,
+              workspaceIds,
+            });
+          })
+        ).at(0);
+  // The text must belong to the version this read started from: a version
+  // promoted between the two reads would pair new text with old metadata.
+  const versionChanged =
+    currentExtracted !== undefined &&
+    currentExtracted !== null &&
+    currentExtracted.currentVersionId !== currentDocument.currentVersion.id;
+  if (
+    docxOutcome.kind !== "markdown" &&
+    (!currentExtracted || versionChanged)
+  ) {
     return structuredErrorResult({
       code: "conflict",
       message: "Current document content is not ready",
@@ -1891,13 +1895,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     });
   }
 
-  const plaintext = currentExtracted
-    ? await decryptContent(
-        context.organizationId,
-        currentExtracted.ciphertext,
-        currentExtracted.iv,
-      )
-    : "";
+  const plaintext = currentExtracted?.text ?? "";
 
   // Prefer the live DOCX-to-Markdown conversion (headings, tables, lists
   // preserved) whenever the current version holds a DOCX file; every other
@@ -1972,6 +1970,8 @@ type CaseLawSearchHit = SearchCaseLawSuccess["hits"][number];
  */
 type MergedCaseLawHit = {
   hit: CaseLawSearchHit;
+  /** `all_terms` when any query returned the decision as holding every word. */
+  match: CaseLawSearchHit["match"];
   matchedQueries: number[];
   rank: number;
 };
@@ -2000,14 +2000,24 @@ const mergeCaseLawSearchHits = (
     for (const [rank, hit] of hits.entries()) {
       const seen = merged.get(hit.decisionId);
       if (seen === undefined) {
-        merged.set(hit.decisionId, { hit, matchedQueries: [queryIndex], rank });
+        merged.set(hit.decisionId, {
+          hit,
+          match: hit.match,
+          matchedQueries: [queryIndex],
+          rank,
+        });
         continue;
       }
       // Queries are walked in index order, so this stays ascending.
       seen.matchedQueries.push(queryIndex);
-      if (rank < seen.rank) {
+      // A full match represents the decision over any partial one: its hit
+      // (excerpt) and rank stand, and ranks compare only within one class,
+      // so a promoted decision never sorts by its partial rank.
+      const promotes = hit.match === "all_terms" && seen.match === "some_terms";
+      if (promotes || (hit.match === seen.match && rank < seen.rank)) {
         seen.hit = hit;
         seen.rank = rank;
+        seen.match = hit.match;
       }
     }
   }
@@ -2015,6 +2025,11 @@ const mergeCaseLawSearchHits = (
   // is an opaque key, and all the order has to be is total and stable.
   return [...merged.values()].toSorted(
     (left, right) =>
+      // Partial matches follow every full match: within one query they are
+      // appended after it, and ranks of different queries are not comparable
+      // across that line.
+      Number(left.match === "some_terms") -
+        Number(right.match === "some_terms") ||
       left.rank - right.rank ||
       right.matchedQueries.length - left.matchedQueries.length ||
       (left.hit.decisionId < right.hit.decisionId ? -1 : 1),
@@ -2188,6 +2203,43 @@ const resolveSearchProvision = (
   text: string,
   country: string,
 ): SearchProvisionRead => {
+  const citedOn = Temporal.Now.plainDateISO("UTC").toString();
+  const euCitations = locateEuProvisionCitations(text, { citedOn });
+  if (euCitations.length > 1) {
+    return provisionRefusal(
+      "The provision names several provisions or a range",
+      'Pass one EU provision per search, for example "Article 6(1)(a) GDPR".',
+    );
+  }
+  const euCitation = euCitations.at(0);
+  if (euCitation !== undefined) {
+    const before = text.slice(0, euCitation.start).trim();
+    const after = text.slice(euCitation.end).trim();
+    if (before.length > 0 || (after.length > 0 && after !== ".")) {
+      return provisionRefusal(
+        "The provision names several provisions or contains unsupported text",
+        'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
+      );
+    }
+    const reference = euCitation.reference;
+    return {
+      type: "resolved",
+      provision: {
+        jurisdiction: "EU",
+        work: euCitation.act.celex,
+        unit: reference.unit,
+        section: reference.section,
+        ...(reference.sectionSuffix === null
+          ? {}
+          : { sectionSuffix: reference.sectionSuffix }),
+        ...(reference.subsection === null
+          ? {}
+          : { subsection: reference.subsection }),
+        ...(reference.letter === null ? {} : { letter: reference.letter }),
+        ...(reference.point === null ? {} : { point: reference.point }),
+      },
+    };
+  }
   const profile = provisionCitationProfileFor(country);
   if (profile === null) {
     return provisionRefusal(
@@ -2198,7 +2250,7 @@ const resolveSearchProvision = (
   const read = resolveProvisionCitation({
     text,
     profile,
-    citedOn: Temporal.Now.plainDateISO("UTC").toString(),
+    citedOn,
   });
   switch (read.status) {
     case "resolved":
@@ -2374,8 +2426,35 @@ const manyRequiredTermsWarnings = ({
       ];
 };
 
+type PartialMatchWarningOptions = {
+  merged: readonly MergedCaseLawHit[];
+  queryIndex: number;
+  countsStrictSet: boolean;
+};
+
+/**
+ * `partial_matches_appended` for a phrasing, counted on the merged response
+ * the caller reads: a hit another phrasing matched in full is returned as
+ * `all_terms`, so it is not counted here.
+ */
+const partialMatchWarnings = ({
+  merged,
+  queryIndex,
+  countsStrictSet,
+}: PartialMatchWarningOptions): AgentCaseLawSearchWarning[] => {
+  const partial = merged.filter(
+    (result) =>
+      result.match === "some_terms" &&
+      result.matchedQueries.includes(queryIndex),
+  ).length;
+  return partial === 0
+    ? []
+    : [partialMatchesAppendedWarning({ partial, countsStrictSet })];
+};
+
 const caseLawSearchResult = ({
   hit,
+  match,
   matchedQueries,
 }: ReturnType<typeof mergeCaseLawSearchHits>[number]) => {
   const resource = resourceRef({
@@ -2408,6 +2487,7 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
+    match,
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
@@ -2597,6 +2677,38 @@ const listSearchCaseLawProvision = async ({
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
 
+type CaseLawSearchCallOutcome =
+  | { exhausted: true }
+  | {
+      exhausted: false;
+      result: Parameters<typeof readCaseLawSearchAnswer>[0];
+    };
+
+/**
+ * Each phrasing's page, or the first failure. A query that failed sinks the
+ * call: a merged page silently missing one phrasing reads as "that phrasing
+ * found nothing", which is a different answer.
+ */
+const readCaseLawQueryPages = (
+  outcomes: readonly CaseLawSearchCallOutcome[],
+  cursor: string | undefined,
+):
+  | Extract<CaseLawSearchAnswer, { type: "failed" }>
+  | { type: "pages"; pages: CaseLawQueryOutcome[] } => {
+  const pages: CaseLawQueryOutcome[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.exhausted) {
+      pages.push({ exhausted: true });
+      continue;
+    }
+    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
+    if (answer.type === "failed") {
+      return answer;
+    }
+    pages.push({ exhausted: false, page: answer.page });
+  }
+  return { type: "pages", pages };
+};
 const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
 
 const handleSearchCaseLawTool: TypedMcpToolHandler<
@@ -2738,21 +2850,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     },
   });
 
-  // A query that failed sinks the call: a merged page silently missing one
-  // phrasing reads as "that phrasing found nothing", which is a different
-  // answer.
-  const pages: CaseLawQueryOutcome[] = [];
-  for (const outcome of outcomes) {
-    if (outcome.exhausted) {
-      pages.push({ exhausted: true });
-      continue;
-    }
-    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
-    if (answer.type === "failed") {
-      return answer.result;
-    }
-    pages.push({ exhausted: false, page: answer.page });
+  const read = readCaseLawQueryPages(outcomes, cursor);
+  if (read.type === "failed") {
+    return read.result;
   }
+  const { pages } = read;
 
   const merged = mergeCaseLawSearchHits(
     pages.map((outcome) => (outcome.exhausted ? [] : outcome.page.hits)),
@@ -2796,14 +2898,21 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         warnings: [
           ...warnings,
           ...provisionRead.warnings,
-          ...outcome.page.warnings.map((warning) =>
-            withFacetValues(warning, values),
-          ),
+          // Recount partial matches after deduplication: another phrasing
+          // may have promoted a partial hit to a full match.
+          ...outcome.page.warnings
+            .filter(({ code }) => code !== "partial_matches_appended")
+            .map((warning) => withFacetValues(warning, values)),
           ...manyRequiredTermsWarnings({
             guidance: mcpCaseLawSearchGuidance(context),
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
+          }),
+          ...partialMatchWarnings({
+            merged,
+            queryIndex: index,
+            countsStrictSet: single !== undefined,
           }),
         ],
       };
@@ -3095,6 +3204,20 @@ const decisionStaticFields = ({
     read.source.name.trim().toLowerCase() === read.court.trim().toLowerCase()
       ? null
       : read.source.name;
+  const citationFields: Pick<FoundDecision, "citations"> = {};
+  if (includedFields.has("citations")) {
+    if (publicCountryUnavailable(read.country, SEARCH_ADMISSION) !== null) {
+      citationFields.citations = {
+        status: "unavailable",
+        reason: "country_not_search_admitted",
+        country: read.country,
+      };
+    } else if (digest !== undefined && digest !== null) {
+      citationFields.citations = citationSummaryOutput(digest, (cited) =>
+        caseLawDecisionAppUrlOf(cited),
+      );
+    }
+  }
   return {
     ...(includedFields.has("details")
       ? {
@@ -3128,15 +3251,7 @@ const decisionStaticFields = ({
     ...(includedFields.has("source") && sourceName !== null
       ? { source: sourceName }
       : {}),
-    ...(includedFields.has("citations") &&
-    digest !== undefined &&
-    digest !== null
-      ? {
-          citations: citationSummaryOutput(digest, (cited) =>
-            caseLawDecisionAppUrlOf(cited),
-          ),
-        }
-      : {}),
+    ...citationFields,
   };
 };
 
@@ -3432,7 +3547,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       // interest counts as demand.
       caller: "attributed",
       documentHydration,
-      surface: "search",
+      surface: "identity",
     });
 
   // The deployment's half of every document-state answer, resolved once for
@@ -3508,9 +3623,8 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     reads.set(decisionId, hydrated);
   }
 
-  // The citation summary, for the entries that answer `found` and asked for
-  // it. Its own gated read: the same gate, so a decision the read could not
-  // see has no summary either.
+  // Citation data requires search admission even when the decision itself
+  // is readable by identity. Closed countries receive a typed disposition.
   const readDigest =
     context.testDependencies?.readGatedDecisionCitationDigest ??
     defaultReadGatedDecisionCitationDigest;
@@ -3520,6 +3634,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         return (
           value !== null &&
           isReadCaseLawDecisionSuccess(value) &&
+          publicCountryUnavailable(value.country, SEARCH_ADMISSION) === null &&
           !isDecisionDocumentPending(value, readsSharedCorpus)
         );
       })
@@ -3579,7 +3694,13 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { cursor, decision_id: decisionId, direction } = parsed.output;
+  const {
+    cursor,
+    decision_id: decisionId,
+    direction,
+    doctrine,
+    polarity,
+  } = parsed.output;
   const limit = normalizePage(
     parsed.output.limit ?? LIMITS.caseLawAgentCitationPageSizeDefault,
   );
@@ -3595,6 +3716,8 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     cursor,
     decisionId: brandPersistedCaseLawDecisionId(decisionId),
     direction,
+    ...(doctrine === undefined ? {} : { doctrine }),
+    ...(polarity === undefined ? {} : { polarity }),
     limit,
     surface: "search",
   });
@@ -3610,10 +3733,25 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       tool: "read_case_law_citations",
     });
   }
+  if (read.type === "doctrine_unavailable") {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Doctrine filtering is unavailable",
+      issues: [
+        {
+          path: "doctrine",
+          message: "Doctrine is unavailable on this case-law surface.",
+        },
+      ],
+      hint: "Call read_case_law_citations again without doctrine; the response's doctrineAvailability will report whether doctrine can be read.",
+    });
+  }
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
       doctrineAvailability: read.page.doctrineAvailability,
+      ...(doctrine === undefined ? {} : { doctrine }),
+      ...(polarity === undefined ? {} : { polarity }),
       decisionId,
       direction,
       nextCursor: read.page.nextCursor,

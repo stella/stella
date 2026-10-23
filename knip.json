@@ -11,7 +11,7 @@
       "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
-        "@typescript/native",
+        "typescript",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
         "eslint",
@@ -258,14 +258,6 @@
     },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
-    },
-    "packages/test-kit": {
-      "entry": [
-        "src/index.ts",
-        "src/db-clock.ts",
-        "src/forbid-network.ts",
-        "src/**/*.test.ts"
-      ]
     },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]

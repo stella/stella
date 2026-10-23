@@ -314,12 +314,15 @@ test("fix mode executes exact autofix workflow blocks", () => {
   ]) {
     expect(lint.run).toContain(command);
   }
+  // The fixer runs on the prepared type graph; its rewrites are type-checked
+  // afterwards and restored when their project does not type-check.
   expect(lint.run.indexOf("ci-generated-sources.ts prepare")).toBeLessThan(
-    lint.run.indexOf("typecheck-coverage.ts --autofix"),
-  );
-  expect(lint.run.indexOf("typecheck-coverage.ts --autofix")).toBeLessThan(
     lint.run.indexOf("--type-aware --fix"),
   );
+  expect(lint.run.indexOf("--type-aware --fix")).toBeLessThan(
+    lint.run.indexOf("typecheck-coverage.ts --autofix"),
+  );
+  expect(lint.run).toContain("restore_lint_paths");
   // API test weights are measured on main and cached, never fixed locally.
   expect(steps.some(({ run }) => run.includes("refresh-test-durations"))).toBe(
     false,
@@ -516,7 +519,7 @@ test.each(["true", "false"])(
     try {
       const step = readVerifyWorkflow({ root, mode: "verify" }).find(
         ({ job, name }) =>
-          job === "ci-plan" && name === "Produce generated sources",
+          job === "generated-sources" && name === "Produce generated sources",
       );
       if (step === undefined) {
         throw new TypeError("Marked generated preparation is missing");

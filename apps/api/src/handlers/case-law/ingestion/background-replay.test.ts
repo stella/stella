@@ -44,6 +44,7 @@ const fixture = (dailyBudget = 3) => {
   });
   const success = (current: BackgroundReplayBatch): ReplayRunReport => ({
     visited: 1,
+    writeOutcomes: { unchanged: 0, rewritten: 1, failed: 0 },
     outcomes: {
       applied: 1,
       unchanged: 0,

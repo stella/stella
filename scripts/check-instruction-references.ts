@@ -637,10 +637,42 @@ export const applyAllowlist = (
 
 // --- Repository access ------------------------------------------------------
 
+// The paths a clean checkout has, plus untracked files about to be committed.
+// Ignored local paths (the planning directory) never count as present, so
+// allowlisted references to them stay in use on any machine.
+const checkoutPaths = (): ReadonlySet<string> => {
+  const listed = Bun.spawnSync(
+    ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+  );
+  if (listed.exitCode !== 0) {
+    panic(`git ls-files failed: ${listed.stderr.toString()}`);
+  }
+  const paths = new Set<string>();
+  for (const file of listed.stdout.toString().split("\0")) {
+    if (file === "") {
+      continue;
+    }
+    paths.add(file);
+    for (let slash = file.indexOf("/"); slash !== -1;) {
+      paths.add(file.slice(0, slash));
+      slash = file.indexOf("/", slash + 1);
+    }
+  }
+  return paths;
+};
+
 const diskRepo = (): Repo => {
   const cache = new Map<string, string | undefined>();
+  const paths = checkoutPaths();
   return {
-    exists: (repoPath) => existsSync(path.join(REPO_ROOT, repoPath)),
+    exists: (repoPath) => {
+      // `normalize` collapses repeated slashes, so one trailing slash at most.
+      const normalized = path.posix.normalize(repoPath);
+      return paths.has(
+        normalized.endsWith("/") ? normalized.slice(0, -1) : normalized,
+      );
+    },
     read: (repoPath) => {
       if (!cache.has(repoPath)) {
         const absolute = path.join(REPO_ROOT, repoPath);

@@ -34,12 +34,14 @@ import {
   installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteCaseLawCountryShape,
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPgliteWorkspaceContactCapacity,
@@ -54,6 +56,8 @@ import {
   installPgliteTimeEntryTimerSignals,
   installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
+  installPgliteSyntheticMembershipTrigger,
+  installPgliteUserFileOrganizationKeyGuard,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 import {
@@ -347,6 +351,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
   caseLawDecisionViewGrantStatement("stella_ingestion"),
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
@@ -529,6 +534,11 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "legislation_amendment_snapshots", "legislation_amendments"
+    TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -555,6 +565,16 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
+  `,
+  // The serving pointer is written by the gated flip and deleted when a
+  // whole generation is promoted; ingestion may not rewrite its key.
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (generation, from_generation, flipped_at)
+      ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
   `,
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
@@ -782,6 +802,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteSyntheticMembershipTrigger(db);
+  await installPgliteUserFileOrganizationKeyGuard(db);
+  await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
@@ -790,6 +813,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
+  await installPgliteCaseLawCountryShape(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);

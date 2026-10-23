@@ -92,6 +92,12 @@ literal `test.skip` or `it.skip` declaration. Its probe unmasks that declaration
 and runs the owning test command twenty times; zero-test and skipped-test
 receipts cannot pass. Unregistered dated owners fail the inventory census.
 
+Entries in `scripts/flaky-test-quarantine.json` are inventoried as
+`flaky-test-quarantine`. Their probe runs the test without its entry; an
+elapsed entry only annotates pull requests and merge groups, because the
+scheduled flaky-test quarantine workflow enforces it on main (see
+[flaky-test-quarantine.md](flaky-test-quarantine.md)).
+
 External contract pin allowances live in
 `scripts/external-contract-pin-allowances.json`. Each names a system and exact
 drifting pins, with canonical UTC `checkedAt` and `expiresAt` timestamps no more

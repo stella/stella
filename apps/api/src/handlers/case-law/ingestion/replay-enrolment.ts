@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { panic } from "better-result";
 
 import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";
@@ -52,6 +53,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.PL_KIS]: { mode: "off" },
   [ADAPTER_KEYS.PL_UODO]: { mode: "off" },
   [ADAPTER_KEYS.PL_UOKIK]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_UOHS]: { mode: "off" },
 } as const satisfies Record<AdapterKey, ReplayEnrolment>;
 
 export const BACKGROUND_REPLAY_LIMITS = {

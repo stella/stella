@@ -188,7 +188,7 @@ test("test matrix admission has one graph owner and no independent path filter",
     "utf-8",
   );
   expect(workflow).toContain(
-    "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'",
+    "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'",
   );
   expect(workflow).toContain(
     `TEST_SCOPE: \${{ needs.ci-plan.outputs.test_scope }}`,

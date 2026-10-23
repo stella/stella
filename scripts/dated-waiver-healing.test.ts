@@ -40,6 +40,7 @@ import {
 import {
   createProbeBudget,
   PROBE_PHASE_BUDGET_MS,
+  removeWaiver,
   runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
@@ -896,6 +897,8 @@ const recoveryCases = {
   "dependency-audit": "later-green",
   "suppression-waiver": "changed-source",
   "quarantined-test": "changed-source",
+  "flaky-test-quarantine": "changed-source",
+  "pending-contract-migration": "changed-source",
 } as const satisfies Record<
   DatedWaiver["kind"],
   "later-green" | "changed-source"
@@ -907,6 +910,22 @@ test("every inventory kind has an exercised resolution policy", () => {
   );
   expect(Object.keys(recoveryCases).toSorted()).toEqual(
     Object.keys(RECHECK_INSTRUCTIONS).toSorted(),
+  );
+});
+
+test("automated healing never removes an unshipped pending contract entry", () => {
+  const pending = {
+    ...entry,
+    source: "apps/api/src/lib/db/pending-contract-migrations/registry.ts",
+    id: "20261015060000_contract",
+    kind: "pending-contract-migration",
+    probe: {
+      command: ["test", "-d", "apps/api/drizzle/20261015060000_contract"],
+      attempts: 20,
+    },
+  } as const satisfies DatedWaiver;
+  expect(() => removeWaiver(pending, () => "registry contents")).toThrow(
+    "Automatic removal is disabled for pending-contract-migration",
   );
 });
 

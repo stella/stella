@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 const INPUT_COLUMNS = new Set([
@@ -28,6 +28,7 @@ const MUTATION_OWNERS = {
   },
   "handlers/case-law/erasure.ts": {
     redactCaseLawDecision: "redactCaseLawDecision",
+    eraseFencedDecision: "redactCaseLawDecision",
   },
   "handlers/case-law/withdraw-document.ts": {
     withdrawCaseLawDecisionDocument: "withdrawCaseLawDecisionDocument",

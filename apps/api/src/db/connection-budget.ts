@@ -104,6 +104,11 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
   },
+  postgresTestRunner: {
+    maxReplicas: 1,
+    pools: DATABASE_POOL_DEFAULTS,
+    publicPool: "shared",
+  },
 } as const satisfies Record<string, ProcessAssumption>;
 
 type ProcessName = keyof typeof DATABASE_PROCESS_ASSUMPTIONS;
@@ -233,6 +238,13 @@ const DATABASE_POOLS = [
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
     processes: ["rehearsal"],
+    admission: "pooled",
+  },
+  {
+    file: "scripts/run-postgres-tests.ts",
+    constructor: 1,
+    maximum: { type: "fixed", value: 1 },
+    processes: ["postgresTestRunner"],
     admission: "pooled",
   },
   {

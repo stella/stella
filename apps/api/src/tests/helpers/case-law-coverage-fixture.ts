@@ -26,6 +26,7 @@ const base = {
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
       pendingTextCount: 3,
+      storedDecisions: 150,
       knownGaps: { type: "unknown" },
       completeness: { state: "not-measured-yet" },
       addedLastWeek: 5,

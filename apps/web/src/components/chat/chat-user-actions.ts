@@ -44,6 +44,11 @@ export const CHAT_USER_ACTIONS = {
     handler: "resolveSecretTarget",
     via: "session",
   },
+  /** Reads whether a stored grant still covers a tool before a card uses it. */
+  "check-stored-grant": {
+    handler: "confirmStoredApprovalGrant",
+    via: "session",
+  },
   /** Resumes the chat with a committed private input receipt. */
   "continue-private-input": {
     handler: "continueRequestSecret",

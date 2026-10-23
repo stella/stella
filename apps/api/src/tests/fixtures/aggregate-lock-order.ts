@@ -64,6 +64,18 @@ export const aggregateFences = () => {
       id: { id: definitionId, organizationId },
       mode: "update",
     },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
+    legislationAmendmentWork: {
+      aggregate: "legislationAmendmentWork",
+      id: {
+        sourceId: createSafeId<"legislationSource">(),
+        eli: "eli/cz/sb/2012/89",
+        language: "cs",
+      },
+    },
     scoutCensus: {
       aggregate: "scoutCensus",
       id: { type: "run", id: createSafeId<"scoutRun">(), organizationId },
@@ -168,6 +180,10 @@ export const aggregateFences = () => {
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
     sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
+    chatToolGrants: {
+      aggregate: "chatToolGrants",
+      id: { organizationId, userId },
+    },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

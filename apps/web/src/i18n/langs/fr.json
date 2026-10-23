@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Retour à l’application",
-    "billingAndUsage": "Facturation et utilisation",
     "billingProfiles": "Profils de facturation",
     "deleteDescription": "Supprimez définitivement cette organisation et ses données. Cette action est irréversible.",
     "deleteOrganization": "Supprimer l’organisation",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Quitter l’organisation",
     "leaveRefusedOnlyOwner": "Vous êtes le seul propriétaire. Désignez un autre membre comme propriétaire avant de partir.",
     "modelsAndProviders": "Modèles et fournisseurs",
-    "noPlan": "Aucune offre active",
     "organizationDeleted": "L’organisation a été supprimée.",
     "organizationId": "ID de l’organisation",
     "organizationLeft": "Vous avez quitté l’organisation.",
-    "overviewDescription": "Gérez votre organisation, les personnes et les outils.",
-    "people": "Personnes",
     "planAndUsage": "Offre et utilisation",
     "title": "Administration de l’organisation",
     "toolsDescription": "Activez ou désactivez les outils intégrés pour toutes les personnes de cette organisation."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Votre assistant vous demandera cette adresse",
-    "copiedToast": "Instructions copiées. Collez-les dans une conversation avec votre assistant.",
     "copy": "Copiez-lui les instructions",
     "description": "Interrogez Claude ou ChatGPT sur vos dossiers et documents. Choisissez votre assistant pour un guide court ; cela prend environ une minute.",
     "instructions": "Connecte-moi à stella, mon espace de travail juridique. Suis les « Instructions for AI agents » sur {guideUrl} et utilise cette adresse de serveur : {mcpUrl}",
     "openGuide": "Ouvrir le guide pour {assistant}",
+    "pasteHint": "Collez-les dans une conversation avec votre assistant.",
     "selfSetupHint": "Vous utilisez Claude Code ou Codex ?",
     "title": "Utilisez stella dans votre assistant IA"
   },
@@ -380,6 +375,12 @@
       "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
       "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent}} votre jugement</strong> — contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
+      "documentView": {
+        "label": "Affichage du document",
+        "original": "Original",
+        "reading": "Mode lecture"
+      },
+      "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
@@ -849,7 +850,6 @@
         "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
       },
       "generate": "Générer les sommaires par IA",
-      "holdingAnchor": "Aller au paragraphe",
       "invitation": "Avec un compte gratuit, l’IA prépare des notes de travail sur cette décision.",
       "topics": "Thèmes",
       "treatment": "Traitement ultérieur"
@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Exhaustivité",
-      "countedOn": "Décompté le {date}",
       "courtsHeading": "Par juridiction",
       "courtsUnavailable": "La répartition par juridiction est indisponible pour le moment.",
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
-      "exceedsReportedTotal": "Contient plus que le dernier total annoncé par le diffuseur le {date}",
-      "gapStatusUnknown": "État des lacunes inconnu",
       "generatedAt": "Chiffres au {date}",
       "globeLabel": "Pays dont la jurisprudence figure dans le corpus, sur un globe",
       "healthCurrent": "À jour",
@@ -1009,6 +1006,9 @@
       "saved": "{count, plural, one {# décision enregistrée} other {# décisions enregistrées}} dans {matter}"
     },
     "newestDecisions": "Décisions les plus récentes",
+    "noResults": {
+      "hint": "Essayez d'autres mots, améliorez la requête avec l'IA ou posez la question dans la conversation."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humaines"
@@ -1082,6 +1082,10 @@
         "short": "Court"
       }
     },
+    "rewritten": {
+      "line": "Aucune correspondance exacte pour <bdi>{original}</bdi> ; résultats pour <bdi>{query}</bdi>",
+      "searchOriginal": "Rechercher mes mots d'origine"
+    },
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
@@ -1098,6 +1102,8 @@
         "hint": "Supprimez ou élargissez un filtre, puis relancez la recherche.",
         "message": "Aucun résultat ne correspond aux filtres appliqués."
       },
+      "partialMatch": "Correspondance partielle",
+      "partialMatches": "Correspondances partielles pour : <bdi>{query}</bdi>",
       "resultsFor": "Résultats pour : <bdi>{query}</bdi>",
       "searchEveryWord": "Rechercher tous les mots"
     },
@@ -1135,6 +1141,7 @@
       "judges": "Juges",
       "legalArea": "Domaine juridique",
       "legalSentence": "Attendu",
+      "paragraphReference": "Paragraphe {number}",
       "popularName": "Nom courant",
       "portraitCredit": "Source des portraits : {source}",
       "provisionMentions": "{count, number}×",
@@ -1381,6 +1388,7 @@
     "credentialSendDescription": "Envoyez-le uniquement si vous souhaitez partager cette valeur dans la conversation.",
     "credentialSendTitle": "Ce message peut contenir un identifiant",
     "deleteThread": "Supprimer la conversation",
+    "diagramUnavailable": "Impossible d’afficher ce diagramme. Son code source figure ci-dessous.",
     "editMode": {
       "autoDirect": "Automatique · réécrire",
       "autoDirectDescription": "Les modifications de l’IA sont appliquées immédiatement en réécrivant directement le document (sans suivi des modifications).",
@@ -1601,6 +1609,9 @@
         "private": "Vos compétences",
         "team": "Compétences de l’équipe"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Également consultés ({count, number})"
     },
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
@@ -2662,10 +2673,12 @@
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",
       "caseLawCountryUnavailable": "La jurisprudence de ce pays n’est pas disponible. Choisissez un autre pays.",
+      "caseLawIdentityOnly": "Pour ce pays, seuls la recherche exacte et la consultation des décisions sont disponibles.",
       "caseLawSearchUnavailable": "La recherche dans la jurisprudence de ce pays n’est pas disponible. Vous pouvez toujours consulter ses décisions publiques.",
       "conflict": "La requête est en conflit avec l’état actuel.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "legislationCountryUnavailable": "Les textes législatifs de ce pays ne sont pas disponibles. Choisissez un autre pays.",
+      "legislationIdentityOnly": "Pour ce pays, seules la recherche exacte et la consultation des textes législatifs sont disponibles.",
       "legislationSearchUnavailable": "La recherche dans les textes législatifs de ce pays n’est pas disponible. Vous pouvez toujours consulter ses textes législatifs publics.",
       "notFound": "Nous n’avons pas trouvé l’élément demandé.",
       "payloadTooLarge": "La requête est trop volumineuse.",
@@ -2688,6 +2701,11 @@
       "aiConfigModelInvalid": "La configuration du modèle d’IA est invalide. Vérifiez les modèles sélectionnés.",
       "aiConfigProviderInvalid": "La configuration du fournisseur d’IA est invalide. Vérifiez les paramètres du fournisseur.",
       "aiConfigProviderValidationFailed": "Le fournisseur d’IA a refusé la configuration. Vérifiez la clé API et le modèle.",
+      "aiDeadlineExceeded": "L’IA n’a pas répondu à temps. Réessayez dans un instant.",
+      "aiOutputInvalid": "La réponse de l’IA avait un format inattendu. Réessayez.",
+      "aiOutputModerated": "Le fournisseur d’IA a modéré la réponse. Reformulez la demande ou choisissez un autre modèle.",
+      "aiProviderTaskUnsupported": "Le fournisseur d’IA configuré ne peut pas effectuer cette tâche. Choisissez-en un qui le peut.",
+      "aiUnknown": "La requête d’IA a échoué. Réessayez.",
       "clauseDirectivesInvalid": "Une clause liée contient des directives non valides. Corrigez la clause avant de remplir le modèle.",
       "clauseDirectivesInvalidDetails": "La clause {clauseName} dans le champ {slotName} contient des directives non valides. Ouvrez l’éditeur de clauses, corrigez les paragraphes indiqués et remplissez à nouveau le modèle.",
       "clauseDirectivesOverrideInvalidDetails": "Le texte de remplacement de la clause {clauseName} dans le champ {slotName} contient des directives non valides. Corrigez ce texte pour ce remplissage avant de réessayer.",
@@ -4173,7 +4191,9 @@
     "prompt": "Que cherchez-vous ?",
     "recent": "Récents",
     "recentCasesFilter": "Décisions",
+    "recentLoadFailed": "L’activité récente n’a pas pu être chargée.",
     "recentSearchFilter": "Recherches",
+    "recentUpdateFailed": "L’activité récente n’a pas pu être mise à jour.",
     "recentlyInForce": "Entrée en vigueur récente",
     "searchLabel": "Rechercher dans la base juridique",
     "searchPlaceholder": "Numéro d'affaire, numéro de texte, ECLI ou mots-clés",
@@ -4234,6 +4254,10 @@
     "archivedEmpty": "Aucune mémoire archivée.",
     "archivedToast": "Mémoire archivée",
     "createdToast": "Enregistré dans la mémoire",
+    "deleteConfirmation": "Saisissez {confirmation} pour confirmer",
+    "deleteDescription": "Cette mémoire sera supprimée définitivement. Cette action est irréversible.",
+    "deleteTitle": "Supprimer la mémoire ?",
+    "deletedToast": "Mémoire supprimée",
     "empty": "Encore rien en mémoire.",
     "kinds": {
       "decision": "Décision",
@@ -5162,6 +5186,8 @@
     "outline": "Sommaire",
     "outlineJumpLabel": "Aller à une disposition",
     "outlineJumpPlaceholder": "§ 10 ou un intitulé",
+    "pendingChanges": "Modifications à venir",
+    "pendingChangesIncomplete": "Les données de l’éditeur peuvent ne pas inclure toutes les modifications à venir.",
     "provisionAskContextPrompt": "\n\nPassages appliquant la disposition dans les décisions les plus autorisées :\n{passages}\n\nUtilise les outils de jurisprudence pour lire l’une de ces décisions en entier ou pour trouver d’autres décisions citant la disposition.",
     "provisionAskPlaceholder": "Poser une question sur cette disposition",
     "provisionAskQuestionPrompt": "À propos de {subject} : {question}",

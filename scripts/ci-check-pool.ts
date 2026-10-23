@@ -7,8 +7,8 @@
 // Selected checks run concurrently, one fewer than the runner CPUs; each log is
 // printed whole, in registry order, and every failure is annotated. Any failed
 // check fails the step after all selected checks have finished, unless its
-// `continue-on-error` holds: then, as for a step, the failure is reported as a
-// warning and its conclusion is success.
+// `continue-on-error` holds: then its conclusion is success. Every failed check
+// still emits an error annotation so the failure digest can report its cause.
 //
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
@@ -226,6 +226,9 @@ export type CheckResult = {
   maxRssBytes: number | undefined;
 };
 
+/** A failed check's detail when it printed no failed test or error line. */
+export const exitCodeDetail = (exitCode: number) => `exit code ${exitCode}`;
+
 const launchedOutcome = (
   launched: Launched,
   check: PoolCheck,
@@ -238,7 +241,7 @@ const launchedOutcome = (
   }
   return launched.exitCode === 0
     ? { outcome: "success", detail: "passed" }
-    : { outcome: "failure", detail: `exit code ${launched.exitCode}` };
+    : { outcome: "failure", detail: exitCodeDetail(launched.exitCode) };
 };
 
 type RunChecksOptions = {
@@ -416,6 +419,21 @@ const logPath = (directory: string, index: number) =>
 
 // A nested group would end the check's own group in the job log.
 const NESTED_GROUP = /^(::(?:end)?group::|##\[(?:end)?group\])/gmu;
+// An error command printed by a check that passed comes from a fixture or a
+// refusal the check exercises, never from this run's failure; left active it
+// becomes a job annotation that failure digests then report as the cause.
+const ERROR_COMMAND = /^(::error\b)/gmu;
+
+/** A check's log as the job log shows it, so the check cannot drive the job's commands. */
+export const checkLogText = (
+  output: string,
+  outcome: CheckResult["outcome"],
+): string => {
+  const grouped = output.replace(NESTED_GROUP, " $1");
+  return outcome === "failure"
+    ? grouped
+    : grouped.replace(ERROR_COMMAND, " $1");
+};
 const escapeProperty = (value: string) =>
   value
     .replaceAll("%", "%25")
@@ -425,6 +443,91 @@ const escapeProperty = (value: string) =>
     .replaceAll(",", "%2C");
 const escapeData = (value: string) =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+
+const FAILURE_CAUSE_LIMIT = 500;
+
+const isResultMarker = (line: string) =>
+  /^\((?:pass|fail|skip|todo)\) /u.test(line.trimStart());
+
+// Bun's own banner, per-file headers, totals and group commands.
+const TEST_RUNNER_LINE =
+  /^(?:bun test v|\d+ (?:pass|fail|skip|todo|snapshots?|expect\(\) calls)\b|Ran \d+ tests? |(?:::|##\[)(?:end)?group\b|\S+\.test\.[cm]?[jt]sx?:$)/u;
+const isTestRunnerLine = (line: string) =>
+  isResultMarker(line) || TEST_RUNNER_LINE.test(line.trim());
+// A line that starts with an error, possibly behind a workflow error command.
+const ERROR_LINE = /^(?:##\[error\]|::error[^:]*::)?\s*error\b/iu;
+// `path[:line[:column]]: finding`, the shape repository checks report in.
+const FINDING_LINE =
+  /^(?:[\w.@-]+\/)+[\w.@$()[\]-]+(?::\d+){0,2}: \S|^[\w.@-]+\.[a-z\d]+(?::\d+){0,2}: \S/iu;
+
+// Bun prints a test's diagnostics before its `(fail)` line, so the test's own
+// error lies between the previous result marker and its marker; output after
+// the marker belongs to the next test, even a passing one that logs errors.
+const errorOfTest = (lines: readonly string[], failureIndex: number) => {
+  let start = failureIndex;
+  while (start > 0 && !isResultMarker(lines.at(start - 1) ?? "")) {
+    start -= 1;
+  }
+  return lines
+    .slice(start, failureIndex)
+    .find((line) => /^error/iu.test(line.trimStart()))
+    ?.trim();
+};
+
+// The runner renders `::error` commands as `##[error]<message>` in downloaded
+// logs and drops the title, so the digest reads this plain record instead.
+export const FAILED_CHECK_RECORD = "FAILED check: ";
+
+export const FAILED_CHECK_SEPARATOR = " -- ";
+
+/**
+ * The plain log record of one failed pooled check: name and first cause, one
+ * line. The name is escaped so it can hold neither the separator nor a line
+ * break; ci-failure-digest.ts decodes it.
+ */
+export const failedCheckRecord = (name: string, cause: string) =>
+  `${FAILED_CHECK_RECORD}${escapeData(name).replaceAll("--", "%2D%2D")}${FAILED_CHECK_SEPARATOR}${cause.replaceAll(/\r?\n/gu, " ")}`;
+
+/** The first actionable cause of one failed pooled check. */
+export const failedCheckCause = (
+  result: Pick<CheckResult, "detail">,
+  output: string,
+) => {
+  const lines = output.split(/\r?\n/u);
+  const failureIndex = lines.findIndex((line) =>
+    line.trimStart().startsWith("(fail) "),
+  );
+  const failure =
+    failureIndex === -1 ? undefined : lines.at(failureIndex)?.trim();
+  const testError =
+    failureIndex === -1 ? undefined : errorOfTest(lines, failureIndex);
+  // A later line's error may belong to another test, so a failed test without
+  // its own diagnostic is named alone.
+  if (failure !== undefined) {
+    return (
+      testError === undefined
+        ? failure
+        : `${failure}${FAILED_CHECK_SEPARATOR}${testError}`
+    ).slice(0, FAILURE_CAUSE_LIMIT);
+  }
+  // A check that runs its own tests and then reports findings prints the
+  // passing tests first; their names are never the finding.
+  const findings = lines
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !isTestRunnerLine(line));
+  return (
+    findings.find((line) => ERROR_LINE.test(line) || FINDING_LINE.test(line)) ??
+    findings.find((line) => /\berror\b/iu.test(line)) ??
+    result.detail
+  ).slice(0, FAILURE_CAUSE_LIMIT);
+};
+
+/** The single workflow annotation emitted for one failed pooled check. */
+export const failedCheckAnnotation = (
+  result: Pick<CheckResult, "name" | "detail">,
+  output: string,
+) =>
+  `::error title=${escapeProperty(`${FAILED_CHECK_RECORD}${result.name}`)}::${escapeData(failedCheckCause(result, output))}`;
 
 const seconds = (value: number) => `${value.toFixed(1)} s`;
 const mebibytes = (bytes: number | undefined) =>
@@ -488,11 +591,39 @@ export const blockingFailures = (results: readonly CheckResult[]) =>
 const isPoolJob = (job: string): job is CheckPoolJob =>
   CHECK_POOL_JOBS.some((known) => known === job);
 
+/** Select an exact, comma-separated subset while retaining manifest order. */
+export const selectChecks = (
+  checks: readonly PoolCheck[],
+  only: string | undefined,
+): PoolCheck[] => {
+  if (only === undefined) {
+    return [...checks];
+  }
+  const requested = only.split(",").map((name) => name.trim());
+  if (requested.some((name) => name === "")) {
+    throw new CheckPoolError("--only requires one or more check names");
+  }
+  const names = new Set(checks.map(({ name }) => name));
+  const unknown = requested.filter((name) => !names.has(name));
+  if (unknown.length > 0) {
+    throw new CheckPoolError(`Unknown check name(s): ${unknown.join(", ")}`);
+  }
+  const selected = new Set(requested);
+  return checks.filter(({ name }) => selected.has(name));
+};
+
 const main = async () => {
-  const [mode, job = ""] = process.argv.slice(2);
-  if (mode !== "run" || !isPoolJob(job)) {
+  const [mode, job = "", option, value, ...extra] = process.argv.slice(2);
+  if (
+    mode !== "run" ||
+    !isPoolJob(job) ||
+    extra.length > 0 ||
+    (option !== undefined && option !== "--only") ||
+    (option === "--only" && value === undefined) ||
+    (option === undefined && value !== undefined)
+  ) {
     throw new CheckPoolError(
-      `Usage: bun scripts/ci-check-pool.ts run ${CHECK_POOL_JOBS.join("|")}`,
+      `Usage: bun scripts/ci-check-pool.ts run ${CHECK_POOL_JOBS.join("|")} [--only <name>[,<name>]]`,
     );
   }
   const root = path.resolve(import.meta.dir, "..");
@@ -517,7 +648,7 @@ const main = async () => {
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
     inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
-  const planned = planChecks(readCheckPool(job), context);
+  const planned = planChecks(selectChecks(readCheckPool(job), value), context);
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   // One check per CPU but one: four concurrent checks on a four-CPU runner
   // pushed default 5 s Bun test budgets past their limit; three did not.
@@ -553,18 +684,18 @@ const main = async () => {
           : "FAILED";
       }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
+      const output =
+        planned[index]?.status === "selected"
+          ? readFileSync(logPath(directory, index), "utf-8")
+          : "";
       if (planned[index]?.status === "selected") {
-        const output = readFileSync(logPath(directory, index), "utf-8");
-        const text = output.replace(NESTED_GROUP, " $1");
+        const text = checkLogText(output, result.outcome);
         writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
       print("::endgroup::");
       if (result.outcome === "failure") {
-        const level = result.continuedOnError ? "warning" : "error";
-        const suffix = result.continuedOnError ? " (continue-on-error)" : "";
-        print(
-          `::${level} title=${escapeProperty(result.name)}::${escapeData(`${result.name} failed${suffix}: ${result.detail}`)}`,
-        );
+        print(failedCheckAnnotation(result, output));
+        print(failedCheckRecord(result.name, failedCheckCause(result, output)));
       }
     },
   });

@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Atpakaļ uz lietotni",
-    "billingAndUsage": "Norēķini un lietojums",
     "billingProfiles": "Norēķinu profili",
     "deleteDescription": "Neatgriezeniski dzēsiet šo organizāciju un tās datus. Šo darbību nevar atsaukt.",
     "deleteOrganization": "Dzēst organizāciju",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Pamest organizāciju",
     "leaveRefusedOnlyOwner": "Jūs esat vienīgais īpašnieks. Pirms aiziešanas padariet par īpašnieku citu dalībnieku.",
     "modelsAndProviders": "Modeļi un pakalpojumu sniedzēji",
-    "noPlan": "Nav aktīva plāna",
     "organizationDeleted": "Organizācija ir dzēsta.",
     "organizationId": "Organizācijas ID",
     "organizationLeft": "Jūs pametāt organizāciju.",
-    "overviewDescription": "Pārvaldiet organizāciju, cilvēkus un rīkus.",
-    "people": "Cilvēki",
     "planAndUsage": "Plāns un lietojums",
     "title": "Organizācijas administrēšana",
     "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistents prasīs šo adresi",
-    "copiedToast": "Norādījumi nokopēti. Ielīmējiet tos tērzēšanā ar asistentu.",
     "copy": "Nokopējiet tam norādījumus",
     "description": "Jautājiet Claude vai ChatGPT par savām lietām un dokumentiem. Izvēlieties asistentu, lai atvērtu īsu ceļvedi; tas aizņem apmēram minūti.",
     "instructions": "Pievieno mani stella, manai juridiskajai darbvietai. Izpildi sadaļu “Instructions for AI agents” vietnē {guideUrl} un izmanto šo servera adresi: {mcpUrl}",
     "openGuide": "Atvērt ceļvedi: {assistant}",
+    "pasteHint": "Ielīmējiet tos tērzēšanā ar asistentu.",
     "selfSetupHint": "Izmantojat Claude Code vai Codex?",
     "title": "Izmantojiet stella savā AI asistentā"
   },
@@ -380,6 +375,12 @@
       "attentionComplete": "<strong>Visi apgalvojumi, kuriem vajadzīgs cilvēka lēmums, ir apstrādāti.</strong> {count, plural, zero {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.} one {# standarta vērtējumam nav vajadzīga individuāla pārskatīšana.} other {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.}}",
       "attentionOpen": "<strong>{count, plural, zero {# apgalvojumiem vajadzīgs} one {# apgalvojumam vajadzīgs} other {# apgalvojumiem vajadzīgs}} jūsu lēmums</strong>: pretrunas un apstrīdētas interpretācijas. {routineCount, plural, zero {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.} one {Pārējais # apgalvojums ir standarta, un tam nav vajadzīgs individuāls apstiprinājums.} other {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, apstrīdēts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} other {}})",
+      "documentView": {
+        "label": "Dokumenta skats",
+        "original": "Oriģināls",
+        "reading": "Lasīšanas skats"
+      },
+      "notLocated": "{count, plural, zero {# apgalvojumi oriģinālā netika atrasti} one {# apgalvojums oriģinālā netika atrasts} other {# apgalvojumi oriģinālā netika atrasti}}",
       "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
       "showQueue": "Rādīt rindu",
       "stats": {
@@ -849,7 +850,6 @@
         "unavailable": "Šim nolēmumam AI analīze nav pieejama."
       },
       "generate": "Sagatavot AI kopsavilkumus",
-      "holdingAnchor": "Pāriet uz rindkopu",
       "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Pilnīgums",
-      "countedOn": "Saskaitīts {date}",
       "courtsHeading": "Pēc tiesas",
       "courtsUnavailable": "Sadalījums pēc tiesām pašlaik nav pieejams.",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
-      "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
-      "gapStatusUnknown": "Iztrūkumu statuss nav zināms",
       "generatedAt": "Dati uz {date}",
       "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
@@ -1009,6 +1006,9 @@
       "saved": "{count, plural, zero {Saglabāti # nolēmumu} one {Saglabāts # nolēmums} other {Saglabāti # nolēmumi}} lietā {matter}"
     },
     "newestDecisions": "Jaunākie nolēmumi",
+    "noResults": {
+      "hint": "Izmēģiniet citus vārdus, uzlabojiet vaicājumu ar AI vai uzdodiet jautājumu tērzēšanā."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Cilvēku"
@@ -1082,6 +1082,10 @@
         "short": "Īss"
       }
     },
+    "rewritten": {
+      "line": "Nav precīzu atbilstību vaicājumam <bdi>{original}</bdi>; rādīti rezultāti vaicājumam <bdi>{query}</bdi>",
+      "searchOriginal": "Meklēt manus sākotnējos vārdus"
+    },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
@@ -1098,6 +1102,8 @@
         "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
         "message": "Nekas neatbilst izvēlētajiem filtriem."
       },
+      "partialMatch": "Daļēja atbilstība",
+      "partialMatches": "Daļējas atbilstības vaicājumam: <bdi>{query}</bdi>",
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
@@ -1135,6 +1141,7 @@
       "judges": "Tiesneši",
       "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
+      "paragraphReference": "{number}. rindkopa",
       "popularName": "Populārais nosaukums",
       "portraitCredit": "Portretu avots: {source}",
       "provisionMentions": "{count, number}×",
@@ -1381,6 +1388,7 @@
     "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
     "credentialSendTitle": "Šajā ziņojumā var būt piekļuves informācija",
     "deleteThread": "Dzēst sarunu",
+    "diagramUnavailable": "Šo diagrammu neizdevās attēlot. Tās pirmkods ir redzams zemāk.",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",
       "autoDirectDescription": "AI labojumi tiek lietoti uzreiz, tieši pārrakstot dokumentu (bez izmaiņu izsekošanas).",
@@ -1601,6 +1609,9 @@
         "private": "Jūsu prasmes",
         "team": "Komandas prasmes"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Arī aplūkoti ({count, number})"
     },
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
@@ -2662,10 +2673,12 @@
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
       "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
+      "caseLawIdentityOnly": "Šajā valstī ir pieejama tikai precīza nolēmumu meklēšana un lasīšana.",
       "caseLawSearchUnavailable": "Šīs valsts judikatūras meklēšana nav pieejama. Tās publiskos tiesu nolēmumus joprojām varat lasīt.",
       "conflict": "Pieprasījums konfliktē ar pašreizējo stāvokli.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "legislationCountryUnavailable": "Šīs valsts tiesību akti nav pieejami. Izvēlieties citu valsti.",
+      "legislationIdentityOnly": "Šajā valstī ir pieejama tikai precīza tiesību aktu meklēšana un lasīšana.",
       "legislationSearchUnavailable": "Šīs valsts tiesību aktu meklēšana nav pieejama. Tās publiskos tiesību aktus joprojām varat lasīt.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
@@ -2688,6 +2701,11 @@
       "aiConfigModelInvalid": "AI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
       "aiConfigProviderInvalid": "AI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "AI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
+      "aiDeadlineExceeded": "AI neatbildēja laikā. Mēģiniet vēlreiz pēc brīža.",
+      "aiOutputInvalid": "AI atbilde bija neparedzētā formātā. Mēģiniet vēlreiz.",
+      "aiOutputModerated": "AI pakalpojumu sniedzējs moderēja izvadi. Pārfrāzējiet pieprasījumu vai izvēlieties citu modeli.",
+      "aiProviderTaskUnsupported": "Konfigurētais AI pakalpojumu sniedzējs nevar izpildīt šo uzdevumu. Izvēlieties tādu, kas to spēj.",
+      "aiUnknown": "AI pieprasījums neizdevās. Mēģiniet vēlreiz.",
       "clauseDirectivesInvalid": "Saistītā klauzulā ir nederīgas direktīvas. Pirms veidnes aizpildīšanas izlabojiet klauzulu.",
       "clauseDirectivesInvalidDetails": "Klauzulā {clauseName} laukā {slotName} ir nederīgas direktīvas. Atveriet klauzulu redaktoru, izlabojiet norādītās rindkopas un vēlreiz aizpildiet veidni.",
       "clauseDirectivesOverrideInvalidDetails": "Klauzulas {clauseName} aizstātais teksts laukā {slotName} satur nederīgas direktīvas. Izlabojiet šīs aizpildīšanas aizstāto tekstu un mēģiniet vēlreiz.",
@@ -4173,7 +4191,9 @@
     "prompt": "Ko jūs meklējat?",
     "recent": "Nesenie",
     "recentCasesFilter": "Nolēmumi",
+    "recentLoadFailed": "Neizdevās ielādēt nesenās darbības.",
     "recentSearchFilter": "Meklējumi",
+    "recentUpdateFailed": "Neizdevās atjaunināt nesenās darbības.",
     "recentlyInForce": "Nesen stājās spēkā",
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
@@ -4234,6 +4254,10 @@
     "archivedEmpty": "Nav arhivētu atmiņu.",
     "archivedToast": "Atmiņa arhivēta",
     "createdToast": "Saglabāts atmiņā",
+    "deleteConfirmation": "Lai apstiprinātu, ievadiet {confirmation}",
+    "deleteDescription": "Šī atmiņa tiks neatgriezeniski dzēsta. Šo darbību nevar atsaukt.",
+    "deleteTitle": "Dzēst atmiņu?",
+    "deletedToast": "Atmiņa dzēsta",
     "empty": "Atmiņā vēl nekā nav.",
     "kinds": {
       "decision": "Lēmums",
@@ -5162,6 +5186,8 @@
     "outline": "Saturs",
     "outlineJumpLabel": "Pāriet uz normu",
     "outlineJumpPlaceholder": "§ 10 vai virsraksts",
+    "pendingChanges": "Gaidāmie grozījumi",
+    "pendingChangesIncomplete": "Izdevēja datos var nebūt iekļauti visi gaidāmie grozījumi.",
     "provisionAskContextPrompt": "\n\nFragmenti, kuros norma piemērota autoritatīvākajos nolēmumos:\n{passages}\n\nIzmanto judikatūras rīkus, lai izlasītu jebkuru no šiem nolēmumiem pilnībā vai atrastu citus nolēmumus, kas atsaucas uz normu.",
     "provisionAskPlaceholder": "Jautājiet par šo normu",
     "provisionAskQuestionPrompt": "Par {subject}: {question}",
