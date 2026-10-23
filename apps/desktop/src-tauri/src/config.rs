@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::managed_policy::{self, ManagedServer};
 use crate::types::DEFAULT_BRIDGE_PORT;
 
 const DEFAULT_WEB_PORT: u16 = 3000;
@@ -98,8 +99,9 @@ pub fn normalize_api_base_url(url: &str) -> String {
 }
 
 pub fn normalize_self_host_web_origin(value: &str) -> Result<String, String> {
-  let parsed = reqwest::Url::parse(value.trim())
-    .map_err(|_| "Self-host web origin is not a valid URL.".to_string())?;
+  let parsed = reqwest::Url::parse(value.trim()).map_err(
+    crate::logging::with_cause_logged("Self-host web origin is not a valid URL."),
+  )?;
   reject_non_origin_url(&parsed)?;
 
   if !is_allowed_user_trusted_url(&parsed) {
@@ -111,8 +113,9 @@ pub fn normalize_self_host_web_origin(value: &str) -> Result<String, String> {
 
 pub fn normalize_self_host_api_base_url(value: &str) -> Result<String, String> {
   let normalized = normalize_api_base_url(value.trim());
-  let parsed = reqwest::Url::parse(&normalized)
-    .map_err(|_| "Self-host API URL is not a valid URL.".to_string())?;
+  let parsed = reqwest::Url::parse(&normalized).map_err(
+    crate::logging::with_cause_logged("Self-host API URL is not a valid URL."),
+  )?;
   reject_non_origin_url(&parsed)?;
 
   if !is_allowed_user_trusted_url(&parsed) {
@@ -123,8 +126,14 @@ pub fn normalize_self_host_api_base_url(value: &str) -> Result<String, String> {
 }
 
 /// The web origin that links a desktop account for an API the build trusts
-/// without a self-host approval: production, or a local development stack.
+/// without a self-host approval: the server an administrator named,
+/// production, or a local development stack.
 pub fn web_origin_for_trusted_api(api_base_url: &str) -> Option<String> {
+  if let Some(server) = managed_server()
+    && server.api_base_url == api_base_url
+  {
+    return Some(server.web_origin.clone());
+  }
   if api_base_url == PRODUCTION_API_BASE_URL {
     return Some(PRODUCTION_WEB_ORIGIN.into());
   }
@@ -140,9 +149,13 @@ pub fn web_origin_for_trusted_api(api_base_url: &str) -> Option<String> {
   Some(format!("http://{}:{web_port}", parsed.host()?))
 }
 
-/// The server a fresh "Connect to stella web" links to: the API and web
-/// origin this build was made for, or production when the build names none.
+/// The server a fresh "Connect to stella web" links to: the server an
+/// administrator named, else the API and web origin this build was made for,
+/// or production when the build names none.
 pub fn default_connect_target() -> (String, String) {
+  if let Some(server) = managed_server() {
+    return (server.api_base_url.clone(), server.web_origin.clone());
+  }
   let api = parse_origins(BUILD_TIME_DEFAULT_API_BASE_URLS.map(str::to_string))
     .into_iter()
     .next();
@@ -173,6 +186,16 @@ pub fn resolve_bridge_port() -> u16 {
 }
 
 pub fn resolve_allowed_origins() -> HashSet<String> {
+  let mut origins = unmanaged_allowed_origins();
+  if let Some(server) = managed_server() {
+    origins.insert(server.web_origin.clone());
+  }
+  origins
+}
+
+/// Allowed web origins before managed policy. API trust derives from these,
+/// never from a managed web origin: the policy names its API itself.
+fn unmanaged_allowed_origins() -> HashSet<String> {
   let web_port = parse_port(std::env::var("STELLA_WEB_PORT").ok(), DEFAULT_WEB_PORT);
 
   let mut origins = HashSet::new();
@@ -191,13 +214,17 @@ pub fn resolve_allowed_origins() -> HashSet<String> {
 }
 
 pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
+  trusted_api_base_urls(managed_server())
+}
+
+fn trusted_api_base_urls(managed: Option<&ManagedServer>) -> HashSet<String> {
   let api_port = parse_port(std::env::var("STELLA_API_PORT").ok(), DEFAULT_API_PORT);
   let mut urls = HashSet::new();
   urls.insert(PRODUCTION_API_BASE_URL.to_string());
   urls.insert(format!("http://127.0.0.1:{api_port}"));
   urls.insert(format!("http://localhost:{api_port}"));
 
-  for origin in resolve_allowed_origins() {
+  for origin in unmanaged_allowed_origins() {
     urls.insert(normalize_api_base_url(&origin));
   }
 
@@ -209,7 +236,15 @@ pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
     urls.insert(normalize_api_base_url(&url));
   }
 
+  if let Some(server) = managed {
+    urls.insert(server.api_base_url.clone());
+  }
+
   urls
+}
+
+fn managed_server() -> Option<&'static ManagedServer> {
+  managed_policy::current().server.as_ref()
 }
 
 #[cfg(test)]
@@ -288,6 +323,16 @@ mod tests {
       normalize_self_host_api_base_url("https://my.stll.app").unwrap(),
       "https://api.stll.app"
     );
+  }
+
+  #[test]
+  fn a_managed_server_trusts_its_api_but_not_its_web_origin_as_an_api() {
+    let urls = trusted_api_base_urls(Some(&ManagedServer {
+      web_origin: "https://stella.firm.example".into(),
+      api_base_url: "https://api.firm.example".into(),
+    }));
+    assert!(urls.contains("https://api.firm.example"));
+    assert!(!urls.contains("https://stella.firm.example"));
   }
 
   #[test]

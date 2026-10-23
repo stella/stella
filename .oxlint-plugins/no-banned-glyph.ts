@@ -1,13 +1,18 @@
-// Scales of justice and gavels are the stock iconography of legal software.
-// They are decorative rather than informative: every product in the category
-// draws them, none of Stella's surfaces need them, and a lawyer reading a
-// results table learns nothing from a pair of scales above it. This design
-// system draws the concept instead of the cliché.
+// Glyphs this design system never draws, by family:
 //
-// Replacements, by what the glyph actually stands for:
+// Legal cliché. Scales of justice and gavels are the stock iconography of
+// legal software. They are decorative rather than informative: every product
+// in the category draws them, none of Stella's surfaces need them, and a
+// lawyer reading a results table learns nothing from a pair of scales above
+// it. Replacements, by what the glyph actually stands for:
 //   court            -> LandmarkIcon
 //   decision/opinion -> FileTextIcon, or LibraryIcon for a collection
 //   the case-law section -> CaseLawIcon from @stll/ui/icons
+//
+// AI persona. A robot turns the AI into a character; Stella presents it as a
+// tool. Replacements:
+//   something the AI did or does -> AiActionIcon from @stll/ui/icons
+//   models, providers, compute   -> CpuIcon
 //
 // Flagged, each at its own site so the replacement decision is reported where
 // it has to be made:
@@ -24,7 +29,8 @@
 // the icon module cannot hand the glyph on. A same-named local component is
 // out of scope. `Hammer` and
 // `Weight` are not in the set: lucide draws them as a tool and a gym plate,
-// and neither reads as a gavel or a balance.
+// and neither reads as a gavel or a balance. Names match exactly, so
+// `BottleWine` or `Bottom*` glyphs are untouched.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged } from "@oxlint/plugins";
@@ -50,15 +56,20 @@ const isIconSource = (source: string, importerRepoPath: string): boolean =>
   source === "@stll/ui/icons" ||
   canonicalModuleId(source, importerRepoPath) === ICON_MODULE;
 
+type GlyphFamily = "legalClicheGlyph" | "aiPersonaGlyph";
+
 // lucide exports the plain, `Icon`-suffixed and `Lucide`-prefixed alias of
 // every glyph, and each is a separate named export a caller can reach for.
-const BANNED_IMPORTS = new Set([
-  "Gavel",
-  "GavelIcon",
-  "LucideGavel",
-  "LucideScale",
-  "Scale",
-  "ScaleIcon",
+const aliases = (glyphs: readonly string[], family: GlyphFamily) =>
+  glyphs.flatMap((glyph) =>
+    [glyph, `${glyph}Icon`, `Lucide${glyph}`].map(
+      (name) => [name, family] as const,
+    ),
+  );
+
+const BANNED_IMPORTS: ReadonlyMap<string, GlyphFamily> = new Map([
+  ...aliases(["Gavel", "Scale"], "legalClicheGlyph"),
+  ...aliases(["Bot", "BotMessageSquare", "BotOff"], "aiPersonaGlyph"),
 ]);
 
 /**
@@ -87,9 +98,9 @@ const isValueReference = (node: unknown): boolean => {
 };
 
 export default eslintCompatPlugin({
-  meta: { name: "no-legal-cliche-glyph" },
+  meta: { name: "no-banned-glyph" },
   rules: {
-    "no-legal-cliche-glyph": {
+    "no-banned-glyph": {
       meta: {
         type: "problem",
         messages: {
@@ -100,17 +111,22 @@ export default eslintCompatPlugin({
             "concept instead — a court is <LandmarkIcon>, a decision is " +
             "<FileTextIcon> (<LibraryIcon> for a collection of them), and " +
             "the case-law section is <CaseLawIcon> from '@stll/ui/icons'.",
+          aiPersonaGlyph:
+            "Do not draw '{{name}}' from 'lucide-react'. A robot " +
+            "personifies the AI, and this design system presents it as a " +
+            "tool. Use <AiActionIcon> from '@stll/ui/icons' for something " +
+            "the AI did or does, and <CpuIcon> for models and providers.",
         },
       },
       createOnce(context) {
         const bannedLocals = new Map<string, string>();
 
         const report = (node: Ranged, name: string) => {
-          context.report({
-            node,
-            messageId: "legalClicheGlyph",
-            data: { name },
-          });
+          const family = BANNED_IMPORTS.get(name);
+          if (family === undefined) {
+            return;
+          }
+          context.report({ node, messageId: family, data: { name } });
         };
 
         return {

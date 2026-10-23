@@ -21,6 +21,7 @@ import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type UploadMessageFilesWithRollbackProps = {
   message: PersistableChatMessage;
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -38,6 +39,7 @@ type UploadMessageFilesWithRollbackResult = Result<
 
 export const uploadMessageFilesWithRollback = async ({
   message,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -46,6 +48,7 @@ export const uploadMessageFilesWithRollback = async ({
 }: UploadMessageFilesWithRollbackProps): Promise<UploadMessageFilesWithRollbackResult> => {
   const uploadResult = await uploadMessageFiles({
     message,
+    organizationId,
     recordAuditEvent,
     safeDb,
     threadId,

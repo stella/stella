@@ -208,10 +208,9 @@ impl DesktopCrashMonitor {
   }
 
   fn try_acquire(&self) -> io::Result<Acquisition> {
-    let mut state = self
-      .state
-      .lock()
-      .map_err(|_| io::Error::other("crash marker lock unavailable"))?;
+    let mut state = self.state.lock().map_err(|poisoned| {
+      io::Error::other(format!("crash marker lock unavailable: {poisoned}"))
+    })?;
     if matches!(state.lifecycle, RunLifecycle::Exiting) {
       return Ok(Acquisition::Contended);
     }
@@ -258,10 +257,9 @@ impl DesktopCrashMonitor {
       }
       let remaining = policy.timeout.saturating_sub(started.elapsed());
       if remaining.is_zero() {
-        let mut state = self
-          .state
-          .lock()
-          .map_err(|_| io::Error::other("crash marker lock unavailable"))?;
+        let mut state = self.state.lock().map_err(|poisoned| {
+          io::Error::other(format!("crash marker lock unavailable: {poisoned}"))
+        })?;
         if matches!(state.lifecycle, RunLifecycle::Running) {
           state.tracking = TrackingState::Unavailable;
         }
@@ -498,9 +496,10 @@ fn read_marker(path: &Path) -> io::Result<Option<RunMarker>> {
   fs::File::open(path)?
     .take(MAX_MARKER_BYTES + 1)
     .read_to_end(&mut bytes)?;
-  serde_json::from_slice(&bytes)
-    .map(Some)
-    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid crash marker"))
+  serde_json::from_slice(&bytes).map(Some).map_err(|error| {
+    crate::logging::log_json_error(&error, "crash marker is invalid");
+    io::Error::new(io::ErrorKind::InvalidData, "invalid crash marker")
+  })
 }
 
 fn read_previous_run(path: &Path) -> io::Result<Option<RunMarker>> {

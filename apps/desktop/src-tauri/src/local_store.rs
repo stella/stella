@@ -17,6 +17,7 @@ use std::{
 };
 
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
+use crate::logging::log_json_error;
 
 const ENVELOPE_VERSION: u8 = 1;
 const NONCE_BYTES: usize = 12;
@@ -45,7 +46,8 @@ fn read_envelope(
     }
   };
   let metadata: serde_json::Value = serde_json::from_slice(&raw).map_err(|error| {
-    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+    log_json_error(&error, "encrypted store envelope is invalid");
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid"))
   })?;
   let object = metadata.as_object().ok_or_else(|| {
     EncryptedReadError::Unreadable(format!("{label} envelope is not an object"))
@@ -58,7 +60,8 @@ fn read_envelope(
     )));
   }
   serde_json::from_slice(&raw).map(Some).map_err(|error| {
-    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+    log_json_error(&error, "encrypted store envelope is invalid");
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid"))
   })
 }
 
@@ -119,7 +122,7 @@ impl EncryptedJsonFile {
 
   fn cipher(&self) -> Result<Aes256Gcm, String> {
     Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| format!("{} encryption key is invalid", self.label))
+      .map_err(|error| format!("{} encryption key is invalid: {error}", self.label))
   }
 
   pub fn load<T: DeserializeOwned>(&self) -> Result<Option<T>, String> {
@@ -141,8 +144,8 @@ impl EncryptedJsonFile {
         "{label} nonce has an invalid length"
       )));
     }
-    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| {
-      EncryptedReadError::Unreadable(format!("{label} nonce has an invalid length"))
+    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|error| {
+      EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
     })?;
     let ciphertext = hex::decode(envelope.ciphertext).map_err(|error| {
       EncryptedReadError::Unreadable(format!("{label} ciphertext is invalid: {error}"))
@@ -157,13 +160,17 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| {
-        EncryptedReadError::Unreadable(format!("{label} store could not be decrypted"))
+      .map_err(|error| {
+        EncryptedReadError::Unreadable(format!(
+          "{label} store could not be decrypted: {error}"
+        ))
       })?;
     serde_json::from_slice(&plaintext)
       .map(Some)
       .map_err(|error| {
-        EncryptedReadError::Incompatible(format!("{label} store is invalid: {error}"))
+        // serde would quote the decrypted contents it failed on.
+        log_json_error(&error, "encrypted store contents are invalid");
+        EncryptedReadError::Incompatible(format!("{label} store is invalid"))
       })
   }
 
@@ -185,7 +192,7 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| format!("{label} encryption failed"))?;
+      .map_err(|error| format!("{label} encryption failed: {error}"))?;
     let envelope = EncryptedEnvelope {
       ciphertext: hex::encode(ciphertext),
       nonce: hex::encode(nonce),
