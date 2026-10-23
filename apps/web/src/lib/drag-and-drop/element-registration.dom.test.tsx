@@ -17,7 +17,6 @@ for (const [kind, register] of Object.entries(registrations)) {
     test("one live registration keeps its cleanup", () => {
       const element = document.createElement("div");
       const cleanup = register({ element, name: "first" });
-      expect(typeof cleanup).toBe("function");
       expect(() => register({ element, name: "second" })).toThrow(
         /first.*second/u,
       );

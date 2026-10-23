@@ -675,6 +675,7 @@ export const AnnotationToolbar = ({
     }
   } else if (selected !== null) {
     const spans = selected.spans;
+    const explainRefusalReason = explainRefusal?.(spans);
     content = (
       <div className="flex flex-wrap items-center gap-1">
         <div className="relative">
@@ -820,7 +821,7 @@ export const AnnotationToolbar = ({
               )}
             </CapabilityAction>
             {onExplain !== undefined &&
-              (explainRefusal?.(spans) === undefined ? (
+              (explainRefusalReason === undefined ? (
                 <CapabilityAction
                   action={{ capability: "ai" }}
                   surface="control"
@@ -855,7 +856,7 @@ export const AnnotationToolbar = ({
                     className="text-muted-foreground px-2 text-xs"
                     id={explainReasonId}
                   >
-                    {explainRefusal?.(spans)}
+                    {explainRefusalReason}
                   </span>
                 </>
               ))}
