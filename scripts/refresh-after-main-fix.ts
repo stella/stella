@@ -227,6 +227,24 @@ export const redWindows = (mainRuns: readonly MainRun[]): RedWindow[] => {
   );
 };
 
+/**
+ * Whether main is red now: a main workflow's latest run with a verdict is not
+ * green. A refresh then would only re-test onto a failing main.
+ */
+export const mainIsRed = (mainRuns: readonly MainRun[]): boolean =>
+  MAIN_WORKFLOWS.some((workflow) => {
+    const latest = mainRuns
+      .filter(
+        (run) =>
+          run.workflow === workflow &&
+          MAIN_EVENTS.includes(run.event) &&
+          runVerdict(run) !== "neutral",
+      )
+      .toSorted(byCreation)
+      .at(-1);
+    return latest !== undefined && runVerdict(latest) !== "green";
+  });
+
 /** Closed windows, oldest first, that contain the given time. */
 export const windowsContaining = (
   windows: readonly RedWindow[],
@@ -890,7 +908,7 @@ export const plan = async (
     return mainRuns;
   }
   const windows = redWindows(mainRuns.value);
-  if (windows.length === 0) {
+  if (windows.length === 0 || mainIsRed(mainRuns.value)) {
     return Result.ok({
       windows,
       selected: [],

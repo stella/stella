@@ -10,6 +10,7 @@ import {
   type MainRun,
   paceRefreshes,
   pairKey,
+  mainIsRed,
   plan,
   type PullRequestEvidence,
   recheckRefresh,
@@ -310,7 +311,7 @@ describe("plan", () => {
 
   // Main green at 1, red at 2 and 3, green at 6; one pull request whose run
   // at 4 failed only a check main failed then.
-  const fakeGh = ({ truncate = false } = {}) => {
+  const fakeGh = ({ truncate = false, redAgain = false } = {}) => {
     const calls: string[] = [];
     const gh: Gh = async (args) => {
       calls.push(args.join(" "));
@@ -344,6 +345,7 @@ describe("plan", () => {
               apiRun(2, 2, "failure"),
               apiRun(3, 3, "failure"),
               apiRun(4, 6, "success"),
+              ...(redAgain ? [apiRun(5, 8, "failure")] : []),
             ]
           : [];
         return page(runs, runs.length + (truncate && runs.length > 0 ? 1 : 0));
@@ -429,10 +431,45 @@ describe("plan", () => {
     ).toHaveLength(4);
   });
 
+  test("a window that closed is not refreshed onto a main that failed again", async () => {
+    const result = await plan(options(fakeGh({ redAgain: true }).gh));
+    if (result.isErr()) {
+      expect.unreachable(result.error.message);
+    }
+    expect(result.value.windows).toHaveLength(1);
+    expect(result.value.selected).toEqual([]);
+    expect(result.value.paced).toEqual([]);
+  });
+
   test("a day listing short of its total_count fails instead of selecting", async () => {
     const result = await plan(options(fakeGh({ truncate: true }).gh));
     expect(result.isErr()).toBe(true);
   });
+});
+
+test("main is red while any main workflow's latest verdict is not green", () => {
+  const depth = (hour: number, conclusion: string) =>
+    run(hour, conclusion, { suitesEvaluated: true });
+  const heavy = (hour: number, conclusion: string) =>
+    run(hour, conclusion, {
+      workflow: "main-heavy.yml",
+      suitesEvaluated: true,
+    });
+  expect(mainIsRed([depth(1, "success"), depth(2, "failure")])).toBe(true);
+  expect(
+    mainIsRed([depth(1, "success"), depth(2, "failure"), depth(3, "success")]),
+  ).toBe(false);
+  expect(
+    mainIsRed([
+      depth(1, "success"),
+      depth(2, "failure"),
+      depth(3, "success"),
+      depth(4, "failure"),
+    ]),
+  ).toBe(true);
+  expect(mainIsRed([depth(3, "success"), heavy(4, "failure")])).toBe(true);
+  // A cancelled run has no verdict and changes nothing.
+  expect(mainIsRed([depth(3, "success"), depth(4, "cancelled")])).toBe(false);
 });
 
 describe("the recheck right before an update", () => {
