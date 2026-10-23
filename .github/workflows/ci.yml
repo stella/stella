@@ -7108,6 +7108,8 @@ jobs:
           mkdir -p "$(dirname "$RECORD_PATH")"
           printf '%s\n' "$REQUIRED_SUMMARY" > "$RECORD_PATH"
 
+      # A metadata run of an idle pull request mirrors this record, so it is
+      # kept as long as the repository allows (a few hundred bytes per run).
       - name: Upload required-jobs record
         if: always() && steps.outcome.outcome != 'skipped'
         continue-on-error: true
@@ -7116,7 +7118,7 @@ jobs:
           name: ci-required-summary
           overwrite: true
           path: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
-          retention-days: 5
+          retention-days: 90
           if-no-files-found: error
 
       # Failure digest: one record per failed step (job, step, kind, first
