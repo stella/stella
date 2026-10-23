@@ -148,8 +148,7 @@ const isNativeToolDefaultEnabledForCodes = (
  * tool's jurisdiction to the org's practice jurisdictions.
  */
 type NativeToolDisabledReason =
-  | "disabled_by_override"
-  | "jurisdiction_mismatch";
+  "disabled_by_override" | "jurisdiction_mismatch";
 
 const nativeToolDisabledReasonForCodes = (
   slug: string,

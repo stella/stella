@@ -140,8 +140,7 @@ const getFileTabEditorState = ({
   desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
   editingDocxTabId: string | null;
   entityData:
-    | { fields: { id: string; propertyId?: string | undefined }[] }
-    | undefined;
+    { fields: { id: string; propertyId?: string | undefined }[] } | undefined;
   filePropertyId: string | undefined;
   isNativeDocxDisplay: boolean;
   isPdfDisplay: boolean;

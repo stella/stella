@@ -1001,8 +1001,7 @@ const stepExecution = ({
   labelPrefix,
   index,
 }: StepExecutionOptions):
-  | { problem: string }
-  | { label: string; cwd: string; shell: string } => {
+  { problem: string } | { label: string; cwd: string; shell: string } => {
   const stepName = step["name"];
   const id = step["id"];
   if (stepName !== undefined && typeof stepName !== "string") {

@@ -1,16 +1,16 @@
 import {
+  hashKey,
   InfiniteQueryObserver,
   QueryClient,
   QueryObserver,
-  hashKey,
 } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { expect, test } from "bun:test";
 
 import {
   REALTIME_EVENT_TYPE,
-  RESOURCE_TYPE,
   RESOURCE_CHANGE_TYPE,
+  RESOURCE_TYPE,
 } from "@stll/api-contract";
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
 

@@ -96,13 +96,11 @@ export const readDeferredE2eCleanup = async (
 
   const results = await Promise.allSettled(
     entries.map(async (entry) => {
-      if (
-        !(
-          entry.isFile() &&
-          (entry.name.endsWith(CLEANUP_RECORD_EXTENSION) ||
-            entry.name.endsWith(CLEANUP_TEMP_EXTENSION))
-        )
-      ) {
+      if (!(
+        entry.isFile() &&
+        (entry.name.endsWith(CLEANUP_RECORD_EXTENSION) ||
+          entry.name.endsWith(CLEANUP_TEMP_EXTENSION))
+      )) {
         return panic(`Unexpected deferred E2E cleanup entry: ${entry.name}`);
       }
 
