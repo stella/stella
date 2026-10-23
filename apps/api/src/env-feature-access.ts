@@ -48,6 +48,11 @@ export const createFeatureAccessGrantsOwner = ({
       }
       const loaded = await source.readValue();
       const parsed = v.parse(featureAccessGrantsEnvSchema, loaded.raw);
+      if (parsed.unknownGrantCount > 0) {
+        logger.error("feature_access.unknown_grant", {
+          "feature_access.unknown_grant_count": parsed.unknownGrantCount,
+        });
+      }
       current = Object.freeze({
         grants: parsed.grants,
         version: loaded.version,

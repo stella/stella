@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -8,6 +8,7 @@ import {
   readFeatureAccessGrants,
 } from "@/api/env-feature-access";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { logger } from "@/api/lib/observability/logger";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const ORGANIZATION_ID = "org_12345678901234567890123456789012";
@@ -67,6 +68,32 @@ test("test fixtures can replace the snapshot while exercising strict access", ()
 });
 
 describe("feature access grant refresh", () => {
+  test("unknown refreshed grants report only their count once per version", async () => {
+    const client = new FakeSsmClient();
+    const owner = createOwner(client, []);
+    client.version = 2;
+    client.raw = JSON.stringify({
+      ...updatedGrants,
+      "unknown-feature": updatedGrants["legal-lists"],
+    });
+    const errors = spyOn(logger, "error").mockImplementation(() => {});
+    try {
+      await owner.refresh();
+      await owner.refresh();
+      expect(owner.read()).toEqual({ grants: updatedGrants, version: 2 });
+      expect(errors.mock.calls).toEqual([
+        [
+          "feature_access.unknown_grant",
+          {
+            "feature_access.unknown_grant_count": 1,
+          },
+        ],
+      ]);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
   test("unchanged versions perform only the metadata check", async () => {
     const client = new FakeSsmClient();
     const owner = createOwner(client, []);
