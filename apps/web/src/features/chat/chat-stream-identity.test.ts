@@ -33,10 +33,9 @@ import {
   keepPostedMessagesInSnapshots,
   keepReasoningSteps,
 } from "@/features/chat/chat-snapshot-history";
+import { buildWireSnapshot } from "@/features/chat/chat-test-fixtures";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
-
-import { buildWireSnapshot } from "../../../../api/src/tests/helpers/chat-fixtures";
 
 // A memoized message row or part card skips a render only when the chunk
 // leaves its object as it was. These tests drive the SDK client the runtime

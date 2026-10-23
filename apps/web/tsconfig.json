@@ -4,7 +4,6 @@
     "types": ["bun-types", "vite/client"],
     "verbatimModuleSyntax": false,
     "paths": {
-      "@/api/*": ["../api/src/*"],
       "@/*": ["./src/*"],
       "@stll/ai-catalog": ["../../packages/ai-catalog/src/index.ts"],
       "@stll/business-registries": [
