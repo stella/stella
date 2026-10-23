@@ -1,12 +1,21 @@
 import "@/api/register-schema-formats";
 import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { Value } from "@sinclair/typebox/value";
+import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
+import * as v from "valibot";
 
-import { isApiDate } from "@/api/lib/json-schema/api-date";
+import { isApiDate, vApiDate } from "@/api/lib/json-schema/api-date";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 const dateSchema = t.String({ format: "date" });
+const dateTimeSchema = t.String({ format: "date-time" });
+
+const API_SOURCE_ROOT = `${import.meta.dir}/../..`;
+const VALIBOT_DATE_OWNER = "lib/json-schema/api-date.ts";
+// Development helpers and one-off scripts never take a request or write a row.
+const OUTSIDE_RUNTIME = /^(?:dev|scripts|tests)\//u;
 
 describe("API calendar date boundaries", () => {
   test("accepts exactly existing CE calendar days across month and leap-century boundaries", () => {
@@ -31,6 +40,7 @@ describe("API calendar date boundaries", () => {
           expect(isApiDate(value)).toBe(expected);
           expect(compiled.Check(value)).toBe(expected);
           expect(Value.Check(dateSchema, value)).toBe(expected);
+          expect(v.is(vApiDate, value)).toBe(expected);
         }
       }
     }
@@ -134,4 +144,51 @@ describe("API calendar date boundaries", () => {
       expect(calls).toBe(9);
     },
   );
+
+  test("publishes the Valibot date as a plain date format", () => {
+    expect(toJsonSchema(vApiDate)).toMatchObject({
+      type: "string",
+      format: "date",
+    });
+    expect(JSON.stringify(toJsonSchema(vApiDate))).not.toContain("pattern");
+  });
+});
+
+describe("API date-time storage boundaries", () => {
+  test.each([
+    "2026-10-23T10:00:00Z",
+    "0001-01-01T00:00:00Z",
+    "9999-12-31T23:59:59Z",
+  ])("accepts the storable instant %s", (value) => {
+    expect(Value.Check(dateTimeSchema, value)).toBe(true);
+  });
+
+  test.each([
+    "0000-01-01T00:00:00Z",
+    // A positive offset moves the instant back into UTC year 0.
+    "0001-01-01T00:00:00+01:00",
+    // A negative offset moves the instant forward into UTC year 10000.
+    "9999-12-31T23:59:59-23:59",
+  ])("rejects the unstorable instant %s", (value) => {
+    expect(Value.Check(dateTimeSchema, value)).toBe(false);
+  });
+});
+
+test("every Valibot date schema checks the calendar day", async () => {
+  const loose: string[] = [];
+  for (const filename of new Glob("**/*.ts").scanSync(API_SOURCE_ROOT)) {
+    if (
+      filename === VALIBOT_DATE_OWNER ||
+      filename.endsWith(".test.ts") ||
+      OUTSIDE_RUNTIME.test(filename)
+    ) {
+      continue;
+    }
+    const source = await Bun.file(`${API_SOURCE_ROOT}/${filename}`).text();
+    if (source.includes(".isoDate()")) {
+      loose.push(filename);
+    }
+  }
+  // `isoDate()` alone passes impossible days and year 0000; use `vApiDate`.
+  expect(loose).toEqual([]);
 });

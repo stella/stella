@@ -31,6 +31,7 @@ import {
   READ_STATUTE_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
@@ -81,7 +82,6 @@ import {
   DEFAULT_SEARCH_LIMIT,
   errorResult,
   handlerStatusOf,
-  ISO_DATE_SCHEMA,
   isToolErrorResult,
   MCP_CONTENT_MAX_CHARS,
   mapValibotIssues,
@@ -167,7 +167,7 @@ const anchorInputSchema = v.pipe(
 );
 
 const asOfInputSchema = v.pipe(
-  ISO_DATE_SCHEMA,
+  vApiDate,
   v.maxLength(10),
   v.description(
     "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it " +
@@ -223,7 +223,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "Filter statutes effective from this ISO date (YYYY-MM-DD)",
@@ -232,7 +232,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "Filter statutes effective up to this ISO date (YYYY-MM-DD)",

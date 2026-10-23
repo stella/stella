@@ -117,6 +117,7 @@ import {
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -217,7 +218,6 @@ import {
   handlerResultMessage,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
   MCP_CONTENT_MAX_CHARS,
@@ -822,14 +822,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     source_id: v.optional(uuidInputSchema("Filter by source ID")),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
       ),
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
       ),

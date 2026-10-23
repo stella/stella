@@ -9,6 +9,7 @@ import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { LAW_READ_SCOPE } from "@/api/handlers/legal-resolve/scope";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { LIMITS } from "@/api/lib/limits";
 
 import { defineMcpToolSet } from "./tool-types";
@@ -118,8 +119,7 @@ const resolveLawArgsSchema = nullAsAbsent(
     ),
     as_of: v.optional(
       v.pipe(
-        v.string(),
-        v.isoDate(),
+        vApiDate,
         v.description(
           "Expression date YYYY-MM-DD; omit for the current expression.",
         ),

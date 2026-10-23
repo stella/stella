@@ -57,6 +57,7 @@ import {
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -2297,7 +2298,7 @@ const setFieldValueContentSchema = v.variant("type", [
       v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
     ),
     value: v.pipe(
-      v.nullable(v.pipe(v.string(), v.isoDate())),
+      v.nullable(vApiDate),
       v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
     ),
   }),

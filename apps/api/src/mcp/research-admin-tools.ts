@@ -21,6 +21,7 @@ import {
   UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
 import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
@@ -778,7 +779,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       ),
       time_locked_through_month: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.isoDate())),
+          v.nullable(vApiDate),
           v.description("Locked month-end date; null unlocks"),
         ),
       ),

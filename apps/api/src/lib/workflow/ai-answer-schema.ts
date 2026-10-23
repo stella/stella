@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 
 /**
  * The structured output one column of any kind asks a model for, keyed by the
@@ -135,7 +136,7 @@ export const answerSchemaForContent = (
           );
     case "date":
       return v.pipe(
-        v.nullable(v.pipe(v.string(), v.isoDate())),
+        v.nullable(vApiDate),
         v.description(ANSWER_CONTEXT.date.description),
         v.examples([...ANSWER_CONTEXT.date.examples]),
       );

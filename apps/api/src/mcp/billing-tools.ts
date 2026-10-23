@@ -37,6 +37,7 @@ import {
   SAVE_TIME_ENTRY_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -79,7 +80,6 @@ import {
   errorResult,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
@@ -473,7 +473,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_from: v.optional(
         v.pipe(
-          ISO_DATE_SCHEMA,
+          vApiDate,
           v.maxLength(10),
           v.description(
             "List only entries worked on or after this ISO date (YYYY-MM-DD)",
@@ -482,7 +482,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_to: v.optional(
         v.pipe(
-          ISO_DATE_SCHEMA,
+          vApiDate,
           v.maxLength(10),
           v.description(
             "List only entries worked on or before this ISO date (YYYY-MM-DD)",
@@ -784,7 +784,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
       ),
       date_worked: v.optional(
         v.pipe(
-          ISO_DATE_SCHEMA,
+          vApiDate,
           v.maxLength(10),
           v.description(
             "Date the work was done (ISO YYYY-MM-DD); required when creating",
@@ -1161,7 +1161,7 @@ const resolveRateArgsSchema = nullAsAbsent(
       v.description("User ID to resolve the rate for"),
     ),
     date: v.pipe(
-      ISO_DATE_SCHEMA,
+      vApiDate,
       v.maxLength(10),
       v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
     ),

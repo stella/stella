@@ -11,6 +11,7 @@ import {
   classifyAIError,
 } from "@/api/lib/ai-error";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 
 export const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
 
@@ -67,7 +68,7 @@ export const deadlineExtractionSchema = v.object({
     v.array(
       v.object({
         label: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
-        dueDate: v.pipe(v.string(), v.isoDate()),
+        dueDate: vApiDate,
         quote: v.pipe(
           v.string(),
           v.trim(),

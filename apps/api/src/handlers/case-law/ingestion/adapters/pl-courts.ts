@@ -80,6 +80,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
@@ -269,8 +270,8 @@ export const PL_COURTS_WALK_KINDS = {
    */
   [PL_COURTS_WALK_KIND.JUDGMENT_DATE]: defineWalkKind({
     params: {
-      from: v.optional(v.pipe(v.string(), v.isoDate())),
-      to: v.optional(v.pipe(v.string(), v.isoDate())),
+      from: v.optional(vApiDate),
+      to: v.optional(vApiDate),
     },
     /**
      * A window that ends before it starts holds no date, so the publisher
