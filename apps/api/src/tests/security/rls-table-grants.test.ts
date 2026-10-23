@@ -253,6 +253,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_decision_source_identities",
   // UUID retirement is ingestion-owned; request transactions cannot access it.
   "case_law_decision_aliases",
+  // Retired publisher identities are ingestion repair state; request
+  // transactions must not observe or mutate them.
+  "case_law_decision_alias_moved_identities",
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",

@@ -64,6 +64,10 @@ export const aggregateFences = () => {
       id: { id: definitionId, organizationId },
       mode: "update",
     },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
     legislationAmendmentWork: {
       aggregate: "legislationAmendmentWork",
       id: {

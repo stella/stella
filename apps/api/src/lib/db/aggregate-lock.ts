@@ -56,6 +56,10 @@ export const AGGREGATE_LOCKS = {
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
+  // Global fence for linking republished rulings and discovering their aliases.
+  // Take it before any case-law decision row lock: link pages use exclusive
+  // mode, while erasures use shared mode so independent erasures can proceed.
+  caseLawRepublication: { rank: 45, kind: "advisory" },
   // Public-corpus work fence is taken before its legacy projection/expression locks.
   legislationAmendmentWork: { rank: 50, kind: "advisory" },
   scoutCensus: { rank: 60, kind: "row" },
@@ -145,6 +149,7 @@ export const AGGREGATE_CHAINS = {
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
   legislationAmendments: ["legislationAmendmentWork"],
+  caseLawRepublication: ["caseLawRepublication"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   chatToolGrants: ["chatThread", "chatToolGrants"],
   memberPrefix: [
@@ -251,6 +256,7 @@ type AggregateIdentities = {
     id: SafeId<"flowDefinition">;
     organizationId: SafeId<"organization">;
   };
+  caseLawRepublication: "global";
   scoutCensus: {
     type: "run";
     id: SafeId<"scoutRun">;
@@ -1326,6 +1332,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         second: sql`hashtext(${options.id.definitionId})`,
         order: [options.aggregate, options.id.definitionId],
       };
+    case "caseLawRepublication":
+      return {
+        first: sql`${0x0f_10_cc_ae}::integer`,
+        second: sql`0::integer`,
+        order: [options.aggregate, options.id],
+      };
     default:
       options satisfies never;
       return panic("Unknown advisory aggregate");
@@ -2178,6 +2190,44 @@ type DecisionCitationStatsLocksOptions = {
  * holds its own row while it waits for stripes.
  */
 const lockedDecisionRowSchema = v.object({ id: v.string() });
+
+/** Coordinate republication linking with alias discovery during erasure. */
+export const lockCaseLawRepublication = async ({
+  tx,
+  mode,
+}: {
+  tx: ExecuteTransaction;
+  mode: AdvisoryLockMode;
+}): Promise<void> => {
+  await withAggregateLock({
+    aggregate: "caseLawRepublication",
+    id: "global",
+    mode,
+    tx,
+  });
+};
+
+/** Lock every retained copy before a case-law erasure mutates any of them. */
+export const lockCaseLawDecisionErasureRows = async ({
+  tx,
+  decisionIds,
+}: {
+  tx: ExecuteTransaction;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+}): Promise<void> => {
+  if (decisionIds.length === 0) {
+    return;
+  }
+  await tx.execute(sql`
+    SELECT id FROM case_law_decisions
+    WHERE id IN (${sql.join(
+      decisionIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    ORDER BY id
+    FOR UPDATE
+  `);
+};
 
 /**
  * The citing decisions a reviewed-label run admits: the unredacted ones among

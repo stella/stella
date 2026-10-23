@@ -1161,20 +1161,27 @@ export const readPglitePublicSanctionsGrants = (): string[] => {
 export const installPgliteDecisionAliases = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261003123000_case_law_decision_aliases",
-      "migration.sql",
-    ),
-  ).filter((statement) => {
-    const source = executableSql(statement);
-    return (
-      source.startsWith("CREATE FUNCTION") ||
-      source.startsWith("CREATE TRIGGER") ||
-      source.startsWith('ALTER TABLE "case_law_decision_aliases" FORCE')
-    );
-  });
+  const statements = [
+    "20261003123000_case_law_decision_aliases",
+    "20261020130000_cross_source_decision_aliases",
+  ]
+    .flatMap((migration) =>
+      readMigrationStatements(
+        nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+      ),
+    )
+    .filter((statement) => {
+      const source = executableSql(statement);
+      return (
+        source.startsWith("CREATE FUNCTION") ||
+        source.startsWith("CREATE OR REPLACE FUNCTION") ||
+        source.includes(
+          "CREATE OR REPLACE FUNCTION public.case_law_decision_alias_validate",
+        ) ||
+        source.startsWith("CREATE TRIGGER") ||
+        source.startsWith('ALTER TABLE "case_law_decision_aliases" FORCE')
+      );
+    });
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
