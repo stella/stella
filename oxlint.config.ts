@@ -1539,6 +1539,7 @@ const config = defineConfig({
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
@@ -2176,6 +2177,17 @@ const config = defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      // Every Bun SQL client and bun-sql drizzle database comes from the
+      // owner, which decodes int8 by column mode (Bun 1.4.4 returns strings).
+      files: [
+        "apps/**/*.{ts,tsx,mts}",
+        "packages/**/*.{ts,tsx,mts}",
+        "scripts/**/*.{ts,mts}",
+        ".oxlint-plugins/__fixtures__/sql-client-owner.fixture.ts",
+      ],
+      rules: { "sql-client-owner/sql-client-owner": "error" },
     },
     {
       files: [

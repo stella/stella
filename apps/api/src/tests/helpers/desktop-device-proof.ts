@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import {
   calculateJwkThumbprint,
   exportJWK,
@@ -11,6 +10,7 @@ import {
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { env } from "@/api/env";
 import {
   DESKTOP_PROOF_HEADER,
@@ -84,8 +84,7 @@ export const claimFixtureDeviceProof = async ({
   if (verified.isErr()) {
     panic("Fixture device proof must verify");
   }
-  const selectQuery = drizzle
-    .mock()
+  const selectQuery = createMockDatabase()
     .select()
     .from(desktopDeviceProofReplays)
     .where(sql`true`);

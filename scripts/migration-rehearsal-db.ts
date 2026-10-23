@@ -31,8 +31,8 @@
 //     that matters.
 
 import { panic } from "better-result";
-import { SQL } from "bun";
 
+import { createSqlClient } from "../apps/api/src/db/sql-client";
 import {
   CONTENDERS,
   contendSession,
@@ -83,7 +83,7 @@ const contendWithAll = async (databaseUrl: string): Promise<never> => {
   const { signal } = new AbortController();
   const chains = Array.from({ length: CONTENDERS }, async (_, session) => {
     await Bun.sleep((CONTENTION_HOLD_MS * session) / CONTENDERS);
-    const connection = new SQL({
+    const connection = createSqlClient({
       url: databaseUrl,
       max: 1,
       connectionTimeout: 30,
@@ -103,7 +103,7 @@ const contendWithAll = async (databaseUrl: string): Promise<never> => {
   return panic("contenders never return");
 };
 
-const client = new SQL({ url, max: 1, connectionTimeout: 30 });
+const client = createSqlClient({ url, max: 1, connectionTimeout: 30 });
 
 const digestOf = async (query: string): Promise<string> => {
   const rows: DigestRow[] = await client.unsafe(query);

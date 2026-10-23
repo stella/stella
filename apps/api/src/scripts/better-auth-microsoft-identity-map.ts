@@ -9,9 +9,7 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import {
   createRemoteJWKSet,
   customFetch,
@@ -22,6 +20,7 @@ import { open, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -256,8 +255,8 @@ const run = async (args: readonly string[]) => {
     );
   }
 
-  const client = new SQL({ max: 1, url: databaseUrl });
-  const database = drizzle({ client });
+  const client = createSqlClient({ max: 1, url: databaseUrl });
+  const database = createDatabase({ client });
   const sources = await readSources(database);
   if (Result.isError(sources)) {
     await client.end();

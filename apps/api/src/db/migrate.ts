@@ -1,9 +1,10 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
 import nodePath from "node:path";
 
 import { printError } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
+import { createSqlClient } from "@/api/db/sql-client";
 
 // Relative imports: this entrypoint also ships as a loose file without tsconfig.
 import { resolveDatabaseUrl } from "../db-url";
@@ -30,7 +31,7 @@ if (!url) {
 }
 
 await runScriptWithErrorOutput(async () => {
-  const client = new SQL({ url, max: 1 });
+  const client = createSqlClient({ url, max: 1 });
   // The loose source and single-file bundle both resolve drizzle from this file.
   const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
   const connection = await client.reserve();
