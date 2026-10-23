@@ -961,7 +961,7 @@ export const push = async ({
   token,
   api = "https://api.github.com",
   fetch: send = fetch,
-  retryDelayMs = 2_000,
+  retryDelayMs = 2000,
 }: PushOptions) => {
   const [owner, name] = repository.split("/");
   if (!owner || !name || !/^[A-Za-z0-9._/-]+$/u.test(branch)) {
