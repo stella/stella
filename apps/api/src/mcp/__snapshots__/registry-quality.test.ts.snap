@@ -3002,10 +3002,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "format": "uuid",
           "description": "Delete only this version instead of the whole document"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -3333,10 +3329,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to delete"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -6000,7 +5992,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it.",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -6030,10 +6022,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "description": "Reassign work to this member; omit to unassign"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "True after human approval"
         }
       }
     }
@@ -6545,7 +6533,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Write capability can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Write capability can access public or external entities outside the private workspace."
     },
-    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval. Read capabilities must use read_capability.",
+    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval, and a capability whose description says it needs a person is refused. Read capabilities must use read_capability.",
     "annotations": {
       "title": "Write capability",
       "destructiveHint": true,
@@ -9637,10 +9625,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "format": "uuid",
           "description": "Delete only this version instead of the whole document"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -9968,10 +9952,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "format": "uuid",
           "description": "Matter ID to delete"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -12635,7 +12615,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it.",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -12665,10 +12645,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "description": "Reassign work to this member; omit to unassign"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "True after human approval"
         }
       }
     }
@@ -13747,10 +13723,6 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
           "type": "string",
           "format": "uuid",
           "description": "Delete only this version instead of the whole document"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -13992,7 +13964,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
       "destructiveHint": "Write capability can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Write capability can access public or external entities outside the private workspace."
     },
-    "description": "Write one capability by id. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Write one capability by id. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval, and a capability whose description says it needs a person is refused.",
     "annotations": {
       "title": "Write capability",
       "destructiveHint": true,

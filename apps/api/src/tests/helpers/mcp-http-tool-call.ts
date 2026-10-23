@@ -9,6 +9,7 @@ import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import {
+  agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -45,6 +46,7 @@ export const callMcpToolOverHttp = async ({
     nowMs: Date.UTC(2026, 0, 15),
   });
   const handler = createMcpHttpRequestHandler({
+    agentAccessRefusal,
     admitAction:
       admitAction ??
       (async (options) =>

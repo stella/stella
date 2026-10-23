@@ -1616,7 +1616,6 @@ export const BILLING_TOOL_DEFINITIONS = [
     accountAccess: "sandbox",
     permissions: { type: "all", permissions: { timeEntry: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    destructiveBehavior: { type: "always" },
     feature: "FEATURE_TIME_BILLING",
     featureId: "time-billing",
     name: "delete_time_entry",

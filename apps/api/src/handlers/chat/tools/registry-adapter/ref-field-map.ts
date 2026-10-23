@@ -393,11 +393,9 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     ],
     projection: SAVE_MATTER_PROJECTION,
   },
-  delete_matter: {
-    chatProjectable: true,
-    inputRefs: [{ kind: "matter", param: "matter_id" }],
-    projection: DELETED_TRUE_PROJECTION,
-  },
+  // Deleting a matter is person-only (`agent-access.ts`): no agent surface
+  // runs it, so chat does not offer it.
+  delete_matter: { chatProjectable: false },
   save_contact: {
     chatProjectable: true,
     inputRefs: [{ kind: "contact", param: "contact_id" }],

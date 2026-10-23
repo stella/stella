@@ -5,6 +5,7 @@ import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import {
+  agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -12,6 +13,7 @@ import {
 } from "@/api/mcp/tools";
 
 export const handleMcpHttpRequest = createMcpHttpRequestHandler({
+  agentAccessRefusal,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,

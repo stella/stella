@@ -196,7 +196,7 @@ const firmState = async (
     .orderBy(auditLogs.createdAt, auditLogs.id),
 });
 
-test("firm monitoring changes require the firm-settings grant in HTTP and MCP", async () => {
+test("firm monitoring changes require the firm-settings grant over HTTP and a person's approval over MCP", async () => {
   expect(roleNames.toSorted().join(",")).toBe(
     Object.keys(roles).toSorted().join(","),
   );
@@ -232,24 +232,25 @@ test("firm monitoring changes require the firm-settings grant in HTTP and MCP", 
           capability: "organization-settings.sanctions-monitoring.update",
           mode,
         });
+        // An organization-wide settings change needs a person's approval in
+        // stella, so no agent call over MCP changes it, whatever the role.
+        if (transport === "mcp") {
+          expect(response.payload).toMatchObject({
+            error: { code: "person_approval_required" },
+          });
+          expect(await firmState(organizationId)).toEqual(before);
+          continue;
+        }
         expect(
           response.ok,
           `${transport}/${role}/${mode}: ${JSON.stringify(response.payload)}`,
         ).toBe(allowed);
         if (!allowed) {
-          if (transport === "http") {
-            expect(response.status).toBe(403);
-          } else {
-            expect(response.payload).toMatchObject({
-              error: { code: "permission_denied" },
-            });
-          }
+          expect(response.status).toBe(403);
           expect(await firmState(organizationId)).toEqual(before);
           continue;
         }
-        expect(response.payload).toMatchObject(
-          transport === "http" ? { mode } : { result: { mode } },
-        );
+        expect(response.payload).toMatchObject({ mode });
         const after = await firmState(organizationId);
         expect(after.settings).toHaveLength(1);
         expect(after.settings.at(0)?.sanctionsMonitoringMode).toBe(mode);

@@ -52,6 +52,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       } as const satisfies CallToolResult;
       const handleRequest = createMcpHttpRequestHandler({
         actionSizePolicy: () => Result.ok(actionSizePolicy),
+        agentAccessRefusal: async () => null,
         authenticateMcpRequest: async () =>
           Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
         captureError: (error) => {
@@ -152,6 +153,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       }
       const handleRequest = createMcpHttpRequestHandler({
         actionSizePolicy: () => Result.ok(actionSizePolicy),
+        agentAccessRefusal: async () => null,
         authenticateMcpRequest: async () =>
           Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
         captureError: (error) => {

@@ -1589,7 +1589,7 @@ describe("capability executor gates", () => {
         }),
       });
 
-    test("every destructive capability is unavailable, even with confirm", async () => {
+    test("every destructive capability is handed back to a person, even with confirm", async () => {
       // Derived from the catalog, not a list: a capability that later becomes
       // destructive is covered without touching this test.
       const destructiveIds = capabilityCatalog
@@ -1605,16 +1605,22 @@ describe("capability executor gates", () => {
           input: {},
           confirm: true,
         });
-        expect({ capability, code: errorEnvelope(result).code }).toEqual({
+        const { code } = errorEnvelope(result);
+        expect({
           capability,
-          code: "permission_denied",
-        });
+          refused:
+            code === "person_approval_required" || code === "person_only",
+        }).toEqual({ capability, refused: true });
       }
     });
 
-    test("destructive capabilities are not listed", async () => {
+    test("destructive capabilities stay listed, each saying a person must act", async () => {
       type CapabilityPage = {
-        items: { id: string; destructive: boolean }[];
+        items: {
+          id: string;
+          destructive: boolean;
+          description: string | null;
+        }[];
         nextCursor: string | null;
       };
       const listed: CapabilityPage["items"] = [];
@@ -1638,8 +1644,14 @@ describe("capability executor gates", () => {
         cursor = page.nextCursor;
       } while (cursor !== null);
 
-      expect(listed.length).toBeGreaterThan(0);
-      expect(listed.filter(({ destructive }) => destructive)).toEqual([]);
+      const destructive = listed.filter((item) => item.destructive);
+      expect(destructive.length).toBeGreaterThan(0);
+      for (const { id, description } of destructive) {
+        expect({
+          id,
+          saysPersonActs: /a person|person's approval/u.test(description ?? ""),
+        }).toEqual({ id, saysPersonActs: true });
+      }
     });
 
     test("a capability that needs no confirmation is unaffected", async () => {

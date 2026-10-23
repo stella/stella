@@ -8,6 +8,7 @@ import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { AGENT_CALL_SURFACE, decideAgentCall } from "@/api/mcp/agent-access";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -37,6 +38,7 @@ import type {
   HandlerOutputsMatchByName,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { structuredErrorResult } from "@/api/mcp/tool-utils";
 import {
   ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
   type AccountOperationCheck,
@@ -156,19 +158,6 @@ const defaultRunRegistryWriteToolDependencies = {
   isMcpToolFeatureEnabled,
 } satisfies RunRegistryWriteToolDependencies;
 
-export const applyChatApprovalConfirmation = ({
-  args,
-  toolName,
-}: {
-  toolName: RegistryWriteToolName;
-  args: Record<string, unknown>;
-}): Record<string, unknown> => {
-  if (toolName === "remove_matter_member") {
-    return { ...args, confirm: true };
-  }
-  return args;
-};
-
 /**
  * Run one write MCP registry tool as a per-call chat tool. Mirrors
  * `runRegistryReadTool`; the differences are intrinsic to writes:
@@ -249,6 +238,21 @@ export const runRegistryWriteTool = async (
         kind: "unavailable",
         message: `Your member role does not permit ${toolName}.`,
       }),
+    );
+  }
+
+  // The chat approval step asked the person before this call ran; the
+  // decision still refuses what only a person may do.
+  const decision = decideAgentCall({
+    target: { type: "tool", name: toolName, access: staticDefinition.access },
+    context,
+    surface: AGENT_CALL_SURFACE.chat,
+    subject: toolName,
+    confirmed: false,
+  });
+  if (decision.type === "refuse") {
+    return Result.err(
+      toRegistryChatToolError(structuredErrorResult(decision.refusal).error),
     );
   }
 
@@ -370,10 +374,7 @@ export const runRegistryWriteTool = async (
   }
 
   const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({
-    args: applyChatApprovalConfirmation({
-      args: normalized.value,
-      toolName,
-    }),
+    args: normalized.value,
     context,
   });
   const finished = await finalizeToolEgress({
