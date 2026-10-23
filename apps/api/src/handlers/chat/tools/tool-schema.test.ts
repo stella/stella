@@ -4,9 +4,9 @@ import {
   hashSchemaInput,
   normalizeApprovalSchema,
   parseWithStandardSchema,
-  toolDefinition,
   type StreamChunk,
   type Tool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
   convertToolsToProviderFormat as convertAnthropicTools,
@@ -447,12 +447,7 @@ const commonProviderOptions = (tools: Tool[]) => ({
 
 type ProviderRequestProbe = {
   provider:
-    | "anthropic"
-    | "bedrock"
-    | "google"
-    | "mistral"
-    | "openai"
-    | "openrouter";
+    "anthropic" | "bedrock" | "google" | "mistral" | "openai" | "openrouter";
   capture: (tools: Tool[]) => Promise<Record<string, unknown>>;
   toolsFromRequest: (request: Record<string, unknown>) => unknown[];
 };

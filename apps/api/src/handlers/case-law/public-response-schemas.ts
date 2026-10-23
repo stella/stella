@@ -7,10 +7,10 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
-  summarizeDecisionCitationsHandler,
-  listLeadingCitationsHandler,
   DecisionCitationRow,
   LeadingCitationRow,
+  listLeadingCitationsHandler,
+  summarizeDecisionCitationsHandler,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   CITATION_TIMELINE_MAX_YEARS,
@@ -24,9 +24,9 @@ import {
 import { CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND } from "@/api/handlers/case-law/decisions/coverage-years";
 import type { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
 import type {
-  listLatestDecisionsHandler,
   LatestDecision,
   LatestDecisionsByCourt,
+  listLatestDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/latest";
 import type { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { languageAlternatesSchema } from "@/api/handlers/case-law/decisions/search-schema";

@@ -46,10 +46,10 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
   canApproveIntegrationAuthorization,
-  integrationStatus,
-  matchesConnectionQuery,
   type IntegrationAuthorizationStatus,
   type IntegrationConnection,
+  integrationStatus,
+  matchesConnectionQuery,
 } from "@/lib/account/connections.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -57,12 +57,12 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  isEffectivelyInstalled,
   type CatalogueMcp,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 import {
-  mcpConnectorsOptions,
   mcpConnectionsOptions,
+  mcpConnectorsOptions,
   type McpConnectorsResponse,
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";

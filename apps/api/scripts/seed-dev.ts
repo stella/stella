@@ -86,7 +86,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
-import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
+import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
@@ -127,20 +127,20 @@ import { seedMarketingCaseLaw } from "./seed-marketing-case-law";
 import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
-  ensureSeedColleaguesInOrganization,
   ensurePrimarySeedUserInOrganization,
+  ensureSeedColleaguesInOrganization,
   ensureTestUsers,
 } from "./seed-test-user";
 import {
   at,
   buildSeedUserIds,
   buildSeedUserRates,
-  DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_ORG_ID,
+  DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   pickAuthor,
-  seedId,
   seedFileIdentity,
+  seedId,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });

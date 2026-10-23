@@ -9,13 +9,12 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { constants } from "node:fs";
 import { open, writeFile } from "node:fs/promises";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   buildBetterAuthOAuthResources,
@@ -309,8 +308,8 @@ const run = async (
   const expectedOAuthResources = buildBetterAuthOAuthResources(
     parsed.value.oauthBaseUrl,
   );
-  const client = new SQL({ url: databaseUrl, max: 1 });
-  const database = drizzle({ client });
+  const client = createSqlClient({ url: databaseUrl, max: 1 });
+  const database = createDatabase({ client });
   const executed = await Result.tryPromise({
     try: async () =>
       await database.transaction(async (transaction) => {

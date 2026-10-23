@@ -14,7 +14,7 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import {

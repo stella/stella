@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -94,9 +94,9 @@ import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";

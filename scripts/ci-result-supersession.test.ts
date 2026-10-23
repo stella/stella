@@ -11,6 +11,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { renderResultInputs } from "./ci-result-inputs";
+
 // ci-result's outcome step, run as CI runs it, against a GitHub API served
 // from fixtures: a run whose required jobs were all cancelled is green only
 // when a newer code run superseded it, and then only as a pass-through; a
@@ -121,42 +123,51 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
   writeFileSync(fixtureFile, JSON.stringify(fixtures));
   const output = path.join(directory, "output");
   writeFileSync(output, "");
-  // A mirror that waits would poll until its bounded wait expires: fail fast instead.
-  const child = Bun.spawnSync(["bash", "-e", "-o", "pipefail", "-c", script], {
-    timeout: 60_000,
-    env: {
-      PATH: process.env["PATH"] ?? "",
-      HOME: directory,
-      GITHUB_WORKFLOW: "CI Checks",
-      TMPDIR: directory,
-      ...staticEnv,
-      EVENT: "pull_request",
-      PR_NUMBER: String(PR),
-      REPO,
-      HEAD_SHA: HEAD,
-      BASE_SHA: "b".repeat(40),
-      GITHUB_RUN_ID: String(RUN),
-      GITHUB_RUN_ATTEMPT: "1",
-      GITHUB_OUTPUT: output,
-      GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
-      GH_RETRY_SCRIPT: gh,
-      FIXTURES: fixtureFile,
-      PLAN: "{}",
-      PLAN_RESULT: "success",
-      RUN_REQUIRED: "true",
-      TRUSTED: "true",
-      SUITE_DEPTH: "fast",
-      QUEUE_DEPTH: "full",
-      QUEUE_VALIDATION: "false",
-      METADATA_ONLY: "false",
-      PR_ACTION: "synchronize",
-      PR_HEAVY_SUITES: "run",
-      COVERAGE_PROFILE: "normal-v1",
-      HEAVY_ONLY: "false",
-      PR_DEPTH_ONLY: "false",
-      ...env,
-    },
+  // Job results and plan outputs reach the outcome script as the inputs step
+  // writes them, never through the environment.
+  const rendered = renderResultInputs(script, {
+    needs: env["NEEDS"] ?? "{}",
+    plan: env["PLAN"] ?? "{}",
   });
+  // A mirror that waits would poll for 90 minutes: fail fast instead.
+  const child = Bun.spawnSync(
+    ["bash", "-e", "-o", "pipefail", "-c", rendered],
+    {
+      timeout: 60_000,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: directory,
+        GITHUB_WORKFLOW: "CI Checks",
+        TMPDIR: directory,
+        ...staticEnv,
+        EVENT: "pull_request",
+        PR_NUMBER: String(PR),
+        REPO,
+        HEAD_SHA: HEAD,
+        BASE_SHA: "b".repeat(40),
+        GITHUB_RUN_ID: String(RUN),
+        GITHUB_RUN_ATTEMPT: "1",
+        GITHUB_OUTPUT: output,
+        GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
+        GH_RETRY_SCRIPT: gh,
+        FIXTURES: fixtureFile,
+        PLAN: "{}",
+        PLAN_RESULT: "success",
+        RUN_REQUIRED: "true",
+        TRUSTED: "true",
+        SUITE_DEPTH: "fast",
+        QUEUE_DEPTH: "full",
+        QUEUE_VALIDATION: "false",
+        METADATA_ONLY: "false",
+        PR_ACTION: "synchronize",
+        PR_HEAVY_SUITES: "run",
+        COVERAGE_PROFILE: "normal-v1",
+        HEAVY_ONLY: "false",
+        PR_DEPTH_ONLY: "false",
+        ...env,
+      },
+    },
+  );
   const line = readFileSync(output, "utf-8")
     .split("\n")
     .find((entry) => entry.startsWith("required_summary="));

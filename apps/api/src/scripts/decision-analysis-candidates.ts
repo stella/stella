@@ -40,11 +40,11 @@ import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
 import {
-  candidateAsRow,
-  listCandidateRows,
   analysisTombstoneReader,
-  openAnalysisDatabase,
+  candidateAsRow,
   type CandidateCursor,
+  listCandidateRows,
+  openAnalysisDatabase,
 } from "./decision-analysis.db";
 import {
   courtFilter,
