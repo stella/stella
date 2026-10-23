@@ -33,6 +33,7 @@ import {
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
+  OAUTH_PROVIDER_SESSION_PATHS,
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
   resolveUserRealtimeAuthorization,
@@ -615,24 +616,71 @@ describe("TWO_FACTOR_MANAGE_PATHS", () => {
 });
 
 describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
-  const sensitiveCtx = (path: string) => ({
-    path,
-    request: new Request(`http://localhost/api/auth${path}`),
-  });
+  const sensitiveCtx = (path: string) => {
+    const headers = new Headers({
+      cookie: "session-token=token; preference=compact; session-data=snapshot",
+    });
+    return {
+      context: {
+        authCookies: {
+          sessionData: { name: "session-data" },
+          sessionToken: { name: "session-token" },
+        },
+      },
+      headers,
+      path,
+      request: new Request(`http://localhost/api/auth${path}`, { headers }),
+    };
+  };
 
   test("loads storage-backed session state before OAuth authorization can mint a durable token", async () => {
     const resolvedPaths: string[] = [];
 
+    const ctx = sensitiveCtx("/oauth2/authorize");
     const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
-      ctx: sensitiveCtx("/oauth2/authorize"),
-      resolveSession: async (ctx) => {
-        resolvedPaths.push(ctx.path);
+      ctx,
+      resolveSession: async (sessionContext) => {
+        resolvedPaths.push(sessionContext.path);
         return null;
       },
     });
 
     expect(Result.isOk(handled) && handled.value).toBeUndefined();
     expect(resolvedPaths).toEqual(["/oauth2/authorize"]);
+    expect(ctx.headers.get("cookie")).toBe("preference=compact");
+  });
+
+  test("treats a server-side OAuth call carrying a revoked session's cookies as signed out", async () => {
+    const resolvedPaths: string[] = [];
+    const { request: _request, ...serverCall } =
+      sensitiveCtx("/oauth2/consent");
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: serverCall,
+      resolveSession: async (sessionContext) => {
+        resolvedPaths.push(sessionContext.path);
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolvedPaths).toEqual(["/oauth2/consent"]);
+    expect(serverCall.headers.get("cookie")).toBe("preference=compact");
+  });
+
+  test("reads no session for an OAuth call without cookies", async () => {
+    let resolved = false;
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: { path: "/oauth2/consent", headers: new Headers() },
+      resolveSession: async () => {
+        resolved = true;
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolved).toBe(false);
   });
 
   test("refuses two-factor management when storage holds no session", async () => {
@@ -677,12 +725,13 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
     expect(resolved).toBe(false);
   });
 
-  test("declares every two-factor endpoint and both OAuth code-flow endpoints as authoritative", () => {
+  test("declares every session-reading sensitive endpoint as authoritative", () => {
     expect(AUTHORITATIVE_SESSION_PATHS).toEqual(
       new Set([
         ...Object.keys(TWO_FACTOR_SESSION_PATHS),
-        "/oauth2/authorize",
-        "/oauth2/consent",
+        ...Object.entries(OAUTH_PROVIDER_SESSION_PATHS).flatMap(
+          ([path, use]) => (use === "browser-session" ? [path] : []),
+        ),
       ]),
     );
   });
