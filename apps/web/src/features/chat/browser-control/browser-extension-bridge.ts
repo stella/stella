@@ -231,8 +231,7 @@ export const isBrowserExtensionBridgeMounted = (): boolean =>
   bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
 
 export const getBrowserClientCapability = ():
-  | BrowserClientCapability
-  | undefined =>
+  BrowserClientCapability | undefined =>
   bridgeRuntime?.allSitesGranted && bridgeRuntime.controllerId
     ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
     : undefined;

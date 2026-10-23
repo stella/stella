@@ -499,10 +499,7 @@ export const getMcpOAuthRedirectUri = (): string => {
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
 
 export type AuthorizationResponseRegistrationMode =
-  | "cimd"
-  | "dcr"
-  | "pre_registered"
-  | "unknown";
+  "cimd" | "dcr" | "pre_registered" | "unknown";
 
 type KnownAuthorizationResponseRegistrationMode = Exclude<
   AuthorizationResponseRegistrationMode,

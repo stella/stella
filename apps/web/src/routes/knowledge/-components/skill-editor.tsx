@@ -101,8 +101,7 @@ type SkillResource = {
 };
 
 type SelectedFile =
-  | { type: "body" }
-  | { type: "resource"; resourceId: string; path: string };
+  { type: "body" } | { type: "resource"; resourceId: string; path: string };
 
 type SkillEditorProps = {
   skillId: string;

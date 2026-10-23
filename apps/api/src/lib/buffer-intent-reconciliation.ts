@@ -147,8 +147,7 @@ type ActiveWorkspaceBufferIntentOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
 } & (
-  | { mode: "share" }
-  | { mode: "update"; organizationId: SafeId<"organization"> }
+  { mode: "share" } | { mode: "update"; organizationId: SafeId<"organization"> }
 );
 
 /**
@@ -318,10 +317,7 @@ export const lockObjectCleanupIntentsForWriter = async (
 };
 
 export type ObjectWriterSettlement =
-  | "cleanup-required"
-  | "cleanup-claimed"
-  | "object-deleted"
-  | "write-uncertain";
+  "cleanup-required" | "cleanup-claimed" | "object-deleted" | "write-uncertain";
 
 /** Claim cleanup before touching bytes: atomic publication retires this row. */
 const claimObjectCleanupIntentForCleanup = async ({
