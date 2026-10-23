@@ -156,7 +156,7 @@ const styleSetValues = ({
     organizationId: ids.orgA,
     name: "Reconciler fixture",
     fileName: "styles.docx",
-    s3Key: s3Key ?? `style-sets/${styleSetId}/current.docx`,
+    s3Key: s3Key ?? `${ids.orgA}/style-sets/${styleSetId}/current.docx`,
     cleanupS3Key,
     sizeBytes: 12,
     createdBy: ids.userA1,
@@ -313,7 +313,7 @@ describe("pending style set package cleanup reconciliation", () => {
   test("leaves the marker for the next sweep when the job skipped", async () => {
     // Something still serves this key, so the deletion is refused. The marker
     // is the durable record that it is still owed and must survive.
-    const servedKey = "style-sets/served/live.docx";
+    const servedKey = `${ids.orgA}/style-sets/served/live.docx`;
     await seedStyleSet({ s3Key: servedKey });
     const owingStyleSetId = await seedStyleSet({ cleanupS3Key: servedKey });
     fake.put(bucket, servedKey, "style set package");
