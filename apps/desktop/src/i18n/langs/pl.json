@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Windows zastrzega skróty z klawiszem Windows dla siebie. Użyj Ctrl lub Alt.",
     "taken": "Inna aplikacja używa już {shortcut}. Wybierz inny.",
     "unavailable": "Inna aplikacja używa {shortcut}, więc ten skrót nie otwiera schowka. Wybierz inny skrót.",
+    "managed": "Twoja organizacja wyłączyła historię schowka.",
     "action": {
       "copy": "Kopiuj",
       "paste": "Wklej",
