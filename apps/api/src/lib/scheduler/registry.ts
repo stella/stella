@@ -173,6 +173,10 @@ import {
   refreshSanctionsSourcesTask,
 } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import {
+  AUDIT_SCHEDULER_PAUSES_TASK,
+  auditSchedulerPauses,
+} from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -218,6 +222,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,

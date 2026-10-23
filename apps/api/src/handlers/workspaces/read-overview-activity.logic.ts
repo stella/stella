@@ -135,6 +135,7 @@ export type ActivityTargetSource =
  * automation row.
  */
 export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
+  [AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF]: null,
   // Audited against the entity the obligation governs, so it reads as that
   // task rather than as a separate record.
   work_obligation: "entity",
@@ -263,6 +264,10 @@ export type VisibleActivityAction =
 
 /** Total over `AuditAction`, so a new action must be narrated or excluded. */
 export const VISIBLE_ACTIVITY_ACTION_BY_ACTION = {
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_CONFIRMATION_SHOWN]: null,
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_ISSUED]: null,
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED]: null,
+  [AUDIT_ACTION.MCP_WEB_HANDOFF_REFUSED]: null,
   access: null,
   [AUDIT_ACTION.SYNTHETIC_SESSION_MINTED]: null,
   cancel: AUDIT_ACTION.CANCEL,

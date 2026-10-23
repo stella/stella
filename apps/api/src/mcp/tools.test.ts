@@ -92,6 +92,7 @@ import {
   currentReadWork,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -860,6 +861,7 @@ type MockProcessingRunQueryInput = {
 };
 
 type MockMcpTransaction = {
+  selectDistinct: () => ReturnType<typeof createSelectBuilder>;
   query: {
     entities: {
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
@@ -896,6 +898,7 @@ type MockMcpTransaction = {
     };
     extractedContent: {
       findFirst: () => Promise<ExtractedContentRow | null>;
+      findMany: () => Promise<unknown[]>;
     };
     fields: {
       findMany: () => Promise<
@@ -1055,6 +1058,83 @@ const createScopedDb = (
             },
             extractedContent: {
               findFirst: async () => extractedContentRow,
+              findMany: async () =>
+                extractedContentRow
+                  ? [
+                      {
+                        ...extractedContentRow,
+                        entity: {
+                          ...extractedContentRow.entity,
+                          workspace: { status: "active" },
+                          versions: [
+                            {
+                              id:
+                                processingState.latestVersionId ??
+                                "entity_version_1",
+                            },
+                          ],
+                          currentVersion: {
+                            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                            deletedAt: null,
+                            id: "entity_version_1",
+                            fields: currentVersionFields.map(
+                              (content, index) => ({
+                                id: `field_${index + 1}`,
+                                content,
+                              }),
+                            ),
+                          },
+                        },
+                      },
+                    ]
+                  : rows.flatMap((row) => {
+                      if (
+                        typeof row !== "object" ||
+                        row === null ||
+                        !("entityId" in row) ||
+                        typeof row.entityId !== "string" ||
+                        !("workspaceId" in row) ||
+                        typeof row.workspaceId !== "string" ||
+                        !("fieldId" in row) ||
+                        typeof row.fieldId !== "string"
+                      ) {
+                        return [];
+                      }
+                      const sourceFileId = `file_${row.entityId}`;
+                      const sourceSha256Hex = "a".repeat(64);
+                      return [
+                        {
+                          ...createExtractedContentRow({
+                            entityId: row.entityId,
+                            workspaceId: row.workspaceId,
+                            sourceEntityVersionId: "entity_version_1",
+                            sourceFieldId: row.fieldId,
+                            sourceFileId,
+                            sourceSha256Hex,
+                          }),
+                          entity: {
+                            name: "Document",
+                            workspace: { status: "active" },
+                            versions: [{ id: "entity_version_1" }],
+                            currentVersion: {
+                              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                              deletedAt: null,
+                              id: "entity_version_1",
+                              fields: [
+                                {
+                                  id: row.fieldId,
+                                  content: {
+                                    type: "file",
+                                    id: sourceFileId,
+                                    sha256Hex: sourceSha256Hex,
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ];
+                    }),
             },
             documentProcessingRuns: {
               findFirst: findNoDocumentProcessingRun,
@@ -1119,6 +1199,7 @@ const createScopedDb = (
             },
           },
           select: () => createSelectBuilder(rows),
+          selectDistinct: () => createSelectBuilder([{ id: WORKSPACE_ID }]),
         }),
     ),
   );
@@ -1776,7 +1857,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("narrows the registry enum to the org's enabled registries", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: ["orsr", "vies"],
+        loadEnabledRegistrySlugs: async () =>
+          await Promise.resolve(readPresent(["orsr", "vies"])),
       });
 
       expect(tool?.inputSchema.properties?.["registry"]).toEqual({
@@ -1789,7 +1871,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("drops the tool when the org can reach no registry", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: [],
+        loadEnabledRegistrySlugs: async () =>
+          await Promise.resolve(readPresent([])),
       });
 
       expect(tool).toBeUndefined();
@@ -1799,8 +1882,13 @@ describe("OpenAI-compatible MCP tools", () => {
       const tool = await registryTool(createContext());
 
       // A context that never resolved its reachable registries (test/synthetic
-      // or a bootstrap read fault) keeps the full advertisement.
-      expect(tool?.inputSchema.properties?.["registry"]).toMatchObject({
+      // or a bootstrap read fault) keeps the full advertisement. The served
+      // schema is shared with later sessions, and Bun's `toMatchObject` swaps
+      // a matched property for its asymmetric matcher (frozen or not), so the
+      // assertion reads a copy.
+      expect(
+        structuredClone(tool?.inputSchema.properties?.["registry"]),
+      ).toMatchObject({
         enum: expect.arrayContaining(["ares", "vies"]),
       });
     });
@@ -1818,7 +1906,8 @@ describe("OpenAI-compatible MCP tools", () => {
         args: { registry: "krs", query: "0000123456" },
         context: {
           ...baseContext,
-          enabledRegistrySlugs: ["ares"],
+          loadEnabledRegistrySlugs: async () =>
+            await Promise.resolve(readPresent(["ares"])),
           testDependencies: {
             ...baseContext.testDependencies,
             executeRegistryLookup: executeRegistryLookupMock,
