@@ -61,12 +61,17 @@ export type GenerateBatchProps = {
     ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
 };
 
+export type BatchSettlement =
+  "answered" | "notStated" | "unsupported" | "refused";
+
 export type GenerateBatchResult = Result<
   {
     aiResults: AIResult[];
     aiJustifications: AIJustification[];
     skippedPropertyIds: SafeId<"property">[];
     unsupportedPropertyIds: SafeId<"property">[];
+    /** One terminal disposition for every property claimed by this batch. */
+    settlements: ReadonlyMap<SafeId<"property">, BatchSettlement>;
   },
   WorkflowValidationError | WorkflowIntegrationError
 >;

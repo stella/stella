@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, not, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -197,8 +197,15 @@ export const listDecisionsPageQuery = ({
     conditions.push(decisionDateKeysetAfter(cursor));
   }
 
-  // Keep the representative lookup correlated and bounded: flattening it
-  // into an anti-join makes the browse walk sort the whole country's corpus.
+  // The representative check stays a correlated, per-row test on the index
+  // walk. Flattened into an anti-join, or kept as a lateral join filtered on
+  // null, the planner estimates that almost no row survives it, expects to
+  // read the whole country to fill a page, and sorts the corpus instead of
+  // walking the date index. As a subplan it is estimated as half the rows,
+  // which is the walk's real shape: most decisions have no earlier version.
+  // `OFFSET 0` is a deliberate optimization fence, not a no-op to clean up:
+  // PostgreSQL never pulls an EXISTS with an offset up into a join, so it is
+  // what keeps the check a subplan. `list-plan.db.test.ts` fails without it.
   const earlierSibling = tx
     .select({ id: sibling.id })
     .from(sibling)
@@ -215,8 +222,8 @@ export const listDecisionsPageQuery = ({
         ...decisionFilterConditions(query, sibling),
       ),
     )
-    .limit(1)
-    .as("earlier_sibling");
+    .limit(1);
+  const hasEarlierSibling = sql`exists (${earlierSibling} offset 0)`;
 
   return tx
     .select(publicDecisionRowColumns())
@@ -225,13 +232,12 @@ export const listDecisionsPageQuery = ({
       caseLawSources,
       eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
-    .leftJoinLateral(earlierSibling, sql`true`)
     .where(
       and(
         ...conditions,
         // Only an older version eligible for this request hides a row.
         // A null group key matches no sibling, so ungrouped rows remain.
-        isNull(earlierSibling.id),
+        not(hasEarlierSibling),
       ),
     )
     .orderBy(

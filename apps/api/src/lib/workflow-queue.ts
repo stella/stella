@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { Queue } from "bullmq";
 import type { Job } from "bullmq";
 import { sleep } from "bun";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { drainFanOut } from "@stll/concurrency";
@@ -13,6 +13,7 @@ import { jsonField } from "@/api/db/json-utils";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
+  entityVersions,
   type ExtractionRunScope,
   fields,
   justifications,
@@ -62,7 +63,9 @@ import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedEntityId,
   brandPersistedExtractionRunId,
+  brandPersistedOrganizationId,
   brandPersistedPropertyId,
+  brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
@@ -90,18 +93,13 @@ import {
 } from "@/api/lib/workflow/get-execution-plan";
 import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import {
-  errorPendingCells,
-  selectWorkspacesWithPendingCells,
+  errorPendingCell,
+  selectPendingCellPage,
 } from "@/api/lib/workflow/orphan-cells";
 import type { OrphanCellsDatabase } from "@/api/lib/workflow/orphan-cells";
+import { reconcilePendingCells } from "@/api/lib/workflow/orphan-recovery";
+import { settle } from "@/api/lib/workflow/owned-state";
 import {
-  selectExpiredStaleRunWorkspaceIds,
-  selectOrphanWorkspaceIds,
-  selectRecoverableOrphanWorkspaceIds,
-} from "@/api/lib/workflow/orphan-recovery";
-import {
-  combineLiveWorkflowJobSnapshots,
-  WORKFLOW_QUEUE_CLASSES,
   WORKFLOW_QUEUE_NAMES,
   WORKFLOW_WORKER_SPECS,
   type WorkflowQueueClass,
@@ -156,6 +154,7 @@ type EntityJobData = {
    * user can re-run an extraction over an already-populated cell.
    */
   forcePropertyIds?: string[];
+  recoveryAttempt?: 1;
 };
 
 /**
@@ -247,9 +246,6 @@ const getQueueForClass = (
   return queue;
 };
 
-const getAllWorkflowQueues = (): WorkflowEntityQueue[] =>
-  WORKFLOW_QUEUE_CLASSES.map(getQueueForClass);
-
 const isCurrentWorkflowRequest = async ({
   requestId,
   workspaceId,
@@ -289,7 +285,6 @@ const MAX_STALLED_COUNT = 2;
 // extended on each entity completion below, so a long-running workflow
 // keeps the TTL fresh regardless of this initial value.
 const RUNNING_LOCK_TTL_SEC = 60 * 60;
-const RECOVERY_LOCK_VALUE = "recovery";
 
 /**
  * Check if a workflow is currently running for a workspace.
@@ -323,6 +318,8 @@ type StartWorkflowArgs = {
   extractionRunStore: ExtractionRunStartStore;
   kickoff?: typeof runQueuedKickoff;
   queue?: WorkflowEntityQueue;
+  /** Internal orphan recovery preserves the bounded second attempt. */
+  recoveryAttempt?: 1;
 };
 
 /**
@@ -377,6 +374,7 @@ type EnqueueEntityJobsArgs = {
   workspaceId: SafeId<"workspace">;
   serviceTier: AIRequestServiceTier;
   forcePropertyIds?: readonly SafeId<"property">[];
+  recoveryAttempt: 0 | 1;
 };
 
 const workflowEntityJobId = ({
@@ -399,6 +397,7 @@ const enqueueEntityJobs = async ({
   userId,
   workspaceId,
   forcePropertyIds,
+  recoveryAttempt,
 }: EnqueueEntityJobsArgs): Promise<void> => {
   if (entityIds.length === 0) {
     return;
@@ -425,6 +424,7 @@ const enqueueEntityJobs = async ({
             forcePropertyIds.length > 0 && {
               forcePropertyIds: [...forcePropertyIds],
             }),
+          ...(recoveryAttempt === 1 && { recoveryAttempt }),
         } satisfies EntityJobData,
         opts: { jobId },
       };
@@ -482,6 +482,9 @@ type PlanAndEnqueueWorkflowOptions = Omit<
   releaseClaimAndFail: (cause: unknown) => Promise<StartWorkflowResult>;
 };
 
+const normalizeRecoveryAttempt = (attempt: 1 | undefined): 0 | 1 =>
+  attempt === 1 ? 1 : 0;
+
 const executionPlanInput = ({
   data,
   inputEntityIds,
@@ -517,6 +520,7 @@ const planAndEnqueueWorkflow = async (
     queue,
     requestId,
     releaseClaimAndFail,
+    recoveryAttempt,
   }: PlanAndEnqueueWorkflowOptions,
   signal?: AbortSignal,
 ): Promise<StartWorkflowResult> => {
@@ -698,6 +702,7 @@ const planAndEnqueueWorkflow = async (
             inputPropertyIds.length > 0 && {
               forcePropertyIds: inputPropertyIds,
             }),
+          recoveryAttempt: normalizeRecoveryAttempt(recoveryAttempt),
         });
       }
     } catch (error: unknown) {
@@ -733,6 +738,7 @@ export const startWorkflow = async ({
   extractionRunStore,
   kickoff = runQueuedKickoff,
   queue,
+  recoveryAttempt,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const requestId = createSafeId<"extractionRun">();
 
@@ -786,6 +792,7 @@ export const startWorkflow = async ({
           propertyIds: inputPropertyIds,
         }),
         ...(queue !== undefined && { queue }),
+        ...(recoveryAttempt !== undefined && { recoveryAttempt }),
       },
       signal,
     );
@@ -823,265 +830,80 @@ export const startWorkflow = async ({
 // heals whatever the previous one left behind.
 
 const RECONCILE_INTERVAL_MS = 60 * 1000;
-const STALE_ACTIVE_RUN_SCAN_LIMIT = 1000;
-// Settle window before acting. A workflow that has just taken its
-// `running` lock but not yet enqueued its first entity batch would look
-// orphaned for a moment; we re-confirm against a fresh job snapshot after
-// this delay so a starting run is never reconciled away.
-const RECONCILE_SETTLE_MS = 5 * 1000;
-// Non-terminal BullMQ states. A job in any of these means the workspace
-// still has reclaimable work in flight, so its run-state is legitimate.
-// BullMQ 6 dropped the separate `paused` state: a paused queue's jobs are
-// reported as `waiting`, which this list already covers.
-const LIVE_JOB_STATES = [
-  "active",
-  "waiting",
-  "delayed",
-  "prioritized",
-  "waiting-children",
-] as const;
-// Upper bound on the live-job snapshot. If the queue holds more in-flight
-// jobs than this, skip the cycle rather than risk treating a busy
-// workspace as orphaned from a truncated scan — a false positive must
-// never clobber a healthy run. A later, quieter cycle reconciles it.
-const snapshotLiveWorkspaceIds = async () => {
-  const jobSnapshots = await Promise.all(
-    getAllWorkflowQueues().map(
-      async (queue) =>
-        await queue.getJobs(
-          [...LIVE_JOB_STATES],
-          0,
-          LIMITS.workflowLiveJobScanLimit - 1,
-        ),
-    ),
-  );
-  return combineLiveWorkflowJobSnapshots({
-    jobSnapshots,
-    scanLimit: LIMITS.workflowLiveJobScanLimit,
-  });
-};
+const PENDING_CELL_PAGE_SIZE = 100;
 
-const readWorkflowRequestIds = async (
-  workspaceIds: readonly string[],
-): Promise<Map<string, string | null>> => {
-  const runStateStore = getRootWorkflowRunStateStore();
-  const requestIds = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunkItems(
-    workspaceIds,
-    LIMITS.workflowEntityBatchSize,
-  )) {
-    await Promise.all(
-      workspaceIdBatch.map(async (id) => {
-        const requestId = await runStateStore.getRequestId(
-          brandPersistedWorkspaceId(id),
-        );
-        requestIds.set(id, requestId);
-      }),
-    );
-  }
-  return requestIds;
-};
-
-const readWorkflowRunningValues = async (
-  workspaceIds: readonly string[],
-): Promise<Map<string, string | null>> => {
-  const runStateStore = getRootWorkflowRunStateStore();
-  const runningValues = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunkItems(
-    workspaceIds,
-    LIMITS.workflowEntityBatchSize,
-  )) {
-    await Promise.all(
-      workspaceIdBatch.map(async (id) => {
-        const runningValue = await runStateStore.getRunningValue(
-          brandPersistedWorkspaceId(id),
-        );
-        runningValues.set(id, runningValue);
-      }),
-    );
-  }
-  return runningValues;
-};
-
-type ShouldRecoverWorkflowOptions = {
-  expectedRequestId: string | null;
-  workspaceId: SafeId<"workspace">;
-};
-
-const shouldRecoverWorkflow = async ({
-  expectedRequestId,
-  workspaceId,
-}: ShouldRecoverWorkflowOptions): Promise<boolean> =>
-  await getRootWorkflowRunStateStore().reserveForRecovery({
-    expectedRequestId,
-    recoveryLockValue: RECOVERY_LOCK_VALUE,
-    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
-    workspaceId,
-  });
-
-/**
- * What orphan reconciliation works through: the workers' connection, for its
- * cell reads and writes, and the run store built over that same connection.
- */
+/** What scheduled cell reconciliation needs from the worker host. */
 type OrphanReconciliationWorker = {
   database: OrphanCellsDatabase;
   extractionRuns: ExtractionRunStore;
 };
 
-type RecoverOrphanedWorkflowOptions = OrphanReconciliationWorker & {
-  expectedRequestId: string | null;
-  workspaceId: SafeId<"workspace">;
-};
-
-const recoverOrphanedWorkflow = async ({
-  database,
-  expectedRequestId,
-  extractionRuns,
-  workspaceId,
-}: RecoverOrphanedWorkflowOptions): Promise<void> => {
-  const shouldRecover = await shouldRecoverWorkflow({
-    expectedRequestId,
-    workspaceId,
-  });
-  if (!shouldRecover) {
+/** Settle only recovery starts that cannot make progress on a later tick. */
+export const settlePendingCellRecoveryStart = async (
+  result: StartWorkflowResult,
+  error: () => Promise<void>,
+): Promise<void> => {
+  if (result.status === "started" || result.status === "already-running") {
     return;
   }
-
-  // Error the stuck `pending` cells first, while the orphaned lock still
-  // blocks any new run from re-populating them. `error` cells stay
-  // eligible for re-extraction (see `prepareBatch`), so a retry or the
-  // next full run picks them back up.
-  const erroredFields = await errorPendingCells(database, workspaceId);
-
-  await extractionRuns
-    .failActiveForWorkspace({
-      errorCode: "ExtractionRunOrphaned",
-      workspaceId,
-    })
-    .catch((error: unknown) => captureError(error, { workspaceId }));
-
-  // Then release the run-state so retries / new runs stop hitting the
-  // "a workflow is already running" 409.
-  await getRootWorkflowRunStateStore().clear(workspaceId);
-
-  logger.warn("workflow.orphan_reconciled", {
-    workspaceId,
-    erroredFields: String(erroredFields),
-  });
-
-  // Push the cleared status + errored cells to any connected client.
-  broadcastWorkflowStatus(workspaceId);
-};
-
-type ReconcileOrphanedWorkflowsOptions = {
-  // Boot passes `true` to also sweep the DB for `pending` cells whose
-  // lock already lapsed via TTL. Every tick still performs the bounded,
-  // indexed stale-run scan because a captured terminal ledger-write failure
-  // can leave no Redis or pending-cell recovery signal.
-  scanPendingCells: boolean;
+  await error();
 };
 
 /**
- * Reconcile workflows orphaned by a killed worker. Safe to call
- * repeatedly; a no-op when nothing is orphaned. Exported for the boot +
- * interval wiring in `initWorkflowWorkers` and for operational scripts.
+ * Reconcile pending cells independently. Queue backlog and unrelated live jobs
+ * are deliberately irrelevant: ownership and deadline on each cell are the
+ * complete recovery signal.
  */
 export const reconcileOrphanedWorkflows = async (
-  { scanPendingCells }: ReconcileOrphanedWorkflowsOptions,
+  _options: Record<string, never>,
   { database, extractionRuns }: OrphanReconciliationWorker,
 ): Promise<void> => {
-  const lockedWorkspaceIds =
-    await getRootWorkflowRunStateStore().scanRunningWorkspaceIds();
-  const pendingWorkspaceIds = scanPendingCells
-    ? await selectWorkspacesWithPendingCells(database)
-    : await selectWorkspacesWithPendingCells(database, lockedWorkspaceIds);
-  const staleActiveWorkspaceIds =
-    await extractionRuns.listStaleActiveWorkspaceIds({
-      before: new Date(
-        Temporal.Now.instant().epochMilliseconds - RUNNING_LOCK_TTL_SEC * 1000,
-      ),
-      limit: STALE_ACTIVE_RUN_SCAN_LIMIT,
-    });
-
-  const candidateWorkspaceIds = [
-    ...lockedWorkspaceIds,
-    ...pendingWorkspaceIds,
-    ...staleActiveWorkspaceIds,
-  ];
-  if (candidateWorkspaceIds.length === 0) {
-    return;
-  }
-
-  const live = await snapshotLiveWorkspaceIds();
-  if (live.truncated) {
-    logger.warn("workflow.reconcile_skipped_backlog", {
-      candidates: String(candidateWorkspaceIds.length),
-    });
-    return;
-  }
-
-  const orphanCandidates = selectOrphanWorkspaceIds({
-    candidateWorkspaceIds,
-    liveWorkspaceIds: live.workspaceIds,
+  const runStateStore = getRootWorkflowRunStateStore();
+  await reconcilePendingCells({
+    now: new Date(Temporal.Now.instant().epochMilliseconds),
+    pageSize: PENDING_CELL_PAGE_SIZE,
+    selectPage: async (cursor, limit) =>
+      await selectPendingCellPage(database, cursor, limit),
+    currentRunId: async (workspaceKey) =>
+      await runStateStore.getRequestId(brandPersistedWorkspaceId(workspaceKey)),
+    error: async (cell) => {
+      await errorPendingCell(database, cell);
+    },
+    retry: async (cell, attempt, delayMs) => {
+      // A retry must retain the original requester: root recovery may write
+      // lifecycle state, but planning still reads through that member's scope.
+      if (cell.organizationId === null || cell.requestedBy === null) {
+        await errorPendingCell(database, cell);
+        return;
+      }
+      await sleep(delayMs);
+      const workspaceId = brandPersistedWorkspaceId(cell.workspaceId);
+      const organizationId = brandPersistedOrganizationId(cell.organizationId);
+      const userId = brandPersistedUserId(cell.requestedBy);
+      const recoveryActor = createRootRunActor(
+        {
+          organizationId,
+          workspaceId,
+          userId,
+          runId: createSafeId<"extractionRun">(),
+        },
+        brandPersistedExtractionRunId,
+      );
+      const result = await startWorkflow({
+        workspaceId,
+        organizationId,
+        userId,
+        scopedDb: recoveryActor.inputDb,
+        entityIds: [brandPersistedEntityId(cell.entityId)],
+        propertyIds: [brandPersistedPropertyId(cell.propertyId)],
+        extractionRunStore: extractionRuns,
+        recoveryAttempt: attempt,
+      });
+      await settlePendingCellRecoveryStart(result, async () => {
+        await errorPendingCell(database, cell);
+      });
+    },
   });
-  if (orphanCandidates.length === 0) {
-    return;
-  }
-
-  const initialRequestIds = await readWorkflowRequestIds(orphanCandidates);
-
-  // Re-confirm after a settle delay so a workflow that is mid-startup
-  // (lock taken, first batch not yet enqueued) is not mistaken for an
-  // orphan.
-  await sleep(RECONCILE_SETTLE_MS);
-  const confirmed = await snapshotLiveWorkspaceIds();
-  if (confirmed.truncated) {
-    return;
-  }
-
-  // Independent reads of two distinct Redis keys per workspace; neither
-  // depends on the other's result.
-  const [currentRequestIds, currentRunningValues] = await Promise.all([
-    readWorkflowRequestIds(orphanCandidates),
-    readWorkflowRunningValues(orphanCandidates),
-  ]);
-  // Pending cells are immediate recovery evidence. A stale durable row is
-  // evidence only once both Redis state keys have actually expired: flex runs
-  // can legitimately extend their lock beyond the row-age threshold before
-  // their first queue job exists.
-  const expiredStaleWorkspaceIds = selectExpiredStaleRunWorkspaceIds({
-    currentRequestIds,
-    currentRunningValues,
-    staleWorkspaceIds: staleActiveWorkspaceIds,
-  });
-  const recoveryEvidenceWorkspaceIdSet = new Set([
-    ...pendingWorkspaceIds,
-    ...expiredStaleWorkspaceIds,
-  ]);
-  const recoveryWorkspaceIds = new Set<string>();
-  for (const workspaceId of orphanCandidates) {
-    if (currentRunningValues.get(workspaceId) === RECOVERY_LOCK_VALUE) {
-      recoveryWorkspaceIds.add(workspaceId);
-    }
-  }
-  const recoverableOrphans = selectRecoverableOrphanWorkspaceIds({
-    candidateWorkspaceIds: orphanCandidates,
-    currentRequestIds,
-    initialRequestIds,
-    liveWorkspaceIds: confirmed.workspaceIds,
-    pendingWorkspaceIds: recoveryEvidenceWorkspaceIdSet,
-    recoveryWorkspaceIds,
-  });
-
-  for (const workspaceId of recoverableOrphans) {
-    // db-await-in-loop: each orphan is recovered only after its own run-lock re-check, and its recovery ends in that workspace's run-state clear and broadcast; the steps are ordered per workspace and cannot share one statement
-    await recoverOrphanedWorkflow({
-      database,
-      expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
-      extractionRuns,
-      workspaceId: brandPersistedWorkspaceId(workspaceId),
-    });
-  }
 };
 
 // ── Worker ─────────────────────────────────────────────
@@ -1172,6 +994,7 @@ const handleWorkflowJobFailed = (
         workspaceId: actor.workspaceId,
       });
       if (!isCurrentRequest) {
+        await markPendingPlannedFieldsErrored(actor, data);
         return;
       }
 
@@ -1284,23 +1107,23 @@ export const handleWorkflowReconcileFailure = (error: unknown): void => {
 /**
  * Drive the reconcile cadence.
  *
- * The thorough pass — the unbounded DB sweep for pending cells whose lock has
- * already lapsed — is owed once per process, and only a completed tick
- * discharges it. A tick that rejects, including on the transient graded above,
- * leaves it owed so the next tick repeats the sweep rather than deferring it to
- * the next restart; later ticks look for pending cells only under a held Redis
- * lock, so the sweep has no equivalent.
+ * Every accepted tick runs the same bounded keyset scan. A tick arriving while
+ * that scan is active is skipped, so an overlong scan cannot overlap itself.
  */
 export const createWorkflowReconcileRunner = (
-  reconcile: (options: ReconcileOrphanedWorkflowsOptions) => Promise<void>,
+  reconcile: (options: Record<string, never>) => Promise<void>,
 ) => {
-  let pendingCellSweepOwed = true;
-  const runTick = async (): Promise<void> => {
-    await reconcile({ scanPendingCells: pendingCellSweepOwed });
-    pendingCellSweepOwed = false;
-  };
+  let running = false;
   return (): void => {
-    runTick().catch(handleWorkflowReconcileFailure);
+    if (running) {
+      return;
+    }
+    running = true;
+    reconcile({})
+      .catch(handleWorkflowReconcileFailure)
+      .finally(() => {
+        running = false;
+      });
   };
 };
 
@@ -1379,24 +1202,32 @@ const markPendingPlannedFieldsErrored = async (
     return;
   }
 
-  const entityRow = await actor.writeDb((tx) =>
-    tx.query.entities.findFirst({
-      where: { id: { eq: entityId } },
-      columns: { currentVersionId: true },
-    }),
-  );
-  if (!entityRow?.currentVersionId) {
-    return;
-  }
-  const entityVersionId = entityRow.currentVersionId;
-
   await actor.writeDb((tx) =>
     tx
       .update(fields)
-      .set({ content: { type: "error", version: 1 } })
+      .set({
+        content: { type: "error", version: 1 },
+        ownerRunId: null,
+        ownerBatchId: null,
+        deadlineAt: null,
+        attempt: null,
+      })
       .where(
         and(
-          eq(fields.entityVersionId, entityVersionId),
+          eq(fields.workspaceId, actor.workspaceId),
+          eq(fields.ownerRunId, actor.runId),
+          inArray(
+            fields.entityVersionId,
+            tx
+              .select({ id: entityVersions.id })
+              .from(entityVersions)
+              .where(
+                and(
+                  eq(entityVersions.entityId, entityId),
+                  isNull(entityVersions.deletedAt),
+                ),
+              ),
+          ),
           inArray(fields.propertyId, propertyIds),
           sql`${fields.content}->>'type' = 'pending'`,
         ),
@@ -1479,6 +1310,7 @@ export const processWorkflowEntityRun = async ({
     executionPlan,
     serviceTier = "standard",
     forcePropertyIds,
+    recoveryAttempt,
   } = data;
   const forcedPropertyIds: ReadonlySet<string> = new Set(forcePropertyIds);
   const brandedEntityId = brandPersistedEntityId(entityId);
@@ -1507,6 +1339,7 @@ export const processWorkflowEntityRun = async ({
       workspaceId: actor.workspaceId,
     });
     if (!isStillCurrentRequest) {
+      await markPendingPlannedFieldsErrored(actor, data);
       return;
     }
 
@@ -1548,6 +1381,7 @@ export const processWorkflowEntityRun = async ({
           signal: batchSignal,
           serviceTier,
           forcedPropertyIds,
+          recoveryAttempt: normalizeRecoveryAttempt(recoveryAttempt),
         }),
     });
     if (Result.isError(drained)) {
@@ -1579,6 +1413,7 @@ type ProcessOneBatchArgs = {
   signal: AbortSignal;
   serviceTier: AIRequestServiceTier;
   forcedPropertyIds: ReadonlySet<string>;
+  recoveryAttempt: 0 | 1;
 };
 
 type BatchPreviewPublisherArgs = {
@@ -1663,7 +1498,8 @@ const processOneBatch = async ({
   signal,
   serviceTier,
   forcedPropertyIds,
-}: ProcessOneBatchArgs) => {
+  recoveryAttempt,
+}: ProcessOneBatchArgs): Promise<void> => {
   const { workspaceId, organizationId, userId, runId: requestId } = actor;
   signal.throwIfAborted();
   const isCurrentRequest = await isCurrentWorkflowRequest({
@@ -1749,11 +1585,21 @@ const processOneBatch = async ({
 
   try {
     // Set fields to "pending"
-    await setFieldsStatus({
+    await claimPendingCells({
       workspaceId,
       entityVersionId,
       batch,
       contentType: "pending",
+      owner: {
+        runId: requestId,
+        batchId: batch.id,
+        deadlineAt: new Date(
+          Temporal.Now.instant().add({
+            milliseconds: getWorkflowBatchAITimeoutMs(serviceTier) + 30_000,
+          }).epochMilliseconds,
+        ),
+        attempt: recoveryAttempt,
+      },
       writeDb: actor.writeDb,
     });
 
@@ -1858,6 +1704,12 @@ const processOneBatch = async ({
         unsupportedPropertyIds.push(
           ...batchResult.value.unsupportedPropertyIds,
         );
+        for (const { id: propertyId } of aiModelProperties) {
+          const outcome = batchResult.value.settlements.get(propertyId);
+          if (outcome === "notStated" || outcome === "refused") {
+            skippedPropertyIds.push(propertyId);
+          }
+        }
       }
     }
 
@@ -1885,13 +1737,22 @@ const processOneBatch = async ({
       });
       aiResults.push(...verdictOutput.aiResults);
       aiJustifications.push(...verdictOutput.aiJustifications);
-      skippedPropertyIds.push(...verdictOutput.skippedPropertyIds);
-      const erroredVerdictIds = new Set<string>(
-        verdictOutput.erroredPropertyIds,
-      );
       for (const property of verdictProperties) {
-        if (erroredVerdictIds.has(property.id)) {
-          erroredProperties.push(property);
+        const settlement = verdictOutput.settlements.get(property.id);
+        switch (settlement) {
+          case "answered":
+            break;
+          case "notStated":
+            skippedPropertyIds.push(property.id);
+            break;
+          case "failedTransient":
+            erroredProperties.push(property);
+            break;
+          case undefined:
+            return panic(`Verdict property ${property.id} was not settled`);
+          default:
+            settlement satisfies never;
+            return panic(`Unhandled verdict settlement: ${String(settlement)}`);
         }
       }
 
@@ -1937,15 +1798,24 @@ const processOneBatch = async ({
       workspaceId,
     });
     if (!isStillCurrentRequest) {
+      await settleOwnedCells({
+        workspaceId,
+        entityVersionId,
+        batch,
+        contentType: "error",
+        ownerRunId: requestId,
+        writeDb: actor.writeDb,
+      });
       return;
     }
 
     if (erroredProperties.length > 0) {
-      await setFieldsStatus({
+      await settleOwnedCells({
         workspaceId,
         entityVersionId,
         batch: { ...batch, properties: erroredProperties },
         contentType: "error",
+        ownerRunId: requestId,
         writeDb: actor.writeDb,
       });
     }
@@ -2003,15 +1873,19 @@ const processOneBatch = async ({
         (id) => !lockedAtWrite.has(id),
       );
 
+      let ownedPropertyIds = new Set<string>();
       if (allPropertyIds.length > 0) {
-        await tx
+        const deleted = await tx
           .delete(fields)
           .where(
             and(
               eq(fields.entityVersionId, entityVersionId),
               inArray(fields.propertyId, allPropertyIds),
+              eq(fields.ownerRunId, requestId),
             ),
-          );
+          )
+          .returning({ propertyId: fields.propertyId });
+        ownedPropertyIds = new Set(deleted.map(({ propertyId }) => propertyId));
       }
 
       const fieldValues = [];
@@ -2020,7 +1894,7 @@ const processOneBatch = async ({
         propertyId,
         content,
       } of processedFields.aiResults) {
-        if (!lockedAtWrite.has(propertyId)) {
+        if (ownedPropertyIds.has(propertyId)) {
           fieldValues.push({
             id: fieldId,
             workspaceId,
@@ -2031,7 +1905,7 @@ const processOneBatch = async ({
         }
       }
       for (const propertyId of processedFields.unsupportedPropertyIds) {
-        if (!lockedAtWrite.has(propertyId)) {
+        if (ownedPropertyIds.has(propertyId)) {
           fieldValues.push({
             id: createSafeId<"field">(),
             workspaceId,
@@ -2049,7 +1923,7 @@ const processOneBatch = async ({
       if (processedFields.aiJustifications.length > 0) {
         const aiResultFieldIdsForLockedProps = new Set<string>();
         for (const { fieldId, propertyId } of processedFields.aiResults) {
-          if (lockedAtWrite.has(propertyId)) {
+          if (!ownedPropertyIds.has(propertyId)) {
             aiResultFieldIdsForLockedProps.add(fieldId);
           }
         }
@@ -2335,15 +2209,32 @@ type SetFieldsStatusArgs = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   batch: PropertyBatch;
-  contentType: "pending" | "error" | "unsupported";
   writeDb: WorkflowRunActor["writeDb"];
-};
+} & (
+  | {
+      contentType: "pending";
+      ownerRunId?: never;
+      owner: {
+        runId: string;
+        batchId: string;
+        deadlineAt: Date;
+        attempt: 0 | 1;
+      };
+    }
+  | {
+      contentType: "error" | "unsupported";
+      owner?: never;
+      ownerRunId: string;
+    }
+);
 
 const setFieldsStatus = async ({
   workspaceId,
   entityVersionId,
   batch,
   contentType,
+  owner,
+  ownerRunId,
   writeDb,
 }: SetFieldsStatusArgs) => {
   const propertyIds = batch.properties.map((p) => p.id);
@@ -2380,25 +2271,62 @@ const setFieldsStatus = async ({
       return;
     }
 
-    await tx
+    const deleted = await tx
       .delete(fields)
       .where(
         and(
           eq(fields.entityVersionId, entityVersionId),
           inArray(fields.propertyId, writablePropertyIds),
+          ...(contentType === "pending"
+            ? []
+            : [eq(fields.ownerRunId, ownerRunId)]),
         ),
-      );
+      )
+      .returning({ propertyId: fields.propertyId });
 
-    const fieldValues = writablePropertyIds.map((propertyId) => ({
+    const settledPropertyIds =
+      contentType === "pending"
+        ? writablePropertyIds
+        : deleted.map(({ propertyId }) => propertyId);
+
+    const fieldValues = settledPropertyIds.map((propertyId) => ({
       id: createSafeId<"field">(),
       workspaceId,
       propertyId,
       entityVersionId,
       content: { type: contentType, version: 1 as const },
+      ownerRunId: owner?.runId ?? null,
+      ownerBatchId: owner?.batchId ?? null,
+      deadlineAt: owner?.deadlineAt ?? null,
+      attempt: owner?.attempt ?? null,
     }));
 
     await tx.insert(fields).values(fieldValues);
   });
+};
+
+const claimPendingCells = async (
+  args: Extract<SetFieldsStatusArgs, { contentType: "pending" }>,
+): Promise<void> => await setFieldsStatus(args);
+
+const settleOwnedCells = async (
+  args: Extract<SetFieldsStatusArgs, { contentType: "error" | "unsupported" }>,
+): Promise<void> => {
+  // Keep the database transition coupled to the total lifecycle primitive.
+  // Adding a settlement outcome therefore requires an explicit persisted
+  // representation before this writer can compile.
+  const settled = settle(
+    {
+      state: "pending",
+      owner: { runId: args.ownerRunId, batchId: args.batch.id },
+      deadlineAt: new Date(0),
+      attempt: 1,
+      actions: ["restart"],
+    },
+    args.contentType === "unsupported" ? "unsupported" : "failedTransient",
+  );
+  const contentType = settled.state === "unsupported" ? "unsupported" : "error";
+  await setFieldsStatus({ ...args, contentType });
 };
 
 const broadcastWorkflowStatus = (workspaceId: SafeId<"workspace">) => {

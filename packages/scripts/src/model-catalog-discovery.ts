@@ -255,6 +255,8 @@ const REVIEWED_MODEL_EXCLUSIONS = {
     "2026-08-28: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "mistral:zai-glm-5-3":
     "2026-09-18: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
+  "mistral:zai-glm-5-3-flash":
+    "2026-10-23: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "openai:gpt-5.6-sol":
     "2026-08-28: duplicate alias; OpenAI's gpt-5.6 alias routes to Sol and is the offered picker ID",
   "openai:gpt-daybreak-blue-latest":
