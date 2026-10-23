@@ -32,6 +32,15 @@ export type ReadinessOutcome =
   { status: "ready" } | { status: "not-ready"; failed: ReadinessDependency[] };
 
 const PROBE_TIMEOUT_MS = 5000;
+const READINESS_TIMEOUT_LABEL = {
+  [READINESS_DEPENDENCY.database]: "database readiness probe",
+  [READINESS_DEPENDENCY.documentConverter]:
+    "document-converter readiness probe",
+  [READINESS_DEPENDENCY.objectStorage]: "object-storage readiness probe",
+  [READINESS_DEPENDENCY.rawSourceErasure]: "raw-source-erasure readiness probe",
+  [READINESS_DEPENDENCY.redis]: "redis readiness probe",
+  [READINESS_DEPENDENCY.scheduledJobs]: "scheduled-jobs readiness probe",
+} as const satisfies Record<ReadinessDependency, string>;
 // Written with the temporary-upload tag, so readiness also proves the task may
 // tag objects, which every server-side temporary write depends on. The marker
 // expires with the bucket lifecycle and is rewritten; the key version moved
@@ -200,7 +209,7 @@ export const runReadinessProbes = async (
       const result = await Result.tryPromise({
         try: async () =>
           await withTimeout(probes[dependency], {
-            label: `${dependency} readiness probe`,
+            label: READINESS_TIMEOUT_LABEL[dependency],
             timeoutMs,
           }),
         catch: (cause) => cause,

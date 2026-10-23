@@ -141,6 +141,7 @@ const createPublisherGateSlotAtInterval = ({
     {
       intervalMs: Math.max(PUBLISHER_GATES[gateId].intervalMs, intervalMs),
       key: gateId,
+      publisherCode: gateId,
       publisher,
       ...(gateId === "cellar-eu" ? { cooldown: "shared" as const } : {}),
     },

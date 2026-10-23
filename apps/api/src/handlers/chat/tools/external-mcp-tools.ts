@@ -347,7 +347,7 @@ const loadConnectorTools = async ({
 
   try {
     return await dependencies.withTimeout(async () => await discovery, {
-      label: `external-mcp-tools:${row.slug}`,
+      label: "external-mcp-tools-discovery",
       timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
     });
   } catch (error) {

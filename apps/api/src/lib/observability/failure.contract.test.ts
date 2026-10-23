@@ -58,6 +58,8 @@ import {
   errorFields,
   failureSink,
   gradeFailure,
+  identityFields,
+  systemFields,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
@@ -93,6 +95,63 @@ import type {
 const SENTINEL = "PRIVILEGED-SENTINEL";
 
 const SINK = failureSink({ event: "contract.sink", expected: [] });
+
+describe("timeout observability", () => {
+  const timeout = (label: string, stack?: string) => {
+    const error = new TimeoutError({
+      message: "expired",
+      label,
+      timeoutMs: 25,
+    });
+    if (stack !== undefined) {
+      error.stack = stack;
+    }
+    return error;
+  };
+
+  test("two labels have two identities and one label has one identity", () => {
+    const first = identityFields(readEvidence(timeout("workflow-reconcile")));
+    const second = identityFields(readEvidence(timeout("document-export")));
+    const sameFromAnotherSite = identityFields(
+      readEvidence(timeout("workflow-reconcile")),
+    );
+
+    expect(first["error.code"]).toBe("workflow-reconcile");
+    expect(second["error.code"]).toBe("document-export");
+    expect(first).not.toEqual(second);
+    expect(first).toEqual(sameFromAnotherSite);
+  });
+
+  test("replaces the generic helper frame with its caller", () => {
+    const error = timeout(
+      "workflow-reconcile",
+      [
+        "TimeoutError: expired",
+        "    at callback (/app/packages/concurrency/src/with-timeout.ts:45:25)",
+        "    at reconcile (/app/apps/api/src/lib/workflow-queue.ts:1148:13)",
+      ].join("\n"),
+    );
+
+    expect(identityFields(readEvidence(error))["error.frame"]).toBe(
+      "/app/apps/api/src/lib/workflow-queue.ts:1148:13",
+    );
+  });
+
+  test("emits root timeout fields and a direct cause label", () => {
+    const root = timeout("workflow-reconcile");
+    const wrapped = new Error("wrapper", {
+      cause: timeout("redis-command"),
+    });
+
+    expect(systemFields(readEvidence(root))).toMatchObject({
+      "error.timeout.label": "workflow-reconcile",
+      "error.timeout.ms": "25",
+    });
+    expect(systemFields(readEvidence(wrapped))).toMatchObject({
+      "error.cause.timeout.label": "redis-command",
+    });
+  });
+});
 
 // --- Shapes, as each boundary delivers them -----------------------------------
 
@@ -1066,17 +1125,23 @@ describe("fields stay compatible with the frozen legacy helpers", () => {
     (_name, row) => {
       const error = row.error();
       const legacyFingerprint = legacy.errorFingerprint(error);
-      const expectedFingerprint =
-        row.unrecognizedFrame === true
-          ? { ...legacyFingerprint, "error.frame": "" }
-          : legacyFingerprint;
+      let expectedFingerprint = legacyFingerprint;
+      if (error instanceof TimeoutError) {
+        expectedFingerprint = {
+          ...legacyFingerprint,
+          "error.code": error.label,
+        };
+      } else if (row.unrecognizedFrame === true) {
+        expectedFingerprint = { ...legacyFingerprint, "error.frame": "" };
+      }
 
       expect(
         withoutNewPgDriverCode(withoutShadow(errorFingerprint(error))),
       ).toEqual(expectedFingerprint);
-      expect(withoutPgFields(withoutShadow(errorSystemFields(error)))).toEqual(
-        legacy.errorSystemFields(error),
-      );
+      const system = withoutPgFields(withoutShadow(errorSystemFields(error)));
+      delete system["error.timeout.label"];
+      delete system["error.timeout.ms"];
+      expect(system).toEqual(legacy.errorSystemFields(error));
       expect(
         withoutNewPgDriverCode(withoutShadow(pgErrorFields(error))),
       ).toEqual(legacy.pgErrorFields(error));
