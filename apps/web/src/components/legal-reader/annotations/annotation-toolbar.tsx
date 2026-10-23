@@ -9,10 +9,11 @@ import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
 import { copyRichToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
+import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
 import {
   Building2Icon,
   ChevronDownIcon,
-  CopyIcon,
+  CopyFromMenuIcon,
   HighlighterIcon,
   LockIcon,
   AddCommentIcon,
@@ -24,7 +25,6 @@ import {
 } from "@stll/ui/icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -161,6 +161,14 @@ export const AnnotationToolbar = ({
   const [copyMenuBox, setCopyMenuBox] = useState<ReaderCopyMenuBox | null>(
     null,
   );
+  const {
+    copied,
+    confirm: confirmCopied,
+    reset: resetCopied,
+  } = useCopiedFeedback();
+  // Counts selection changes, so a clipboard write that settles after the
+  // reader moved on to other words never confirms a copy of those words.
+  const selectionGenerationRef = useRef(0);
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -390,7 +398,24 @@ export const AnnotationToolbar = ({
       }
       readSelection();
     };
-    const onSelectionChange = () => readSelection();
+    const onSelectionChange = () => {
+      selectionGenerationRef.current += 1;
+      // A confirmation belongs to the words that were copied.
+      resetCopied();
+      readSelection();
+    };
+    const onCopy = () => {
+      const selection = ownerDoc.getSelection();
+      if (
+        barRef.current !== null &&
+        selection !== null &&
+        !selection.isCollapsed &&
+        root.contains(selection.anchorNode) &&
+        root.contains(selection.focusNode)
+      ) {
+        confirmCopied();
+      }
+    };
     const onViewportChange = () => readSelection();
     // Dragging selected words carries the passage with the document it came
     // from, so a drop on the chat composer lands as chips where the corpus
@@ -409,6 +434,7 @@ export const AnnotationToolbar = ({
       writePassage(event.dataTransfer, quote);
     };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
+    ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
@@ -423,6 +449,7 @@ export const AnnotationToolbar = ({
       observer.disconnect();
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", onSelectionChange);
+      ownerDoc.removeEventListener("copy", onCopy);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
@@ -681,6 +708,8 @@ export const AnnotationToolbar = ({
       <div className="flex flex-wrap items-center gap-1">
         <div className="relative">
           <Button
+            aria-label={copied ? t("common.copied") : t("common.copy")}
+            data-copy-trigger=""
             onClick={(event) => {
               const MENU_ESTIMATED_HEIGHT_PX = 200;
               const barRect = barRef.current?.getBoundingClientRect();
@@ -704,8 +733,12 @@ export const AnnotationToolbar = ({
             size="sm"
             variant="ghost"
           >
-            <CopyIcon className="size-3.5" />
-            {t("common.copy")}
+            <CopyFeedback
+              copied={copied}
+              copiedLabel={t("common.copied")}
+              icon={CopyFromMenuIcon}
+              label={t("common.copy")}
+            />
             <ChevronDownIcon className="size-3" />
           </Button>
           {copyOpen &&
@@ -762,25 +795,29 @@ export const AnnotationToolbar = ({
                           selected,
                           target,
                         });
+                        const generation = selectionGenerationRef.current;
                         detached(
                           (async () => {
-                            const copied = await copyRichToClipboard(text);
-                            if (Result.isError(copied)) {
+                            const copyResult = await copyRichToClipboard(text);
+                            if (Result.isError(copyResult)) {
                               notifyUserError(
-                                copied.error,
+                                copyResult.error,
                                 t("errors.actionFailed"),
                               );
                               return;
                             }
-                            stellaToast.add({
-                              title: t("common.copied"),
-                              type: "success",
-                            });
+                            if (generation === selectionGenerationRef.current) {
+                              confirmCopied();
+                            }
                           })(),
                           "legal-reader.selection-copy",
                         );
                         setCopyOpen(false);
-                        clearSelection();
+                        // The option unmounts with the menu; keep keyboard
+                        // focus on the trigger that now shows the confirmation.
+                        barRef.current
+                          ?.querySelector<HTMLElement>("[data-copy-trigger]")
+                          ?.focus();
                       }}
                       onFocus={() => setCopyPreviewMode(copyMode)}
                       onMouseDown={(event) => event.preventDefault()}

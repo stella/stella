@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Retour à l’application",
-    "billingAndUsage": "Facturation et utilisation",
     "billingProfiles": "Profils de facturation",
     "deleteDescription": "Supprimez définitivement cette organisation et ses données. Cette action est irréversible.",
     "deleteOrganization": "Supprimer l’organisation",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Quitter l’organisation",
     "leaveRefusedOnlyOwner": "Vous êtes le seul propriétaire. Désignez un autre membre comme propriétaire avant de partir.",
     "modelsAndProviders": "Modèles et fournisseurs",
-    "noPlan": "Aucune offre active",
     "organizationDeleted": "L’organisation a été supprimée.",
     "organizationId": "ID de l’organisation",
     "organizationLeft": "Vous avez quitté l’organisation.",
-    "overviewDescription": "Gérez votre organisation, les personnes et les outils.",
-    "people": "Personnes",
     "planAndUsage": "Offre et utilisation",
     "title": "Administration de l’organisation",
     "toolsDescription": "Activez ou désactivez les outils intégrés pour toutes les personnes de cette organisation."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Votre assistant vous demandera cette adresse",
-    "copiedToast": "Instructions copiées. Collez-les dans une conversation avec votre assistant.",
     "copy": "Copiez-lui les instructions",
     "description": "Interrogez Claude ou ChatGPT sur vos dossiers et documents. Choisissez votre assistant pour un guide court ; cela prend environ une minute.",
     "instructions": "Connecte-moi à stella, mon espace de travail juridique. Suis les « Instructions for AI agents » sur {guideUrl} et utilise cette adresse de serveur : {mcpUrl}",
     "openGuide": "Ouvrir le guide pour {assistant}",
+    "pasteHint": "Collez-les dans une conversation avec votre assistant.",
     "selfSetupHint": "Vous utilisez Claude Code ou Codex ?",
     "title": "Utilisez stella dans votre assistant IA"
   },
@@ -931,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Exhaustivité",
-      "countedOn": "Décompté le {date}",
       "courtsHeading": "Par juridiction",
       "courtsUnavailable": "La répartition par juridiction est indisponible pour le moment.",
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
-      "exceedsReportedTotal": "Contient plus que le dernier total annoncé par le diffuseur le {date}",
-      "gapStatusUnknown": "État des lacunes inconnu",
       "generatedAt": "Chiffres au {date}",
       "globeLabel": "Pays dont la jurisprudence figure dans le corpus, sur un globe",
       "healthCurrent": "À jour",

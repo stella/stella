@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Voltar ao aplicativo",
-    "billingAndUsage": "Faturamento e uso",
     "billingProfiles": "Perfis de faturamento",
     "deleteDescription": "Exclua permanentemente esta organização e seus dados. Esta ação não pode ser desfeita.",
     "deleteOrganization": "Excluir organização",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Sair da organização",
     "leaveRefusedOnlyOwner": "Você é o único proprietário. Torne outro membro proprietário antes de sair.",
     "modelsAndProviders": "Modelos e provedores",
-    "noPlan": "Nenhum plano ativo",
     "organizationDeleted": "A organização foi excluída.",
     "organizationId": "ID da organização",
     "organizationLeft": "Você saiu da organização.",
-    "overviewDescription": "Gerencie sua organização, as pessoas e as ferramentas.",
-    "people": "Pessoas",
     "planAndUsage": "Plano e uso",
     "title": "Administração da organização",
     "toolsDescription": "Ative ou desative as ferramentas integradas para todas as pessoas desta organização."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Seu assistente vai pedir este endereço",
-    "copiedToast": "Instruções copiadas. Cole-as em uma conversa com seu assistente.",
     "copy": "Copie as instruções para ele",
     "description": "Pergunte ao Claude ou ao ChatGPT sobre seus casos e documentos. Escolha seu assistente para ver um guia curto; leva cerca de um minuto.",
     "instructions": "Conecte-me ao stella, meu espaço de trabalho jurídico. Siga as instruções para agentes de IA em {guideUrl} e use este endereço de servidor: {mcpUrl}",
     "openGuide": "Abrir o guia do {assistant}",
+    "pasteHint": "Cole-as em uma conversa com seu assistente.",
     "selfSetupHint": "Usa o Claude Code ou o Codex?",
     "title": "Use o stella no seu assistente de IA"
   },
@@ -931,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Completude",
-      "countedOn": "Contado em {date}",
       "courtsHeading": "Por tribunal",
       "courtsUnavailable": "A distribuição por tribunal está indisponível no momento.",
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
-      "exceedsReportedTotal": "Contém mais do que o último total informado pelo órgão em {date}",
-      "gapStatusUnknown": "Situação das lacunas desconhecida",
       "generatedAt": "Números de {date}",
       "globeLabel": "Países cuja jurisprudência o corpus contém, em um globo",
       "healthCurrent": "Atualizado",
