@@ -5,12 +5,16 @@ import { openMaintenanceSql } from "@/api/db/long-running-connection";
 import { onlineWorkState, type ONLINE_WORK_STATES } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
-import { detached } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
 } from "@/api/lib/db/ebs-signal-reader";
-import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import {
+  type SchedulerDb,
+  type SchedulerTask,
+  SchedulerTaskFailure,
+} from "@/api/lib/scheduler/types";
 
 import { createOnlineIndexHold } from "../../../db/online-index-gate";
 import { openOnlineIndexObserver } from "../../../db/online-index-observer";
@@ -73,9 +77,16 @@ type OnlineWorkRunnerDependencies = {
   claim: (
     options: Pick<ClaimOnlineWorkUnitOptions, "name" | "lifecycle">,
   ) => Promise<OnlineWorkUnitClaim>;
-  /** Runs the claimed walk past this tick; failures are reported, never thrown here. */
-  detach: (work: Promise<void>) => void;
+  /** Runs the claimed walk past this tick; its failure is reported, never returned to the tick. */
+  detach: (work: Promise<UnitResult>) => void;
 };
+
+/** How a detached unit ended: recorded, or failed with its checkpoint written. */
+type UnitResult = Result<void, SchedulerTaskFailure>;
+
+type OnlineWorkRunnerTick = (
+  now: Date,
+) => Promise<Result<OnlineWorkRunnerOutcome, SchedulerTaskFailure>>;
 
 const redactedError = (error: unknown): string => {
   const message = error instanceof Error ? error.message : String(error);
@@ -123,21 +134,26 @@ export const createOnlineWorkRunner = ({
   const finishUnit = async (
     name: OnlineWorkName,
     run: ClaimedUnit["run"],
-  ): Promise<void> => {
+  ): Promise<UnitResult> => {
     try {
-      await run(async (outcome) => {
+      return await run(async (outcome): Promise<UnitResult> => {
         if (Result.isError(outcome)) {
           await store.markFailed({ name, error: redactedError(outcome.error) });
-          throw outcome.error;
+          return Result.err(
+            new SchedulerTaskFailure({
+              message: `Online work ${name} failed`,
+              cause: outcome.error,
+            }),
+          );
         }
         switch (outcome.value.type) {
           case "complete":
             await store.markFinalized(name);
-            return;
+            return Result.ok(undefined);
           case "deferred":
             // The gate held the unit; it stays building and the next tick
             // claims it again.
-            return;
+            return Result.ok(undefined);
           default:
             outcome.value satisfies never;
             return panic("Unknown online work outcome");
@@ -149,12 +165,12 @@ export const createOnlineWorkRunner = ({
   };
 
   /** `now` is the tick's own time: it dates the claim. */
-  return async (now: Date): Promise<OnlineWorkRunnerOutcome> => {
+  const tick: OnlineWorkRunnerTick = async (now) => {
     if (build.type === "building") {
-      return { type: "building", name: build.name };
+      return Result.ok({ type: "building", name: build.name });
     }
     if (pending.length === 0) {
-      return IDLE;
+      return Result.ok(IDLE);
     }
     const states = await store.readStates();
     const finalized = new Set(
@@ -164,12 +180,12 @@ export const createOnlineWorkRunner = ({
     );
     const name = pending.find((candidate) => !finalized.has(candidate));
     if (name === undefined) {
-      return IDLE;
+      return Result.ok(IDLE);
     }
     const claimed = await claim({ name, lifecycle });
     switch (claimed.type) {
       case "lock_held":
-        return SKIPPED;
+        return Result.ok(SKIPPED);
       case "claimed":
         break;
       default:
@@ -198,16 +214,22 @@ export const createOnlineWorkRunner = ({
     });
     if (Result.isError(marked)) {
       await claimed.release();
-      throw marked.error;
+      return Result.err(
+        new SchedulerTaskFailure({
+          message: `Recording the claim on online work ${name} failed`,
+          cause: marked.error,
+        }),
+      );
     }
     if (marked.value === "finished-elsewhere") {
       await claimed.release();
-      return IDLE;
+      return Result.ok(IDLE);
     }
     build = { type: "building", name };
     detach(finishUnit(name, claimed.run));
-    return { type: "started", name };
+    return Result.ok({ type: "started", name });
   };
+  return tick;
 };
 
 export const createDrizzleOnlineWorkStateStore = (
@@ -276,16 +298,22 @@ const maintenancePool = (): OnlineMigrationPool => ({
   },
 });
 
-type RunnerByDb = (
-  db: SchedulerDb,
-) => (now: Date) => Promise<OnlineWorkRunnerOutcome>;
+type RunnerByDb = (db: SchedulerDb) => OnlineWorkRunnerTick;
+
+/** A unit that failed after writing its checkpoint is reported like a rejection. */
+const reportUnitFailure = async (work: Promise<UnitResult>): Promise<void> => {
+  const result = await work;
+  if (Result.isError(result)) {
+    captureError(result.error, { detached: "online-work.build-unit" });
+  }
+};
 
 /**
  * One runner per process: its build state must outlive the tick that
  * started a build, so it is created on the first tick and kept.
  */
 const processRunner = (): RunnerByDb => {
-  let runner: ((now: Date) => Promise<OnlineWorkRunnerOutcome>) | undefined;
+  let runner: OnlineWorkRunnerTick | undefined;
   return (db) => {
     runner ??= createOnlineWorkRunner({
       names: ONLINE_WORK_NAMES,
@@ -305,7 +333,7 @@ const processRunner = (): RunnerByDb => {
             await openOnlineIndexObserver(envBase.DATABASE_URL),
         }),
       detach: (work) => {
-        detached(work, "online-work.build-unit");
+        detached(reportUnitFailure(work), "online-work.build-unit");
       },
     });
     return runner;
@@ -315,4 +343,6 @@ const processRunner = (): RunnerByDb => {
 const runnerFor = processRunner();
 
 export const runPendingOnlineWork = (async ({ db, dueAt }) =>
-  await runnerFor(db)(dueAt.claimedAtDate())) satisfies SchedulerTask;
+  (await runnerFor(db)(dueAt.claimedAtDate())).map(
+    () => undefined,
+  )) satisfies SchedulerTask;

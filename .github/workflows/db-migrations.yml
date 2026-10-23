@@ -208,6 +208,7 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
         # Exercises the shipped migrate path (Bun SQL + drizzle migrator),
         # the same entrypoint the deploy runs, not the drizzle-kit CLI.
         run: bun run src/db/migrate.ts
@@ -250,6 +251,7 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           PGPASSWORD: stella
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
         run: |
           set -euo pipefail
           psql -h 127.0.0.1 -U stella_owner -d stella -c \

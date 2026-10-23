@@ -907,6 +907,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               DB_LOAD_GATE_BUSY_WINDOWS: "[]",
               DB_LOAD_GATE_LONG_TX_MAX_AGE_MS: "1",
               ONLINE_INDEX_RETRY_MS: "13",
+              STELLA_MIGRATE_ONLINE_WORK: "build_finalized",
               HOME: environmentDirectory,
               NODE_ENV: "test",
               PATH: process.env["PATH"] ?? "",

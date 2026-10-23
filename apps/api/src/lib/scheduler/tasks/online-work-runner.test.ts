@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
+import type { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
 import type { OnlineMigrationOutcome } from "../../../db/online-migration-connection";
 import {
@@ -85,7 +85,7 @@ const createHarness = ({
     OnlineWorkName,
     PromiseWithResolvers<OnlineMigrationOutcome>
   >();
-  const detachedWork: Promise<void>[] = [];
+  const detachedWork: Promise<Result<void, SchedulerTaskFailure>>[] = [];
   const runner = createOnlineWorkRunner({
     names: ONLINE_WORK_NAMES,
     lifecycle: lifecycleWithPending(pending),
@@ -110,7 +110,7 @@ const createHarness = ({
         release,
         run: async (record) => {
           try {
-            await record(
+            return await record(
               await Result.tryPromise({
                 try: async () => await walk.promise,
                 catch: (cause: unknown) => cause,
@@ -140,7 +140,7 @@ const createHarness = ({
     claims,
     releases,
     statesAtRelease,
-    tick: async () => await runner(START),
+    tick: async () => (await runner(START)).unwrap(),
     walkOf,
     settle,
   };
@@ -212,7 +212,7 @@ describe("online work runner", () => {
           run: async (record) => {
             walked.push(runnerId);
             try {
-              await record(Result.ok({ type: "complete" }));
+              return await record(Result.ok({ type: "complete" }));
             } finally {
               await release();
             }
@@ -222,7 +222,7 @@ describe("online work runner", () => {
     // Runner b chose its unit from this snapshot, taken before a finished it.
     const stale = await store.readStates();
     let staleReads = 1;
-    const work: Promise<void>[] = [];
+    const work: Promise<unknown>[] = [];
     const a = createOnlineWorkRunner({
       names: ONLINE_WORK_NAMES,
       lifecycle,
@@ -249,10 +249,10 @@ describe("online work runner", () => {
       detach: () => panic("Runner b must not walk a finished unit"),
     });
 
-    expect(await a(START)).toEqual({ type: "started", name: FIRST });
+    expect((await a(START)).unwrap()).toEqual({ type: "started", name: FIRST });
     await Promise.all(work);
 
-    expect(await b(START)).toEqual({ type: "idle" });
+    expect((await b(START)).unwrap()).toEqual({ type: "idle" });
     expect(walked).toEqual(["a"]);
     expect(gaveUp).toEqual(["b"]);
     expect(holder).toBeNull();
@@ -272,7 +272,10 @@ describe("online work runner", () => {
       );
     const [settled] = await harness.settle();
 
-    expect(settled?.status).toBe("rejected");
+    // Reported as a failure of the detached unit, after its checkpoint.
+    expect(
+      settled?.status === "fulfilled" && Result.isError(settled.value),
+    ).toBe(true);
     const failed = harness.rows.get(FIRST);
     expect(failed?.state).toBe("failed");
     expect(failed?.lastError).not.toContain("secret");
@@ -325,9 +328,12 @@ describe("online work runner", () => {
       detach: () => undefined,
     });
 
-    const rejection = await rejectionOf(runner(START));
+    const outcome = await runner(START);
 
-    expect(rejection).toHaveProperty("message", "write refused");
+    expect(Result.isError(outcome) && outcome.error.cause).toHaveProperty(
+      "message",
+      "write refused",
+    );
     expect(releases).toEqual([FIRST]);
   });
 

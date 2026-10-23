@@ -941,13 +941,13 @@ export type OnlineWorkUnitClaim =
       type: "claimed";
       /**
        * Walks the unit and hands its result to `record` while the lock is
-       * still held, then releases the lock and the session. Recording under
-       * the lock keeps another process from claiming the unit between the
-       * walk's end and its checkpoint.
+       * still held, then releases the lock and the session and returns what
+       * `record` returned. Recording under the lock keeps another process
+       * from claiming the unit between the walk's end and its checkpoint.
        */
-      run: (
-        record: (result: OnlineWorkRunResult) => Promise<void>,
-      ) => Promise<void>;
+      run: <Recorded>(
+        record: (result: OnlineWorkRunResult) => Promise<Recorded>,
+      ) => Promise<Recorded>;
       /** Gives the claim up without walking. */
       release: () => Promise<void>;
     };
@@ -1030,7 +1030,7 @@ export const claimOnlineWorkUnit = async (
           },
           catch: (cause: unknown) => cause,
         });
-        await record(result);
+        return await record(result);
       } finally {
         await release();
       }

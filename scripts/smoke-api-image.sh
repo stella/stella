@@ -120,6 +120,7 @@ migrate() {
   local database_url=${1:-postgres://$database_owner:smoke-only@smoke-postgres:5432/stella}
   run_probe --env "DATABASE_URL=$database_url" \
     --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
+    --env STELLA_MIGRATE_ONLINE_WORK=build_finalized \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 

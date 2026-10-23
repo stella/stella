@@ -86,7 +86,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
         const main = openClient({ max: 2 });
         const builder = await openClient().sql.reserve();
         const observer = await openClient().sql.reserve();
-        const work: Promise<void>[] = [];
+        const work: Promise<unknown>[] = [];
         try {
           await main.sql.unsafe(
             `DROP INDEX CONCURRENTLY IF EXISTS public."${index.name}"`,
@@ -117,7 +117,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             },
           });
 
-          expect(await runner(TICK)).toEqual({
+          expect((await runner(TICK)).unwrap()).toEqual({
             type: "started",
             name: index.name,
           });
@@ -139,7 +139,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             index.name,
           ]);
           expect(row).toEqual([{ state: "finalized", attempts: 1 }]);
-          expect(await runner(TICK)).toEqual({ type: "idle" });
+          expect((await runner(TICK)).unwrap()).toEqual({ type: "idle" });
         } finally {
           await main.sql.unsafe("DELETE FROM online_work_state");
           const present = await main.sql.unsafe<{ present: boolean }[]>(
@@ -190,7 +190,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
           detach: () => panic("A skipped tick starts no work"),
         });
 
-        expect(await runner(TICK)).toEqual({ type: "skipped" });
+        expect((await runner(TICK)).unwrap()).toEqual({ type: "skipped" });
         const row = await main.sql.unsafe<
           { state: string; attempts: number }[]
         >("SELECT state, attempts FROM online_work_state WHERE name = $1", [
