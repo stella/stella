@@ -15,7 +15,6 @@ import type {
   McpHttpHandler,
   Tool as McpTool,
   ReadResourceResult,
-  Resource,
   RequestId,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
@@ -100,6 +99,7 @@ import {
   setMcpMetricProtocolPath,
   setMcpMetricToolName,
 } from "@/api/mcp/request-metrics";
+import type { listMcpResources } from "@/api/mcp/resources";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
@@ -218,7 +218,7 @@ type McpServerDependencies = {
     mode?: McpMode,
     scopes?: readonly string[],
   ) => Promise<McpTool[]>;
-  listMcpResources: (mode: McpMode, context?: McpRequestContext) => Resource[];
+  listMcpResources: typeof listMcpResources;
   readMcpResource: (
     uri: string,
     mode: McpMode,
@@ -1026,7 +1026,7 @@ export const createMcpHttpRequestHandler = ({
       },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
-        instructions: getMcpInstructions(mode, context),
+        instructions: await getMcpInstructions(mode, context),
       },
     );
 
@@ -1052,8 +1052,8 @@ export const createMcpHttpRequestHandler = ({
     // Resources are static, public, tenant-independent documents (the template
     // marker grammar today); the same set is served in both modes without a
     // per-tool scope gate. Every request already carries a valid session token.
-    server.setRequestHandler("resources/list", () => ({
-      resources: listMcpResources(mode, context),
+    server.setRequestHandler("resources/list", async () => ({
+      resources: await listMcpResources(mode, { context }),
     }));
 
     server.setRequestHandler(

@@ -210,7 +210,7 @@ describe("feature descriptor discovery and admission", () => {
       expect(writeResult.isErr() && writeResult.error.kind).toBe("unavailable");
       expect(scopedDb).not.toHaveBeenCalled();
       expect(
-        listMcpResources("default", context).some(
+        (await listMcpResources("default", { context })).some(
           (resource) => resource.uri === "stella://about",
         ),
       ).toBe(false);
@@ -223,10 +223,10 @@ describe("feature descriptor discovery and admission", () => {
         status: "error",
         error: { message: expect.stringContaining("Unknown resource") },
       });
-      expect(getMcpInstructions("default", context)).not.toContain(
-        "stella://about",
+      expect(await getMcpInstructions("default", context)).not.toContain(
+        "stella-product-identity",
       );
-      expect(getMcpInstructions("default", context)).not.toContain(
+      expect(await getMcpInstructions("default", context)).not.toContain(
         "prepare_feedback",
       );
       expect(chatScriptReadToolNames(context)).not.toContain("list_matters");
@@ -258,7 +258,7 @@ describe("feature descriptor discovery and admission", () => {
         }),
       ).toBeDefined();
       expect(
-        listMcpResources("default", context).some(
+        (await listMcpResources("default", { context })).some(
           (resource) => resource.uri === "stella://about",
         ),
       ).toBe(true);
@@ -266,8 +266,8 @@ describe("feature descriptor discovery and admission", () => {
         (await readMcpResource("stella://about", "default", context)).contents
           .length,
       ).toBeGreaterThan(0);
-      expect(getMcpInstructions("default", context)).toContain(
-        "stella://about",
+      expect(await getMcpInstructions("default", context)).toContain(
+        "stella-product-identity",
       );
       expect(chatScriptReadToolNames(context)).toContain("list_matters");
       expect(chatCodeModeSystemPrompt([], context)).toContain("list_matters");

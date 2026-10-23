@@ -70,7 +70,7 @@ const call = async ({ toolName, access }: CallOptions) => {
       return { content: [{ type: "text", text: "app data" }] };
     },
     listMcpTools: async () => [],
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
     resolveMcpSessionContext: async () => {

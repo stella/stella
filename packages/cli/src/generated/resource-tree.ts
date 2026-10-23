@@ -73,6 +73,15 @@ export const generatedResourceTree: ResourceNode = {
             uri: "stella://reference/feedback-workflow",
           },
         },
+        "playbook-builder": {
+          kind: "leaf",
+          spec: {
+            kind: "show",
+            commandPath: ["reference", "show", "playbook-builder"],
+            name: "playbook-builder",
+            uri: "stella://skills/playbook-builder",
+          },
+        },
       },
     },
   },
