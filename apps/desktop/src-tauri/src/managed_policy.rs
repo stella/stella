@@ -1,6 +1,7 @@
 //! Settings an organization's administrator fixes for every user of a
-//! machine: turning off in-app updates, keeping the activity timeline off,
-//! and naming the self-hosted server the app trusts without asking.
+//! machine: turning off in-app updates, keeping the activity timeline or
+//! clipboard history off, and naming the self-hosted server the app trusts
+//! without asking.
 //!
 //! macOS reads the app's preference domain through a configuration profile
 //! or the machine-wide preferences file; Windows reads
@@ -17,6 +18,7 @@ use crate::feature_gate::DesktopFeature;
 
 pub const DISABLE_UPDATES: &str = "DisableUpdates";
 pub const DISABLE_ACTIVITY: &str = "DisableActivity";
+pub const DISABLE_CLIPBOARD: &str = "DisableClipboard";
 pub const SERVER_WEB_ORIGIN: &str = "ServerWebOrigin";
 pub const SERVER_API_URL: &str = "ServerApiURL";
 
@@ -29,6 +31,9 @@ const WINDOWS_POLICY_KEY: &str = r"Software\Policies\stella\Desktop";
 pub struct ManagedPolicy {
   pub updates_disabled: bool,
   pub activity_disabled: bool,
+  /// No clipboard history: nothing is recorded, and neither the shortcut,
+  /// the tray nor a link opens its window.
+  pub clipboard_disabled: bool,
   pub server: Option<ManagedServer>,
 }
 
@@ -57,6 +62,7 @@ impl ManagedPolicy {
     Self {
       updates_disabled: source.flag(DISABLE_UPDATES),
       activity_disabled: source.flag(DISABLE_ACTIVITY),
+      clipboard_disabled: source.flag(DISABLE_CLIPBOARD),
       server: managed_server(source),
     }
   }
@@ -70,6 +76,7 @@ pub fn current() -> &'static ManagedPolicy {
       tracing::info!(
         updates_disabled = policy.updates_disabled,
         activity_disabled = policy.activity_disabled,
+        clipboard_disabled = policy.clipboard_disabled,
         server = policy
           .server
           .as_ref()
@@ -222,6 +229,17 @@ mod tests {
       ManagedPolicy::from_source(&Fixture::default()),
       ManagedPolicy::default()
     );
+  }
+
+  #[test]
+  fn the_clipboard_flag_turns_off_clipboard_history_only() {
+    let policy = ManagedPolicy::from_source(&Fixture {
+      flags: HashMap::from([(DISABLE_CLIPBOARD, true)]),
+      ..Fixture::default()
+    });
+    assert!(policy.clipboard_disabled);
+    assert!(!policy.updates_disabled);
+    assert!(policy.blocked_features().is_empty());
   }
 
   #[test]

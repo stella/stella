@@ -1538,6 +1538,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/tooltip-provider-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
@@ -1687,6 +1688,7 @@ const config = defineConfig({
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
+    "./.oxlint-plugins/require-polite-publisher-fetch.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
@@ -2175,6 +2177,14 @@ const config = defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/tooltip-provider-owner.fixture.tsx",
+      ],
+      rules: {
+        "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
     },
     {
       // Exercise no-direct-unsaved-work-guard against its regression fixture;
@@ -3729,6 +3739,13 @@ const config = defineConfig({
       },
     },
     {
+      files: [...PRODUCT_FRONTEND_FILES, "apps/desktop/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-restricted-imports": [
@@ -4886,6 +4903,19 @@ const config = defineConfig({
         "no-raw-error-logging/no-raw-error-logging": "error",
         "no-secret-in-log-sink/no-secret-in-log-sink": "error",
         "require-safe-outbound-target/require-safe-outbound-target": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-polite-publisher-fetch.fixture.ts",
+        "apps/api/src/handlers/case-law/ingestion/**/*.{ts,tsx}",
+        "apps/api/src/handlers/soft-law/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "require-polite-publisher-fetch/require-polite-publisher-fetch":
+          "error",
       },
     },
     {
