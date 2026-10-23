@@ -24,9 +24,9 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
-  CopyIcon,
   CropIcon,
   DownloadIcon,
+  DuplicateIcon,
   GripVerticalIcon,
   PlusIcon,
   Redo2Icon,
@@ -1040,7 +1040,7 @@ const LoadedPDFPageOrganizer = ({
             tooltip={tPageEditor("duplicate")}
             variant="ghost"
           >
-            <CopyIcon />
+            <DuplicateIcon />
           </Button>
           <Button
             aria-label={tPageEditor("delete")}

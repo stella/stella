@@ -84,6 +84,7 @@ macro_rules! with_stella_commands {
       activity_commands::activity_delete_other_account_history => "activity_delete_other_account_history",
       activity_commands::activity_set_browser_title_capture => "activity_set_browser_title_capture",
       activity_commands::activity_set_capture_details => "activity_set_capture_details",
+      activity_commands::activity_set_detect_calls => "activity_set_detect_calls",
       activity_commands::activity_set_app_detail_capture => "activity_set_app_detail_capture",
       activity_commands::activity_open_accessibility_settings => "activity_open_accessibility_settings",
       activity_commands::activity_copy_text => "activity_copy_text",

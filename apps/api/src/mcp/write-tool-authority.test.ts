@@ -65,7 +65,6 @@ const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
     userId: toSafeId<"user">("user_1"),
     userEmail: "member@example.test",
     accessibleWorkspaceIds: [],
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: role,
   });
@@ -135,6 +134,7 @@ const mcpOffered = (role: MemberRole): ReadonlySet<string> =>
       listOfferedStaticMcpToolDefinitions({
         context: mcpContextFor(role),
         mode,
+        enabledRegistrySlugs: undefined,
       }).map((definition) => definition.name),
     ),
   );
@@ -619,7 +619,6 @@ describe("write tools whose input selects the operation", () => {
     const updateOnly = asTestRaw<AuthorizedMcpRequestContext>({
       accessibleWorkspaceIds: [],
       credentialPermissions: { entity: ["update"] },
-      enabledRegistrySlugs: undefined,
       grantedScopes: [],
       memberRole: "owner",
     });
@@ -721,15 +720,16 @@ describe("write tool account access", () => {
     env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
     try {
       const context = asTestRaw<AuthorizedMcpRequestContext>({
-        enabledRegistrySlugs: undefined,
         grantedScopes: [],
         memberRole: "owner",
         userEmail: "limited@example.test",
       });
       const offered = new Set(
-        listOfferedStaticMcpToolDefinitions({ context, mode: "default" }).map(
-          (definition) => definition.name,
-        ),
+        listOfferedStaticMcpToolDefinitions({
+          context,
+          mode: "default",
+          enabledRegistrySlugs: undefined,
+        }).map((definition) => definition.name),
       );
       expect(offered.has("update_organization_settings")).toBe(false);
       expect(offered.has("set_practice_jurisdictions")).toBe(false);

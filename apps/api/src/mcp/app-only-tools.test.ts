@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { chatScriptReadToolNames } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { toSafeId } from "@/api/lib/branded-types";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import {
   McpAuthenticationError,
   McpOrganizationAccessError,
@@ -30,7 +31,8 @@ const requestContext = () =>
     userEmail: "reader@example.test",
     memberRole: "owner",
     grantedScopes: ["stella:read"],
-    enabledRegistrySlugs: [],
+    loadEnabledRegistrySlugs: async () =>
+      await Promise.resolve(readPresent([])),
   });
 
 type CallOptions = {
@@ -114,6 +116,7 @@ describe("app-only reader tool authorization", () => {
       mode: "default",
       scopes: ["stella:read"],
       audience: "model",
+      enabledRegistrySlugs: [],
     });
     const chat = chatScriptReadToolNames();
     for (const name of appOnlyNames) {
