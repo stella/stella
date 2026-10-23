@@ -6,7 +6,7 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,

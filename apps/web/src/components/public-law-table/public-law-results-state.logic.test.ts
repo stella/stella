@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   PUBLIC_LAW_SEARCH_STATE,
-  publicLawRowsPhase,
   publicLawLoadMode,
+  publicLawRowsPhase,
   publicLawSearchOutage,
   queryAnsweredByRows,
   rowsAnswerRequestedSearch,

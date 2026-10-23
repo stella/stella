@@ -47,15 +47,15 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
-  legalReaderAnnotations,
   caseLawSources,
-  publishedCaseLawDecisions,
   entities,
   entityVersions,
   fields,
+  legalReaderAnnotations,
   legislationDocuments,
   legislationSources,
   properties,
+  publishedCaseLawDecisions,
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";

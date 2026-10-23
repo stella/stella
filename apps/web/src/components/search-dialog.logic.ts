@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 

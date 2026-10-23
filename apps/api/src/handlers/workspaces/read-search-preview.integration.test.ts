@@ -42,6 +42,11 @@ afterEach(async () => {
   if (seededIds.length === 0) {
     return;
   }
+  // A seeded entity points at its current version, so detach it first.
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: null })
+    .where(inArray(entities.id, seededIds));
   const seededVersionIds = testDb
     .select({ id: entityVersions.id })
     .from(entityVersions)

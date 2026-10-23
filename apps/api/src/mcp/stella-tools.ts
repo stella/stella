@@ -5,8 +5,8 @@ import * as v from "valibot";
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
   CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
@@ -22,13 +22,13 @@ import {
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  DEFAULT_SEARCH_SORT,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
-  DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
-  searchPageEnd,
   SEARCH_TOTAL_NOT_COUNTED,
+  searchPageEnd,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -54,12 +54,12 @@ import { envBase } from "@/api/env-base";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   DECISION_DOCUMENT_STATE,
+  type DecisionDocumentHydration,
   decisionDocumentState,
   documentHydrationFor,
+  type readGatedDecisionWithDocument,
   readsSharedPublicLawCorpus,
   STORED_ONLY_DOCUMENT_HYDRATION,
-  type DecisionDocumentHydration,
-  type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
@@ -96,10 +96,10 @@ import {
 } from "@/api/lib/case-law/search-warnings";
 import { projectCaseLawCourt } from "@/api/lib/chat/case-law-court-projection";
 import {
+  CASE_LAW_COVERAGE_PROJECTION,
   LIST_MATTERS_DETAIL_PROJECTION,
   LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
-  CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
@@ -110,9 +110,9 @@ import {
 } from "@/api/lib/chat/projections";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
-  resolveCurrentFileSourceField,
-  loadCurrentExtractedContents,
   type ExtractedContentSourceProvenance,
+  loadCurrentExtractedContents,
+  resolveCurrentFileSourceField,
 } from "@/api/lib/document-content-provenance";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -154,8 +154,8 @@ import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
 import {
   decisionOutline,
-  locateDecisionBlocks,
   type LocatedDecisionBlock,
+  locateDecisionBlocks,
 } from "@/api/mcp/case-law-decision-outline";
 import {
   citationSummaryOutput,
@@ -176,11 +176,11 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  defaultListCaseLawProvisionDecisions,
   defaultReadCaseLawCoverageHandler,
   defaultReadGatedDecisionCitationDigest,
   defaultReadGatedDecisionCitations,
   defaultReadGatedDecisionWithDocument,
-  defaultListCaseLawProvisionDecisions,
   defaultSearchDecisionsHandler,
   isReadCaseLawDecisionSuccess,
   isSearchCaseLawSuccess,
@@ -205,7 +205,6 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
-  legalCitationLinkFields,
   countryInputSchema,
   countryNormalization,
   cursorInput,
@@ -218,6 +217,7 @@ import {
   internalFailureResult,
   invalidCursorResult,
   ISO_DATE_SCHEMA,
+  legalCitationLinkFields,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
   MCP_CONTENT_MAX_CHARS,
@@ -1133,7 +1133,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+      "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -3953,8 +3953,8 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
               knownGaps:
-                source.knownGaps.type === "known"
-                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                source.knownGaps.type === "reconciled"
+                  ? { ...source.knownGaps, years: [...source.knownGaps.years] }
                   : source.knownGaps,
             })),
             courts: null,
@@ -3974,8 +3974,8 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
               knownGaps:
-                source.knownGaps.type === "known"
-                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                source.knownGaps.type === "reconciled"
+                  ? { ...source.knownGaps, years: [...source.knownGaps.years] }
                   : source.knownGaps,
             })),
             courts:

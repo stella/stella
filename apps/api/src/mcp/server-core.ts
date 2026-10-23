@@ -1,22 +1,22 @@
 import {
-  ProtocolError,
-  ProtocolErrorCode,
   createMcpHandler,
   isInitializeRequest,
   isLegacyRequest,
+  ProtocolError,
+  ProtocolErrorCode,
   Server,
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import type {
   AuthInfo,
-  CallToolResult,
   CallToolRequest,
-  ServerContext,
+  CallToolResult,
   McpHttpHandler,
-  Tool as McpTool,
   ReadResourceResult,
-  Resource,
   RequestId,
+  Resource,
+  ServerContext,
+  Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -51,8 +51,8 @@ import {
 } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
-  invokedCapabilityConsumesServices,
   featureOmittedCapabilityIds,
+  invokedCapabilityConsumesServices,
 } from "@/api/mcp/capability-tools";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
@@ -63,11 +63,11 @@ import {
   MCP_TOOL_OMISSION_REASONS,
   type McpMode,
   type McpToolOmissionReason,
+  STELLA_API_CONTRACT,
   STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
   STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
-  STELLA_API_CONTRACT,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -112,13 +112,17 @@ import type {
 import {
   closestToolNames,
   didYouMean,
-  MCP_INTERNAL_ERROR_HINT,
   MAX_TOOL_NAME_CHARS,
+  MCP_INTERNAL_ERROR_HINT,
   oauthScopeRecoveryHint,
   quoteToolName,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import {
+  MCP_WEB_HANDOFF_TOOL,
+  withWebHandoffLinks,
+} from "@/api/mcp/web-handoff-links";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
@@ -188,6 +192,7 @@ type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
   chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
+  decorateToolResult?: typeof withWebHandoffLinks;
   authenticateMcpRequest: (
     token: string,
     options: { mode: McpMode },
@@ -790,6 +795,7 @@ export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
   chargeReadBytes = chargeMcpReadBytes,
   actionSizePolicy = getActionSizePolicy,
+  decorateToolResult = withWebHandoffLinks,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
@@ -930,8 +936,12 @@ export const createMcpHttpRequestHandler = ({
             toolName,
           }),
       );
+      const decoratedResult =
+        toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
+          ? result
+          : await decorateToolResult(result, context);
       return await boundMcpToolResult({
-        result,
+        result: decoratedResult,
         requestId: mcpReq.id,
         definition,
         readClass,

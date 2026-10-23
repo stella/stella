@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   GLOBAL_SEARCH_RESULT_TYPES,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toResourceName,
 } from "@stll/api-contract";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
@@ -25,15 +25,15 @@ import {
   getCompanySearchQuery,
   getEntityLocation,
   getRecentFileLocation,
-  getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  getRecentFileRoute,
   isLazySearchGroupActive,
   isSearchTypeInScope,
-  resolveRegistryResultsPane,
   rememberSelectedFacetLabels,
-  resolveEntityDocumentRoute,
   resolveEagerSearchTypes,
+  resolveEntityDocumentRoute,
+  resolveRegistryResultsPane,
   resolveSearchScope,
   toAskAIMessageHtml,
 } from "./search-dialog.logic";

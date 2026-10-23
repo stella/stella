@@ -1,4 +1,4 @@
-import { StrictMode, startTransition, useLayoutEffect } from "react";
+import { startTransition, StrictMode, useLayoutEffect } from "react";
 import { hydrateRoot } from "react-dom/client";
 
 import { CancelledError } from "@tanstack/react-query";

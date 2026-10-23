@@ -216,11 +216,11 @@ describe("write tool permissions", () => {
     }
   });
 
-  test("MCP discovery offers no role a write tool its permissions do not grant", () => {
+  test("MCP discovery offers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), mcpOffered)).toEqual([]);
   });
 
-  test("chat registers no role a write tool its permissions do not grant", () => {
+  test("chat registers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), chatOffered)).toEqual([]);
   });
 
@@ -643,6 +643,7 @@ describe("write tool account access", () => {
     ).toEqual([
       "add_matter_member:standard",
       "fill_template:standard",
+      "mint_web_handoff:standard",
       "remove_matter_member:standard",
       "save_filled_template:standard",
       "set_practice_jurisdictions:standard",

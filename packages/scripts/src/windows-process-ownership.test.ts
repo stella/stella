@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  testInvocationMemoryLimit,
   TEST_INVOCATION_MEMORY_GIB_ENV,
+  testInvocationMemoryLimit,
   watchTestProcessMemory,
 } from "./process-memory";
 import { spawnTestProcess } from "./process-spawn";
