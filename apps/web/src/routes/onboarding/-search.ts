@@ -1,8 +1,8 @@
 import * as v from "valibot";
 
 import { toAppRedirectTo } from "@/lib/redirect";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { optionalFlagSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
 export const onboardingSearchSchema = routeSearchSchema({
   preview: optionalFlagSearchSchema,

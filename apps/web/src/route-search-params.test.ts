@@ -5,7 +5,7 @@ import {
   parseRouteSearch,
   routeSearchSchema,
   stringifyRouteSearch,
-} from "@/lib/route-search-params";
+} from "@/route-search-params";
 
 describe("parseRouteSearch", () => {
   test("reads scalars as the URL's own text", () => {
@@ -59,7 +59,9 @@ describe("stringifyRouteSearch", () => {
       "",
       "nájem 2026",
     ]) {
-      expect(parseRouteSearch(stringifyRouteSearch({ q: text })).q).toBe(text);
+      expect(parseRouteSearch(stringifyRouteSearch({ q: text }))["q"]).toBe(
+        text,
+      );
     }
   });
 

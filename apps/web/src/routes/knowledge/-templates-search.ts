@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 
 /**
  * `template` is the template open in the Studio: selecting one writes it,

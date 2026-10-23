@@ -5,7 +5,7 @@ import { isUuid } from "@stll/api-contract/safe-id";
 import { Temporal, todayFor } from "@stll/time";
 
 import { APIError } from "@/lib/errors/api";
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 
 /**
  * The history page's filters live in the URL, so a reader who opens a chat

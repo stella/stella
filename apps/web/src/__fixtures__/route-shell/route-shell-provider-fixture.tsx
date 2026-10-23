@@ -35,6 +35,8 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
   suite?: "leaf-shells" | "law-hosts" | "route-search";
+  /** The router's reading of a URL, which the route-search suite checks with. */
+  parseSearch?: (searchStr: string) => Record<string, unknown>;
 };
 
 const FIXTURE_AUDIENCE = { anonymous: "anonymous", member: "member" } as const;
@@ -481,7 +483,11 @@ const installFixtureNetwork = () => {
   };
 };
 const loadFixtureRuntime = async (
-  { mode, suite = "leaf-shells" }: RouteShellProviderFixtureOptions,
+  {
+    mode,
+    suite = "leaf-shells",
+    parseSearch,
+  }: RouteShellProviderFixtureOptions,
   network: ReturnType<typeof installFixtureNetwork>,
 ) => {
   // Bun does not run Start's client/server build transform. Keep its client
@@ -534,7 +540,7 @@ const loadFixtureRuntime = async (
   const { createRouteErrorLifecycleController } =
     await import("@/lib/analytics/route-error-lifecycle");
   const { parseRouteSearch, stringifyRouteSearch } =
-    await import("@/lib/route-search-params");
+    await import("@/route-search-params");
 
   const createFixtureRouter = (initialEntry: string) => {
     const queryClient = createAppQueryClient();
@@ -628,6 +634,7 @@ const loadFixtureRuntime = async (
   return {
     mode,
     suite,
+    parseSearch,
     createFixtureRouter,
     census,
     registeredRoutes,
@@ -704,6 +711,7 @@ const declareCensus = (fixture: FixtureRuntime) => {
   const {
     mode,
     suite,
+    parseSearch,
     registeredRoutes,
     isLegacyTool,
     uiLeaves,
@@ -711,10 +719,15 @@ const declareCensus = (fixture: FixtureRuntime) => {
     hasUi,
   } = fixture;
   if (suite === "route-search") {
+    const readSearch =
+      parseSearch ??
+      panic("The route-search suite needs the router's search parser.");
     test("every route opens whatever its URL's search carries", () => {
       expect(
-        routeSearchRefusals(registeredRoutes, (routeId) =>
-          fixtureSearch(routeId, "reader@example.com"),
+        routeSearchRefusals(
+          registeredRoutes,
+          (routeId) => fixtureSearch(routeId, "reader@example.com"),
+          readSearch,
         ),
       ).toEqual([]);
     });
@@ -893,7 +906,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
           component: protectedLeaf ? Probe : Page,
           beforeLoad: protectedLeaf
             ? undefined
-            : () => authFixtureBeforeLoadData(route.id),
+            : () => authFixtureBeforeLoadData(route.id, user.email),
           loader,
         });
         await initializeI18n();

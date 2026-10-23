@@ -1,11 +1,12 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { fetchDevOtp } from "@/lib/dev-otp";
 import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { emailSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
 const searchSchema = routeSearchSchema({
   email: v.optional(emailSchema()),
@@ -26,11 +27,13 @@ export const Route = createFileRoute("/auth/otp")({
     // A code goes to an address; without one there is nothing to enter
     // here, so the reader starts the sign-in again.
     if (search.email === undefined) {
-      throw redirect({
+      redirect({
         to: "/auth",
         search: { redirectTo: search.redirectTo },
         replace: true,
+        throw: true,
       });
+      return panic("TanStack Router did not throw the sign-in redirect.");
     }
     return { otpEmail: search.email };
   },

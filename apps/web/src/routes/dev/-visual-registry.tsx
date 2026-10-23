@@ -4,7 +4,7 @@ import type { ComponentType, ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 
 import { visualRegistry } from "./-visual-metadata";
 import type { VisualName } from "./-visual-metadata";

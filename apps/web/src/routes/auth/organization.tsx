@@ -58,13 +58,13 @@ import {
   normalizeRedirectTo,
   onboardingNavigation,
 } from "@/lib/redirect";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import {
   optionalFlagSearchSchema,
   schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
+import { routeSearchSchema } from "@/route-search-params";
 
 const searchSchema = routeSearchSchema({
   devQuickStart: optionalFlagSearchSchema,

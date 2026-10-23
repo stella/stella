@@ -14,7 +14,7 @@ import {
   publicLawPageSearchSchema,
   publicLawPageSizeSearchSchema,
 } from "@/components/public-law-table/public-law-pagination.logic";
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 
 export const STATUTE_MAX_QUERY_LENGTH = 256;
 

@@ -69,10 +69,10 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { optionalFlagSearchSchema } from "@/lib/schema";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { routeSearchSchema } from "@/route-search-params";
 import {
   type LawScope,
   lawHomeDescriptor,

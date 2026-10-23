@@ -11,7 +11,7 @@ import {
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 
 const DevQuickStartButton = import.meta.env.DEV
   ? React.lazy(async () => {

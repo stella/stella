@@ -24,8 +24,8 @@ import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 

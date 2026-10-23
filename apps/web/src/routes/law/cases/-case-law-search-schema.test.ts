@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { decisionDateRange } from "@/features/case-law/case-law-index-search.logic";
-import { parseRouteSearch } from "@/lib/route-search-params";
+import { parseRouteSearch } from "@/route-search-params";
 
 import { searchSchema } from "./-case-law-search-schema";
 

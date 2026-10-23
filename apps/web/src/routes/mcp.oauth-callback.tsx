@@ -16,7 +16,7 @@ import { detached } from "@/lib/detached";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 const KNOWLEDGE_MCP_PATH = "/knowledge/tools";

@@ -10,7 +10,7 @@ import {
   readStatuteIntent,
   statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
-import { parseRouteSearch } from "@/lib/route-search-params";
+import { parseRouteSearch } from "@/route-search-params";
 
 describe("statute search mode transitions", () => {
   for (const country of ["cze", "svk"]) {
@@ -78,10 +78,10 @@ describe("statute publication year search", () => {
     if (!("year" in plainSearch) || !("year" in quotedSearch)) {
       panic("The router omitted the year search parameter");
     }
-    expect(plainSearch.year).toBe("2026");
-    expect(quotedSearch.year).toBe("2026");
-    expect(v.parse(lawYearSearchSchema, plainSearch.year)).toBe("2026");
-    expect(v.parse(lawYearSearchSchema, quotedSearch.year)).toBe("2026");
+    expect(plainSearch["year"]).toBe("2026");
+    expect(quotedSearch["year"]).toBe("2026");
+    expect(v.parse(lawYearSearchSchema, plainSearch["year"])).toBe("2026");
+    expect(v.parse(lawYearSearchSchema, quotedSearch["year"])).toBe("2026");
   });
   test.each([1000, "1000", 2012, "2012", 9999, "9999"])(
     "normalizes a four-digit year: %j",

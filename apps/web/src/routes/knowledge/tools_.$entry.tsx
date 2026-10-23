@@ -20,7 +20,7 @@ import {
   createPublicToolsHead,
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
 

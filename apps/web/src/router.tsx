@@ -22,12 +22,9 @@ import { setUserErrorRouteTemplate } from "@/lib/errors/user-toast";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
-import {
-  parseRouteSearch,
-  stringifyRouteSearch,
-} from "@/lib/route-search-params";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();

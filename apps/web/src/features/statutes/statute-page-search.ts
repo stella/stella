@@ -8,8 +8,8 @@ import { normalizeStatuteVersionSegment } from "@stll/api-contract/statute-route
 import { parsePlainDate } from "@stll/time";
 
 import { isStatuteCompareShow } from "@/features/statutes/statute-compare-search";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { optionalIntegerSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
 /**
  * A calendar day, not merely a date-shaped string: `2026-02-30` matches the

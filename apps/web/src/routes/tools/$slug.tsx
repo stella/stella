@@ -33,8 +33,8 @@ import {
   createPublicToolsHead,
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
+import { routeSearchSchema } from "@/route-search-params";
 
 const AddToStella = lazy(async () => ({
   default: (await import("@/features/knowledge/public/tools/add-to-stella"))

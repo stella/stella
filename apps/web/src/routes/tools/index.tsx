@@ -6,11 +6,11 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import {
   TOOLS_KIND_FILTERS,
   type ToolsKindFilter,
 } from "@/lib/tools-catalogue";
+import { routeSearchSchema } from "@/route-search-params";
 import { PublicToolsIndex } from "@/routes/tools/-components/public-tools-index";
 
 // Public SEO page: a bad `?kind=` value (e.g. `?kind=skills`) must degrade

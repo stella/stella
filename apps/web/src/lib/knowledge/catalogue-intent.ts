@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 
 /**
  * What a visitor asked to do with a catalogue template before they had an

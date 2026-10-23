@@ -56,7 +56,6 @@ import {
 } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
 import {
@@ -70,6 +69,7 @@ import {
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { routeSearchSchema } from "@/route-search-params";
 import { ListSourceAction } from "@/routes/_protected.workspaces/$workspaceId/-components/list-source-action";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 

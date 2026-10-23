@@ -22,9 +22,9 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { routeSearchSchema } from "@/route-search-params";
 
 export const Route = createFileRoute("/_protected/time")({
   validateSearch: routeSearchSchema({

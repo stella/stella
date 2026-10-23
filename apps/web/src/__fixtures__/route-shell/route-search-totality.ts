@@ -1,7 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { parseRouteSearch } from "@/lib/route-search-params";
-
 /**
  * Whether every route reads any URL anyone can type without failing the page.
  *
@@ -82,10 +80,13 @@ const describeValue = (value: string) =>
 /**
  * Each `route key=value` a route refuses. `baseSearch` is the search a route
  * needs to open at all; a hostile value replaces one key of it at a time.
+ * `parseSearch` is the router's own reading of a URL, so a route sees what it
+ * sees in the app.
  */
 export const routeSearchRefusals = (
   routes: readonly SearchRoute[],
   baseSearch: (routeId: string) => Record<string, string>,
+  parseSearch: (searchStr: string) => Record<string, unknown>,
 ): string[] => {
   const keys = new Set<string>([UNDECLARED_SEARCH_KEY]);
   for (const route of routes) {
@@ -103,7 +104,7 @@ export const routeSearchRefusals = (
     for (const key of keys) {
       for (const value of HOSTILE_SEARCH_VALUES) {
         const query = new URLSearchParams({ ...base, [key]: value });
-        if (!accepts(validator, parseRouteSearch(query.toString()))) {
+        if (!accepts(validator, parseSearch(query.toString()))) {
           refusals.push(`${route.id} ${key}=${describeValue(value)}`);
         }
       }

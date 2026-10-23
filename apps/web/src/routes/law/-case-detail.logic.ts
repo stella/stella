@@ -46,9 +46,9 @@ import {
   prefetchNonCriticalQuery,
   routeQueryOptions,
 } from "@/lib/react-query";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { routeSearchSchema } from "@/route-search-params";
 
 const optionalPublicDecisionSearchQuerySchema = v.optional(
   v.pipe(

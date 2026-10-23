@@ -35,7 +35,6 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import {
   optionalIntegerSearchSchema,
   optionalSearchStringSchema,
@@ -61,6 +60,7 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
+import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";

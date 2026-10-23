@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { KnowledgeLandingSkeleton } from "@/features/knowledge/views/knowledge-landing-view";
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicKnowledgeLanding } from "@/routes/knowledge/-public/public-knowledge-landing";
 

@@ -102,7 +102,6 @@ import {
 } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import {
   optionalFlagSearchSchema,
   optionalIntegerSearchSchema,
@@ -117,6 +116,7 @@ import {
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { routeSearchSchema } from "@/route-search-params";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";

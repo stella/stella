@@ -6,7 +6,7 @@ import { socialProviderSchema } from "@/components/auth/access-reset.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { redirectToSchema } from "@/lib/redirect";
-import { routeSearchSchema } from "@/lib/route-search-params";
+import { routeSearchSchema } from "@/route-search-params";
 import {
   loadSocialLinkHint,
   NO_SOCIAL_LINK_HINT,

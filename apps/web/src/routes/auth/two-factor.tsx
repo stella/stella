@@ -4,8 +4,8 @@ import * as v from "valibot";
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
 import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
 import { redirectToSchema } from "@/lib/redirect";
-import { routeSearchSchema } from "@/lib/route-search-params";
 import { optionalFlagSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
 const searchSchema = routeSearchSchema({
   linkProvider: v.optional(socialProviderSchema),
