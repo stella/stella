@@ -417,17 +417,17 @@
   "candidate:.github/workflows/deploy-staging.yml/build-api": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "0d4bc3a4dc098b5a23b23abceb0bd2b777e7ba0e1f2fc481593c0e080b525e41"
+    "reviewedDigest": "02ffc429016ef8c0df82ca45ed5788f7e3f3025fe163b430b036d80bcb2d327f"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-web": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "91b8f046a2658b073bd7da59dfda6b2c3c583ffabef5c52cba040ecdae9f8dae"
+    "reviewedDigest": "3ea1427135faddb6dc908f2b589945cf9c217f2aead1aac26a04831185b4d1cf"
   },
   "candidate:.github/workflows/deploy-staging.yml/promote-staging": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "8d4b29016ce0c0392e9ac16dae146ef0152700c4ce001c336444d3e9a9d678e4"
+    "reviewedDigest": "9e2552a5e6f347c73ccfd2f36fb6470728afdb02629da7d4b1ee341adeae5689"
   },
   "candidate:.github/workflows/desktop-release-canary.yml/check-latest": {
     "kind": "ordinary",
@@ -802,22 +802,22 @@
   "candidate:.github/workflows/release.yml/build": {
     "kind": "priority",
     "qualifier": "Builds, pushes and attests API image digests for the resolved release.",
-    "reviewedDigest": "1b11b0977a692b5a3d2737602593efd602a162945cfda68fd4024741b8e6fe3f"
+    "reviewedDigest": "7860deae799c29b30d9d3d9077051e12da77a83690600abb6c62840ef8a2e988"
   },
   "candidate:.github/workflows/release.yml/prepare-web-image": {
     "kind": "priority",
     "qualifier": "Reuses a verified web receipt or builds, publishes and attests the resolved release web image.",
-    "reviewedDigest": "c13164bce9e2c111d72d80631e0c0863df59facf85bf35e17fb7bbb5fbd062b9"
+    "reviewedDigest": "06665b4d41dfd03d3403d5da65f6632de148735da08db2429bd75c23a082d7fc"
   },
   "candidate:.github/workflows/release.yml/manifest": {
     "kind": "priority",
     "qualifier": "Publishes immutable release image tags and creates the draft GitHub release with its artifacts.",
-    "reviewedDigest": "03d2b0a3a790c790c3fa35a8f8e4d884aea3c45898338f9ab3f4b865d9b8be71"
+    "reviewedDigest": "6c1de529640a6e62f54122e9e4b291ae298a86dbbe382969e61db3dc21260207"
   },
   "candidate:.github/workflows/release.yml/promote": {
     "kind": "priority",
     "qualifier": "Deploys stable releases to production, verifies the served commit, publishes the release and advances stable image tags.",
-    "reviewedDigest": "dcc269875d60e9ab032d9234947050aebafc41dca4d92357e1b736773ee70494"
+    "reviewedDigest": "deb51216ce2621098d14f47f8336e25dd12941c180d92db4002907fe886ddf99"
   },
   "candidate:.github/workflows/release.yml/promote-staging": {
     "kind": "priority",

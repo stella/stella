@@ -355,6 +355,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -642,136 +644,36 @@ jobs:
         timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
 
-      - name: Run staging web smoke
-        id: web-smoke
-        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging
+      # Independent checks share the promotion lock; corpus preflight and MCP
+      # remain ordered within their worker. Response policy and model-turn are report-only.
+      - name: Run staging post-deploy checks
+        id: staging-checks
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        run: bash scripts/staging-post-deploy-checks.sh
         env:
+          # Preserve the web smoke's implicit success() gate.
+          RUN_WEB_SMOKE: ${{ job.status == 'success' }}
+          CORPUS_SEARCH_WAIVED: ${{ needs.resolve.outputs.corpus_search_waived }}
           STAGING_STATE: ${{ vars.STAGING_STATE }}
           E2E_WEB_URL: https://staging.stll.app
           E2E_API_URL: https://api-staging.stll.app
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
           E2E_EDGE_HEADER_NAME: x-stella-edge-token
           E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-          # Block the smoke until staging actually serves this commit,
-          # so it doesn't race the ECS task rollover.
           EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
-
-      # The declared cache and robots headers of Knowledge responses. Also
-      # runs on its own through staging-response-policy.yml. Report-only
-      # until it has a record of green runs.
-      - name: Run staging response policy checks
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
-        continue-on-error: true
-        run: |
-          if bun apps/api/src/scripts/post-deploy-response-policy.ts; then
-            echo "Staging response policy checks passed." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning title=Staging response policy checks failed (report-only)::See the step log for the failed checks."
-            echo "Staging response policy checks FAILED (report-only, promotion not blocked). See the step log." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-        env:
-          E2E_WEB_URL: https://staging.stll.app
-          E2E_API_URL: https://api-staging.stll.app
-          E2E_EDGE_HEADER_NAME: x-stella-edge-token
-          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-
-      # `!cancelled()` keeps this signal when the web smoke fails, but it
-      # also suppresses the implicit success() gate, so without the explicit
-      # deps condition this step ran after a failed deploy with no toolchain
-      # installed and died with `bun: command not found`.
-      - name: Run staging API chat smoke
-        id: api-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
-        run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
-        env:
-          E2E_API_URL: https://api-staging.stll.app
-          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
-          E2E_EDGE_HEADER_NAME: x-stella-edge-token
-          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-          EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
-          # The real model turn runs in the next step.
-          SMOKE_AI_JOURNEY: skip
-
-      # Report-only until reviewed on 2026-10-02: a failure is annotated and
-      # summarized but does not fail the promotion. To make it blocking,
-      # delete the `continue-on-error: true` line below.
-      - name: Run staging API model-turn smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
-        continue-on-error: true
-        run: |
-          if bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"; then
-            echo "Staging model-turn smoke passed." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning title=Staging model-turn smoke failed (report-only)::See the step log for the failed checks."
-            echo "Staging model-turn smoke FAILED (report-only, promotion not blocked). See the step log." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-        env:
-          E2E_API_URL: https://api-staging.stll.app
-          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
-          E2E_EDGE_HEADER_NAME: x-stella-edge-token
-          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-          EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
-          SMOKE_AI_JOURNEY: only
           SMOKE_AI_OPENAI_API_KEY: ${{ secrets.STAGING_SMOKE_OPENAI_API_KEY }}
-
-      - name: Check staging corpus search backend
-        id: corpus-preflight
-        continue-on-error: ${{ needs.resolve.outputs.corpus_search_waived == 'true' }}
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
-        timeout-minutes: 2
-        env:
-          E2E_API_URL: https://api-staging.stll.app
-          E2E_EDGE_HEADER_NAME: x-stella-edge-token
-          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-        run: |
-          set -euo pipefail
-          curl_edge_args=()
-          if [[ -n "${E2E_EDGE_HEADER_NAME:-}" && -n "${E2E_EDGE_HEADER_VALUE:-}" ]]; then
-            curl_edge_args+=(--header "${E2E_EDGE_HEADER_NAME}: ${E2E_EDGE_HEADER_VALUE}")
-          fi
-          response_file="$RUNNER_TEMP/staging-corpus-search.json"
-          http_status="000"
-          if ! http_status="$(curl --connect-timeout 5 --max-time 30 \
-            --silent --show-error --output "$response_file" --write-out '%{http_code}' \
-            --header 'Content-Type: application/json' \
-            ${curl_edge_args[@]+"${curl_edge_args[@]}"} \
-            --data '{"query":"contract","country":"CZ","limit":1,"strict":true}' \
-            "${E2E_API_URL}/v1/case/decisions/search")"; then
-            http_status="000"
-          fi
-          if [[ "$http_status" != "200" ]] || ! jq -e \
-            'type == "object" and (.hits | type == "array") and (.queryUsed | type == "string" and length > 0) and has("total") and (has("message") | not)' \
-            "$response_file" >/dev/null 2>&1; then
-            echo "::error title=corpus index down::Staging case-law search preflight failed (HTTP ${http_status}); MCP smoke cannot verify search without its backend."
-            echo "corpus index down: staging case-law search preflight failed (HTTP ${http_status})." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "Staging corpus search backend answered the preflight." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Run staging MCP user journeys
-        id: mcp-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.corpus-preflight.outcome == 'success' }}
-        run: bun run canary:mcp
-        env:
           MCP_CANARY_ENVIRONMENT: staging
           MCP_CANARY_BASE_URL: https://api-staging.stll.app
           MCP_CANARY_CONFIGURED_BASE_URL: https://api-staging.stll.app
           MCP_CANARY_FRONTEND_URL: https://staging.stll.app
           MCP_CANARY_MODE: full
-          # Release verification requires every journey, including the
-          # authenticated probes, rather than accepting partial coverage.
           MCP_CANARY_REQUIRE_CREDENTIALS: "true"
           APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
           APP_REVIEW_ORGANIZATION_ID: ${{ vars.STAGING_APP_REVIEW_ORGANIZATION_ID }}
           REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}
-          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
-          E2E_EDGE_HEADER_NAME: x-stella-edge-token
-          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
 
       - name: Upload Playwright report
-        if: ${{ always() && steps.web-smoke.outcome != '' && steps.web-smoke.outcome != 'skipped' }}
+        if: ${{ always() && steps.staging-checks.outputs.web-smoke != '' && steps.staging-checks.outputs.web-smoke != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: staging-smoke-report
@@ -784,10 +686,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
           DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
-          WEB_SMOKE: ${{ steps.web-smoke.outcome }}
-          API_SMOKE: ${{ steps.api-smoke.outcome }}
-          MCP_SMOKE: ${{ steps.mcp-smoke.outcome }}
-          CORPUS_PREFLIGHT: ${{ steps.corpus-preflight.outcome }}
+          WEB_SMOKE: ${{ steps.staging-checks.outputs.web-smoke }}
+          API_SMOKE: ${{ steps.staging-checks.outputs.api-smoke }}
+          MCP_SMOKE: ${{ steps.staging-checks.outputs.mcp-smoke }}
+          CORPUS_PREFLIGHT: ${{ steps.staging-checks.outputs.corpus-preflight }}
           CORPUS_SEARCH_WAIVED: ${{ needs.resolve.outputs.corpus_search_waived }}
           WAIVE_REASON: ${{ inputs.waive_reason }}
           JOB_STATUS: ${{ job.status }}

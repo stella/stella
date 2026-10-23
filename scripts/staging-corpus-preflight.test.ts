@@ -3,41 +3,8 @@ import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const workflowFile = Bun.file(
-  new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
-);
 let workspace = "";
 let script = "";
-
-const preflightScript = (workflow: string) => {
-  const start = workflow.indexOf(
-    "      - name: Check staging corpus search backend\n",
-  );
-  const run = workflow.indexOf("        run: |\n", start);
-  const end = workflow.indexOf(
-    "      - name: Run staging MCP user journeys\n",
-    run,
-  );
-  if (start === -1 || run === -1 || end === -1) {
-    throw new Error("Staging corpus preflight must precede MCP smoke");
-  }
-  return workflow
-    .slice(run + "        run: |\n".length, end)
-    .split("\n")
-    .map((line) => line.slice(10))
-    .join("\n");
-};
-
-const assertMcpGate = (workflow: string) => {
-  const start = workflow.indexOf(
-    "      - name: Run staging MCP user journeys\n",
-  );
-  const end = workflow.indexOf("        run:", start);
-  expect(
-    workflow.slice(start, end),
-    "MCP smoke requires the corpus preflight",
-  ).toContain("steps.corpus-preflight.outcome == 'success'");
-};
 
 type PreflightCase = {
   status: string;
@@ -87,7 +54,9 @@ const runPreflight = async ({
 
 beforeAll(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), "staging-corpus-preflight-"));
-  script = preflightScript(await workflowFile.text());
+  script = await Bun.file(
+    new URL("staging-corpus-preflight.sh", import.meta.url),
+  ).text();
   const curl = path.join(workspace, "curl");
   await Bun.write(
     curl,
@@ -158,26 +127,6 @@ test.each([
     expect(result.calls).not.toContain("x-stella-edge-token:");
   },
 );
-
-test("the former missing preflight and an ungated MCP smoke violate the contract", async () => {
-  const workflow = await workflowFile.text();
-  assertMcpGate(workflow);
-  const ungated = workflow.replace(
-    " && steps.corpus-preflight.outcome == 'success'",
-    "",
-  );
-  expect(ungated).not.toBe(workflow);
-  expect(() => assertMcpGate(ungated)).toThrow(
-    "MCP smoke requires the corpus preflight",
-  );
-  const removed = workflow.replace(
-    "      - name: Check staging corpus search backend\n",
-    "",
-  );
-  expect(() => preflightScript(removed)).toThrow(
-    "Staging corpus preflight must precede MCP smoke",
-  );
-});
 
 test("accepting a backend failure breaks the executed preflight guard", async () => {
   const input = {

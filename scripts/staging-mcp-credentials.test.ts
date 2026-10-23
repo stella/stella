@@ -51,8 +51,11 @@ const parseWorkflow = (file: string) =>
 const canaryEnv = (file: string) =>
   Object.values(parseWorkflow(file).jobs)
     .flatMap(({ steps }) => steps ?? [])
-    .find(({ run }) => run === "bun run canary:mcp")?.env ??
-  panic(`Missing MCP canary environment: ${file}`);
+    .find(
+      ({ run }) =>
+        run === "bun run canary:mcp" ||
+        run === "bash scripts/staging-post-deploy-checks.sh",
+    )?.env ?? panic(`Missing MCP canary environment: ${file}`);
 const staging = canaryEnv("deploy-staging.yml");
 const assertCredentials = (
   env: Record<string, string>,
