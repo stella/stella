@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware, isAPIError } from "better-auth/api";
+import type { createAuthMiddleware } from "better-auth/api";
 
 const GET_SESSION_PATH = "/get-session";
 
@@ -99,22 +99,21 @@ const ownSessionTokens = async (
 
 /**
  * Every auth endpoint answer passes through here: no response carries a
- * session token other than the caller's current one.
+ * session token other than the caller's current one. Errors and raw
+ * responses are not plain objects, so they pass through unchanged.
  */
-export const createSessionTokenRedactionPlugin = () =>
+export const createSessionTokenRedactionPlugin = (
+  middleware: typeof createAuthMiddleware,
+) =>
   ({
     id: "stella-session-token-redaction",
     hooks: {
       after: [
         {
           matcher: () => true,
-          handler: createAuthMiddleware(async (ctx) => {
-            const returned = ctx.context.returned;
-            if (returned instanceof Response || isAPIError(returned)) {
-              return undefined;
-            }
+          handler: middleware(async (ctx) => {
             const redacted = redactForeignSessionTokens(
-              returned,
+              ctx.context.returned,
               await ownSessionTokens(ctx),
             );
             if (!redacted.changed) {

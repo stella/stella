@@ -107,7 +107,7 @@ describe("session list over HTTP", () => {
 
   test("the session list shows other devices by id only", async () => {
     const { listed, otherToken } = await twoDeviceSessions(
-      createAuth([createSessionTokenRedactionPlugin()]),
+      createAuth([createSessionTokenRedactionPlugin(createAuthMiddleware)]),
     );
     expect(listed.status).toBe(200);
     const body: unknown = await listed.json();
@@ -145,7 +145,10 @@ describe("signing out another device by id", () => {
       secret: "test-secret-that-is-long-enough-for-better-auth",
       database: memoryAdapter(database),
       emailAndPassword: { enabled: true },
-      plugins: [lifetime.plugin, createSessionTokenRedactionPlugin()],
+      plugins: [
+        lifetime.plugin,
+        createSessionTokenRedactionPlugin(createAuthMiddleware),
+      ],
       hooks: {
         before: createAuthMiddleware(async (ctx) => {
           lifetime.prepare(ctx.context);
@@ -213,9 +216,11 @@ describe("signing out another device by id", () => {
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 // Only these modules read the session table outside Better Auth: the lifetime
-// store (credential checks), the new-device notice (address and user agent)
-// and the monitoring session authority (id and expiry only).
+// store (credential checks), the new-device notice (address and user agent),
+// the MCP web handoff (id and client name) and the monitoring session
+// authority (id and expiry only).
 const SESSION_TABLE_READERS = new Set([
+  "src/lib/auth/mcp-web-handoff.ts",
   "src/lib/auth/session-history.ts",
   "src/lib/auth/session-lifetime-store.ts",
   "src/lib/synthetic-principal/session-authority.ts",
