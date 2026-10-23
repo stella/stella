@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import type { FetchWithTimeoutInit } from "@stll/fetch";
 
 import {
   DesktopAccountConflictError,
   desktopAccountGrantRequest,
   desktopBridgeProofHeaders,
   parseDesktopAccountChallenge,
+  readDesktopConnection,
   resolveDesktopAccountLink,
   verifyDesktopConnectionStatus,
 } from "@/lib/desktop-bridge";
@@ -264,4 +266,38 @@ test("binds the account grant to every validated native challenge field", () => 
     verifierHash: challenge.verifierHash,
     deviceJkt: challenge.deviceJkt,
   });
+});
+
+test("sends every browser loopback request as a credentialless GET", async () => {
+  const requests: {
+    input: string | URL | Request;
+    init?: FetchWithTimeoutInit;
+  }[] = [];
+  await readDesktopConnection({
+    correlationId: challenge.correlationId,
+    portSecret: challenge.portSecret,
+    request: async (input, init) => {
+      requests.push({ input, init });
+      return new Response(null, { status: 503 });
+    },
+  });
+
+  expect(requests).toHaveLength(1);
+  for (const { input, init } of requests) {
+    const url = new URL(input instanceof Request ? input.url : input);
+    const headers = new Headers(init?.headers);
+    expect(url.origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/u);
+    expect(url.pathname).toBe("/v1/connection");
+    expect(url.searchParams.get("correlationId")).toBe(challenge.correlationId);
+    expect([...url.searchParams.keys()]).toEqual(["correlationId"]);
+    expect(init?.method).toBe("GET");
+    expect(init?.credentials).toBe("omit");
+    expect(init?.referrerPolicy).toBe("no-referrer");
+    expect(init?.body).toBeUndefined();
+    expect(headers.has("authorization")).toBe(false);
+    expect(headers.has("cookie")).toBe(false);
+    expect(JSON.stringify({ url: url.href, init })).not.toContain(
+      challenge.portSecret,
+    );
+  }
 });
