@@ -40,6 +40,7 @@ const cardinalitiesSchema = v.object({
   listRows: v.number(),
 });
 export type SmokeCardinalities = v.InferOutput<typeof cardinalitiesSchema>;
+export const SMOKE_WORLD_DIMENSIONS = v.keyof(cardinalitiesSchema).options;
 type StorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>;
 export type SmokeScaleWorld = SmokeWorld & {
   storageState: StorageState;
@@ -53,7 +54,7 @@ export const assertTenfoldSmokeWorlds = ({
   small: SmokeCardinalities;
   large: SmokeCardinalities;
 }): void => {
-  for (const dimension of v.keyof(cardinalitiesSchema).options) {
+  for (const dimension of SMOKE_WORLD_DIMENSIONS) {
     if (small[dimension] <= 0 || large[dimension] !== small[dimension] * 10) {
       panic(
         `${dimension}: expected positive tenfold fixtures, observed ${small[dimension]} and ${large[dimension]}`,
@@ -298,7 +299,7 @@ let worldsPromise: Promise<SmokeWorlds> | undefined;
 
 // The route-smoke project has one worker. All serial groups share this one
 // seed operation, while each route still opens fresh browser contexts.
-export const getSmokeWorlds = (
+export const getSmokeWorlds = async (
   outputDirectory: string,
 ): Promise<SmokeWorlds> => {
   worldsPromise ??= (async () => {
@@ -324,7 +325,7 @@ export const getSmokeWorlds = (
     await rename(`${worldsPath}.tmp`, worldsPath);
     return worlds;
   })();
-  return worldsPromise;
+  return await worldsPromise;
 };
 
 // A failed serial group replaces the worker. Later groups reuse the completed

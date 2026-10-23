@@ -1,25 +1,16 @@
-import { panic } from "better-result";
-import * as v from "valibot";
-
 import type { RouteNetworkMetrics } from "./network";
 import type { RouteRenderMetrics } from "./render-census";
+import {
+  RENDER_COMMIT_FLOOR,
+  type RouteScaleLedgerRow,
+} from "./route-scale-ledger";
 
-const reason = v.pipe(v.string(), v.trim(), v.minLength(12));
-const dimensionSchema = v.picklist([
-  "requestCounts",
-  "depth",
-  "dbQueries",
-  "transactions",
-  "responseSizes",
-  "renderCommits",
-  "dataRenderCommits",
-]);
-// Dimensions measured once per route rather than per request.
-const ROUTE_DIMENSIONS = new Set<string>([
-  "depth",
-  "renderCommits",
-  "dataRenderCommits",
-]);
+export {
+  parseRouteScaleLedger,
+  RENDER_COMMIT_FLOOR,
+  routeScaleLedgerMembership,
+  type RouteScaleLedgerRow,
+} from "./route-scale-ledger";
 
 // The large world holds ten times the small world's rows (100 -> 1000), so a
 // commit per row costs 900 extra commits and even a commit per ten rows 90.
@@ -27,61 +18,8 @@ const ROUTE_DIMENSIONS = new Set<string>([
 // task and commit separately instead of batching with a sibling, and a
 // Suspense reveal can fall on either side of React's throttle window. The
 // allowance is a fixed floor plus one commit per API response of the route.
-export const RENDER_COMMIT_FLOOR = 8;
 export const renderCommitAllowance = (responses: number): number =>
   RENDER_COMMIT_FLOOR + responses;
-const rowSchema = v.strictObject({
-  route: v.pipe(v.string(), v.minLength(1)),
-  dimension: dimensionSchema,
-  // Depth and render commits use "$route"; every other allowance names one
-  // normalized request.
-  request: v.pipe(v.string(), v.minLength(1)),
-  owner: v.pipe(v.string(), v.trim(), v.minLength(1)),
-  reason,
-  // Absolute count delta, or response byte multiplier (default: 2). Render
-  // commit allowances replace the route's computed allowance.
-  max: v.pipe(v.number(), v.integer(), v.minValue(1)),
-});
-
-export type RouteScaleLedgerRow = v.InferOutput<typeof rowSchema>;
-const ledgerSchema = v.array(rowSchema);
-
-const rowId = ({ route, dimension, request }: RouteScaleLedgerRow): string =>
-  JSON.stringify([route, dimension, request]);
-
-export const parseRouteScaleLedger = (text: string): RouteScaleLedgerRow[] => {
-  const rows = v.parse(ledgerSchema, JSON.parse(text));
-  const ids = new Set<string>();
-  for (const row of rows) {
-    const id = rowId(row);
-    if (ids.has(id)) {
-      panic(`Duplicate route scale allowance: ${id}`);
-    }
-    if (ROUTE_DIMENSIONS.has(row.dimension) !== (row.request === "$route")) {
-      panic(`Route-level allowances, and only they, use $route: ${id}`);
-    }
-    if (row.dimension === "responseSizes" && row.max <= 2) {
-      panic(`Response size allowance must exceed the default factor 2: ${id}`);
-    }
-    if (
-      (row.dimension === "renderCommits" ||
-        row.dimension === "dataRenderCommits") &&
-      row.max <= RENDER_COMMIT_FLOOR
-    ) {
-      panic(
-        `Render commit allowance must exceed the floor ${String(RENDER_COMMIT_FLOOR)}: ${id}`,
-      );
-    }
-    ids.add(id);
-  }
-  return rows;
-};
-
-// One member per budget unit: increasing an existing max adds members too.
-export const routeScaleLedgerMembership = (text: string): string[] =>
-  parseRouteScaleLedger(text).flatMap((row) =>
-    Array.from({ length: row.max }, (_, index) => `${rowId(row)}#${index + 1}`),
-  );
 
 type CheckScaleCostOptions = {
   dimension: RouteScaleLedgerRow["dimension"];

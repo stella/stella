@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { routeScaleLedgerMembership } from "../apps/web/e2e/helpers/route-scale";
+import { routeScaleLedgerMembership } from "../apps/web/e2e/helpers/route-scale-ledger";
 import { runLedgerMembershipGuard } from "./ledger-membership";
 
 export const checkRouteScaleLedger = (): number =>

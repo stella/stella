@@ -713,9 +713,9 @@ describe("request database measurement headers", () => {
   test("mounted handlers expose counts on the final response without completion hooks", async () => {
     const app = new Elysia()
       .wrap(
-        (handle) => async (request) =>
+        (handle) => async (request: Request) =>
           runWithRequestScope(async () => {
-            const response: unknown = await handle(request);
+            const response: unknown = await Promise.resolve(handle(request));
             if (!(response instanceof Response)) {
               throw new HandlerError({
                 status: 500,
@@ -745,7 +745,10 @@ describe("request database measurement headers", () => {
 
   test("completion and error responses expose their own query and transaction counts", async () => {
     const app = new Elysia()
-      .wrap((handle) => (request) => runWithRequestScope(() => handle(request)))
+      .wrap(
+        (handle) => (request: Request) =>
+          runWithRequestScope(() => handle(request)),
+      )
       .onError((context) => answerRequestError(context))
       .onAfterHandle(async (context) => await completeRequest(context))
       .get("/health", async () => {

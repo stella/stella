@@ -6,12 +6,12 @@ import type {
   Request,
 } from "@playwright/test";
 import { expect, request as apiRequestFactory, test } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import { checkRouteScaleLedger } from "../../../../scripts/check-route-scale-ledger";
 import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
@@ -51,6 +51,10 @@ import {
   routeScaleCensus,
   type RouteScaleMeasurement,
 } from "../helpers/route-scale";
+import {
+  addedLedgerEntries,
+  routeScaleLedgerMembership,
+} from "../helpers/route-scale-ledger";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
   assertSmokeRouteCoverage,
@@ -86,6 +90,40 @@ const SCALE_LEDGER = parseRouteScaleLedger(JSON.stringify(scaleLedger));
 // page it loads, so setup/teardown are no longer hostage to a per-test fixture
 // lifecycle; both need the authenticated storage state wired in explicitly.
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
+
+const routeScaleLedgerAdditions = (): string[] => {
+  const baseRef = "origin/main";
+  const resolved = spawnSync(
+    "git",
+    [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      "--end-of-options",
+      `${baseRef}^{commit}`,
+    ],
+    { cwd: REPO_ROOT, encoding: "utf-8" },
+  );
+  if (resolved.status !== 0) {
+    return [`base ${baseRef} could not be resolved`];
+  }
+  const commit = resolved.stdout.trim();
+  const ledgerPath = "apps/web/e2e/route-scale-ledger.json";
+  const base = spawnSync("git", ["show", `${commit}:${ledgerPath}`], {
+    cwd: REPO_ROOT,
+    encoding: "utf-8",
+  });
+  if (base.status !== 0) {
+    if (/exists on disk, but not in|does not exist in/u.test(base.stderr)) {
+      return [];
+    }
+    return [`git show ${commit}:${ledgerPath} failed: ${base.stderr}`];
+  }
+  return addedLedgerEntries(
+    routeScaleLedgerMembership(JSON.stringify(scaleLedger)),
+    routeScaleLedgerMembership(base.stdout),
+  );
+};
 const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
 const ROUTE_TREE_PATH = path.resolve(
@@ -524,7 +562,10 @@ declarePublicKnowledgeSmoke({ mode: "disabled" });
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
-  expect(checkRouteScaleLedger(), "route scale allowances only shrink").toBe(0);
+  expect(
+    routeScaleLedgerAdditions(),
+    "route scale allowances only shrink",
+  ).toEqual([]);
   const routeKeys = new Set(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
   expect(
     SCALE_LEDGER.filter(({ route }) => !routeKeys.has(route)),

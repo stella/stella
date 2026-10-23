@@ -13,6 +13,7 @@ import {
   readSmokeWorlds,
   smokeWorldDirectory,
   SMOKE_WORLD_COUNTS,
+  SMOKE_WORLD_DIMENSIONS,
   type SmokeCardinalities,
   type SmokeScaleWorld,
 } from "../helpers/smoke-world";
@@ -39,16 +40,18 @@ const large = {
 describe("smoke world cardinality", () => {
   test("starts at a full hundred-row page and scales every fixture dimension tenfold", () => {
     expect(SMOKE_WORLD_COUNTS.small).toBeGreaterThanOrEqual(100);
-    expect(SMOKE_WORLD_COUNTS.large).toBe(SMOKE_WORLD_COUNTS.small * 10);
+    expect(SMOKE_WORLD_COUNTS.large + 0).toBe(SMOKE_WORLD_COUNTS.small * 10);
     assertTenfoldSmokeWorlds({ small, large });
   });
 
   test("refuses any dimension that was omitted from large-world generation", () => {
-    for (const dimension of Object.keys(small)) {
+    for (const dimension of SMOKE_WORLD_DIMENSIONS) {
+      const invalidLarge: SmokeCardinalities = { ...large };
+      invalidLarge[dimension] = 100;
       expect(() =>
         assertTenfoldSmokeWorlds({
           small,
-          large: { ...large, [dimension]: 100 },
+          large: invalidLarge,
         }),
       ).toThrow(`${dimension}: expected positive tenfold fixtures`);
     }

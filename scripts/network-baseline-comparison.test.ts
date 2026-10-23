@@ -86,10 +86,20 @@ test("successive write recordings retain declarations and timing-conditional pea
               observedRequests.map((key) => [key, 1]),
             ),
             missingDbQueryCounts: {},
+            transactions: Object.fromEntries(
+              observedRequests.map((key) => [key, 1]),
+            ),
+            missingTransactionCounts: {},
             responseSizes: Object.fromEntries(
               observedRequests.map((key) => [key, 1024]),
             ),
             missingResponseSizeCounts: {},
+            requestCosts: Object.fromEntries(
+              observedRequests.map((key) => [
+                key,
+                [{ dbQueries: 1, transactions: 1, responseBytes: 1024 }],
+              ]),
+            ),
           },
         ],
       ]),
@@ -115,8 +125,13 @@ test("only a validated declaration permits measured growth", () => {
         depthChain: [],
         dbQueries: { "GET /old": 2 },
         missingDbQueryCounts: {},
+        transactions: { "GET /old": 1 },
+        missingTransactionCounts: {},
         responseSizes: { "GET /old": 1024 },
         missingResponseSizeCounts: {},
+        requestCosts: {
+          "GET /old": [{ dbQueries: 2, transactions: 1, responseBytes: 1024 }],
+        },
       },
     ],
   ]);
@@ -175,8 +190,11 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       depthChain: [],
       dbQueries: {},
       missingDbQueryCounts: {},
+      transactions: {},
+      missingTransactionCounts: {},
       responseSizes: {},
       missingResponseSizeCounts: {},
+      requestCosts: {},
     },
   };
   expect(

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ValiError } from "valibot";
 
-import { addedEntries } from "../../../../scripts/ledger-membership";
 import type { RouteNetworkMetrics } from "../helpers/network";
 import type { RouteRenderMetrics } from "../helpers/render-census";
 import {
@@ -13,6 +12,7 @@ import {
   routeScaleLedgerMembership,
 } from "../helpers/route-scale";
 import type { RouteScaleMeasurement } from "../helpers/route-scale";
+import { addedLedgerEntries } from "../helpers/route-scale-ledger";
 
 const request = "GET /v1/entities";
 const route = "/$workspaceId/entities";
@@ -225,13 +225,13 @@ describe("scale ledger", () => {
     const wider = routeScaleLedgerMembership(
       JSON.stringify([{ ...allowance, max: 3 }]),
     );
-    expect(addedEntries(tighter, original)).toEqual([]);
-    expect(addedEntries([], original)).toEqual([]);
-    expect(addedEntries(wider, original)).toHaveLength(1);
+    expect(addedLedgerEntries(tighter, original)).toEqual([]);
+    expect(addedLedgerEntries([], original)).toEqual([]);
+    expect(addedLedgerEntries(wider, original)).toHaveLength(1);
     const other = routeScaleLedgerMembership(
       JSON.stringify([{ ...allowance, route: "/new" }]),
     );
-    expect(addedEntries(other, original)).toHaveLength(2);
+    expect(addedLedgerEntries(other, original)).toHaveLength(2);
   });
 });
 
