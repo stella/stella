@@ -74,6 +74,6 @@ describe("CitationPassageQuote", () => {
       render(
         <CitationPassageQuote read={{ passage: null, status: "failed" }} />,
       ),
-    ).toContain(messages.errors.actionFailed);
+    ).toContain(renderToStaticMarkup(messages.errors.actionFailed));
   });
 });

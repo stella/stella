@@ -623,14 +623,28 @@ const BARE_ERROR_MESSAGES = new Set([
   "unknown error",
 ]);
 
-const bareErrorForm = (value: string): string =>
-  normalizeUnicode(value, "NFC")
+const TRAILING_ERROR_PUNCTUATION = new Set([".", "!", ":", "\u2026"]);
+
+const stripTrailingErrorPunctuation = (value: string): string => {
+  let end = value.length;
+  while (end > 0) {
+    const character = value.at(end - 1);
+    if (!character || !TRAILING_ERROR_PUNCTUATION.has(character)) {
+      break;
+    }
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
+const bareErrorForm = (value: string): string => {
+  const normalized = normalizeUnicode(value, "NFC")
     .toLowerCase()
     .replaceAll("\u2019", "'")
     .replaceAll(/\s+/gu, " ")
-    .trim()
-    .replace(/[.!\u2026]+$/u, "")
     .trim();
+  return stripTrailingErrorPunctuation(normalized).trim();
+};
 
 export const isBareErrorMessage = (value: string): boolean =>
   BARE_ERROR_MESSAGES.has(bareErrorForm(value));

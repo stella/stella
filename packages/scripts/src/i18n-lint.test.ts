@@ -752,6 +752,7 @@ describe("bare error messages", () => {
   test("a message that only says something failed is bare", () => {
     for (const message of [
       "Error",
+      "Error:",
       "error.",
       "Something went  wrong",
       "An unexpected error occurred!",
