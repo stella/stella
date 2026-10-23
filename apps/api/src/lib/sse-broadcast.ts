@@ -335,11 +335,5 @@ export type SseBroadcastPublisher = ReturnType<
 export const defaultSseBroadcastPublisher: SseBroadcastPublisher =
   createSseBroadcastPublisher();
 
-export const {
-  publishOrganizationEvent,
-  publishSessionEvent,
-  publishUserAccessRevoked,
-  publishUserEvent,
-  publishWorkspaceAccessRevoked,
-  publishWorkspaceEvent,
-} = defaultSseBroadcastPublisher;
+export const { publishSessionEvent, publishWorkspaceEvent } =
+  defaultSseBroadcastPublisher;
