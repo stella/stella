@@ -185,7 +185,9 @@ test("release audit blocks findings unless a reasoned explicit waiver is supplie
     "tag",
     "Refuse a release with known dependency advisories",
   );
-  expect(gate.run).toBe("bash scripts/check-release-dependency-audit.sh");
+  expect(gate.run).toBe(
+    'bash "$RUNNER_TEMP/release-gate.sh" run dependency-audit bash scripts/check-release-dependency-audit.sh',
+  );
 });
 
 const githubExpression = (body: string) => `\${{ ${body} }}`;

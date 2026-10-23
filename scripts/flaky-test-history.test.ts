@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
-import type { FailureRecord } from "./ci-failure-digest";
+import { digestFile, type FailureRecord } from "./ci-failure-digest";
 import {
   buildHistory,
   collectEvidence,
@@ -600,7 +600,11 @@ describe("evidence collection", () => {
         // Run 2 predates structured test identities.
         writeFileSync(
           path.join(dir, "ci-failures.json"),
-          JSON.stringify(rest.at(1) === "1" ? digest : [{ job: "x" }]),
+          JSON.stringify(
+            rest.at(1) === "1"
+              ? digestFile(digest, { GITHUB_RUN_ID: "1" })
+              : { version: 1, failures: [{ job: "x" }] },
+          ),
         );
         return Result.ok("");
       }

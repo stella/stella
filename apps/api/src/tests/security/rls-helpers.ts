@@ -63,12 +63,12 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { cents } from "@/api/lib/money";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -700,7 +700,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgA,
       name: "Tmpl A",
       fileName: "a.docx",
-      s3Key: "test/a.docx",
+      s3Key: `${ids.orgA}/test/a.docx`,
       sizeBytes: 1024,
       createdBy: ids.userA1,
     },
@@ -709,7 +709,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgB,
       name: "Tmpl B",
       fileName: "b.docx",
-      s3Key: "test/b.docx",
+      s3Key: `${ids.orgB}/test/b.docx`,
       sizeBytes: 1024,
       createdBy: ids.userB1,
     },
@@ -1163,28 +1163,44 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       ...userFileFixture,
       id: ids.userFileGlobalA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileGlobalA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileGlobalA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgA,
+      }),
       threadId: ids.chatThreadGlobalA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileWorkspaceA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgA,
+      }),
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileGlobalB1UserA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileGlobalB1UserA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileGlobalB1UserA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgB,
+      }),
       threadId: ids.chatThreadGlobalB1UserA1,
     },
     {
       ...userFileFixture,
       id: ids.userFileWorkspaceB1UserA1,
       userId: ids.userA1,
-      s3Key: testFileKey(`user-files/${ids.userFileWorkspaceB1UserA1}`),
+      s3Key: createUserFileKey({
+        fileId: ids.userFileWorkspaceB1UserA1,
+        mimeType: userFileFixture.mimeType,
+        organizationId: ids.orgB,
+      }),
       threadId: ids.chatThreadWorkspaceB1UserA1,
       thumbnailFileId: Bun.randomUUIDv7(),
     },
@@ -1475,7 +1491,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgA,
       templateId: ids.templateA,
       version: 1,
-      s3Key: "test/a-v1.docx",
+      s3Key: `${ids.orgA}/test/a-v1.docx`,
       createdBy: ids.userA1,
     },
     {
@@ -1483,7 +1499,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgB,
       templateId: ids.templateB,
       version: 1,
-      s3Key: "test/b-v1.docx",
+      s3Key: `${ids.orgB}/test/b-v1.docx`,
       createdBy: ids.userB1,
     },
   ]);
