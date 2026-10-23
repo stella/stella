@@ -1745,6 +1745,7 @@ export const caseLawCoverageSlices = p.pgTable(
       sql`${t.reported} IS NOT NULL OR ${t.walkError} IS NOT NULL`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
