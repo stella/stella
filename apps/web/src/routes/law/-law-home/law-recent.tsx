@@ -109,7 +109,7 @@ const ScopedLawRecentList = ({
   const emptyLabel = (() => {
     switch (history.list.status) {
       case "error":
-        return "common.error" as const;
+        return "lawHome.recentLoadFailed" as const;
       case "pending":
         return "common.loading" as const;
       case "ready":

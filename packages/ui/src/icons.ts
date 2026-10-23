@@ -65,7 +65,6 @@ export {
   BookTextIcon,
   BookmarkIcon,
   BookmarkPlusIcon,
-  BotIcon,
   BracesIcon,
   BrainIcon,
   Building2Icon,

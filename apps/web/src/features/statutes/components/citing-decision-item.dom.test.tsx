@@ -121,6 +121,11 @@ for (const [locale, messages, localizedThree] of [
 
     expect(ui.getByRole("button", { name: /1 C 1\/2020/u })).toBeTruthy();
     const row = ui.container;
+    // The row names its decision once: the case number is the trigger, and
+    // no chip repeats it or the court badge beside the court's name.
+    const text = row.textContent;
+    expect(text.split(decision.caseNumber)).toHaveLength(2);
+    expect(text.split(decision.courtAbbreviation)).toHaveLength(2);
     expect(row.textContent).toContain(localizedThree);
     expect(row.textContent).toContain("×");
     expect(row.querySelector("mark")?.textContent).toBe("§ 13");

@@ -89,3 +89,20 @@ test("accepts shared loading primitives and unrelated animation text", async () 
     ),
   ).toEqual([]);
 });
+
+test("only the loader module draws the spinner", async () => {
+  const spinner =
+    'const view = <LoaderCircleIcon className="size-full animate-spin" />;';
+  expect(
+    await lintSingleRule("no-adhoc-loader", spinner, {
+      cwd: "scratch",
+      sourcePath: "packages/ui/src/components/loader.tsx",
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule("no-adhoc-loader", spinner, {
+      cwd: "scratch",
+      sourcePath: "packages/ui/src/components/loader-variant.tsx",
+    }),
+  ).toEqual([1, 1]);
+});
