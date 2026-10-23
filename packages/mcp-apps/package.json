@@ -24,7 +24,6 @@
     "typecheck": "bun ../../scripts/prepare-mcp-apps.ts && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=src/shared/generated/tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/mcp-apps",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build",
     "build": "bun ../../scripts/prepare-mcp-apps.ts"
   },
@@ -66,7 +65,6 @@
     "cheerio": "^1.2.0",
     "domhandler": "^6.0.1",
     "fast-check": "catalog:",
-    "oxc-transform-react": "catalog:",
     "postcss": "catalog:",
     "tailwindcss": "catalog:"
   }

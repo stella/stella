@@ -1,10 +1,10 @@
 import { useTranslations } from "use-intl";
 
 import {
+  AiActionIcon,
   FileDiffIcon,
   LockIcon,
   UserCheckIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import {

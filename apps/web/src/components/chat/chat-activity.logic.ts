@@ -5,11 +5,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 
 export type ChatToolActivityCategory =
-  | "artifact"
-  | "computation"
-  | "mutation"
-  | "research"
-  | "user-input";
+  "artifact" | "computation" | "mutation" | "research" | "user-input";
 
 const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   show_visual: "artifact",

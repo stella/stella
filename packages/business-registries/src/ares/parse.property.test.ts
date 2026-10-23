@@ -10,8 +10,8 @@ import {
 import {
   expectNullableString,
   expectRegistryOutcome,
-  expectRegistryResponses,
   expectRegistryResponse,
+  expectRegistryResponses,
   forEachRegistryMutation,
   registryExtras,
   registryString,

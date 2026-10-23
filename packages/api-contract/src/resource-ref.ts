@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import { encodeRfc3986Component } from "./rfc3986";
-import { isSafeIdValue, toSafeId, type SafeId } from "./safe-id";
+import { isSafeIdValue, type SafeId, toSafeId } from "./safe-id";
 
 /** Stable product nouns. Presentation labels and storage table names may differ. */
 export const RESOURCE_TYPE = {

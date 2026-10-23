@@ -1,12 +1,5 @@
 import { panic, Result } from "better-result";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -22,7 +15,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   type CorpusIndexClient,
   CorpusIndexError,
@@ -73,7 +66,12 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  capturePgliteDatabaseBaseline,
+  createTestPglite,
+  type PgliteDatabaseBaseline,
+  resetPgliteDatabase,
+} from "@/api/tests/pglite-test-db";
 
 /** The metastore instant a delete task receipt carries in these tests. */
 const DELETE_TASK_CREATED_AT = Temporal.Instant.from("2026-08-25T12:00:00Z");
@@ -123,7 +121,7 @@ const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
-let seededSnapshot: Blob;
+let baseline: PgliteDatabaseBaseline;
 
 const clearDecisionIntents = async (): Promise<void> => {
   await db.transaction(async (tx) => {
@@ -308,9 +306,7 @@ const installProjectionMigrationDdl = async (): Promise<void> => {
   await executeInOrder(0);
 };
 
-const buildSeededSnapshot = async (): Promise<Blob> => {
-  db = drizzle({ client });
-  await installProjectionMigrationDdl();
+const seedDatabase = async (): Promise<void> => {
   await db.insert(caseLawSources).values({
     id: SOURCE_ID,
     adapterKey: "projection-store-test",
@@ -345,24 +341,22 @@ const buildSeededSnapshot = async (): Promise<Blob> => {
     desiredIndexId: INDEX_ID,
     updatedAt: INITIAL_RUNNABLE_AT,
   });
-  return await client.dumpDataDir("none");
 };
 
 beforeAll(async () => {
   client = await createTestPglite();
-  try {
-    seededSnapshot = await buildSeededSnapshot();
-  } finally {
-    await client.close();
-  }
+  db = drizzle({ client });
+  await installProjectionMigrationDdl();
+  baseline = await capturePgliteDatabaseBaseline(client);
+  await seedDatabase();
 });
 
 beforeEach(async () => {
-  client = await createTestPglite(seededSnapshot);
-  db = drizzle({ client });
+  await resetPgliteDatabase(client, baseline);
+  await seedDatabase();
 });
 
-afterEach(async () => {
+afterAll(async () => {
   await client.close();
 });
 

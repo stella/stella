@@ -101,7 +101,6 @@ test("scaffolds the package files and registers the knip workspace", () => {
     scripts: {
       test: "bun test src",
       typecheck: "bun check --no-pretty --all --project=tsconfig.json",
-      format: "bun ../../scripts/run-oxfmt.ts .",
     },
     devDependencies: {
       "@stll/typescript-config": "workspace:*",
@@ -139,7 +138,7 @@ test("scaffolds the package files and registers the knip workspace", () => {
   });
 });
 
-// The scaffold's own output is the fixture, and oxfmt is the oracle: no
+// The scaffold's own output is the fixture, and bun fmt is the oracle: no
 // hand-written expectation can drift away from what the formatter does.
 test("scaffolded files need no formatting pass", () => {
   const root = createRoot();
@@ -155,21 +154,23 @@ test("scaffolded files need no formatting pass", () => {
   const scaffolded = result.files.filter((rel) => rel !== "knip.json");
   const before = scaffolded.map((rel) => read(root, rel));
 
-  const formatter = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      "oxfmt",
-      "-c",
-      path.join(REPO_ROOT, ".oxfmtrc.json"),
-      ...scaffolded.map((rel) => path.join(root, rel)),
-    ],
-    { cwd: REPO_ROOT, stderr: "pipe", stdout: "pipe" },
-  );
-  expect(formatter.stderr.toString()).toBe("");
-  expect(formatter.exitCode).toBe(0);
+  // Each file is formatted at its repository path, under the root bunfig.toml.
+  const formatted = scaffolded.map((rel, index) => {
+    const formatter = Bun.spawnSync(
+      [process.execPath, "fmt", "--stdin-filepath", rel],
+      {
+        cwd: REPO_ROOT,
+        stdin: Buffer.from(before[index] ?? ""),
+        stderr: "pipe",
+        stdout: "pipe",
+      },
+    );
+    expect(formatter.stderr.toString()).toBe("");
+    expect(formatter.exitCode).toBe(0);
+    return formatter.stdout.toString();
+  });
 
-  expect(scaffolded.map((rel) => read(root, rel))).toEqual(before);
+  expect(formatted).toEqual(before);
 });
 
 test("appends after the last packages entry when the name sorts last", () => {

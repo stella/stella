@@ -4,8 +4,8 @@ import { Fragment, isValidElement } from "react";
 import { useTranslations } from "use-intl";
 
 import {
-  parseCanonicalChatSourceCitationHref,
   type ChatSourceCitationTarget,
+  parseCanonicalChatSourceCitationHref,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
@@ -286,7 +286,12 @@ export const StreamdownMentionLink = ({
     );
   }
 
-  return <ProxyChatLink href={href}>{children}</ProxyChatLink>;
+  // Keep the id: footnote back-links point at the reference anchor.
+  return (
+    <ProxyChatLink href={href} id={props.id}>
+      {children}
+    </ProxyChatLink>
+  );
 };
 
 const SourceCitationChip = ({

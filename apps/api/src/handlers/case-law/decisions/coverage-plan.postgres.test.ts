@@ -149,7 +149,6 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
           asTestRaw<CaseLawPublicReadTransaction>(db),
-          "pg-fts",
         );
         // The per-source endpoint read, then one grouped pending-text count
         // for the page's sources.
@@ -169,9 +168,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         expect(probes).toHaveLength(2);
         for (const probe of probes) {
           expect(["Index Scan", "Index Only Scan"]).toContain(probe.nodeType);
-          // The serving semi-join can discard unindexed dates, so its Limit
-          // bounds matched endpoints rather than every input index row. The
-          // endpoint limits and actual scan work are asserted below.
+          // The endpoint limits and actual scan work are asserted below.
           expect(probe.indexCond).toContain("source_id");
           expect(probe.indexCond).toContain("decision_date IS NOT NULL");
         }

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   DOCX_DOCUMENT_CACHE_LIMIT,
-  EMPTY_DOCX_DOCUMENT_CACHE,
   docxDocumentCacheKey,
+  EMPTY_DOCX_DOCUMENT_CACHE,
   invalidateDocxDocumentCache,
   readDocxDocumentCache,
   writeDocxDocumentCache,
