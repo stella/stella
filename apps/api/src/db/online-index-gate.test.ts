@@ -14,9 +14,9 @@ import { readOnlineIndexConfig } from "../env-online-index";
 import {
   createOnlineIndexGate,
   createOnlineIndexHold,
-  tableLockBlockers,
   type OnlineIndexEbsSource,
   type OnlineIndexHoldRef,
+  tableLockBlockers,
   type TableLockHolder,
 } from "./online-index-gate";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
