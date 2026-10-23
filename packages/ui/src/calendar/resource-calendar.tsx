@@ -31,10 +31,7 @@ export type ResourceCalendarResource = {
 };
 
 export type ResourceCalendarEntryTone =
-  | "accent"
-  | "neutral"
-  | "warning"
-  | "destructive";
+  "accent" | "neutral" | "warning" | "destructive";
 
 export type ResourceCalendarEntry = {
   accessibleLabel: string;

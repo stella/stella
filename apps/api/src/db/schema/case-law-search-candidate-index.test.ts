@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { isNotNull } from "drizzle-orm";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 

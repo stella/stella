@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import {
   DECISION_TYPE_KIND_OTHER,
-  isDecisionTypeKind,
   type DecisionTypeKind,
+  isDecisionTypeKind,
 } from "@stll/api-contract/case-law-decision-types";
 
 import inventory from "@/api/lib/case-law/decision-type-inventory.json" with { type: "json" };
@@ -274,8 +274,7 @@ export const DECISION_TYPE_KIND_BY_KEY: ReadonlyMap<string, DecisionTypeKind> =
  * (`order`) get the same rows. Anything else is matched as stated.
  */
 type DecisionTypeFilter =
-  | { type: "kind"; kind: DecisionTypeKind }
-  | { type: "stated"; stated: string };
+  { type: "kind"; kind: DecisionTypeKind } | { type: "stated"; stated: string };
 
 export const decisionTypeFilter = (requested: string): DecisionTypeFilter => {
   if (isDecisionTypeKind(requested)) {
