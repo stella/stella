@@ -1,109 +1,39 @@
 mod contract {
-  use std::{
-    collections::{BTreeMap, BTreeSet},
-    process::Command,
-  };
+  use std::collections::BTreeSet;
 
   const PROBES: &str = include_str!("../examples/local_file_creation_guard.rs");
+  const EXPECTATION: &str = "#[expect(clippy::disallowed_methods";
 
-  fn active(path: &str) -> bool {
-    if path.starts_with("plist::") {
-      return cfg!(target_os = "macos");
-    }
-    if path.starts_with("rustix::") {
-      return cfg!(unix);
-    }
-    if path.starts_with("winsafe::") {
-      return cfg!(windows);
-    }
-    true
-  }
-
+  // Clippy proves each probe is rejected while linting the example; this
+  // keeps the probe list equal to the configured bans.
   #[test]
-  fn local_file_creation_clippy_contract() {
+  fn every_banned_writer_has_one_expecting_probe() {
     let configured: BTreeSet<_> = include_str!("../clippy.toml")
       .lines()
       .filter(|line| line.contains("create private desktop files through local_store"))
       .map(|line| line.split('"').nth(1).unwrap().to_string())
       .collect();
-    let probes: BTreeSet<_> = PROBES
+    let guards: Vec<_> = PROBES
       .lines()
       .filter_map(|line| line.trim().strip_prefix("// guard: ").map(str::to_string))
       .collect();
+    let probes: BTreeSet<_> = guards.iter().cloned().collect();
+    assert_eq!(probes.len(), guards.len(), "each writer has one probe");
     assert_eq!(
       configured, probes,
-      "every configured writer must have a compile-fail probe"
+      "every configured writer must have a probe"
     );
-    // kit-allow: compile-fail probes need a separate clippy process
-    let output = Command::new("cargo")
-      .current_dir(env!("CARGO_MANIFEST_DIR"))
-      .args([
-        "clippy",
-        "--locked",
-        "--offline",
-        "--example",
-        "local_file_creation_guard",
-        "--features",
-        "local-file-guard-probe",
-        "--message-format=json",
-        "--",
-        "-D",
-        "warnings",
-      ])
-      .output()
-      .expect("Clippy must run the writer probes");
-    assert!(!output.status.success(), "writer probes must be rejected");
-    let mut rejected = BTreeMap::<String, usize>::new();
-    let mut unexpected = Vec::new();
-    for line in String::from_utf8(output.stdout).unwrap().lines() {
-      let Ok(record) = serde_json::from_str::<serde_json::Value>(line) else {
-        continue;
-      };
-      if record["reason"] != "compiler-message" || record["message"]["level"] != "error"
-      {
-        continue;
-      }
-      let message = &record["message"];
-      if message["code"]["code"] != "clippy::disallowed_methods" {
-        unexpected.push(message.to_string());
-        continue;
-      }
-      let span = message["spans"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|span| span["is_primary"] == true)
-        .unwrap();
-      assert!(
-        span["file_name"]
-          .as_str()
-          .unwrap()
-          .ends_with("local_file_creation_guard.rs")
-      );
-      let line_number = usize::try_from(span["line_start"].as_u64().unwrap()).unwrap();
-      let path = PROBES
-        .lines()
-        .take(line_number)
-        .filter_map(|line| line.trim().strip_prefix("// guard: "))
-        .last()
-        .unwrap();
-      *rejected.entry(path.to_string()).or_default() += 1;
-    }
-    assert!(
-      unexpected.is_empty(),
-      "unexpected compile errors: {unexpected:?}\n{}",
-      String::from_utf8_lossy(&output.stderr)
-    );
-    let expected: BTreeMap<_, _> = configured
-      .into_iter()
-      .filter(|path| active(path))
-      .map(|path| (path, 1))
-      .collect();
-    assert_eq!(
-      rejected,
-      expected,
-      "each writer must produce exactly its configured lint at its call site\n{}",
-      String::from_utf8_lossy(&output.stderr)
-    );
+    let probe_functions = PROBES
+      .lines()
+      .filter(|line| {
+        line.starts_with("fn probe_") || line.starts_with("async fn probe_")
+      })
+      .count();
+    let expectations = PROBES
+      .lines()
+      .filter(|line| line.starts_with(EXPECTATION))
+      .count();
+    assert_eq!(probe_functions, guards.len(), "one guard per probe");
+    assert_eq!(expectations, probe_functions, "every probe expects the ban");
   }
 }
