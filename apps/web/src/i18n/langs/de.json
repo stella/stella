@@ -5994,6 +5994,7 @@
       "downloadFailed": "Download fehlgeschlagen",
       "downloadPdf": "Als PDF herunterladen",
       "downloadSearchablePdf": "Durchsuchbare PDF",
+      "emptyFile": "Die Datei ist leer.",
       "includeReferenceNumber": "Aktenzeichen einfügen",
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",
