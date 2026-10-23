@@ -1,5 +1,6 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
+// parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
 import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
@@ -70,10 +71,10 @@ import {
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
-  DecisionJudgeInput,
   EmptyAst,
   IngestionResult,
   ListingIdentity,
+  PrintedDecisionJudge,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
@@ -924,10 +925,10 @@ const RAPPORTEUR = /^sprawozdawc/iu;
  * The bench as the ruling's table prints it, and the dissenters its text
  * names. A judge is listed once per role.
  */
-export const plTkJudges = (ruling: PlTkRuling): DecisionJudgeInput[] => {
-  const judges: DecisionJudgeInput[] = [];
+export const plTkJudges = (ruling: PlTkRuling): PrintedDecisionJudge[] => {
+  const judges: PrintedDecisionJudge[] = [];
   const seen = new Set<string>();
-  const add = (judge: DecisionJudgeInput): void => {
+  const add = (judge: PrintedDecisionJudge): void => {
     const key = `${judge.role}\u0000${judge.nameAsPrinted}`;
     if (!seen.has(key)) {
       seen.add(key);

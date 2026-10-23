@@ -48,6 +48,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { czUsOpeningBench } from "@/api/handlers/case-law/ingestion/adapters/cz-us-bench";
 import {
   fetchNalus,
   NALUS_REQUEST_INTERVAL_MS,
@@ -97,8 +98,10 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type {
-  RawIngestionResult,
+  CzechDeclinedDecisionJudge,
   DecisionJudgeInput,
+  PrintedDecisionJudge,
+  RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -777,7 +780,7 @@ const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
  * what the roster is matched on: honorifics differ between the court's own
  * pages and change over a career.
  */
-const detailJudges = (fields: NalusDetailFields): DecisionJudgeInput[] =>
+const detailJudges = (fields: NalusDetailFields): PrintedDecisionJudge[] =>
   [
     ...fields.rapporteur.map((name) => ({
       role: DECISION_JUDGE_ROLE.RAPPORTEUR,
@@ -788,6 +791,42 @@ const detailJudges = (fields: NalusDetailFields): DecisionJudgeInput[] =>
       nameAsPrinted: stripAcademicTitles(name),
     })),
   ].filter(({ nameAsPrinted }) => nameAsPrinted.length > 0);
+
+type DecisionJudgesOptions = {
+  recordCard: ParsedRecordCard;
+  cardJudges: readonly PrintedDecisionJudge[] | undefined;
+  bench: readonly CzechDeclinedDecisionJudge[];
+};
+
+/**
+ * Everyone the decision names: the bench its opening sentence states, then
+ * the record card's rapporteur and dissenters. The card and the sentence both
+ * name the rapporteur and the roster resolves the two to one row; the bench
+ * comes first so that row carries the roster's spelling, the one the rest of
+ * the bench is shown in, rather than the card's surname-first one.
+ *
+ * Absent when the card could not be read, so the judges already stored stay
+ * as they are; a card the court says it does not hold leaves the sentence as
+ * the only statement, and a sentence naming nobody then states nothing.
+ */
+const decisionJudges = ({
+  recordCard,
+  cardJudges,
+  bench,
+}: DecisionJudgesOptions): DecisionJudgeInput[] | undefined => {
+  switch (recordCard.state) {
+    case CZ_US_RECORD_CARD_STATE.READ:
+      return [...bench, ...(cardJudges ?? [])];
+    case CZ_US_RECORD_CARD_STATE.ABSENT:
+      return bench.length === 0 ? undefined : [...bench];
+    case CZ_US_RECORD_CARD_STATE.UNAVAILABLE:
+      return undefined;
+    default: {
+      recordCard satisfies never;
+      return panic(`Unhandled record card state: ${String(recordCard)}`);
+    }
+  }
+};
 
 /** Record-card fields the row carries under their own metadata keys. */
 const DETAIL_METADATA_KEYS = [
@@ -1035,10 +1074,15 @@ const parseDecisionPage = ({
     extractLabel(html, "lblPopularName") ?? detail?.popularName.at(0);
   const bodyText = extractDocContentText(html);
   const fulltext = extractFulltext(bodyText);
-  const judges = detail === null ? undefined : detailJudges(detail);
+  const cardJudges = detail === null ? undefined : detailJudges(detail);
+  const judges = decisionJudges({
+    recordCard,
+    cardJudges,
+    bench: czUsOpeningBench(bodyText ?? ""),
+  });
   // The stored facts row reads one name; the roles live on `judges`, and
   // both spell it the way the roster is matched on.
-  const judge = judges?.find(
+  const judge = cardJudges?.find(
     ({ role }) => role === DECISION_JUDGE_ROLE.RAPPORTEUR,
   )?.nameAsPrinted;
 
