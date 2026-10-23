@@ -73,7 +73,7 @@ const durableReferenceExpression = (
     uuidFileId !== null
       ? uuidFileId
       : null;
-  const thumbnailUserId = parts.length === 2 ? parts[0] : null;
+  const thumbnailOwnerId = parts.length === 2 ? parts[0] : null;
   return sql<boolean>`
     COALESCE(
       (SELECT TRUE FROM ${userFiles}
@@ -90,8 +90,11 @@ const durableReferenceExpression = (
       (SELECT TRUE FROM ${userFiles}
         INNER JOIN ${chatThreads} ON ${chatThreads.id} = ${userFiles.threadId}
         WHERE ${chatThreads.organizationId} = ${organizationId}
-          AND ${userFiles.userId} = ${thumbnailUserId}
-          AND ${userFiles.thumbnailFileId} = ${fileId} LIMIT 1),
+          AND ${userFiles.thumbnailFileId} = ${fileId}
+          AND ((${thumbnailOwnerId} = ${organizationId}
+              AND starts_with(${userFiles.s3Key}, ${organizationId} || '/'))
+            OR (${userFiles.userId} = ${thumbnailOwnerId}
+              AND starts_with(${userFiles.s3Key}, ${thumbnailOwnerId} || '/'))) LIMIT 1),
       (SELECT TRUE FROM ${fields}
         INNER JOIN ${workspaces} ON ${workspaces.id} = ${fields.workspaceId}
         WHERE ${fields.workspaceId} = ${workspaceId}::uuid

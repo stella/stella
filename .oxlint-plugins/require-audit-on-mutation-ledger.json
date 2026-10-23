@@ -144,14 +144,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeOAuthTokensAndGrants",
-    "writes": {
-      "delete:oauthClient": 1,
-      "delete:oauthConsent": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/agent-auth-idjag.ts::bindCeremonyToIssuer",
     "writes": {
       "update:agentRegistration": 1
