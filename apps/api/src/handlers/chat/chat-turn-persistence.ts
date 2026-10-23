@@ -21,6 +21,7 @@ import {
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  CHAT_TURN_STATUS_OF_OUTCOME,
   closeCutShortCalls,
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
@@ -1473,7 +1474,11 @@ export const settleChatTurnOnTx = async ({
           settledAt: null,
           status: "awaiting-user" as const,
         };
+      // A paused turn owes nothing and runs nothing: its row settles
+      // completed (`CHAT_TURN_STATUS_OF_OUTCOME`), the stored message carries
+      // the pause, and the user's next message starts the next turn.
       case "completed":
+      case "paused":
         if (assistantMessageId === null) {
           return null;
         }
@@ -1486,7 +1491,7 @@ export const settleChatTurnOnTx = async ({
           interactionType: null,
           interruptionReason: null,
           settledAt,
-          status: "completed" as const,
+          status: CHAT_TURN_STATUS_OF_OUTCOME[outcome.type],
         };
       case "cancelled":
         return {

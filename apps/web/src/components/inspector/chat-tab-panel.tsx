@@ -269,6 +269,8 @@ export const ChatTabPanel = ({
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -614,6 +616,7 @@ export const ChatTabPanel = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -705,6 +708,7 @@ export const ChatTabPanel = ({
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
                   onOpenPlaybook={handleOpenPlaybook}
+                  onContinuePausedTurn={continuePausedTurn}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
                   queuedMessageActions={{

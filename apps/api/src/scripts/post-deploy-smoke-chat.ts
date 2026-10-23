@@ -428,6 +428,7 @@ const TURN_OUTCOME_TYPES = {
   completed: true,
   failed: true,
   interrupted: true,
+  paused: true,
 } as const satisfies Record<ChatTurnOutcome["type"], true>;
 
 const picklistOf = <TKey extends string>(record: Record<TKey, true>) =>

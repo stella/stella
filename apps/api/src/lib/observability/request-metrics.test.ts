@@ -415,6 +415,7 @@ const SETTLED_OUTCOMES = {
   completed: "completed",
   failed: "failed",
   interrupted: "interrupted",
+  paused: "paused",
 } as const satisfies { [TOutcome in ChatTurnOutcome["type"]]: TOutcome };
 
 describe("buildChatTurnSettlementRecord", () => {

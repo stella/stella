@@ -1,9 +1,4 @@
-import {
-  EventType,
-  maxIterations,
-  RUN_CANCEL_REASON,
-  uiMessagesToWire,
-} from "@tanstack/ai";
+import { EventType, RUN_CANCEL_REASON, uiMessagesToWire } from "@tanstack/ai";
 import type {
   AnyServerTool,
   ChatMiddleware,
@@ -33,6 +28,7 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
+import type { ChatTurnBudget } from "@stll/chat-limits";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
@@ -69,6 +65,14 @@ import {
   CHAT_RUN_MODE,
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
+import {
+  CHAT_TURN_LOOP_STRATEGY,
+  createChatTurnBudget,
+} from "@/api/handlers/chat/chat-turn-budget";
+import type {
+  ChatTurnBudgetRun,
+  ChatTurnPause,
+} from "@/api/handlers/chat/chat-turn-budget";
 import {
   readChatTurnTiming,
   OWNER_LOST_OUTCOME,
@@ -151,6 +155,7 @@ import type {
   ChatMessageUsage,
   ChatPart,
   ChatTurnOutcome,
+  ChatTurnSpend,
   ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
@@ -268,7 +273,6 @@ const TIMING_READ_FAILURE = failureSink({
   expected: [],
 });
 
-const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 const STELLA_ANON_RESTORATIONS_EVENT = "stella.anon-restorations";
@@ -383,6 +387,11 @@ type StreamChatProps = {
    */
   threadToolCallIds: readonly string[];
   tools: ChatToolMap;
+  /**
+   * The caps the turn runs under. `CHAT_TURN_BUDGET` for every chat turn;
+   * a test harness narrows it to reach a cap in a few steps.
+   */
+  turnBudget?: ChatTurnBudget | undefined;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -505,6 +514,8 @@ const SETTLEMENT_STAGE_OUTCOME = {
   cancelled: "cancelled",
   failed: "failed",
   interrupted: "cancelled",
+  // The run ended as designed, on its budget.
+  paused: "completed",
 } as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
 
 type OutputGeneratorPosition =
@@ -603,6 +614,7 @@ export const streamChat = async ({
   threadId,
   threadToolCallIds,
   tools,
+  turnBudget: turnBudgetCaps,
   externalMcpToolSource,
   userId,
   workspaceId,
@@ -807,6 +819,16 @@ export const streamChat = async ({
     preflightContextNotice ?? null,
   );
 
+  // One budget for the turn: what its stored message already spent, and what
+  // every attempt of this request adds.
+  const turnBudget = createChatTurnBudget({
+    budget: turnBudgetCaps,
+    owningMessage:
+      owningAssistantMessageId === undefined
+        ? undefined
+        : rawMessages.find(({ id }) => id === owningAssistantMessageId),
+  });
+
   let servedTurnModel: ChatTurnModel = {
     provider: primaryModel.provider,
     model: primaryModel.modelId,
@@ -863,6 +885,7 @@ export const streamChat = async ({
     threadId,
     // One ledger for the run: every request of it, a fallback's included.
     toolCallIds: new ToolCallIdLedger(threadToolCallIds),
+    turnBudget,
     userId,
     workspaceId,
   });
@@ -963,6 +986,7 @@ export const streamChat = async ({
     owningAssistantMessageId,
     restorationPairs,
     source: persistenceVisibleStream,
+    turnBudget,
   });
   const visibleOutput = transformClientVisibleStream({
     deniedApprovals: findDeniedApprovals(preparedMessageList),
@@ -1483,6 +1507,8 @@ type RunChatAttemptsProps = {
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   toolCallIds: ToolCallIdLedger;
+  /** The turn's budget: every attempt of it, a fallback's included, spends it. */
+  turnBudget: ChatTurnBudgetRun;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1514,6 +1540,7 @@ const runChatAttempts = async function* ({
   thirdPartyBoundary,
   threadId,
   toolCallIds,
+  turnBudget,
   userId,
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<PublicStreamChunk> {
@@ -1550,6 +1577,7 @@ const runChatAttempts = async function* ({
     thirdPartyBoundary,
     threadId,
     toolCallIds,
+    turnBudget,
     userId,
     workspaceId,
   });
@@ -1604,6 +1632,7 @@ const runChatAttempts = async function* ({
     thirdPartyBoundary,
     threadId,
     toolCallIds,
+    turnBudget,
     userId,
     workspaceId,
   });
@@ -1650,6 +1679,7 @@ type RunChatAttemptProps = {
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   toolCallIds: ToolCallIdLedger;
+  turnBudget: ChatTurnBudgetRun;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1681,6 +1711,7 @@ const runChatAttempt = async function* ({
   thirdPartyBoundary,
   threadId,
   toolCallIds,
+  turnBudget,
   userId,
   workspaceId,
 }: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
@@ -1758,7 +1789,7 @@ const runChatAttempt = async function* ({
         toolCallIds,
       ),
       messages: preparedMessages,
-      agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
+      agentLoopStrategy: CHAT_TURN_LOOP_STRATEGY,
       abortController,
       threadId,
       ...(runId === undefined ? {} : { runId }),
@@ -1786,6 +1817,7 @@ const runChatAttempt = async function* ({
           threadId,
         }),
         sandboxMiddleware,
+        turnBudget.middleware,
       ],
     });
     return;
@@ -1816,7 +1848,7 @@ const runChatAttempt = async function* ({
           },
         }
       : {}),
-    agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
+    agentLoopStrategy: CHAT_TURN_LOOP_STRATEGY,
     abortController,
     threadId,
     ...(runId === undefined ? {} : { runId }),
@@ -1843,6 +1875,7 @@ const runChatAttempt = async function* ({
         tenantWorkspaceIds,
         threadId,
       }),
+      turnBudget.middleware,
     ],
   });
 
@@ -2080,6 +2113,9 @@ type ProcessServerChatStreamProps = {
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   processor: ChatStreamProcessor;
   source: AsyncIterable<PublicStreamChunk>;
+  /** The turn's budget: a loop it ended settles as `paused`, and every
+   *  terminal message stores what the turn has spent. */
+  turnBudget?: Pick<ChatTurnBudgetRun, "pause" | "spend"> | undefined;
 };
 
 /**
@@ -2328,6 +2364,7 @@ const drainedRunOutcome = ({
   abortSignal,
   deadlineSignal,
   finalRunFinishedChunks,
+  pause,
   responseMessage,
   runCancelled,
   toolCallsWithCompleteInput,
@@ -2335,6 +2372,8 @@ const drainedRunOutcome = ({
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
   finalRunFinishedChunks: readonly PublicStreamChunk[];
+  /** The budget cap that ended the loop, if one did. */
+  pause: ChatTurnPause | null;
   responseMessage: ChatMessage | null;
   runCancelled: boolean;
   toolCallsWithCompleteInput: ReadonlySet<string>;
@@ -2367,6 +2406,11 @@ const drainedRunOutcome = ({
   }
   if (awaitingUserInteraction !== null) {
     return { type: "awaiting-user", interaction: awaitingUserInteraction };
+  }
+  // A card the user owes keeps the turn first; otherwise a loop the budget
+  // ended waits for the user's next message.
+  if (pause !== null) {
+    return pause;
   }
   return { type: "completed" };
 };
@@ -2450,6 +2494,7 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  getTurnSpend: () => ChatTurnSpend | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2470,6 +2515,7 @@ const createStreamSettlement = ({
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
   getUsage,
+  getTurnSpend,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
@@ -2533,7 +2579,9 @@ const createStreamSettlement = ({
     // between the stream and the persistence processor is a defect in this
     // pipeline, so it must not be graded as an anticipated provider state.
     if (
-      (outcome.type === "completed" || outcome.type === "awaiting-user") &&
+      (outcome.type === "completed" ||
+        outcome.type === "awaiting-user" ||
+        outcome.type === "paused") &&
       getProducedAnswer() &&
       (getResponseMessage()?.parts.length ?? 0) === 0
     ) {
@@ -2557,6 +2605,7 @@ const createStreamSettlement = ({
             outcome,
             producedAnswer: getProducedAnswer(),
             responseMessage,
+            turnSpend: getTurnSpend(),
             usage: getUsage(),
           })
         : attachTerminalTurnOutcome({
@@ -3203,6 +3252,7 @@ export const processServerChatStream = async function* ({
   onFinish,
   processor,
   source,
+  turnBudget,
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
   const runState = { cancelled: false };
@@ -3252,6 +3302,7 @@ export const processServerChatStream = async function* ({
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
     getUsage: () => usage,
+    getTurnSpend: () => turnBudget?.spend(),
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
     terminal,
@@ -3354,6 +3405,7 @@ export const processServerChatStream = async function* ({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
       finalRunFinishedChunks,
+      pause: turnBudget?.pause() ?? null,
       responseMessage: getResponseMessage(),
       runCancelled: runState.cancelled,
       toolCallsWithCompleteInput,
@@ -3412,8 +3464,14 @@ export const processServerChatStream = async function* ({
 
 type ProcessTurnForPersistenceProps = Omit<
   ProcessServerChatStreamProps,
-  "getResponseMessage" | "initialMessages" | "mapMessageId" | "processor"
+  | "getResponseMessage"
+  | "initialMessages"
+  | "mapMessageId"
+  | "processor"
+  | "turnBudget"
 > & {
+  /** Every persisted turn runs under its budget. */
+  turnBudget: Pick<ChatTurnBudgetRun, "pause" | "spend">;
   /** The history the run starts from: the messages it may continue. */
   initialMessages: ChatMessage[];
   owningAssistantMessageId: SafeId<"chatMessage"> | undefined;
@@ -3463,6 +3521,9 @@ type FinishResponseMessageProps = {
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   producedAnswer: boolean;
   responseMessage: ChatMessage | null;
+  /** What the turn has spent of its budget, which a later request of the
+   *  same turn adds to. */
+  turnSpend: ChatTurnSpend | undefined;
   usage: TokenUsage | undefined;
 };
 
@@ -3471,6 +3532,7 @@ const createTerminalResponseMessage = ({
   outcome,
   producedAnswer,
   responseMessage,
+  turnSpend,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   if (outcome.type === "completed" && !producedAnswer) {
@@ -3505,7 +3567,13 @@ const createTerminalResponseMessage = ({
     usage,
   });
   return attachTerminalTurnOutcome({
-    message: persistableMessage,
+    message:
+      turnSpend === undefined
+        ? persistableMessage
+        : {
+            ...persistableMessage,
+            metadata: { ...persistableMessage.metadata, turnSpend },
+          },
     turnOutcome: outcome,
   });
 };

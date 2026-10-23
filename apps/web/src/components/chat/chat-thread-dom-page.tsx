@@ -134,6 +134,7 @@ const ChatThreadDomPage = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId: organizationId,
+          approvalIdsAwaitedAtOpen: session.approvalIdsAwaitedAtOpen,
           alwaysApprovedTools: session.alwaysApprovedTools,
           conversationApprovedTools: session.conversationApprovedTools,
           confirmStoredApprovalGrant: session.confirmStoredApprovalGrant,
@@ -166,6 +167,7 @@ const ChatThreadDomPage = ({
             onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
             onOpenCreatedDocument={session.handleOpenCreatedDocument}
             onOpenPlaybook={session.handleOpenPlaybook}
+            onContinuePausedTurn={session.continuePausedTurn}
             onResend={session.resendLatestMessage}
             queuedMessageActions={{
               remove: session.removeQueuedMessage,

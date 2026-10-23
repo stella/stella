@@ -11,6 +11,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { CHAT_TURN_BUDGET } from "@stll/chat-limits";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -147,7 +149,9 @@ export const registerRecordedConversationSuite = (
     /** The user reloads the page. */
     | { type: "reload" }
     /** Retry on the latest answer. */
-    | { type: "retry" };
+    | { type: "retry" }
+    /** Continue on an answer paused on its turn budget: the message it sends. */
+    | { messageId: string; text: string; type: "continue" };
 
   type RecordedStep = {
     action: RecordedAction;
@@ -380,6 +384,16 @@ return { id: document.entityId, name: document.name };`;
     };
   };
 
+  /** What the web app's Continue sends, in the recording's language. */
+  const continueText = async (): Promise<string> => {
+    const catalog: unknown = await import(
+      new URL("../../../../web/src/i18n/langs/en.json", import.meta.url).href
+    );
+    return asTestRaw<{
+      default: { chat: { turnPaused: { continue: string } } };
+    }>(catalog).default.chat.turnPaused.continue;
+  };
+
   /**
    * The live view holds the tool call as far as the scripted model streams
    * it before going quiet at `point`: its arguments (`before-tool-end`), or
@@ -580,6 +594,30 @@ return { id: document.entityId, name: document.name };`;
           await recorder.client.resend();
         });
       },
+      // The turn reaches its budget at a step boundary and pauses; nothing
+      // runs until the user's Continue sends the next message.
+      "paused-turn": async (recorder) => {
+        recorder.harness.limitTurnBudget(recorder.threadId, {
+          maxToolCalls: 2,
+          maxPromptTokens: CHAT_TURN_BUDGET.maxPromptTokens,
+        });
+        await send(recorder, "List every template", [
+          asks([plainCall("call-1")]),
+          asks([plainCall("call-2")], "Some lists are long"),
+        ]);
+        recorder.harness.script(recorder.threadId, [
+          answers("Listed every template"),
+        ]);
+        const text = await continueText();
+        const messageId = Bun.randomUUIDv7();
+        await step(
+          recorder,
+          { messageId, text, type: "continue" },
+          async () => {
+            await recorder.client.sendUserMessage(messageId, text);
+          },
+        );
+      },
       "error-before-first-chunk": async (recorder) => {
         await send(recorder, "Draft the NDA", [
           { message: "Scripted provider failure", type: "fail-before-output" },
@@ -763,7 +801,9 @@ return { id: document.entityId, name: document.name };`;
     // A message the page never posted is a finding, never a recording: writing
     // it would make the committed file expect the page to drop it.
     const unposted = recording.steps.flatMap(({ action, exchanges }, index) =>
-      (action.type === "send" || action.type === "retry") &&
+      (action.type === "send" ||
+        action.type === "retry" ||
+        action.type === "continue") &&
       exchanges.length === 0
         ? [`step ${String(index + 1)} (${action.type})`]
         : [],
@@ -802,11 +842,13 @@ return { id: document.entityId, name: document.name };`;
           }
         }
       }
+      // Only orphans fail here: each scenario's own test requires its file,
+      // and a scenario of a suite that has not run yet has none to compare.
       expect(
-        readdirSync(FIXTURE_DIR)
-          .filter((name) => name.endsWith(RECORDING_EXTENSION))
-          .toSorted(),
-      ).toEqual(recordedFilenames.toSorted());
+        readdirSync(FIXTURE_DIR).filter(
+          (name) => name.endsWith(RECORDING_EXTENSION) && !recordings.has(name),
+        ),
+      ).toEqual([]);
     });
   });
 };

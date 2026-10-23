@@ -35,10 +35,12 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import type {
   ChatClientTools,
+  ChatWorkAwaitedAtOpen,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
   getAwaitedAssistantMessageId,
+  getChatWorkAwaitedAtOpen,
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
@@ -153,6 +155,11 @@ export type ChatActivitySession = {
 
 export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
+  /**
+   * The tool work the thread already waited on when this runtime was built
+   * from it (`getChatWorkAwaitedAtOpen`): it resumes only once the user acts.
+   */
+  readonly workAwaitedAtOpen: ChatWorkAwaitedAtOpen;
   resolveToolApproval: (
     response: {
       approved: boolean;
@@ -1140,6 +1147,7 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
+    workAwaitedAtOpen: getChatWorkAwaitedAtOpen(initialMessages),
     reportedUnknownActivityTypes: new Set<string>(),
     resolveToolApproval: async (response, options) => {
       if (isStoppedTurn()) {

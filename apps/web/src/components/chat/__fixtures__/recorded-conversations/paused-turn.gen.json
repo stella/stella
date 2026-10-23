@@ -1,0 +1,1055 @@
+{
+  "initialPage": {
+    "activeTurnId": null,
+    "messages": [],
+    "olderCursor": null,
+    "lastActivityAt": null
+  },
+  "scenario": "paused-turn",
+  "steps": [
+    {
+      "action": {
+        "messageId": "00000000-0000-7000-8000-000000000001",
+        "text": "List every template",
+        "type": "send"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-1",
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:01.000Z"
+                  }
+                },
+                "role": "user",
+                "content": "List every template"
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "List every template"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:02.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "List every template"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:03.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-1",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            }
+          },
+          "ended": "complete",
+          "response": {
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225625000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225626000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225627000,\"metadata\":{\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225628000,\"metadata\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"server\"}}\n\nid: 5\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{}\",\"timestamp\":1767225629000}\n\nid: 6\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225630000,\"metadata\":{\"tanstack\":{\"input\":{}}}}\n\nid: 7\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225631000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-1\",\"content\":\"{\\\"templates\\\":[{\\\"id\\\":\\\"00000000-0000-7000-8000-000000000004\\\",\\\"name\\\":\\\"Tmpl A\\\",\\\"fieldCount\\\":0,\\\"tags\\\":null,\\\"whenToUse\\\":null,\\\"whenNotToUse\\\":null}]}\",\"role\":\"tool\"}\n\nid: 8\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225632000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:06.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:07.000Z\"}}}\n\nid: 9\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Some lists are long\",\"timestamp\":1767225633000}\n\nid: 10\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225634000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 11\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-2\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225635000,\"metadata\":{\"stellaStepId\":\"call-2\",\"stellaToolExecutor\":\"server\"}}\n\nid: 12\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-2\",\"delta\":\"{}\",\"timestamp\":1767225636000}\n\nid: 13\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-2\",\"timestamp\":1767225637000,\"metadata\":{\"tanstack\":{\"input\":{}}}}\n\nid: 14\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225638000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-2\",\"content\":\"{\\\"templates\\\":[{\\\"id\\\":\\\"00000000-0000-7000-8000-000000000004\\\",\\\"name\\\":\\\"Tmpl A\\\",\\\"fieldCount\\\":0,\\\"tags\\\":null,\\\"whenToUse\\\":null,\\\"whenNotToUse\\\":null}]}\",\"role\":\"tool\"}\n\nid: 15\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225639000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "status": 200,
+            "turnId": "00000000-0000-7000-8000-000000000005"
+          },
+          "page": {
+            "activeTurnId": null,
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:08.000Z",
+                "edited": false,
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "revision": 0,
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "List every template"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:09.000Z",
+                "edited": false,
+                "id": "00000000-0000-7000-8000-000000000006",
+                "metadata": {
+                  "turnOutcome": {
+                    "type": "failed",
+                    "error": "unknown"
+                  },
+                  "turnTiming": {
+                    "status": "finished",
+                    "durationMs": 0
+                  }
+                },
+                "role": "assistant",
+                "revision": 0,
+                "parts": []
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:10.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "action": {
+        "messageId": "00000000-0000-7000-8000-000000000007",
+        "text": "Continue",
+        "type": "continue"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "threadId": "00000000-0000-7000-8000-000000000002",
+            "runId": "run-recorded-2",
+            "state": {},
+            "messages": [
+              {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:11.000Z"
+                  }
+                },
+                "role": "user",
+                "content": "List every template"
+              },
+              {
+                "id": "00000000-0000-7000-8000-000000000003",
+                "metadata": {
+                  "turnTiming": {
+                    "status": "running",
+                    "elapsedMs": 0,
+                    "startedAt": "2026-01-01T00:00:12.000Z",
+                    "durationMs": 0,
+                    "observedAt": "2026-01-01T00:00:13.000Z"
+                  },
+                  "tanstack": {
+                    "model": "gpt-5.4-mini",
+                    "createdAt": "2026-01-01T00:00:14.000Z",
+                    "toolCallMetadata": {
+                      "call-1": {
+                        "stellaStepId": "call-1",
+                        "stellaToolExecutor": "server"
+                      },
+                      "call-2": {
+                        "stellaStepId": "call-2",
+                        "stellaToolExecutor": "server"
+                      }
+                    }
+                  }
+                },
+                "role": "assistant",
+                "content": "Some lists are long",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "list_templates",
+                      "arguments": "{}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "list_templates",
+                      "arguments": "{}"
+                    }
+                  }
+                ]
+              },
+              {
+                "role": "tool",
+                "id": "tool-call-1",
+                "toolCallId": "call-1",
+                "content": "{\"templates\":[{\"id\":\"00000000-0000-7000-8000-000000000004\",\"name\":\"Tmpl A\",\"fieldCount\":0,\"tags\":null,\"whenToUse\":null,\"whenNotToUse\":null}]}",
+                "metadata": {
+                  "tanstack": {
+                    "toolResult": {}
+                  }
+                }
+              },
+              {
+                "role": "tool",
+                "id": "tool-call-2",
+                "toolCallId": "call-2",
+                "content": "{\"templates\":[{\"id\":\"00000000-0000-7000-8000-000000000004\",\"name\":\"Tmpl A\",\"fieldCount\":0,\"tags\":null,\"whenToUse\":null,\"whenNotToUse\":null}]}",
+                "metadata": {
+                  "tanstack": {
+                    "toolResult": {}
+                  }
+                }
+              },
+              {
+                "id": "00000000-0000-7000-8000-000000000007",
+                "metadata": {
+                  "tanstack": {
+                    "createdAt": "2026-01-01T00:00:15.000Z"
+                  }
+                },
+                "role": "user",
+                "content": "Continue"
+              }
+            ],
+            "tools": [
+              {
+                "name": "use-browser",
+                "description": "Execute an approved command in the stella Chrome extension.",
+                "parameters": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "open"
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "url"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "snapshot"
+                        },
+                        "textOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 400000
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "click"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "fill"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "select"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "page",
+                        "target",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "press-key"
+                        },
+                        "key": {
+                          "enum": [
+                            "ArrowDown",
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "Backspace",
+                            "Enter",
+                            "Escape",
+                            "Space",
+                            "Tab"
+                          ],
+                          "type": "string"
+                        },
+                        "page": {
+                          "type": "object",
+                          "properties": {
+                            "revision": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 128
+                            },
+                            "url": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            }
+                          },
+                          "required": [
+                            "revision",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "target": {
+                          "type": "object",
+                          "properties": {
+                            "context": {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            "href": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4096
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            "ref": {
+                              "type": "string",
+                              "maxLength": 256,
+                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
+                            },
+                            "role": {
+                              "type": "string",
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "ref",
+                            "role"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "key",
+                        "page",
+                        "target"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "const": "go-back"
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ],
+            "context": [],
+            "forwardedProps": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000007",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Continue"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:16.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-2",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            },
+            "data": {
+              "message": {
+                "id": "00000000-0000-7000-8000-000000000007",
+                "role": "user",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Continue"
+                  }
+                ],
+                "createdAt": "2026-01-01T00:00:17.000Z"
+              },
+              "sendMode": "rawOverride",
+              "runId": "run-recorded-2",
+              "threadId": "00000000-0000-7000-8000-000000000002"
+            }
+          },
+          "ended": "complete",
+          "response": {
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225640000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225641000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"role\":\"assistant\",\"timestamp\":1767225642000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:18.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:19.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"delta\":\"Listed every template\",\"timestamp\":1767225643000}\n\nid: 5\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"timestamp\":1767225644000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 6\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"timestamp\":1767225645000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 7\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225646000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"stop\"}}}\n\n",
+            "status": 200,
+            "turnId": "00000000-0000-7000-8000-000000000009"
+          },
+          "page": {
+            "activeTurnId": null,
+            "messages": [
+              {
+                "createdAt": "2026-01-01T00:00:20.000Z",
+                "edited": false,
+                "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
+                "revision": 0,
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "List every template"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:21.000Z",
+                "edited": false,
+                "id": "00000000-0000-7000-8000-000000000006",
+                "metadata": {
+                  "turnOutcome": {
+                    "type": "failed",
+                    "error": "unknown"
+                  },
+                  "turnTiming": {
+                    "status": "finished",
+                    "durationMs": 0
+                  }
+                },
+                "role": "assistant",
+                "revision": 0,
+                "parts": []
+              },
+              {
+                "createdAt": "2026-01-01T00:00:22.000Z",
+                "edited": false,
+                "id": "00000000-0000-7000-8000-000000000007",
+                "role": "user",
+                "revision": 0,
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Continue"
+                  }
+                ]
+              },
+              {
+                "createdAt": "2026-01-01T00:00:23.000Z",
+                "edited": false,
+                "id": "00000000-0000-7000-8000-000000000008",
+                "metadata": {
+                  "usage": {
+                    "totalTokens": 2,
+                    "promptTokens": 1,
+                    "completionTokens": 1
+                  },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
+                  },
+                  "turnSpend": {
+                    "promptTokens": 1
+                  },
+                  "refContext": {
+                    "refs": [],
+                    "version": 2,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
+                  "turnOutcome": {
+                    "type": "completed"
+                  },
+                  "turnTiming": {
+                    "status": "finished",
+                    "durationMs": 0
+                  }
+                },
+                "role": "assistant",
+                "revision": 0,
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Listed every template"
+                  }
+                ]
+              }
+            ],
+            "olderCursor": null,
+            "lastActivityAt": "2026-01-01T00:00:24.000Z"
+          }
+        }
+      ]
+    }
+  ],
+  "threadId": "00000000-0000-7000-8000-000000000002"
+}

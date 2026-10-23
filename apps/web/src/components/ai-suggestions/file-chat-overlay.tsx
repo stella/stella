@@ -1543,6 +1543,8 @@ const FileChatOverlayInner = ({
     isLoadingOlder,
     loadOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -2024,6 +2026,7 @@ const FileChatOverlayInner = ({
     }
 
     const partsToRun = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: chat.workAwaitedAtOpen,
       clientStatus,
       executedIds,
       messageParts: message.parts,
@@ -2035,7 +2038,7 @@ const FileChatOverlayInner = ({
         "file-chat-overlay.run-folio-agent-doc-tool-call",
       );
     }
-  }, [clientStatus, messages, runFolioAgentDocToolCall]);
+  }, [chat, clientStatus, messages, runFolioAgentDocToolCall]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
@@ -2512,6 +2515,7 @@ const FileChatOverlayInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -2565,6 +2569,7 @@ const FileChatOverlayInner = ({
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onOpenPlaybook={handleOpenPlaybook}
+              onContinuePausedTurn={continuePausedTurn}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

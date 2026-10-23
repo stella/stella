@@ -657,6 +657,8 @@ const TemplateStudioChatInner = ({
     error,
     messages,
     refreshAnswers,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -1333,6 +1335,7 @@ const TemplateStudioChatInner = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -1367,6 +1370,7 @@ const TemplateStudioChatInner = ({
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
               onOpenPlaybook={handleOpenPlaybook}
+              onContinuePausedTurn={continuePausedTurn}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

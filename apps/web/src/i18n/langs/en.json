@@ -1787,6 +1787,10 @@
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
     },
+    "turnPaused": {
+      "continue": "Continue",
+      "status": "Paused after {count, plural, one {# step} other {# steps}}"
+    },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
     "usageFallbackNotice": "Daily AI allowance used — replies continue on the standard model.",

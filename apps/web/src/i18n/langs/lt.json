@@ -1787,6 +1787,10 @@
       "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
       "replyReadyTitle": "Atsakymas paruoštas"
     },
+    "turnPaused": {
+      "continue": "Tęsti",
+      "status": "Pristabdyta po {count, plural, one {# žingsnio} few {# žingsnių} many {# žingsnio} other {# žingsnių}}"
+    },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
     "usageFallbackNotice": "Dienos DI kvota išnaudota — atsakymai toliau teikiami standartiniu modeliu.",

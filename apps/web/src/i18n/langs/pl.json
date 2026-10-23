@@ -1787,6 +1787,10 @@
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
     },
+    "turnPaused": {
+      "continue": "Kontynuuj",
+      "status": "Wstrzymano po {count, plural, one {# kroku} few {# krokach} many {# krokach} other {# kroku}}"
+    },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
     "usageFallbackNotice": "Dzienny limit AI wyczerpany — odpowiedzi działają dalej na modelu standardowym.",

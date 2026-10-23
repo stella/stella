@@ -1071,6 +1071,7 @@ test("native resume identity survives persistence only while the turn awaits the
     cancelled: { type: "cancelled", reason: "user-stop" },
     failed: { type: "failed", error: "unknown" },
     interrupted: { type: "interrupted", reason: "owner-lost" },
+    paused: { type: "paused", reason: "tool-calls", toolCalls: 50 },
   } as const satisfies Record<ChatTurnOutcome["type"], ChatTurnOutcome>;
   for (const turnOutcome of Object.values(outcomes)) {
     const settled = attachTerminalTurnOutcome({

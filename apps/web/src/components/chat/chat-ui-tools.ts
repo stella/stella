@@ -783,6 +783,43 @@ export const getAwaitedAssistantMessageId = (
   findAwaitedAssistantMessageId(messages, isUserAnswerablePart);
 
 /**
+ * The tool work a thread already waits on when a page opens it: approval
+ * cards, and client-run document tools no result answers yet. The page
+ * resumes none of it on its own (no grant or page policy answers such a
+ * card, the file overlay runs no such call): a reopened thread continues
+ * tool work only once the user acts. Work that arrives while the page is
+ * open is not in it.
+ */
+export type ChatWorkAwaitedAtOpen = {
+  approvalIds: ReadonlySet<string>;
+  clientToolCallIds: ReadonlySet<string>;
+};
+
+export const getChatWorkAwaitedAtOpen = (
+  messages: readonly PersistedChatMessage[],
+): ChatWorkAwaitedAtOpen => {
+  const parts = messages.flatMap((message) =>
+    message.role === "assistant" ? message.parts : [],
+  );
+  return {
+    approvalIds: new Set(
+      parts.flatMap((part) =>
+        part.type === "tool-call" &&
+        part.state === "approval-requested" &&
+        part.approval !== undefined
+          ? [part.approval.id]
+          : [],
+      ),
+    ),
+    clientToolCallIds: new Set(
+      parts.flatMap((part) =>
+        isUnresolvedFolioAgentDocToolCallPart(part) ? [part.id] : [],
+      ),
+    ),
+  };
+};
+
+/**
  * An unresolved auto-run folio-agents tool-call part (a read tool or
  * `suggest_changes`), narrowed by {@link isUnresolvedFolioAgentDocToolCallPart}.
  */
@@ -983,6 +1020,8 @@ export const isChatClientRequestActive = (status: ChatClientState): boolean => {
 };
 
 type SelectIdleFolioAgentDocToolCallPartsOptions = {
+  /** What the thread waited on when the page opened it: never run here. */
+  awaitedAtOpen: ChatWorkAwaitedAtOpen;
   clientStatus: ChatClientState;
   executedIds: ReadonlySet<string>;
   messageParts: readonly ChatPart[];
@@ -999,13 +1038,17 @@ type SelectIdleFolioAgentDocToolCallPartsOptions = {
  * `suggest_changes` input state.
  */
 export const selectIdleFolioAgentDocToolCallParts = ({
+  awaitedAtOpen,
   clientStatus,
   executedIds,
   messageParts,
 }: SelectIdleFolioAgentDocToolCallPartsOptions): UnresolvedFolioAgentDocToolCallPart[] =>
   isChatClientRequestActive(clientStatus)
     ? []
-    : selectUnresolvedFolioAgentDocToolCallParts(messageParts, executedIds);
+    : selectUnresolvedFolioAgentDocToolCallParts(
+        messageParts,
+        executedIds,
+      ).filter(({ id }) => !awaitedAtOpen.clientToolCallIds.has(id));
 
 type ServerChatTurnOutcome = NonNullable<
   NonNullable<ChatMessage["metadata"]>["turnOutcome"]
@@ -1045,11 +1088,24 @@ export const resolveChatAssistantTurnOutcome = (
     case "completed":
     case "failed":
     case "interrupted":
+    case "paused":
       return outcome;
     default:
       outcome satisfies never;
       return panic(`Unhandled outcome: ${String(outcome)}`);
   }
+};
+
+/**
+ * The pause a stored answer ended on: its turn reached its budget, and the
+ * user's next message (Continue sends one) runs the next step. Null for any
+ * other answer.
+ */
+export const getPausedChatTurn = (
+  message: ChatAssistantTurnMessage | null,
+): Extract<ServerChatTurnOutcome, { type: "paused" }> | null => {
+  const outcome = resolveChatAssistantTurnOutcome(message);
+  return outcome.type === "paused" ? outcome : null;
 };
 
 export const getChatAssistantTurnError = (
@@ -1073,6 +1129,7 @@ export const getChatAssistantTurnError = (
     case "incomplete":
     case "interrupted":
     case "legacy-completed":
+    case "paused":
       return undefined;
     default:
       outcome satisfies never;

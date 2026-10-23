@@ -7,6 +7,7 @@ import {
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  CHAT_TURN_STATUS_OF_OUTCOME,
   findUnsettledStoredToolCalls,
   isClientAnswerableToolCall,
 } from "@/api/handlers/chat/chat-turn-settlement";
@@ -241,7 +242,7 @@ const turnOutcomeMismatchesOf = ({
     const stored = answer.metadata?.turnOutcome;
     if (
       stored !== undefined &&
-      stored.type === expected.type &&
+      CHAT_TURN_STATUS_OF_OUTCOME[stored.type] === turn.status &&
       storedReason(stored) === expected.reason
     ) {
       return [];

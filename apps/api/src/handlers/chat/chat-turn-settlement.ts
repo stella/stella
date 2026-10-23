@@ -13,6 +13,7 @@ import type {
   ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { isRecord } from "@/api/lib/type-guards";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
@@ -87,6 +88,9 @@ const OUTCOME_POLICY = {
   completed: "none",
   failed: "stopped",
   interrupted: "stopped",
+  // The budget ends the loop at a step boundary, after every call of the
+  // step has its result.
+  paused: "none",
 } as const satisfies Record<OutcomeType, OpenCallPolicy>;
 
 /**
@@ -101,6 +105,7 @@ export const CUT_SHORT_OUTCOME = {
   completed: false,
   failed: false,
   interrupted: true,
+  paused: false,
 } as const satisfies Record<OutcomeType, boolean>;
 
 type CutShortOutcomeType = {
@@ -113,6 +118,20 @@ export type CutShortOutcome = Extract<
   ChatTurnOutcome,
   { type: CutShortOutcomeType }
 >;
+
+/**
+ * The status a turn's row settles as for each outcome its message stores. A
+ * paused turn owes nothing and runs nothing, so its row is completed; the
+ * message carries the pause.
+ */
+export const CHAT_TURN_STATUS_OF_OUTCOME = {
+  "awaiting-user": "awaiting-user",
+  cancelled: "cancelled",
+  completed: "completed",
+  failed: "failed",
+  interrupted: "interrupted",
+  paused: "completed",
+} as const satisfies Record<OutcomeType, ChatTurnStatus>;
 
 export const isCutShortOutcome = (
   outcome: ChatTurnOutcome,

@@ -249,6 +249,8 @@ export const ChatThreadPage = ({
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -605,6 +607,7 @@ export const ChatThreadPage = ({
         <ChatApprovalContext
           value={{
             activeOrganizationId,
+            approvalIdsAwaitedAtOpen,
             alwaysApprovedTools,
             conversationApprovedTools,
             confirmStoredApprovalGrant,
@@ -703,6 +706,7 @@ export const ChatThreadPage = ({
                         }
                         onOpenCreatedDocument={handleOpenCreatedDocument}
                         onOpenPlaybook={handleOpenPlaybook}
+                        onContinuePausedTurn={continuePausedTurn}
                         onResend={resendLatestMessage}
                         onSendWithoutAnonymization={sendWithoutAnonymization}
                         queuedMessageActions={{
