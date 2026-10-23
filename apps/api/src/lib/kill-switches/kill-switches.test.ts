@@ -153,6 +153,7 @@ describe("kill switch admission", () => {
 
       const dispatch = await admitModelDispatch({
         organizationId,
+        userId,
         actionKind,
         organizationStateDb: testOrganizationStateDb,
         signal: new AbortController().signal,
