@@ -1462,6 +1462,20 @@ describe("extractCitations", () => {
     ).toBe("sygn. akt IA Ca 835/97");
   });
 
+  test("extracts a Polish case number whose division code carries a trailing dot", () => {
+    const single = "w wyroku z 3 maja 2001 r. (sygn. akt II P. 123/01) sąd";
+    const twoWord = "postanowieniem sygn. akt III A Ua. 45/10 oddalono";
+    const citations = extractCitations([{ index: 0, text: single }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("sygn. akt II P. 123/01");
+    expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(
+      bareCitationKey("sygn. akt II P 123/01"),
+    );
+    expect(
+      extractCitations([{ index: 0, text: twoWord }])[0]?.citationText,
+    ).toBe("sygn. akt III A Ua. 45/10");
+  });
+
   test("dedupes a Polish case number cited both glued and spaced", () => {
     // The same civil-division case is cited once with the roman numeral
     // glued to the registry letter ("IC 1523/96") and once spaced ("I C
