@@ -613,6 +613,54 @@ test(
 );
 
 test(
+  "a staged count that expires before the final swap is counted again, not published",
+  async () => {
+    await swappedRefresh(refreshDb);
+    const before = await snapshot();
+    const countries = PUBLIC_CASE_LAW_PAGE_COUNTRIES.length;
+    // Stage every country but the last, one per run.
+    for (let run = 0; run < countries - 1; run += 1) {
+      // db-await-in-loop: consecutive scheduler runs, each staging one country
+      await refreshCaseLawSitemapShards(refreshDb, { clock: spentClock() });
+    }
+    const [first] = await stagedCountries();
+    if (first === undefined) {
+      return panic("Expected a staged country.");
+    }
+    let transactions = 0;
+    // The first staged count expires after the run reads which counts are
+    // fresh and before its swap, as a count just under its limit would
+    // while the last country is walked.
+    const ageing = {
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => {
+        transactions += 1;
+        if (transactions === 2) {
+          await db
+            .update(caseLawSitemapShardCounts)
+            .set({
+              countedAt: sql`now() - make_interval(secs => ${SITEMAP_COUNT_MAX_AGE_MS / 1000 + 60})`,
+            })
+            .where(eq(caseLawSitemapShardCounts.country, first));
+        }
+        return await db.transaction(work);
+      },
+    };
+    // SAFETY: forwards every transaction to the PGlite handle.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
+    const ageingDb = ageing as unknown as RefreshDb;
+
+    const last = await refreshCaseLawSitemapShards(ageingDb);
+
+    expect(last).toMatchObject({ type: "counting", remaining: 1 });
+    expect(await snapshot()).toEqual(before);
+    expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
+      type: "swapped",
+    });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
   "a swap that finds a country unstaged replaces nothing",
   async () => {
     await swappedRefresh(refreshDb);

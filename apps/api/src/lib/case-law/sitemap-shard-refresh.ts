@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { inArray, sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -365,6 +365,9 @@ const toStagedMonths = (months: CountryMonths): StagedMonth[] =>
  */
 export const SITEMAP_COUNT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
+/** A staged count is usable while it is younger than its maximum age. */
+const freshlyStaged = sql`${caseLawSitemapShardCounts.countedAt} > now() - make_interval(secs => ${SITEMAP_COUNT_MAX_AGE_MS / 1000})`;
+
 type StageCountryOptions = {
   db: RefreshDb;
   budget: SitemapRefreshBudget;
@@ -411,9 +414,7 @@ const readFreshlyStagedCountries = async (
     const rows = await tx
       .select({ country: caseLawSitemapShardCounts.country })
       .from(caseLawSitemapShardCounts)
-      .where(
-        sql`${caseLawSitemapShardCounts.countedAt} > now() - make_interval(secs => ${SITEMAP_COUNT_MAX_AGE_MS / 1000})`,
-      );
+      .where(freshlyStaged);
     return new Set(rows.map(({ country }) => country));
   });
 
@@ -474,8 +475,10 @@ type SwapOutcome =
  * one transaction, so a reader sees the previous snapshot or this one, never
  * a mix, and clear the staged counts for the next cycle. The table lock admits
  * readers and queues a second refresh's swap behind this one. A run that
- * finds a public country unstaged (an overlapping run swapped and cleared the
- * counts meanwhile) replaces nothing, so a snapshot never omits a country.
+ * finds a public country unstaged or its count expired (an overlapping run
+ * swapped and cleared the counts, or the count aged during this run's walk)
+ * replaces nothing, so a snapshot never omits a country or mixes counts
+ * further apart than their maximum age.
  */
 const swapSnapshot = async (
   db: RefreshDb,
@@ -500,9 +503,14 @@ const swapSnapshot = async (
       })
       .from(caseLawSitemapShardCounts)
       .where(
-        inArray(caseLawSitemapShardCounts.country, [
-          ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
-        ]),
+        and(
+          inArray(caseLawSitemapShardCounts.country, [
+            ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+          ]),
+          // A count that aged past its limit while later countries were
+          // walked is missing too; the next run counts it again.
+          freshlyStaged,
+        ),
       );
     const missing = PUBLIC_CASE_LAW_PAGE_COUNTRIES.length - staged.length;
     if (missing > 0) {
