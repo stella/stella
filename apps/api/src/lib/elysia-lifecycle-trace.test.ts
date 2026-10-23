@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Elysia, t } from "elysia";
+import { Elysia, ElysiaError, t } from "elysia";
 
 const SECURITY_HEADERS = {
   "referrer-policy": "no-referrer",
@@ -38,6 +38,9 @@ type LifecycleFixture = {
 
 const scenarioFromRequest = (request: Request): Scenario => {
   const segment = new URL(request.url).pathname.split("/").at(-1);
+  if (segment === undefined) {
+    throw new TypeError("Unknown lifecycle scenario: undefined");
+  }
   switch (segment) {
     case "success":
     case "auth":
@@ -46,7 +49,7 @@ const scenarioFromRequest = (request: Request): Scenario => {
     case "thrown-error":
       return segment;
     default:
-      throw new TypeError(`Unknown lifecycle scenario: ${String(segment)}`);
+      throw new TypeError(`Unknown lifecycle scenario: ${segment}`);
   }
 };
 
@@ -72,6 +75,7 @@ const buildApp = (fixture: LifecycleFixture) =>
           "stella.session=forwarded; Path=/; HttpOnly; SameSite=Lax";
         return { code: "unauthorized", message: "Authentication required" };
       }
+      return undefined;
     })
     .onAfterHandle(({ request }) => {
       fixture.trace.push("afterHandle");
@@ -80,9 +84,9 @@ const buildApp = (fixture: LifecycleFixture) =>
         fixture.trace.push("refund");
       }
     })
-    .onError(({ code, set }) => {
+    .onError(({ error, set }) => {
       fixture.trace.push("error");
-      if (code === "VALIDATION") {
+      if (error instanceof ElysiaError && error.code === "validation") {
         set.status = 422;
         return { code: "validation_error", message: "Invalid request" };
       }
@@ -97,6 +101,7 @@ const buildApp = (fixture: LifecycleFixture) =>
     })
     .post(
       "/trace/:scenario",
+      { body: t.Object({ value: t.String() }) },
       ({ request, set }) => {
         fixture.trace.push("handler");
         switch (scenarioFromRequest(request)) {
@@ -112,9 +117,10 @@ const buildApp = (fixture: LifecycleFixture) =>
             throw new TypeError(
               "Scenario should have completed before handler",
             );
+          default:
+            throw new TypeError("Unknown lifecycle scenario");
         }
       },
-      { body: t.Object({ value: t.String() }) },
     );
 
 const request = (scenario: Scenario, body: unknown) =>
@@ -260,7 +266,7 @@ describe("Elysia request lifecycle", () => {
         rateLimited ? "9" : null,
       );
       expect(response.headers.get("set-cookie")).toBe(cookie);
-      expect(fixture.trace).toEqual(trace);
+      expect(fixture.trace).toEqual([...trace]);
       expect(fixture.refunded).toBe(refunded);
       expect(fixture.completed).toBe(1);
     },

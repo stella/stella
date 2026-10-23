@@ -153,11 +153,9 @@ const provisionPreviewSchema = t.Object({
   truncated: t.Boolean(),
 });
 
-type ProvisionCapabilitySchemas = {
-  readonly [Kind in ProvisionLinkCapability["type"]]: TSchema & {
-    static: Extract<ProvisionLinkCapability, { type: Kind }>;
-  };
-};
+type ProvisionCapabilitySchemas = Readonly<
+  Record<ProvisionLinkCapability["type"], TSchema>
+>;
 
 const provisionCapabilitySchemas = {
   supported: t.Object({

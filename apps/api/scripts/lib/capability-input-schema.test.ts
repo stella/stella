@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { KindGuard, Type } from "typebox";
+import { IsObject, Type } from "typebox";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
 import type { AdvertisedSchemas } from "../../src/mcp/advertised-schema";
@@ -27,7 +27,7 @@ test("static conditional schemas project canonical inputs before public naming a
       projectInputSchema: (schemas: AdvertisedSchemas) => {
         projections += 1;
         expect(schemas.body).toBe(body);
-        if (schemas.body === undefined || !KindGuard.IsObject(schemas.body)) {
+        if (schemas.body === undefined || !IsObject(schemas.body)) {
           throw new Error("Expected canonical TypeBox body");
         }
         expect(schemas.body.properties["workspaceId"]).toBeDefined();

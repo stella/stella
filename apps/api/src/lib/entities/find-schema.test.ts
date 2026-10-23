@@ -27,10 +27,6 @@ describe("find schema", () => {
 describe("find term length", () => {
   const scope = { propertyIds: [], type: "all" };
 
-  test("the floor is the contract's, not a copy of it", () => {
-    expect(tFind.properties.term.minLength).toBe(ENTITY_FIND_TERM_MIN_LENGTH);
-  });
-
   test("a term one character short is rejected, one at the floor accepted", () => {
     const short = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1);
     const enough = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH);

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { KindGuard } from "typebox";
+import type { TSchema } from "typebox";
 
 import { isRecord } from "../../src/lib/type-guards";
 import { advertisedSchema } from "../../src/mcp/advertised-schema";
@@ -22,6 +22,9 @@ type ConditionalSchemaRequirement = {
   projectInputSchema: (schemas: AdvertisedSchemas) => AdvertisedSchemas;
 };
 
+const isTypeBoxSchema = (value: unknown): value is TSchema =>
+  isRecord(value) && typeof value["~kind"] === "string";
+
 const hasSchemaProjection = (
   value: unknown,
 ): value is ConditionalSchemaRequirement =>
@@ -31,7 +34,7 @@ const canonicalSchemaPart = (value: unknown) => {
   if (value === undefined) {
     return undefined;
   }
-  if (!KindGuard.IsSchema(value)) {
+  if (!isTypeBoxSchema(value)) {
     return panic("Conditional feature access requires TypeBox input schemas");
   }
   return value;
@@ -65,7 +68,7 @@ const staticInputSchemas = (config: Record<string, unknown>) => {
  * schema is left as the handler declared it.
  */
 const advertisedPart = (part: unknown): unknown =>
-  KindGuard.IsSchema(part) ? advertisedSchema(part) : part;
+  isTypeBoxSchema(part) ? advertisedSchema(part) : part;
 
 /** Schema keywords whose value is itself a schema node. */
 const SCHEMA_NODE_KEYWORDS = ["items", "additionalProperties", "not"] as const;

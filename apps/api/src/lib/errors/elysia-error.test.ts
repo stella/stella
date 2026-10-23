@@ -14,8 +14,8 @@ const driftedBody = (): { ok: string } => JSON.parse('{"unexpected":true}');
 // A real Elysia app, so the answers stay bound to the errors the framework
 // actually raises rather than to a hand-written stand-in for them.
 const app = new Elysia()
-  .onError(({ code, error, set }) => {
-    const answer = elysiaErrorAnswer(code, error);
+  .onError(({ error, set }) => {
+    const answer = elysiaErrorAnswer(undefined, error);
     set.status = answer.status;
     return elysiaErrorBody(answer);
   })

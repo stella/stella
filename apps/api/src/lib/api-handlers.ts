@@ -2,7 +2,7 @@ import type { Err } from "better-result";
 import { panic, Result, UnhandledException } from "better-result";
 import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaStatus, status, t } from "elysia";
-import type { Static, TSchema } from "typebox";
+import type { Static, StaticDecode, TSchema } from "typebox";
 
 import type { ModelTask } from "@stll/ai-catalog";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -2250,7 +2250,7 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  | ElysiaStatus<infer _Code, infer _Body>
+  | ElysiaStatus<infer _Code, infer _Body, infer _Status>
   | Response
   ? never
   : TResult;
@@ -2297,13 +2297,37 @@ export type ExactSuccessSchemaGuard<TConfig, TResult> = TConfig extends {
  * whose result type is still generic where it calls this one; that factory
  * applies `ExactSuccessSchemaGuard` on its own entry points instead.
  */
-export const createSafeUncheckedBoundedPublicHandler = <
+type PublicHandlerWireResult<TConfig, TResult> = TConfig extends {
+  response: infer Responses extends Readonly<Record<number, TSchema>>;
+}
+  ? {
+      [StatusCode in keyof Responses]: StatusCode extends number
+        ? StatusCode extends 200
+          ? StaticDecode<Responses[StatusCode]>
+          : ElysiaStatus<StatusCode, StaticDecode<Responses[StatusCode]>>
+        : never;
+    }[keyof Responses]
+  : SafeHandlerResult<TResult>;
+
+export function createSafeUncheckedBoundedPublicHandler<
   TConfig extends PublicHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
-) => {
+): {
+  config: TConfig;
+  handler: (
+    ctx: PublicHandlerContext<TConfig>,
+  ) => Promise<PublicHandlerWireResult<TConfig, TResult>>;
+};
+export function createSafeUncheckedBoundedPublicHandler<
+  TConfig extends PublicHandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
+) {
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
@@ -2344,7 +2368,7 @@ export const createSafeUncheckedBoundedPublicHandler = <
     readTimeout: "route-class",
   });
   return recordSafeHandler(definition);
-};
+}
 
 /**
  * A public corpus route: every error answers with the bounded public body

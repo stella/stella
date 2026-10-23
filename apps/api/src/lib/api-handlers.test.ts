@@ -1,5 +1,6 @@
 import { Result, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { ElysiaStatus } from "elysia";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
@@ -167,7 +168,7 @@ describe("createSafeRootHandler usage preflight", () => {
       );
       const result = await endpoint.handler(createContext(endpoint, safeDb));
       expect(bodyRan).toBe(false);
-      if (!("~status" in result)) {
+      if (!(result instanceof ElysiaStatus)) {
         throw new TypeError("Expected static admission refusal");
       }
       expect({ status: result.status, body: result.response }).toEqual({
@@ -247,7 +248,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const result = await endpoint.handler(createContext(endpoint, safeDb));
 
       expect(meteredHandlerCalled).toBe(false);
-      if (!("~status" in result)) {
+      if (!(result instanceof ElysiaStatus)) {
         throw new Error("Expected usage preflight to return a status response");
       }
       expect(result.status).toBe(500);
@@ -412,7 +413,7 @@ describe("createSafeRootHandler member AI access", () => {
       }),
     );
     expect(bodyRan).toBe(false);
-    if (!("~status" in result)) {
+    if (!(result instanceof ElysiaStatus)) {
       throw new HandlerError({
         message: "Expected an AI access response",
         status: 500,
@@ -451,7 +452,7 @@ describe("createSafeRootHandler member AI access", () => {
       );
 
       expect(bodyRan).toBe(false);
-      if (!("~status" in result)) {
+      if (!(result instanceof ElysiaStatus)) {
         throw new Error("expected a status response");
       }
       expect({ status: result.status, body: result.response }).toEqual({
@@ -516,7 +517,7 @@ describe("createSafeRootHandler permission gate", () => {
     );
 
     expect(bodyRan).toBe(false);
-    if (!("~status" in result)) {
+    if (!(result instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(result.status).toBe(403);
@@ -593,7 +594,7 @@ describe("request.failed severity", () => {
       }),
     );
 
-    if (!("~status" in response)) {
+    if (!(response instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(response.status).toBe(400);
@@ -609,7 +610,7 @@ describe("request.failed severity", () => {
       new HandlerError({ status: 400, message: "Invalid chat tool arguments" }),
     );
 
-    if (!("~status" in response)) {
+    if (!(response instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(response.status).toBe(400);
@@ -630,7 +631,7 @@ describe("request.failed severity", () => {
       new DatabaseError({ message: "connection closed" }),
     );
 
-    if (!("~status" in response)) {
+    if (!(response instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(response.status).toBe(500);
@@ -699,7 +700,7 @@ describe("a mapped status survives the transport wrapper", () => {
             return Result.err(wrapped);
           });
           expect(response).toMatchObject({
-            code: metadata.status,
+            status: metadata.status,
             response: {
               code: refusal.code,
               message: metadata.message,
@@ -728,7 +729,7 @@ describe("a mapped status survives the transport wrapper", () => {
         return Result.err(new UnhandledException({ cause: error }));
       });
       expect(response).toMatchObject({
-        code: 500,
+        status: 500,
         response: {
           code: "internal_server_error",
           message: "Internal server error",
@@ -764,7 +765,7 @@ describe("a mapped status survives the transport wrapper", () => {
       );
     });
 
-    if (!("~status" in response)) {
+    if (!(response instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(response.status).toBe(422);
@@ -793,7 +794,7 @@ describe("a mapped status survives the transport wrapper", () => {
       );
     });
     expect(response).toMatchObject({
-      code: 422,
+      status: 422,
       response: {
         code: "clause_directives_invalid",
         retryable: false,
@@ -817,7 +818,7 @@ describe("a mapped status survives the transport wrapper", () => {
       return Result.ok({ value });
     });
 
-    if (!("~status" in response)) {
+    if (!(response instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(response.status).toBe(503);
@@ -830,7 +831,7 @@ describe("a mapped status survives the transport wrapper", () => {
       throw upstreamRefusal();
     });
 
-    if (!("~status" in response)) {
+    if (!(response instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(response.status).toBe(503);
@@ -847,7 +848,7 @@ describe("a mapped status survives the transport wrapper", () => {
       return Result.ok({ value });
     });
 
-    if (!("~status" in response)) {
+    if (!(response instanceof ElysiaStatus)) {
       throw new Error("expected a status response");
     }
     expect(response.status).toBe(500);
@@ -1106,7 +1107,7 @@ describe("provider failure HTTP response", () => {
         const response = await endpoint.handler(
           createContext(endpoint, safeDb),
         );
-        if (!("~status" in response)) {
+        if (!(response instanceof ElysiaStatus)) {
           throw new TypeError("The fixture returns a status response");
         }
         expect(response.status).toBe(502);
@@ -1156,7 +1157,7 @@ test("BYOK provider diagnostics cross HTTP as a top-level field without entering
   const safeDb: SafeDb = async <T>() =>
     Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
   const response = await endpoint.handler(createContext(endpoint, safeDb));
-  if (!("~status" in response)) {
+  if (!(response instanceof ElysiaStatus)) {
     throw new TypeError("Expected error response");
   }
   expect(response.response).toMatchObject({

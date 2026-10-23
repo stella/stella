@@ -1,3 +1,4 @@
+import type { ElysiaStatus } from "elysia";
 import { t } from "elysia";
 import type { TSchema } from "typebox";
 
@@ -46,10 +47,14 @@ import {
 } from "@/api/lib/search/response-text-bounds";
 import type { FacetBucket } from "@/api/lib/search/types";
 
-type Success<T extends (...args: never[]) => unknown> = Exclude<
-  Awaited<ReturnType<T>>,
-  { code: unknown; response: unknown } | { message: string }
->;
+type Success<T extends (...args: never[]) => unknown> =
+  Awaited<ReturnType<T>> extends infer Result
+    ? Result extends ElysiaStatus<infer _Code, infer _Body, infer _Status>
+      ? never
+      : Result extends { message: string }
+        ? never
+        : Result
+    : never;
 
 // Display caps cover the stored identity columns at four bytes per code point.
 const identity = {

@@ -7,7 +7,7 @@
  * string.
  */
 
-import { ValidationError } from "elysia";
+import { ElysiaError, ValidationError } from "elysia";
 
 import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
 import type {
@@ -20,10 +20,13 @@ import { isResponseValidationError } from "@/api/lib/errors/response-validation"
 import type { FrameworkFailure } from "@/api/lib/observability/failure";
 
 const ELYSIA_ERROR_CODE = {
-  validation: "VALIDATION",
-  notFound: "NOT_FOUND",
-  parse: "PARSE",
+  validation: ["VALIDATION", "validation"],
+  notFound: ["NOT_FOUND", "not-found"],
+  parse: ["PARSE", "parse"],
 } as const;
+
+const frameworkErrorCode = (code: unknown, error: unknown) =>
+  code ?? (error instanceof ElysiaError ? error.code : undefined);
 
 type ElysiaErrorAnswer = {
   status: number;
@@ -46,30 +49,56 @@ const lengthBound = (schema: unknown, key: "maxLength" | "minLength") => {
 const issueFor = (
   path: string,
   schema: unknown,
-  value: unknown,
+  required: boolean,
 ): ApiValidationIssue => {
   const field = path.replace(/^\//u, "").replaceAll("/", ".");
   const constraint = ((): {
     constraint: ApiValidationConstraint;
     limit?: number;
   } => {
-    if (value === undefined) {
+    if (required) {
       return { constraint: "required" };
     }
-    if (typeof value === "string") {
-      const max = lengthBound(schema, "maxLength");
-      if (max !== undefined && value.length > max) {
-        return { constraint: "maxLength", limit: max };
-      }
-      const min = lengthBound(schema, "minLength");
-      if (min !== undefined && value.length < min) {
-        return { constraint: "minLength", limit: min };
-      }
+    const max = lengthBound(schema, "maxLength");
+    if (max !== undefined) {
+      return { constraint: "maxLength", limit: max };
+    }
+    const min = lengthBound(schema, "minLength");
+    if (min !== undefined) {
+      return { constraint: "minLength", limit: min };
     }
     return { constraint: "invalid" };
   })();
   return { field, ...constraint };
 };
+
+const schemaAtPath = (schema: unknown, path: string): unknown => {
+  let current = schema;
+  for (const segment of path.replace(/^\//u, "").split("/")) {
+    if (segment === "" || typeof current !== "object" || current === null) {
+      return current;
+    }
+    const properties: unknown = Reflect.get(current, "properties");
+    if (typeof properties !== "object" || properties === null) {
+      return current;
+    }
+    current = Reflect.get(properties, segment);
+  }
+  return current;
+};
+
+const requiredProperties = (params: unknown): readonly string[] => {
+  if (typeof params !== "object" || params === null) {
+    return [];
+  }
+  const required: unknown = Reflect.get(params, "requiredProperties");
+  return Array.isArray(required)
+    ? required.filter((value): value is string => typeof value === "string")
+    : [];
+};
+
+const validationDetails = (details: unknown): readonly unknown[] =>
+  Array.isArray(details) ? details : [];
 
 /**
  * The failing fields of a rejected request, deduplicated, without the values
@@ -81,16 +110,32 @@ const requestValidationIssues = (error: unknown): ApiValidationIssue[] => {
   }
   const seen = new Set<string>();
   const issues: ApiValidationIssue[] = [];
-  for (const { path, schema, value } of error.all) {
-    const issue = issueFor(path, schema, value);
-    const key = `${issue.field}:${issue.constraint}`;
-    if (seen.has(key)) {
+  for (const detail of validationDetails(error.all)) {
+    if (typeof detail !== "object" || detail === null) {
       continue;
     }
-    seen.add(key);
-    issues.push(issue);
-    if (issues.length === MAX_VALIDATION_ISSUES) {
-      break;
+    const path: unknown = Reflect.get(detail, "path");
+    if (typeof path !== "string") {
+      continue;
+    }
+    const params: unknown = Reflect.get(detail, "params");
+    const required = requiredProperties(params);
+    const paths = required.length > 0 ? required : [path];
+    for (const issuePath of paths) {
+      const issue = issueFor(
+        issuePath,
+        schemaAtPath(error.schema, issuePath),
+        required.length > 0,
+      );
+      const key = `${issue.field}:${issue.constraint}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      issues.push(issue);
+      if (issues.length === MAX_VALIDATION_ISSUES) {
+        return issues;
+      }
     }
   }
   return issues;
@@ -126,17 +171,24 @@ const MALFORMED_REQUEST_ANSWER = {
  * an answered client outcome.
  */
 export const elysiaErrorAnswer = (
-  code: string | number,
+  code: string | number | undefined,
   error: unknown,
 ): ElysiaErrorAnswer => {
-  switch (code) {
-    case ELYSIA_ERROR_CODE.validation:
+  const resolvedCode = frameworkErrorCode(code, error);
+  if (resolvedCode === undefined) {
+    return INTERNAL_ANSWER;
+  }
+  switch (resolvedCode) {
+    case ELYSIA_ERROR_CODE.validation[0]:
+    case ELYSIA_ERROR_CODE.validation[1]:
       return isResponseValidationError(error)
         ? INTERNAL_ANSWER
         : { ...INVALID_REQUEST_ANSWER, issues: requestValidationIssues(error) };
-    case ELYSIA_ERROR_CODE.notFound:
+    case ELYSIA_ERROR_CODE.notFound[0]:
+    case ELYSIA_ERROR_CODE.notFound[1]:
       return NOT_FOUND_ANSWER;
-    case ELYSIA_ERROR_CODE.parse:
+    case ELYSIA_ERROR_CODE.parse[0]:
+    case ELYSIA_ERROR_CODE.parse[1]:
       return MALFORMED_REQUEST_ANSWER;
     default:
       return INTERNAL_ANSWER;
@@ -161,17 +213,24 @@ export const elysiaErrorBody = ({ message, issues }: ElysiaErrorAnswer) =>
  * internal error, which is graded from the error's own evidence.
  */
 export const elysiaFailureReason = (
-  code: string | number,
+  code: string | number | undefined,
   error: unknown,
 ): FrameworkFailure | undefined => {
-  switch (code) {
-    case ELYSIA_ERROR_CODE.validation:
+  const resolvedCode = frameworkErrorCode(code, error);
+  if (resolvedCode === undefined) {
+    return undefined;
+  }
+  switch (resolvedCode) {
+    case ELYSIA_ERROR_CODE.validation[0]:
+    case ELYSIA_ERROR_CODE.validation[1]:
       return isResponseValidationError(error)
         ? "response_invalid"
         : "request_validation";
-    case ELYSIA_ERROR_CODE.notFound:
+    case ELYSIA_ERROR_CODE.notFound[0]:
+    case ELYSIA_ERROR_CODE.notFound[1]:
       return "route_not_found";
-    case ELYSIA_ERROR_CODE.parse:
+    case ELYSIA_ERROR_CODE.parse[0]:
+    case ELYSIA_ERROR_CODE.parse[1]:
       return "request_malformed";
     default:
       return undefined;

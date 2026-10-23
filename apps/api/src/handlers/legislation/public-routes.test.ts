@@ -65,7 +65,7 @@ describe("public statute routes", () => {
       "unobserved",
     );
     expect(search).toMatchObject({
-      code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+      status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
       response: {
         status: "unavailable",
         country: "SVK",

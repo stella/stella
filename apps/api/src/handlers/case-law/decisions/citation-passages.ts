@@ -346,8 +346,7 @@ export type ReadDecisionCitationsOptions = {
   surface: PublicCountrySurface;
 };
 
-const statusCodeOf = (result: ElysiaStatus<number, unknown>): number =>
-  result.status;
+const statusCodeOf = (result: { status: number }): number => result.status;
 
 /**
  * One page of a decision's citations, each with the paragraph that made it.
