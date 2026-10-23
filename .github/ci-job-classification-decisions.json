@@ -147,7 +147,7 @@
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3c2192d2e7a0a0c905c7379c08fb78aef5f060ddd1113113953c53db3f3c14d1"
+    "reviewedDigest": "9417453b99d4b0eccd311a48d483d80886fa049cd4a91600d9a0e86806f84ae4"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
@@ -162,7 +162,7 @@
   "candidate:.github/workflows/ci.yml/ci-browser": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "a17a00562aa716e4325b11d84c03a8a0249ceeeaa630f0b1f45cab35472a1bbb"
+    "reviewedDigest": "3b21626b39ed963fda4403e21e8c09bbdc9e8e7bb5671f1d80a10b665ca6e779"
   },
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
@@ -237,7 +237,7 @@
   "candidate:.github/workflows/ci.yml/e2e-production-shard": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "03216c346e5cb5d6e9aec9f822411c2578b3a0e410db65f01bf52e269ccbfa41"
+    "reviewedDigest": "56f627c1e4f92bce80122f25e938f941499e9d0b33c3b23c3926879f80393f53"
   },
   "candidate:.github/workflows/ci.yml/stack-redaction-browsers": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "295acb3c0c3732f86ba552fcb5d4308a0ecff837b67d3497ddbe51224a212613"
+    "reviewedDigest": "c1ae66859e3e2e41a63c5420975a0124bc64b2a431f7472adfc216ebdb99a753"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "4af9c40f93e234ae858aa4f8e789da8db00b601e5a5190b52d17e3617d896222"
+    "reviewedDigest": "de74f630af6ba92144c79a2f572da083163b422fba050c942d296fa5b069604b"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
