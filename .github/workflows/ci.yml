@@ -4591,6 +4591,7 @@ jobs:
       # atomic instead of leaving an invocation on the previous total.
       - name: Read production E2E shard count
         id: e2e-shards
+        timeout-minutes: 1
         run: echo "count=$(bun scripts/e2e-spec-shards-core.ts count)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve e2e shard budget
