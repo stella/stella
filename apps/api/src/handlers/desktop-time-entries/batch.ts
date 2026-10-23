@@ -4,10 +4,10 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
 import {
-  desktopTimeEntryBatchSchema,
-  desktopTimeEntryBatchResponseSchema,
-  type DesktopTimeEntryBatchResponse,
   type DesktopTimeEntryBatch,
+  type DesktopTimeEntryBatchResponse,
+  desktopTimeEntryBatchResponseSchema,
+  desktopTimeEntryBatchSchema,
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -23,9 +23,9 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import {
-  createAuditRecorder,
   type AuditEvent,
   type AuditRecorder,
+  createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
 import {

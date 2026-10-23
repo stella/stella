@@ -25,9 +25,9 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { user } from "@/api/db/auth-schema";
 import {
-  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   auditLogs,
   organizationProfessionalUseAcceptances,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";

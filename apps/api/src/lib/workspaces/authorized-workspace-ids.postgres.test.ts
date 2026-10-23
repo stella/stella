@@ -9,8 +9,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   activeAuthorizedWorkspaceQuery,
-  authorizedWorkspaceIdSubquery,
   authorizedWorkspaceIds,
+  authorizedWorkspaceIdSubquery,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

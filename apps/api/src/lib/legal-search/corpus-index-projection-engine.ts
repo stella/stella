@@ -7,10 +7,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
-  CorpusIndexError,
-  corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexClient,
+  corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexDeleteTask,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { LIMITS } from "@/api/lib/limits";

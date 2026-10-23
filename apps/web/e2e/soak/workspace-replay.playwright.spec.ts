@@ -15,17 +15,17 @@ import { WORKSPACE_REPLAY_ENV } from "./env";
 import {
   BoundedEventTrail,
   MAX_REPLAY_STEPS,
+  parseReplayArtifact,
   REPLAY_ARTIFACT_VERSION,
   REPLAY_FIXTURE_NAME,
-  parseReplayArtifact,
-  serializeReplayArtifact,
   type ReplayArtifact,
   type ReplayEvent,
   type ReplayTrailEvent,
+  serializeReplayArtifact,
 } from "./replay-artifact";
 import {
-  SeededRandom,
   hasWorkspaceAction,
+  SeededRandom,
   selectWeightedAction,
 } from "./workspace-actions";
 import {

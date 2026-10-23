@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
-import { dependencyScope, type DependencyScope } from "./ci-dependency-scope";
+import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
   requiresDesktopBrowser,
   requiresLandingBuild,
@@ -209,8 +209,6 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "scripts/ci-windows-dry-run-*",
   "scripts/wasm-*",
   "scripts/test-wasm-offline.sh",
-  "scripts/run-oxfmt.ts",
-  "scripts/check-format-environment.ts",
   "scripts/ci-install*",
   "scripts/build-updater-manifest.sh",
   "scripts/promote-desktop-release.sh",

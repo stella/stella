@@ -5,7 +5,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { classifyFailure } from "@stll/errors";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
-import { Temporal, parsePlainDate } from "@stll/time";
+import { parsePlainDate, Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import {
@@ -53,11 +53,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";

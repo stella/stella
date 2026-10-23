@@ -9,13 +9,12 @@
       "noOtherSessions": "Nincs más aktív munkamenet",
       "revokeOtherSessions": "Kijelentkezés más eszközökről",
       "revokeOtherSessionsConfirm": "Ezzel az összes munkamenet megszűnik, kivéve a jelenlegit.",
+      "signedInFrom": "Bejelentkezés innen: {clientName}",
       "unknownDevice": "Ismeretlen eszköz"
     }
   },
   "admin": {
     "ai": "MI",
-    "backToApp": "Vissza az alkalmazáshoz",
-    "billingAndUsage": "Számlázás és használat",
     "billingProfiles": "Számlázási profilok",
     "deleteDescription": "Véglegesen törli ezt a szervezetet és az adatait. Ez a művelet nem vonható vissza.",
     "deleteOrganization": "Szervezet törlése",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Kilépés a szervezetből",
     "leaveRefusedOnlyOwner": "Ön az egyetlen tulajdonos. Mielőtt kilép, tegyen tulajdonossá egy másik tagot.",
     "modelsAndProviders": "Modellek és szolgáltatók",
-    "noPlan": "Nincs aktív csomag",
     "organizationDeleted": "A szervezet törölve lett.",
     "organizationId": "Szervezetazonosító",
     "organizationLeft": "Kilépett a szervezetből.",
-    "overviewDescription": "Kezelje szervezetét, a személyeket és az eszközöket.",
-    "people": "Személyek",
     "planAndUsage": "Csomag és használat",
     "title": "Szervezet adminisztrációja",
     "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Az asszisztens ezt a címet fogja kérni",
-    "copiedToast": "Utasítások másolva. Illeszd be őket az asszisztenssel folytatott csevegésbe.",
     "copy": "Másold ki neki az utasításokat",
     "description": "Kérdezd a Claude-ot vagy a ChatGPT-t az ügyeidről és dokumentumaidról. Válaszd ki az asszisztensed egy rövid útmutatóhoz; nagyjából egy perc.",
     "instructions": "Csatlakoztass a stellához, a jogi munkaterületemhez. Kövesd az „Instructions for AI agents” részt itt: {guideUrl}, és ezt a szervercímet használd: {mcpUrl}",
     "openGuide": "Útmutató megnyitása: {assistant}",
+    "pasteHint": "Illeszd be őket az asszisztenssel folytatott csevegésbe.",
     "selfSetupHint": "Claude Code-ot vagy Codexet használsz?",
     "title": "Használd a stellát az AI-asszisztensedben"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Átírási lehetőségek",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
+      "accountRestricted": "Az AI-szolgáltató beállításai nem érhetők el ehhez a fiókhoz.",
+      "configUnreadable": "Az AI-szolgáltató konfigurációja nem olvasható. Kérje meg a szervezet egyik rendszergazdáját, hogy csatlakoztassa újra.",
       "cta": "AI-beállítások megnyitása",
       "description": "Adjon hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
+      "permissionRequired": "Csak szervezeti rendszergazda csatlakoztathat AI-szolgáltatót.",
+      "seatRequired": "Kérje meg a szervezet egyik rendszergazdáját, hogy rendeljen Önhöz licencet.",
       "title": "AI-szolgáltató csatlakoztatása"
     },
     "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?",
@@ -142,6 +142,8 @@
       "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
       "title": "Nem sikerült bejelentkeztetni"
     },
+    "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",
+    "handoffTitle": "Tovább a Stellába",
     "headline": "Tisztán látás minden ügyben.",
     "invitation": {
       "declined": "Meghívó elutasítva",
@@ -162,6 +164,7 @@
     },
     "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
+    "reauthenticationRequired": "A művelet folytatásához jelentkezzen be újra.",
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
@@ -931,13 +934,10 @@
     },
     "coverage": {
       "completeness": "Teljesség",
-      "countedOn": "Megszámolva: {date}",
       "courtsHeading": "Bíróságonként",
       "courtsUnavailable": "A bíróságonkénti bontás jelenleg nem érhető el.",
       "decisionYears": "Határozatok évei",
       "description": "Mennyi ítélkezési gyakorlatot tartalmaz a korpusz országonként és bíróságonként, és mennyire friss az egyes források tartalma.",
-      "exceedsReportedTotal": "Többet tartalmaz, mint a közzétevő legutóbbi, {date} szerinti összesítése",
-      "gapStatusUnknown": "A hiányok állapota ismeretlen",
       "generatedAt": "Adatok: {date}",
       "globeLabel": "Országok, amelyek ítélkezési gyakorlatát a korpusz tartalmazza, földgömbön",
       "healthCurrent": "Naprakész",
@@ -958,7 +958,8 @@
       "searchable": "Kereshető",
       "title": "Az ítélkezési gyakorlat lefedettsége",
       "totalFrom": "Összesítés {date} szerint",
-      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el."
+      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el.",
+      "unreadListingPeriods": "A jegyzék be nem olvasott időszakai"
     },
     "decisionNotFound": "A határozat nem található",
     "decisionTypes": {
@@ -4945,7 +4946,7 @@
       "description": "Használd a stellát az AI-asszisztensedből, és lásd, mi fér hozzá a fiókodhoz.",
       "developerDescription": "Szervercímek és a parancssori eszköz technikai beállításokhoz.",
       "developerTitle": "Fejlesztői hozzáférés",
-      "disconnectConfirmDescription": "Ez megvonja a(z) {clientName} hozzáférését a fiókjához, valamint érvényteleníti az összes általa kibocsátott tokent. Bármikor újra csatlakozhat.",
+      "disconnectConfirmDescription": "Ez megvonja a(z) {clientName} hozzáférését a fiókjához, valamint érvényteleníti az összes általa kibocsátott tokent. Bármikor újra csatlakozhat. A kapcsolaton keresztül létrehozott böngésző-munkamenetek is kijelentkeznek.",
       "disconnectConfirmTitle": "Leválasztja a(z) {clientName} alkalmazást?",
       "disconnectSuccess": "A(z) {clientName} leválasztva",
       "integrationsDescription": "Külső szolgáltatások, amelyeket az AI a nevedben használhat, például a dokumentumtárad.",
@@ -5998,6 +5999,7 @@
       "downloadFailed": "A letöltés sikertelen",
       "downloadPdf": "Letöltés PDF-ként",
       "downloadSearchablePdf": "Kereshető PDF",
+      "emptyFile": "A fájl üres.",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",
       "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
       "maxEntitiesReached": "Elérte a maximális elemszámot",

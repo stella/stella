@@ -4,13 +4,13 @@ import { describe, expect, test } from "bun:test";
 
 import { NETWORK_DEPTH_METHOD as SCOPE_NETWORK_DEPTH_METHOD } from "../../../../scripts/network-baseline-scope";
 import {
-  NETWORK_DEPTH_METHOD,
-  type NetworkBaseline,
-  type RouteNetworkMetrics,
   diffNetworkBaseline,
   mergeNetworkBaseline,
+  NETWORK_DEPTH_METHOD,
+  type NetworkBaseline,
   normalizeApiPath,
   responseSizeAllowance,
+  type RouteNetworkMetrics,
   waitForQuietPeriod,
 } from "../helpers/network";
 

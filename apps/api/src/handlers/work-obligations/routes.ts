@@ -22,13 +22,16 @@ export const workObligationsRoute = new Elysia({
     params: updateWorkObligation.config.params,
     body: updateWorkObligation.config.body,
     permissions: updateWorkObligation.config.permissions,
+    accountAccess: updateWorkObligation.config.accountAccess,
   })
   .post("/:entityId/acknowledge", acknowledgeWorkObligation.handler, {
     params: acknowledgeWorkObligation.config.params,
     permissions: acknowledgeWorkObligation.config.permissions,
+    accountAccess: acknowledgeWorkObligation.config.accountAccess,
   })
   .post("/:entityId/transition", transitionWorkObligation.handler, {
     params: transitionWorkObligation.config.params,
     body: transitionWorkObligation.config.body,
     permissions: transitionWorkObligation.config.permissions,
+    accountAccess: transitionWorkObligation.config.accountAccess,
   });
