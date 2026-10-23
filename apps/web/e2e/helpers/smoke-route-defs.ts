@@ -66,7 +66,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
   }),
   staticRoute("/settings/account/profile"),
-  staticRoute("/admin"),
+  staticRoute("/admin", {
+    expectation: { kind: "redirectsTo", to: "/admin/general" },
+  }),
   staticRoute("/admin/general"),
   staticRoute("/admin/tools"),
   staticRoute("/admin/ai"),

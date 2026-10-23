@@ -278,12 +278,19 @@ const organizationCredentialTables = () => {
 
 const handledMemberTables = async (omittedDelete?: PgTable) => {
   const handled = new Set<string>();
+  const organizationId = mintAuthProviderId<"organization">();
+  const userId = mintAuthProviderId<"user">();
   // Only awaited statements reach this transport; constructing a builder or
   // declaring a cleanup disposition cannot satisfy the guard.
-  const database = drizzle(async (query) => {
+  const database = drizzle(async (query, params) => {
     const table = /^(?:delete from|update) "([^"]+)"/u.exec(query)?.at(1);
     if (table !== undefined) {
       handled.add(table);
+    }
+    if (table === "mcp_web_handoff") {
+      expect(query).toContain('"mcp_web_handoff"."user_id" = $1');
+      expect(query).toContain('"mcp_web_handoff"."organization_id" = $2');
+      expect(params).toEqual([userId, organizationId]);
     }
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
@@ -306,8 +313,8 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     },
   });
   await removeOrganizationMemberInTransaction(asTestRaw(transaction), {
-    organizationId: mintAuthProviderId<"organization">(),
-    userId: mintAuthProviderId<"user">(),
+    organizationId,
+    userId,
     actorUserId: mintAuthProviderId<"user">(),
     memberId: mintAuthProviderIdValue(),
   });
