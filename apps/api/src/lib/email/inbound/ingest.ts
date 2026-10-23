@@ -375,6 +375,7 @@ export const ingestInboundMail = async ({
         }),
       );
     } else if (scan !== "pass") {
+      // An inconclusive provider verdict is immutable; retrying cannot resolve it.
       delivery = {
         status: "drop",
         sender: outerSender,

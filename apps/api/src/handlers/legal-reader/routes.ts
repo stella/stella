@@ -19,18 +19,22 @@ export const legalReaderRoute = new Elysia({ prefix: "/reader" })
   .get("/annotations", listReaderAnnotations.handler, {
     query: listReaderAnnotations.config.query,
     permissions: listReaderAnnotations.config.permissions,
+    accountAccess: listReaderAnnotations.config.accountAccess,
   })
   .post("/annotations", createReaderAnnotation.handler, {
     body: createReaderAnnotation.config.body,
     permissions: createReaderAnnotation.config.permissions,
+    accountAccess: createReaderAnnotation.config.accountAccess,
   })
   .patch("/annotations/:annotationId", updateReaderAnnotation.handler, {
     body: updateReaderAnnotation.config.body,
     params: updateReaderAnnotation.config.params,
     permissions: updateReaderAnnotation.config.permissions,
+    accountAccess: updateReaderAnnotation.config.accountAccess,
   })
   .use(readerAnswersRoute)
   .delete("/annotations/:annotationId", deleteReaderAnnotation.handler, {
     params: deleteReaderAnnotation.config.params,
     permissions: deleteReaderAnnotation.config.permissions,
+    accountAccess: deleteReaderAnnotation.config.accountAccess,
   });
