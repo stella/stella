@@ -46,6 +46,7 @@ import {
   classifyAttachmentError,
   formatAttachmentIssue,
 } from "@/api/lib/search/extraction-worker-attachments";
+import { formatWorkerErrorLine } from "@/api/lib/search/extraction-worker-error";
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,
@@ -370,7 +371,7 @@ try {
     const outputError = sanitizeErrorForOutput(result.error);
     const outputErrorType =
       outputError instanceof Error ? outputError.name : "UnknownError";
-    process.stderr.write(`extraction-worker error: ${outputErrorType}\n`);
+    process.stderr.write(`${formatWorkerErrorLine(outputErrorType)}\n`);
     process.exit(1);
   }
   if (result.value) {
@@ -380,6 +381,6 @@ try {
 } catch (error) {
   const outputError = sanitizeErrorForOutput(error);
   const type = outputError instanceof Error ? outputError.name : "UnknownError";
-  process.stderr.write(`extraction-worker error: ${type}\n`);
+  process.stderr.write(`${formatWorkerErrorLine(type)}\n`);
   process.exit(1);
 }

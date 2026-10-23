@@ -95,10 +95,12 @@ const extractionError = ({
   exitCode,
   message,
   termination,
+  workerErrorClass = null,
 }: {
   exitCode: number | null;
   message: string;
   termination: ExtractionWorkerTermination | null;
+  workerErrorClass?: string | null;
 }): ExtractionWorkerError =>
   new ExtractionWorkerError({
     code: extractionWorkerErrorCode(termination),
@@ -107,6 +109,7 @@ const extractionError = ({
     mimeType: "application/pdf",
     sizeBytes: 12_345,
     termination,
+    workerErrorClass,
   });
 
 beforeEach(() => {
@@ -362,6 +365,34 @@ describe("captureError extraction diagnostics", () => {
     expect(captured.at(0)?.properties).toMatchObject({
       "error.code": "parser_failed",
       exitCode: "1",
+    });
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
+  });
+
+  test("fingerprints distinct parser classes as distinct defects", () => {
+    captureError(
+      extractionError({
+        exitCode: 1,
+        message: "parser failed",
+        termination: null,
+        workerErrorClass: "PdfParseError",
+      }),
+    );
+    captureError(
+      extractionError({
+        exitCode: 1,
+        message: "parser failed",
+        termination: null,
+        workerErrorClass: "RangeError",
+      }),
+    );
+
+    expect(captured).toHaveLength(2);
+    expect(captured.at(0)?.properties).toMatchObject({
+      "error.code": "parser_failed:PdfParseError",
+      workerErrorClass: "PdfParseError",
     });
     expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
       captured.at(1)?.properties["$exception_fingerprint"],

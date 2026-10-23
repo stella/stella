@@ -94,6 +94,13 @@ export const safeErrorTelemetryFields = (
       terminationReason: error.termination.reason,
     };
   }
+  if (error.workerErrorClass !== null) {
+    return {
+      ...fields,
+      exitCode: String(error.exitCode),
+      workerErrorClass: error.workerErrorClass,
+    };
+  }
   return { ...fields, exitCode: String(error.exitCode) };
 };
 
