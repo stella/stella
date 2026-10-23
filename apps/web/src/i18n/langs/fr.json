@@ -2040,7 +2040,6 @@
       "viewDocumentation": "Voir la documentation"
     },
     "enterKey": "↵",
-    "error": "Erreur",
     "expenses": "Dépenses",
     "export": {
       "citations": "Références",
@@ -2113,6 +2112,7 @@
     },
     "lastUpdated": "Dernière mise à jour",
     "legalDatabase": "Base de données juridique",
+    "loadFailed": "Échec du chargement.",
     "loadMore": "Charger plus",
     "loading": "Chargement",
     "logTime": "Saisir le temps",
@@ -2199,7 +2199,7 @@
     "showMore": "Afficher plus",
     "showSecretValue": "Afficher la valeur secrète",
     "signOut": "Se déconnecter",
-    "somethingWentWrong": "Une erreur est survenue",
+    "somethingWentWrong": "Une erreur est survenue. Réessayez, ou rechargez la page si le problème persiste.",
     "sort": "Trier",
     "source": "Source",
     "stale": "Obsolète",
@@ -2669,7 +2669,7 @@
       "notEnabled": "Cette action n’est pas activée pour votre organisation.",
       "periodExhausted": "Cette action est suspendue pour votre organisation."
     },
-    "actionFailed": "Action échouée",
+    "actionFailed": "Cela n’a pas fonctionné. Réessayez, ou rechargez la page si le problème persiste.",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",
       "caseLawCountryUnavailable": "La jurisprudence de ce pays n’est pas disponible. Choisissez un autre pays.",
@@ -3220,7 +3220,7 @@
     "saveSerializeFailedTitle": "Impossible de créer le DOCX",
     "savingDocument": "Enregistrement...",
     "showDetails": "Afficher les détails",
-    "somethingWentWrong": "Une erreur s’est produite",
+    "somethingWentWrong": "Une erreur est survenue. Réessayez, ou rechargez la page si le problème persiste.",
     "synced": "Synchronisé",
     "syncing": "Synchronisation",
     "tableBordersAll": "Toutes les bordures",

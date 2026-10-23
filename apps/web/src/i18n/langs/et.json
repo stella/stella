@@ -2040,7 +2040,6 @@
       "viewDocumentation": "Vaata dokumentatsiooni"
     },
     "enterKey": "↵",
-    "error": "Viga",
     "expenses": "Kulud",
     "export": {
       "citations": "Viited",
@@ -2113,6 +2112,7 @@
     },
     "lastUpdated": "Viimati uuendatud",
     "legalDatabase": "Õigusandmebaas",
+    "loadFailed": "Laadimine ebaõnnestus.",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
@@ -2199,7 +2199,7 @@
     "showMore": "Näita rohkem",
     "showSecretValue": "Kuva salajane väärtus",
     "signOut": "Logi välja",
-    "somethingWentWrong": "Midagi läks valesti",
+    "somethingWentWrong": "Midagi läks valesti. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "sort": "Sorteeri",
     "source": "Allikas",
     "stale": "Aegunud",
@@ -2669,7 +2669,7 @@
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
       "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
     },
-    "actionFailed": "Toiming ebaõnnestus",
+    "actionFailed": "See ei õnnestunud. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
       "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
@@ -3220,7 +3220,7 @@
     "saveSerializeFailedTitle": "DOCX-i ei saanud luua",
     "savingDocument": "Salvestamine...",
     "showDetails": "Näita üksikasju",
-    "somethingWentWrong": "Midagi läks valesti",
+    "somethingWentWrong": "Midagi läks valesti. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "synced": "Sünkroonitud",
     "syncing": "Sünkroonimine",
     "tableBordersAll": "Kõik äärised",

@@ -2040,7 +2040,6 @@
       "viewDocumentation": "Zobraziť dokumentáciu"
     },
     "enterKey": "↵",
-    "error": "Chyba",
     "expenses": "Výdavky",
     "export": {
       "citations": "Citácie",
@@ -2113,6 +2112,7 @@
     },
     "lastUpdated": "Naposledy aktualizované",
     "legalDatabase": "Právna databáza",
+    "loadFailed": "Nepodarilo sa načítať.",
     "loadMore": "Načítať ďalšie",
     "loading": "Načítavam",
     "logTime": "Zaznamenať čas",
@@ -2199,7 +2199,7 @@
     "showMore": "Zobraziť viac",
     "showSecretValue": "Zobraziť tajnú hodnotu",
     "signOut": "Odhlásiť sa",
-    "somethingWentWrong": "Niečo sa pokazilo",
+    "somethingWentWrong": "Niečo sa pokazilo. Skúste to znova, a ak sa to opakuje, načítajte stránku znova.",
     "sort": "Zoradiť",
     "source": "Zdroj",
     "stale": "Zastarané",
@@ -2669,7 +2669,7 @@
       "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
       "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
     },
-    "actionFailed": "Akcia zlyhala",
+    "actionFailed": "Nepodarilo sa to. Skúste to znova, a ak sa to opakuje, načítajte stránku znova.",
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",
       "caseLawCountryUnavailable": "Judikatúra tejto krajiny nie je dostupná. Vyberte inú krajinu.",
@@ -3220,7 +3220,7 @@
     "saveSerializeFailedTitle": "Nepodarilo sa vytvoriť DOCX",
     "savingDocument": "Ukladá sa...",
     "showDetails": "Zobraziť detaily",
-    "somethingWentWrong": "Niečo sa pokazilo",
+    "somethingWentWrong": "Niečo sa pokazilo. Skúste to znova, a ak sa to opakuje, načítajte stránku znova.",
     "synced": "Synchronizované",
     "syncing": "Synchronizuje sa",
     "tableBordersAll": "Všetky orámovania",

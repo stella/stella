@@ -2040,7 +2040,6 @@
       "viewDocumentation": "View documentation"
     },
     "enterKey": "↵",
-    "error": "Error",
     "expenses": "Expenses",
     "export": {
       "citations": "Citations",
@@ -2113,6 +2112,7 @@
     },
     "lastUpdated": "Last updated",
     "legalDatabase": "Legal database",
+    "loadFailed": "Couldn't load.",
     "loadMore": "Load more",
     "loading": "Loading",
     "logTime": "Log time",
@@ -2199,7 +2199,7 @@
     "showMore": "Show more",
     "showSecretValue": "Show secret value",
     "signOut": "Sign out",
-    "somethingWentWrong": "Something went wrong",
+    "somethingWentWrong": "Something went wrong. Try again, or reload the page if it keeps happening.",
     "sort": "Sort",
     "source": "Source",
     "stale": "Stale",
@@ -2669,7 +2669,7 @@
       "notEnabled": "This action is not enabled for your organization.",
       "periodExhausted": "This action is paused for your organization."
     },
-    "actionFailed": "Action failed",
+    "actionFailed": "That didn't work. Try again, or reload the page if it keeps happening.",
     "api": {
       "badRequest": "The request could not be completed.",
       "caseLawCountryUnavailable": "Case law for this country is not available. Choose another country.",
@@ -3220,7 +3220,7 @@
     "saveSerializeFailedTitle": "Could not create DOCX",
     "savingDocument": "Saving...",
     "showDetails": "Show details",
-    "somethingWentWrong": "Something went wrong",
+    "somethingWentWrong": "Something went wrong. Try again, or reload the page if it keeps happening.",
     "synced": "Synced",
     "syncing": "Syncing",
     "tableBordersAll": "All borders",
