@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -59,12 +60,11 @@ describe("createPropertiesBatch", () => {
       }),
     );
 
-    expect(result).toMatchObject({
-      code: 422,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(422, {
         code: "ai-column-input-required",
         hint: expect.stringContaining(systemFileId),
-      },
-    });
+      }),
+    );
   });
 });

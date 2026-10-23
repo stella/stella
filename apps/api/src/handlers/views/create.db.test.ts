@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -190,10 +191,11 @@ describe("one correspondence view per matter", () => {
       createSafeId<"workspaceView">(),
     );
 
-    expect(outcome).toMatchObject({
-      code: 400,
-      response: { message: "A matter holds only one correspondence view" },
-    });
+    expect(outcome).toMatchObject(
+      elysiaStatus(400, {
+        message: "A matter holds only one correspondence view",
+      }),
+    );
     // Both inserts rolled back with the refused transaction.
     expect(await correspondenceViewIds()).toEqual([]);
   });

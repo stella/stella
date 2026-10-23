@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { caseLawProvisionExtractions } from "@/api/db/schema";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
@@ -233,10 +234,9 @@ if (!databaseUrl || !runPostgresTests) {
             published_input_digest = desired_input_digest, published_at = now()
           WHERE decision_id = ${decisionId}::uuid`;
 
-        expect(await page(first.nextCursor)).toMatchObject({
-          code: 409,
-          response: { type: "conflict" },
-        });
+        expect(await page(first.nextCursor)).toMatchObject(
+          elysiaStatus(409, { type: "conflict" }),
+        );
         expect(await page()).toMatchObject({
           status: { type: "current" },
           generation: "9007199254740993",

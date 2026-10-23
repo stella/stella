@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -229,19 +230,17 @@ describe("reading one provision preview", () => {
     const preview = await readPreview(civilCode, "par_2079");
 
     expect(preview).not.toHaveProperty("blocks");
-    expect(preview).toMatchObject({
-      code: 404,
-      response: { message: "Provision not found" },
-    });
+    expect(preview).toMatchObject(
+      elysiaStatus(404, { message: "Provision not found" }),
+    );
   });
 
   test("a source not cleared for redistribution reads as not found", async () => {
     const preview = await readPreview(withheldAct, "par_898");
 
     expect(preview).not.toHaveProperty("blocks");
-    expect(preview).toMatchObject({
-      code: 404,
-      response: { message: "Legislation document not found" },
-    });
+    expect(preview).toMatchObject(
+      elysiaStatus(404, { message: "Legislation document not found" }),
+    );
   });
 });

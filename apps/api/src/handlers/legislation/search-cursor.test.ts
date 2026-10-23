@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
@@ -51,14 +52,13 @@ test.each(["DEU", "cze", "cz", "*"])(
       "unobserved",
     );
 
-    expect(result).toMatchObject({
-      code: 400,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(400, {
         message: expect.stringContaining(
           `Admitted jurisdiction codes (uppercase): ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}`,
         ),
-      },
-    });
+      }),
+    );
     expect(reads()).toBe(0);
   },
 );
@@ -109,10 +109,9 @@ test.each(["corpus-index", "pg-fts"] as const)(
     );
 
     expect(result).not.toHaveProperty("items");
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { message: "Invalid cursor" }),
+    );
     expect(reads()).toBe(0);
   },
 );
@@ -153,10 +152,9 @@ test.each(["corpus-index", "pg-fts"] as const)(
         "unobserved",
         { provider, loadSearchConfigs: async () => [] },
       );
-      expect(result).toMatchObject({
-        code: 400,
-        response: { message: "Invalid cursor" },
-      });
+      expect(result).toMatchObject(
+        elysiaStatus(400, { message: "Invalid cursor" }),
+      );
       expect(reads()).toBe(0);
     }
   },

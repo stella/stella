@@ -10,6 +10,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -375,10 +376,9 @@ describe("invoice mutations respect running time ownership", () => {
       const invoiceId = await seedInvoice();
       const entryId = await seedRunningEntry({ kind });
       const before = await readState();
-      expect(await run({ invoiceId, entryId, actor: "member" })).toMatchObject({
-        code: 409,
-        response: { code: "running_timer" },
-      });
+      expect(await run({ invoiceId, entryId, actor: "member" })).toMatchObject(
+        elysiaStatus(409, { code: "running_timer" }),
+      );
       expect(await readState()).toEqual(before);
       expect(auditEvents).toHaveLength(0);
     },
@@ -393,10 +393,7 @@ describe("invoice mutations respect running time ownership", () => {
       const before = await readState();
       expect(
         await run({ invoiceId, entryId, lineId, actor: "member" }),
-      ).toMatchObject({
-        code: 409,
-        response: { code: "running_timer" },
-      });
+      ).toMatchObject(elysiaStatus(409, { code: "running_timer" }));
       expect(await readState()).toEqual(before);
       expect(auditEvents).toHaveLength(0);
     },
@@ -448,10 +445,9 @@ describe("invoice mutations respect running time ownership", () => {
       const invoiceId = await seedInvoice();
       const entryId = await seedRunningEntry({ kind });
       const before = await readState();
-      expect(await run({ invoiceId, entryId })).toMatchObject({
-        code: 409,
-        response: { code: "running_timer" },
-      });
+      expect(await run({ invoiceId, entryId })).toMatchObject(
+        elysiaStatus(409, { code: "running_timer" }),
+      );
       expect(await readState()).toEqual(before);
       expect(auditEvents).toHaveLength(0);
     },
@@ -464,10 +460,9 @@ describe("invoice mutations respect running time ownership", () => {
       const entryId = await seedRunningEntry({ kind, invoiceId });
       const lineId = await seedTimeLine(invoiceId, entryId);
       const before = await readState();
-      expect(await run({ invoiceId, entryId, lineId })).toMatchObject({
-        code: 409,
-        response: { code: "running_timer" },
-      });
+      expect(await run({ invoiceId, entryId, lineId })).toMatchObject(
+        elysiaStatus(409, { code: "running_timer" }),
+      );
       expect(await readState()).toEqual(before);
       expect(auditEvents).toHaveLength(0);
     },
@@ -654,10 +649,11 @@ test("concurrent invoice creation respects the final available matter slot", asy
   expect(startedCount).toBe(2);
   expect(results.filter((result) => "id" in result)).toHaveLength(1);
   expect(results.filter((result) => "code" in result)).toEqual([
-    expect.objectContaining({
-      code: 400,
-      response: { message: "Invoice limit reached for this workspace" },
-    }),
+    expect.objectContaining(
+      elysiaStatus(400, {
+        message: "Invoice limit reached for this workspace",
+      }),
+    ),
   ]);
   expect(await db.$count(invoices, eq(invoices.workspaceId, workspaceId))).toBe(
     LIMITS.invoicesPerWorkspace,

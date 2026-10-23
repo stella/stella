@@ -91,8 +91,8 @@ export const createSyntheticRoute = (options: SyntheticRouteOptions) => {
   const createSession = createSyntheticSessionHandler(options);
   return new Elysia({ name: "synthetic-session", prefix: "/synthetic" }).post(
     "/session",
-    createSession,
     { parse: "none" },
+    createSession,
   );
 };
 

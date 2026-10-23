@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
@@ -257,10 +258,11 @@ describe("explicit chat regeneration", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: { message: "Only the latest user turn can be regenerated" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(409, {
+        message: "Only the latest user turn can be regenerated",
+      }),
+    );
     expect(streamChatMock).not.toHaveBeenCalled();
     expect(
       await testDb

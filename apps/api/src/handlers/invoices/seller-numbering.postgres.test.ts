@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -398,12 +399,9 @@ if (!databaseUrl || !runPostgres) {
         { id: invoiceId },
       ]);
       expect(outcomes.filter((outcome) => "code" in outcome)).toEqual([
-        {
-          code: 409,
-          response: {
-            message: "Cannot finalize invoice from its current status",
-          },
-        },
+        elysiaStatus(409, {
+          message: "Cannot finalize invoice from its current status",
+        }),
       ]);
       const row = await db.query.invoices.findFirst({
         where: { id: { eq: invoiceId } },
@@ -465,13 +463,12 @@ if (!databaseUrl || !runPostgres) {
       const invoiceId = await seedInvoice(scenario, {
         sellerProfileId: sellerC,
       });
-      expect(await finalize({ scenario, db, invoiceId })).toEqual({
-        code: 409,
-        response: {
+      expect(await finalize({ scenario, db, invoiceId })).toEqual(
+        elysiaStatus(409, {
           message: "No default number series configured for this document type",
           hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
-        },
-      });
+        }),
+      );
       expect(
         await db.query.invoices.findFirst({
           where: { id: { eq: invoiceId } },

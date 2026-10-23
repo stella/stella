@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 import { Value } from "typebox/value";
 
 import {
@@ -92,13 +93,12 @@ describe("organization AI settings validation", () => {
             body: { providers: [{ provider, region }], overrideModels },
           }),
         );
-        expect(result).toMatchObject({
-          code: 400,
-          response: {
+        expect(result).toMatchObject(
+          elysiaStatus(400, {
             code: "ai_config_provider_invalid",
             message: `The selected endpoint setting is not supported by ${provider}. Use global.`,
-          },
-        });
+          }),
+        );
         expect(db.written()).toBeUndefined();
         expect(db.operations()).toBe(1);
       });
@@ -270,13 +270,12 @@ describe("Anthropic workspace settings", () => {
           },
         }),
       );
-      expect(result).toMatchObject({
-        code: 400,
-        response: {
+      expect(result).toMatchObject(
+        elysiaStatus(400, {
           code: "ai_config_anthropic_workspace_required",
           message: `anthropic: Anthropic rejected the key (HTTP 400): ${message}`,
-        },
-      });
+        }),
+      );
       expect(db.written()).toBeUndefined();
     } finally {
       probe.mockRestore();
@@ -372,13 +371,12 @@ describe("Anthropic workspace settings", () => {
         },
       }),
     );
-    expect(result).toMatchObject({
-      code: 400,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(400, {
         code: "ai_config_provider_invalid",
         message: "Workspace ID is supported only for Anthropic",
-      },
-    });
+      }),
+    );
     expect(db.written()).toBeUndefined();
   });
 
@@ -418,13 +416,12 @@ describe("Anthropic workspace settings", () => {
         }),
       );
       expect(JSON.stringify(result)).toContain("Google access denied");
-      expect(result).toMatchObject({
-        code: 400,
-        response: {
+      expect(result).toMatchObject(
+        elysiaStatus(400, {
           code: "ai_config_provider_validation_failed",
           message: expect.stringContaining("Workspace required"),
-        },
-      });
+        }),
+      );
       expect(db.written()).toBeUndefined();
     } finally {
       probe.mockRestore();
@@ -648,14 +645,13 @@ describe("decision credential dependencies on settings save", () => {
             },
           }),
         );
-        expect(result).toMatchObject({
-          code: 400,
-          response: {
+        expect(result).toMatchObject(
+          elysiaStatus(400, {
             code: "ai_config_decision_invalid",
             message:
               "The decision model reuses your OpenAI API key. Keep that provider and key, add a separate decision API key, or switch the decision provider.",
-          },
-        });
+          }),
+        );
         expect(db.written()).toBeUndefined();
         expect(db.operations()).toBe(1);
         expect(fetch).not.toHaveBeenCalled();

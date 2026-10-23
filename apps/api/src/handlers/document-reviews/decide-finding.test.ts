@@ -1,10 +1,10 @@
+import { describe, expect, test } from "bun:test";
 /**
  * The decision endpoint's contract: a decision names its reviewer and moment,
  * reopening withdraws both, every transition leaves an audit row, and a
  * finding the caller cannot see is indistinguishable from one that is absent.
  */
-
-import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -255,12 +255,11 @@ describe("decideDocumentReviewFinding", () => {
       body: { decision: "accepted", applicationStatus: "applied" },
     });
 
-    expect(result).toMatchObject({
-      code: 422,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(422, {
         message: "This review finding has no proposed edit to apply.",
-      },
-    });
+      }),
+    );
     expect(updates).toEqual([]);
     expect(auditEvents).toEqual([]);
   });
@@ -338,10 +337,9 @@ describe("decideDocumentReviewFinding", () => {
       body: { decision: "dismissed" },
     });
 
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Review finding not found" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(404, { message: "Review finding not found" }),
+    );
     expect(updates).toEqual([]);
     expect(auditEvents).toEqual([]);
   });

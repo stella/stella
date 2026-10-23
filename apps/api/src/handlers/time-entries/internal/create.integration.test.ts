@@ -9,6 +9,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { BILLING_STATUS, TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
@@ -202,10 +203,9 @@ describe("internal time creation", () => {
         timeLockedThroughMonth: date.with({ day: date.daysInMonth }).toString(),
       })
       .where(eq(organizationSettings.organizationId, ids.orgA));
-    expect(await createFor(body)).toMatchObject({
-      code: 400,
-      response: { code: "time_period_locked" },
-    });
+    expect(await createFor(body)).toMatchObject(
+      elysiaStatus(400, { code: "time_period_locked" }),
+    );
     await db
       .update(organizationSettings)
       .set({
@@ -219,14 +219,13 @@ describe("internal time creation", () => {
         ...body,
         dateWorked: date.subtract({ days: 3 }).toString(),
       }),
-    ).toMatchObject({ code: 400, response: { code: "outside_edit_window" } });
-    expect(await createFor({ ...body, narrative: " \t\n " })).toMatchObject({
-      code: 400,
-      response: { code: "narrative_required" },
-    });
+    ).toMatchObject(elysiaStatus(400, { code: "outside_edit_window" }));
+    expect(await createFor({ ...body, narrative: " \t\n " })).toMatchObject(
+      elysiaStatus(400, { code: "narrative_required" }),
+    );
     expect(
       await createFor({ ...body, dateWorked: "2026-02-30" }),
-    ).toMatchObject({ code: 400, response: { code: "invalid_date_worked" } });
+    ).toMatchObject(elysiaStatus(400, { code: "invalid_date_worked" }));
     expect(createdIds).toHaveLength(0);
   });
 });

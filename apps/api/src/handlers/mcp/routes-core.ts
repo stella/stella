@@ -163,38 +163,38 @@ export const createMcpRoute = ({
     .options(MCP_ADVANCED_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_ADVANCED_DISCOVERY_PATH,
-      readAdvancedMetadata.handler,
       readAdvancedMetadata.config,
+      readAdvancedMetadata.handler,
     )
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       ROOT_MCP_DISCOVERY_PATH,
-      readDefaultMetadata.handler,
       readDefaultMetadata.config,
+      readDefaultMetadata.handler,
     )
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_ANONYMIZED_DISCOVERY_PATH,
-      readAnonymizedMetadata.handler,
       readAnonymizedMetadata.config,
+      readAnonymizedMetadata.handler,
     )
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_DISCOVERY_PATH,
-      readDefaultMetadata.handler,
       readDefaultMetadata.config,
+      readDefaultMetadata.handler,
     )
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_DOCUMENTS_DISCOVERY_PATH,
-      readDocumentsMetadata.handler,
       readDocumentsMetadata.config,
+      readDocumentsMetadata.handler,
     )
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(
       MCP_LAW_DISCOVERY_PATH,
-      readLawMetadata.handler,
       readLawMetadata.config,
+      readLawMetadata.handler,
     )
     .all(
       MCP_ADVANCED_HTTP_PATH,
@@ -225,6 +225,7 @@ export const createMcpRoute = ({
     )
     .all(
       MCP_HTTP_PATH,
+      { parse: "none" },
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
           options: {
@@ -239,7 +240,6 @@ export const createMcpRoute = ({
       // The MCP transports own JSON parsing. If Elysia parses first, the
       // web-standard Request reaches them with an already-consumed body and
       // every valid JSON-RPC POST is rejected as a parse error.
-      { parse: "none" },
     )
     .all(
       MCP_DOCUMENTS_HTTP_PATH,
@@ -297,8 +297,6 @@ const mcpRouteRegistry = createMcpRoute({
 
 export const isMcpTransportRequest = createRequestRouteClassifier({
   routes: mcpRouteRegistry.routes,
-  staticRoutes: mcpRouteRegistry.router.static,
-  strictPath: mcpRouteRegistry.config.strictPath,
-  aot: mcpRouteRegistry.config.aot,
+  strictPath: undefined,
   classifyRoute: (route) => route.method === "ALL",
 });

@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -180,12 +181,11 @@ describe("number series allocation", () => {
       user: { id: ids.userA1 },
       recordAuditEvent: async () => {},
     });
-    expect(await updateNumberSeries.handler(context)).toEqual({
-      code: 409,
-      response: {
+    expect(await updateNumberSeries.handler(context)).toEqual(
+      elysiaStatus(409, {
         message: "Pattern and padding cannot change after allocation",
-      },
-    });
+      }),
+    );
     const rows = await testDb
       .select({ pattern: numberSeries.pattern })
       .from(numberSeries)
@@ -247,10 +247,9 @@ describe("number series allocation", () => {
         user: { id: ids.userA1 },
         recordAuditEvent: async () => {},
       });
-      expect(await createNumberSeries.handler(context)).toEqual({
-        code: 404,
-        response: { message: "Seller profile not found" },
-      });
+      expect(await createNumberSeries.handler(context)).toEqual(
+        elysiaStatus(404, { message: "Seller profile not found" }),
+      );
     } finally {
       await testDb
         .delete(sellerProfiles)

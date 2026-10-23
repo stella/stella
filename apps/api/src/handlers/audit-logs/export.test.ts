@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -116,12 +117,11 @@ describe("exportAuditLogs", () => {
 
     const result = await exportAuditLogs.handler(context);
 
-    expect(result).toEqual({
-      code: 413,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(413, {
         message: `The export exceeds ${LIMITS.exportRowLimit} rows. Narrow the filters and try again.`,
-      },
-    });
+      }),
+    );
     expect(auditCallCount).toBe(0);
   });
 });

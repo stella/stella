@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia, t } from "elysia";
+import { Elysia, t, status as elysiaStatus } from "elysia";
 
 import { createSafeRootHandler, ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -173,10 +173,7 @@ describe("feature access safe-handler admission", () => {
         scopedDb: database.scopedDb,
       }),
     );
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Not found" },
-    });
+    expect(result).toMatchObject(elysiaStatus(404, { message: "Not found" }));
     expect(executions).toBe(0);
     expect(database.getCallCount()).toBe(1);
   });
@@ -216,10 +213,7 @@ describe("feature access safe-handler admission", () => {
           },
         }),
       );
-      expect(result).toMatchObject({
-        code: 404,
-        response: { message: "Not found" },
-      });
+      expect(result).toMatchObject(elysiaStatus(404, { message: "Not found" }));
       expect(executions).toBe(0);
       expect(database.getCallCount()).toBe(1);
     }
@@ -309,10 +303,9 @@ describe("feature access safe-handler admission", () => {
         session: { activeOrganizationId: toSafeId<"organization">("org_1") },
       }),
     );
-    expect(result).toMatchObject({
-      code: 500,
-      response: { message: "Internal server error" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(500, { message: "Internal server error" }),
+    );
     expect(observedUserId).toBe("user_1");
     expect(executions).toBe(0);
   });

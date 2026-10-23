@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { status as elysiaStatus } from "elysia";
 
 import { member } from "@/api/db/auth-schema";
 import {
@@ -1125,10 +1126,9 @@ describe("duplicateWorkspace", () => {
     );
 
     // The abort travels as the same rejection the caller always answered.
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Workspaces limit reached" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Workspaces limit reached" }),
+    );
     expect(insertedTables).toEqual([]);
 
     // No row survives the abort, so every object copied for it is an orphan
@@ -1191,10 +1191,9 @@ describe("duplicateWorkspace", () => {
       createContext({ includeContent: true, safeDb, scopedDb }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Entities limit reached" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Entities limit reached" }),
+    );
     expect(requestKeys("COPY")).toEqual([]);
   });
 });

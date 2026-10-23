@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { status as elysiaStatus } from "elysia";
 
 import {
   documentCounters,
@@ -1847,10 +1848,9 @@ describe("copy-to-workspace", () => {
     );
 
     // The abort travels as the same rejection the caller always answered.
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: "Target parent must be a folder" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { message: "Target parent must be a folder" }),
+    );
     expect(insertedEntities).toHaveLength(0);
 
     // No row survives the abort, so every object copied for it is an orphan

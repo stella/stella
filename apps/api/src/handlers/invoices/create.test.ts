@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -82,12 +83,11 @@ describe("createInvoice", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message: "All time entries must match the invoice currency",
-      },
-    });
+      }),
+    );
   });
 
   test("returns 409 when the invoice number already exists", async () => {
@@ -110,10 +110,11 @@ describe("createInvoice", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: { message: "An invoice with this number already exists" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(409, {
+        message: "An invoice with this number already exists",
+      }),
+    );
   });
 
   test("rejects entries that are already attached to another invoice", async () => {
@@ -137,13 +138,12 @@ describe("createInvoice", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message:
           "All entries must be approved, not already on an invoice, and billable for hourly billing",
-      },
-    });
+      }),
+    );
   });
 
   test("returns a retryable conflict when the claim count changes", async () => {
@@ -184,12 +184,11 @@ describe("createInvoice", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(409, {
         message: "Some entries were modified concurrently; please retry",
-      },
-    });
+      }),
+    );
     expect(auditCalls).toBe(0);
   });
 });

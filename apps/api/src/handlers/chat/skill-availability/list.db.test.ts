@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { ElysiaStatus } from "elysia";
 
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -172,8 +173,8 @@ const skillKeyOf = (skillId: string): SkillKey | undefined =>
 /** The seeded skills' decisions: hidden everywhere, and needs per skill here. */
 const decide = async (options: Parameters<typeof call>[0]) => {
   const result = await call(options);
-  if ("code" in result) {
-    throw new TypeError(`expected the availability list, got ${result.code}`);
+  if (result instanceof ElysiaStatus) {
+    throw new TypeError(`expected the availability list, got ${result.status}`);
   }
   const unavailable = result.unavailable.flatMap(({ skillId }) => {
     const key = skillKeyOf(skillId);
@@ -407,8 +408,10 @@ describe("built-in skills are decided beside installed ones", () => {
         },
       ),
     );
-    if ("code" in result) {
-      throw new TypeError(`expected the availability list, got ${result.code}`);
+    if (result instanceof ElysiaStatus) {
+      throw new TypeError(
+        `expected the availability list, got ${result.status}`,
+      );
     }
     return new Set(result.unavailable.map(({ skillId }) => skillId));
   };

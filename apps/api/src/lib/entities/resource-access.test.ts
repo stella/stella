@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 import { Type } from "typebox";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -103,7 +104,7 @@ test("generic handlers return the same missing response before resource details"
     expect(result).toMatchObject(
       visible
         ? { name: "Ordinary task" }
-        : { code: 404, response: { message: "Not found" } },
+        : elysiaStatus(404, { message: "Not found" }),
     );
     expect(lookups).toBe(visible ? 1 : 0);
   }

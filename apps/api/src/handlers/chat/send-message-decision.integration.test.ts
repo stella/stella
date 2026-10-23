@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { ElysiaStatus } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
@@ -204,7 +205,7 @@ test("the first send binds the reader decision to the listed thread badge", asyn
       user: { id: ids.userA1 },
     }),
   );
-  if ("code" in listed) {
+  if (listed instanceof ElysiaStatus) {
     throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
   }
   expect(

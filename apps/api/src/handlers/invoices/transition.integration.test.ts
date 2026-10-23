@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -104,10 +105,11 @@ describe("invoice transition integration", () => {
     const secondResult = await runTransition(invoiceId, "finalize");
 
     expect(firstResult).toEqual({ id: invoiceId });
-    expect(secondResult).toEqual({
-      code: 409,
-      response: { message: "Cannot finalize invoice from its current status" },
-    });
+    expect(secondResult).toEqual(
+      elysiaStatus(409, {
+        message: "Cannot finalize invoice from its current status",
+      }),
+    );
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
   });
 
@@ -218,10 +220,9 @@ describe("invoice transition integration", () => {
       status: INVOICE_STATUS.DRAFT,
       invoiceNumber: null,
     });
-    expect(await runTransition(unnumbered, "finalize")).toMatchObject({
-      code: 409,
-      response: { hint: expect.any(String) },
-    });
+    expect(await runTransition(unnumbered, "finalize")).toMatchObject(
+      elysiaStatus(409, { hint: expect.any(String) }),
+    );
     expect(await readInvoiceStatus(unnumbered)).toBe(INVOICE_STATUS.DRAFT);
     const manual = await seedInvoice({
       status: INVOICE_STATUS.DRAFT,

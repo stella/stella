@@ -1270,7 +1270,7 @@ export const createApprovalHarness = ({
     if (!Value.Check(agUiSendMessageBodySchema, raw)) {
       const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
         .slice(0, 3)
-        .map(({ message, path }) => `${path}: ${message}`);
+        .map(({ message, instancePath }) => `${instancePath}: ${message}`);
       clientFindings.push(
         ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
           { invalidBody: errors },

@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 
 import {
   SEARCH_TOTAL_NOT_COUNTED,
@@ -1457,10 +1458,9 @@ test("a provision-only list under the Postgres provider says it needs corpus-ind
     caseLawDb,
     dependencies: { provider: "pg-fts" },
   });
-  expect(refused).toMatchObject({
-    code: 400,
-    response: { message: expect.stringContaining("corpus-index") },
-  });
+  expect(refused).toMatchObject(
+    elysiaStatus(400, { message: expect.stringContaining("corpus-index") }),
+  );
 });
 
 test("a provision-only list reads its page and excerpts in one snapshot", async () => {

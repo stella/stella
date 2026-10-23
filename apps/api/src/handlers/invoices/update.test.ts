@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { invoices, timeEntries, INVOICE_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -84,11 +85,10 @@ describe("updateInvoice currency integrity", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message: "Invoice currency cannot change while entries are attached",
-      },
-    });
+      }),
+    );
   });
 });

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -155,10 +156,9 @@ describe("calendar task handler", () => {
           },
         }),
       );
-      expect(result).toEqual({
-        code: 400,
-        response: { message: "Invalid calendar date range" },
-      });
+      expect(result).toEqual(
+        elysiaStatus(400, { message: "Invalid calendar date range" }),
+      );
     },
   );
 
@@ -176,10 +176,9 @@ describe("calendar task handler", () => {
         },
       }),
     );
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid calendar date property" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid calendar date property" }),
+    );
   });
 
   test("rejects inverted instants within the same UTC day", async () => {
@@ -195,10 +194,9 @@ describe("calendar task handler", () => {
         },
       }),
     );
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid calendar date range" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid calendar date range" }),
+    );
   });
 
   test("rejects inverted date ranges", async () => {
@@ -219,9 +217,8 @@ describe("calendar task handler", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid calendar date range" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid calendar date range" }),
+    );
   });
 });

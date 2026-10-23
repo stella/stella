@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import {
   createDocx,
@@ -888,10 +889,9 @@ describe("documents.compare", () => {
 
     const result = await harness.definition.handler(harness.context);
 
-    expect(result).toEqual({
-      code: 404,
-      response: { message: "Document not found" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(404, { message: "Document not found" }),
+    );
     expect(harness.readEntityVersionFileMock).not.toHaveBeenCalled();
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
     expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
@@ -902,10 +902,7 @@ describe("documents.compare", () => {
 
     const result = await harness.definition.handler(harness.context);
 
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Not found" },
-    });
+    expect(result).toMatchObject(elysiaStatus(404, { message: "Not found" }));
     expect(harness.compareDocxMock).not.toHaveBeenCalled();
     expect(harness.readEntityVersionFileMock).not.toHaveBeenCalled();
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();

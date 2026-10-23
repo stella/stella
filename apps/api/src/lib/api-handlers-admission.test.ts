@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import { Elysia } from "elysia";
+import { Elysia, status as elysiaStatus } from "elysia";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
@@ -276,10 +276,9 @@ describe("finite HTTP action admission", () => {
         deps,
       );
       const response = await failure.handler(asTestRaw(ctx));
-      expect(response).toMatchObject({
-        code: 409,
-        response: { code: "conflict", message: "Existing failure" },
-      });
+      expect(response).toMatchObject(
+        elysiaStatus(409, { code: "conflict", message: "Existing failure" }),
+      );
       expect(deps.counts()).toEqual({ acquisitions: 0, releases: 0 });
     });
   });
@@ -416,10 +415,9 @@ describe("finite HTTP action admission", () => {
         },
         deps,
       );
-      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
-        code: 500,
-        response: { code: "internal_server_error" },
-      });
+      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject(
+        elysiaStatus(500, { code: "internal_server_error" }),
+      );
       expect(cancelled).toBe(true);
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
     });
@@ -441,10 +439,9 @@ describe("finite HTTP action admission", () => {
         },
         deps,
       );
-      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
-        code: 409,
-        response: { code: "conflict" },
-      });
+      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject(
+        elysiaStatus(409, { code: "conflict" }),
+      );
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
     });
   });
@@ -461,10 +458,9 @@ describe("finite HTTP action admission", () => {
         },
         deps,
       );
-      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
-        code: 429,
-        response: { code: "action_concurrency_busy" },
-      });
+      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject(
+        elysiaStatus(429, { code: "action_concurrency_busy" }),
+      );
       expect(calls).toBe(0);
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 0 });
     });
@@ -498,10 +494,9 @@ describe("finite HTTP action admission", () => {
         },
         { admit },
       );
-      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
-        code: 503,
-        response: { code: "action_admission_unavailable" },
-      });
+      expect(await endpoint.handler(asTestRaw(context()))).toMatchObject(
+        elysiaStatus(503, { code: "action_admission_unavailable" }),
+      );
       expect(calls).toBe(0);
     });
   });

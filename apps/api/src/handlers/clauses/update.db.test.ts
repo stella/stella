@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { Elysia } from "elysia";
+import { Elysia, status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 import JSZip from "jszip";
 
@@ -611,10 +611,12 @@ describe("clause body preconditions", () => {
         },
       }),
     );
-    expect(result).toMatchObject({
-      code: 400,
-      response: { code: CLAUSE_VERSION_LIMIT_ERROR_CODE, retryable: false },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, {
+        code: CLAUSE_VERSION_LIMIT_ERROR_CODE,
+        retryable: false,
+      }),
+    );
     expect(
       await testDb.query.clauses.findFirst({ where: { id: { eq: clauseId } } }),
     ).toEqual(before);

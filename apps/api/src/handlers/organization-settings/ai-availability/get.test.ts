@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ElysiaStatus } from "elysia";
 
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -50,8 +51,8 @@ const readAvailability = async (
         orgAIConfigStatus,
       }),
     );
-    if ("code" in result) {
-      throw new Error(`Expected availability, got status ${result.code}`);
+    if (result instanceof ElysiaStatus) {
+      throw new TypeError(`Expected availability, got status ${result.status}`);
     }
     return result;
   } finally {

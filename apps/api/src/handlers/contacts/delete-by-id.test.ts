@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -64,12 +65,11 @@ describe("deleteContactById", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(409, {
         message: "Reassign or delete 2 matters before deleting this contact",
-      },
-    });
+      }),
+    );
     expect(getCallCount()).toBe(1);
     expect(deleteCalled).toBe(false);
   });
@@ -114,12 +114,11 @@ describe("deleteContactById", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(409, {
         message: "Reassign or delete 1 matter before deleting this contact",
-      },
-    });
+      }),
+    );
     expect(getCallCount()).toBe(1);
     expect(updateCalled).toBe(false);
     expect(deleteCalled).toBe(false);
@@ -150,12 +149,11 @@ describe("deleteContactById", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 404,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(404, {
         message: "Contact not found",
-      },
-    });
+      }),
+    );
     expect(getCallCount()).toBe(1);
   });
 });

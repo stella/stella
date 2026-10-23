@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -108,10 +109,9 @@ const assignedUserIds = async () => {
   return rows.map((row) => row.userId);
 };
 
-const CAPACITY_REJECTION = {
-  code: 409,
-  response: { message: "All included per-user limits are assigned" },
-} as const;
+const CAPACITY_REJECTION = elysiaStatus(409, {
+  message: "All included per-user limits are assigned",
+}) as const;
 
 describe("assign-seat capacity", () => {
   test("assigns a member while the entitlement has a free seat", async () => {

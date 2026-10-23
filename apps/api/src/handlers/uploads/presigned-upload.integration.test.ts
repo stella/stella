@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import JSZip from "jszip";
 
 import {
@@ -416,10 +417,9 @@ describe("presigned upload mutation flow", () => {
       ),
     );
 
-    expect(finalizeResult).toEqual({
-      code: 422,
-      response: { message: "Aborted by client" },
-    });
+    expect(finalizeResult).toEqual(
+      elysiaStatus(422, { message: "Aborted by client" }),
+    );
   });
 
   test("replays structured file-security rejection details after finalize", async () => {
@@ -476,13 +476,12 @@ describe("presigned upload mutation flow", () => {
       ],
     } satisfies ApiFileSecurityRejectionDetails;
 
-    expect(firstFinalize).toEqual({
-      code: 422,
-      response: {
+    expect(firstFinalize).toEqual(
+      elysiaStatus(422, {
         message: ATTACHED_TEMPLATE_REJECTION_MESSAGE,
         ...rejectionDetails,
-      },
-    });
+      }),
+    );
     expect(replayedFinalize).toEqual(firstFinalize);
     expect(
       await testDb.query.pendingUploads.findFirst({
@@ -683,13 +682,12 @@ describe("presigned upload mutation flow", () => {
       ),
     );
 
-    expect(finalized).toMatchObject({
-      code: 422,
-      response: {
+    expect(finalized).toMatchObject(
+      elysiaStatus(422, {
         code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
         issues: [{ code: "ooxml_dde", path: "file" }],
-      },
-    });
+      }),
+    );
     expect(
       await testDb.query.pendingUploads.findFirst({
         where: { id: { eq: uploadId } },
@@ -732,10 +730,7 @@ describe("presigned upload mutation flow", () => {
       ),
     );
 
-    expect(result).toEqual({
-      code: 404,
-      response: { message: "Upload not found" },
-    });
+    expect(result).toEqual(elysiaStatus(404, { message: "Upload not found" }));
     expect(
       await testDb
         .select({ status: pendingUploads.status })

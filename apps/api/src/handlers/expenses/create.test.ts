@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -62,12 +63,11 @@ describe("createExpense (timezone validation)", () => {
 
     const result = await createExpense.handler(createContext({ safeDb }));
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message: "Invalid timezone identifier",
-      },
-    });
+      }),
+    );
     expect(getCallCount()).toBe(1);
   });
 });

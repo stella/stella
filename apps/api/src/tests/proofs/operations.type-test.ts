@@ -1,5 +1,6 @@
 import type { Named, Proof } from "@gdp-ts/core";
 import { Result } from "better-result";
+import { ElysiaStatus } from "elysia";
 
 import { runCheckedSubagentBatch } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { readCheckedAIConfiguration } from "@/api/lib/ai-config-loader";
@@ -113,8 +114,8 @@ export const scopedOperationResultInference = async <N>(
   >[0],
 ) => {
   const result = await runCheckedScopedHandler(args);
-  if ("code" in result) {
-    return result.code;
+  if (result instanceof ElysiaStatus) {
+    return result.status;
   }
   return Result.ok(result.ok satisfies boolean);
 };

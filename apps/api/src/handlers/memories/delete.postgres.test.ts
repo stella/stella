@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { sha256Hex } from "@stll/sha256/node";
 
@@ -168,7 +169,7 @@ if (!databaseUrl || !runPostgresTests) {
             expect(result).toEqual(
               allowed
                 ? { id: memoryId }
-                : { code: 403, response: { message: "Forbidden" } },
+                : elysiaStatus(403, { message: "Forbidden" }),
             );
             expect(
               await db.$count(aiMemories, eq(aiMemories.id, memoryId)),

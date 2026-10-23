@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { encodeEntitiesWindowCursor } from "@/api/lib/entities/window-cursor";
@@ -219,10 +220,7 @@ describe("entity read handlers", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toEqual(elysiaStatus(400, { message: "Invalid cursor" }));
   });
 
   test("window query rejects malformed timestamp cursor values before querying", async () => {
@@ -249,9 +247,6 @@ describe("entity read handlers", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toEqual(elysiaStatus(400, { message: "Invalid cursor" }));
   });
 });

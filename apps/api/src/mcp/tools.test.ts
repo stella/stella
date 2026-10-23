@@ -9,6 +9,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 import JSZip from "jszip";
 import * as v from "valibot";
 
@@ -5317,10 +5318,9 @@ describe("OpenAI-compatible MCP tools", () => {
       type: "expression",
       id: STATUTE_ID,
     });
-    readProvisionHistoryHandlerMock.mockResolvedValue({
-      code: 404,
-      response: { message: "Provision not found" },
-    });
+    readProvisionHistoryHandlerMock.mockResolvedValue(
+      elysiaStatus(404, { message: "Provision not found" }),
+    );
 
     expectErrorEnvelope(
       await handleMcpToolCall({

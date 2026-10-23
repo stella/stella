@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
@@ -282,10 +283,12 @@ describe("playbook document type references", () => {
         params: { playbookId, version: 1 },
       }),
     );
-    expect(restored).toMatchObject({
-      code: 400,
-      response: { message: DOCUMENT_TYPE_NOT_FOUND_MESSAGE, retryable: false },
-    });
+    expect(restored).toMatchObject(
+      elysiaStatus(400, {
+        message: DOCUMENT_TYPE_NOT_FOUND_MESSAGE,
+        retryable: false,
+      }),
+    );
     expect(await readDefinition(playbookId)).toEqual(before);
     expect(await readPlaybookAudit(ids.orgA, playbookId)).toEqual([]);
     expect(
@@ -426,10 +429,9 @@ describe("playbook document type references", () => {
         },
       }),
     );
-    expect(staleUpdate).toMatchObject({
-      code: 409,
-      response: { code: VERSION_CONFLICT_ERROR_CODE },
-    });
+    expect(staleUpdate).toMatchObject(
+      elysiaStatus(409, { code: VERSION_CONFLICT_ERROR_CODE }),
+    );
     expect(await readDefinition(playbookId)).toEqual(before);
     expect(await readPlaybookAudit(ids.orgA, playbookId)).toEqual([]);
 
@@ -446,10 +448,9 @@ describe("playbook document type references", () => {
         },
       }),
     );
-    expect(missingUpdate).toMatchObject({
-      code: 404,
-      response: { message: "Playbook not found" },
-    });
+    expect(missingUpdate).toMatchObject(
+      elysiaStatus(404, { message: "Playbook not found" }),
+    );
     expect(await readDefinition(missingId)).toEqual([]);
     expect(await readPlaybookAudit(ids.orgA, missingId)).toEqual([]);
     expect(await readDefinition(playbookId)).toEqual(before);
@@ -650,10 +651,12 @@ describe("playbook document type references", () => {
         body: { starterId: starter.starterId },
       }),
     );
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: DOCUMENT_TYPE_NOT_FOUND_MESSAGE, retryable: false },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, {
+        message: DOCUMENT_TYPE_NOT_FOUND_MESSAGE,
+        retryable: false,
+      }),
+    );
     expect(
       await testDb
         .select({ id: playbookDefinitions.id })

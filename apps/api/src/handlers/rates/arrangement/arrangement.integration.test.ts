@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -295,10 +296,9 @@ test("mixed-currency approved work remains recordable but cap status is unavaila
       (row) => row.metadata?.["event"] === "billing_currency_mismatch",
     ),
   ).toHaveLength(1);
-  expect(await set({ ...capped, capAmount: 20_000 })).toMatchObject({
-    code: 409,
-    response: { code: "billing_currency_mismatch" },
-  });
+  expect(await set({ ...capped, capAmount: 20_000 })).toMatchObject(
+    elysiaStatus(409, { code: "billing_currency_mismatch" }),
+  );
 });
 
 test("another organization cannot read or replace an arrangement under a foreign matter pin", async () => {
@@ -329,10 +329,9 @@ test("another organization cannot read or replace an arrangement under a foreign
       body: { mode: "flat_fee", currency: "USD", flatFeeAmount: 1 },
     }),
   );
-  expect(result).toMatchObject({
-    code: 404,
-    response: { message: "Workspace not found" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(404, { message: "Workspace not found" }),
+  );
   expect(
     await getArrangement.handler(
       createTestHandlerContext<Parameters<typeof getArrangement.handler>[0]>({
@@ -584,10 +583,9 @@ test("GET configuration can be resent unchanged and stale revisions are refused"
   }
   expect(await set(readback)).toEqual(readback);
   await set({ mode: "hourly", currency: "USD" });
-  expect(await set(readback)).toMatchObject({
-    code: 409,
-    response: { code: "billing_arrangement_stale" },
-  });
+  expect(await set(readback)).toMatchObject(
+    elysiaStatus(409, { code: "billing_arrangement_stale" }),
+  );
 });
 
 test.each([
@@ -644,10 +642,9 @@ test("legacy draft time reservations are counted once before and after line mate
     remainingInvoiceCapAmount: "2000",
     remainingWipCapAmount: "2000",
   });
-  expect(await set({ ...capped, capAmount: 7999 })).toMatchObject({
-    code: 409,
-    response: { code: "billing_cap_below_reserved" },
-  });
+  expect(await set({ ...capped, capAmount: 7999 })).toMatchObject(
+    elysiaStatus(409, { code: "billing_cap_below_reserved" }),
+  );
   await db.insert(invoiceLines).values({
     invoiceId,
     workspaceId,

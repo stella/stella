@@ -8,21 +8,20 @@
  */
 
 import { ElysiaError, ValidationError } from "elysia";
+import { IsLocalizedValidationError } from "typebox/error";
+import type { TLocalizedValidationError } from "typebox/error";
 
 import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
-import type {
-  ApiValidationConstraint,
-  ApiValidationIssue,
-} from "@stll/api-contract";
+import type { ApiValidationIssue } from "@stll/api-contract";
 
 import { httpError } from "@/api/lib/errors/http-error";
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import type { FrameworkFailure } from "@/api/lib/observability/failure";
 
 const ELYSIA_ERROR_CODE = {
-  validation: ["VALIDATION", "validation"],
-  notFound: ["NOT_FOUND", "not-found"],
-  parse: ["PARSE", "parse"],
+  validation: "validation",
+  notFound: "not-found",
+  parse: "parse",
 } as const;
 
 const frameworkErrorCode = (code: unknown, error: unknown) =>
@@ -38,67 +37,24 @@ type ElysiaErrorAnswer = {
 // One rejected request answers with a bounded list; Elysia itself stops at 64.
 const MAX_VALIDATION_ISSUES = 20;
 
-const lengthBound = (schema: unknown, key: "maxLength" | "minLength") => {
-  if (typeof schema !== "object" || schema === null || !(key in schema)) {
-    return undefined;
-  }
-  const bound: unknown = Reflect.get(schema, key);
-  return typeof bound === "number" ? bound : undefined;
-};
+const fieldAt = (path: string) => path.replace(/^\//u, "").replaceAll("/", ".");
 
 const issueFor = (
-  path: string,
-  schema: unknown,
-  required: boolean,
+  error: TLocalizedValidationError,
+  path = error.instancePath,
 ): ApiValidationIssue => {
-  const field = path.replace(/^\//u, "").replaceAll("/", ".");
-  const constraint = ((): {
-    constraint: ApiValidationConstraint;
-    limit?: number;
-  } => {
-    if (required) {
-      return { constraint: "required" };
-    }
-    const max = lengthBound(schema, "maxLength");
-    if (max !== undefined) {
-      return { constraint: "maxLength", limit: max };
-    }
-    const min = lengthBound(schema, "minLength");
-    if (min !== undefined) {
-      return { constraint: "minLength", limit: min };
-    }
-    return { constraint: "invalid" };
-  })();
-  return { field, ...constraint };
-};
-
-const schemaAtPath = (schema: unknown, path: string): unknown => {
-  let current = schema;
-  for (const segment of path.replace(/^\//u, "").split("/")) {
-    if (segment === "" || typeof current !== "object" || current === null) {
-      return current;
-    }
-    const properties: unknown = Reflect.get(current, "properties");
-    if (typeof properties !== "object" || properties === null) {
-      return current;
-    }
-    current = Reflect.get(properties, segment);
+  const field = fieldAt(path);
+  if (error.keyword === "maxLength") {
+    return { field, constraint: "maxLength", limit: error.params.limit };
   }
-  return current;
-};
-
-const requiredProperties = (params: unknown): readonly string[] => {
-  if (typeof params !== "object" || params === null) {
-    return [];
+  if (error.keyword === "minLength") {
+    return { field, constraint: "minLength", limit: error.params.limit };
   }
-  const required: unknown = Reflect.get(params, "requiredProperties");
-  return Array.isArray(required)
-    ? required.filter((value): value is string => typeof value === "string")
-    : [];
+  return {
+    field,
+    constraint: error.keyword === "required" ? "required" : "invalid",
+  };
 };
-
-const validationDetails = (details: unknown): readonly unknown[] =>
-  Array.isArray(details) ? details : [];
 
 /**
  * The failing fields of a rejected request, deduplicated, without the values
@@ -110,23 +66,18 @@ const requestValidationIssues = (error: unknown): ApiValidationIssue[] => {
   }
   const seen = new Set<string>();
   const issues: ApiValidationIssue[] = [];
-  for (const detail of validationDetails(error.all)) {
-    if (typeof detail !== "object" || detail === null) {
+  for (const detail of error.errors) {
+    if (!IsLocalizedValidationError(detail)) {
       continue;
     }
-    const path: unknown = Reflect.get(detail, "path");
-    if (typeof path !== "string") {
-      continue;
-    }
-    const params: unknown = Reflect.get(detail, "params");
-    const required = requiredProperties(params);
-    const paths = required.length > 0 ? required : [path];
-    for (const issuePath of paths) {
-      const issue = issueFor(
-        issuePath,
-        schemaAtPath(error.schema, issuePath),
-        required.length > 0,
-      );
+    const paths =
+      detail.keyword === "required"
+        ? detail.params.requiredProperties.map(
+            (property) => `${detail.instancePath}/${property}`,
+          )
+        : [detail.instancePath];
+    for (const path of paths) {
+      const issue = issueFor(detail, path);
       const key = `${issue.field}:${issue.constraint}`;
       if (seen.has(key)) {
         continue;
@@ -179,16 +130,13 @@ export const elysiaErrorAnswer = (
     return INTERNAL_ANSWER;
   }
   switch (resolvedCode) {
-    case ELYSIA_ERROR_CODE.validation[0]:
-    case ELYSIA_ERROR_CODE.validation[1]:
+    case ELYSIA_ERROR_CODE.validation:
       return isResponseValidationError(error)
         ? INTERNAL_ANSWER
         : { ...INVALID_REQUEST_ANSWER, issues: requestValidationIssues(error) };
-    case ELYSIA_ERROR_CODE.notFound[0]:
-    case ELYSIA_ERROR_CODE.notFound[1]:
+    case ELYSIA_ERROR_CODE.notFound:
       return NOT_FOUND_ANSWER;
-    case ELYSIA_ERROR_CODE.parse[0]:
-    case ELYSIA_ERROR_CODE.parse[1]:
+    case ELYSIA_ERROR_CODE.parse:
       return MALFORMED_REQUEST_ANSWER;
     default:
       return INTERNAL_ANSWER;
@@ -221,16 +169,13 @@ export const elysiaFailureReason = (
     return undefined;
   }
   switch (resolvedCode) {
-    case ELYSIA_ERROR_CODE.validation[0]:
-    case ELYSIA_ERROR_CODE.validation[1]:
+    case ELYSIA_ERROR_CODE.validation:
       return isResponseValidationError(error)
         ? "response_invalid"
         : "request_validation";
-    case ELYSIA_ERROR_CODE.notFound[0]:
-    case ELYSIA_ERROR_CODE.notFound[1]:
+    case ELYSIA_ERROR_CODE.notFound:
       return "route_not_found";
-    case ELYSIA_ERROR_CODE.parse[0]:
-    case ELYSIA_ERROR_CODE.parse[1]:
+    case ELYSIA_ERROR_CODE.parse:
       return "request_malformed";
     default:
       return undefined;

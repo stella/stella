@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -78,10 +79,7 @@ describe("updateWorkspace", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 404,
-      response: { message: "Client not found" },
-    });
+    expect(result).toEqual(elysiaStatus(404, { message: "Client not found" }));
     expect(getCallCount()).toBe(1);
   });
 
@@ -119,9 +117,6 @@ describe("updateWorkspace", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 404,
-      response: { message: "Client not found" },
-    });
+    expect(result).toEqual(elysiaStatus(404, { message: "Client not found" }));
   });
 });

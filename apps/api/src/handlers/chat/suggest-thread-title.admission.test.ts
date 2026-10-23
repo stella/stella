@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
@@ -207,15 +208,12 @@ describe("title authorization and usage precede action coordination", () => {
         expect(enabled).toEqual(disabled);
         expect(enabled).toMatchObject(
           denial === "workspace"
-            ? { code: 404, response: { message: "Workspace not found" } }
-            : {
-                code: 402,
-                response: {
-                  code: "usage_limit_exceeded",
-                  reason: "no_entitlement",
-                  available: 0,
-                },
-              },
+            ? elysiaStatus(404, { message: "Workspace not found" })
+            : elysiaStatus(402, {
+                code: "usage_limit_exceeded",
+                reason: "no_entitlement",
+                available: 0,
+              }),
         );
       });
     }
@@ -228,12 +226,11 @@ test("thread title usage refusal calls no model and persists nothing", async () 
     denial: "usage",
     storeState: "busy",
   });
-  expect(result).toMatchObject({
-    code: 402,
-    response: {
+  expect(result).toMatchObject(
+    elysiaStatus(402, {
       code: "usage_limit_exceeded",
       reason: "no_entitlement",
       available: 0,
-    },
-  });
+    }),
+  );
 });

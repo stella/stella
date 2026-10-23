@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import {
@@ -1134,10 +1135,9 @@ describe("public statute list", () => {
     );
 
     expect(result).not.toHaveProperty("items");
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { message: "Invalid cursor" }),
+    );
   });
 
   test("rejects a cursor from the other ordering", async () => {
@@ -1153,10 +1153,9 @@ describe("public statute list", () => {
     );
 
     expect(result).not.toHaveProperty("items");
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { message: "Invalid cursor" }),
+    );
   });
 
   test("rejects a cursor outside either protocol", async () => {
@@ -1174,10 +1173,9 @@ describe("public statute list", () => {
       );
 
       expect(result).not.toHaveProperty("items");
-      expect(result).toMatchObject({
-        code: 400,
-        response: { message: "Invalid cursor" },
-      });
+      expect(result).toMatchObject(
+        elysiaStatus(400, { message: "Invalid cursor" }),
+      );
     }
   });
 
@@ -1545,10 +1543,9 @@ describe("public statute versions", () => {
     });
 
     expect(result).not.toHaveProperty("items");
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Legislation document not found" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(404, { message: "Legislation document not found" }),
+    );
   });
 });
 
@@ -1611,10 +1608,9 @@ describe("public statute read", () => {
       "pages",
     );
 
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Legislation document not found" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(404, { message: "Legislation document not found" }),
+    );
   });
 });
 
@@ -1638,13 +1634,12 @@ describe("point-in-time statute read", () => {
     expect(expectDocumentId(await readEliAsOf("CZ/1998/222", yesterday))).toBe(
       sunsetAct,
     );
-    expect(await readEliAsOf("CZ/1998/222", today)).toMatchObject({
-      code: 404,
-      response: {
+    expect(await readEliAsOf("CZ/1998/222", today)).toMatchObject(
+      elysiaStatus(404, {
         message:
           "No version of this legislation was in force on the given date",
-      },
-    });
+      }),
+    );
   });
 
   test("prefers the latest opening when several windows cover the date", async () => {
@@ -1659,13 +1654,12 @@ describe("point-in-time statute read", () => {
   });
 
   test("reads as not found before the corpus covers the work", async () => {
-    expect(await readAsOf("2013-01-01")).toMatchObject({
-      code: 404,
-      response: {
+    expect(await readAsOf("2013-01-01")).toMatchObject(
+      elysiaStatus(404, {
         message:
           "No version of this legislation was in force on the given date",
-      },
-    });
+      }),
+    );
   });
 
   test("narrows to one language", async () => {
@@ -1680,10 +1674,9 @@ describe("point-in-time statute read", () => {
       legislationDb,
     );
 
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Legislation document not found" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(404, { message: "Legislation document not found" }),
+    );
   });
 
   test("reads as not found for a source not cleared for redistribution", async () => {
@@ -1692,10 +1685,9 @@ describe("point-in-time statute read", () => {
       legislationDb,
     );
 
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Legislation document not found" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(404, { message: "Legislation document not found" }),
+    );
   });
 
   test("keeps the stored publisher metadata off the response", async () => {
@@ -2016,10 +2008,9 @@ describe("provision history", () => {
       surface: "pages",
     });
 
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Provision not found" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(404, { message: "Provision not found" }),
+    );
   });
 
   test("answers from a version that dropped the anchor, not just from one that kept it", async () => {
@@ -2072,10 +2063,9 @@ describe("provision history", () => {
       surface: "pages",
     });
 
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Legislation document not found" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(404, { message: "Legislation document not found" }),
+    );
   });
 
   test("walks every carrying version exactly once across cursor pages", async () => {
@@ -2132,10 +2122,9 @@ describe("provision history", () => {
               legislationDb: historyDb,
               surface: "pages",
             }),
-          ).toMatchObject({
-            code: 404,
-            response: { message: "Provision not found" },
-          });
+          ).toMatchObject(
+            elysiaStatus(404, { message: "Provision not found" }),
+          );
           continue;
         }
 

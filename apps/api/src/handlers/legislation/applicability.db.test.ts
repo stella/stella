@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -441,9 +442,8 @@ const inconsistentBody = (
     to: string | null;
     basis: LegislationWindowDispositionBasis;
   }[],
-) => ({
-  code: 404,
-  response: {
+) =>
+  elysiaStatus(404, {
     code: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
     message: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
     versions: versions.map((entry) => ({
@@ -453,8 +453,7 @@ const inconsistentBody = (
       versionValidTo: entry.to,
       basis: entry.basis,
     })),
-  },
-});
+  });
 
 // --- Equivalence -----------------------------------------------------------
 
@@ -712,13 +711,12 @@ describe("the gap reason", () => {
   });
 
   test("a Work whose publisher states it never took effect is uncovered, not inconsistent", async () => {
-    expect(await readEli(NEVER_ELI, "2010-01-01")).toMatchObject({
-      code: 404,
-      response: {
+    expect(await readEli(NEVER_ELI, "2010-01-01")).toMatchObject(
+      elysiaStatus(404, {
         message:
           "No version of this legislation was in force on the given date",
-      },
-    });
+      }),
+    );
     expect(await resolveOne(NEVER_ELI, "2010-01-01")).toEqual({
       id: null,
       reason: null,

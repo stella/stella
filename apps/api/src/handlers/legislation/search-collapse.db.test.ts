@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import { STATUTE_ALIASES } from "@stll/api-contract/statute-aliases";
@@ -704,10 +705,9 @@ describe("the Postgres search path", () => {
         "unobserved",
         searchDependencies,
       );
-      expect(response).toMatchObject({
-        code: 400,
-        response: { message: "Invalid cursor" },
-      });
+      expect(response).toMatchObject(
+        elysiaStatus(400, { message: "Invalid cursor" }),
+      );
     }
   });
 

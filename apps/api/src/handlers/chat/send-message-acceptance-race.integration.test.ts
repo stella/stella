@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -148,13 +149,10 @@ describe("a send whose thread changed between its read and its claim", () => {
       // The fixture must reach the fault: the other turn settled in between.
       expect(raceRan).toBe(true);
       expect(refused).toEqual({
-        rejection: {
-          code: 409,
-          response: {
-            message:
-              "The chat changed while this message was being sent; send it again",
-          },
-        },
+        rejection: elysiaStatus(409, {
+          message:
+            "The chat changed while this message was being sent; send it again",
+        }),
         status: "rejected",
       });
       const afterRefusal = await storedThread(threadId);

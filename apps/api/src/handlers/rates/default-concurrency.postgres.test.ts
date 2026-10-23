@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { status as elysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -302,12 +303,9 @@ if (!databaseUrl || !runPostgres) {
             auditLogs,
             eq(auditLogs.workspaceId, workspaceId),
           );
-        const refusal = {
-          code: 400,
-          response: {
-            message: "Cannot unset default: no other default rate table exists",
-          },
-        };
+        const refusal = elysiaStatus(400, {
+          message: "Cannot unset default: no other default rate table exists",
+        });
 
         // The second table is the only default. Clearing the flag on the first
         // one looks safe until the competing promotion of that same table

@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { correspondenceDropLogs } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -179,10 +180,9 @@ describe("correspondence drop-log read boundary", () => {
 
   test("rejects a malformed cursor with status 400", async () => {
     const result = await read({ cursor: "not-a-cursor" });
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid pagination cursor" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid pagination cursor" }),
+    );
   });
 
   test("does not read another matter or organization through a scoped handle", async () => {

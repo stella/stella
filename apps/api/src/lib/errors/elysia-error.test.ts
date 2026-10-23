@@ -29,7 +29,16 @@ const app = new Elysia()
   .post(
     "/bounded-body",
     {
-      body: t.Object({ name: t.String({ minLength: 1, maxLength: 8 }) }),
+      body: t.Object({ name: t.String({ minLength: 3, maxLength: 8 }) }),
+    },
+    () => "ok",
+  )
+  .post(
+    "/pattern-body",
+    {
+      body: t.Object({
+        name: t.String({ pattern: "^[a-z]+$", maxLength: 8 }),
+      }),
     },
     () => "ok",
   )
@@ -83,6 +92,25 @@ describe("answering a framework-raised error", () => {
       issues: [{ field: "name", constraint: "maxLength", limit: 8 }],
     });
     expect(body).not.toContain(tooLong);
+  });
+
+  test("reports the pattern failure instead of an unfailing length bound", async () => {
+    const response = await post(
+      "/pattern-body",
+      JSON.stringify({ name: "123" }),
+    );
+
+    expect(await response.json()).toMatchObject({
+      issues: [{ field: "name", constraint: "invalid" }],
+    });
+  });
+
+  test("reports a short string as minLength, never maxLength", async () => {
+    const response = await post("/bounded-body", JSON.stringify({ name: "x" }));
+
+    expect(await response.json()).toMatchObject({
+      issues: [{ field: "name", constraint: "minLength", limit: 3 }],
+    });
   });
 
   test("names a missing field as required", async () => {

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -120,10 +121,12 @@ test.each(customContents)(
         file: false,
         ai: false,
       }),
-    ).toMatchObject({
-      code: 422,
-      response: { code: "file_property_type_immutable", retryable: false },
-    });
+    ).toMatchObject(
+      elysiaStatus(422, {
+        code: "file_property_type_immutable",
+        retryable: false,
+      }),
+    );
     expect(
       await db.query.properties.findFirst({
         where: { id: { eq: ids.propertyA1 } },
@@ -148,10 +151,12 @@ test.each(customContents)(
       file: true,
       ai: false,
     });
-    expect(response).toMatchObject({
-      code: 422,
-      response: { code: "file_property_type_immutable", retryable: false },
-    });
+    expect(response).toMatchObject(
+      elysiaStatus(422, {
+        code: "file_property_type_immutable",
+        retryable: false,
+      }),
+    );
     expect(
       await db.query.properties.findFirst({
         where: { id: { eq: ids.filePropertyA1 } },
@@ -181,10 +186,12 @@ test("non-system file columns retain their type", async () => {
       file: true,
       ai: false,
     }),
-  ).toMatchObject({
-    code: 422,
-    response: { code: "file_property_type_immutable", retryable: false },
-  });
+  ).toMatchObject(
+    elysiaStatus(422, {
+      code: "file_property_type_immutable",
+      retryable: false,
+    }),
+  );
   expect(
     await db.query.properties.findFirst({
       where: { id: { eq: ids.filePropertyA1 } },
@@ -204,14 +211,13 @@ test("file type refusal precedes AI tool validation", async () => {
       file: false,
       ai: true,
     }),
-  ).toMatchObject({
-    code: 422,
-    response: {
+  ).toMatchObject(
+    elysiaStatus(422, {
       code: "file_property_type_immutable",
       retryable: false,
       hint: expect.stringContaining("properties.update"),
-    },
-  });
+    }),
+  );
 });
 
 test("file column updates preserve document references", async () => {

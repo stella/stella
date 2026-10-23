@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -216,12 +217,11 @@ describe("answer rewrite endpoint", () => {
       replacement: "new\n\nblock",
     });
     expect(modelCalls).toBe(1);
-    expect(result).toMatchObject({
-      code: 502,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(502, {
         message:
           "Answer rewrite returned unbalanced Markdown; try another instruction",
-      },
-    });
+      }),
+    );
   });
 });

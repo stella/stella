@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import {
   createFeatureAccessSnapshot,
@@ -87,10 +88,9 @@ for (const grants of [
           featureAccessSnapshot: snapshot,
         }),
       );
-      expect(result, id).toMatchObject({
-        code: 404,
-        response: { message: "Not found" },
-      });
+      expect(result, id).toMatchObject(
+        elysiaStatus(404, { message: "Not found" }),
+      );
     }
   });
 }

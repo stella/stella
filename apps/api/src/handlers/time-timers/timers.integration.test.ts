@@ -10,6 +10,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus, ElysiaStatus } from "elysia";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
@@ -137,8 +138,8 @@ const start = async (matterId = ids.wsA1) => {
       }),
     }),
   );
-  if ("code" in result) {
-    throw new Error(`Timer start failed: ${JSON.stringify(result)}`);
+  if (result instanceof ElysiaStatus) {
+    throw new TypeError(`Timer start failed: ${JSON.stringify(result)}`);
   }
   return result;
 };
@@ -231,8 +232,8 @@ describe("global timer lifecycle", () => {
     const timer = await start();
     setSystemTime(new Date("2026-09-02T00:01:00.000Z"));
     const first = await confirm(timer.id);
-    if ("code" in first) {
-      throw new Error(`Timer confirm failed: ${JSON.stringify(first)}`);
+    if (first instanceof ElysiaStatus) {
+      throw new TypeError(`Timer confirm failed: ${JSON.stringify(first)}`);
     }
     expect(await readTimer(timer.id)).toBeUndefined();
     const entry = await db.query.timeEntries.findFirst({
@@ -264,8 +265,8 @@ describe("global timer lifecycle", () => {
   test("replaying confirmation after entry deletion refuses to recreate it", async () => {
     const timer = await start();
     const completed = await confirm(timer.id);
-    if ("code" in completed) {
-      throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+    if (completed instanceof ElysiaStatus) {
+      throw new TypeError(`Timer confirm failed: ${JSON.stringify(completed)}`);
     }
     await db.delete(timeEntries).where(eq(timeEntries.id, completed.id));
     const before = await db
@@ -278,10 +279,9 @@ describe("global timer lifecycle", () => {
         ),
       );
     const auditCount = auditEvents.length;
-    expect(await confirm(timer.id)).toMatchObject({
-      code: 409,
-      response: { message: "The confirmed entry was deleted" },
-    });
+    expect(await confirm(timer.id)).toMatchObject(
+      elysiaStatus(409, { message: "The confirmed entry was deleted" }),
+    );
     expect(await confirm(timer.id)).toMatchObject({ code: 409 });
     expect(
       await db
@@ -411,8 +411,10 @@ describe("global timer lifecycle", () => {
         .set({ timeLockedThroughMonth: null })
         .where(eq(organizationSettings.organizationId, ids.orgA));
       const completed = await complete(timerId);
-      if ("code" in completed) {
-        throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+      if (completed instanceof ElysiaStatus) {
+        throw new TypeError(
+          `Timer confirm failed: ${JSON.stringify(completed)}`,
+        );
       }
       expect(completed.id).not.toBe(legacyId);
       expect(
@@ -456,8 +458,8 @@ describe("global timer lifecycle", () => {
     const timer = await start();
     setSystemTime(new Date("2026-09-02T00:01:00.000Z"));
     const result = await confirm(timer.id);
-    if ("code" in result) {
-      throw new Error(`Timer confirm failed: ${JSON.stringify(result)}`);
+    if (result instanceof ElysiaStatus) {
+      throw new TypeError(`Timer confirm failed: ${JSON.stringify(result)}`);
     }
     const entry = await db.query.timeEntries.findFirst({
       where: { id: { eq: result.id } },
@@ -479,8 +481,8 @@ describe("global timer lifecycle", () => {
         }),
       }),
     );
-    if ("code" in started) {
-      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    if (started instanceof ElysiaStatus) {
+      throw new TypeError(`Timer start failed: ${JSON.stringify(started)}`);
     }
     setSystemTime(new Date("2026-09-02T00:06:00.000Z"));
     const request = createTestHandlerContext<
@@ -494,8 +496,10 @@ describe("global timer lifecycle", () => {
       }),
     });
     const completed = await confirmTimer.handler(request);
-    if ("code" in completed) {
-      throw new Error(`Internal confirm failed: ${JSON.stringify(completed)}`);
+    if (completed instanceof ElysiaStatus) {
+      throw new TypeError(
+        `Internal confirm failed: ${JSON.stringify(completed)}`,
+      );
     }
     expect(completed).toMatchObject({
       activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
@@ -574,8 +578,8 @@ describe("global timer lifecycle", () => {
         }),
       }),
     );
-    if ("code" in started) {
-      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    if (started instanceof ElysiaStatus) {
+      throw new TypeError(`Timer start failed: ${JSON.stringify(started)}`);
     }
     await db
       .update(organizationSettings)
@@ -603,8 +607,8 @@ describe("global timer lifecycle", () => {
         body: checkedBody(startTimer.config.body, { description: "Research" }),
       }),
     );
-    if ("code" in started) {
-      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    if (started instanceof ElysiaStatus) {
+      throw new TypeError(`Timer start failed: ${JSON.stringify(started)}`);
     }
     const auditCount = auditEvents.length;
     const result = await confirm(started.id);
@@ -697,8 +701,10 @@ describe("global timer lifecycle", () => {
           body: checkedBody(confirmTimer.config.body, { timezoneId: "UTC" }),
         }),
       );
-      if ("code" in completed) {
-        throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+      if (completed instanceof ElysiaStatus) {
+        throw new TypeError(
+          `Timer confirm failed: ${JSON.stringify(completed)}`,
+        );
       }
       expect(
         await db.query.timeEntries.findFirst({
@@ -745,8 +751,8 @@ describe("global timer lifecycle", () => {
         }),
       }),
     );
-    if ("code" in started) {
-      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    if (started instanceof ElysiaStatus) {
+      throw new TypeError(`Timer start failed: ${JSON.stringify(started)}`);
     }
     const originalTimer = await readTimer(started.id);
     expect(originalTimer).toMatchObject({
@@ -772,10 +778,9 @@ describe("global timer lifecycle", () => {
         body: checkedBody(confirmTimer.config.body, { timezoneId: "UTC" }),
       }),
     );
-    expect(refused).toMatchObject({
-      code: 404,
-      response: { message: "Matter not found or not accessible" },
-    });
+    expect(refused).toMatchObject(
+      elysiaStatus(404, { message: "Matter not found or not accessible" }),
+    );
     expect(await readTimer(started.id)).toEqual(originalTimer);
     expect(
       await db
@@ -793,8 +798,8 @@ describe("global timer lifecycle", () => {
     );
     expect(reassigned).toMatchObject({ id: started.id, matterId: ids.wsA1 });
     const completed = await confirm(started.id);
-    if ("code" in completed) {
-      throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+    if (completed instanceof ElysiaStatus) {
+      throw new TypeError(`Timer confirm failed: ${JSON.stringify(completed)}`);
     }
     expect(await readTimer(started.id)).toBeUndefined();
     expect(
@@ -892,10 +897,9 @@ describe("global timer lifecycle", () => {
       );
     }
     expect(scopedOriginal.value).toBeUndefined();
-    expect(await confirm(timerId)).toMatchObject({
-      code: 404,
-      response: { message: "Original timer entry is not accessible" },
-    });
+    expect(await confirm(timerId)).toMatchObject(
+      elysiaStatus(404, { message: "Original timer entry is not accessible" }),
+    );
     expect(await readTimer(timerId)).toMatchObject({
       legacyTimeEntryId: legacyId,
     });
@@ -908,10 +912,9 @@ describe("global timer lifecycle", () => {
         params: { id: timerId },
       }),
     );
-    expect(discarded).toMatchObject({
-      code: 404,
-      response: { message: "Original timer entry is not accessible" },
-    });
+    expect(discarded).toMatchObject(
+      elysiaStatus(404, { message: "Original timer entry is not accessible" }),
+    );
     expect(await readTimer(timerId)).toMatchObject({
       legacyTimeEntryId: legacyId,
     });

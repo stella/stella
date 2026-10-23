@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -144,12 +145,11 @@ describe("search handler workspace scoping", () => {
       scopedDb: unusedScopedDb,
     });
 
-    expect(result).toMatchObject({
-      code: 400,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(400, {
         message: "Provide a search query or at least one filter",
-      },
-    });
+      }),
+    );
     expect(searchMock).not.toHaveBeenCalled();
   });
 
@@ -167,10 +167,9 @@ describe("search handler workspace scoping", () => {
       scopedDb: unusedScopedDb,
     });
 
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { message: "Invalid cursor" }),
+    );
     expect(searchMock).not.toHaveBeenCalled();
   });
 
@@ -305,10 +304,9 @@ describe("search handler workspace scoping", () => {
       scopedDb: unusedScopedDb,
     });
 
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: "Workspace not found in organization" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { message: "Workspace not found in organization" }),
+    );
     expect(searchMock).not.toHaveBeenCalled();
   });
 

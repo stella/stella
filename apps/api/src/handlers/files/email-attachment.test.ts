@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { scanEmailAttachmentForSave } from "@/api/handlers/files/email-attachment-save-scan";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -43,10 +44,7 @@ test("rejects an inaccessible target matter before reading source bytes", async 
 
   const result = await saveEmailAttachmentEndpoint.handler(context);
 
-  expect(result).toEqual({
-    code: 404,
-    response: { message: "Not found" },
-  });
+  expect(result).toEqual(elysiaStatus(404, { message: "Not found" }));
   expect(scopedDb).not.toHaveBeenCalled();
 });
 

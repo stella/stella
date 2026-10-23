@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { status as elysiaStatus } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
@@ -341,10 +342,11 @@ describe("send message context-matter authorization", () => {
       createContext({ contextMatterIds: [inaccessibleWorkspaceId] }),
     );
 
-    expect(result).toEqual({
-      code: 403,
-      response: { message: "contextMatterIds includes inaccessible matter" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(403, {
+        message: "contextMatterIds includes inaccessible matter",
+      }),
+    );
   });
 
   test("treats a deleting matter as inaccessible even when membership still resolves", async () => {
@@ -352,10 +354,11 @@ describe("send message context-matter authorization", () => {
       createContext({ contextMatterIds: [deletingWorkspaceId] }),
     );
 
-    expect(result).toEqual({
-      code: 403,
-      response: { message: "contextMatterIds includes inaccessible matter" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(403, {
+        message: "contextMatterIds includes inaccessible matter",
+      }),
+    );
   });
 });
 
@@ -384,12 +387,11 @@ describe("agent sandbox preflight", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 422,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(422, {
         message: "Agent sandbox runs are not enabled for this deployment.",
-      },
-    });
+      }),
+    );
     expect(insertValues).toHaveBeenCalledTimes(1);
     expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
@@ -426,10 +428,9 @@ describe("agent connector isolation", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid chat message" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid chat message" }),
+    );
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
   });
 
@@ -533,10 +534,11 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     expect(insert).not.toHaveBeenCalled();
   });
 
@@ -569,10 +571,11 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     expect(loadWebSearchProvidersForOrgMock).not.toHaveBeenCalled();
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
   });
@@ -607,10 +610,11 @@ describe("send message disconnect handling", () => {
     );
     webSearchProviderLoadHook = undefined;
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     expect(loadWebSearchProvidersForOrgMock).toHaveBeenCalledTimes(1);
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
   });
@@ -644,10 +648,11 @@ describe("send message disconnect handling", () => {
     );
     externalMcpToolsLoadHook = undefined;
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     expect(loadExternalMcpToolsForUserMock).toHaveBeenCalledTimes(1);
     expect(findChatThread).toHaveBeenCalledTimes(1);
   });
@@ -679,10 +684,11 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     expect(insertValues).toHaveBeenCalledTimes(1);
     expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
@@ -714,10 +720,11 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
 
@@ -764,10 +771,11 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     const claimUpdate = claimUpdates.at(0);
     if (!claimUpdate) {
       throw new Error("Expected the rollback ownership claim to update");
@@ -827,10 +835,11 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Client disconnected before AI work started",
+      }),
+    );
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -932,10 +941,9 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 500,
-      response: { message: "Failed to discover chat connectors" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(500, { message: "Failed to discover chat connectors" }),
+    );
     expect(turnUpdates).toContainEqual(
       expect.objectContaining({
         failureCode: "connector-discovery",
@@ -1046,10 +1054,9 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 500,
-      response: { message: "Failed to discover chat connectors" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(500, { message: "Failed to discover chat connectors" }),
+    );
     expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
     expect(acceptanceTransaction).not.toBeNull();
     expect(claimTransaction).toBe(acceptanceTransaction);
@@ -1138,10 +1145,9 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 500,
-      response: { message: "Failed to discover chat connectors" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(500, { message: "Failed to discover chat connectors" }),
+    );
     const persistedFailure = insertedMessages.at(-1);
     expect(persistedFailure).toEqual([
       expect.objectContaining({
@@ -1256,10 +1262,11 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: { message: "The run id already names another chat turn" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(409, {
+        message: "The run id already names another chat turn",
+      }),
+    );
     expect(lookup).toHaveBeenCalledTimes(1);
     expect(compactMessagesForContextMock).not.toHaveBeenCalled();
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
@@ -1575,10 +1582,9 @@ describe("send message disconnect handling", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 500,
-      response: { message: "Failed to discover chat connectors" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(500, { message: "Failed to discover chat connectors" }),
+    );
     // Turn acceptance, the user message, and the terminal failed
     // assistant message each persist their own row; the user-message
     // persist and the failure persist each touch the thread row once.
@@ -1634,12 +1640,11 @@ describe("send message turn persistence", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message: "Regeneration requires one unambiguous user-message target",
-      },
-    });
+      }),
+    );
     expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         threadId,
@@ -1718,10 +1723,9 @@ describe("send message turn persistence", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: { message: "A chat turn is already running" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(409, { message: "A chat turn is already running" }),
+    );
     expect(compactionCheckpointReads).toBe(HISTORY_WINDOW_CHECKPOINT_READS);
     expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
       expect.objectContaining({

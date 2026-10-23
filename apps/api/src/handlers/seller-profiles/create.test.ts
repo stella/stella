@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -58,10 +59,7 @@ describe("seller profile creation", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid IBAN" },
-    });
+    expect(result).toEqual(elysiaStatus(400, { message: "Invalid IBAN" }));
     expect(transactionCount).toBe(0);
   });
 
@@ -84,10 +82,9 @@ describe("seller profile creation", () => {
       }),
     );
 
-    expect(result).toMatchObject({
-      code: 400,
-      response: { code: "vat_payer_requires_vat_id" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { code: "vat_payer_requires_vat_id" }),
+    );
     expect(transactionCount).toBe(0);
   });
 

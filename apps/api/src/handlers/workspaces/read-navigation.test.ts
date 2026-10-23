@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -232,10 +233,7 @@ describe("workspace navigation pagination", () => {
 
     const result = await readWorkspaceNavigation.handler(context);
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toEqual(elysiaStatus(400, { message: "Invalid cursor" }));
     expect(limit).not.toHaveBeenCalled();
   });
 });

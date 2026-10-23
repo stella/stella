@@ -1,6 +1,7 @@
 // The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
@@ -92,10 +93,9 @@ describe("verification handler access admission", () => {
             body: {},
           }),
         );
-        expect(result).toMatchObject({
-          code: 404,
-          response: { message: "Not found" },
-        });
+        expect(result).toMatchObject(
+          elysiaStatus(404, { message: "Not found" }),
+        );
         expect(operations).toBe(0);
       }
     } finally {
@@ -164,10 +164,7 @@ describe("verification handler access admission", () => {
         selections = 0;
         expect(
           await get.handler(asTestRaw({ ...fixture, params: { runId } })),
-        ).toMatchObject({
-          code: 404,
-          response: { message: "Not found" },
-        });
+        ).toMatchObject(elysiaStatus(404, { message: "Not found" }));
         expect(selections).toBe(0);
       }
     } finally {
@@ -332,10 +329,7 @@ test.each(["active", "daily"] as const)(
             }),
           }),
         );
-        expect(result).toMatchObject({
-          code: 429,
-          response: { retryable: true },
-        });
+        expect(result).toMatchObject(elysiaStatus(429, { retryable: true }));
         const mapped = mapHandlerResult({
           id: "lists.verifications.create",
           result,

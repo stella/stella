@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import confirmAgentClaim from "@/api/handlers/agent-auth/confirm";
@@ -164,10 +165,9 @@ describe("own-work permissions", () => {
         },
       };
       const result = await grantDesktopRegistryKey.handler(asTestRaw(context));
-      expect(result).toMatchObject({
-        code: 403,
-        response: { code: "forbidden", message: "Forbidden" },
-      });
+      expect(result).toMatchObject(
+        elysiaStatus(403, { code: "forbidden", message: "Forbidden" }),
+      );
     }
   });
 

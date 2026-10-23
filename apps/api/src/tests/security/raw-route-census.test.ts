@@ -35,7 +35,7 @@ type RawRouteReview = { access: RawRouteAccess; reason: string };
  * here with a reason; an entry whose route is gone fails it too.
  */
 const RAW_ROUTES = {
-  "ALL /*": {
+  "* /*": {
     access: RAW_ROUTE_ACCESS.sandbox,
     reason:
       "Better Auth handler; its before hooks refuse the demo account's account, key, OAuth and organization writes.",

@@ -33,7 +33,7 @@ describe("tenant route classification", () => {
           dispatched += 1;
           return "exempt";
         };
-        const app = new Elysia({ aot, strictPath })
+        const app = new Elysia({ strictPath })
           .all("/fixed", exempt)
           .get("/:id", tenant, tenantHooks)
           .post("/write", tenant, tenantHooks)
@@ -43,9 +43,7 @@ describe("tenant route classification", () => {
           .get("/optional/:id?", tenant, tenantHooks);
         const classify = createTenantActionClassifier({
           routes: app.routes,
-          staticRoutes: app.router.static,
-          strictPath: app.config.strictPath,
-          aot: app.config.aot,
+          strictPath,
         });
         const cases = [
           ["GET", "/fixed"],
@@ -80,7 +78,7 @@ describe("tenant route classification", () => {
           );
         }
         // AOT's static ALL route precedes dynamic GET; dynamic dispatch reverses it.
-        expect(classify(new Request("http://localhost/fixed"))).toBe(!aot);
+        expect(classify(new Request("http://localhost/fixed"))).toBe(false);
         for (const upgrade of ["websocket", "WebSocket"]) {
           const request = new Request("http://localhost/value", {
             headers: { upgrade },
@@ -95,37 +93,33 @@ describe("tenant route classification", () => {
   }
 
   test("derives upgrade dispatch from the same static and dynamic websocket registry", async () => {
-    for (const aot of [true, false]) {
-      const app = new Elysia({ aot })
-        .get("/socket", tenantHooks, () => "tenant")
-        .route("WS", "/socket", () => "exempt")
-        .get("/live/:id", tenantHooks, () => "tenant")
-        .route("WS", "/live/:id", () => "exempt");
-      const classify = createTenantActionClassifier({
-        routes: app.routes,
-        staticRoutes: app.router.static,
-        strictPath: app.config.strictPath,
-        aot: app.config.aot,
-      });
-      for (const path of ["/socket", "/live/item"]) {
-        for (const upgrade of [undefined, "websocket", "WebSocket"]) {
-          const headers = new Headers();
-          if (upgrade !== undefined) {
-            headers.set("upgrade", upgrade);
-          }
-          const request = new Request(`http://localhost${path}`, { headers });
-          const response = await app.handle(request);
-          expect(classify(request)).toBe(
-            response.status === 200 && (await response.text()) === "tenant",
-          );
+    const app = new Elysia()
+      .get("/socket", tenantHooks, () => "tenant")
+      .route("WS", "/socket", () => "exempt")
+      .get("/live/:id", tenantHooks, () => "tenant")
+      .route("WS", "/live/:id", () => "exempt");
+    const classify = createTenantActionClassifier({
+      routes: app.routes,
+      strictPath: undefined,
+    });
+    for (const path of ["/socket", "/live/item"]) {
+      for (const upgrade of [undefined, "websocket", "WebSocket"]) {
+        const headers = new Headers();
+        if (upgrade !== undefined) {
+          headers.set("upgrade", upgrade);
         }
+        const request = new Request(`http://localhost${path}`, { headers });
+        const response = await app.handle(request);
+        expect(classify(request)).toBe(
+          response.status === 200 && (await response.text()) === "tenant",
+        );
       }
     }
   });
 
   test("preserves the first static path group's ownership of colliding loose aliases", async () => {
     for (const reverse of [false, true]) {
-      const app = new Elysia({ aot: true, strictPath: false });
+      const app = new Elysia({ strictPath: false });
       if (reverse) {
         app
           .post("/same/", () => "exempt")
@@ -137,9 +131,7 @@ describe("tenant route classification", () => {
       }
       const classify = createTenantActionClassifier({
         routes: app.routes,
-        staticRoutes: app.router.static,
-        strictPath: app.config.strictPath,
-        aot: app.config.aot,
+        strictPath: false,
       });
       for (const path of ["/same", "/same/"]) {
         for (const method of ["GET", "POST"]) {

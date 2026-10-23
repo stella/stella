@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries, rateTables } from "@/api/db/schema";
@@ -271,12 +272,9 @@ test("the default flag can be cleared only while another table in the matter sta
       );
     return rows.map((row) => row.id);
   };
-  const refused = {
-    code: 400,
-    response: {
-      message: "Cannot unset default: no other default rate table exists",
-    },
-  };
+  const refused = elysiaStatus(400, {
+    message: "Cannot unset default: no other default rate table exists",
+  });
 
   expect(await unset(firstId)).toEqual({ id: firstId });
   expect(await defaults()).toEqual([secondId]);

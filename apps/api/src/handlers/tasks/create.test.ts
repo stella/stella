@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { member } from "@/api/db/auth-schema";
 import {
@@ -122,10 +123,9 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid task status" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid task status" }),
+    );
   });
 
   test("invalid priority returns 400 before DB call", async () => {
@@ -139,10 +139,9 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid task priority" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid task priority" }),
+    );
   });
 
   test("invalid list item type returns 400 before DB call", async () => {
@@ -156,10 +155,9 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid list item type" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid list item type" }),
+    );
   });
 
   test("invalid status checked before invalid priority", async () => {
@@ -177,10 +175,9 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid task status" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Invalid task status" }),
+    );
   });
 
   test("rejects a working target after the hard deadline before DB access", async () => {
@@ -198,10 +195,11 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Working target cannot be after the hard deadline" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Working target cannot be after the hard deadline",
+      }),
+    );
   });
 
   test("rejects workflow-only fields while Governed Workflow is disabled", async () => {

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
@@ -117,12 +118,11 @@ test("refuses an unsafe restatement before changing any field", async () => {
     currency: "KWD",
     notes: "After",
   });
-  expect(result).toEqual({
-    code: 400,
-    response: {
+  expect(result).toEqual(
+    elysiaStatus(400, {
       message: "Currency change would put the contact rate out of range",
-    },
-  });
+    }),
+  );
   expect(row).toEqual({
     currency: "JPY",
     defaultHourlyRate: cents(9_007_199_254_741),

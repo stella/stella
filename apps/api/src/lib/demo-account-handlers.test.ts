@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { env } from "@/api/env";
 import { readFileEndpoint } from "@/api/handlers/files/routes";
@@ -108,10 +109,9 @@ describe("account lifecycle handlers", () => {
           }),
         );
         for (const response of [downloaded, added, removed, created, deleted]) {
-          expect(response).toMatchObject({
-            code: 403,
-            response: { code: "account_access_unavailable" },
-          });
+          expect(response).toMatchObject(
+            elysiaStatus(403, { code: "account_access_unavailable" }),
+          );
         }
       } finally {
         env.DEMO_ACCOUNT_EMAIL = previous.email;

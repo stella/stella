@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import savedSecret from "@/api/handlers/chat/saved-secret";
 import submitSecret from "@/api/handlers/chat/submit-secret";
@@ -33,10 +34,9 @@ const countingSafeDb = () => {
   return { reads, safeDb };
 };
 
-const connectorAccessRefusal = {
-  code: 403,
-  response: { message: "Connector access is unavailable" },
-};
+const connectorAccessRefusal = elysiaStatus(403, {
+  message: "Connector access is unavailable",
+});
 
 test("refuses the saved-credential read without connector access before any database read", async () => {
   const { reads, safeDb } = countingSafeDb();

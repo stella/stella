@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { member } from "@/api/db/auth-schema";
 import { auditLogs, workspaceMembers } from "@/api/db/schema";
@@ -188,10 +189,9 @@ describe("addWorkspaceMember", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 404,
-      response: { message: "Workspace not found" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(404, { message: "Workspace not found" }),
+    );
   });
 });
 
@@ -203,8 +203,7 @@ test("matter membership cannot be added without current organization membership"
     await addWorkspaceMember.handler(
       createContext({ body: { userId: "user_invitee" }, safeDb, scopedDb }),
     ),
-  ).toMatchObject({
-    code: 400,
-    response: { message: "User is not a member of this organization" },
-  });
+  ).toMatchObject(
+    elysiaStatus(400, { message: "User is not a member of this organization" }),
+  );
 });

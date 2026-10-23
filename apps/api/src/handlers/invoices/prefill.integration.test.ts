@@ -9,6 +9,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -554,10 +555,9 @@ describe("invoice create with expenses and billed-time changes", () => {
       "member",
     );
 
-    expect(result).toMatchObject({
-      code: 403,
-      response: { code: "entry_adjustment_forbidden" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(403, { code: "entry_adjustment_forbidden" }),
+    );
     expect(
       await db.query.timeEntries.findFirst({ where: { id: { eq: entry } } }),
     ).toMatchObject({
@@ -578,10 +578,9 @@ describe("invoice create with expenses and billed-time changes", () => {
       ],
     });
 
-    expect(result).toMatchObject({
-      code: 400,
-      response: { code: "invalid_entry_adjustments" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { code: "invalid_entry_adjustments" }),
+    );
   });
 
   test("billing only work before a rate change uses the earlier rate, and a stale reviewed total is refused", async () => {
@@ -611,10 +610,9 @@ describe("invoice create with expenses and billed-time changes", () => {
       taxableSupplyDate: "2026-09-02",
       expectedTotalAmount: 461_250,
     });
-    expect(stale).toMatchObject({
-      code: 409,
-      response: { code: "invoice_total_changed" },
-    });
+    expect(stale).toMatchObject(
+      elysiaStatus(409, { code: "invoice_total_changed" }),
+    );
     expect(
       await db.query.timeEntries.findFirst({ where: { id: { eq: early } } }),
     ).toMatchObject({ status: "approved", invoiceId: null });
@@ -666,10 +664,9 @@ describe("invoice create with expenses and billed-time changes", () => {
       timeEntryIds: [entry],
       taxableSupplyDate: "2026-09-02",
     });
-    expect(refused).toMatchObject({
-      code: 409,
-      response: { code: "vat_rate_missing" },
-    });
+    expect(refused).toMatchObject(
+      elysiaStatus(409, { code: "vat_rate_missing" }),
+    );
     expect(
       await db.query.timeEntries.findFirst({ where: { id: { eq: entry } } }),
     ).toMatchObject({ status: "approved", invoiceId: null });

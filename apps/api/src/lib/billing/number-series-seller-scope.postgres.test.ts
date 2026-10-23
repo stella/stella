@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { numberSeries, sellerProfiles } from "@/api/db/schema";
@@ -393,10 +394,9 @@ if (!databaseUrl || !runPostgresTests) {
         f.archivedSeller,
         foreign.sellerA,
       ]) {
-        expect(await f.create(seller)).toEqual({
-          code: 404,
-          response: { message: "Seller profile not found" },
-        });
+        expect(await f.create(seller)).toEqual(
+          elysiaStatus(404, { message: "Seller profile not found" }),
+        );
       }
       expect(await f.defaults()).toHaveLength(1);
     });
@@ -441,10 +441,9 @@ if (!databaseUrl || !runPostgresTests) {
         archived,
         foreignSeries,
       ]) {
-        expect(await f.makeDefault(id)).toEqual({
-          code: 404,
-          response: { message: "Number series not found" },
-        });
+        expect(await f.makeDefault(id)).toEqual(
+          elysiaStatus(404, { message: "Number series not found" }),
+        );
       }
       expect((await f.defaults()).map((row) => row.id).toSorted()).toEqual(
         [replacement, a].toSorted(),
@@ -470,13 +469,12 @@ if (!databaseUrl || !runPostgresTests) {
       const b = await f.insert({ sellerProfileId: f.sellerB, isDefault: true });
       const alternate = await f.insert({ sellerProfileId: f.sellerB });
       for (const scope of [f.sellerA, null]) {
-        expect(await f.update(b, scope)).toEqual({
-          code: 409,
-          response: {
+        expect(await f.update(b, scope)).toEqual(
+          elysiaStatus(409, {
             message:
               "A default number series already exists for this seller scope",
-          },
-        });
+          }),
+        );
         expect(await f.update(alternate, scope)).toEqual({ id: alternate });
         const moved = await f.scopedDb(
           async (tx) =>
@@ -505,10 +503,9 @@ if (!databaseUrl || !runPostgresTests) {
         f.archivedSeller,
         foreign.sellerA,
       ]) {
-        expect(await f.update(id, seller)).toEqual({
-          code: 404,
-          response: { message: "Seller profile not found" },
-        });
+        expect(await f.update(id, seller)).toEqual(
+          elysiaStatus(404, { message: "Seller profile not found" }),
+        );
       }
       const archived = await f.insert({ archivedAt: new Date() });
       const foreignSeries = await foreign.insert();
@@ -517,10 +514,9 @@ if (!databaseUrl || !runPostgresTests) {
         archived,
         foreignSeries,
       ]) {
-        expect(await f.update(inaccessible, f.sellerB)).toEqual({
-          code: 404,
-          response: { message: "Number series not found" },
-        });
+        expect(await f.update(inaccessible, f.sellerB)).toEqual(
+          elysiaStatus(404, { message: "Number series not found" }),
+        );
       }
       expect(await f.defaults()).toEqual([{ id, sellerProfileId: f.sellerA }]);
     });

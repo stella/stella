@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -55,10 +56,9 @@ describe("seller profile updates", () => {
 
     const result = await updateSellerProfile.handler(context);
 
-    expect(result).toEqual({
-      code: 404,
-      response: { message: "Seller profile not found" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(404, { message: "Seller profile not found" }),
+    );
     expect(auditCalled).toBe(false);
   });
 

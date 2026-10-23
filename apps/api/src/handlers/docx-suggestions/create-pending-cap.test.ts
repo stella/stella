@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import {
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
@@ -45,10 +46,9 @@ const operation = (id: string) =>
     replace: "after",
   }) satisfies FolioAIEditOperation;
 
-const PENDING_LIMIT_REFUSAL = {
-  code: 409,
-  response: { code: DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE },
-};
+const PENDING_LIMIT_REFUSAL = elysiaStatus(409, {
+  code: DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
+});
 
 type SeededDocument = {
   entityId: SafeId<"entity">;

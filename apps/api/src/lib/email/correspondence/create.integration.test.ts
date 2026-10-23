@@ -89,18 +89,16 @@ const recorderFor = (
     server: null,
   });
 
-type HandlerFailure = Extract<
-  Awaited<ReturnType<typeof getCorrespondence.handler>>,
-  { code: number }
->;
-
-const expectSuccess = <T>(response: T | HandlerFailure): T => {
+function expectSuccess<T>(
+  response: T,
+): Exclude<T, ElysiaStatus<number, unknown, number>>;
+function expectSuccess(response: unknown): unknown {
   expect(response).not.toBeInstanceOf(ElysiaStatus);
   if (response instanceof ElysiaStatus) {
     throw new TypeError(`Expected success, received status ${response.status}`);
   }
   return response;
-};
+}
 
 const directProvenance = {
   source: "delivery",

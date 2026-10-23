@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { BILLING_STATUS, INVOICE_STATUS, invoices } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -77,12 +78,11 @@ describe("addEntries currency enforcement", () => {
       ),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message: "All time entries must match the invoice currency",
-      },
-    });
+      }),
+    );
   });
 
   test.each(["time entries", "expenses"])(
@@ -162,12 +162,11 @@ describe("addEntries currency enforcement", () => {
         ),
       );
 
-      expect(result).toEqual({
-        code: 409,
-        response: {
+      expect(result).toEqual(
+        elysiaStatus(409, {
           message: "Some entries were modified concurrently; please retry",
-        },
-      });
+        }),
+      );
       expect(auditCalls).toBe(0);
       expect(lockInvoiceForUpdate).toHaveBeenCalledWith("update");
     },

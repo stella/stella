@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
@@ -51,10 +52,9 @@ test("archive entry validation returns a client response before parsing", async 
       body: { file },
     }),
   );
-  expect(prepared).toMatchObject({
-    code: 422,
-    response: { message: "Invalid archive" },
-  });
+  expect(prepared).toMatchObject(
+    elysiaStatus(422, { message: "Invalid archive" }),
+  );
 
   const uploaded = await uploadSkill.handler(
     createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
@@ -68,10 +68,9 @@ test("archive entry validation returns a client response before parsing", async 
       },
     }),
   );
-  expect(uploaded).toMatchObject({
-    code: 422,
-    response: { message: "Invalid archive" },
-  });
+  expect(uploaded).toMatchObject(
+    elysiaStatus(422, { message: "Invalid archive" }),
+  );
 });
 
 test("archive validation applies configured limits", async () => {

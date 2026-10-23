@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { member } from "@/api/db/auth-schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -107,12 +108,11 @@ describe("createWorkspaces", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message: "Some users are not members of this organization",
-      },
-    });
+      }),
+    );
     // Granted memberships lock in the order organization removal uses.
     expect(lockedMemberOrder).toEqual([member.userId]);
     expect(getCallCount()).toBe(1);
@@ -181,10 +181,9 @@ describe("createWorkspaces", () => {
     // 400 from the workspaces-limit branch confirms we got past the
     // schema gate without a client lookup; 0 calls confirms the
     // contacts table was never queried for a personal matter.
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Workspaces limit reached" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Workspaces limit reached" }),
+    );
     expect(clientSelectCalls).toBe(0);
   });
   test("personal creation holds its creator's organization membership", async () => {
@@ -226,9 +225,10 @@ describe("createWorkspaces", () => {
       }),
     );
     expect(strength).toBe("update");
-    expect(response).toMatchObject({
-      code: 400,
-      response: { message: "Some users are not members of this organization" },
-    });
+    expect(response).toMatchObject(
+      elysiaStatus(400, {
+        message: "Some users are not members of this organization",
+      }),
+    );
   });
 });

@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 
@@ -146,10 +147,7 @@ describe("bulk rejecting pending docx suggestions", () => {
         body: { suggestionIds: [suggestionId] },
       },
     );
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Not found" },
-    });
+    expect(result).toMatchObject(elysiaStatus(404, { message: "Not found" }));
 
     const row = await readSuggestion(suggestionId);
     expect(row?.status).toBe("pending");

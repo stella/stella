@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 
@@ -319,14 +320,13 @@ test.each(["single", "bulk"] as const)(
             templateId,
             recordAuditEvent,
           });
-    expect(result).toMatchObject({
-      code: 422,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(422, {
         code: CLAUSE_DIRECTIVES_INVALID_CODE,
         retryable: false,
         issues: [{ path: "body.0" }],
-      },
-    });
+      }),
+    );
     expect(await pinnedVersionByLinkId()).toEqual(before);
     expect(auditCalls).toBe(0);
   },

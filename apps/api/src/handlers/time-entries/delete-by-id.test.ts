@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -69,12 +70,11 @@ describe("deleteTimeEntryById", () => {
       createContext({ safeDb, scopedDb }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message: "Cannot delete a billed entry; revert the invoice first",
-      },
-    });
+      }),
+    );
     expect(getCallCount()).toBe(1);
   });
 

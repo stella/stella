@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -380,15 +381,14 @@ test.each(Object.entries(removalBlockers))(
       const before = await sourceState(f);
       const beforeObjects = [...f.fake.objects.entries()];
       const referenced = kind === "time" || kind === "expense";
-      expect(await f.run(true)).toMatchObject({
-        code: 409,
-        response: {
+      expect(await f.run(true)).toMatchObject(
+        elysiaStatus(409, {
           code: referenced
             ? "entity_transfer_source_referenced"
             : "entity_transfer_source_in_use",
           retryable: !referenced,
-        },
-      });
+        }),
+      );
       expect(f.fake.requests.filter(({ method }) => method === "COPY")).toEqual(
         [],
       );
@@ -491,10 +491,12 @@ test("move refuses a source beyond the live-version read limit without suggestin
       })),
     );
     const objects = [...f.fake.objects.entries()];
-    expect(await f.run(true)).toMatchObject({
-      code: 409,
-      response: { code: "entity_transfer_source_limit", retryable: false },
-    });
+    expect(await f.run(true)).toMatchObject(
+      elysiaStatus(409, {
+        code: "entity_transfer_source_limit",
+        retryable: false,
+      }),
+    );
     expect(f.fake.requests.filter(({ method }) => method === "COPY")).toEqual(
       [],
     );

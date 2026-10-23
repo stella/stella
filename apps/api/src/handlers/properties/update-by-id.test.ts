@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { auditEventChanges } from "@/api/lib/audit-log";
@@ -110,10 +111,12 @@ describe("updateProperty", () => {
         },
       }),
     );
-    expect(result).toMatchObject({
-      code: 422,
-      response: { code: "file_property_type_immutable", retryable: false },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(422, {
+        code: "file_property_type_immutable",
+        retryable: false,
+      }),
+    );
     expect(order).toEqual(["lock", "select", "for:update", "check"]);
   });
 
@@ -140,10 +143,11 @@ describe("updateProperty", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Fallback must match one of the supplied options" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, {
+        message: "Fallback must match one of the supplied options",
+      }),
+    );
     expect(getCallCount()).toBe(0);
   });
 
@@ -375,10 +379,9 @@ describe("updateProperty", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 422,
-      response: { message: "Document type classifier already exists" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(422, { message: "Document type classifier already exists" }),
+    );
     expect(updateCalled).toBe(false);
   });
 
@@ -879,10 +882,9 @@ describe("updateProperty", () => {
         }),
       );
 
-      expect(result).toEqual({
-        code: 422,
-        response: { message: "Too many dependencies" },
-      });
+      expect(result).toEqual(
+        elysiaStatus(422, { message: "Too many dependencies" }),
+      );
       expect(db.insertedCount()).toBeNull();
     });
   });

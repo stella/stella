@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
@@ -335,10 +336,7 @@ describe("notification list scoping", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toEqual(elysiaStatus(400, { message: "Invalid cursor" }));
   });
 });
 
@@ -388,10 +386,9 @@ describe("unread count", () => {
       }),
     );
 
-    expect(result).toEqual({
-      code: 404,
-      response: { message: "Notification not found" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(404, { message: "Notification not found" }),
+    );
     const [row] = await testDb
       .select({ readAt: notifications.readAt })
       .from(notifications)
@@ -561,10 +558,11 @@ describe("announcements", () => {
   });
 
   test("refuse a caller the allowlist does not name", async () => {
-    expect(await announceAs(ids.userA1, ids.userAdmin)).toEqual({
-      code: 403,
-      response: { message: "Announcements require operator authorization" },
-    });
+    expect(await announceAs(ids.userA1, ids.userAdmin)).toEqual(
+      elysiaStatus(403, {
+        message: "Announcements require operator authorization",
+      }),
+    );
   });
 
   test("the default endpoint reads the deployment's own configuration", async () => {

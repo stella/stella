@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import {
@@ -804,10 +805,9 @@ describe.skipIf(!runEngineTests)(
           "unobserved",
           { provider: "corpus-index", loadSearchConfigs: async () => [] },
         );
-        expect(response).toMatchObject({
-          code: 400,
-          response: { message: "Invalid cursor" },
-        });
+        expect(response).toMatchObject(
+          elysiaStatus(400, { message: "Invalid cursor" }),
+        );
       }
       expect(searchCalls.length).toBe(callStart);
     });
@@ -869,10 +869,9 @@ describe.skipIf(!runEngineTests)(
               "unobserved",
               dependencies,
             );
-            expect(response).toMatchObject({
-              code: 400,
-              response: { message: "Invalid cursor" },
-            });
+            expect(response).toMatchObject(
+              elysiaStatus(400, { message: "Invalid cursor" }),
+            );
             expect(searchCalls.length).toBe(callStart);
           }
         }
@@ -906,10 +905,9 @@ describe.skipIf(!runEngineTests)(
             ),
         },
       );
-      expect(response).toMatchObject({
-        code: 400,
-        response: { message: "Invalid cursor" },
-      });
+      expect(response).toMatchObject(
+        elysiaStatus(400, { message: "Invalid cursor" }),
+      );
       expect(searchCalls.length).toBe(callStart);
     });
 

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
@@ -418,16 +419,12 @@ describe("personal time entries", () => {
   });
 
   test("rejects impossible calendar dates and malformed cursors", async () => {
-    expect(await listFor({ date: "2024-06-31" })).toMatchObject({
-      code: 400,
-      response: { code: "invalid_date_worked" },
-    });
+    expect(await listFor({ date: "2024-06-31" })).toMatchObject(
+      elysiaStatus(400, { code: "invalid_date_worked" }),
+    );
     expect(
       await listFor({ date: DAY, cursor: encodePaginationCursor(["bad-id"]) }),
-    ).toMatchObject({
-      code: 400,
-      response: { code: "invalid_cursor" },
-    });
+    ).toMatchObject(elysiaStatus(400, { code: "invalid_cursor" }));
   });
 });
 

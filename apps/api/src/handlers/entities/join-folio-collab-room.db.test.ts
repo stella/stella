@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import { readFileSync } from "node:fs";
 import * as yProseMirror from "y-prosemirror";
 import * as yjs from "yjs";
@@ -441,10 +442,9 @@ test("a dedicated principal joins only while its dedicated session is live", asy
 
     await store.revokeSyntheticSessions();
     const refused = await checkpoint();
-    expect(refused).toMatchObject({
-      code: 403,
-      response: { code: "account_access_unavailable" },
-    });
+    expect(refused).toMatchObject(
+      elysiaStatus(403, { code: "account_access_unavailable" }),
+    );
   } finally {
     fake.stop();
     await testDb.delete(workspaces).where(eq(workspaces.id, workspaceId));

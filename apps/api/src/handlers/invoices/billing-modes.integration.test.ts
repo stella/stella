@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -302,10 +303,9 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
     ),
   ];
   for (const result of attempts) {
-    expect(result).toMatchObject({
-      code: 409,
-      response: { code: "flat_fee_invoice_locked" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(409, { code: "flat_fee_invoice_locked" }),
+    );
   }
   expect(
     await db.query.invoiceLines.findMany({
@@ -323,10 +323,9 @@ test("hourly draft reservations consume the cap; refused claims roll back and de
   const second = await seedEntry();
   const invoiceId = invoiceIdFrom(await draft([first]));
   const rejected = await draft([second]);
-  expect(rejected).toMatchObject({
-    code: 409,
-    response: { code: "billing_cap_exceeded" },
-  });
+  expect(rejected).toMatchObject(
+    elysiaStatus(409, { code: "billing_cap_exceeded" }),
+  );
   expect(
     await db.query.timeEntries.findFirst({ where: { id: { eq: second } } }),
   ).toMatchObject({
@@ -354,7 +353,7 @@ test("finalize rechecks a lowered cap atomically and void releases covered marke
     await transitionInvoice.handler(
       context(transitionInvoice.handler, { action: "finalize" }, { invoiceId }),
     ),
-  ).toMatchObject({ code: 409, response: { code: "billing_cap_exceeded" } });
+  ).toMatchObject(elysiaStatus(409, { code: "billing_cap_exceeded" }));
   expect(
     await db.query.invoices.findFirst({ where: { id: { eq: invoiceId } } }),
   ).toMatchObject({ status: "draft", finalizedAt: null });
@@ -406,10 +405,9 @@ test("capped invoices refuse foreign-currency time even when its charge is zero"
       timeEntryIds: [entryId],
     }),
   );
-  expect(result).toMatchObject({
-    code: 409,
-    response: { code: "billing_currency_mismatch" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(409, { code: "billing_currency_mismatch" }),
+  );
   expect(
     await db.query.timeEntries.findFirst({ where: { id: { eq: entryId } } }),
   ).toMatchObject({
@@ -539,10 +537,7 @@ test("approved work in another currency does not block adding charges to a cappe
   // 1800 of 2000 is reserved: the next 600 is refused for the cap, not for
   // the currency of the unbilled work.
   const fourth = await seedEntry();
-  const capExceeded = {
-    code: 409,
-    response: { code: "billing_cap_exceeded" },
-  };
+  const capExceeded = elysiaStatus(409, { code: "billing_cap_exceeded" });
   expect(
     await addEntries.handler(
       context(addEntries.handler, { timeEntryIds: [fourth] }, { invoiceId }),
@@ -629,10 +624,7 @@ test("time already invoiced in another currency still blocks changes to a capped
   invoiceIds.push(foreignInvoiceId);
   await setArrangement("hourly", 2000);
   const line = await lineFor(invoiceId, first);
-  const mismatch = {
-    code: 409,
-    response: { code: "billing_currency_mismatch" },
-  };
+  const mismatch = elysiaStatus(409, { code: "billing_currency_mismatch" });
   const expectEveryChangeRefused = async () => {
     expect(
       await updateLine.handler(

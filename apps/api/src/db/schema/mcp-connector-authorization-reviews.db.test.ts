@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import { status as elysiaStatus } from "elysia";
 import { readFileSync } from "node:fs";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -788,10 +789,9 @@ describe("MCP connector authorization reviews", () => {
     });
     const audits: unknown[] = [];
 
-    expect(await connectAsMember({ slug, issuer, audits })).toMatchObject({
-      code: 409,
-      response: { code: "mcp_authorization_approval_required" },
-    });
+    expect(await connectAsMember({ slug, issuer, audits })).toMatchObject(
+      elysiaStatus(409, { code: "mcp_authorization_approval_required" }),
+    );
     expect(await reviewRows(unconfiguredConnectorId)).toEqual([
       expect.objectContaining({
         organizationId,

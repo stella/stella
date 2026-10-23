@@ -9,7 +9,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { ElysiaStatus } from "elysia";
+import { ElysiaStatus, status as elysiaStatus } from "elysia";
 
 import { Temporal } from "@stll/time";
 
@@ -695,10 +695,7 @@ const assertRunningEntryRefusal = async ({
   }
   const before = await readEntry(entryId);
   const result = await operation.run("admin", entryId);
-  expect(result).toMatchObject({
-    code: 409,
-    response: { code: "running_timer" },
-  });
+  expect(result).toMatchObject(elysiaStatus(409, { code: "running_timer" }));
   expect(await readEntry(entryId)).toEqual(before);
   expect(await readSplitSuccessors(entryId)).toHaveLength(0);
   if (timerId) {
@@ -809,10 +806,9 @@ describe("admin ending a member's timer", () => {
       .where(eq(organizationSettings.organizationId, organizationId));
     const id = await seedTimer({ description: " " });
     const before = await readTimer(id);
-    expect(await stopAs({ actor: "admin", id })).toMatchObject({
-      code: 400,
-      response: { code: "narrative_required" },
-    });
+    expect(await stopAs({ actor: "admin", id })).toMatchObject(
+      elysiaStatus(400, { code: "narrative_required" }),
+    );
     expect(await readTimer(id)).toEqual(before);
     const result = await stopAs({
       actor: "admin",
@@ -892,10 +888,9 @@ describe("admin ending a member's timer", () => {
           .toString(),
       })
       .where(eq(organizationSettings.organizationId, organizationId));
-    expect(await stopAs({ actor: "admin", id })).toMatchObject({
-      code: 400,
-      response: { code: "time_period_locked" },
-    });
+    expect(await stopAs({ actor: "admin", id })).toMatchObject(
+      elysiaStatus(400, { code: "time_period_locked" }),
+    );
     expect(await readTimer(id)).toEqual(before);
     expect(
       await testDb
@@ -926,10 +921,9 @@ describe("admin ending a member's timer", () => {
       )
       .returning();
     expect(membership).toHaveLength(1);
-    expect(await stopAs({ actor: "admin", id })).toMatchObject({
-      code: 404,
-      response: { message: "Matter not found or not accessible" },
-    });
+    expect(await stopAs({ actor: "admin", id })).toMatchObject(
+      elysiaStatus(404, { message: "Matter not found or not accessible" }),
+    );
     expect(await readTimer(id)).toEqual(before);
     expect(
       await testDb.select().from(auditLogs).where(eq(auditLogs.resourceId, id)),
@@ -1070,10 +1064,9 @@ describe("admin ending a member's timer", () => {
         .where(eq(organizationSettings.organizationId, organizationId));
       const before = await readTimer(id);
       const refused = await stopAs({ actor: "admin", id });
-      expect(refused).toMatchObject({
-        code: 400,
-        response: { code: "time_period_locked" },
-      });
+      expect(refused).toMatchObject(
+        elysiaStatus(400, { code: "time_period_locked" }),
+      );
       expect(await readTimer(id)).toEqual(before);
       await testDb
         .update(organizationSettings)

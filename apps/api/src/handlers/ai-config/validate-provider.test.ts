@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 import { Value } from "typebox/value";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
@@ -25,13 +26,12 @@ describe("provider settings validation", () => {
             body: { provider, region, apiKey: "test-key" },
           }),
         );
-        expect(result).toMatchObject({
-          code: 400,
-          response: {
+        expect(result).toMatchObject(
+          elysiaStatus(400, {
             code: "ai_config_provider_invalid",
             message: `The selected endpoint setting is not supported by ${provider}. Use global.`,
-          },
-        });
+          }),
+        );
       });
     }
   }
@@ -72,11 +72,10 @@ test("non-Anthropic workspace id is rejected before the provider probe", async (
       },
     }),
   );
-  expect(result).toMatchObject({
-    code: 400,
-    response: {
+  expect(result).toMatchObject(
+    elysiaStatus(400, {
       code: "ai_config_provider_invalid",
       message: "Workspace ID is supported only for Anthropic",
-    },
-  });
+    }),
+  );
 });

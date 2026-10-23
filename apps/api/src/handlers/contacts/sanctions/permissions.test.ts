@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import firmMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -34,9 +35,6 @@ test.each([review, contactMonitoring, firmMonitoring])(
       }),
     );
     expect(reads).toBe(0);
-    expect(result).toMatchObject({
-      code: 403,
-      response: { code: "forbidden" },
-    });
+    expect(result).toMatchObject(elysiaStatus(403, { code: "forbidden" }));
   },
 );

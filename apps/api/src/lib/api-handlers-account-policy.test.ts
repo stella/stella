@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import {
   ACCOUNT_ACCESS,
@@ -65,10 +66,9 @@ describe("handler account policy", () => {
       if (email === "standard@example.test") {
         expect(result).toEqual({ success: true });
       } else {
-        expect(result).toMatchObject({
-          code: 403,
-          response: { code: "account_access_unavailable" },
-        });
+        expect(result).toMatchObject(
+          elysiaStatus(403, { code: "account_access_unavailable" }),
+        );
       }
     },
   );
@@ -112,10 +112,9 @@ test.each(["when-used", "always"] as const)(
         user: { email: "account@example.test" },
       }),
     );
-    expect(response).toMatchObject({
-      code: 403,
-      response: { code: "account_access_unavailable" },
-    });
+    expect(response).toMatchObject(
+      elysiaStatus(403, { code: "account_access_unavailable" }),
+    );
     expect(usesFeature).not.toHaveBeenCalled();
   },
 );
@@ -182,10 +181,9 @@ test("applies declared account access alongside resource permissions", async () 
       }),
     );
     if (email === "account@example.test") {
-      expect(response).toMatchObject({
-        code: 403,
-        response: { code: "account_access_unavailable" },
-      });
+      expect(response).toMatchObject(
+        elysiaStatus(403, { code: "account_access_unavailable" }),
+      );
     } else {
       expect(response).toEqual({ success: true });
     }
@@ -239,10 +237,9 @@ describe("session handler account policy", () => {
         accountAccess === ACCOUNT_ACCESS.standard ? 1 : 0,
       );
       if (expectedCalls === 0) {
-        expect(result).toMatchObject({
-          code: 403,
-          response: { code: "account_access_unavailable" },
-        });
+        expect(result).toMatchObject(
+          elysiaStatus(403, { code: "account_access_unavailable" }),
+        );
       } else {
         expect(result).toEqual({ success: true });
       }

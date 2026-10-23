@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts } from "@/api/db/schema";
@@ -114,12 +115,11 @@ if (!databaseUrl || !runPostgresTests) {
           .update(contacts)
           .set({ currency: "JPY", defaultHourlyRate: cents(9_007_199_254_741) })
           .where(eq(contacts.id, contactId));
-        expect(await update("KWD")).toEqual({
-          code: 400,
-          response: {
+        expect(await update("KWD")).toEqual(
+          elysiaStatus(400, {
             message: "Currency change would put the contact rate out of range",
-          },
-        });
+          }),
+        );
         expect(await read()).toEqual({
           currency: "JPY",
           rate: cents(9_007_199_254_741),

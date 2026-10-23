@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 
@@ -162,10 +163,7 @@ describe("docx suggestion resolve/revert state transitions", () => {
         body: { status: "accepted", appliedMode: "direct" },
       },
     );
-    expect(result).toMatchObject({
-      code: 404,
-      response: { message: "Not found" },
-    });
+    expect(result).toMatchObject(elysiaStatus(404, { message: "Not found" }));
 
     const row = await readSuggestion(suggestionId);
     expect(row?.status).toBe("pending");

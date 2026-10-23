@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import { Value } from "typebox/value";
 
 import { user as authUser, member } from "@/api/db/auth-schema";
@@ -191,10 +192,9 @@ describe("daily target boundaries", () => {
   test("rejects invalid values even when called outside the HTTP schema", async () => {
     const audit = auditRecorder();
     for (const minutes of [0, -1, 1.5, 1441]) {
-      expect(await updateOwn({ minutes, audit })).toMatchObject({
-        code: 400,
-        response: { code: "invalid_daily_target" },
-      });
+      expect(await updateOwn({ minutes, audit })).toMatchObject(
+        elysiaStatus(400, { code: "invalid_daily_target" }),
+      );
     }
     expect(
       await readTarget({ organizationId: ids.orgA, userId: ids.userA1 }),
@@ -213,10 +213,7 @@ describe("daily target ownership and audit", () => {
         actor: "member",
         audit,
       }),
-    ).toMatchObject({
-      code: 403,
-      response: { code: "forbidden" },
-    });
+    ).toMatchObject(elysiaStatus(403, { code: "forbidden" }));
     expect(
       await readTarget({ organizationId: ids.orgA, userId: ids.userA2 }),
     ).toEqual([]);
@@ -243,10 +240,9 @@ describe("daily target ownership and audit", () => {
         actor: "owner",
         audit,
       }),
-    ).toMatchObject({
-      code: 404,
-      response: { code: "daily_target_member_not_found" },
-    });
+    ).toMatchObject(
+      elysiaStatus(404, { code: "daily_target_member_not_found" }),
+    );
     expect(
       await readTarget({ organizationId: ids.orgB, userId: ids.userB1 }),
     ).toEqual([]);

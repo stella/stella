@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 import * as v from "valibot";
 
 import type { statements } from "@stll/permissions";
@@ -309,10 +310,9 @@ describe("handler account policy census", () => {
             organizationId: context.session.activeOrganizationId,
           }),
         });
-        expect(response, endpoint.id).toMatchObject({
-          code: 403,
-          response: { code: "account_access_unavailable" },
-        });
+        expect(response, endpoint.id).toMatchObject(
+          elysiaStatus(403, { code: "account_access_unavailable" }),
+        );
       }
     } finally {
       env.DEMO_ACCOUNT_EMAIL = previousEmail;

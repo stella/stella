@@ -10,6 +10,7 @@ import {
   test,
 } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
@@ -1136,10 +1137,9 @@ describe("duplicate entity", () => {
     const result = await duplicateEntity.handler(createContext({ safeDb }));
 
     // The abort travels as the same rejection the caller always answered.
-    expect(result).toMatchObject({
-      code: 400,
-      response: { message: "Entity has no current version" },
-    });
+    expect(result).toMatchObject(
+      elysiaStatus(400, { message: "Entity has no current version" }),
+    );
 
     // No row survives the abort, so every object copied for it is an orphan
     // and all of them go back.

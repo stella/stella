@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
@@ -268,14 +269,13 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
         user: { id: userId },
       }),
     );
-    expect(result).toMatchObject({
-      code: 402,
-      response: {
+    expect(result).toMatchObject(
+      elysiaStatus(402, {
         code: "usage_limit_exceeded",
         reason: "no_entitlement",
         available: 0,
-      },
-    });
+      }),
+    );
     expect(entitlementReads).toBe(1);
     expect(threadReads).toBe(1);
     expect(messageReads).toBe(2);

@@ -7,7 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { Elysia } from "elysia";
+import { Elysia, status as elysiaStatus } from "elysia";
 
 import { calculateDocumentTotals } from "@stll/invoicing";
 
@@ -390,10 +390,9 @@ describe("invoice lines", () => {
       manual({ quantity: "1", unitPriceMinor: 1000 }, STANDARD_RATE),
     );
     await setStatus(invoiceId, INVOICE_STATUS.FINALIZED);
-    const refused = {
-      code: 409,
-      response: { message: "Invoice not found or not in draft status" },
-    } as const;
+    const refused = elysiaStatus(409, {
+      message: "Invoice not found or not in draft status",
+    }) as const;
 
     expect(
       await runCreate(
@@ -845,12 +844,11 @@ describe("invoice lines", () => {
     const first = await seedTimeEntry({ billedMinutes: 60 });
     const second = await seedTimeEntry({ billedMinutes: 30 });
 
-    expect(await runAddEntries(invoiceId, [first, second])).toEqual({
-      code: 400,
-      response: {
+    expect(await runAddEntries(invoiceId, [first, second])).toEqual(
+      elysiaStatus(400, {
         message: `An invoice holds at most ${LIMITS.invoiceLinesPerInvoice} lines`,
-      },
-    });
+      }),
+    );
     expect(
       await testDb.query.timeEntries.findMany({
         where: { id: { in: [first, second] } },

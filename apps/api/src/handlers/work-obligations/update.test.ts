@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import {
   auditLogs,
@@ -384,13 +385,12 @@ describe("updateWorkObligation", () => {
         expect(result).toEqual({ success: true });
         return;
       }
-      expect(result).toMatchObject({
-        code: 403,
-        response: {
+      expect(result).toMatchObject(
+        elysiaStatus(403, {
           message:
             "Only an admin or owner can reassign work already owned by someone else",
-        },
-      });
+        }),
+      );
     },
   );
 });

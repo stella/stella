@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -96,10 +97,9 @@ describe("generated document upload preflight", () => {
       createContext({ file, safeDb }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: { message: "Generated document draft not found" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(409, { message: "Generated document draft not found" }),
+    );
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
@@ -113,12 +113,11 @@ describe("generated document upload preflight", () => {
       createContext({ draftChatThreadId: threadId, file, safeDb }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(409, {
         message: "Generated document draft is not bound to this chat",
-      },
-    });
+      }),
+    );
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
@@ -153,13 +152,12 @@ describe("generated document upload preflight", () => {
       createContext({ file, safeDb }),
     );
 
-    expect(result).toEqual({
-      code: 409,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(409, {
         message:
           "Generated document content does not match the requested draft",
-      },
-    });
+      }),
+    );
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
@@ -175,10 +173,9 @@ describe("generated document upload preflight", () => {
       createContext({ file, safeDb }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Entities limit reached" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Entities limit reached" }),
+    );
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
@@ -190,10 +187,9 @@ describe("generated document upload preflight", () => {
       createContext({ file, safeDb }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Property not found in workspace" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Property not found in workspace" }),
+    );
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 });

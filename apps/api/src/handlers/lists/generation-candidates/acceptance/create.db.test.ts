@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
@@ -368,10 +369,9 @@ const acceptGoverned = async (seeded: SeededAcceptance) =>
   await runAcceptance(acceptGovernedCandidate, seeded);
 
 /** The rejection the compensation path answers with, on both ownerships. */
-const SOURCE_MISSING_REJECTION = {
-  code: 409,
-  response: { message: "Candidate source is no longer available" },
-} as const;
+const SOURCE_MISSING_REJECTION = elysiaStatus(409, {
+  message: "Candidate source is no longer available",
+}) as const;
 
 const taskEntityCount = async (seeded: SeededAcceptance) =>
   await testDb.$count(

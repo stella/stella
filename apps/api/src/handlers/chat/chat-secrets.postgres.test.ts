@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import * as v from "valibot";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
@@ -801,13 +802,12 @@ if (!databaseUrl || !runPostgres) {
 
           // The owner's thread reaches the connector lookup, which has no
           // enabled connector for this slug.
-          expect(await readSaved(scope.threadId)).toMatchObject({
-            code: 404,
-            response: {
+          expect(await readSaved(scope.threadId)).toMatchObject(
+            elysiaStatus(404, {
               message:
                 "Enable this connector in settings before providing a credential",
-            },
-          });
+            }),
+          );
           // The owner's thread reaches the pending-request check, which finds
           // no request awaiting input.
           expect(await submitDecline(scope.threadId)).toMatchObject({
@@ -815,10 +815,9 @@ if (!databaseUrl || !runPostgres) {
           });
 
           const unknownThread = createSafeId<"chatThread">();
-          const threadNotFound = {
-            code: 404,
-            response: { message: "Chat thread not found" },
-          };
+          const threadNotFound = elysiaStatus(404, {
+            message: "Chat thread not found",
+          });
           expect(await readSaved(unknownThread)).toMatchObject(threadNotFound);
           expect(await submitDecline(unknownThread)).toMatchObject(
             threadNotFound,

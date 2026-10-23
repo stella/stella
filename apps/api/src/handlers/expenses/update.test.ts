@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -81,14 +82,13 @@ describe("updateExpense currency restatement range", () => {
       Math.floor(Number.MAX_SAFE_INTEGER / 1000) + 1,
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(400, {
         message:
           "This expense cannot be restated in the new currency; " +
           "send the amount in that currency instead",
-      },
-    });
+      }),
+    );
     // Refusal completes without opening another transaction.
     expect(getCallCount()).toBe(1);
   });

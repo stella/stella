@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -567,14 +568,12 @@ test("citing decisions refuse a request that names neither key or both", async (
 
   // The status and the message are the contract a caller reads: an unrelated
   // failure would also leave `items` absent.
-  expect(neither).toMatchObject({
-    code: 400,
-    response: { message: "Name exactly one of work or eli" },
-  });
-  expect(both).toMatchObject({
-    code: 400,
-    response: { message: "Name exactly one of work or eli" },
-  });
+  expect(neither).toMatchObject(
+    elysiaStatus(400, { message: "Name exactly one of work or eli" }),
+  );
+  expect(both).toMatchObject(
+    elysiaStatus(400, { message: "Name exactly one of work or eli" }),
+  );
 });
 
 test("both provision reads preserve applied statements independently of the decision-date candidate", async () => {

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
+import { ElysiaStatus } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
@@ -233,8 +234,8 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<string>> => {
       },
     }),
   );
-  if ("code" in result) {
-    throw new TypeError(`expected the availability list, got ${result.code}`);
+  if (result instanceof ElysiaStatus) {
+    throw new TypeError(`expected the availability list, got ${result.status}`);
   }
   const withheld = new Set<string>(
     [...result.unavailable, ...result.unavailableHere].map(

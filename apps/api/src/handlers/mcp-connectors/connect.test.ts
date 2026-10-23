@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import {
   mcpOAuthState,
@@ -125,10 +126,9 @@ const setup = (
 test("requires current connector approval before connecting", async () => {
   const setupResult = setup(`${issuer}/other`);
   const result = await setupResult.handler.handler(setupResult.context);
-  expect(result).toMatchObject({
-    code: 409,
-    response: { code: "mcp_authorization_approval_required" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(409, { code: "mcp_authorization_approval_required" }),
+  );
   expect(setupResult.clientReads()).toBe(0);
   expect(setupResult.states).toEqual([]);
   expect(
@@ -177,10 +177,9 @@ test("curated approval for another issuer requires administrator approval", asyn
     issuer: "https://as.example.net",
     endpointOrigins: [],
   });
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
-    code: 409,
-    response: { code: "mcp_authorization_approval_required" },
-  });
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject(
+    elysiaStatus(409, { code: "mcp_authorization_approval_required" }),
+  );
   expect(fixture.states).toEqual([]);
 });
 
@@ -210,10 +209,9 @@ test("pending authorization requires administrator approval", async () => {
 test("a connector without an approved issuer awaits administrator review", async () => {
   const fixture = setup(null);
   fixture.context.memberRole = sessionMemberRole("member");
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
-    code: 409,
-    response: { code: "mcp_authorization_approval_required" },
-  });
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject(
+    elysiaStatus(409, { code: "mcp_authorization_approval_required" }),
+  );
   expect(fixture.clientReads()).toBe(0);
   expect(fixture.states).toEqual([]);
   expect(

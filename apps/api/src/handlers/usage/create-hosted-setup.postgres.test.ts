@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 import fc from "fast-check";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
@@ -218,7 +219,7 @@ const startedSession = (response: unknown) =>
     ? response
     : null;
 
-const refusal = (code: string) => ({ code: 409, response: { code } });
+const refusal = (code: string) => elysiaStatus(409, { code });
 
 const readClaims = async (
   tx: Pick<Transaction, "select">,

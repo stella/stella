@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import {
   entities,
@@ -239,19 +240,17 @@ describe("work obligation transitions", () => {
   test("only the owner can acknowledge or complete work", async () => {
     const entityId = await seedOpenWork();
 
-    expect(await acknowledge(entityId, ids.userA2)).toEqual({
-      code: 403,
-      response: {
+    expect(await acknowledge(entityId, ids.userA2)).toEqual(
+      elysiaStatus(403, {
         message: "Only the accountable owner can acknowledge this work",
-      },
-    });
+      }),
+    );
     await acknowledge(entityId, ids.userA1);
-    expect(await transition(entityId, ids.userA2, "complete")).toEqual({
-      code: 403,
-      response: {
+    expect(await transition(entityId, ids.userA2, "complete")).toEqual(
+      elysiaStatus(403, {
         message: "Only the accountable owner can complete this work",
-      },
-    });
+      }),
+    );
     expect(await transition(entityId, ids.userA1, "complete")).toEqual({
       success: true,
     });
@@ -371,12 +370,11 @@ describe("work obligation transitions", () => {
   test("a gate task cannot be reopened", async () => {
     const { entityId } = await seedFlowReviewWork();
 
-    expect(await transition(entityId, ids.userA1, "reopen")).toEqual({
-      code: 409,
-      response: {
+    expect(await transition(entityId, ids.userA1, "reopen")).toEqual(
+      elysiaStatus(409, {
         message:
           "A workflow review cannot be reopened; start the workflow again instead",
-      },
-    });
+      }),
+    );
   });
 });

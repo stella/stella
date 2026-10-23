@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
@@ -91,10 +92,9 @@ describe("memory feature admission", () => {
         type: "required",
         featureId: AI_MEMORY_FEATURE_ID,
       });
-      expect(await endpoint.run()).toEqual({
-        code: 404,
-        response: { message: "Not found" },
-      });
+      expect(await endpoint.run()).toEqual(
+        elysiaStatus(404, { message: "Not found" }),
+      );
     });
   }
   for (const method of ["GET", "POST", "PATCH", "DELETE"]) {

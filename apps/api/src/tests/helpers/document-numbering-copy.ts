@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { expect } from "bun:test";
+import { ElysiaStatus } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb } from "@/api/db/scoped";
@@ -82,7 +83,7 @@ export const runNumberingCopy = async ({
       workspaceId: sourceWorkspaceId,
     }),
   );
-  if ("code" in copied) {
+  if (copied instanceof ElysiaStatus) {
     panic("Expected document copy to succeed");
   }
   expect(typeof copied.entityId).toBe("string");

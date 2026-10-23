@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { status as elysiaStatus } from "elysia";
 
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -246,10 +247,9 @@ test("pre-grant reader serves legacy links and picks up status grants without a 
       panic("expected a pre-grant cursor page");
     }
     await setStatusGrants("grant");
-    expect(await page(id, fallback.nextCursor)).toMatchObject({
-      code: 409,
-      response: { type: "conflict" },
-    });
+    expect(await page(id, fallback.nextCursor)).toMatchObject(
+      elysiaStatus(409, { type: "conflict" }),
+    );
     expect(await page(id)).toMatchObject({
       items: [
         {
@@ -482,16 +482,12 @@ test("cursor binds to the full bigint generation and orders span then anchor", a
   });
   await citation({ decisionId: id, spanStart: 5, anchor: "new" });
   await setState(id, sql`generation = generation + 1`);
-  expect(await page(id, first.nextCursor)).toMatchObject({
-    code: 409,
-    response: { type: "conflict" },
-  });
+  expect(await page(id, first.nextCursor)).toMatchObject(
+    elysiaStatus(409, { type: "conflict" }),
+  );
   expect(
     await page(id, encodePaginationCursor(["9007199254740992", 10, "b"])),
-  ).toMatchObject({
-    code: 409,
-    response: { type: "conflict" },
-  });
+  ).toMatchObject(elysiaStatus(409, { type: "conflict" }));
 });
 
 test("malformed cursors fail before a page is returned", async () => {

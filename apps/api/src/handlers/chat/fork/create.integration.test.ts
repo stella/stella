@@ -9,6 +9,7 @@ import {
   test,
 } from "bun:test";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { ElysiaStatus } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -332,7 +333,7 @@ const messageTexts = (
  */
 const expectForked = async (pending: ReturnType<typeof forkThread.handler>) => {
   const result = await pending;
-  if ("code" in result) {
+  if (result instanceof ElysiaStatus) {
     throw new TypeError(`fork failed: ${JSON.stringify(result)}`);
   }
   return result;
@@ -405,7 +406,7 @@ test("copies the prefix, preserves the title, and projects fork provenance", asy
   ]);
 
   const listed = await getThreads.handler(threadsContext());
-  if ("code" in listed) {
+  if (listed instanceof ElysiaStatus) {
     throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
   }
   expect(
@@ -764,7 +765,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
         user: { id: ids.userA1 },
       }),
     );
-    if ("code" in response) {
+    if (response instanceof ElysiaStatus) {
       throw new TypeError(`get-messages failed: ${JSON.stringify(response)}`);
     }
     return response.forkProvenance;
@@ -831,7 +832,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
       user: { id: ids.userA1 },
     }),
   );
-  if ("code" in response) {
+  if (response instanceof ElysiaStatus) {
     throw new TypeError(`get-messages failed: ${JSON.stringify(response)}`);
   }
   expect(response.forkProvenance).toEqual({ type: "parent-unavailable" });

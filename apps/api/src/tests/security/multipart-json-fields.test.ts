@@ -38,8 +38,10 @@ const isObjectSchema = (schema: unknown): schema is TObject =>
 
 /** The schema's TypeBox kind, or `""` for a value carrying no kind symbol. */
 const kindOf = (schema: TSchema): string => {
-  const kind: unknown = schema["~kind"];
-  return typeof kind === "string" ? kind : "";
+  if (!("~kind" in schema)) {
+    return "";
+  }
+  return typeof schema["~kind"] === "string" ? schema["~kind"] : "";
 };
 
 const isFileSchema = (schema: TSchema): boolean => {
@@ -49,19 +51,42 @@ const isFileSchema = (schema: TSchema): boolean => {
 
 /** TypeBox schemas carry their keywords as plain properties (`TSchema` has a
  *  string index signature), so read them without asserting a shape. */
-const stringKeyword = (schema: TSchema, key: string): string | undefined => {
-  const value: unknown = schema[key];
-  return typeof value === "string" ? value : undefined;
+const stringKeyword = (
+  schema: TSchema,
+  key: "format" | "pattern",
+): string | undefined => {
+  if (key === "format") {
+    return "format" in schema && typeof schema.format === "string"
+      ? schema.format
+      : undefined;
+  }
+  return "pattern" in schema && typeof schema.pattern === "string"
+    ? schema.pattern
+    : undefined;
 };
 
-const numberKeyword = (schema: TSchema, key: string): number | undefined => {
-  const value: unknown = schema[key];
-  return typeof value === "number" ? value : undefined;
+const numberKeyword = (
+  schema: TSchema,
+  key: "maxLength" | "minLength",
+): number | undefined => {
+  if (key === "maxLength") {
+    return "maxLength" in schema && typeof schema.maxLength === "number"
+      ? schema.maxLength
+      : undefined;
+  }
+  return "minLength" in schema && typeof schema.minLength === "number"
+    ? schema.minLength
+    : undefined;
 };
 
 const unionMembers = (schema: TSchema): TSchema[] => {
-  const anyOf: unknown = schema["anyOf"];
-  return Array.isArray(anyOf) ? anyOf : [];
+  if (!("anyOf" in schema) || !Array.isArray(schema.anyOf)) {
+    return [];
+  }
+  return schema.anyOf.filter(
+    (member): member is TSchema =>
+      typeof member === "object" && member !== null,
+  );
 };
 
 const stringMember = (schema: TSchema): TSchema | undefined => {
@@ -119,7 +144,7 @@ const STRING_FILLERS = [
 const filler = (schema: TSchema): string | null => {
   switch (kindOf(schema)) {
     case "Literal":
-      return String(schema["const"]);
+      return "const" in schema ? String(schema.const) : null;
     case "Boolean":
       return "true";
     case "Number":
@@ -136,9 +161,9 @@ const filler = (schema: TSchema): string | null => {
     }
     default: {
       // Closed value sets (`t.UnionEnum`) carry their members as `enum`.
-      const members: unknown = schema["enum"];
+      const members = "enum" in schema ? schema.enum : undefined;
       if (Array.isArray(members) && members.length > 0) {
-        return String(members[0]);
+        return String(members.at(0));
       }
       return (
         STRING_FILLERS.find((candidate) => Value.Check(schema, candidate)) ??

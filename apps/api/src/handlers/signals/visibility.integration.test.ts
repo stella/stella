@@ -8,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import {
   SCOUT_KEY,
@@ -292,10 +293,7 @@ describe("signal visibility", () => {
       role: "intern",
       query: { cursor: encodePaginationCursor([unscopedSignalA]) },
     });
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Invalid cursor" },
-    });
+    expect(result).toEqual(elysiaStatus(400, { message: "Invalid cursor" }));
   });
 
   test("another organization's signals never leak", async () => {

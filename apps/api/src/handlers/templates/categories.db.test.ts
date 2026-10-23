@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { status as elysiaStatus } from "elysia";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -139,20 +140,18 @@ test("a move that closes no loop is applied", async () => {
 test("a move onto a direct child is refused", async () => {
   const result = await reparent(root, middle);
 
-  expect(result).toMatchObject({
-    code: 400,
-    response: { message: "Cannot create circular category hierarchy" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(400, { message: "Cannot create circular category hierarchy" }),
+  );
   expect(await parentOf(root)).toBeNull();
 });
 
 test("a move onto a grandchild is refused, so the walk climbs past one level", async () => {
   const result = await reparent(root, leaf);
 
-  expect(result).toMatchObject({
-    code: 400,
-    response: { message: "Cannot create circular category hierarchy" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(400, { message: "Cannot create circular category hierarchy" }),
+  );
   expect(await parentOf(root)).toBeNull();
 });
 
@@ -191,10 +190,9 @@ test("a chain that already loops is reported rather than walked forever", async 
 
   const result = await reparent(mover, loopedB);
 
-  expect(result).toMatchObject({
-    code: 400,
-    response: { message: "Cannot create circular category hierarchy" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(400, { message: "Cannot create circular category hierarchy" }),
+  );
   expect(await parentOf(mover)).toBeNull();
 });
 
@@ -242,10 +240,9 @@ test("another firm's category is not reachable from this firm's walk", async () 
     })
   ).unwrap();
 
-  expect(result).toMatchObject({
-    code: 404,
-    response: { message: "Parent category not found" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(404, { message: "Parent category not found" }),
+  );
 });
 
 // The pre-check answers from the rows it read; when that answer is stale (a
@@ -284,13 +281,12 @@ test("a loop the pre-check misses is refused by the database with the same 400",
     })
   ).unwrap();
 
-  expect(result).toMatchObject({
-    code: 400,
-    response: {
+  expect(result).toMatchObject(
+    elysiaStatus(400, {
       code: TREE_PARENT_CYCLE_ERROR_CODE,
       message: "Cannot create circular category hierarchy",
-    },
-  });
+    }),
+  );
   expect(await parentOf(root)).toBeNull();
 });
 

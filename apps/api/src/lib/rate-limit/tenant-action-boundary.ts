@@ -17,9 +17,7 @@ export const TENANT_ACTION_DETAIL =
 
 type RequestRouteClassifierOptions = {
   routes: Readonly<Elysia["routes"]>;
-  staticRoutes: Readonly<Record<string, Readonly<Record<string, number>>>>;
   strictPath: boolean | undefined;
-  aot: boolean | undefined;
   classifyRoute: (route: Elysia["routes"][number]) => boolean;
 };
 

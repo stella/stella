@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus, ElysiaStatus } from "elysia";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -230,8 +231,8 @@ const readResponse = async (fixture: Fixture, messages: Messages) =>
 
 const readMessages = async (fixture: Fixture, messages: Messages) => {
   const response = await readResponse(fixture, messages);
-  if ("code" in response) {
-    panic(`Message endpoint refused timing fixture: ${response.code}`);
+  if (response instanceof ElysiaStatus) {
+    panic(`Message endpoint refused timing fixture: ${response.status}`);
   }
   return response;
 };
@@ -342,10 +343,9 @@ if (!databaseUrl || !runPostgresTests) {
           durationMs: 7000,
           state: "completed",
         });
-        expect(await readResponse(fixture, messages)).toMatchObject({
-          code: 404,
-          response: { message: "Workspace not found" },
-        });
+        expect(await readResponse(fixture, messages)).toMatchObject(
+          elysiaStatus(404, { message: "Workspace not found" }),
+        );
       });
     });
   });

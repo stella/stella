@@ -1,5 +1,6 @@
 import { type InferOk, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import type { Paragraph } from "@stll/docx-core/model";
 import {
@@ -193,10 +194,9 @@ describe("createBilingualEntity", () => {
       createContext({ sourceLang: "en", targetLang: "EN" }),
     );
 
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Source and target language must differ" },
-    });
+    expect(result).toEqual(
+      elysiaStatus(400, { message: "Source and target language must differ" }),
+    );
     expect(loadEntityVersionDocxBufferMock).not.toHaveBeenCalled();
   });
 
@@ -233,12 +233,11 @@ describe("createBilingualEntity", () => {
     scanVerdict = "reject";
     const result = await createBilingualEntity.handler(createContext());
 
-    expect(result).toEqual({
-      code: 422,
-      response: {
+    expect(result).toEqual(
+      elysiaStatus(422, {
         message: "Bilingual document rejected: content does not match",
-      },
-    });
+      }),
+    );
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
     // A scan verdict is an expected outcome the caller is told about; only a
     // scanner that fails to run is reported.

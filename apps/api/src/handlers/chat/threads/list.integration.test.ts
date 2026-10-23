@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
+import { status as elysiaStatus, ElysiaStatus } from "elysia";
 import { Value } from "typebox/value";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
@@ -177,7 +178,8 @@ const seedThread = async ({
     await insertUpload({ fileName, threadId });
   }
 
-  for (const [index, fileName] of attachmentNames.entries()) {
+  for (const [index, fileName] of attachmentNames.entries() instanceof
+    ElysiaStatus) {
     const fileId = await insertUpload({ fileName, threadId });
     await testDb.insert(chatMessages).values({
       ...message(index),
@@ -219,7 +221,7 @@ const listThreads = async (
       user: { id: ids.userA1 },
     }),
   );
-  if ("code" in listed) {
+  if (listed instanceof ElysiaStatus) {
     throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
   }
   return listed;
@@ -532,7 +534,7 @@ describe("chat thread list matter filter", () => {
 
   const listPage = async (options: Parameters<typeof requestPage>[0]) => {
     const listed = await requestPage(options);
-    if ("code" in listed) {
+    if (listed instanceof ElysiaStatus) {
       throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
     }
     return listed;
@@ -648,10 +650,9 @@ describe("chat thread list matter filter", () => {
       workspaceIds: [ids.wsA1],
     });
 
-    expect(listed).toMatchObject({
-      code: 404,
-      response: { message: "Workspace not found" },
-    });
+    expect(listed).toMatchObject(
+      elysiaStatus(404, { message: "Workspace not found" }),
+    );
     expect(JSON.stringify(listed)).not.toContain(hiddenId);
   });
 

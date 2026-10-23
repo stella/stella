@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import { savedTimeNarratives, featureEnrolments } from "@/api/db/schema";
@@ -210,8 +211,7 @@ test("saved narratives stop at the per-user limit", async () => {
       body: { name: "Over limit", narrative: "More text" },
     }),
   );
-  expect(result).toMatchObject({
-    code: 400,
-    response: { message: "Saved time narrative limit reached" },
-  });
+  expect(result).toMatchObject(
+    elysiaStatus(400, { message: "Saved time narrative limit reached" }),
+  );
 });

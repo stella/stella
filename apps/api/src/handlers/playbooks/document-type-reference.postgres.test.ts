@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { status as elysiaStatus } from "elysia";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -477,12 +478,11 @@ if (!databaseUrl || !runPostgresTests) {
                   panic(`Scoped save failed: ${result.error.message}`);
                 }
                 deleteBarrier.release();
-                expect(await deletion).toMatchObject({
-                  code: 409,
-                  response: {
+                expect(await deletion).toMatchObject(
+                  elysiaStatus(409, {
                     message: `In use by 1 playbook(s): ${playbookName}. Reassign them first.`,
-                  },
-                });
+                  }),
+                );
                 const definitions =
                   await saveDb.query.playbookDefinitions.findMany({
                     where: { organizationId: { eq: fixture.organizationId } },

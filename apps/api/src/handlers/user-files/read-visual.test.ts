@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { status as elysiaStatus } from "elysia";
 
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -75,10 +76,9 @@ test("reads the owner's stored generated view", async () => {
 });
 
 test("returns not found for an unknown file id", async () => {
-  expect(await read(createSafeId<"userFile">())).toMatchObject({
-    code: 404,
-    response: { message: "User file not found" },
-  });
+  expect(await read(createSafeId<"userFile">())).toMatchObject(
+    elysiaStatus(404, { message: "User file not found" }),
+  );
 });
 
 test.each(["Ordinary text attachment", JSON.stringify({ title: "Example" })])(
@@ -90,9 +90,8 @@ test.each(["Ordinary text attachment", JSON.stringify({ title: "Example" })])(
         mimeType: "text/plain",
       }),
     );
-    expect(await read(ids.userFileWorkspaceA1, fileReader)).toMatchObject({
-      code: 422,
-      response: { message: "The attachment is not a generated view" },
-    });
+    expect(await read(ids.userFileWorkspaceA1, fileReader)).toMatchObject(
+      elysiaStatus(422, { message: "The attachment is not a generated view" }),
+    );
   },
 );
