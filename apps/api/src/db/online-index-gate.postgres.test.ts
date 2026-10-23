@@ -30,7 +30,9 @@ const connectionAdapter = (
   execute: async (statement, parameters = []) => {
     await connection.unsafe(statement, [...parameters]);
   },
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
   terminate: async () => {
     await terminateReserved(connection);
   },

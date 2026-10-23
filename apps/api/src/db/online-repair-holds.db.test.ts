@@ -67,7 +67,9 @@ const repairConnection = (
     }
     return await connection.unsafe(statement, [...parameters]);
   },
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
   terminate: async () => {
     await terminateReserved(connection);
   },
@@ -460,7 +462,9 @@ describe.skipIf(!enabled)(
                 },
                 query: async (statement, parameters = []) =>
                   await observer.unsafe(statement, [...parameters]),
-                release: () => observer.release(),
+                release: async () => {
+                  await observer.release();
+                },
               };
             },
             log: (record: unknown) => {
