@@ -2,7 +2,7 @@
   "candidate:.github/workflows/autofix-generated-conflicts.yml/dispatch": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "c761a04865fa388de3b43608089164a0b6e104aabfca2564a0894bbb86fe1ca0"
+    "reviewedDigest": "0e6885c3afa9f7c753c3692f1c0d077efb0090f2e6150c3a2ba8482b49aef48e"
   },
   "candidate:.github/workflows/generated-conflicts-publish.yml/publish": {
     "kind": "ordinary",
@@ -117,7 +117,7 @@
   "candidate:.github/workflows/ci.yml/ci-plan": {
     "kind": "support",
     "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-    "reviewedDigest": "ea55d632840737ffd299cfa7b36f28c4cb27a42b45ca78b9976e0a9e4f0302ce"
+    "reviewedDigest": "2009b953b535ccc5bc231fa8d0f78d07179f1015c87659ee91e3996b13ca9adf"
   },
   "candidate:.github/workflows/ci.yml/generated-sources": {
     "kind": "support",
@@ -192,7 +192,7 @@
   "candidate:.github/workflows/ci.yml/migration-upgrade-rehearsal": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "3d3162df160428e612b1023c23c9281c2f74b25482a74c6382a49725329231fa"
+    "reviewedDigest": "4120d4fb66bbcdddc0732b2edeb80d2362bee8403c33164ab0c82de3973ccc0a"
   },
   "candidate:.github/workflows/ci.yml/release-typecheck": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "18708beab5289372e33a613a93b04cc4817314c0168b417438ab2f14b82ec866"
+    "reviewedDigest": "130a8c9655bb9b2b7954c7838c145f5f93379c1a21a46c35a1485b86d8c4b433"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "6152d1196ef54c3503cc7e15301f9ded7daebb800cde5d0ee38447ab3ad5c372"
+    "reviewedDigest": "ed561295982e9a86eaf553424f4508684225dd435832e2401c92599db2acbab6"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -522,7 +522,7 @@
   "candidate:.github/workflows/marketing-screenshots-update.yml/update": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "b6a9667d02cc18aca3f2df0c238b128689d51b6320593e4497334ae206d7172a"
+    "reviewedDigest": "f5d07940666b5a5f470e0f74ab313f88205e58fe018669aa4348edbfd5da23a6"
   },
   "candidate:.github/workflows/marketing-screenshots.yml/check": {
     "kind": "support",
