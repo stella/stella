@@ -12,6 +12,7 @@ import { InfoIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
@@ -22,6 +23,7 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -198,7 +200,10 @@ export const ProvisionInspectorView = ({
             {/* The floating bar owns the top corner, so the first row starts
                 below it rather than under the zoom controls. */}
             <div
-              className="flex flex-col gap-6 pt-12 pb-4"
+              className={cn(
+                "flex flex-col gap-6 pb-4",
+                VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+              )}
               ref={contentRef}
               {...textScale.rootProps}
             >
