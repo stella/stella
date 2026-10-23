@@ -1,6 +1,6 @@
 import {
-  isCaseLawJurisdiction,
   type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 
 import {

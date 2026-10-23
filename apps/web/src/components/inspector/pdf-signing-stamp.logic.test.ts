@@ -6,8 +6,8 @@ import {
   defaultStampBox,
   previewDeltaToPoints,
   STAMP_LIMITS_PT,
-  stampKeyAdjustment,
   type StampBox,
+  stampKeyAdjustment,
   type StampPageSize,
 } from "@/components/inspector/pdf-signing-stamp.logic";
 

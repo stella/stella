@@ -5,8 +5,8 @@ import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import type {
   HandlerConfig,
-  WorkspaceHandlerConfig,
   McpExposure,
+  WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import {
   parseCatalog,
@@ -16,8 +16,8 @@ import { encodeCompatId } from "@/api/mcp/compat-ids";
 import { resolveCompatFetchReadClass } from "@/api/mcp/compat-tools";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import {
-  resolveMcpReadClass,
   type McpToolAccessBranch,
+  resolveMcpReadClass,
 } from "@/api/mcp/tool-types";
 
 const catalog = parseCatalog(readCapabilityCatalog());

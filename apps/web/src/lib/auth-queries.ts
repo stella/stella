@@ -1,7 +1,7 @@
 import {
+  type QueryClient,
   queryOptions,
   skipToken,
-  type QueryClient,
 } from "@tanstack/react-query";
 
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";

@@ -2,12 +2,12 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
-  inArray,
-  or,
-  getColumnTable,
   getColumns,
+  getColumnTable,
   getTableName,
+  inArray,
   is,
+  or,
   SQL,
   sql,
 } from "drizzle-orm";

@@ -8,9 +8,9 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -25,9 +25,9 @@ import {
 } from "@/components/matter-target-picker";
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import {
-  getCopyToMatterRootEntities,
-  getCopyToMatterErrorKey,
   type CopyToMatterEntity,
+  getCopyToMatterErrorKey,
+  getCopyToMatterRootEntities,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";

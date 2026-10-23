@@ -33,8 +33,8 @@ import { panic } from "better-result";
 
 import {
   CASE_LAW_JURISDICTIONS,
-  isCaseLawJurisdiction,
   type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -45,6 +45,7 @@ import {
 } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  canonicalCorpusIndexMaturationPeriod,
   CORPUS_FINAL_INDEX_CONFIG_VERSION,
   CORPUS_FINAL_INDEX_DOCSTORE_DEFAULT,
   CORPUS_FINAL_INDEX_DOCSTORE_V7,
@@ -55,16 +56,15 @@ import {
   CORPUS_FINAL_INDEX_MIN_SHARDS,
   CORPUS_FINAL_INDEX_SPLIT_NUM_DOCS_TARGET,
   CORPUS_INDEX_DATE_INPUT_FORMATS,
+  type CorpusIndexConfig,
+  type CorpusIndexDocstoreSettings,
+  type CorpusIndexIndexingSettings,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
   PROJECTION_GENERATION_FIELD,
   PUBLISHER_KEYWORDS_FIELD,
   PUBLISHER_SUMMARY_FIELD,
   STEM_FIELD_OF,
-  canonicalCorpusIndexMaturationPeriod,
-  type CorpusIndexConfig,
-  type CorpusIndexDocstoreSettings,
-  type CorpusIndexIndexingSettings,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { QUICKWIT_V09_BUILD_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";

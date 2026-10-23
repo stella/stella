@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   CAPTION_LINE_KIND,
   CZ_CAPTION_FORMS,
-  SK_CAPTION_FORMS,
   detectDecisionCaption,
+  SK_CAPTION_FORMS,
 } from "./decision-caption.js";
 import type { DecisionCaption } from "./decision-caption.js";
 import { plainTextOf } from "./document-ast.js";

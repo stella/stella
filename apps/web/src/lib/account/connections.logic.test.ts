@@ -6,9 +6,9 @@ import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import {
   canApproveIntegrationAuthorization,
+  type IntegrationAuthorizationStatus,
   integrationStatus,
   matchesConnectionQuery,
-  type IntegrationAuthorizationStatus,
 } from "./connections.logic";
 
 const PROPERTY_MAX_TEXT_PARTS = 20;
@@ -51,8 +51,7 @@ describe("integration approval", () => {
       "approved",
       "needs_reapproval",
     ] as const satisfies readonly (
-      | IntegrationAuthorizationStatus
-      | undefined
+      IntegrationAuthorizationStatus | undefined
     )[];
     for (const status of statuses) {
       expect(canApproveIntegrationAuthorization(false, status)).toBe(false);

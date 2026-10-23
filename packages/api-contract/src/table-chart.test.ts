@@ -5,9 +5,9 @@ import {
   isTableChartable,
   isTableChartPlanUsable,
   parseTableChartNumber,
+  TABLE_CHART_LIMITS,
   tableChartPlanSchema,
   tableChartRequestSchema,
-  TABLE_CHART_LIMITS,
 } from "./table-chart";
 import type { TableChartPlan } from "./table-chart";
 
