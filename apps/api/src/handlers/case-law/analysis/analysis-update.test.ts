@@ -21,9 +21,9 @@ import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 
 import type { AnalysisOutput } from "./analysis-output";
 import {
-  applyAnalysisUpdate,
   type AnalysisSubject,
   type AnalysisUpdateFences,
+  applyAnalysisUpdate,
 } from "./analysis-update";
 
 const DECISION_ID = toSafeId<"caseLawDecision">(

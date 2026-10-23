@@ -11,12 +11,7 @@ const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
 
 type UploadState =
-  | "idle"
-  | "running"
-  | "paused"
-  | "rate-limited"
-  | "cancelled"
-  | "done";
+  "idle" | "running" | "paused" | "rate-limited" | "cancelled" | "done";
 
 type UploadFn<T> = (file: File, signal: AbortSignal) => Promise<T>;
 

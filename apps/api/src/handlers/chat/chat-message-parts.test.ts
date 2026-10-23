@@ -10,17 +10,17 @@ import fc from "fast-check";
 
 import {
   CHAT_RICH_PART_LIMITS,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import {
   ASK_USER_TOOL_NAME,
-  CREATE_DOCUMENT_TOOL_NAME,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
-  isServerChatToolCall,
+  CREATE_DOCUMENT_TOOL_NAME,
   createChatPastedTextPart,
+  isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
@@ -33,19 +33,19 @@ import {
   chatMessageFromPersisted,
   classifyChatPartForPersistence,
   createChatTextPart,
-  isIncomingChatPart,
+  getAwaitingUserInteraction,
+  getAwaitingUserInteractions,
+  getResumedUserInteraction,
   isChatAttachmentPart,
   isChatPart,
+  isIncomingChatPart,
   isProviderVisibleChatPart,
   isServerOwnedChatPart,
   mergeAnonRestorations,
   normalizePersistedChatMessageContent,
   restoreServerOwnedChatParts,
-  toPersistedChatMessageContentV3,
   toPersistableChatMessage,
-  getAwaitingUserInteraction,
-  getAwaitingUserInteractions,
-  getResumedUserInteraction,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { assembleMessageMarkdown } from "@/api/handlers/chat/export/export-shared";
 import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";

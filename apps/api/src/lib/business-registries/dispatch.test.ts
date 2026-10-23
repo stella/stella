@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   AresAPIError,
-  AresRequestError,
   type AresCompany,
+  AresRequestError,
 } from "@stll/business-registries/ares";
 import {
   BrregAPIError,

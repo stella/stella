@@ -6,17 +6,17 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import { apikey, member } from "@/api/db/auth-schema";
 import {
+  bufferObjectCleanupIntents,
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
   entityVersions,
   folioCollabRoomTokens,
-  properties,
-  bufferObjectCleanupIntents,
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
   pdfSigningSessions,
+  properties,
   sharepointConnections,
   sharepointOAuthState,
   workspaceMembers,

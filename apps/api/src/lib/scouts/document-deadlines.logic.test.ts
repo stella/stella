@@ -4,9 +4,9 @@ import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy"
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
   DEADLINE_SCOUT_MAX_ATTEMPTS,
+  deadlineDedupeKey,
   deadlineScanAdmission,
   deadlineScoutFailureStatus,
-  deadlineDedupeKey,
   deadlineSeverity,
   filterDeadlines,
   quoteOccursInText,

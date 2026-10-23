@@ -7,8 +7,8 @@ import { assertProperty } from "@stll/property-testing";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
-  handoffLinkResult,
   decorateWebHandoffLinks,
+  handoffLinkResult,
   webHandoffPaths,
 } from "./web-handoff-links-core";
 

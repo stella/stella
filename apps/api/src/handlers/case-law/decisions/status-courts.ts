@@ -1,4 +1,4 @@
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import {
