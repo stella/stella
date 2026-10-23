@@ -954,7 +954,8 @@
       "searchable": "Wyszukiwalne",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne."
+      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
+      "unreadListingPeriods": "Nieodczytane okresy wykazu"
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "decisionTypes": {
@@ -5994,6 +5995,7 @@
       "downloadFailed": "Pobieranie nie powiodło się",
       "downloadPdf": "Pobierz jako PDF",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
+      "emptyFile": "Plik jest pusty.",
       "includeReferenceNumber": "Dołącz numer referencyjny",
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",

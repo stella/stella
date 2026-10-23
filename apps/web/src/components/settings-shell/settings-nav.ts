@@ -149,8 +149,7 @@ const ORGANIZATION_SECTIONS = [
 ] as const;
 
 type SettingsNavSectionSource =
-  | typeof ACCOUNT_SECTION
-  | (typeof ORGANIZATION_SECTIONS)[number];
+  typeof ACCOUNT_SECTION | (typeof ORGANIZATION_SECTIONS)[number];
 type SettingsNavItem = SettingsNavSectionSource["items"][number];
 
 /**

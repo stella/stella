@@ -954,7 +954,8 @@
       "searchable": "Dostupné na vyhľadanie",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
-      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
+      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii.",
+      "unreadListingPeriods": "Nenačítané obdobia zoznamu"
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "decisionTypes": {
@@ -5994,6 +5995,7 @@
       "downloadFailed": "Sťahovanie zlyhalo",
       "downloadPdf": "Stiahnuť ako PDF",
       "downloadSearchablePdf": "Prehľadávateľné PDF",
+      "emptyFile": "Súbor je prázdny.",
       "includeReferenceNumber": "Pridať referenčné číslo",
       "itemLimitReached": "Tento spis dosiahol limit položiek.",
       "maxEntitiesReached": "Dosiahnutý maximálny počet položiek",

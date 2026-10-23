@@ -954,7 +954,8 @@
       "searchable": "Searchable",
       "title": "Case-law coverage",
       "totalFrom": "Total from {date}",
-      "unavailable": "Coverage figures are unavailable right now."
+      "unavailable": "Coverage figures are unavailable right now.",
+      "unreadListingPeriods": "Listing periods not read"
     },
     "decisionNotFound": "Decision not found",
     "decisionTypes": {
@@ -5994,6 +5995,7 @@
       "downloadFailed": "Download failed",
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
+      "emptyFile": "The file is empty.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",

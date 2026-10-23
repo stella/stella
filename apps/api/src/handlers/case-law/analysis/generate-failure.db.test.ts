@@ -38,8 +38,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_FAILURE_HOLD_MS,
   analysisFailureKeyTag,
-  failureClaimGuard,
   analysisFailureRecord,
+  failureClaimGuard,
 } from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
@@ -123,11 +123,7 @@ const VALID_ANSWER = {
 
 /** How the faked provider answers one run. */
 type ProviderAnswer =
-  | "cut-off"
-  | "valid"
-  | "never"
-  | "refused"
-  | "rate-limited";
+  "cut-off" | "valid" | "never" | "refused" | "rate-limited";
 
 /** The retry delay the rate-limited answer names: far past the wait cap. */
 const RATE_LIMIT_DELAY_MS = 41_400_000;

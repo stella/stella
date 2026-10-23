@@ -954,7 +954,8 @@
       "searchable": "Interrogeables",
       "title": "Couverture de la jurisprudence",
       "totalFrom": "Total au {date}",
-      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment."
+      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment.",
+      "unreadListingPeriods": "Périodes de la liste non lues"
     },
     "decisionNotFound": "Décision introuvable",
     "decisionTypes": {
@@ -5994,6 +5995,7 @@
       "downloadFailed": "Échec du téléchargement",
       "downloadPdf": "Télécharger en PDF",
       "downloadSearchablePdf": "PDF avec texte recherchable",
+      "emptyFile": "Le fichier est vide.",
       "includeReferenceNumber": "Inclure le numéro de référence",
       "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",
       "maxEntitiesReached": "Nombre maximal d’éléments atteint",

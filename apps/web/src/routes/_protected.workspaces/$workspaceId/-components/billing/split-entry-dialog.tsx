@@ -4,9 +4,9 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
-  DialogFormState,
   Dialog,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
 } from "@stll/ui/dialog";
 import { PlusIcon, TrashIcon } from "@stll/ui/icons";

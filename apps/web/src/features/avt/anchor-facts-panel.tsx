@@ -43,8 +43,8 @@ import {
   SaveIndicator,
 } from "@/features/avt/state-chip";
 import type {
-  FactConfidence,
   EditableFactDetails,
+  FactConfidence,
   ListItem,
 } from "@/features/avt/types";
 import { CONFIDENCE_LABEL_KEYS, FACT_CONFIDENCES } from "@/features/avt/types";
