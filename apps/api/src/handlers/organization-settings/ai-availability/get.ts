@@ -97,7 +97,7 @@ const readAIAvailability = createSafeRootHandler(
         orgAIConfigStatus,
       }),
       providerConfiguration: checkHandlerConfigurationAdmission({
-        principal: { memberRole, email: user.email },
+        principal: { memberRole, readEmail: () => user.email },
         config: updateAIConfigConfig,
       }),
       deferredServiceTierAvailable: isDeferredServiceTierAvailableForTask(

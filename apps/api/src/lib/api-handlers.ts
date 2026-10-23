@@ -485,7 +485,9 @@ export const checkHandlerConfigurationAdmission = ({
   config,
   checkAccountOperation = checkRestrictedAccountOperation,
 }: {
-  principal: { memberRole: AuthorizedMemberRole; email: string };
+  // The email is read only when an account check applies: a sandbox handler's
+  // context need not carry a user.
+  principal: { memberRole: AuthorizedMemberRole; readEmail: () => string };
   config: Pick<HandlerConfig, "permissions" | "accountAccess">;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
 }): HandlerConfigurationAdmission => {
@@ -494,7 +496,9 @@ export const checkHandlerConfigurationAdmission = ({
   }
   if (
     requiresAccountCheck(config.accountAccess) &&
-    Result.isError(checkAccountOperation(principal.email, config.accountAccess))
+    Result.isError(
+      checkAccountOperation(principal.readEmail(), config.accountAccess),
+    )
   ) {
     return "account_restricted";
   }
@@ -1481,7 +1485,7 @@ const createSafeScopedHandler = <
         });
       }
       const configurationAdmission = checkHandlerConfigurationAdmission({
-        principal: { memberRole, email: ctx.user.email },
+        principal: { memberRole, readEmail: () => ctx.user.email },
         config,
         checkAccountOperation,
       });

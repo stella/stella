@@ -62,11 +62,11 @@
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
-      "accountRestricted": "MI nodrošinātāja iestatījumi šim kontam nav pieejami.",
-      "configUnreadable": "MI nodrošinātāja konfigurāciju nevar nolasīt. Lūdziet organizācijas administratoram to savienot atkārtoti.",
+      "accountRestricted": "AI pakalpojumu sniedzēja iestatījumi šim kontam nav pieejami.",
+      "configUnreadable": "AI pakalpojumu sniedzēja konfigurāciju nevar nolasīt. Lūdziet organizācijas administratoram to savienot atkārtoti.",
       "cta": "Atvērt AI iestatījumus",
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
-      "permissionRequired": "MI nodrošinātāju var savienot tikai organizācijas administrators.",
+      "permissionRequired": "AI pakalpojumu sniedzēju var pievienot tikai organizācijas administrators.",
       "seatRequired": "Lūdziet organizācijas administratoram piešķirt jums vietu.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
     },
