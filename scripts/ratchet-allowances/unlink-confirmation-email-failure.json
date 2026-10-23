@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/lib/auth/confirmation-email.ts",
+  "delta": 1,
+  "reason": "Extract the existing two-factor sender for shared confirmation delivery without changing its failure classification. The original handler loses this construction; transport and configuration failures remain defects rather than being reclassified as anticipated."
+}

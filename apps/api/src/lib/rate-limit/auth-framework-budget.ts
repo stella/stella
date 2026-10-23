@@ -9,6 +9,10 @@ import {
 
 // Exact rules precede wildcard rules; the framework chooses the first match.
 export const AUTH_FRAMEWORK_BUDGETS = {
+  "/sign-in-methods/send-otp": {
+    name: "auth.framework.address",
+    rule: AUTH_RATE_LIMITS.defaultEmail,
+  },
   "/sign-up/email": {
     name: "auth.sign_up.address",
     rule: AUTH_RATE_LIMITS.signUp,
