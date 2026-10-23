@@ -1,6 +1,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
+  type FilenameContext,
   getPropertyName,
   isAstNode,
   isFileIn,
@@ -9,12 +11,10 @@ import {
   resolveImportedExpressionForEnforcement,
   resolveVariable,
   returnArguments,
+  type ScopeContext,
   stableInitializer,
   staticStringValue,
   unwrapExpression,
-  type AstNode,
-  type FilenameContext,
-  type ScopeContext,
 } from "./utils.ts";
 
 const OWNER = "packages/scripts/src/child-exit-status";

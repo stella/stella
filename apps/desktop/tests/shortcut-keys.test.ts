@@ -136,6 +136,15 @@ describe("native shortcut contract", () => {
     ]);
   });
 
+  test("registration states match the native enum", () => {
+    expect(
+      rustEnumVariants(
+        readNativeSource("clipboard_shortcut.rs"),
+        "ShortcutRegistration",
+      ),
+    ).toEqual(["active", "paused", "unavailable", "managed"]);
+  });
+
   test("the guards accept the native shapes and reject drifted ones", () => {
     const snapshot = {
       defaultKeys: DEFAULT_KEYS,
@@ -143,6 +152,11 @@ describe("native shortcut contract", () => {
       registration: "active",
     };
     expect(isClipboardShortcutSnapshot(snapshot)).toBe(true);
+    for (const registration of ["paused", "unavailable", "managed"]) {
+      expect(isClipboardShortcutSnapshot({ ...snapshot, registration })).toBe(
+        true,
+      );
+    }
     expect(
       isClipboardShortcutSnapshot({ ...snapshot, registration: "registered" }),
     ).toBe(false);

@@ -6,7 +6,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { FileIcon } from "@stll/ui/icons";
 import { getMatterColor } from "@stll/ui/matter-colors";

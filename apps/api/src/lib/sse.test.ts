@@ -1,9 +1,9 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
+  RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
-  RESOURCE_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
@@ -117,8 +117,20 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 const setIntervalSpy = spyOn(globalThis, "setInterval");
 const clearIntervalSpy = spyOn(globalThis, "clearInterval");
 
+const clientsBeforeImport = createdClients.length;
+const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
+const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
 const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
   await import("@/api/lib/sse");
+
+// Measure the import itself. Bun's --rerun-each retains mock history between
+// iterations, so absolute call counts include lifecycle calls from earlier
+// runs even though importing (or retrieving) the module performed no work.
+const clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
+const redisClientsCreatedDuringImport =
+  createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
+const intervalsStartedDuringImport =
+  setIntervalSpy.mock.calls.length - intervalCallsBeforeImport;
 
 // Let the fire-and-forget subscribe promise inside startSse settle. A timer
 // turn drains the whole pending microtask queue, so this does not depend on
@@ -148,6 +160,7 @@ const observeStreamRead = async (stream: ReadableStream) => {
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
+const sessionId = "session_1";
 const publishWorkspaceEventMock = async (
   targetWorkspaceId: SafeId<"workspace">,
   event: WorkspaceRealtimeEvent,
@@ -171,11 +184,15 @@ const publishWorkspaceEventMock = async (
 };
 const publishWorkspaceAccessRevokedMock = async (): Promise<void> => {};
 const authorizeAllWorkspaceConnections = async ({
-  userIds,
+  sessionIds,
 }: {
-  userIds: readonly SafeId<"user">[];
-}) => new Set(userIds);
-const authorizeAllUserConnections = async () => true;
+  sessionIds: readonly string[];
+}) => new Set(sessionIds);
+const authorizeAllUserConnections = async ({
+  sessionIds,
+}: {
+  sessionIds: readonly string[];
+}) => new Set(sessionIds);
 const startTestSse = (): void => {
   startSse(
     {
@@ -195,6 +212,8 @@ const subscribeToWorkspace = (
 ): ReadableStream =>
   subscribe({
     organizationId,
+    sessionId:
+      subscribingUserId === userId ? sessionId : `session-${subscribingUserId}`,
     signal,
     userId: subscribingUserId,
     workspaceId,
@@ -217,9 +236,9 @@ const broadcastTestEvent = (
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {
-    expect(createdClients).toHaveLength(0);
-    expect(setIntervalSpy).not.toHaveBeenCalled();
-    expect(createRedisClientMock).not.toHaveBeenCalled();
+    expect(clientsCreatedDuringImport).toBe(0);
+    expect(intervalsStartedDuringImport).toBe(0);
+    expect(redisClientsCreatedDuringImport).toBe(0);
   });
 
   test("registering a local connection before startSse does not throw", () => {
@@ -456,8 +475,12 @@ describe("workspace access revocation", () => {
     startSse(
       {
         user: authorizeAllUserConnections,
-        workspace: async ({ userIds }) =>
-          new Set(userIds.filter((candidate) => candidate === retainedUserId)),
+        workspace: async ({ sessionIds }) =>
+          new Set(
+            sessionIds.filter(
+              (candidate) => candidate === `session-${retainedUserId}`,
+            ),
+          ),
       },
       {
         createClient: createRedisClientMock,
@@ -588,12 +611,12 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     startSse(
       {
         user: authorizeAllUserConnections,
-        workspace: async ({ userIds }) => {
+        workspace: async ({ sessionIds }) => {
           authorizationCalls += 1;
           if (authorizationCalls === 1) {
             await firstAuthorization.promise;
           }
-          return new Set(userIds);
+          return new Set(sessionIds);
         },
       },
       {

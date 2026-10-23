@@ -38,6 +38,7 @@ describe("auth session paths", () => {
     const expectedSessionCreatingPaths = new Set([
       "/callback/:id",
       "/email-otp/verify-email",
+      "/mcp-handoff/redeem",
       "/sign-in/email",
       "/sign-in/email-otp",
       "/sign-in/social",

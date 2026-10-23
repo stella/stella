@@ -14,10 +14,10 @@ import { AT_RIS_APPLICATIONS } from "@/api/handlers/case-law/ingestion/adapters/
  * publisher identifier stored as the publisher spells it.
  */
 import {
-  metadataUrlKeys,
+  META_URL_DIAGNOSTICS,
   metadataUrlChildSchema,
   metadataUrlItemSchema,
-  META_URL_DIAGNOSTICS,
+  metadataUrlKeys,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -471,8 +471,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
 export const isClassifiedMetadataKey = (
   key: string,
 ): key is
-  | keyof typeof METADATA_TEXT_DISPOSITIONS
-  | typeof META_URL_DIAGNOSTICS =>
+  keyof typeof METADATA_TEXT_DISPOSITIONS | typeof META_URL_DIAGNOSTICS =>
   key === META_URL_DIAGNOSTICS ||
   Object.hasOwn(METADATA_TEXT_DISPOSITIONS, key);
 

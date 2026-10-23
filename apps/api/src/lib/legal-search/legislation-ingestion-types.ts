@@ -4,6 +4,8 @@ import type {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LegislationExpressionKind,
 } from "@stll/api-contract/legislation-expression";
+import type { LegislationPublisherEvidence } from "@stll/api-contract/legislation-publisher-evidence";
+import type { LegislationDocumentStatus } from "@stll/api-contract/legislation-status";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,9 +36,6 @@ import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
  * `LegislationDocumentInput` stands apart from `IngestionResult` instead of
  * being generalised into it.
  */
-
-/** Lifecycle of a legislative text at a given point in time. */
-type LegislationStatus = "current" | "historical" | "repealed" | "draft";
 
 /**
  * How the publisher states the close of a consolidation window.
@@ -123,9 +122,7 @@ type LegislationExpressionIdentity = {
  * earlier) show what it listed then.
  */
 type LegislationObservationOrigin =
-  | "live"
-  | "bulk-snapshot"
-  | "stored-raw-replay";
+  "live" | "bulk-snapshot" | "stored-raw-replay";
 
 export const LEGISLATION_AMENDMENT_CHANGE_KINDS = [
   "changed",
@@ -148,8 +145,7 @@ export type LegislationAmendmentRelation = {
   affectedAnchor: string;
   changeKind: (typeof LEGISLATION_AMENDMENT_CHANGE_KINDS)[number];
   effective:
-    | { type: "date"; on: string }
-    | { type: "not-stated"; text: string | null };
+    { type: "date"; on: string } | { type: "not-stated"; text: string | null };
   /** Original instruction code, retained alongside its normalized kind. */
   publisherInstruction: string | null;
 };
@@ -185,7 +181,7 @@ export type LegislationDocumentInput = {
   country: string;
   language: string;
   documentType?: string | null;
-  status?: LegislationStatus;
+  status?: LegislationDocumentStatus;
   effectiveDate?: string | null;
   /**
    * The consolidation this row holds. Required: a connector that reads no
@@ -216,7 +212,11 @@ export type LegislationDocumentInput = {
   ast?: DocumentAst | EmptyAst | null;
   sourceUrl?: string | null;
   documentUrl?: string | null;
-  metadata?: Record<string, unknown>;
+  /** Exact work aliases for publisher-identity sources; language/edition identifiers are not work aliases. */
+  identifiers?: readonly string[] | undefined;
+  metadata?: Record<string, unknown> & {
+    publisherEvidence?: LegislationPublisherEvidence;
+  };
   /**
    * The publisher's response as received (HTML, a JSON string, a structured
    * envelope over several responses), after the pipeline's
@@ -379,6 +379,5 @@ export type LegislationSourceAdapter = {
    * its reason.
    */
   reconciliation:
-    | LegislationSourceReconciliation
-    | LegislationReconciliationUnsupported;
+    LegislationSourceReconciliation | LegislationReconciliationUnsupported;
 };

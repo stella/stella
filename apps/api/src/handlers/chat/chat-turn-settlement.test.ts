@@ -406,6 +406,40 @@ describe("the settled history the engine converts", () => {
     };
   };
 
+  // A stop while a call's input streams stores the call with the text that
+  // had arrived. What the provider is handed must still be a call: a JSON
+  // object as its arguments, answered by the result that says it never ran.
+  test.each(["", '{"name": "N'])(
+    "a call cut off with arguments %p reaches the engine with no input",
+    (partial) => {
+      const cutOff = {
+        arguments: partial,
+        id: "cut-off",
+        name: "mcp__external__delete",
+        state: "input-streaming",
+        type: "tool-call",
+      } satisfies ChatPart;
+      const storedCall =
+        closeCutShortCalls(
+          toPersistableChatMessage({
+            id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fc"),
+            parts: [cutOff],
+            role: "assistant",
+          }),
+        ).parts[0] ?? panic("The cut-short message lost its call");
+      // The stored call keeps the partial text: the fixture reaches the fault.
+      expect(storedCall).toMatchObject({ arguments: partial, state: "error" });
+
+      const request = modelRequest([storedCall]);
+      expect(findTranscriptProblems(request)).toEqual([]);
+      expect(
+        request.messages.flatMap(({ toolCalls }) =>
+          (toolCalls ?? []).map(({ function: { arguments: text } }) => text),
+        ),
+      ).toEqual(["{}"]);
+    },
+  );
+
   test("a batch with an unanswered call keeps its calls in one step", () => {
     const parts = [approval("first", false), question, approval("last", false)];
     const history = settleHistoryForRun({

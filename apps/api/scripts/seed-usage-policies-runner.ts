@@ -19,7 +19,7 @@ import {
   TransactionRollbackError,
 } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { openSync, closeSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, writeFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {

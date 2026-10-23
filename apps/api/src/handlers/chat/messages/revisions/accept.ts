@@ -3,8 +3,8 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import {
-  chatMessageAcceptedEditSchema,
   type ChatMessageAcceptedEdit,
+  chatMessageAcceptedEditSchema,
 } from "@stll/api-contract/chat-message-revisions";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";

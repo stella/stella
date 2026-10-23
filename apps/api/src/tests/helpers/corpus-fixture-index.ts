@@ -1,6 +1,6 @@
 import {
-  type CorpusIndexManifest,
   corpusIndexConfigFromManifest,
+  type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 
 // Keep committed-ingest receipts while avoiding the production batching window.

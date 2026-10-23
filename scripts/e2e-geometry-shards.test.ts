@@ -125,7 +125,7 @@ test("production shards split every geometry viewport evenly without losing host
   // Exercise the workflow's project selection rather than a hand-written mirror.
   expect(listGeometry(generalProjects)).toEqual([]);
   expect(run).toContain(
-    `--project=docked-chat-geometry --shard=\${{ matrix.shard }}/${E2E_SHARD_COUNT}`,
+    `--project=docked-chat-geometry --shard=\${{ matrix.shard }}/\${{ steps.e2e-shards.outputs.count }}`,
   );
   const project = ["--project=docked-chat-geometry"];
   const allCases = listGeometry(project);
@@ -216,7 +216,11 @@ esac
         [
           "bash",
           "-c",
-          productionShardRun().replaceAll(`\${{ matrix.shard }}`, "1"),
+          productionShardRun()
+            .replaceAll(`\${{ matrix.shard }}`, "1")
+            .replaceAll(`\${{ steps.e2e-shards.outputs.count }}`, () =>
+              String(E2E_SHARD_COUNT),
+            ),
         ],
         {
           cwd: workspace,

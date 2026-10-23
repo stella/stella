@@ -108,10 +108,12 @@ describe("custom oxlint guardrails", () => {
     expect(protectedGuardSource).toContain("roleOptions");
     expect(protectedGuardSource).not.toContain("organizationOptions");
 
-    // The route definition (beforeLoad, loader) must never seed the matter
-    // list: route commit cannot wait on it. The rendered shell may subscribe
-    // to it, but only as deferred chrome, which dedupes with the sidebar's
-    // identical subscription instead of adding a request.
+    // Route commit must never wait on the matter list. The signed-in guard
+    // only starts it, detached, in the shell's first request wave (otherwise
+    // it opens its own round after chrome mounts and delays every
+    // enrolment-gated request). The rendered shell subscribes to it only as
+    // deferred chrome, which dedupes with that warm cache instead of adding a
+    // request.
     expect(protectedRouteFileSource).toContain(
       "beforeLoad: loadProtectedContext,",
     );
@@ -121,7 +123,14 @@ describe("custom oxlint guardrails", () => {
     expect(protectedGuardSource).toContain(
       "export const loadProtectedContext = async",
     );
-    expect(protectedGuardSource).not.toContain("workspacesNavigationOptions");
+    const guardNavigationReads =
+      protectedGuardSource.match(/workspacesNavigationOptions\(/gu) ?? [];
+    const detachedGuardNavigationReads =
+      protectedGuardSource.match(
+        /detached\(\s*prefetchRouteQuery\(\s*queryClient,\s*workspacesNavigationOptions\(/gu,
+      ) ?? [];
+    expect(guardNavigationReads).toHaveLength(1);
+    expect(detachedGuardNavigationReads).toHaveLength(1);
     const navigationListReads =
       protectedFrameSource.match(/workspacesNavigationOptions\(/gu) ?? [];
     const chromeNavigationListReads =

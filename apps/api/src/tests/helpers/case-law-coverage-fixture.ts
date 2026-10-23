@@ -26,7 +26,11 @@ const base = {
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
       pendingTextCount: 3,
-      knownGaps: { type: "unknown" },
+      storedDecisions: 150,
+      knownGaps: {
+        type: "not_reconciled",
+        reason: "The source listing is not date-sliced.",
+      },
       completeness: { state: "not-measured-yet" },
       addedLastWeek: 5,
     },
@@ -90,7 +94,10 @@ const expectedSources = [
     decisionYearFrom: 1993,
     decisionYearTo: 2026,
     pendingTextCount: 3,
-    knownGaps: { type: "unknown" },
+    knownGaps: {
+      type: "not_reconciled",
+      reason: "The source listing is not date-sliced.",
+    },
   },
 ] as const;
 

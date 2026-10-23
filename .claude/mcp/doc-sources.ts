@@ -219,7 +219,6 @@ export const DOC_SOURCES = {
       "oxlint",
       "@oxlint/plugins",
       "oxc-transform-react",
-      "oxfmt",
       "oxlint-tsgolint",
     ],
     markdownPages: {
@@ -229,12 +228,7 @@ export const DOC_SOURCES = {
     url: "https://oxc.rs/llms.txt",
   },
   Streamdown: {
-    dependencies: [
-      "streamdown",
-      "@streamdown/cjk",
-      "@streamdown/math",
-      "@streamdown/mermaid",
-    ],
+    dependencies: ["streamdown", "@streamdown/cjk", "@streamdown/math"],
     url: "https://streamdown.dev/llms.txt",
   },
   BetterResult: {
@@ -447,6 +441,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-10-19T00:00:00.000Z",
+      dependency: "pele",
+      explanation:
+        "https://pele.run/llms.txt and https://raw.githubusercontent.com/obsidianmd/pele/main/llms.txt return 404. Use the documentation at https://pele.run and the README at https://github.com/obsidianmd/pele#readme directly.",
+      expiresAt: "2026-11-18T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-11T00:00:00.000Z",
       dependency: "shell-quote",
       explanation:
@@ -631,11 +633,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-23T00:00:00.000Z",
+      checkedAt: "2026-10-23T00:00:00.000Z",
       dependency: "hyparquet",
       explanation:
         "https://hyparam.github.io/hyparquet/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/hyparam/hyparquet and the typed API in its package (src/types.d.ts) directly.",
-      expiresAt: "2026-10-23T00:00:00.000Z",
+      expiresAt: "2026-11-22T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
