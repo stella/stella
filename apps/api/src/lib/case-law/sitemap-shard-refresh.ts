@@ -428,13 +428,10 @@ type StagedCountry = { country: string; months: readonly StagedMonth[] };
  */
 const shardRows = (countries: readonly StagedCountry[]): ShardRow[] =>
   countries.flatMap(({ country, months }) => {
-    const byMonth = new Map<string, StagedMonth[]>();
-    for (const staged of months) {
-      const key = `${staged.year}|${staged.month}`;
-      const buckets = byMonth.get(key) ?? [];
-      buckets.push(staged);
-      byMonth.set(key, buckets);
-    }
+    const byMonth = Map.groupBy(
+      months,
+      ({ year, month }) => `${year}|${month}`,
+    );
     return [...byMonth.values()].flatMap((buckets) => {
       const first = buckets.at(0) ?? panic("A staged month has no buckets");
       let monthTotal = 0;
@@ -565,9 +562,19 @@ const swapSnapshot = async (
  * leaves the scheduler's runtime ceiling room for the country in progress and
  * the swap; the next run resumes from the staged counts.
  */
-export const SITEMAP_REFRESH_RUN_BUDGET_MS = 15 * 60 * 1000;
+const SITEMAP_REFRESH_RUN_BUDGET_MS = 15 * 60 * 1000;
 
-export type SitemapRefreshOutcome =
+/** Counts one country in its own snapshot and stages it; answers the pages read. */
+const countAndStageCountry = async (
+  options: Parameters<typeof countCountryMonths>[0],
+): Promise<number> => {
+  const walked = await countCountryMonths(options);
+  const { db, budget, country } = options;
+  await stageCountry({ db, budget, country, ...walked });
+  return walked.pages;
+};
+
+type SitemapRefreshOutcome =
   | { type: "counting"; counted: number; remaining: number; pages: number }
   | { type: "swapped"; largestShard: number; pages: number; shards: number };
 
@@ -618,16 +625,14 @@ export const refreshCaseLawSitemapShards = async (
   for (const country of pending) {
     throwIfAborted(signal);
     // db-await-in-loop: one snapshot per country; each is staged before the next starts
-    const walked = await countCountryMonths({
+    pages += await countAndStageCountry({
       db,
       budget,
       pageSize,
       signal,
       country,
     });
-    await stageCountry({ db, budget, country, ...walked });
     counted += 1;
-    pages += walked.pages;
     // Checked after a country, so every run stages at least one and a
     // budget shorter than one country's walk still advances the cycle.
     if (counted < pending.length && clock() - startedAt >= runBudgetMs) {

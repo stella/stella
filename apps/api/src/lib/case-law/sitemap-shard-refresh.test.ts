@@ -564,7 +564,7 @@ test(
     }
 
     expect(outcomes.map(({ type }) => type)).toEqual([
-      ...Array.from({ length: countries - 1 }, () => "counting"),
+      ...Array.from({ length: countries - 1 }, () => "counting" as const),
       "swapped",
     ]);
     expect(
