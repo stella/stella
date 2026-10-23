@@ -107,12 +107,6 @@ export const sanctionsSources = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicSanctionsReaderPolicies(),
-    p.pgPolicy("sanctions_sources_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_sources'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_sources'::regclass)`,
-    }),
   ],
 );
 
@@ -177,12 +171,6 @@ export const sanctionsEditions = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicSanctionsReaderPolicies(),
-    p.pgPolicy("sanctions_editions_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_editions'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_editions'::regclass)`,
-    }),
   ],
 );
 
@@ -203,12 +191,6 @@ export const sanctionsEntryPayloads = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicSanctionsReaderPolicies(),
-    p.pgPolicy("sanctions_entry_payloads_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_entry_payloads'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_entry_payloads'::regclass)`,
-    }),
   ],
 );
 
@@ -233,11 +215,5 @@ export const sanctionsEditionEntries = p.pgTable(
     p.index("sanctions_edition_entries_content_hash_idx").on(table.contentHash),
     ...globalCaseLawPolicies(),
     ...publicSanctionsReaderPolicies(),
-    p.pgPolicy("sanctions_edition_entries_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_edition_entries'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_edition_entries'::regclass)`,
-    }),
   ],
 );

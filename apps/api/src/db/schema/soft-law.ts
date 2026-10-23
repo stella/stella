@@ -71,12 +71,6 @@ export const softLawSources = p.pgTable.withRLS(
       "soft_law_sources_lease_check",
       sql`(${t.leaseToken} IS NULL AND ${t.leaseExpiresAt} IS NULL) OR (${t.runState} = 'running' AND ${t.leaseToken} IS NOT NULL AND ${t.leaseExpiresAt} IS NOT NULL)`,
     ),
-    p.pgPolicy("soft_law_sources_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_sources'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_sources'::regclass)`,
-    }),
   ],
 );
 
@@ -142,12 +136,6 @@ export const softLawDocuments = p.pgTable.withRLS(
       "soft_law_documents_issued_check",
       sql`(${t.issuedOnState} = 'stated' AND ${t.issuedOn} IS NOT NULL) OR (${t.issuedOnState} = 'not_stated' AND ${t.issuedOn} IS NULL)`,
     ),
-    p.pgPolicy("soft_law_documents_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_documents'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_documents'::regclass)`,
-    }),
   ],
 );
 
@@ -199,12 +187,6 @@ export const softLawDocumentVersions = p.pgTable.withRLS(
       "soft_law_versions_window_check",
       sql`${t.observedTo} IS NULL OR ${t.observedTo} >= ${t.observedFrom}`,
     ),
-    p.pgPolicy("soft_law_document_versions_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_document_versions'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_document_versions'::regclass)`,
-    }),
   ],
 );
 
@@ -241,12 +223,6 @@ export const softLawDocumentLocators = p.pgTable.withRLS(
       name: "soft_law_locators_document_fk",
       columns: [t.documentId],
       foreignColumns: [softLawDocuments.id],
-    }),
-    p.pgPolicy("soft_law_document_locators_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_document_locators'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_document_locators'::regclass)`,
     }),
   ],
 );
@@ -298,11 +274,5 @@ export const softLawIngestionAttempts = p.pgTable.withRLS(
       "soft_law_attempts_tag_check",
       sql`(${t.status} = 'rejected' AND ${t.tag} IS NOT NULL AND ${t.tag} IN (${values(SOFT_LAW_ITEM_TAGS)})) OR (${t.status} <> 'rejected' AND ${t.tag} IS NULL)`,
     ),
-    p.pgPolicy("soft_law_ingestion_attempts_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_ingestion_attempts'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.soft_law_ingestion_attempts'::regclass)`,
-    }),
   ],
 );

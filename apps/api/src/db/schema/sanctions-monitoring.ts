@@ -195,12 +195,6 @@ export const sanctionsEditionFanouts = p.pgTable(
       )})`,
     ),
     ...globalCaseLawPolicies(),
-    p.pgPolicy("sanctions_edition_fanouts_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_edition_fanouts'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sanctions_edition_fanouts'::regclass)`,
-    }),
   ],
 );
 

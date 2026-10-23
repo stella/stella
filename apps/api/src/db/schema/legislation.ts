@@ -771,12 +771,6 @@ export const legislationAmendmentSnapshots = p.pgTable(
       .onDelete("cascade"),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
-    p.pgPolicy("legislation_amendment_snapshots_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_amendment_snapshots'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_amendment_snapshots'::regclass)`,
-    }),
   ],
 );
 
@@ -829,11 +823,5 @@ export const legislationAmendments = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
-    p.pgPolicy("legislation_amendments_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_amendments'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_amendments'::regclass)`,
-    }),
   ],
 );

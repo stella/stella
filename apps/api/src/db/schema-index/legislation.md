@@ -161,22 +161,22 @@ legislation_amendment_snapshots.observed_at  timestamptz  not null  legislation.
 legislation_amendment_snapshots.coverage     jsonb        not null  legislation.ts:758
 ```
 
-## legislation_amendments · `legislationAmendments` · legislation.ts:784 · rls
+## legislation_amendments · `legislationAmendments` · legislation.ts:778 · rls
 
 Publisher-stated provision effects, independent of consolidation windows.
 
 ```text
-legislation_amendments.source_id              safeUuid  fk,not null  legislation.ts:787
-legislation_amendments.target_eli             varchar   not null     legislation.ts:790
-legislation_amendments.language               varchar   not null     legislation.ts:791
-legislation_amendments.publisher_id           varchar   not null     legislation.ts:792
-legislation_amendments.amending_eli           varchar   not null     legislation.ts:793
-legislation_amendments.amending_title         text      null         legislation.ts:794
-legislation_amendments.amending_anchor        text      null         legislation.ts:795
-legislation_amendments.affected_anchor        text      not null     legislation.ts:796
-legislation_amendments.change_kind            text      not null     legislation.ts:797
-legislation_amendments.effective_type         text      not null     legislation.ts:800
-legislation_amendments.effective_date         date      null         legislation.ts:803
-legislation_amendments.effective_text         text      null         legislation.ts:804
-legislation_amendments.publisher_instruction  text      null         legislation.ts:805
+legislation_amendments.source_id              safeUuid  fk,not null  legislation.ts:781
+legislation_amendments.target_eli             varchar   not null     legislation.ts:784
+legislation_amendments.language               varchar   not null     legislation.ts:785
+legislation_amendments.publisher_id           varchar   not null     legislation.ts:786
+legislation_amendments.amending_eli           varchar   not null     legislation.ts:787
+legislation_amendments.amending_title         text      null         legislation.ts:788
+legislation_amendments.amending_anchor        text      null         legislation.ts:789
+legislation_amendments.affected_anchor        text      not null     legislation.ts:790
+legislation_amendments.change_kind            text      not null     legislation.ts:791
+legislation_amendments.effective_type         text      not null     legislation.ts:794
+legislation_amendments.effective_date         date      null         legislation.ts:797
+legislation_amendments.effective_text         text      null         legislation.ts:798
+legislation_amendments.publisher_instruction  text      null         legislation.ts:799
 ```

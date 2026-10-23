@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { stellaPublicLawReader } from "@/api/db/rls";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -175,7 +176,7 @@ describe.skipIf(!enabled)("public corpus owner behaviour", () => {
         "legislation_amendments",
       ],
       run: async (fixture) => {
-        const { client, owner, schema } = fixture;
+        const { client, schema } = fixture;
         const sourceId = createSafeId<"legislationSource">();
         const documentId = createSafeId<"legislationDocument">();
         const work = { sourceId, eli: "eli/cz/sb/2012/89", language: "cs" };
@@ -188,13 +189,27 @@ describe.skipIf(!enabled)("public corpus owner behaviour", () => {
         await client`INSERT INTO legislation_amendments
           (source_id, target_eli, language, publisher_id, amending_eli, affected_anchor, change_kind, effective_type, effective_date)
           VALUES (${sourceId}, ${work.eli}, 'cs', 'fixture-amendment', 'eli/cz/sb/2026/159', 'section-1', 'inserted', 'date', '2027-01-01')`;
-        // The reader's capability probe intentionally names the canonical schema.
-        await client.unsafe(`GRANT SELECT (coverage) ON public.legislation_amendment_snapshots TO ${owner};
-          GRANT SELECT (publisher_id) ON public.legislation_amendments TO ${owner}`);
+        await client.unsafe(
+          `GRANT USAGE ON SCHEMA ${schema} TO ${stellaPublicLawReader.name}`,
+        );
+        for (const table of [
+          "legislation_sources",
+          "legislation_documents",
+          "legislation_amendment_snapshots",
+          "legislation_amendments",
+        ]) {
+          const columns = await client<{ name: string }[]>`
+            SELECT attname AS name FROM pg_attribute
+            WHERE attrelid = ${`public.${table}`}::regclass AND attnum > 0 AND NOT attisdropped
+              AND has_column_privilege(${stellaPublicLawReader.name}, attrelid, attnum, 'SELECT')`;
+          expect(columns.length).toBeGreaterThan(0);
+          await client.unsafe(`GRANT SELECT (${columns.map(({ name }) => identifier(name)).join(", ")})
+            ON ${schema}.${identifier(table)} TO ${stellaPublicLawReader.name}`);
+        }
         const read = async () =>
           await publicLawReadDb(async (tx) => {
             await tx.execute(
-              sql`SELECT set_config('role', ${owner}, true), set_config('search_path', ${`${schema}, public`}, true)`,
+              sql`SELECT set_config('search_path', ${`${schema}, public`}, true)`,
             );
             const posture = await tx.execute<{
               name: string;
@@ -203,7 +218,7 @@ describe.skipIf(!enabled)("public corpus owner behaviour", () => {
             }>(sql`
             SELECT current_user AS name, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`);
             expect(executedRows(posture).at(0)).toMatchObject({
-              name: owner,
+              name: stellaPublicLawReader.name,
               rolsuper: false,
               rolbypassrls: false,
             });
@@ -222,65 +237,25 @@ describe.skipIf(!enabled)("public corpus owner behaviour", () => {
         expect(
           result.amendments.items.map(({ publisherId }) => publisherId),
         ).toEqual(["fixture-amendment"]);
-        await client.unsafe(`DROP POLICY legislation_amendment_snapshots_owner ON ${schema}.legislation_amendment_snapshots;
-          DROP POLICY legislation_amendments_owner ON ${schema}.legislation_amendments`);
-        expect(await read()).toMatchObject({
-          snapshot: null,
-          amendments: { items: [] },
-        });
       },
     });
   });
 
-  test("owner citation updates maintain stats and expose exact state rows", async () => {
-    await withOwnerFixture({
-      tables: [
-        "case_law_sources",
-        "case_law_decisions",
-        "case_law_citations",
-        "case_law_decision_citation_stats",
-        "case_law_decision_citation_stats_state",
-      ],
-      functions: [
-        "decision_citation_stats_contributions",
-        "apply_decision_citation_stats",
-        "sync_decision_citation_stats_edge",
-      ],
-      triggers: ["case_law_citation_stats_edge_update"],
-      run: async (fixture) => {
-        const { client, schema } = fixture;
-        const sourceId = createSafeId<"caseLawSource">();
-        const citing = createSafeId<"caseLawDecision">();
-        const cited = createSafeId<"caseLawDecision">();
-        const citation = createSafeId<"caseLawCitation">();
-        await seedDecision(client, citing, sourceId);
-        await seedDecision(client, cited, sourceId);
-        await client`INSERT INTO case_law_citations (id, citing_decision_id, citation_text)
-          VALUES (${citation}, ${citing}, 'Fixture reference')`;
-        await client`INSERT INTO case_law_decision_citation_stats_state VALUES (${cited}, 'exact')`;
-        await asOwner(fixture, async () => {
-          expect(
-            await client`SELECT decision_id, status FROM case_law_decision_citation_stats_state`,
-          ).toEqual([{ decision_id: cited, status: "exact" }]);
-          await client`UPDATE case_law_citations SET cited_decision_id = ${cited} WHERE id = ${citation}`;
-          expect(
-            await client`SELECT decision_id, direction, count::integer FROM case_law_decision_citation_stats`,
-          ).toEqual([{ decision_id: cited, direction: "incoming", count: 1 }]);
-        });
-        await client.unsafe(
-          `DROP POLICY case_law_decision_citation_stats_state_owner ON ${schema}.case_law_decision_citation_stats_state`,
-        );
-        await asOwner(fixture, async () => {
-          expect(
-            await client`SELECT decision_id FROM case_law_decision_citation_stats_state`,
-          ).toEqual([]);
-          await client`UPDATE case_law_citations SET cited_decision_id = NULL WHERE id = ${citation}`;
-        });
-        expect(
-          await client`SELECT count::integer FROM case_law_decision_citation_stats`,
-        ).toEqual([{ count: 1 }]);
-      },
-    });
+  test("shared public reads use the reader role and deny writes", async () => {
+    expect(process.env["PUBLIC_LAW_DATABASE_URL"]).toBeUndefined();
+    const role = await publicLawReadDb(async (tx) =>
+      executedRows(
+        await tx.execute<{ name: string }>(sql`SELECT current_user AS name`),
+      ).at(0),
+    );
+    expect(role?.name).toBe(stellaPublicLawReader.name);
+    const denied = await rejectionOf(
+      publicLawReadDb(async (tx) => {
+        // COPY checks INSERT privileges before the read-only transaction guard.
+        await tx.execute(sql`COPY legislation_amendments FROM STDIN`);
+      }),
+    );
+    expect(denied).toMatchObject({ cause: { errno: "42501" } });
   });
 
   test("owner inserts reject a retired decision UUID", async () => {
