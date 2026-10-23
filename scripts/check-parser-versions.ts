@@ -569,17 +569,32 @@ const withoutOutputUnchangedMarkers = (source: string): string =>
     .filter((line) => !OUTPUT_UNCHANGED.test(line))
     .join("\n");
 
-// Layout, comments and types never change what a parser emits, so a
-// formatting-only edit must not demand a version bump. Compare the code the
-// transpiler prints instead of the text; source it cannot parse compares
-// verbatim, which still demands the bump.
+const NAMED_SPECIFIERS =
+  /^((?:import|export)(?: type)? \{)([^}]*)(\} from )/gmu;
+
+// Layout, comments, types and the order of names inside one import never
+// change what a parser emits, so a formatting-only edit must not demand a
+// version bump. Compare the code the transpiler prints, with named
+// specifiers sorted; statement order still counts. Source it cannot parse
+// compares verbatim, which still demands the bump.
 const printedCode = (file: string, source: string): string => {
   const printer = file.endsWith("x") ? jsxTranspiler : transpiler;
+  let printed: string;
   try {
-    return printer.transformSync(source);
+    printed = printer.transformSync(source);
   } catch {
     return source;
   }
+  return printed.replace(
+    NAMED_SPECIFIERS,
+    (_, open: string, names: string, close: string) =>
+      `${open}${names
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .toSorted()
+        .join(", ")}${close}`,
+  );
 };
 
 const LOCATION_DEPENDENT = /\bimport\.meta\b|\b__dirname\b|\b__filename\b/u;
