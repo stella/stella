@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 2,
+  "reason": "The workspace mutation census adds a mutation registry and its reviewed ledger at the web library boundary so the guard can discover every exported workspace mutation hook and keep each mutation's invalidations bounded."
+}
