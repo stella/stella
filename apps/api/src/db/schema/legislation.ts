@@ -28,13 +28,13 @@ import {
   isNotNull,
   jsonb,
   p,
-  pUuid,
   publicLawReaderPolicies,
+  pUuid,
   safeUuid,
   sql,
   stellaPublicLawReader,
-  tsvector,
   timestamptz,
+  tsvector,
 } from "./common";
 import type {
   CorpusSourceDescriptor,

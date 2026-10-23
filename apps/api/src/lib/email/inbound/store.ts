@@ -8,8 +8,8 @@ import {
   SETTING_USER_ID,
   SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_MODE,
   stella,
+  WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
 import {
   correspondenceDropLogs,
@@ -22,15 +22,15 @@ import {
   type InboundFiler,
 } from "@/api/lib/email/inbound/acceptance";
 import {
-  InboundPersistenceError,
   type InboundDeliveryOutcome,
   type InboundDeliveryStore,
+  InboundPersistenceError,
   type PersistInboundDeliveryOptions,
 } from "@/api/lib/email/inbound/ingest";
 import {
-  resolveInboundSender,
-  lookupInboundPrimaryAccount,
   type InboundTransaction,
+  lookupInboundPrimaryAccount,
+  resolveInboundSender,
 } from "@/api/lib/email/inbound/sender";
 import { brandDerivedCorrespondenceDropId } from "@/api/lib/safe-id-boundaries";
 

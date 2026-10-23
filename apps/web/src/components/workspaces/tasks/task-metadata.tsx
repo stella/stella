@@ -17,10 +17,10 @@ import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/com
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import {
-  PRIORITY_COLORS,
-  PRIORITY_ICONS,
   ITEM_TYPE_TRANSLATION_KEYS,
   LIST_ITEM_TYPES,
+  PRIORITY_COLORS,
+  PRIORITY_ICONS,
   STATUS_COLORS,
   STATUS_ICONS,
   TASK_PRIORITIES,

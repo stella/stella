@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
 
 import {
-  sanitizeHandoffUrl,
   handoffNavigationDestination,
+  sanitizeHandoffUrl,
 } from "@/lib/account/handoff-url";
 
 const capture = async (href: string) => {
@@ -12,8 +12,8 @@ const capture = async (href: string) => {
   const window = {
     location,
     takeStellaHandoff: ():
-      | { code: string; path: string; destination: string }
-      | undefined => undefined,
+      { code: string; path: string; destination: string } | undefined =>
+      undefined,
     history: {
       state: { preserved: true },
       replaceState: (_state: unknown, _title: string, url: URL) => {

@@ -42,11 +42,11 @@ import {
   isStoredReadAbsence,
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
-  storedReadUnavailable,
-  UNAVAILABLE_CYCLES_BEFORE_MARKING,
   type ReadOutcome,
   type ReadRefusal,
   type ReadUnavailableCause,
+  storedReadUnavailable,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
@@ -59,6 +59,7 @@ import {
   czRegionalFixture,
   czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
@@ -72,18 +73,17 @@ import {
   plUokikFixture,
   skCourtsFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   buildWithFault,
   changedPaths,
   classifyFaultedBuild,
   classifyRefusedBuild,
+  type FaultOutcome,
   flattenBuilt,
   READ_FAULTS,
   READ_REFUSALS,
   recordFetchStages,
-  type FaultOutcome,
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

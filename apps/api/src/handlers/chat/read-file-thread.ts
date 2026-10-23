@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import {
-  readFileChatThreadMapping,
   type FileThreadLookupInput,
+  readFileChatThreadMapping,
 } from "@/api/handlers/chat/file-thread-mapping";
 import {
   emptyMessagePage,

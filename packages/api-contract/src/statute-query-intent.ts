@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
-  STATUTE_ALIASES,
   resolveStatuteAlias,
+  STATUTE_ALIASES,
   type StatuteAliasTarget,
 } from "./statute-aliases";
 import {
@@ -274,9 +274,7 @@ const EMBEDDED_ALIAS_POLICY = {
 } as const satisfies {
   [Country in StatuteQueryCountry]: {
     [Alias in keyof (typeof STATUTE_ALIASES)[Country]]:
-      | "whole-query"
-      | "title"
-      | readonly string[];
+      "whole-query" | "title" | readonly string[];
   };
 };
 

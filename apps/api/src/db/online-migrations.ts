@@ -14,8 +14,8 @@ import {
 import { MONITORING_SESSION_INDEXES } from "@/api/lib/synthetic-principal/indexes";
 
 import {
-  REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
+  REWRITTEN_MIGRATION_INDEXES,
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
@@ -831,8 +831,7 @@ export const runOnlineMigrations = async (
   );
 
 type OnlineValidationOutcome =
-  | { type: "validated" }
-  | { type: "migrator_active" };
+  { type: "validated" } | { type: "migrator_active" };
 
 const VALIDATED = {
   type: "validated",

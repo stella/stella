@@ -1,4 +1,4 @@
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
@@ -225,8 +225,7 @@ export const getRecentFileRoute = ({
 });
 
 type DialogCloseActionState =
-  | { status: "idle" }
-  | { status: "pending"; run: () => void };
+  { status: "idle" } | { status: "pending"; run: () => void };
 
 export const createDialogCloseActionQueue = () => {
   let state: DialogCloseActionState = { status: "idle" };

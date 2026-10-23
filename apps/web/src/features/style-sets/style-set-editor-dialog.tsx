@@ -7,10 +7,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
@@ -27,9 +27,9 @@ import type {
 } from "@/features/style-sets/style-set-editor-types";
 import { StyleSetPreview } from "@/features/style-sets/style-set-preview";
 import {
+  stellaStyleEditorOptions,
   styleSetEditorOptions,
   styleSetsKeys,
-  stellaStyleEditorOptions,
 } from "@/features/style-sets/style-set-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
