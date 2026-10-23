@@ -25,6 +25,7 @@ import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
   authCapabilitiesRoute,
+  authMetadataPreflightRoute,
   authMetadataRoute,
 } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
@@ -440,11 +441,11 @@ const api = new Elysia()
     }
 
     // Ahead of the CORS layer below, which otherwise answers every preflight
-    // with the API-wide method list and leaves the MCP route's own preflight
-    // unreachable.
-    const mcpPreflightResponse = handleMcpPreflightRequest(request, set);
-    if (mcpPreflightResponse) {
-      return mcpPreflightResponse;
+    // with the API-wide method list and trusted origins only, leaving the MCP
+    // route's own preflight unreachable.
+    const publicPreflightResponse = handleMcpPreflightRequest(request, set);
+    if (publicPreflightResponse) {
+      return publicPreflightResponse;
     }
 
     return (
@@ -452,6 +453,9 @@ const api = new Elysia()
       handleVisualSandboxRequest(request, set)
     );
   })
+  // Keep discovery interception in its owning handler module while mounting it
+  // before the credentialed global CORS layer.
+  .use(authMetadataPreflightRoute)
   .use(
     cors({
       origin: ALLOWED_BROWSER_ORIGINS,

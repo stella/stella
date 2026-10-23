@@ -912,7 +912,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   };
 
   const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
-    if (isPending || !hasUploadInputItems(input)) {
+    if (!hasUploadInputItems(input)) {
       return;
     }
     detached(
