@@ -6,7 +6,9 @@ export class EmptyUploadFileError extends TaggedError("EmptyUploadFileError")<{
   message: string;
 }> {}
 
-export const validateUploadFileNotEmpty = (size: number) => {
+export const validateUploadFileNotEmpty = (
+  size: number,
+): Result<void, EmptyUploadFileError> => {
   if (size !== 0) {
     return Result.ok();
   }
