@@ -642,7 +642,6 @@ const api = new Elysia()
       )
       .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
-      .use(dataExportsRoute)
       .use(
         new Elysia()
           .use(caseLawRoute)
@@ -660,7 +659,9 @@ const api = new Elysia()
       .use(tasksRoute)
       .use(workObligationsRoute)
       .use(myWorkRoute)
-      .use(accountExportsRoute)
+      // Organization and personal exports share one link: each `.use` here
+      // deepens the inferred chain type.
+      .use(new Elysia().use(accountExportsRoute).use(dataExportsRoute))
       .use(meRoute)
       .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),
