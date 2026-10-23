@@ -9,6 +9,7 @@ export type DecisionCitationIdentity = {
 export const DECISION_CITATION_PRESENTATION = {
   compact: "compact",
   expanded: "expanded",
+  inline: "inline",
 } as const;
 
 export type DecisionCitationPresentation =

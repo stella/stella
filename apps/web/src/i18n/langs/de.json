@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "KI",
-    "backToApp": "Zurück zur App",
-    "billingAndUsage": "Abrechnung und Nutzung",
     "billingProfiles": "Abrechnungsprofile",
     "deleteDescription": "Diese Organisation und ihre Daten werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
     "deleteOrganization": "Organisation löschen",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Organisation verlassen",
     "leaveRefusedOnlyOwner": "Sie sind der einzige Inhaber. Machen Sie ein anderes Mitglied zum Inhaber, bevor Sie die Organisation verlassen.",
     "modelsAndProviders": "Modelle und Anbieter",
-    "noPlan": "Kein aktiver Tarif",
     "organizationDeleted": "Die Organisation wurde gelöscht.",
     "organizationId": "Organisations-ID",
     "organizationLeft": "Sie haben die Organisation verlassen.",
-    "overviewDescription": "Verwalten Sie Ihre Organisation, Personen und Werkzeuge.",
-    "people": "Personen",
     "planAndUsage": "Tarif und Nutzung",
     "title": "Organisationsverwaltung",
     "toolsDescription": "Aktivieren oder deaktivieren Sie integrierte Werkzeuge für alle in dieser Organisation."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Ihr Assistent fragt nach dieser Adresse",
-    "copiedToast": "Anweisungen kopiert. Fügen Sie sie in einen Chat mit Ihrem Assistenten ein.",
     "copy": "Anweisungen für ihn kopieren",
     "description": "Fragen Sie Claude oder ChatGPT zu Ihren Akten und Dokumenten. Wählen Sie Ihren Assistenten für eine kurze Anleitung; es dauert etwa eine Minute.",
     "instructions": "Verbinde mich mit stella, meinem juristischen Arbeitsbereich. Folge den Anweisungen für KI-Agenten unter {guideUrl} und verwende diese Serveradresse: {mcpUrl}",
     "openGuide": "Anleitung für {assistant} öffnen",
+    "pasteHint": "Fügen Sie sie in einen Chat mit Ihrem Assistenten ein.",
     "selfSetupHint": "Sie nutzen Claude Code oder Codex?",
     "title": "stella in Ihrem KI-Assistenten nutzen"
   },
@@ -855,7 +850,6 @@
         "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
       },
       "generate": "KI-Leitsätze erzeugen",
-      "holdingAnchor": "Zum Absatz",
       "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
       "topics": "Themen",
       "treatment": "Spätere Rezeption"
@@ -932,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Vollständigkeit",
-      "countedOn": "Gezählt am {date}",
       "courtsHeading": "Nach Gericht",
       "courtsUnavailable": "Die Aufschlüsselung nach Gerichten ist derzeit nicht verfügbar.",
       "decisionYears": "Entscheidungsjahre",
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
-      "exceedsReportedTotal": "Enthält mehr als die zuletzt vom Herausgeber genannte Gesamtzahl vom {date}",
-      "gapStatusUnknown": "Lückenstatus unbekannt",
       "generatedAt": "Zahlen vom {date}",
       "globeLabel": "Länder, deren Rechtsprechung der Korpus enthält, auf einem Globus",
       "healthCurrent": "Aktuell",
@@ -1111,6 +1102,8 @@
         "hint": "Entfernen oder erweitern Sie einen Filter und suchen Sie erneut.",
         "message": "Nichts entspricht den gewählten Filtern."
       },
+      "partialMatch": "Teilweiser Treffer",
+      "partialMatches": "Teilweise Treffer für: <bdi>{query}</bdi>",
       "resultsFor": "Ergebnisse für: <bdi>{query}</bdi>",
       "searchEveryWord": "Alle Wörter suchen"
     },
@@ -1148,6 +1141,7 @@
       "judges": "Richter",
       "legalArea": "Rechtsgebiet",
       "legalSentence": "Leitsatz",
+      "paragraphReference": "Absatz {number}",
       "popularName": "Populärer Name",
       "portraitCredit": "Quelle der Porträts: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1388,7 @@
     "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
     "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
+    "diagramUnavailable": "Dieses Diagramm konnte nicht dargestellt werden. Der Quelltext steht unten.",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",
       "autoDirectDescription": "KI-Änderungen werden sofort angewendet und überschreiben das Dokument direkt (ohne Änderungsverfolgung).",
@@ -2706,6 +2701,7 @@
       "aiConfigModelInvalid": "Die KI-Modellkonfiguration ist ungültig. Prüfen Sie die ausgewählten Modelle.",
       "aiConfigProviderInvalid": "Die Konfiguration des KI-Anbieters ist ungültig. Prüfen Sie die Anbietereinstellungen.",
       "aiConfigProviderValidationFailed": "Der KI-Anbieter hat die Konfiguration abgelehnt. Prüfen Sie API-Schlüssel und Modell.",
+      "aiDeadlineExceeded": "Die KI hat nicht rechtzeitig geantwortet. Bitte versuchen Sie es gleich noch einmal.",
       "aiOutputInvalid": "Die KI-Antwort hatte ein unerwartetes Format. Versuchen Sie es erneut.",
       "aiOutputModerated": "Der KI-Anbieter hat die Ausgabe moderiert. Formulieren Sie die Anfrage um oder wählen Sie ein anderes Modell.",
       "aiProviderTaskUnsupported": "Der konfigurierte KI-Anbieter kann diese Aufgabe nicht ausführen. Wählen Sie einen Anbieter, der sie unterstützt.",
@@ -4195,7 +4191,9 @@
     "prompt": "Wonach suchen Sie?",
     "recent": "Zuletzt verwendet",
     "recentCasesFilter": "Entscheidungen",
+    "recentLoadFailed": "Die letzten Aktivitäten konnten nicht geladen werden.",
     "recentSearchFilter": "Suchen",
+    "recentUpdateFailed": "Die letzten Aktivitäten konnten nicht aktualisiert werden.",
     "recentlyInForce": "Kürzlich in Kraft getreten",
     "searchLabel": "Rechtsdatenbank durchsuchen",
     "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",

@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Volver a la aplicación",
-    "billingAndUsage": "Facturación y uso",
     "billingProfiles": "Perfiles de facturación",
     "deleteDescription": "Elimina permanentemente esta organización y sus datos. Esta acción no se puede deshacer.",
     "deleteOrganization": "Eliminar organización",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Salir de la organización",
     "leaveRefusedOnlyOwner": "Eres el único propietario. Haz propietario a otro miembro antes de salir.",
     "modelsAndProviders": "Modelos y proveedores",
-    "noPlan": "Sin plan activo",
     "organizationDeleted": "La organización se ha eliminado.",
     "organizationId": "ID de la organización",
     "organizationLeft": "Has salido de la organización.",
-    "overviewDescription": "Gestiona tu organización, las personas y las herramientas.",
-    "people": "Personas",
     "planAndUsage": "Plan y uso",
     "title": "Administración de la organización",
     "toolsDescription": "Activa o desactiva las herramientas integradas para todas las personas de esta organización."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Tu asistente te pedirá esta dirección",
-    "copiedToast": "Instrucciones copiadas. Pégalas en un chat con tu asistente.",
     "copy": "Cópiale las instrucciones",
     "description": "Pregunta a Claude o ChatGPT sobre tus asuntos y documentos. Elige tu asistente para ver una guía breve; lleva alrededor de un minuto.",
     "instructions": "Conéctame a stella, mi espacio de trabajo jurídico. Sigue las instrucciones para agentes de IA de {guideUrl} y usa esta dirección de servidor: {mcpUrl}",
     "openGuide": "Abrir la guía de {assistant}",
+    "pasteHint": "Pégalas en un chat con tu asistente.",
     "selfSetupHint": "¿Usas Claude Code o Codex?",
     "title": "Usa stella en tu asistente de IA"
   },
@@ -855,7 +850,6 @@
         "unavailable": "El análisis con IA no está disponible para esta resolución."
       },
       "generate": "Generar sumarios con IA",
-      "holdingAnchor": "Ir al párrafo",
       "invitation": "Con una cuenta gratuita, la IA prepara notas de trabajo sobre esta resolución.",
       "topics": "Temas",
       "treatment": "Tratamiento posterior"
@@ -932,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Exhaustividad",
-      "countedOn": "Contado el {date}",
       "courtsHeading": "Por tribunal",
       "courtsUnavailable": "El desglose por tribunal no está disponible en este momento.",
       "decisionYears": "Años de las resoluciones",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
-      "exceedsReportedTotal": "Contiene más que el último total indicado por el organismo el {date}",
-      "gapStatusUnknown": "Estado de lagunas desconocido",
       "generatedAt": "Datos a {date}",
       "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
@@ -1111,6 +1102,8 @@
         "hint": "Quite o amplíe un filtro y vuelva a buscar.",
         "message": "Nada coincide con los filtros aplicados."
       },
+      "partialMatch": "Coincidencia parcial",
+      "partialMatches": "Coincidencias parciales para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
     },
@@ -1148,6 +1141,7 @@
       "judges": "Jueces",
       "legalArea": "Área jurídica",
       "legalSentence": "Fundamento jurídico",
+      "paragraphReference": "Párrafo {number}",
       "popularName": "Nombre popular",
       "portraitCredit": "Fuente de los retratos: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1388,7 @@
     "credentialSendDescription": "Envíalo solo si quieres compartir este valor en la conversación.",
     "credentialSendTitle": "Este mensaje puede contener una credencial",
     "deleteThread": "Eliminar conversación",
+    "diagramUnavailable": "No se ha podido mostrar este diagrama. Debajo aparece su código fuente.",
     "editMode": {
       "autoDirect": "Automático · reescribir",
       "autoDirectDescription": "Las ediciones de la IA se aplican de inmediato reescribiendo directamente el documento (sin control de cambios).",
@@ -2706,6 +2701,7 @@
       "aiConfigModelInvalid": "La configuración del modelo de IA no es válida. Revisa los modelos seleccionados.",
       "aiConfigProviderInvalid": "La configuración del proveedor de IA no es válida. Revisa los ajustes del proveedor.",
       "aiConfigProviderValidationFailed": "El proveedor de IA rechazó la configuración. Revisa la clave de API y el modelo.",
+      "aiDeadlineExceeded": "La IA no respondió a tiempo. Inténtalo de nuevo en un momento.",
       "aiOutputInvalid": "La respuesta de IA tenía un formato inesperado. Inténtalo de nuevo.",
       "aiOutputModerated": "El proveedor de IA moderó la respuesta. Reformula la solicitud o elige otro modelo.",
       "aiProviderTaskUnsupported": "El proveedor de IA configurado no puede realizar esta tarea. Elige uno que sí pueda.",
@@ -4195,7 +4191,9 @@
     "prompt": "¿Qué busca?",
     "recent": "Recientes",
     "recentCasesFilter": "Resoluciones",
+    "recentLoadFailed": "No se ha podido cargar la actividad reciente.",
     "recentSearchFilter": "Búsquedas",
+    "recentUpdateFailed": "No se ha podido actualizar la actividad reciente.",
     "recentlyInForce": "En vigor recientemente",
     "searchLabel": "Buscar en la base de datos jurídica",
     "searchPlaceholder": "Número de asunto, número de norma, ECLI o palabras clave",

@@ -3,9 +3,11 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContextForRootRedirect } from "@/routes/-auth-context";
 
 export const Route = createFileRoute("/")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   component: RootRedirect,
 });
 

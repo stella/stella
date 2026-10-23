@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Back to app",
-    "billingAndUsage": "Billing and usage",
     "billingProfiles": "Billing profiles",
     "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.",
     "deleteOrganization": "Delete organization",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Leave organization",
     "leaveRefusedOnlyOwner": "You are the only owner. Make another member an owner before you leave.",
     "modelsAndProviders": "Models and providers",
-    "noPlan": "No active plan",
     "organizationDeleted": "The organization has been deleted.",
     "organizationId": "Organization ID",
     "organizationLeft": "You have left the organization.",
-    "overviewDescription": "Manage your organization, people and tools.",
-    "people": "People",
     "planAndUsage": "Plan and usage",
     "title": "Organization admin",
     "toolsDescription": "Enable or disable native tools for everyone in this organization."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Your assistant will ask for this address",
-    "copiedToast": "Instructions copied. Paste them into a chat with your assistant.",
     "copy": "Copy instructions for it",
     "description": "Ask Claude or ChatGPT about your matters and documents. Choose your assistant for a short guide; it takes about a minute.",
     "instructions": "Connect me to stella, my legal workspace. Follow the “Instructions for AI agents” at {guideUrl} and use this server address: {mcpUrl}",
     "openGuide": "Open the guide for {assistant}",
+    "pasteHint": "Paste them into a chat with your assistant.",
     "selfSetupHint": "Using Claude Code or Codex?",
     "title": "Use stella in your AI assistant"
   },
@@ -855,7 +850,6 @@
         "unavailable": "AI analysis is not available for this decision."
       },
       "generate": "Generate AI headnotes",
-      "holdingAnchor": "Go to paragraph",
       "invitation": "With a free account, AI drafts working notes on this decision.",
       "topics": "Topics",
       "treatment": "Later treatment"
@@ -932,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Completeness",
-      "countedOn": "Counted {date}",
       "courtsHeading": "By court",
       "courtsUnavailable": "The per-court breakdown is unavailable right now.",
       "decisionYears": "Decision years",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
-      "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}",
-      "gapStatusUnknown": "Gap status unknown",
       "generatedAt": "Figures from {date}",
       "globeLabel": "Countries whose case law the corpus holds, on a globe",
       "healthCurrent": "Up to date",
@@ -1111,6 +1102,8 @@
         "hint": "Drop or widen a filter and search again.",
         "message": "Nothing matched under the filters you narrowed with."
       },
+      "partialMatch": "Partial match",
+      "partialMatches": "Partial matches for: <bdi>{query}</bdi>",
       "resultsFor": "Results for: <bdi>{query}</bdi>",
       "searchEveryWord": "Search every word"
     },
@@ -1148,6 +1141,7 @@
       "judges": "Judges",
       "legalArea": "Legal area",
       "legalSentence": "Legal sentence",
+      "paragraphReference": "Paragraph {number}",
       "popularName": "Popular name",
       "portraitCredit": "Portrait source: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1388,7 @@
     "credentialSendDescription": "Send only if you intend to share this value in the conversation.",
     "credentialSendTitle": "This message may contain a credential",
     "deleteThread": "Delete conversation",
+    "diagramUnavailable": "This diagram could not be rendered. Its source is shown below.",
     "editMode": {
       "autoDirect": "Auto · rewrite",
       "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
@@ -2706,6 +2701,7 @@
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.",
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.",
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.",
+      "aiDeadlineExceeded": "The AI did not answer in time. Try again in a moment.",
       "aiOutputInvalid": "The AI answer had an unexpected format. Try again.",
       "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
       "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",
@@ -4195,7 +4191,9 @@
     "prompt": "What are you looking for?",
     "recent": "Recent",
     "recentCasesFilter": "Cases",
+    "recentLoadFailed": "Recent activity could not be loaded.",
     "recentSearchFilter": "Searches",
+    "recentUpdateFailed": "Recent activity could not be updated.",
     "recentlyInForce": "Recently in force",
     "searchLabel": "Search the legal database",
     "searchPlaceholder": "Case number, act number, ECLI or keywords",

@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Zpět do aplikace",
-    "billingAndUsage": "Fakturace a využití",
     "billingProfiles": "Fakturační profily",
     "deleteDescription": "Trvale smažete tuto organizaci a její data. Tuto akci nelze vrátit zpět.",
     "deleteOrganization": "Smazat organizaci",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Opustit organizaci",
     "leaveRefusedOnlyOwner": "Jste jediný vlastník. Než organizaci opustíte, udělejte vlastníkem jiného člena.",
     "modelsAndProviders": "Modely a poskytovatelé",
-    "noPlan": "Žádný aktivní tarif",
     "organizationDeleted": "Organizace byla smazána.",
     "organizationId": "ID organizace",
     "organizationLeft": "Opustili jste organizaci.",
-    "overviewDescription": "Spravujte organizaci, lidi a nástroje.",
-    "people": "Lidé",
     "planAndUsage": "Tarif a využití",
     "title": "Správa organizace",
     "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistent si vyžádá tuto adresu",
-    "copiedToast": "Pokyny zkopírovány. Vložte je do chatu se svým asistentem.",
     "copy": "Zkopírujte mu pokyny",
     "description": "Ptejte se Claude nebo ChatGPT na své spisy a dokumenty. Vyberte svého asistenta a otevře se krátký návod; zabere asi minutu.",
     "instructions": "Připoj mě ke stelle, mému právnímu pracovnímu prostoru. Postupuj podle části „Instructions for AI agents“ na {guideUrl} a použij tuto adresu serveru: {mcpUrl}",
     "openGuide": "Otevřít návod pro {assistant}",
+    "pasteHint": "Vložte je do chatu se svým asistentem.",
     "selfSetupHint": "Používáte Claude Code nebo Codex?",
     "title": "Používejte stellu ve svém AI asistentovi"
   },
@@ -855,7 +850,6 @@
         "unavailable": "AI analýza není pro toto rozhodnutí k dispozici."
       },
       "generate": "Sestavit právní věty pomocí AI",
-      "holdingAnchor": "Přejít na odstavec",
       "invitation": "S bezplatným účtem vám AI k rozhodnutí připraví pracovní poznámky.",
       "topics": "Témata",
       "treatment": "Pozdější judikatura"
@@ -932,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Úplnost",
-      "countedOn": "Spočítáno k {date}",
       "courtsHeading": "Podle soudu",
       "courtsUnavailable": "Rozpis podle soudů není momentálně k dispozici.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Kolik judikatury korpus obsahuje podle států a soudů a jak aktuální je každý zdroj.",
-      "exceedsReportedTotal": "Obsahuje víc, než vydavatel naposledy uvedl k {date}",
-      "gapStatusUnknown": "Stav mezer není znám",
       "generatedAt": "Údaje k {date}",
       "globeLabel": "Státy, jejichž judikaturu korpus obsahuje, na glóbu",
       "healthCurrent": "Aktuální",
@@ -1111,6 +1102,8 @@
         "hint": "Zrušte nebo rozšiřte filtr a hledejte znovu.",
         "message": "Zvoleným filtrům nic neodpovídá."
       },
+      "partialMatch": "Částečná shoda",
+      "partialMatches": "Částečné shody pro: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
       "searchEveryWord": "Hledat všechna slova"
     },
@@ -1148,6 +1141,7 @@
       "judges": "Soudci",
       "legalArea": "Oblast práva",
       "legalSentence": "Právní věta",
+      "paragraphReference": "Odstavec {number}",
       "popularName": "Populární název",
       "portraitCredit": "Zdroj portrétů: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1388,7 @@
     "credentialSendDescription": "Odešlete ji pouze tehdy, pokud chcete tuto hodnotu sdílet v konverzaci.",
     "credentialSendTitle": "Tato zpráva může obsahovat přístupový údaj",
     "deleteThread": "Smazat konverzaci",
+    "diagramUnavailable": "Diagram se nepodařilo vykreslit. Níže je jeho zdrojový kód.",
     "editMode": {
       "autoDirect": "Automaticky · přepsat",
       "autoDirectDescription": "Úpravy od AI se použijí ihned přímým přepsáním dokumentu (bez sledování změn).",
@@ -2706,6 +2701,7 @@
       "aiConfigModelInvalid": "Konfigurace modelu AI je neplatná. Zkontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurace poskytovatele AI je neplatná. Zkontrolujte nastavení poskytovatele.",
       "aiConfigProviderValidationFailed": "Poskytovatel AI konfiguraci odmítl. Zkontrolujte klíč API a model.",
+      "aiDeadlineExceeded": "AI neodpověděla včas. Zkuste to za chvíli znovu.",
       "aiOutputInvalid": "Odpověď AI měla neočekávaný formát. Zkuste to znovu.",
       "aiOutputModerated": "Poskytovatel AI výstup zablokoval. Přeformulujte požadavek nebo zvolte jiný model.",
       "aiProviderTaskUnsupported": "Nastavený poskytovatel AI tuto úlohu nezvládá. Zvolte poskytovatele, který ji zvládá.",
@@ -4195,7 +4191,9 @@
     "prompt": "Co hledáte?",
     "recent": "Nedávné",
     "recentCasesFilter": "Rozhodnutí",
+    "recentLoadFailed": "Nedávnou aktivitu se nepodařilo načíst.",
     "recentSearchFilter": "Hledání",
+    "recentUpdateFailed": "Nedávnou aktivitu se nepodařilo aktualizovat.",
     "recentlyInForce": "Nedávno nabylo účinnosti",
     "searchLabel": "Hledat v právní databázi",
     "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo klíčová slova",

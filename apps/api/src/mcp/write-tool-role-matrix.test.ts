@@ -610,7 +610,6 @@ const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
 
 const mcpContextFor = (role: MemberRole): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     accessibleWorkspaceIds: ["workspace_1"],
     memberRole: role,
@@ -666,6 +665,7 @@ const offeredOn = (role: MemberRole, mode: McpMode): ReadonlySet<string> =>
     listOfferedStaticMcpToolDefinitions({
       context: mcpContextFor(role),
       mode,
+      enabledRegistrySlugs: undefined,
     }).map((definition) => definition.name),
   );
 
@@ -1199,6 +1199,7 @@ describe("static feature tool enrolment boundary", () => {
         const offered = listOfferedStaticMcpToolDefinitions({
           context: principal,
           mode,
+          enabledRegistrySlugs: undefined,
         }).some(({ name }) => name === definition.name);
         expect({ tool: definition.name, mode, enrolled, offered }).toEqual({
           tool: definition.name,
