@@ -9,13 +9,12 @@
       "noOtherSessions": "Aucune autre session active",
       "revokeOtherSessions": "Déconnecter les autres appareils",
       "revokeOtherSessionsConfirm": "Toutes les sessions seront fermées, sauf la session en cours.",
+      "signedInFrom": "Connexion via {clientName}",
       "unknownDevice": "Appareil inconnu"
     }
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Retour à l’application",
-    "billingAndUsage": "Facturation et utilisation",
     "billingProfiles": "Profils de facturation",
     "deleteDescription": "Supprimez définitivement cette organisation et ses données. Cette action est irréversible.",
     "deleteOrganization": "Supprimer l’organisation",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Quitter l’organisation",
     "leaveRefusedOnlyOwner": "Vous êtes le seul propriétaire. Désignez un autre membre comme propriétaire avant de partir.",
     "modelsAndProviders": "Modèles et fournisseurs",
-    "noPlan": "Aucune offre active",
     "organizationDeleted": "L’organisation a été supprimée.",
     "organizationId": "ID de l’organisation",
     "organizationLeft": "Vous avez quitté l’organisation.",
-    "overviewDescription": "Gérez votre organisation, les personnes et les outils.",
-    "people": "Personnes",
     "planAndUsage": "Offre et utilisation",
     "title": "Administration de l’organisation",
     "toolsDescription": "Activez ou désactivez les outils intégrés pour toutes les personnes de cette organisation."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Votre assistant vous demandera cette adresse",
-    "copiedToast": "Instructions copiées. Collez-les dans une conversation avec votre assistant.",
     "copy": "Copiez-lui les instructions",
     "description": "Interrogez Claude ou ChatGPT sur vos dossiers et documents. Choisissez votre assistant pour un guide court ; cela prend environ une minute.",
     "instructions": "Connecte-moi à stella, mon espace de travail juridique. Suis les « Instructions for AI agents » sur {guideUrl} et utilise cette adresse de serveur : {mcpUrl}",
     "openGuide": "Ouvrir le guide pour {assistant}",
+    "pasteHint": "Collez-les dans une conversation avec votre assistant.",
     "selfSetupHint": "Vous utilisez Claude Code ou Codex ?",
     "title": "Utilisez stella dans votre assistant IA"
   },
@@ -142,6 +138,8 @@
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",
       "title": "Nous n'avons pas pu vous connecter"
     },
+    "handoffAccount": "Continuer en tant que <account>{email}</account> dans <organization>{organizationName}</organization> ?",
+    "handoffTitle": "Continuer vers stella",
     "headline": "La clarté pour chaque affaire.",
     "invitation": {
       "declined": "Invitation refusée",
@@ -162,6 +160,7 @@
     },
     "professionalUseStatement": "En créant un compte, vous confirmez utiliser stella à des fins professionnelles et reconnaissez que stella est un outil destiné aux professionnels du droit et ne remplace pas un conseil juridique.",
     "rateLimitExceeded": "Trop de tentatives. Veuillez réessayer plus tard.",
+    "reauthenticationRequired": "Reconnectez-vous pour poursuivre cette action.",
     "resendCode": "Renvoyer le code à <email>{emailAddress}</email>",
     "selectOrganization": "Sélectionner une organisation",
     "signIn": "Se connecter",
@@ -931,13 +930,10 @@
     },
     "coverage": {
       "completeness": "Exhaustivité",
-      "countedOn": "Décompté le {date}",
       "courtsHeading": "Par juridiction",
       "courtsUnavailable": "La répartition par juridiction est indisponible pour le moment.",
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
-      "exceedsReportedTotal": "Contient plus que le dernier total annoncé par le diffuseur le {date}",
-      "gapStatusUnknown": "État des lacunes inconnu",
       "generatedAt": "Chiffres au {date}",
       "globeLabel": "Pays dont la jurisprudence figure dans le corpus, sur un globe",
       "healthCurrent": "À jour",
@@ -958,7 +954,8 @@
       "searchable": "Interrogeables",
       "title": "Couverture de la jurisprudence",
       "totalFrom": "Total au {date}",
-      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment."
+      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment.",
+      "unreadListingPeriods": "Périodes de la liste non lues"
     },
     "decisionNotFound": "Décision introuvable",
     "decisionTypes": {
@@ -4200,7 +4197,9 @@
     "prompt": "Que cherchez-vous ?",
     "recent": "Récents",
     "recentCasesFilter": "Décisions",
+    "recentLoadFailed": "L’activité récente n’a pas pu être chargée.",
     "recentSearchFilter": "Recherches",
+    "recentUpdateFailed": "L’activité récente n’a pas pu être mise à jour.",
     "recentlyInForce": "Entrée en vigueur récente",
     "searchLabel": "Rechercher dans la base juridique",
     "searchPlaceholder": "Numéro d'affaire, numéro de texte, ECLI ou mots-clés",
@@ -4944,7 +4943,7 @@
       "description": "Utilisez stella depuis votre assistant IA et voyez ce qui a accès à votre compte.",
       "developerDescription": "Adresses du serveur et outil en ligne de commande, pour les configurations techniques.",
       "developerTitle": "Accès développeur",
-      "disconnectConfirmDescription": "Cela révoque l’accès de {clientName} à votre compte, ainsi que tous les jetons qu’il a émis. Vous pouvez vous reconnecter à tout moment.",
+      "disconnectConfirmDescription": "Cela révoque l’accès de {clientName} à votre compte, ainsi que tous les jetons qu’il a émis. Vous pouvez vous reconnecter à tout moment. Les sessions de navigateur créées via cette connexion seront également déconnectées.",
       "disconnectConfirmTitle": "Déconnecter {clientName} ?",
       "disconnectSuccess": "{clientName} a été déconnecté",
       "integrationsDescription": "Services externes que l’IA peut utiliser pour vous, comme votre espace de documents.",
@@ -5997,6 +5996,7 @@
       "downloadFailed": "Échec du téléchargement",
       "downloadPdf": "Télécharger en PDF",
       "downloadSearchablePdf": "PDF avec texte recherchable",
+      "emptyFile": "Le fichier est vide.",
       "includeReferenceNumber": "Inclure le numéro de référence",
       "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",
       "maxEntitiesReached": "Nombre maximal d’éléments atteint",
