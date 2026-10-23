@@ -577,7 +577,12 @@ if (import.meta.main) {
   const outcome = await Result.tryPromise(async () => {
     const base = process.env["BASE_SHA"] || "origin/main";
     // Match ci-plan: NUL-delimited paths, no rename inference, merge-base diff.
-    const suppliedChanged = process.env["CHANGED_FILES_JSON"];
+    // CI hands ci-plan's list over as a file: a large diff exceeds the size
+    // limit of a single environment variable.
+    const suppliedPath = process.env["CHANGED_FILES_PATH"];
+    const suppliedChanged = suppliedPath
+      ? (await Bun.file(suppliedPath).text()).trim()
+      : "";
     let changed: string[];
     if (suppliedChanged) {
       changed = v.parse(v.array(v.string()), JSON.parse(suppliedChanged));

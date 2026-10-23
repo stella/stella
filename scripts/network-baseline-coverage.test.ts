@@ -373,7 +373,7 @@ test("light coverage prepares through the shared action before checking under th
   expect(steps.indexOf(checkout)).toBeLessThan(steps.indexOf(prepare));
   expect(checkout["with"]).toMatchObject({ "fetch-depth": 0 });
   expect(prepare["uses"]).toBe("./.github/actions/prepare-network-baseline");
-  expect(prepare["timeout-minutes"]).toBe(1);
+  expect(prepare["timeout-minutes"]).toBe(5);
   expect(coverage["if"]).toContain(
     "steps.network_manifest_prepare.outcome == 'success'",
   );

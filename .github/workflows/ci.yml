@@ -2387,7 +2387,7 @@ jobs:
           CI_CHECK_CONTEXT: "Prepares and validates baseline using target revision and external recording context."
         id: network_manifest_prepare
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        timeout-minutes: 1
+        timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
@@ -2704,9 +2704,13 @@ jobs:
           && github.event_name == 'pull_request'
           && matrix.shard == 'rest-web'
           && needs.ci-plan.outputs.package_checks_required == 'true'
-        env:
-          CHANGED_FILES_JSON: ${{ needs.ci-plan.outputs.changed_files }}
-        run: bun scripts/flake-gate.ts --blocking
+        # A file, not an environment variable: a large diff exceeds the size
+        # limit of one variable and the step cannot start.
+        run: |
+          cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'
+          ${{ needs.ci-plan.outputs.changed_files }}
+          CHANGED_FILES_JSON
+          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking
 
       # Annotates each quarantined outcome and writes its recent history to the
       # job summary; reporting only, so it never changes the job's verdict.
