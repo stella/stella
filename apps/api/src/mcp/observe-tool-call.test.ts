@@ -1,6 +1,8 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   resetAnalyticsForTesting,
   setAnalyticsForTesting,
@@ -82,6 +84,52 @@ describe("MCP tool product analytics", () => {
     expect(captured).toHaveLength(1);
     expect(JSON.stringify(captured.at(0))).not.toContain(marker);
     expect(captured.at(0)?.properties).toMatchObject({ tool: "unknown" });
+  });
+
+  test("does not copy a hostile refusal code or message", async () => {
+    const marker = "HOSTILE_PRIVATE_MARKER_c41d";
+    const recording = installRecordingAnalytics();
+
+    await observeMcpToolCall({
+      context: customerContext(),
+      mode: "default",
+      toolName: "list_matters",
+      run: async () => envelope(`code_${marker}`, `message ${marker}`),
+    });
+
+    const captured = toolEvents(recording.events);
+    expect(captured).toHaveLength(1);
+    expect(JSON.stringify(captured.at(0))).not.toContain(marker);
+    expect(captured.at(0)?.properties).toMatchObject({
+      outcome: "refused",
+      error_code: "unknown",
+    });
+  });
+
+  test("does not copy a thrown error's message", async () => {
+    const marker = "HOSTILE_PRIVATE_MARKER_9b3e";
+    const recording = installRecordingAnalytics();
+
+    const rejection = await rejectionOf(
+      observeMcpToolCall({
+        context: customerContext(),
+        mode: "default",
+        toolName: "list_matters",
+        run: async () => {
+          throw new Error(`failed on ${marker}`);
+        },
+      }),
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(String(rejection)).toContain(marker);
+
+    const captured = toolEvents(recording.events);
+    expect(captured).toHaveLength(1);
+    expect(JSON.stringify(captured.at(0))).not.toContain(marker);
+    expect(captured.at(0)?.properties).toMatchObject({
+      outcome: "internal_error",
+      error_class: "unknown",
+    });
   });
 
   test.each([
