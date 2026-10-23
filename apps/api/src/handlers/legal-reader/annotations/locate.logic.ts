@@ -11,7 +11,7 @@
 import { panic } from "better-result";
 
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
-import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 type AnnotationPassage = {
@@ -109,33 +109,6 @@ const findOccurrences = (raw: string, quote: string): Occurrence[] => {
   }
 };
 
-/** The places a block's words are rendered, each under its own anchor. */
-type TextPiece = { anchorId: string; text: string };
-
-const piecesOf = (block: Block): TextPiece[] => {
-  switch (block.type) {
-    case "heading":
-    case "paragraph":
-      return [{ anchorId: block.anchorId, text: plainTextOf(block.inlines) }];
-    case "table":
-      return block.rows.flatMap((row, rowIndex) =>
-        row.map((cell, columnIndex) => ({
-          anchorId: tableCellPieceId({
-            blockId: block.id,
-            columnIndex,
-            rowIndex,
-          }),
-          text: plainTextOf(cell.inlines),
-        })),
-      );
-    case "image":
-      return [];
-    default:
-      block satisfies never;
-      return panic(`Unhandled block type: ${String(block)}`);
-  }
-};
-
 type LocateContext = {
   blocks: readonly Block[];
   blocksByAnchor: ReadonlyMap<string, Block>;
@@ -168,7 +141,7 @@ const AMBIGUITY_ANCHORS_SHOWN = 8;
 const matchesIn = (blocks: readonly Block[], rawQuote: string) => {
   const quote = rawQuote.toWellFormed();
   return blocks.flatMap((block) =>
-    piecesOf(block).flatMap((rawPiece) => {
+    readerAnchorPiecesOf(block).flatMap((rawPiece) => {
       const piece = { ...rawPiece, text: rawPiece.text.toWellFormed() };
       return findOccurrences(piece.text, quote).map((occurrence) => ({
         block,
