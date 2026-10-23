@@ -225,16 +225,7 @@ for (const fixture of surfaces) {
               case "command palette":
                 return (
                   <CommandActionItem
-                    entry={{
-                      type: "command-action",
-                      title: "Run action",
-                      action: {
-                        ...commandAction,
-                        title: "Run action",
-                        keywordLabels: [],
-                      },
-                    }}
-                    navigation={{ type: "button" }}
+                    action={{ ...commandAction, title: "Run action" }}
                     onSelect={() => {
                       calls += 1;
                     }}

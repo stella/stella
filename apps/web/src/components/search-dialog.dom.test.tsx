@@ -174,6 +174,14 @@ const typeQuery = async () => {
   return input;
 };
 
+test("actions stay on the blank screen and never sit above results", async () => {
+  await mount();
+  expect(testing.screen.getByText(messages.common.actions)).toBeTruthy();
+
+  await typeQuery();
+  expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
+});
+
 test("Case law scope searches only case law and drops matter recents and actions", async () => {
   useDevStore.setState({ publicLawPreview: true });
   await mount();
