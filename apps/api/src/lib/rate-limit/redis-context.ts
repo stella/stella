@@ -466,7 +466,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     }
   }
 
-  private async getRedis(): Promise<RedisRateLimitClient> {
+  private async getRedis() {
     let connection = this.redisConnection;
     if (connection === null) {
       const client = this.createRedis();
@@ -491,26 +491,30 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
         connection.ready = null;
       }
       if (outcome.status === "failed") {
-        throw outcome.error;
+        return Result.err(outcome.error);
       }
     }
-    return connection.client;
+    return Result.ok(connection.client);
   }
 
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
-    const redis = await this.getRedis();
-    const result = await Result.tryPromise({
-      try: async () =>
-        await withCommandTimeout({
-          command: redis.send(command, args),
-          commandTimeoutMs: this.commandTimeoutMs,
-          label: "api-rate-limit-redis-command",
-          scheduleTimeout: this.scheduleTimeout,
-        }),
-      catch: (error: unknown) => error,
-    });
+    const redisResult = await this.getRedis();
+    const redis = Result.isOk(redisResult) ? redisResult.value : null;
+    const result =
+      redis === null
+        ? redisResult
+        : await Result.tryPromise({
+            try: async () =>
+              await withCommandTimeout({
+                command: redis.send(command, args),
+                commandTimeoutMs: this.commandTimeoutMs,
+                label: "api-rate-limit-redis-command",
+                scheduleTimeout: this.scheduleTimeout,
+              }),
+            catch: (error: unknown) => error,
+          });
     if (Result.isError(result)) {
-      if (TimeoutError.is(result.error)) {
+      if (redis !== null && TimeoutError.is(result.error)) {
         if (this.redisConnection?.client === redis) {
           this.redisConnection = null;
         }
