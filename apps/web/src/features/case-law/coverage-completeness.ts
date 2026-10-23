@@ -12,9 +12,7 @@ type CaseLawCompletenessCounts = {
  *
  * It is capped at 100 because the denominator is an observation, not a live
  * figure: a total read weeks ago can be smaller than what the corpus holds
- * today, and "104 %" reads as a broken page rather than as the lag it is. The
- * overshoot is a fact about the denominator, so it is reported beside the
- * ratio by `caseLawCompletenessExceedsReported` instead of inside it.
+ * today, and "104 %" reads as a broken page rather than as the lag it is.
  *
  * It rounds down because 100 must mean complete. Rounding 99.6 % to 100 tells
  * a reader every decision is held while four in a thousand are missing, and
@@ -35,9 +33,3 @@ export const caseLawCompletenessPercent = ({
   }
   return Math.floor((stored / reported) * 100);
 };
-
-/** Whether the corpus holds more than the publisher's last stated total. */
-export const caseLawCompletenessExceedsReported = ({
-  reported,
-  stored,
-}: CaseLawCompletenessCounts): boolean => reported > 0 && stored > reported;

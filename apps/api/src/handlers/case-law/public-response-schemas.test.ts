@@ -118,3 +118,28 @@ test("every public case-law response family bounds serialized multibyte response
     { numRuns: 30 * Object.keys(responseContracts).length },
   );
 });
+
+test("coverage responses accept more than 100 recorded years", () => {
+  const response = stressResponse(coverageResponseSchema, "coverage", 0);
+  if (!isRecord(response) || !Array.isArray(response["countries"])) {
+    throw new TypeError("Coverage response fixture must contain countries");
+  }
+  const country = response["countries"].at(0);
+  if (!isRecord(country) || !Array.isArray(country["sources"])) {
+    throw new TypeError("Coverage response fixture must contain sources");
+  }
+  const source = country["sources"].at(0);
+  if (!isRecord(source)) {
+    throw new TypeError("Coverage response fixture must contain a source");
+  }
+  source["knownGaps"] = {
+    type: "reconciled",
+    summary: { missing: 0, shortSlices: 0, unlistedSlices: 0 },
+    years: Array.from({ length: 101 }, (_, year) => ({
+      year,
+      type: "complete",
+    })),
+  };
+
+  expect(Value.Check(coverageResponseSchema, response)).toBe(true);
+});

@@ -58,6 +58,10 @@ export const TABLE_RETENTION = {
   oauth_client_resource: {
     boundedBy: "Cascade-deleted with its client or resource.",
   },
+  mcp_web_handoff: {
+    ttlColumn: "expires_at",
+    sweeper: "auth.sweepRegistrations",
+  },
   oauth_client_assertion: {
     ttlColumn: "expires_at",
     sweeper: "auth.sweepRegistrations",

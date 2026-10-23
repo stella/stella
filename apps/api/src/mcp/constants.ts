@@ -105,10 +105,12 @@ export {
   ROOT_MCP_DISCOVERY_PATH,
 };
 
+export const MCP_PROTOCOL_VERSION_HEADER = "MCP-Protocol-Version";
+
 export const MCP_DISCOVERY_ALLOWED_HEADERS = [
   "Authorization",
   "Content-Type",
-  "MCP-Protocol-Version",
+  MCP_PROTOCOL_VERSION_HEADER,
 ] as const;
 
 export const MCP_ALLOWED_HEADERS = [
