@@ -307,6 +307,30 @@ test("a string root export resolves to its entry, never the src/index guess", ()
   }
 });
 
+test("a declared entry without exports fails closed instead of guessing src/index", () => {
+  const { root, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import "@stll/fixture-package";\n',
+    );
+    write(
+      "packages/fixture/package.json",
+      JSON.stringify({
+        name: "@stll/fixture-package",
+        browser: "./src/browser.ts",
+      }),
+    );
+    write("packages/fixture/src/browser.ts", "export const target = 1;");
+    write("packages/fixture/src/index.ts", "export const target = 2;");
+    expect(
+      selectGeometrySpecs(["apps/web/src/unrelated.ts"], root),
+    ).not.toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("an exports form the selector cannot read fails closed", () => {
   // A fresh fixture: selection caches manifests per repository root.
   const { root, write } = createSelectionFixture();
@@ -680,6 +704,8 @@ test("a computed visual URL leaves the spec incomplete beside a literal one", ()
     `const url = \`/dev?visual=${interpolated("name")}\`;`,
     `const url = \`/dev?theme=${interpolated("theme")}&visual=${interpolated("name")}\`;`,
     'const url = "/dev?visual=" + name;',
+    // A literal name that is concatenated on is only a prefix.
+    'const url = "/dev?visual=a" + suffix;',
   ]) {
     expect(
       specVisualNames(

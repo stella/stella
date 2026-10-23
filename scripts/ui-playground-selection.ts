@@ -113,9 +113,11 @@ export const specVisualNames = (
   }
   // A `visual=` not followed by a literal name is computed, whatever builds
   // it (interpolation, concatenation) and whichever parameters precede it.
-  const dynamic = /\/dev\?(?:[^"'`\s]*&)?visual=(?![a-z0-9-]+["'`&#])/u.test(
-    source,
-  );
+  // A literal that is concatenated on (`"/dev?visual=a" + suffix`) is
+  // computed too: the name it ends with is only a prefix.
+  const dynamic =
+    /\/dev\?(?:[^"'`\s]*&)?visual=(?![a-z0-9-]+["'`&#])/u.test(source) ||
+    /\/dev\?(?:[^"'`\s]*&)?visual=[a-z0-9-]*["'`]\s*\+/u.test(source);
   const registryCensus =
     dynamic && /Object\.entries\(visualRegistry\)/u.test(source);
   if (registryCensus) {
@@ -269,6 +271,14 @@ const resolveImport = (
           return { files: [], internal: true, complete: false };
         }
         candidates = [`${packageRoot}/${exported.replace(/^\.\//u, "")}`];
+      } else if (
+        typeof manifest === "object" &&
+        manifest !== null &&
+        ["main", "module", "browser"].some((field) => field in manifest)
+      ) {
+        // A declared entry without exports: the src/index convention below
+        // would guess past it, so the closure is unknown.
+        return { files: [], internal: true, complete: false };
       }
       candidates ??= [
         `${packageRoot}/src${workspace[2] === undefined ? "/index" : `/${workspace[2]}`}`,
