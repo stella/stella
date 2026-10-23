@@ -1,11 +1,6 @@
-import * as v from "valibot";
-
-import {
-  caseLawSearchFilterSchema,
-  caseLawSearchWarningSchema,
-  type CaseLawSearchFilter,
-  type CaseLawSearchWarning,
-  type CaseLawSearchWarningCode,
+import type {
+  CaseLawSearchWarning,
+  CaseLawSearchWarningCode,
 } from "@stll/api-contract/search";
 
 /**
@@ -30,7 +25,7 @@ import {
  * request. Order is the schema's, so two requests carrying the same filters
  * produce the same sentence.
  */
-type CaseLawSearchFilterNames = readonly CaseLawSearchFilter[];
+type CaseLawSearchFilterNames = readonly string[];
 
 type CaseLawSearchWarningsOptions = {
   /**
@@ -38,6 +33,7 @@ type CaseLawSearchWarningsOptions = {
    * Empty when the query required every word it carried.
    */
   droppedFunctionWords: readonly string[];
+  partialHitCount?: number;
   /** Filters the request narrowed with, empty for an unnarrowed search. */
   filters: CaseLawSearchFilterNames;
   /**
@@ -48,11 +44,10 @@ type CaseLawSearchWarningsOptions = {
   emptyResultSet: boolean;
 };
 
-const functionWordsWarning = (
+export const functionWordsWarning = (
   dropped: readonly string[],
 ): CaseLawSearchWarning => ({
   code: "function_words_optional",
-  droppedFunctionWords: [...dropped],
   // Named, not counted: a reader deciding whether the search answered their
   // question needs to know which words it stopped requiring, not how many.
   message: `The search did not require these words, which are grammar rather than subject matter: ${dropped.join(", ")}.`,
@@ -70,7 +65,6 @@ const noHitsFilteredWarning = (
   filters: CaseLawSearchFilterNames,
 ): CaseLawSearchWarning => ({
   code: "no_hits_filtered",
-  filters: [...filters],
   // The filters are named because the reader chose them and can drop them.
   // The other reading of an empty page — that the corpus holds nothing on the
   // subject — is the one this warning exists to rule out.
@@ -89,12 +83,21 @@ const noHitsFilteredWarning = (
  */
 export const caseLawSearchWarnings = ({
   droppedFunctionWords,
+  partialHitCount = 0,
   filters,
   emptyResultSet,
 }: CaseLawSearchWarningsOptions): CaseLawSearchWarning[] => {
   const warnings: CaseLawSearchWarning[] = [];
   if (droppedFunctionWords.length > 0) {
     warnings.push(functionWordsWarning(droppedFunctionWords));
+  }
+  if (partialHitCount > 0) {
+    warnings.push(
+      partialMatchesAppendedWarning({
+        partial: partialHitCount,
+        countsStrictSet: true,
+      }),
+    );
   }
   if (!emptyResultSet) {
     return warnings;
@@ -124,51 +127,21 @@ export const caseLawSearchWarnings = ({
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
  */
-const agentWarningText = { message: v.string(), hint: v.string() };
-
-const agentWarningSchemas = [
-  v.strictObject({
-    code: v.literal("filter_read"),
-    filter: caseLawSearchFilterSchema,
-    courtAliases: v.array(
-      v.strictObject({ input: v.string(), resolved: v.string() }),
-    ),
-    ...agentWarningText,
-  }),
-  v.strictObject({
-    code: v.literal("filter_dropped"),
-    filter: caseLawSearchFilterSchema,
-    received: v.string(),
-    ...agentWarningText,
-  }),
-  v.strictObject({
-    code: v.literal("many_required_terms"),
-    ...agentWarningText,
-  }),
-  v.strictObject({
-    code: v.literal("provision_cited_widely"),
-    citingDecisions: v.pipe(v.number(), v.integer(), v.minValue(1)),
-    ...agentWarningText,
-  }),
+export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
+  "filter_read",
+  "filter_dropped",
+  "many_required_terms",
+  "provision_cited_widely",
 ] as const;
 
-export const agentCaseLawSearchWarningSchema = v.variant("code", [
-  ...caseLawSearchWarningSchema.options,
-  ...agentWarningSchemas,
-]);
+type AgentCaseLawSearchWarningCode =
+  (typeof AGENT_CASE_LAW_SEARCH_WARNING_CODES)[number];
 
-export type AgentCaseLawSearchWarning = v.InferOutput<
-  typeof agentCaseLawSearchWarningSchema
->;
-
-export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = agentWarningSchemas.map(
-  ({ entries }) => entries.code.literal,
-);
-
-type AgentCaseLawSearchWarningCode = Exclude<
-  AgentCaseLawSearchWarning["code"],
-  CaseLawSearchWarningCode
->;
+export type AgentCaseLawSearchWarning = {
+  readonly code: CaseLawSearchWarningCode | AgentCaseLawSearchWarningCode;
+  readonly message: string;
+  readonly hint: string;
+};
 
 /**
  * A court the corpus stores under several spellings (with and without the
@@ -180,29 +153,19 @@ export const filterReadWarning = ({
   received,
   values: [value, ...others],
 }: {
-  filter: CaseLawSearchFilter;
+  filter: string;
   received: string;
   values: readonly [string, ...string[]];
 }): AgentCaseLawSearchWarning =>
   others.length === 0
     ? {
         code: "filter_read",
-        filter,
-        courtAliases: [value, ...others].map((resolved) => ({
-          input: received,
-          resolved,
-        })),
-        message: `Read ${filter} ${JSON.stringify(received)} as "${value}".`,
+        message: `Read ${filter} ${received} as "${value}".`,
         hint: `Pass ${filter} "${value}" to search the same way without this note.`,
       }
     : {
         code: "filter_read",
-        filter,
-        courtAliases: [value, ...others].map((resolved) => ({
-          input: received,
-          resolved,
-        })),
-        message: `Read ${filter} ${JSON.stringify(received)} as one ${filter} stored under ${String(others.length + 1)} spellings, and matched each: ${[value, ...others].map((spelling) => `"${spelling}"`).join(", ")}.`,
+        message: `Read ${filter} ${received} as one ${filter} stored under ${String(others.length + 1)} spellings, and matched each: ${[value, ...others].map((spelling) => `"${spelling}"`).join(", ")}.`,
         hint: `Pass ${filter} "${value}" to search the same ${filter} the same way.`,
       };
 
@@ -211,15 +174,13 @@ export const filterDroppedWarning = ({
   received,
   known,
 }: {
-  filter: CaseLawSearchFilter;
+  filter: string;
   received: string;
   /** The values the caller could have meant, most useful first; bounded. */
   known: string;
 }): AgentCaseLawSearchWarning => ({
   code: "filter_dropped",
-  filter,
-  received,
-  message: `${JSON.stringify(received)} names no single ${filter}, so this search ran without the ${filter} filter.`,
+  message: `${received} names no single ${filter}, so this search ran without the ${filter} filter.`,
   hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
 });
 
@@ -250,9 +211,26 @@ export const provisionCitedWidelyWarning = ({
   citingDecisions: number;
 }): AgentCaseLawSearchWarning => ({
   code: "provision_cited_widely",
-  citingDecisions,
   message: `${provision} is cited by ${String(citingDecisions)} decisions, more than one search can filter by: these results are the topic's best matches that cite it, not all of them.`,
   hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with an exact total.",
+});
+
+export const partialMatchesAppendedWarning = ({
+  partial,
+  countsStrictSet,
+}: {
+  /** How many returned hits hold only some of the phrasing's words. */
+  partial: number;
+  /**
+   * Whether the response's total and facets are this phrasing's strict set:
+   * true for a single phrasing, false once several are merged (the total is
+   * uncounted and the facets describe the first phrasing only).
+   */
+  countsStrictSet: boolean;
+}): CaseLawSearchWarning => ({
+  code: "partial_matches_appended",
+  message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did${countsStrictSet ? "; the total and facets count only the decisions holding every word" : ""}.`,
+  hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
 });
 
 /**
@@ -286,6 +264,8 @@ export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   function_words_optional: () => functionWordsWarning(["na"]),
   no_hits: noHitsWarning,
   no_hits_filtered: () => noHitsFilteredWarning(["court"]),
+  partial_matches_appended: () =>
+    partialMatchesAppendedWarning({ partial: 3, countsStrictSet: true }),
 } as const satisfies Record<
   CaseLawSearchWarningCode,
   () => CaseLawSearchWarning
@@ -296,13 +276,13 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   filter_read: () =>
     filterReadWarning({
       filter: "court",
-      received: "NS",
+      received: '"NS"',
       values: ["Nejvyšší soud"],
     }),
   filter_dropped: () =>
     filterDroppedWarning({
       filter: "court",
-      received: "Česká republika",
+      received: '"Česká republika"',
       known: 'Known values include "Nejvyšší soud".',
     }),
   provision_cited_widely: () =>

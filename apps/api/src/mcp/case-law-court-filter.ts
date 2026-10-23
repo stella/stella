@@ -173,13 +173,17 @@ export const readCourtFilter = ({
       }),
     };
   }
-  const { spellings } =
+  const { abbreviation, spellings } =
     identities.find((identity) => identity.spellings[0] === read.value) ??
     panic(`Court vocabulary read a value it does not hold: ${read.value}`);
   return {
     type: "court",
     courts: spellings,
-    warning: courtReadWarning({ court, spellings }),
+    // These are the abbreviations the tool description advertises, derived
+    // from the same apex registry when the identities were built. Treating
+    // one as a repair would make the documented call noisy.
+    warning:
+      court === abbreviation ? null : courtReadWarning({ court, spellings }),
   };
 };
 
@@ -263,6 +267,9 @@ const combinedCourtWarning = ({
   if (reading.type === "dropped") {
     return reading.warning;
   }
+  if (reading.warning === null) {
+    return null;
+  }
   return courtReadWarning({
     court,
     spellings:
@@ -318,11 +325,22 @@ export const resolveCourtFilter = async ({
           reading: courtReading,
           spellings: combined.courtSpellings,
         });
+  const warnings = [
+    ...(courtWarning === null ? [] : [courtWarning]),
+    ...listWarnings,
+  ];
+  const warningKeys = new Set<string>();
   return {
     court: combined.court,
     courts: combined.courts,
-    warnings:
-      courtWarning === null ? listWarnings : [courtWarning, ...listWarnings],
+    warnings: warnings.filter(({ code, message, hint }) => {
+      const key = JSON.stringify([code, message, hint]);
+      if (warningKeys.has(key)) {
+        return false;
+      }
+      warningKeys.add(key);
+      return true;
+    }),
   };
 };
 

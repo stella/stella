@@ -44,7 +44,7 @@ export const recordDecisionUsage = async ({
       workspaceId: metering.workspaceId,
       userId: metering.userId,
       actionType: metering.actionType,
-      modelRole: "decision",
+      modelTask: "decision",
       unitsConsumed: lane === "pool" ? unitsConsumed : 0,
       serviceTier: "standard",
       isByok,

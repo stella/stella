@@ -3,10 +3,7 @@ import type { Static } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
-import {
-  CASE_LAW_SEARCH_FILTERS,
-  CASE_LAW_SEARCH_WARNING_CODES,
-} from "@stll/api-contract/search";
+import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
 import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
@@ -114,6 +111,7 @@ const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   citationCount: hit.citationCount,
   citationAuthority: hit.citationAuthority,
   matchingPassages: hit.matchingPassages,
+  match: hit.match,
   createdAt: truncateTextBytes(hit.createdAt, bytes.date),
 });
 
@@ -123,36 +121,6 @@ const projectBucket = (bucket: FacetBucket) => ({
   label: nullableText(bucket.label, bytes.label),
   count: bucket.count,
 });
-
-const projectWarning = (
-  warning: SearchResponse["warnings"][number],
-): SearchResponse["warnings"][number] => {
-  const text = {
-    message: truncateTextBytes(warning.message, bytes.warning),
-    hint: truncateTextBytes(warning.hint, bytes.warning),
-  };
-  switch (warning.code) {
-    case "function_words_optional":
-      return {
-        ...warning,
-        ...text,
-        droppedFunctionWords: warning.droppedFunctionWords
-          .slice(0, LIMITS.searchQueryMaxLength)
-          .map((word) => truncateTextBytes(word, bytes.queryUsed)),
-      };
-    case "no_hits_filtered":
-      return {
-        ...warning,
-        ...text,
-        filters: warning.filters.slice(0, CASE_LAW_SEARCH_FILTERS.length),
-      };
-    case "no_hits":
-      return { ...warning, ...text };
-    default:
-      warning satisfies never;
-      return panic(`Unhandled search warning: ${String(warning)}`);
-  }
-};
 
 // Both backends pass their entire successful envelope through this boundary.
 export const projectCaseLawSearchResponse = (
@@ -207,5 +175,9 @@ export const projectCaseLawSearchResponse = (
   queryUsed: truncateTextBytes(response.queryUsed, bytes.queryUsed),
   warnings: response.warnings
     .slice(0, CASE_LAW_SEARCH_WARNING_CODES.length)
-    .map(projectWarning),
+    .map((warning) => ({
+      code: warning.code,
+      message: truncateTextBytes(warning.message, bytes.warning),
+      hint: truncateTextBytes(warning.hint, bytes.warning),
+    })),
 });

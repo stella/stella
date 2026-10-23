@@ -2,12 +2,14 @@ import { panic } from "better-result";
 
 import {
   BYOK_DEFAULT_MODELS,
+  MODEL_OVERRIDE_GROUPS,
   BYOK_MODEL_OPTIONS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   DECISION_MODEL_PROVIDERS,
   DECISION_MODEL_CATALOG,
 } from "@stll/ai-catalog";
+import type { ModelOverrideGroup } from "@stll/ai-catalog";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
@@ -30,7 +32,16 @@ export const PROVIDER_LABELS = {
   bedrock: "Bedrock",
 } as const satisfies Record<(typeof PROVIDER_KEYS)[number], string>;
 
-export const ROLE_KEYS = ["chat", "fast", "reasoning", "pdf"] as const;
+const MODEL_GROUP_DISPLAY_ORDER = {
+  chat: 0,
+  fast: 1,
+  reasoning: 2,
+  pdf: 3,
+} as const satisfies Record<ModelOverrideGroup, number>;
+export const ROLE_KEYS = MODEL_OVERRIDE_GROUPS.toSorted(
+  (left, right) =>
+    MODEL_GROUP_DISPLAY_ORDER[left] - MODEL_GROUP_DISPLAY_ORDER[right],
+);
 
 export type ProviderValue = (typeof PROVIDER_KEYS)[number];
 export type RegionValue = Extract<
@@ -242,46 +253,62 @@ export const providerDraftsFromStoredProviders = (
   return drafts.length > 0 ? drafts : [createProviderCredentialDraft()];
 };
 
-export const createDefaultRoleModels = (
-  providers: readonly ProviderValue[] = ["google"],
-): RoleModelSelections => ({
-  chat: getDefaultModelSelection(
-    getDefaultProviderForRole(providers, "chat"),
-    "chat",
-  ),
-  fast: getDefaultModelSelection(
-    getDefaultProviderForRole(providers, "fast"),
-    "fast",
-  ),
-  reasoning: getDefaultModelSelection(
-    getDefaultProviderForRole(providers, "reasoning"),
-    "reasoning",
-  ),
-  pdf: getDefaultModelSelection(
-    getDefaultProviderForRole(providers, "pdf"),
-    "pdf",
-  ),
-});
+export const projectDefaultRoleModels = (
+  defaultModels: OrganizationAIConfig["defaultModels"],
+): RoleModelSelections => {
+  const project = (
+    selection: OrganizationAIConfig["defaultModels"][RoleValue],
+  ): ModelSelection | null => {
+    if (selection === null) {
+      return null;
+    }
+    if (!isProviderValue(selection.provider)) {
+      // The API also accepts custom providers that this settings picker does not offer.
+      return null;
+    }
+    return { provider: selection.provider, modelId: selection.modelId };
+  };
+  return {
+    chat: project(defaultModels.chat),
+    fast: project(defaultModels.fast),
+    reasoning: project(defaultModels.reasoning),
+    pdf: project(defaultModels.pdf),
+  };
+};
+
+export const projectProviderDefaultRoleModels = (
+  providerDefaults: OrganizationAIConfig["providerDefaultModels"],
+) =>
+  providerDefaults.flatMap(({ provider, defaultModels }) =>
+    isProviderValue(provider)
+      ? [{ provider, defaultModels: projectDefaultRoleModels(defaultModels) }]
+      : [],
+  );
+
+export type ProviderDefaultRoleModels = ReturnType<
+  typeof projectProviderDefaultRoleModels
+>;
 
 export const roleModelsFromOverrideModels = ({
   overrideModels,
   providers,
+  defaultModels,
 }: {
   overrideModels: StoredOverrideModels;
   providers: readonly ProviderValue[];
+  defaultModels: RoleModelSelections;
 }): RoleModelSelections => {
-  const models = createDefaultRoleModels(providers);
-
   if (!overrideModels) {
-    return models;
+    return { ...defaultModels };
   }
 
   const providerSet = new Set(providers);
+  const entries: [RoleValue, ModelSelection | null][] = [];
 
   for (const role of ROLE_KEYS) {
     const selection = overrideModels[role];
     if (selection === null) {
-      models[role] = null;
+      entries.push([role, null]);
       continue;
     }
     if (
@@ -291,38 +318,17 @@ export const roleModelsFromOverrideModels = ({
       providerSet.has(selection.provider) &&
       isProviderRoleSupported(selection.provider, role)
     ) {
-      models[role] = {
-        provider: selection.provider,
-        modelId: selection.modelId,
-      };
+      entries.push([
+        role,
+        {
+          provider: selection.provider,
+          modelId: selection.modelId,
+        },
+      ]);
     }
   }
 
-  return models;
-};
-
-export const ensureRoleModelsForProviders = ({
-  providers,
-  roleModels,
-}: {
-  providers: readonly ProviderValue[];
-  roleModels: RoleModelSelections;
-}): RoleModelSelections => {
-  const configuredProviders = new Set(providers);
-  const nextModels = createDefaultRoleModels(providers);
-
-  for (const role of ROLE_KEYS) {
-    const selection = roleModels[role];
-    if (
-      selection &&
-      configuredProviders.has(selection.provider) &&
-      isProviderRoleSupported(selection.provider, role)
-    ) {
-      nextModels[role] = selection;
-    }
-  }
-
-  return nextModels;
+  return { ...defaultModels, ...Object.fromEntries(entries) };
 };
 
 export const roleOverridesFromStoredModels = ({
@@ -614,28 +620,6 @@ export const hasUsableProviderDrafts = (
 
   return true;
 };
-
-export const getDefaultModelSelection = (
-  provider: ProviderValue | undefined,
-  role: RoleValue,
-): ModelSelection | null => {
-  if (!provider) {
-    return null;
-  }
-  const entry = DEFAULT_MODELS_BY_PROVIDER[provider][role];
-  if (entry.kind === "unsupported") {
-    return null;
-  }
-  return { provider, modelId: entry.modelId };
-};
-
-const getDefaultProviderForRole = (
-  providers: readonly ProviderValue[],
-  role: RoleValue,
-): ProviderValue | undefined =>
-  providers.find(
-    (provider) => DEFAULT_MODELS_BY_PROVIDER[provider][role].kind === "default",
-  );
 
 const normalizeModelSelection = ({
   provider,

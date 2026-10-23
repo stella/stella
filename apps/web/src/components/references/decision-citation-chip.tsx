@@ -91,6 +91,14 @@ const DecisionCitationLabel = ({
           {paragraph}
         </span>
       );
+    case DECISION_CITATION_PRESENTATION.inline:
+      return (
+        <span className="inline-flex items-center gap-1">
+          {badge}
+          <BidiText as="span">{decision.caseNumber}</BidiText>
+          {paragraph}
+        </span>
+      );
     default:
       presentation satisfies never;
       return panic(
@@ -134,7 +142,7 @@ export const DecisionCitationChip = ({
           paragraph,
         });
   const links = resolveLegalCitationLinks({
-    appUrl: decision.readerUrl,
+    url: decision.readerUrl,
     sourceUrl: decision.originalUrl,
     appOrigins: new Set([
       new URL(env.VITE_PUBLIC_APP_URL).origin,

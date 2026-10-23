@@ -206,6 +206,7 @@ const DEFAULT_PREPARE_FILE_COMPARISON_DEPENDENCIES: PrepareFileComparisonDepende
   { presignUploadUrl };
 
 const presignInput = async ({
+  userId,
   dependencies,
   file,
   organizationId,
@@ -213,9 +214,11 @@ const presignInput = async ({
   dependencies: PrepareFileComparisonDependencies;
   file: FileComparisonInputFile;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 }): Promise<Result<ReservedUpload, unknown>> => {
   const id = createSafeId<"fileComparisonUpload">();
   const presigned = await dependencies.presignUploadUrl({
+    userId,
     key: fileComparisonObjectKey({ organizationId, uploadId: id }),
     expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
     contentType: DOCX_MIME_TYPE,
@@ -261,8 +264,8 @@ export const reserveFileComparisonInputs = async ({
 }): Promise<Result<ReservedFileComparisonInputs, InternalToolErrorResult>> => {
   const { organizationId, userId } = context;
   const [reservedBase, reservedTarget] = await Promise.all([
-    presignInput({ dependencies, file: base, organizationId }),
-    presignInput({ dependencies, file: target, organizationId }),
+    presignInput({ dependencies, file: base, organizationId, userId }),
+    presignInput({ dependencies, file: target, organizationId, userId }),
   ]);
   if (Result.isError(reservedBase)) {
     return Result.err(internalFailureResult(reservedBase.error));

@@ -16,13 +16,14 @@ const identityFields = [
   "decisionDate",
   "caseNumber",
   "ecli",
-  "appUrl",
+  "url",
   "source_url",
+  "match",
 ] as const;
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,
   v.object({
-    ...v.pick(search, ["nextCursor", "nextStep", "headnotes"]).entries,
+    ...v.pick(search, ["nextCursor", "headnotes"]).entries,
     results: v.array(
       v.union([
         v.object(
@@ -65,7 +66,14 @@ export const APP_SEARCH_SCHEMA = v.union([
     ),
     searches: v.array(
       v.object({
-        warnings: search.entries.searches.item.entries.warnings,
+        warnings: v.array(
+          v.object(
+            v.pick(search.entries.searches.item.entries.warnings.item, [
+              "audience",
+              "message",
+            ]).entries,
+          ),
+        ),
       }),
     ),
   }),

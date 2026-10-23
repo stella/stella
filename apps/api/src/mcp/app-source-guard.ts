@@ -1,7 +1,7 @@
 import { load } from "cheerio";
 import { isText } from "domhandler";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 // Runtime SDK imports and the call primitive stay at these explicit boundaries.
 const SDK_OWNERS: ReadonlySet<string> = new Set([

@@ -27,7 +27,7 @@ const metadata = {
   country: "CZ",
   date: null,
   ecli: null,
-  appUrl: "https://stella.example/decisions/1",
+  url: "https://stella.example/decisions/1",
 } satisfies ReaderPage["metadata"];
 const paragraph = (number: number, text = `Paragraph ${number}`) =>
   ({
@@ -120,7 +120,7 @@ describe("MCP decision reader paging", () => {
             end: 3,
             citationId: "citation-1",
             decisionId: metadata.decisionId,
-            appUrl: null,
+            url: null,
           },
         ],
         nextCursor: "provisions",
@@ -136,7 +136,7 @@ describe("MCP decision reader paging", () => {
       page({
         phase: "provisions",
         provisionAnchors: [
-          { pieceId: "block-48", start: 0, end: 3, provision, appUrl: null },
+          { pieceId: "block-48", start: 0, end: 3, provision, url: null },
         ],
       }),
     );
@@ -148,13 +148,13 @@ describe("MCP decision reader paging", () => {
   test("open range links survive pages whose metadata URL has no fragment", () => {
     const rangedMetadata = {
       ...metadata,
-      appUrl: `${metadata.appUrl}#par=48-49`,
+      url: `${metadata.url}#par=48-49`,
     };
     const state = accept(
       createReaderPager(rangedMetadata),
       page({ items: [paragraph(48)] }),
     );
-    expect(state.metadata.appUrl).toBe(rangedMetadata.appUrl);
+    expect(state.metadata.url).toBe(rangedMetadata.url);
   });
   test("target ranges resolve only after their court paragraphs have arrived", () => {
     const initial = accept(

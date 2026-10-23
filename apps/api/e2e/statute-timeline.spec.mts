@@ -25,8 +25,7 @@ const INPUT = {
   limit: 50,
 };
 const VERSION_2020 = {
-  appUrl: "https://stella.example/legislation/2020",
-  url: null,
+  url: "https://stella.example/legislation/2020",
   documentId: "00000000-0000-4000-8000-000000000001",
   resourceName:
     "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000001",
@@ -42,7 +41,6 @@ const VERSION_2020 = {
   truncated: true,
 } satisfies ProvisionHistory["items"][number];
 const VERSION_2021 = {
-  appUrl: null,
   url: null,
   documentId: "00000000-0000-4000-8000-000000000002",
   resourceName:
@@ -58,7 +56,6 @@ const VERSION_2021 = {
   truncated: false,
 } satisfies ProvisionHistory["items"][number];
 const VERSION_WITHHELD = {
-  appUrl: null,
   url: "https://publisher.example/legislation/2019",
   documentId: "00000000-0000-4000-8000-000000000003",
   resourceName:
@@ -73,7 +70,7 @@ const VERSION_WITHHELD = {
 } satisfies ProvisionHistory["items"][number];
 const VERSION_WITHDRAWN = {
   ...VERSION_2020,
-  appUrl: null,
+  url: null,
   documentId: "00000000-0000-4000-8000-000000000004",
   resourceName:
     "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000004",
@@ -88,7 +85,7 @@ const VERSION_WITHDRAWN = {
 } satisfies ProvisionHistory["items"][number];
 const VERSION_NEVER_IN_FORCE = {
   ...VERSION_2020,
-  appUrl: null,
+  url: null,
   documentId: "00000000-0000-4000-8000-000000000005",
   resourceName:
     "stella://resource/legislation_document/id=00000000-0000-4000-8000-000000000005",
@@ -375,10 +372,7 @@ test("timeline selection, adjacent comparison and paging work in the fixture hos
       cursor: "timeline-page-2",
     },
   });
-  expect(recorded.openedUrls).toEqual([
-    VERSION_2020.appUrl,
-    VERSION_WITHHELD.url,
-  ]);
+  expect(recorded.openedUrls).toEqual([VERSION_2020.url, VERSION_WITHHELD.url]);
   expect(
     recorded.calls.filter(({ name }) => name === "read_statute_provisions"),
   ).toHaveLength(0);

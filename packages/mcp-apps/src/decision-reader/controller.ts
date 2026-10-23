@@ -56,7 +56,7 @@ export const createReaderController = (
     }
   };
   const range = () => {
-    const url = received?.metadata.appUrl;
+    const url = received?.metadata.url;
     return url === null || url === undefined || !URL.canParse(url)
       ? null
       : parseDecisionParagraphFragment(new URL(url).hash);

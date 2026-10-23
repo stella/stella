@@ -6,26 +6,26 @@ import {
 } from "@stll/api-contract/decision-paragraph-range";
 
 type DecisionDeepLinkOptions = {
-  appUrl: string | null;
+  url: string | null;
   anchorId: string | null;
   number?: number | undefined;
 };
 
 /** The reader's address for one block: the decision's page and its fragment. */
 export const decisionBlockDeepLink = ({
-  appUrl,
+  url,
   anchorId,
   number,
 }: DecisionDeepLinkOptions) => {
-  if (appUrl === null) {
+  if (url === null) {
     return {};
   }
   if (number !== undefined) {
     const range = parseDecisionParagraphRange(String(number));
     if (Result.isOk(range)) {
-      return { url: `${appUrl}#${decisionParagraphFragment(range.value)}` };
+      return { url: `${url}#${decisionParagraphFragment(range.value)}` };
     }
   }
   // The web router decodes fragments with decodeURI, preserving escaped reserved characters.
-  return anchorId === null ? {} : { url: `${appUrl}#${encodeURI(anchorId)}` };
+  return anchorId === null ? {} : { url: `${url}#${encodeURI(anchorId)}` };
 };

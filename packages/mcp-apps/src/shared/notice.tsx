@@ -1,5 +1,3 @@
-import { useTranslations } from "use-intl";
-
 import { ChevronRightIcon } from "@stll/ui/icons";
 
 import { searchNoticeDetails } from "./notice.logic";
@@ -36,7 +34,4 @@ export const SearchNotice = ({
   warnings,
 }: {
   warnings: readonly AppSearchWarning[];
-}) => {
-  const t = useTranslations();
-  return <AppNotice details={searchNoticeDetails(warnings, t)} />;
-};
+}) => <AppNotice details={searchNoticeDetails(warnings)} />;

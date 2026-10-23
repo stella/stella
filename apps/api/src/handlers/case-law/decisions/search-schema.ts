@@ -9,8 +9,8 @@ import {
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
-  CASE_LAW_SEARCH_FILTERS,
   CASE_LAW_SEARCH_WARNING_CODES,
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_REACH,
 } from "@stll/api-contract/search";
@@ -111,42 +111,21 @@ export const searchDecisionsBodySchema = t.Object({
   alternatives: t.Optional(tLegalAlternatives),
 });
 
-const searchWarningText = {
-  message: boundedString(bytes.warning),
-  hint: boundedString(bytes.warning),
-};
-const searchWarningSchema = t.Union([
-  t.Object(
-    {
-      code: t.Literal("function_words_optional"),
-      ...searchWarningText,
-      droppedFunctionWords: t.Array(boundedString(bytes.queryUsed), {
-        maxItems: LIMITS.searchQueryMaxLength,
-      }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    { code: t.Literal("no_hits"), ...searchWarningText },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      code: t.Literal("no_hits_filtered"),
-      ...searchWarningText,
-      filters: t.Array(t.UnionEnum([...CASE_LAW_SEARCH_FILTERS]), {
-        maxItems: CASE_LAW_SEARCH_FILTERS.length,
-      }),
-    },
-    { additionalProperties: false },
-  ),
-]);
+const searchWarningSchema = t.Object(
+  {
+    code: t.UnionEnum([...CASE_LAW_SEARCH_WARNING_CODES]),
+    message: boundedString(bytes.warning),
+    hint: boundedString(bytes.warning),
+  },
+  { additionalProperties: false },
+);
 
 const nullableStringSchema = nullableBoundedString(bytes.date);
 
 const decisionIdentifierSchema = t.Object(
   {
     type: t.Union([
+      t.Literal(DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER),
       t.Literal(DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
       t.Literal(DECISION_IDENTIFIER_TYPES.ECLI),
       t.Literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
@@ -303,6 +282,10 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           // window: breadth, not weight. One on the Postgres branch and on an
           // identifier lookup, which score whole decisions.
           matchingPassages: Type.Integer({ minimum: 1 }),
+          // Whether the decision holds every word of the query, or only some
+          // of them: a short first page is topped up with the latter, after
+          // every hit of the former.
+          match: t.UnionEnum([...DECISION_SEARCH_MATCHES]),
           createdAt: boundedString(bytes.date),
         },
         { additionalProperties: false },

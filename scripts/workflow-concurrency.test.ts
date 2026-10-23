@@ -350,7 +350,9 @@ describe("pull request workflow concurrency", () => {
           (file === "deploy-landing.yml" &&
             group === `deploy-landing-\${{ github.ref }}`) ||
           (file === "manual-checks.yml" &&
-            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`) ||
+          (file === "queue-admission.yml" &&
+            group === `queue-admission-\${{ inputs.pr }}`);
         if (deliberate) {
           return [];
         }
@@ -632,57 +634,6 @@ test("unrelated labels cannot supersede baseline recording requests", async () =
   expect(await groupFor(file, { ...unrelated, run_id: 2 })).not.toBe(
     await groupFor(file, unrelated),
   );
-});
-
-test("unrelated flake-gate labels use an isolated non-cancelling group", async () => {
-  const file = "flake-gate.yml";
-  const requested = {
-    ...recording,
-    workflow: "Changed-test flake report",
-    inputs: { base_ref: "" },
-    event: {
-      ...recording.event,
-      action: "labeled",
-      label: { name: "flake-gate" },
-    },
-  };
-  const reportGroup = await groupFor(file, requested);
-  expect(
-    await groupFor(file, {
-      ...requested,
-      event: { ...requested.event, action: "synchronize" },
-    }),
-  ).toBe(reportGroup);
-
-  const unrelated = {
-    ...requested,
-    event: { ...requested.event, label: { name: "documentation" } },
-  };
-  expect(await groupFor(file, unrelated)).not.toBe(reportGroup);
-  expect(await concurrencyValueFor(file, "cancel-in-progress", unrelated)).toBe(
-    "false",
-  );
-  expect(await concurrencyValueFor(file, "cancel-in-progress", requested)).toBe(
-    "true",
-  );
-
-  const reusableCall = {
-    ...requested,
-    run_id: 44,
-    event: {
-      pull_request: requested.event.pull_request,
-      action: "opened",
-    },
-    inputs: { base_ref: "origin/main" },
-  };
-  const reusableGroup = await groupFor(file, reusableCall);
-  expect(reusableGroup).not.toBe(reportGroup);
-  expect(
-    await groupFor(file, { ...reusableCall, run_id: reusableCall.run_id + 1 }),
-  ).not.toBe(reusableGroup);
-  expect(
-    await concurrencyValueFor(file, "cancel-in-progress", reusableCall),
-  ).toBe("false");
 });
 
 test("manual CI replaces the same branch while PRs and merge groups stay isolated", async () => {

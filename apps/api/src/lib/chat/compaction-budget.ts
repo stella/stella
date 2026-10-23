@@ -17,7 +17,7 @@ import {
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
-import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
 import {
   MANAGED_MODEL_TIER,
   type ManagedModelTier,
@@ -71,7 +71,7 @@ const resolveChatModelId = ({
   organizationId,
   modelTier,
 }: ResolveChatCompactionBudgetOptions): string | undefined => {
-  // On the managed fast tier a selection is served by the fast model (see
+  // On the managed fast tier a selection is served by the short-text model (see
   // `getTanStackTextModelById`), so the budget follows the role default.
   const servesSelection =
     orgAIConfig !== null || modelTier === MANAGED_MODEL_TIER.standard;
@@ -82,13 +82,13 @@ const resolveChatModelId = ({
   }
 
   try {
-    return getTanStackTextModelInfoForRole("chat", orgAIConfig, {
+    return getTanStackTextModelInfoForTask("chat", orgAIConfig, {
       dataClass: "customer",
       organizationId,
       modelTier,
     }).modelId;
   } catch {
-    // Boundary: `getTanStackTextModelInfoForRole` throws for an
+    // Boundary: `getTanStackTextModelInfoForTask` throws for an
     // unconfigured/role-unsupported chat model (e.g. BYOK not set up). Budget
     // resolution is best-effort — fall back to the default trigger via an
     // undefined window rather than failing the send or the meter.

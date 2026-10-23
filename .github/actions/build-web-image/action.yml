@@ -15,10 +15,10 @@ inputs:
     description: Browser-visible PostHog project key required for official Stella builds; passed separately so it is never committed.
     required: true
   posthog-cli-api-key:
-    description: PostHog personal API key with error-tracking write scope. Non-empty opts the build into publishing the client source maps; every caller states it so a missing wire-up is visible, an empty value skips the upload.
+    description: PostHog personal API key with error-tracking write scope. Every official build publishes its client source maps, so an empty value fails the build.
     required: true
   posthog-project-id:
-    description: Numeric PostHog project id that receives the source maps; must be non-empty whenever posthog-cli-api-key is.
+    description: Numeric PostHog project id that receives the source maps.
     required: true
   source-path:
     description: Checkout containing the exact source commit to build.
@@ -43,12 +43,24 @@ runs:
         RELEASE_REF: ${{ inputs.release-ref }}
         RELEASE_SHA: ${{ inputs.release-sha }}
         POSTHOG_KEY: ${{ inputs.posthog-key }}
+        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_PROJECT_ID: ${{ inputs.posthog-project-id }}
         SOURCE_PATH: ${{ inputs.source-path }}
         TARGET_ENV: ${{ inputs.target-environment }}
       run: |
         set -euo pipefail
         if [[ ! "$POSTHOG_KEY" =~ ^phc_[A-Za-z0-9_-]{20,}$ ]]; then
           echo "::error::A valid PostHog project key is required for official stella web builds."
+          exit 1
+        fi
+        # Frames from an unpublished build never resolve to source, so an
+        # official build without its upload credentials stops here.
+        if [[ -z "$POSTHOG_CLI_API_KEY" ]]; then
+          echo "::error::posthog-cli-api-key is required for official stella web builds."
+          exit 1
+        fi
+        if [[ ! "$POSTHOG_PROJECT_ID" =~ ^[0-9]+$ ]]; then
+          echo "::error::posthog-project-id must be a numeric PostHog project id."
           exit 1
         fi
         if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
@@ -176,7 +188,7 @@ runs:
         build-args: |
           STELLA_VERSION=${{ steps.args.outputs.version }}
           STELLA_COMMIT_SHA=${{ inputs.release-sha }}
-          POSTHOG_SOURCEMAP_PUBLISH=${{ inputs.posthog-cli-api-key != '' }}
+          POSTHOG_SOURCEMAP_PUBLISH=true
           POSTHOG_SOURCEMAP_PROJECT_ID=${{ inputs.posthog-project-id }}
           ${{ steps.args.outputs.values }}
           ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}

@@ -8,11 +8,16 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
-import { FACET_COUNT_TYPE, SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_WARNING_CODES,
+  DECISION_SEARCH_MATCHES,
+  FACET_COUNT_TYPE,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import { agentCaseLawSearchWarningSchema } from "../case-law/search-warnings";
+import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "../case-law/search-warnings";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-projection";
 import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
 import {
@@ -87,11 +92,7 @@ export const caseNumberTypeProjection = v.optional(
 );
 
 const caseLawSearchIdentityFields = {
-  // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
-  // is disabled (`FEATURE_PUBLIC_LAW`), so the projected shape is
-  // nullable; a non-nullable declaration would fail the strict parse and
-  // take the tool off the chat surface on any deployment with the flag off.
-  appUrl: v.nullable(v.string()),
+  // The primary link can be absent when neither reader nor publisher is available.
   url: v.nullable(publicUrl()),
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
@@ -111,6 +112,9 @@ const caseLawSearchIdentityFields = {
   matchedQueries: v.array(v.number()),
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
+  // Whether the decision holds every word of the query, or only some of them
+  // (appended after the others when few decisions held every word).
+  match: v.picklist(DECISION_SEARCH_MATCHES),
   // The publisher's own decision URL, which may embed the publisher's
   // own UUID — never a Stella tenant id, so it is forwarded unchanged.
   sourceUrl: v.nullable(publicUrl()),
@@ -163,11 +167,15 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // What the search answered that the call did not ask for. Empty for a
           // phrasing that required every word it carried and found something.
           warnings: v.array(
-            v.union(
-              agentCaseLawSearchWarningSchema.options.map((warning) =>
-                projectionBranch(warning),
-              ),
-            ),
+            v.strictObject({
+              code: v.picklist([
+                ...CASE_LAW_SEARCH_WARNING_CODES,
+                ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
+              ]),
+              audience: v.picklist(["agent", "user"]),
+              message: v.string(),
+              hint: v.string(),
+            }),
           ),
         }),
       ),

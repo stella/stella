@@ -413,7 +413,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "chat",
+    task: "chat",
     scopeKey: null,
   });
   const system = `${SYSTEM_PROMPT}\nEditable DOCX blocks:\n\`\`\`json\n${renderEditableBlocks(snapshot)}\n\`\`\``;
@@ -843,11 +843,12 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "chat",
+        task: "chat",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),

@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import * as v from "valibot";
 
 import { ENTITY_KINDS } from "./entity-kinds";
 
@@ -46,6 +45,11 @@ export const SEARCH_EXCERPTS = ["short", "medium", "long"] as const;
 export type SearchExcerpt = (typeof SEARCH_EXCERPTS)[number];
 
 export const DEFAULT_SEARCH_EXCERPT = SEARCH_EXCERPTS[0];
+
+/** Whether a decision satisfies every required term or a relaxed partial query. */
+export const DECISION_SEARCH_MATCHES = ["all_terms", "some_terms"] as const;
+
+export type DecisionSearchMatch = (typeof DECISION_SEARCH_MATCHES)[number];
 
 /** Match semantics shared by HTTP, MCP and persisted chat projections. */
 export const LEGISLATION_SEARCH_MATCH_TYPES = ["strict", "relaxed"] as const;
@@ -102,61 +106,35 @@ export const countedSearchTotal = (
  * second list of them is how a warning the API emits stops being a warning
  * the page knows how to show. The wording belongs to each surface — the API
  * writes an agent-facing sentence, the web renders a translated one — so
- * codes and structured facts are shared.
+ * only the codes are shared.
  *
  * - `function_words_optional`: the query carried words that are grammar
  *   rather than subject matter, and did not require them. The response's
  *   `queryUsed` is what it did require.
+ * - `partial_matches_appended`: some hits match only part of the required
+ *   terms; each hit carries its own match classification.
  * - `no_hits`: nothing matched the words the query required.
  * - `no_hits_filtered`: nothing matched under the filters the request
  *   narrowed with, which is a different answer from `no_hits` because the
  *   caller can drop a filter.
  */
-export const CASE_LAW_SEARCH_FILTERS = [
-  "court",
-  "courts",
-  "category",
-  "hasLegalSentence",
-  "provision",
-  "dateFrom",
-  "dateTo",
-  "decisionType",
-  "language",
-  "sourceId",
+export const CASE_LAW_SEARCH_WARNING_CODES = [
+  "function_words_optional",
+  "partial_matches_appended",
+  "no_hits",
+  "no_hits_filtered",
 ] as const;
 
-export const caseLawSearchFilterSchema = v.picklist(CASE_LAW_SEARCH_FILTERS);
-export type CaseLawSearchFilter = v.InferOutput<
-  typeof caseLawSearchFilterSchema
->;
+export type CaseLawSearchWarningCode =
+  (typeof CASE_LAW_SEARCH_WARNING_CODES)[number];
 
-const caseLawSearchWarningText = {
-  message: v.string(),
-  hint: v.string(),
+export type CaseLawSearchWarning = {
+  readonly code: CaseLawSearchWarningCode;
+  /** What happened, in the caller's own terms. */
+  readonly message: string;
+  /** The concrete next call, never a restatement of the message. */
+  readonly hint: string;
 };
-
-export const caseLawSearchWarningSchema = v.variant("code", [
-  v.strictObject({
-    code: v.literal("function_words_optional"),
-    droppedFunctionWords: v.array(v.string()),
-    ...caseLawSearchWarningText,
-  }),
-  v.strictObject({ code: v.literal("no_hits"), ...caseLawSearchWarningText }),
-  v.strictObject({
-    code: v.literal("no_hits_filtered"),
-    filters: v.array(caseLawSearchFilterSchema),
-    ...caseLawSearchWarningText,
-  }),
-]);
-
-export type CaseLawSearchWarning = v.InferOutput<
-  typeof caseLawSearchWarningSchema
->;
-
-export const CASE_LAW_SEARCH_WARNING_CODES =
-  caseLawSearchWarningSchema.options.map(({ entries }) => entries.code.literal);
-
-export type CaseLawSearchWarningCode = CaseLawSearchWarning["code"];
 
 export const GLOBAL_SEARCH_RESULT_TYPES = [
   "matter",

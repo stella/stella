@@ -11,7 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 /**
  * Drafting a column's prompt with the model, for either set of columns that
@@ -359,7 +359,7 @@ export const suggestColumnPrompt = async ({
       workspaceId: scope.workspaceId,
     },
     feature: scope.feature,
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -372,20 +372,21 @@ export const suggestColumnPrompt = async ({
 
   const generateResult = await Result.tryPromise({
     try: async () =>
-      await generateTanStackTextForRole({
+      await generateTanStackTextForTask({
         dataClass: "customer",
         finishPolicy: "require-complete",
-        role: "fast",
+        task: "short-text",
         serviceTier: "standard",
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        userId,
         admission,
         tenantWorkspaceIds: scope.tenantWorkspaceIds,
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: null,
         }),
         system: suggestPromptSystemPrompt(context),
@@ -402,10 +403,8 @@ export const suggestColumnPrompt = async ({
             }),
           },
         ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
-        ]),
+        abortSignal,
+        deadlineMs: SUGGEST_TIMEOUT_MS,
       }),
     catch: (error) => {
       aiAnalytics.captureError(error);

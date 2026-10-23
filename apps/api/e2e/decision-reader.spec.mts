@@ -45,7 +45,7 @@ const metadata = {
   country: "CZE",
   date: "2024-04-15",
   ecli: null,
-  appUrl: "https://stella.example/case-law/fixture",
+  url: "https://stella.example/case-law/fixture",
 } as const satisfies ReaderPage["metadata"];
 const OPEN = {
   status: "available",
@@ -174,7 +174,7 @@ const LINK_PAGES = [
           end: "Cited decision".length,
           citationId: "linked-citation",
           decisionId: citedDecisionId,
-          appUrl: citedDecisionUrl,
+          url: citedDecisionUrl,
         },
       ],
     },
@@ -191,7 +191,7 @@ const LINK_PAGES = [
           start: linkedText.indexOf("cited provision"),
           end: linkedText.indexOf("cited provision") + "cited provision".length,
           provision,
-          appUrl: provisionUrl,
+          url: provisionUrl,
         },
       ],
     },
@@ -203,7 +203,7 @@ const CITED_OPEN = {
     ...metadata,
     decisionId: citedDecisionId,
     caseNumber: "II. ÚS 456/24",
-    appUrl: citedDecisionUrl,
+    url: citedDecisionUrl,
   },
 } satisfies ReaderOpen;
 const CITED_PAGE = {
@@ -216,7 +216,7 @@ const PREVIEW = {
   language: "cs",
   anchorId: provision.anchor,
   citedAnchorId: provision.cited_anchor,
-  appUrl: provisionUrl,
+  url: provisionUrl,
   headings: [],
   heading: null,
   blocks: [
@@ -246,9 +246,9 @@ const RESULT_FIXTURE = {
       index === RESULT_TARGET_INDEX
         ? metadata.caseNumber
         : `Fixture result ${index + 1}`,
-    appUrl:
+    url:
       index === RESULT_TARGET_INDEX
-        ? `${metadata.appUrl}#par=48-49`
+        ? `${metadata.url}#par=48-49`
         : `https://stella.example/law/cze/cases/fixture/result-${index + 1}`,
   })),
 } satisfies SearchResults;
@@ -656,7 +656,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       paragraphs: "48-49",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
       revision: "updated",
     });
@@ -789,7 +789,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([metadata.appUrl]);
+      .toEqual([metadata.url]);
     const recorded = await history(page);
     expect(recorded.toolResponses).toHaveLength(2);
     expect(
@@ -816,7 +816,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       paragraphs: "48-49",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
     });
     await expect(app.locator("#para48[data-reader-landing]")).toBeVisible();
@@ -835,7 +835,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([`${metadata.appUrl}#par=48-49`]);
+      .toEqual([`${metadata.url}#par=48-49`]);
     expect(
       (await history(page)).calls.map(({ arguments: args }) => args["cursor"]),
     ).toEqual([undefined, "fixture-page-2"]);
@@ -860,7 +860,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([metadata.appUrl]);
+      .toEqual([metadata.url]);
     expect((await history(page)).calls).toEqual([
       {
         name: "read_case_law_decision_blocks",
@@ -1008,11 +1008,11 @@ for (const host of ["ChatGPT", "Claude"] as const) {
         ...readerPage.content,
         citationAnchors: readerPage.content.citationAnchors.map((anchor) => ({
           ...anchor,
-          appUrl: null,
+          url: null,
         })),
         provisionAnchors: readerPage.content.provisionAnchors.map((anchor) => ({
           ...anchor,
-          appUrl: null,
+          url: null,
         })),
       },
     })) satisfies ReaderPage[];
@@ -1086,7 +1086,7 @@ test("reader reassembles fragmented blocks and consumes anchor-only pages", asyn
             start: 0,
             end: 9,
             citationId: "fixture-citation",
-            appUrl: citedDecisionUrl,
+            url: citedDecisionUrl,
             decisionId: "00000000-0000-4000-8000-000000000002",
           },
         ],
@@ -1128,7 +1128,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       surface: "results",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
     });
     const rows = app.locator("tbody tr");
@@ -1183,7 +1183,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([`${metadata.appUrl}#par=48-49`]);
+      .toEqual([`${metadata.url}#par=48-49`]);
     await expect(page.locator("iframe")).toHaveCount(1);
     await expect
       .poll(async () => (await history(page)).calls)
@@ -1226,7 +1226,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await expect(rows).toHaveCount(35);
     await expect(opener).toBeFocused();
     expect((await history(page)).links).toEqual([
-      `${metadata.appUrl}#par=48-49`,
+      `${metadata.url}#par=48-49`,
     ]);
     await expect(page.locator("iframe")).toHaveCount(1);
   });
@@ -1329,28 +1329,9 @@ test("search notes use one compact disclosure and hide model-only instructions",
     searches: [
       {
         warnings: [
-          {
-            code: "filter_read",
-            filter: "court",
-            courtAliases: [
-              { input: "NS", resolved: "Nejvyšší soud" },
-              { input: "ÚS", resolved: "Ústavní soud" },
-            ],
-            message: "MODEL ONLY",
-            hint: "Pass court",
-          },
-          {
-            code: "function_words_optional",
-            droppedFunctionWords: ["za", "při"],
-            message: "MODEL ONLY",
-            hint: "Pass strict: true",
-          },
-          {
-            code: "function_words_optional",
-            droppedFunctionWords: ["při", "se"],
-            message: "MODEL ONLY",
-            hint: "Pass strict: true",
-          },
+          { audience: "user", message: "Žádná odpovídající rozhodnutí" },
+          { audience: "user", message: "Žádné výsledky s filtry: Soud" },
+          { audience: "agent", message: "MODEL ONLY: Pass strict: true" },
         ],
       },
     ],
@@ -1365,9 +1346,9 @@ test("search notes use one compact disclosure and hide model-only instructions",
   const notice = app.locator("[data-app-notice]");
   await expect(notice).toHaveCount(1);
   await expect(notice.locator("summary")).toContainText(
-    "NS jako Nejvyšší soud, ÚS jako Ústavní soud",
+    "Žádná odpovídající rozhodnutí",
   );
-  await expect(notice.locator("summary")).toContainText("za, při, se");
+  await expect(notice.locator("summary")).toContainText("Žádné výsledky s filtry: Soud");
   await expect(notice).not.toHaveAttribute("open");
   await expect(notice.locator("ul")).toBeHidden();
   const collapsedHeight = await notice.evaluate(
@@ -1393,9 +1374,8 @@ test("search pages with only model guidance have no notice", async ({
       {
         warnings: [
           {
-            code: "many_required_terms",
+            audience: "agent",
             message: "MODEL ONLY",
-            hint: "Pass fewer terms",
           },
         ],
       },

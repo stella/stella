@@ -1,0 +1,102 @@
+{
+  "title": "Contract notice review",
+  "data": {
+    "formattingLocale": "en-GB",
+    "direction": "ltr",
+    "labels": {
+      "eyebrow": "Legal analysis",
+      "title": "Contract notice review",
+      "scope": "Synthetic example · source-limited analysis, not a finding on applicable law",
+      "test-title": "Decision checklist",
+      "cases-title": "Authorities and relevance",
+      "timeline-title": "Notice timeline",
+      "table-title": "Evidence comparison",
+      "columns": ["Issue", "Available evidence", "Next step"],
+      "empty": "No source material supplied for this section. Add sources to continue the analysis."
+    },
+    "summary": [
+      {
+        "label": "Working conclusion",
+        "value": "Receipt needs confirmation",
+        "detail": "The delivery record alone does not resolve the contractual notice test."
+      },
+      {
+        "label": "Next action",
+        "value": "Compare notice clause and receipt",
+        "detail": "Obtain the signed clause and the recipient's acknowledgement."
+      }
+    ],
+    "checklist": [
+      {
+        "question": "Does the clause require receipt?",
+        "status": "Open",
+        "reason": "The signed notice clause has not been supplied."
+      },
+      {
+        "question": "Is dispatch documented?",
+        "status": "Supported",
+        "reason": "The supplied delivery record identifies a dispatch date."
+      },
+      {
+        "question": "Is the contractual recipient identified?",
+        "status": "Open",
+        "reason": "Compare the address on the record with the signed clause."
+      }
+    ],
+    "cases": [
+      {
+        "linkId": "authority-a",
+        "citation": "Example appellate court · A 12/2024 · paragraph 18 (synthetic)",
+        "proposition": "Distinguish evidence of dispatch from evidence of receipt.",
+        "relevance": "Use to frame the evidence question; governing law and contractual wording still need verification."
+      },
+      {
+        "linkId": "authority-b",
+        "citation": "Example civil court · B 7/2023 · paragraph 9 (synthetic)",
+        "proposition": "Read the agreed notice mechanism before assessing delivery.",
+        "relevance": "Compare the clause's recipient and permitted delivery method."
+      }
+    ],
+    "timeline": [
+      {
+        "date": "2026-09-02",
+        "dateLabel": "2 September 2026",
+        "title": "Notice dispatched",
+        "detail": "Date shown on the supplied delivery record."
+      },
+      {
+        "date": null,
+        "dateLabel": "Date not established",
+        "title": "Receipt",
+        "detail": "Recipient acknowledgement has not been supplied."
+      }
+    ],
+    "comparison": [
+      {
+        "issue": "Permitted method",
+        "evidence": "Delivery record available; signed clause missing",
+        "nextStep": "Obtain the signed notice clause"
+      },
+      {
+        "issue": "Recipient",
+        "evidence": "Address appears on the delivery record",
+        "nextStep": "Compare with the contractual recipient"
+      },
+      {
+        "issue": "Receipt date",
+        "evidence": "Not established by the supplied material",
+        "nextStep": "Request acknowledgement or delivery confirmation"
+      }
+    ]
+  },
+  "links": [
+    {
+      "id": "authority-a",
+      "decisionId": "00000000-0000-4000-8000-000000000011"
+    },
+    {
+      "id": "authority-b",
+      "decisionId": "00000000-0000-4000-8000-000000000012"
+    }
+  ]
+}

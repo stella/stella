@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -21,7 +22,7 @@ const readUserFileContent = createSafeRootHandler(
   async function* ({
     params: { fileId },
     safeDb,
-    session: { activeOrganizationId },
+    session: { activeOrganizationId, id: sourceSessionId },
     user,
     recordAuditEvent,
   }) {
@@ -57,10 +58,13 @@ const readUserFileContent = createSafeRootHandler(
         }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
+          userId: user.id,
+          source: { kind: "request", sessionId: sourceSessionId },
           s3Key: file.s3Key,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,

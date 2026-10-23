@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { LIMITS } from "@/api/lib/limits";
 
 import { cursorInput, nullAsAbsent, uuidInputSchema } from "./input-schemas";
@@ -14,6 +18,20 @@ export const readCaseLawCitationsArgsSchema = nullAsAbsent(
       v.picklist(CITATION_READ_DIRECTIONS),
       v.description(
         "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
+      ),
+    ),
+    doctrine: v.optional(
+      v.pipe(
+        v.picklist(
+          DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated"),
+        ),
+        v.description("Only citations with this reviewed doctrinal finding."),
+      ),
+    ),
+    polarity: v.optional(
+      v.pipe(
+        v.picklist(CITATION_TREATMENTS),
+        v.description("Only citations with this polarity reading."),
       ),
     ),
     limit: v.optional(

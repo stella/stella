@@ -11,8 +11,11 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-/** The predicate of a job that is planned on every non-heavy, non-draft run. */
-export const ALWAYS_PLANNED_PREDICATE = `\${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}`;
+/**
+ * The predicate of a job that is planned on every non-heavy, non-draft run
+ * except an enqueued head's, whose queued tree the merge group validates.
+ */
+export const ALWAYS_PLANNED_PREDICATE = `\${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || (github.event.pull_request.draft != true && github.event.action != 'enqueued')) }}`;
 
 const JOB_PLACEHOLDER = "<job>";
 const OUTPUT_PLACEHOLDER = "<output>";
@@ -24,6 +27,14 @@ const OUTPUT_PLACEHOLDER = "<output>";
  */
 export const FAST_REQUIRED_PREDICATE_ATOMS = [
   "needs.ci-plan.outputs.run_required != 'false'",
+  "needs.ci-plan.result == 'success'",
+  "needs.pr-heavy-gate.result == 'success'",
+  // A repository check waits on the gate only when the plan schedules it; a
+  // push that merges only the base runs its checks ungated.
+  "needs.ci-plan.outputs.pr_heavy_gate_required != 'true'",
+  // A check that waits on the gate past `!cancelled()` still requires its
+  // generated sources explicitly.
+  "needs.generated-sources.result == 'success'",
   "inputs.heavy_only != true",
   "inputs.heavy_only == true",
   "inputs.pr_depth_only != true",

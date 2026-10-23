@@ -18,7 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
   AIJustification,
   AIResult,
@@ -386,7 +386,7 @@ export const gradeTierMatch = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.verdict",
-    modelRole: "pdf",
+    modelTask: "pdf",
     orgAIConfig: orgAIConfig ?? null,
     modelTier: admission.modelTier,
     properties: {
@@ -402,9 +402,10 @@ export const gradeTierMatch = async ({
 
   return await Result.tryPromise({
     try: async (): Promise<TierMatchVerdict> => {
-      const result = await generateTanStackObjectForRole({
+      const result = await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -413,7 +414,7 @@ export const gradeTierMatch = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "pdf",
+          task: "pdf",
           scopeKey: entityVersionId,
         }),
         serviceTier,
@@ -522,7 +523,7 @@ export const gradeTierMatches = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.verdict",
-    modelRole: "pdf",
+    modelTask: "pdf",
     orgAIConfig: orgAIConfig ?? null,
     modelTier: admission.modelTier,
     properties: {
@@ -538,9 +539,10 @@ export const gradeTierMatches = async ({
 
   return await Result.tryPromise({
     try: async (): Promise<ReadonlyMap<string, TierMatchVerdict>> => {
-      const result = await generateTanStackObjectForRole({
+      const result = await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -549,7 +551,7 @@ export const gradeTierMatches = async ({
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "pdf",
+          task: "pdf",
           scopeKey: entityVersionId,
         }),
         serviceTier,
@@ -629,6 +631,11 @@ export type VerdictBatchOutput = {
   // positionMatch verdicts whose LLM call failed: the caller flips their field
   // to "error" so they stay re-runnable.
   erroredPropertyIds: SafeId<"property">[];
+  /** One disposition for every verdict cell claimed by this batch. */
+  settlements: ReadonlyMap<
+    SafeId<"property">,
+    "answered" | "notStated" | "failedTransient"
+  >;
 };
 
 export type ComputeVerdictBatchArgs = {
@@ -693,6 +700,10 @@ export const computeVerdictBatch = async ({
   const gradedVerdicts: GradedVerdict[] = [];
   const skippedPropertyIds: SafeId<"property">[] = [];
   const erroredPropertyIds: SafeId<"property">[] = [];
+  const settlements = new Map<
+    SafeId<"property">,
+    "answered" | "notStated" | "failedTransient"
+  >();
 
   // Every decided verdict lands in both places at once: the cell the table
   // renders, and the record a finding is written from.
@@ -709,6 +720,7 @@ export const computeVerdictBatch = async ({
         fieldContentByPropertyId.get(property.tool.askPropertyId),
       ),
     });
+    settlements.set(property.id, "answered");
   };
 
   type PositionMatchTask = {
@@ -723,6 +735,7 @@ export const computeVerdictBatch = async ({
     );
     if (!conditionsMet) {
       skippedPropertyIds.push(property.id);
+      settlements.set(property.id, "notStated");
       continue;
     }
 
@@ -734,6 +747,7 @@ export const computeVerdictBatch = async ({
       case "extractOnly":
         // No verdict is materialized for an extractOnly position; nothing to do.
         skippedPropertyIds.push(property.id);
+        settlements.set(property.id, "notStated");
         break;
       case "presence":
         recordDeterministic(
@@ -792,6 +806,7 @@ export const computeVerdictBatch = async ({
         });
         if (Result.isError(graded)) {
           erroredPropertyIds.push(property.id);
+          settlements.set(property.id, "failedTransient");
           return;
         }
         const { tier, rationale, matchedRef } = graded.value;
@@ -826,6 +841,7 @@ export const computeVerdictBatch = async ({
           content,
           fileFieldIds: [],
         });
+        settlements.set(property.id, "answered");
       }),
     );
   }
@@ -836,5 +852,6 @@ export const computeVerdictBatch = async ({
     gradedVerdicts,
     skippedPropertyIds,
     erroredPropertyIds,
+    settlements,
   };
 };

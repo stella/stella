@@ -1,10 +1,8 @@
 import { panic } from "better-result";
 
-import {
-  normalizeCountry,
-  normalizeDateBound,
-  normalizeStringList,
-} from "@stll/agent-input";
+import { normalizeCountry } from "@stll/agent-input/country";
+import { normalizeDateBound } from "@stll/agent-input/date-value";
+import { normalizeStringList } from "@stll/agent-input/string-list";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
@@ -18,6 +16,7 @@ type SearchPage = Extract<SearchResults, { results: unknown }>;
 type RowContent =
   | {
       type: "search";
+      match: SearchPage["results"][number]["match"];
       snippet: string | null;
       keywords: SearchPage["results"][number]["keywords"];
       headnote:
@@ -35,7 +34,7 @@ export type ResultRow = Pick<
   | "decisionDate"
   | "caseNumber"
   | "ecli"
-  | "appUrl"
+  | "url"
   | "source_url"
 > &
   RowContent;
@@ -49,7 +48,7 @@ const resultRow = <Content extends RowContent>(
   decisionDate: row.decisionDate,
   caseNumber: row.caseNumber,
   ecli: row.ecli,
-  appUrl: parseLegalCitationHttpUrl(row.appUrl)?.href ?? null,
+  url: parseLegalCitationHttpUrl(row.url)?.href ?? null,
   source_url:
     parseLegalCitationHttpUrl(row.source_url ?? null)?.href ?? undefined,
   ...details,
@@ -79,48 +78,6 @@ const searchHeadnote = (
   }
 };
 
-const warningView = (
-  warning: SearchPage["searches"][number]["warnings"][number],
-) => {
-  switch (warning.code) {
-    case "function_words_optional":
-      return {
-        code: warning.code,
-        droppedFunctionWords: warning.droppedFunctionWords.map((word) => word),
-      } as const;
-    case "filter_read":
-      return {
-        code: warning.code,
-        filter: warning.filter,
-        courtAliases: warning.courtAliases.map(({ input, resolved }) => ({
-          input,
-          resolved,
-        })),
-      } as const;
-    case "filter_dropped":
-      return {
-        code: warning.code,
-        filter: warning.filter,
-        received: warning.received,
-      } as const;
-    case "no_hits_filtered":
-      return {
-        code: warning.code,
-        filters: warning.filters.map((filter) => filter),
-      } as const;
-    case "provision_cited_widely":
-      return {
-        code: warning.code,
-        citingDecisions: warning.citingDecisions,
-      } as const;
-    case "no_hits":
-    case "many_required_terms":
-      return { code: warning.code } as const;
-    default:
-      return panic("Unknown app search warning", warning satisfies never);
-  }
-};
-
 // Only the rendered fields and the next-page handle survive in the view state.
 export const searchView = (data: SearchResults) => {
   if (!("results" in data)) {
@@ -135,6 +92,7 @@ export const searchView = (data: SearchResults) => {
     results: data.results.map((row) =>
       resultRow(row, {
         type: "search",
+        match: row.match,
         // A licence-withheld row carries no excerpt to show.
         snippet: "snippet" in row ? row.snippet : null,
         keywords:
@@ -159,9 +117,11 @@ export const searchView = (data: SearchResults) => {
           },
     nextCursor: data.nextCursor,
     searches: data.searches.map(({ warnings }) => ({
-      warnings: warnings.map(warningView),
+      warnings: warnings.map(({ audience, message }) => ({
+        audience,
+        message,
+      })),
     })),
-    nextStep: data.nextStep,
   } as const;
 };
 
@@ -183,7 +143,7 @@ export const resolveView = (data: ResolveResults) => {
                   court: document.court,
                   courtAbbreviation: null,
                   decisionDate: document.decisionDate,
-                  appUrl: document.readerUrl,
+                  url: document.readerUrl,
                 },
                 { type: "resolve", snippet: null },
               ),
@@ -206,7 +166,7 @@ export const resolveView = (data: ResolveResults) => {
             decisionId,
             identifier,
             label,
-            appUrl: parseLegalCitationHttpUrl(readerUrl)?.href ?? null,
+            url: parseLegalCitationHttpUrl(readerUrl)?.href ?? null,
           }),
         ),
       } as const;

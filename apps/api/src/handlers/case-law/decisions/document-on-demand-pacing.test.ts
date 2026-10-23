@@ -8,6 +8,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   withImmediatePublisherSlot,
@@ -204,7 +205,7 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
         await fetchPublisher("https://obcan.justice.sk/document.pdf", {
           adapterKey,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         });
         return { status: "claimed" };
       },

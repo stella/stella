@@ -1,8 +1,12 @@
 import { fireEvent, render } from "@testing-library/react";
 import { expect, test } from "bun:test";
 
+import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
+import { DECISION_SEARCH_MATCHES } from "@stll/api-contract/search";
+
 import { appFailure, formatAppFailure } from "../shared/app-error";
 import { appLocale } from "../shared/locale";
+import { searchView } from "./model";
 import { CaseLawApp } from "./view";
 import type { CaseLawBridge } from "./view";
 
@@ -69,13 +73,46 @@ test("invalid agent filter input displays a translated hint", () => {
         facets: null,
         nextCursor: null,
         searches: [],
-        nextStep: undefined,
       },
     },
   });
   const ui = render(<CaseLawApp bridge={host.bridge} />);
   expect(ui.getByRole("alert").textContent).toBe("Vyberte platný stát.");
 });
+
+test.each(["cs-CZ", "en", "ar"])(
+  "agent-directed court and grammar notes never render in the %s app",
+  (locale) => {
+    const messages = [
+      'Read court "NS" as "Nejvyšší soud". Pass court "Nejvyšší soud" to search the same way without this note.',
+      "The search did not require these words, which are grammar rather than subject matter: za, vůči. Pass strict: true to require every word, or quote a phrase...",
+    ];
+    const host = fakeBridge({
+      ...baseSnapshot,
+      context: { locale },
+      input: { country: "CZE", queries: ["náhrada škody"] },
+      result: {
+        status: "ready",
+        view: {
+          type: "search",
+          results: [],
+          facets: null,
+          nextCursor: null,
+          searches: messages.map((message) => ({
+            warnings: [{ audience: "agent", message }],
+          })),
+        },
+      },
+    });
+    const ui = render(<CaseLawApp bridge={host.bridge} />);
+    expect(ui.getByRole("main")).toBeDefined();
+    for (const message of messages) {
+      expect(ui.container.textContent).not.toContain(message);
+    }
+    expect(ui.container.textContent).not.toContain("Pass strict: true");
+    expect(ui.container.textContent).not.toContain('Read court "NS"');
+  },
+);
 
 test("resolved decisions preserve citations and open the external link", () => {
   const host = fakeBridge({
@@ -95,7 +132,7 @@ test("resolved decisions preserve citations and open the external link", () => {
             decisionDate: null,
             caseNumber: "25 Cdo 123/2024",
             ecli: "ECLI:CZ:NS:2024:25.CDO.123.2024.1",
-            appUrl: "https://stella.example/decision/1",
+            url: "https://stella.example/decision/1",
             source_url: undefined,
           },
         ],
@@ -119,7 +156,6 @@ test("search dates expose localized labels and calendar controls", async () => {
         facets: null,
         nextCursor: null,
         searches: [],
-        nextStep: undefined,
       },
     },
   });
@@ -150,3 +186,35 @@ test("Arabic results render localized empty-state copy in the host direction", (
     "لم يُعثر على حكم مطابق تمامًا. ابحث في الاجتهاد القضائي بدلًا من ذلك.",
   );
 });
+
+for (const { locale, label, direction } of [
+  { locale: "en", label: "Partial match", direction: "ltr" },
+  { locale: "ar", label: "تطابق جزئي", direction: "rtl" },
+] as const) {
+  test.each(DECISION_SEARCH_MATCHES)(
+    `${locale} results disclose %s matching in the host direction`,
+    (match) => {
+      const host = fakeBridge({
+        ...baseSnapshot,
+        context: { locale },
+        input: { country: "CZE", queries: ["náhrada škody"] },
+        result: {
+          status: "ready",
+          view: searchView({
+            ...APP_SEARCH_FIXTURE,
+            results: APP_SEARCH_FIXTURE.results.map((row) => ({
+              ...row,
+              match,
+            })),
+          }),
+        },
+      });
+      const ui = render(<CaseLawApp bridge={host.bridge} />);
+      expect(ui.getByRole("main").getAttribute("dir")).toBe(direction);
+      const labels = ui.queryAllByText(label);
+      expect(labels).toHaveLength(
+        match === "some_terms" ? APP_SEARCH_FIXTURE.results.length : 0,
+      );
+    },
+  );
+}

@@ -128,6 +128,7 @@ import {
   chatMessageExistsForThread,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
+import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -168,6 +169,11 @@ import {
 import { hasSuggestChangesApprovalResponse } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { resolveChatDocumentClients } from "@/api/handlers/chat/tools/chat-document-clients";
 import {
+  applyChatToolGrants,
+  loadChatToolGrants,
+  type StoredChatToolGrant,
+} from "@/api/handlers/chat/tools/chat-tool-grants";
+import {
   areSubagentToolsRegistered,
   areTemplateAuthoringToolsRegistered,
   areWebResearchToolsRegistered,
@@ -182,6 +188,7 @@ import {
 } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
   LazyExternalMcpToolsLoader,
+  LoadedExternalMcpConnector,
   LoadedExternalMcpTools,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
 import {
@@ -200,6 +207,7 @@ import {
   chatToolNamesForSkills,
   type ChatSkillToolContext,
 } from "@/api/handlers/chat/tools/skill-tool-availability";
+import { scopedExternalConnectors } from "@/api/handlers/chat/tools/source-scope";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -289,7 +297,7 @@ import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import {
-  requireTanStackAIAvailableForRole,
+  requireTanStackAIAvailableForTask,
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
@@ -2085,7 +2093,8 @@ type AssembleTurnSystemPromptOptions = {
     systemSafe: ChatSafePromptLayers;
     systemUntrusted: ChatUntrustedPromptSuffix;
   };
-  externalMcpTools: LoadedExternalMcpTools | undefined;
+  /** The connectors the turn may call, after its source chips. */
+  externalMcpConnectors: readonly LoadedExternalMcpConnector[];
   requestedSkillsPrompt: string;
   sendMode: ChatSendMode;
 };
@@ -2098,7 +2107,7 @@ type AssembleTurnSystemPromptOptions = {
 // in anonymized mode.
 const assembleTurnSystemPrompt = ({
   chatContext,
-  externalMcpTools,
+  externalMcpConnectors,
   requestedSkillsPrompt,
   sendMode,
 }: AssembleTurnSystemPromptOptions) => ({
@@ -2109,9 +2118,7 @@ const assembleTurnSystemPrompt = ({
   systemUntrusted: extendChatUntrustedPromptSuffix(
     chatContext.systemUntrusted,
     [
-      buildExternalMcpSystemHint(
-        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
-      ),
+      buildExternalMcpSystemHint(externalMcpConnectors),
       requestedSkillsPrompt,
     ].map(chatVolatilePromptSection),
   ),
@@ -2219,11 +2226,11 @@ export const createSendMessage = (
         );
       }
 
-      yield* requireTanStackAIAvailableForRole({
+      yield* requireTanStackAIAvailableForTask({
         dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
-        role: "chat",
+        task: "chat",
       });
 
       const hasEnvelopeCorrelationMismatch = (): boolean =>
@@ -2463,6 +2470,11 @@ export const createSendMessage = (
       const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
         async () =>
           await dependencies.loadExternalMcpTools({
+            executionAudit: {
+              recordAuditEvent,
+              safeDb,
+              threadId: body.threadId,
+            },
             nullUnionStrategy: externalMcpNullUnionStrategy,
             organizationId: session.activeOrganizationId,
             permit: grantThirdPartyOutboundPermit(),
@@ -2938,25 +2950,26 @@ export const createSendMessage = (
         // Normal streaming needs external MCP tools. Agent runs reach tools only
         // through their workspace-scoped Stella MCP binding, so loading per-user
         // external connectors here would create unused clients.
-        const externalMcpToolsResult = shouldLoadExternalMcpToolsForStreaming(
+        // Stored approval grants load with them: the API, not the browser,
+        // decides which approval-gated calls run without a prompt, and agent
+        // runs keep every approval gate.
+        const toolSourcesResult = shouldLoadExternalMcpToolsForStreaming(
           body.runMode,
         )
-          ? await Result.tryPromise({
-              try: async () =>
-                await externalMcpToolsLoader.getExternalMcpTools(),
-              catch: (cause) =>
-                new HandlerError({
-                  status: 500,
-                  message: "Failed to discover chat connectors",
-                  cause,
-                }),
+          ? await loadStreamingToolSources({
+              chatThreadId: body.threadId,
+              externalMcpToolsLoader,
+              organizationId: session.activeOrganizationId,
+              safeDb,
+              userId: user.id,
             })
-          : Result.ok(undefined);
-        if (Result.isError(externalMcpToolsResult)) {
+          : Result.ok(NO_STREAMING_TOOL_SOURCES);
+        if (Result.isError(toolSourcesResult)) {
           await lifecycle.failCurrentTurn("connector-discovery", true);
-          return Result.err(externalMcpToolsResult.error);
+          return Result.err(toolSourcesResult.error);
         }
-        const externalMcpTools = externalMcpToolsResult.value;
+        const { chatToolGrants, externalConnectors, externalMcpTools } =
+          toolSourcesResult.value;
 
         // Streaming tools mirror the surface the user is on: only the
         // DOCX file-overlay client knows how to satisfy
@@ -2968,12 +2981,25 @@ export const createSendMessage = (
         // folio-agents `read_document`/`find_text` tools are narrower
         // still — `hasActiveDocxFileClient` only, since Template Studio
         // mounts no watcher to resolve them.
-        const chatTools = getChatTools({
-          ...chatToolContext,
-          modelAdmission,
-          externalTools: externalMcpTools?.tools ?? {},
-          skillMetadata: chatContext.skillMetadata,
-          activeSkillContext: chatContext.activeSkillContext,
+        // Source chips on the latest user message (corpora, registries,
+        // connectors) limit this turn to the sources they name. Read from
+        // history (which holds the incoming message once accepted) so an
+        // approval continuation stays scoped.
+        const sourceScopes = sourceScopesOfLatestUserMessage(
+          latestMessagePlan.messages,
+        );
+        const chatTools = applyChatToolGrants({
+          externalConnectors,
+          grants: chatToolGrants,
+          tools: getChatTools({
+            ...chatToolContext,
+            sourceScopes,
+            externalConnectors,
+            modelAdmission,
+            externalTools: externalMcpTools?.tools ?? {},
+            skillMetadata: chatContext.skillMetadata,
+            activeSkillContext: chatContext.activeSkillContext,
+          }),
         });
         // A named scope narrows the streaming turn to its server-defined
         // allowlist (validation above stays broad so persisted tool parts
@@ -3029,7 +3055,10 @@ export const createSendMessage = (
         }
         const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
           chatContext,
-          externalMcpTools,
+          externalMcpConnectors: scopedExternalConnectors(
+            sourceScopes,
+            externalConnectors,
+          ),
           requestedSkillsPrompt: requestedSkillsPrompt.value,
           sendMode: body.sendMode,
         });
@@ -3391,6 +3420,61 @@ const resolveExternalToolsForValidation = async (
   }
   const loaded = await loader.getExternalMcpTools();
   return loaded.tools;
+};
+
+type StreamingToolSources = {
+  chatToolGrants: readonly StoredChatToolGrant[];
+  externalConnectors: readonly LoadedExternalMcpConnector[];
+  externalMcpTools: LoadedExternalMcpTools | undefined;
+};
+
+const NO_STREAMING_TOOL_SOURCES: StreamingToolSources = {
+  chatToolGrants: [],
+  externalConnectors: [],
+  externalMcpTools: undefined,
+};
+
+/** The user's connector tools and the stored grants that apply to them. */
+const loadStreamingToolSources = async ({
+  chatThreadId,
+  externalMcpToolsLoader,
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  chatThreadId: SafeId<"chatThread">;
+  externalMcpToolsLoader: LazyExternalMcpToolsLoader;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<Result<StreamingToolSources, HandlerError | SafeDbError>> => {
+  const externalMcpTools = await Result.tryPromise({
+    try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
+    catch: (cause) =>
+      new HandlerError({
+        status: 500,
+        message: "Failed to discover chat connectors",
+        cause,
+      }),
+  });
+  if (Result.isError(externalMcpTools)) {
+    return Result.err(externalMcpTools.error);
+  }
+  const chatToolGrants = await loadChatToolGrants({
+    chatThreadId,
+    organizationId,
+    safeDb,
+    userId,
+  });
+  if (Result.isError(chatToolGrants)) {
+    // The database error carries its own failure grade.
+    return Result.err(chatToolGrants.error);
+  }
+  return Result.ok({
+    chatToolGrants: chatToolGrants.value,
+    externalConnectors: externalMcpTools.value.connectors,
+    externalMcpTools: externalMcpTools.value,
+  });
 };
 
 export const shouldLoadExternalMcpToolsForStreaming = (

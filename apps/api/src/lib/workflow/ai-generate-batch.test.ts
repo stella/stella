@@ -45,7 +45,7 @@ describe("buildWorkflowAIAnalyticsProps", () => {
 
     expect(props).toMatchObject({
       feature: "workflow.generate-batch",
-      modelRole: "pdf",
+      modelTask: "pdf",
       properties: {
         entity_version_id: "entity-version-1",
         organization_id: organizationId,

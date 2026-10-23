@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { prDepthJobs } from "./ci-pr-jobs";
+
+export { prDepthJobs } from "./ci-pr-jobs";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -74,33 +78,6 @@ export const mainHeavyJobs = (workflow: unknown) => {
   return gated.filter((job) => !thin.includes(job));
 };
 
-export const prDepthJobs = (workflow: unknown) => {
-  const jobs = record(record(workflow)["jobs"]);
-  const result = record(jobs["ci-result"]);
-  const steps = result["steps"];
-  if (!Array.isArray(steps)) {
-    panic("Expected ci-result steps");
-  }
-  const outcome = steps.find(
-    (step: unknown) => record(step)["name"] === "Evaluate CI outcome",
-  );
-  const env = record(outcome)["env"];
-  const required = record(env)["FAST_REQUIRED"];
-  if (typeof required !== "string") {
-    panic("Expected FAST_REQUIRED JSON");
-  }
-  const fastRequired: unknown = JSON.parse(required);
-  if (
-    !Array.isArray(fastRequired) ||
-    !fastRequired.every((job) => typeof job === "string")
-  ) {
-    panic("Expected FAST_REQUIRED job names");
-  }
-  return fastRequired.filter(
-    (job) => job.startsWith("ci-checks-") || job.startsWith("code-quality-"),
-  );
-};
-
 // These jobs cannot certify the queued tree: they either consume a different
 // revision or duplicate a producer selected for an ordinary merge group.
 export const MERGE_GROUP_EXCEPTIONS = {
@@ -108,6 +85,8 @@ export const MERGE_GROUP_EXCEPTIONS = {
     "Negative proof against the pull request base, rather than the queued tree.",
   "heavy-web-build":
     "Heavy-dispatch artifact producer; web-build produces the merge-group artifact.",
+  "pr-heavy-gate":
+    "Pull request ordering gate; a merge group starts its suites after the plan.",
 } as const;
 
 export const queueAdmittedJobs = (workflow: unknown) => {

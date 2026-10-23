@@ -684,10 +684,10 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 4 |
-| assistant_chat | 17 |
-| auth_plumbing | 32 |
+| assistant_chat | 18 |
+| auth_plumbing | 36 |
 | billing_ui | 1 |
-| chat_thread_ui | 12 |
+| chat_thread_ui | 17 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
@@ -695,11 +695,11 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
-| provider_secret | 33 |
+| provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
 | search_ui | 18 |
-| session_token_exchange | 20 |
+| session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 20 |
 | url_preview | 2 |

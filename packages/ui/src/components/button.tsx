@@ -1,6 +1,6 @@
 "use client";
 
-import type * as React from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
@@ -102,7 +102,8 @@ type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
-  tooltip?: React.ReactNode;
+  icon?: ReactNode;
+  tooltip?: ReactNode;
 } & useRender.ComponentProps<"button">;
 
 function Button({
@@ -111,14 +112,15 @@ function Button({
   size,
   render,
   loading,
+  icon,
   children,
   disabled,
   tooltip,
   ...props
 }: ButtonProps) {
-  const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
-    render ? undefined : "button";
-
+  const typeValue: ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
+    ? undefined
+    : "button";
   // Same value `renderTooltipTrigger` mounts below, so the disposition and the
   // popup cannot disagree about whether this button has a tooltip.
   const tooltipContent = tooltip ?? props["aria-label"] ?? props.title;
@@ -131,18 +133,21 @@ function Button({
     disposition === BUTTON_DISPOSITION.accessibleDisabled;
 
   const defaultProps = {
-    children: loading ? (
+    children: (
       <>
-        <Loader
-          className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
-          data-slot="button-loader"
-          size="sm"
-          variant="decorative"
-        />
+        {loading ? (
+          <Loader
+            animation="none"
+            className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
+            data-slot="button-loader"
+            size="sm"
+            variant="decorative"
+          />
+        ) : (
+          icon
+        )}
         {children}
       </>
-    ) : (
-      children
     ),
     className: cn(
       disposition === BUTTON_DISPOSITION.enabled &&
@@ -150,9 +155,6 @@ function Button({
         variant !== "link" &&
         buttonPressClass,
       buttonVariants({ className, size, variant }),
-      // While loading, the loader is the button's only icon: a caller's own
-      // leading icon would otherwise sit beside it as a second spinner.
-      loading && "[&_svg:not([data-slot=button-loader]_svg)]:hidden",
       isAccessibleDisabled && buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",
