@@ -295,6 +295,10 @@ export const templates = p.pgTable(
     p.unique("templates_id_org_unq").on(table.id, table.organizationId),
     storedFileScanStateCheck("templates_scan_state_check", table.scanState),
     p.check(
+      "templates_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
+    ),
+    p.check(
       "templates_origin_type_values_check",
       sql`${table.originType} IN (${sql.join(TEMPLATE_ORIGIN_TYPE_SQL_VALUES, sql`, `)})`,
     ),
@@ -479,6 +483,10 @@ export const templateVersions = p.pgTable(
     storedFileScanStateCheck(
       "template_versions_scan_state_check",
       table.scanState,
+    ),
+    p.check(
+      "template_versions_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
     ),
     ...orgPolicies(),
   ],
