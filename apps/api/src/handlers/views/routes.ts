@@ -19,14 +19,17 @@ export const viewsRoute = new Elysia({
   })
   .get("/", readViews.handler, {
     permissions: readViews.config.permissions,
+    accountAccess: readViews.config.accountAccess,
   })
   .put("/", createView.handler, {
     body: createView.config.body,
     permissions: createView.config.permissions,
+    accountAccess: createView.config.accountAccess,
   })
   .post("/reorder", reorderViews.handler, {
     body: reorderViews.config.body,
     permissions: reorderViews.config.permissions,
+    accountAccess: reorderViews.config.accountAccess,
   })
   .group("/view/:viewId", (app) =>
     app
@@ -34,19 +37,23 @@ export const viewsRoute = new Elysia({
         body: updateView.config.body,
         params: updateView.config.params,
         permissions: updateView.config.permissions,
+        accountAccess: updateView.config.accountAccess,
       })
       .post("/convert", convertView.handler, {
         body: convertView.config.body,
         params: convertView.config.params,
         permissions: convertView.config.permissions,
+        accountAccess: convertView.config.accountAccess,
       })
       .get("/export", exportTableView.handler, {
         params: exportTableView.config.params,
         permissions: exportTableView.config.permissions,
+        accountAccess: exportTableView.config.accountAccess,
         query: exportTableView.config.query,
       })
       .delete("/", deleteView.handler, {
         params: deleteView.config.params,
         permissions: deleteView.config.permissions,
+        accountAccess: deleteView.config.accountAccess,
       }),
   );
