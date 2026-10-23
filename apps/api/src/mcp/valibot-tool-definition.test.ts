@@ -1,4 +1,4 @@
-import { describe, expect, test, expectTypeOf } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 

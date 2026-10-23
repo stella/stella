@@ -6,11 +6,11 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
+  AiActionIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   FileTextIcon,
   UploadIcon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";

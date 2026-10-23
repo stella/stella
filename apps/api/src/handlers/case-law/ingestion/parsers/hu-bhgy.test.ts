@@ -3,8 +3,8 @@ import fc from "fast-check";
 
 import type {
   BlockContent,
-  Footnote,
   Document as FolioDocument,
+  Footnote,
   Paragraph,
   ParagraphAlignment,
 } from "@stll/docx-core/model";
@@ -33,22 +33,22 @@ import {
   parseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import {
-  readRtfString,
   readRtf as readRtfDocument,
+  readRtfString,
 } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
-  VISIBLE_RUN_CASES,
   VISIBLE_FIELD_DOCUMENT,
+  VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 
 import {
-  noteTableRtf,
-  furnitureRtf,
-  NOTE_PATHS,
-  LINE_BOUNDARIES,
-  notePathDocument,
   assertNotePath,
+  furnitureRtf,
+  LINE_BOUNDARIES,
+  NOTE_PATHS,
+  notePathDocument,
+  noteTableRtf,
 } from "./document-note-paths.fixtures";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";
@@ -291,6 +291,388 @@ describe("the decision's own date", () => {
     expect(huDecisionDateFrom("Rendelkező rész")).toBeUndefined();
     expect(huDecisionDateFrom("Budapest, 2025. brumaire 1.")).toBeUndefined();
   });
+});
+
+type HungarianDateParts = {
+  year: number;
+  month: number;
+  day: number;
+};
+
+const spelledHungarianDate = ({ year, month, day }: HungarianDateParts) => {
+  const monthName =
+    month >= 1 && month <= 12
+      ? new Intl.DateTimeFormat("hu-HU", {
+          month: "long",
+          timeZone: "UTC",
+        }).format(new Date(Date.UTC(2000, month - 1, 1)))
+      : "ismeretlen";
+  return { year, monthName, day };
+};
+
+const HUNGARIAN_CLOSING_SHAPES = [
+  {
+    name: "month marker",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `Budapest, ${year}. ${monthName} hó ${day}. napján`,
+  },
+  {
+    name: "year and month markers",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `Budapest, ${year}. év ${monthName} hó ${day}. napján`,
+  },
+  {
+    name: "adjectival year and month markers",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `Budapest, ${year}. évi ${monthName} hó ${day}. napján`,
+  },
+  {
+    name: "year marker",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `Budapest, ${year}. év ${monthName} ${day}. napján`,
+  },
+  {
+    name: "omitted place",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `, ${year}. ${monthName} ${day}.`,
+  },
+  {
+    name: "short lowercase place",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `őr, ${year}. ${monthName} ${day}.`,
+  },
+  {
+    name: "anonymized place with a digit",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `Helység3, ${year}. ${monthName} ${day}.`,
+  },
+  {
+    name: "parenthesized anonymized place",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `(helység), ${year}. ${monthName} ${day}.`,
+  },
+  {
+    name: "anonymized place without a separator",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `helység neve ${year}. ${monthName} hó ${day}. napján`,
+  },
+  {
+    name: "indented closing",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `${"\u00a0".repeat(7)} Budapest, ${year}. ${monthName} ${day}. `,
+  },
+  {
+    name: "bare date with an inflected day",
+    render: ({
+      year,
+      monthName,
+      day,
+    }: ReturnType<typeof spelledHungarianDate>) =>
+      `${year}. ${monthName} ${day}-án`,
+  },
+] as const;
+
+const closingDocument = (line: string, boundary: "paragraph" | "soft-break") =>
+  boundary === "paragraph"
+    ? documentOf([
+        { text: "Indokolás" },
+        { text: "[1] A bíróság döntése." },
+        { text: line },
+        { text: "Dr. Példa Anna s.k." },
+      ])
+    : bodyOf([
+        paragraphOf({ text: "Indokolás" }),
+        softBrokenParagraph([
+          "[1] A bíróság döntése.",
+          line,
+          "Dr. Példa Anna s.k.",
+        ]),
+      ]);
+
+describe("Hungarian closing date shapes", () => {
+  for (const shape of HUNGARIAN_CLOSING_SHAPES) {
+    test.each(["paragraph", "soft-break"] as const)(
+      `${shape.name} states the decision date across a %s boundary`,
+      (boundary) => {
+        const line = shape.render(
+          spelledHungarianDate({ year: 2024, month: 6, day: 13 }),
+        );
+        const parsed = parseDocument(closingDocument(line, boundary));
+        expect(parsed.decisionDate).toBe("2024-06-13");
+        expect(parsed.documentAst.metadata.decisionDate).toBe("2024-06-13");
+      },
+    );
+  }
+
+  test("a closing formula ends a continued history header", () => {
+    const parsed = parse([
+      { text: "A bíróság" },
+      {
+        text: "A másodfokú bíróság neve és a jogerős határozat száma: Példa Törvényszék, 1.P.20.001/2023/2.",
+      },
+      { text: "[1] A bíróság döntése." },
+      { text: "Pécs, 2024. február 4." },
+      { text: "Dr. Példa Anna s.k. bíró" },
+    ]);
+    expect(parsed.decisionDate).toBe("2024-02-04");
+  });
+
+  test.each([
+    ["timestamp reference", "város, időbélyegző szerint."],
+    [
+      "electronic timestamp reference",
+      "Budapest, elektronikus dátumbélyegző szerint",
+    ],
+    ["empty date placeholder", "Dátum"],
+    ["case summary citation", "(Kúria Kfv.IV.38.001/2020.)"],
+    ["administrative attachment date", "helység1. 2024. 03.25."],
+  ])("%s states no court decision date", (_name, line) => {
+    expect(
+      parseDocument(closingDocument(line, "paragraph")).decisionDate,
+    ).toBeUndefined();
+  });
+
+  test("a certification in separate paragraphs does not date the decision", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[1] A bíróság döntése." },
+      { text: "A kiadmány hiteléül:" },
+      { text: "Budapest, 2024. június 13." },
+      { text: "Dr. Példa Anna s.k." },
+    ]);
+    expect(parsed.decisionDate).toBeUndefined();
+  });
+
+  test("a certification marker after a soft break excludes subsequent dated paragraphs", () => {
+    const parsed = parseDocument(
+      bodyOf([
+        paragraphOf({ text: "Indokolás" }),
+        softBrokenParagraph(["[1] A bíróság döntése.", "A kiadmány hiteléül:"]),
+        paragraphOf({ text: "Budapest, 2024. június 13." }),
+        paragraphOf({ text: "Dr. Példa Anna s.k." }),
+      ]),
+    );
+    expect(parsed.decisionDate).toBeUndefined();
+  });
+
+  test("a bare date without a following signature does not date the decision", () => {
+    expect(
+      parse([
+        { text: "Indokolás" },
+        { text: "2024. június 13-án" },
+        { text: "Az elsőfokú bíróság tárgyalást tartott." },
+      ]).decisionDate,
+    ).toBeUndefined();
+  });
+
+  test.each(["bíró", "előadó bíró", "tanácselnök", "a tanács elnöke"])(
+    "a bare date before a signature bearing the %s role dates both paragraph layouts",
+    (role) => {
+      const signature = `Dr. Példa Anna s.k. ${role}`;
+      const paragraph = parse([
+        { text: "Indokolás" },
+        { text: "[1] A bíróság döntése." },
+        { text: "2024. június 13-án" },
+        { text: signature },
+      ]);
+      const softBreak = parseDocument(
+        bodyOf([
+          paragraphOf({ text: "Indokolás" }),
+          softBrokenParagraph([
+            "[1] A bíróság döntése.",
+            "2024. június 13-án",
+            signature,
+          ]),
+        ]),
+      );
+
+      expect(paragraph.decisionDate).toBe("2024-06-13");
+      expect(softBreak.decisionDate).toBe("2024-06-13");
+    },
+  );
+
+  test("a soft-broken paragraph can open with a bare decision date", () => {
+    const parsed = parseDocument(
+      bodyOf([
+        paragraphOf({ text: "Indokolás" }),
+        softBrokenParagraph(["2024. június 13-án", "Dr. Példa Anna s.k. bíró"]),
+      ]),
+    );
+
+    expect(parsed.decisionDate).toBe("2024-06-13");
+    expect(parsed.documentAst.metadata.decisionDate).toBe("2024-06-13");
+  });
+});
+
+const isGregorianDay = ({ year, month, day }: HungarianDateParts) => {
+  if (month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  if (month === 2) {
+    return day <= (leap ? 29 : 28);
+  }
+  const lastDay = [4, 6, 9, 11].includes(month) ? 30 : 31;
+  return day <= lastDay;
+};
+
+test("Hungarian decision dates are real calendar dates stated in their source", () => {
+  assertProperty(
+    "Hungarian decision dates are real calendar dates stated in their source",
+    fc.property(
+      fc.record({
+        year: fc.oneof(
+          fc.integer({ min: 1900, max: 2100 }),
+          fc.constantFrom(1900, 2000, 2024, 2100),
+        ),
+        month: fc.integer({ min: 0, max: 13 }),
+        day: fc.oneof(
+          fc.integer({ min: 0, max: 32 }),
+          fc.constantFrom(29, 30, 31),
+        ),
+      }),
+      (parts) => {
+        const iso = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+        const expected = isGregorianDay(parts) ? iso : undefined;
+        const sourceDates = new Set(expected === undefined ? [] : [expected]);
+        const numeric = `${parts.year}.${parts.month}.${parts.day}.`;
+        expect(huDecisionDateFrom(numeric)).toBe(expected);
+        for (const shape of HUNGARIAN_CLOSING_SHAPES) {
+          const line = shape.render(spelledHungarianDate(parts));
+          for (const boundary of ["paragraph", "soft-break"] as const) {
+            const parsed = parseDocument(closingDocument(line, boundary));
+            expect(parsed.decisionDate).toBe(expected);
+            if (parsed.decisionDate !== undefined) {
+              expect(sourceDates.has(parsed.decisionDate)).toBe(true);
+              const [year, month, day] = parsed.decisionDate
+                .split("-")
+                .map(Number);
+              expect(year).toBeDefined();
+              expect(month).toBeDefined();
+              expect(day).toBeDefined();
+              if (
+                year !== undefined &&
+                month !== undefined &&
+                day !== undefined
+              ) {
+                expect(isGregorianDay({ year, month, day })).toBe(true);
+              }
+            }
+          }
+          const note = parse(
+            [
+              { text: "Indokolás" },
+              { text: "[1] A bíróság döntése.", footnotes: [1] },
+            ],
+            [
+              {
+                type: "footnote",
+                id: 1,
+                content: [
+                  paragraphOf({ text: line }),
+                  paragraphOf({ text: "Dr. Példa Anna s.k." }),
+                ],
+              },
+            ],
+          );
+          expect(note.decisionDate).toBeUndefined();
+          const softBrokenNote = parse(
+            [
+              { text: "Indokolás" },
+              { text: "[1] A bíróság döntése.", footnotes: [1] },
+            ],
+            [
+              {
+                type: "footnote",
+                id: 1,
+                content: [
+                  softBrokenParagraph([
+                    "Példa megjegyzés.",
+                    line,
+                    "Dr. Példa Anna s.k.",
+                  ]),
+                ],
+              },
+            ],
+          );
+          expect(softBrokenNote.decisionDate).toBeUndefined();
+          const certification = parse([
+            { text: "Indokolás" },
+            { text: "[1] A bíróság döntése." },
+            { text: "A kiadmány hiteléül:" },
+            { text: line },
+            { text: "Dr. Példa Anna s.k." },
+          ]);
+          expect(certification.decisionDate).toBeUndefined();
+          const softBrokenCertification = parseDocument(
+            bodyOf([
+              paragraphOf({ text: "Indokolás" }),
+              softBrokenParagraph([
+                "[1] A bíróság döntése.",
+                "A kiadmány hiteléül:",
+                line,
+                "Dr. Példa Anna s.k.",
+              ]),
+            ]),
+          );
+          expect(softBrokenCertification.decisionDate).toBeUndefined();
+          const continuedCertification = parseDocument(
+            bodyOf([
+              paragraphOf({ text: "Indokolás" }),
+              softBrokenParagraph([
+                "[1] A bíróság döntése.",
+                "A kiadmány hiteléül:",
+              ]),
+              paragraphOf({ text: line }),
+              paragraphOf({ text: "Dr. Példa Anna s.k." }),
+            ]),
+          );
+          expect(continuedCertification.decisionDate).toBeUndefined();
+        }
+      },
+    ),
+    { numRuns: 100 },
+  );
 });
 
 describe("the decision's kind", () => {

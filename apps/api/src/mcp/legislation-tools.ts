@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
@@ -51,8 +51,6 @@ import {
 } from "@/api/mcp/provision-text-window";
 import type { StatuteDocument } from "@/api/mcp/public-law-handlers";
 import {
-  isLegislationSearchSuccess,
-  isStatuteDocument,
   defaultListStatuteVersionsHandler,
   defaultReadLegislationProvisionVersions,
   defaultReadProvisionHistoryHandler,
@@ -60,6 +58,8 @@ import {
   defaultResolveStatuteExpression,
   defaultResolveStatuteWorkVersion,
   defaultSearchLegislationHandler,
+  isLegislationSearchSuccess,
+  isStatuteDocument,
 } from "@/api/mcp/public-law-handlers";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import type {
@@ -70,29 +70,29 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   buildLegislationDocumentAppUrl,
-  legalCitationLinkFields,
   countryInputSchema,
   countryNormalization,
-  ELI_NORMALIZATION,
-  FILTER_NORMALIZATION,
   cursorInput,
   DEFAULT_SEARCH_LIMIT,
+  ELI_NORMALIZATION,
   errorResult,
+  FILTER_NORMALIZATION,
   handlerStatusOf,
+  invalidCursorResult,
   ISO_DATE_SCHEMA,
   isToolErrorResult,
-  MCP_CONTENT_MAX_CHARS,
+  legalCitationLinkFields,
   mapValibotIssues,
+  MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
   searchIndexUnavailableResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
-  validationErrorResult,
   uuidInputSchema,
+  validationErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 import {

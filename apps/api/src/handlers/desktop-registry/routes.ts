@@ -6,8 +6,8 @@ import renew from "@/api/handlers/desktop-registry/renew";
 import request from "@/api/handlers/desktop-registry/request";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import {
-  DESKTOP_REGISTRY_ROUTE_PREFIX,
   DESKTOP_REGISTRY_REQUEST_ROUTE,
+  DESKTOP_REGISTRY_ROUTE_PREFIX,
   desktopRegistryRequestHeaders,
 } from "@/api/lib/business-registries/desktop/request-contract";
 
@@ -29,4 +29,5 @@ export const desktopRegistryRoute = new Elysia({
   .post("/grant", grant.handler, {
     body: grant.config.body,
     permissions: grant.config.permissions,
+    accountAccess: grant.config.accountAccess,
   });

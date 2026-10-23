@@ -169,7 +169,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law within one country. `queries` merges phrasings of one question; matchedQueries names those behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
@@ -327,7 +327,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5796,6 +5796,7 @@
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to describe, as returned by list_capabilities (e.g. \"time-entries.create\")."
         }
       }
@@ -5822,6 +5823,7 @@
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
@@ -5876,6 +5878,7 @@
         "capability": {
           "type": "string",
           "minLength": 1,
+          "maxLength": 128,
           "description": "Capability id to invoke. Use an id list_capabilities returned."
         },
         "input": {
@@ -5917,6 +5920,34 @@
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["web", "open"],
+      "excluded": true,
+      "scope": "read"
+    },
+    "name": "mint_web_handoff",
+    "description": "App-only: refresh a web link when the user opens it. Returns a plain link when sign-in handoff is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Web URL the user chose to open."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Open web link",
+      "readOnlyHint": false,
+      "idempotentHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
     }
   }
 ]

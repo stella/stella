@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 // Every module that reads a file to display it must sit under
 // RecoverableViewerBoundary, so no viewer can dead-end on a failed load.

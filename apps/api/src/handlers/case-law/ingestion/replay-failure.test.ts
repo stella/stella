@@ -19,7 +19,7 @@ test("stored payload budgets and timeout causes produce stable content-free clas
   const timeout = new TimeoutError({
     message: "fixture object read timed out",
     label: "fixture/raw",
-    timeoutMs: 10,
+    timeoutMs: 10, // timeout under test
   });
   for (const cause of [
     timeout,

@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
-import { dependencyScope, type DependencyScope } from "./ci-dependency-scope";
+import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
   requiresDesktopBrowser,
   requiresLandingBuild,
@@ -209,8 +209,6 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "scripts/ci-windows-dry-run-*",
   "scripts/wasm-*",
   "scripts/test-wasm-offline.sh",
-  "scripts/run-oxfmt.ts",
-  "scripts/check-format-environment.ts",
   "scripts/ci-install*",
   "scripts/build-updater-manifest.sh",
   "scripts/promote-desktop-release.sh",
@@ -929,16 +927,35 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "web_api_types_required", ({ full, p }) =>
       bool(
         full ||
+          // The web API types generator's complete cached input contract.
           p([
-            "apps/api/*",
-            "apps/web/src/*",
-            "apps/web/package.json",
-            "apps/web/tsconfig*.json",
-            "packages/*",
-            "scripts/generated-files.ts",
+            "apps/api/src/*",
+            "apps/api/scripts/*",
+            "apps/api/package.json",
+            "apps/api/tsconfig.json",
             "patches/*",
+            "apps/web/package.json",
+            "apps/web/src/generated/api-routes.gen.ts",
+            "packages/ai-catalog/*",
+            "packages/api-contract/*",
+            "packages/boe/*",
+            "packages/cli/*",
+            "packages/business-registries/*",
+            "packages/chat-limits/*",
+            "packages/country-codes/*",
+            "packages/errors/*",
+            "packages/infosoud/*",
+            "packages/money/*",
+            "packages/permissions/*",
+            "packages/portable-path/*",
+            "packages/scripts/*",
+            "packages/sha256/*",
+            "packages/skills/*",
+            "packages/template-packs/*",
+            "packages/time/*",
+            "packages/typescript-config/base.json",
+            "scripts/generated-files.ts",
             "types/*",
-            "tsconfig*.json",
             "bun.lock",
             "bunfig.toml",
             "package.json",

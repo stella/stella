@@ -9,13 +9,12 @@
       "noOtherSessions": "Nav citu aktīvu sesiju",
       "revokeOtherSessions": "Izrakstīties no citām ierīcēm",
       "revokeOtherSessionsConfirm": "Tiks beigtas visas sesijas, izņemot pašreizējo.",
+      "signedInFrom": "Pierakstīšanās no {clientName}",
       "unknownDevice": "Nezināma ierīce"
     }
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Atpakaļ uz lietotni",
-    "billingAndUsage": "Norēķini un lietojums",
     "billingProfiles": "Norēķinu profili",
     "deleteDescription": "Neatgriezeniski dzēsiet šo organizāciju un tās datus. Šo darbību nevar atsaukt.",
     "deleteOrganization": "Dzēst organizāciju",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Pamest organizāciju",
     "leaveRefusedOnlyOwner": "Jūs esat vienīgais īpašnieks. Pirms aiziešanas padariet par īpašnieku citu dalībnieku.",
     "modelsAndProviders": "Modeļi un pakalpojumu sniedzēji",
-    "noPlan": "Nav aktīva plāna",
     "organizationDeleted": "Organizācija ir dzēsta.",
     "organizationId": "Organizācijas ID",
     "organizationLeft": "Jūs pametāt organizāciju.",
-    "overviewDescription": "Pārvaldiet organizāciju, cilvēkus un rīkus.",
-    "people": "Cilvēki",
     "planAndUsage": "Plāns un lietojums",
     "title": "Organizācijas administrēšana",
     "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistents prasīs šo adresi",
-    "copiedToast": "Norādījumi nokopēti. Ielīmējiet tos tērzēšanā ar asistentu.",
     "copy": "Nokopējiet tam norādījumus",
     "description": "Jautājiet Claude vai ChatGPT par savām lietām un dokumentiem. Izvēlieties asistentu, lai atvērtu īsu ceļvedi; tas aizņem apmēram minūti.",
     "instructions": "Pievieno mani stella, manai juridiskajai darbvietai. Izpildi sadaļu “Instructions for AI agents” vietnē {guideUrl} un izmanto šo servera adresi: {mcpUrl}",
     "openGuide": "Atvērt ceļvedi: {assistant}",
+    "pasteHint": "Ielīmējiet tos tērzēšanā ar asistentu.",
     "selfSetupHint": "Izmantojat Claude Code vai Codex?",
     "title": "Izmantojiet stella savā AI asistentā"
   },
@@ -142,6 +138,8 @@
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
       "title": "Neizdevās jūs pieslēgt"
     },
+    "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",
+    "handoffTitle": "Turpināt uz stella",
     "headline": "Skaidrība ikvienā lietā.",
     "invitation": {
       "declined": "Uzaicinājums noraidīts",
@@ -162,6 +160,7 @@
     },
     "professionalUseStatement": "Izveidojot kontu, jūs apliecināt, ka izmantojat stella profesionāliem mērķiem, un saprotat, ka stella ir rīks juridiskajiem speciālistiem un neaizstāj juridisku konsultāciju.",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
+    "reauthenticationRequired": "Lai turpinātu šo darbību, pierakstieties vēlreiz.",
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
@@ -855,7 +854,6 @@
         "unavailable": "Šim nolēmumam AI analīze nav pieejama."
       },
       "generate": "Sagatavot AI kopsavilkumus",
-      "holdingAnchor": "Pāriet uz rindkopu",
       "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
@@ -932,13 +930,10 @@
     },
     "coverage": {
       "completeness": "Pilnīgums",
-      "countedOn": "Saskaitīts {date}",
       "courtsHeading": "Pēc tiesas",
       "courtsUnavailable": "Sadalījums pēc tiesām pašlaik nav pieejams.",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
-      "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
-      "gapStatusUnknown": "Iztrūkumu statuss nav zināms",
       "generatedAt": "Dati uz {date}",
       "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
@@ -959,7 +954,8 @@
       "searchable": "Meklējami",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
+      "unreadListingPeriods": "Nenolasītie saraksta periodi"
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "decisionTypes": {
@@ -1111,6 +1107,8 @@
         "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
         "message": "Nekas neatbilst izvēlētajiem filtriem."
       },
+      "partialMatch": "Daļēja atbilstība",
+      "partialMatches": "Daļējas atbilstības vaicājumam: <bdi>{query}</bdi>",
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
@@ -1148,6 +1146,7 @@
       "judges": "Tiesneši",
       "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
+      "paragraphReference": "{number}. rindkopa",
       "popularName": "Populārais nosaukums",
       "portraitCredit": "Portretu avots: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1393,7 @@
     "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
     "credentialSendTitle": "Šajā ziņojumā var būt piekļuves informācija",
     "deleteThread": "Dzēst sarunu",
+    "diagramUnavailable": "Šo diagrammu neizdevās attēlot. Tās pirmkods ir redzams zemāk.",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",
       "autoDirectDescription": "AI labojumi tiek lietoti uzreiz, tieši pārrakstot dokumentu (bez izmaiņu izsekošanas).",
@@ -2706,6 +2706,7 @@
       "aiConfigModelInvalid": "AI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
       "aiConfigProviderInvalid": "AI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "AI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
+      "aiDeadlineExceeded": "AI neatbildēja laikā. Mēģiniet vēlreiz pēc brīža.",
       "aiOutputInvalid": "AI atbilde bija neparedzētā formātā. Mēģiniet vēlreiz.",
       "aiOutputModerated": "AI pakalpojumu sniedzējs moderēja izvadi. Pārfrāzējiet pieprasījumu vai izvēlieties citu modeli.",
       "aiProviderTaskUnsupported": "Konfigurētais AI pakalpojumu sniedzējs nevar izpildīt šo uzdevumu. Izvēlieties tādu, kas to spēj.",
@@ -4195,7 +4196,9 @@
     "prompt": "Ko jūs meklējat?",
     "recent": "Nesenie",
     "recentCasesFilter": "Nolēmumi",
+    "recentLoadFailed": "Neizdevās ielādēt nesenās darbības.",
     "recentSearchFilter": "Meklējumi",
+    "recentUpdateFailed": "Neizdevās atjaunināt nesenās darbības.",
     "recentlyInForce": "Nesen stājās spēkā",
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
@@ -4939,7 +4942,7 @@
       "description": "Izmantojiet stella no sava AI asistenta un redziet, kam ir piekļuve jūsu kontam.",
       "developerDescription": "Servera adreses un komandrindas rīks tehniskiem iestatījumiem.",
       "developerTitle": "Izstrādātāju piekļuve",
-      "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā.",
+      "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā. Tiks izbeigtas arī pārlūkprogrammas sesijas, kas izveidotas, izmantojot šo savienojumu.",
       "disconnectConfirmTitle": "Atvienot {clientName}?",
       "disconnectSuccess": "{clientName} atvienots",
       "integrationsDescription": "Ārējie pakalpojumi, ko AI var izmantot jūsu vietā, piemēram, dokumentu krātuve.",
@@ -5992,6 +5995,7 @@
       "downloadFailed": "Lejupielāde neizdevās",
       "downloadPdf": "Lejupielādēt kā PDF",
       "downloadSearchablePdf": "Meklējams PDF",
+      "emptyFile": "Fails ir tukšs.",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",

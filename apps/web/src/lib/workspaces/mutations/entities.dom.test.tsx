@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test, spyOn } from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceEntity } from "@/lib/types";

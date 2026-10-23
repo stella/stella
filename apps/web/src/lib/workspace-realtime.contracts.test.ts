@@ -1,14 +1,14 @@
 import {
   QueryClient,
-  QueryObserver,
-  queryOptions,
   type QueryKey,
   type QueryMeta,
+  QueryObserver,
+  queryOptions,
 } from "@tanstack/react-query";
 import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import {
@@ -39,9 +39,9 @@ import {
   applyResourceQueryActions,
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
+  RESOURCE_MUTATION_CONTRACTS,
   resourceMutation,
   resourceQueryOptions,
-  RESOURCE_MUTATION_CONTRACTS,
 } from "@/lib/workspace-realtime";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import {
@@ -49,10 +49,10 @@ import {
   entityViewRowsOptions,
 } from "@/lib/workspaces/queries/entity-views";
 import {
-  invoicesKeys,
   invoiceByIdOptions,
   invoicePrefillOptions,
   invoicesInfiniteOptions,
+  invoicesKeys,
 } from "@/lib/workspaces/queries/invoices";
 import {
   timeEntriesKeys,

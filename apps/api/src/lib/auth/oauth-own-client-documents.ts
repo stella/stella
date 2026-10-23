@@ -2,8 +2,8 @@ import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 import {
   buildCliClientMetadataDocument,
-  cliClientMetadataUrl,
   type CliClientMetadataDocument,
+  cliClientMetadataUrl,
 } from "@stll/cli/client-metadata-document";
 
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";

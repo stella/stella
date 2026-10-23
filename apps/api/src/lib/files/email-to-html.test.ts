@@ -14,14 +14,14 @@ import {
   EmailParseError,
   emailToHtml,
   emailToPreview,
+  isEmailAttachmentPreviewable,
+  type ParsedEmail,
   parsedEmailToText,
   parseEmail,
-  type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
-  sanitizeEmailBodyHtml,
   resolveEmailAttachmentMimeType,
-  isEmailAttachmentPreviewable,
+  sanitizeEmailBodyHtml,
 } from "./email-to-html";
 
 const toArrayBuffer = (value: string): ArrayBuffer => {
@@ -822,7 +822,7 @@ describe("renderEmailHtml", () => {
       "Visible beforeHidden option visible after",
     );
     expect(preview.bodyHtml).toContain("Closed dialog");
-    expect(preview.bodyHtml).toContain("Template content");
+    expect(preview.bodyHtml).not.toContain("Template content");
     expect(preview.bodyHtml).toContain("Closed popover");
     expect(preview.bodyHtml).toContain("Hidden option");
   });

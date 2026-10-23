@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
-  createDocx,
-  createEmptyDocument,
   type CompareDocxError,
   type CompareResult,
+  createDocx,
+  createEmptyDocument,
 } from "@stll/folio-core";
 import { FolioDocxReviewer, parseDocx } from "@stll/folio-core/server";
 
@@ -227,7 +227,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "timed out",
           label: options.label,
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return await operation(new AbortController().signal);
@@ -239,7 +239,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "delivery failed",
           label: "download",
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return {

@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import { is, sql } from "drizzle-orm";
 import {
-  getTableConfig,
-  PgRole,
   foreignKey,
-  PgTable,
+  getTableConfig,
   pgPolicy,
+  PgRole,
+  PgTable,
   pgTable,
   text,
   uuid,

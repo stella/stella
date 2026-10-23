@@ -23,9 +23,9 @@ import {
   documentPropertiesQueryKey,
   fileContentByFieldQueryRoot,
   fileContentQueryKey,
+  type FileMetadataQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
-  type FileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
 import { fetchStorageArrayBuffer } from "@/lib/files/storage-fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";

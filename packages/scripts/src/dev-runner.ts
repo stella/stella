@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Result, panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
@@ -24,9 +24,9 @@ import { childExitStatus } from "./child-exit-status";
 import {
   dockerCommand,
   DockerEndpointError,
-  resolveInstalledDevDockerKeeper,
   type DockerTarget,
   resolveDockerTarget,
+  resolveInstalledDevDockerKeeper,
 } from "./dev-docker";
 import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
@@ -38,9 +38,9 @@ import {
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
-  MAX_PORT_OFFSET,
   type DevMode,
   type InfraOffsetSetting,
+  MAX_PORT_OFFSET,
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {
@@ -2026,6 +2026,9 @@ const buildApiScriptStep = ({
 // file then fails the API's startup check instead of serving another corpus.
 const SEEDED_STACK_LEGAL_SEARCH_PROVIDER = "pg-fts";
 
+const SEEDED_ORGANIZATION_GRANTS_PRELOAD =
+  "./scripts/grant-seeded-organization-features.ts";
+
 const withSeededStackSearch = (env: NodeJS.ProcessEnv) => ({
   ...env,
   LEGAL_SEARCH_PROVIDER: SEEDED_STACK_LEGAL_SEARCH_PROVIDER,
@@ -2155,6 +2158,11 @@ export const buildPersistentSteps = ({
   // included, and cannot exclude paths. Seeded stacks are driven by agents that
   // restart them explicitly, so only interactive dev pays for hot reload.
   const watchArgs = seeded ? [] : ["--watch"];
+  // The seeded organization sees every invitation feature; grants in
+  // apps/api/.env stay in place alongside it.
+  const seededGrantArgs = seeded
+    ? ["--preload", SEEDED_ORGANIZATION_GRANTS_PRELOAD]
+    : [];
 
   if (modeIncludesApi(mode)) {
     primary.push({
@@ -2164,6 +2172,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
+        ...seededGrantArgs,
         ...watchArgs,
         "src/server.ts",
       ],

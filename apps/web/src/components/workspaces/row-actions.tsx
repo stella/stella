@@ -21,18 +21,18 @@ import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   ArchiveIcon,
-  CopyIcon,
   DownloadIcon,
+  DuplicateIcon,
   EllipsisVerticalIcon,
   EyeIcon,
   FileDownIcon,
-  FilePenLineIcon,
   FileOutputIcon,
+  FilePenLineIcon,
   FileTextIcon,
   FolderPlusIcon,
   FolderSyncIcon,
-  LaptopIcon,
   LanguagesIcon,
+  LaptopIcon,
   LockOpenIcon,
   Maximize2Icon,
   MessageSquareIcon,
@@ -63,9 +63,9 @@ import { DownloadRenditionMenuItems } from "@/components/inspector/download-rend
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import {
   canDownloadScrubbed,
-  getDownloadRenditions,
   type DownloadRendition,
   type DownloadVariant,
+  getDownloadRenditions,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
@@ -82,8 +82,8 @@ import {
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
   buildSelectionParentLookup,
-  resolveAncestorIds,
   type CopyToMatterEntity,
+  resolveAncestorIds,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import {
   getEntityName,
@@ -125,8 +125,8 @@ import {
   type OpenFileInDesktopResult,
 } from "@/lib/desktop-bridge";
 import {
-  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   canOpenDesktopEdit,
+  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
@@ -1213,7 +1213,7 @@ const RowDuplicatePrimaryAction = ({
       tooltip={label}
       variant="ghost"
     >
-      {pending ? <Loader label={label} size="sm" /> : <CopyIcon />}
+      {pending ? <Loader label={label} size="sm" /> : <DuplicateIcon />}
     </Button>
   );
 };
@@ -1718,7 +1718,7 @@ const RowFileOperationsMenu = ({
         disabled={duplicatePending}
         onClick={() => detached(onDuplicate(), "row-actions.duplicate")}
       >
-        <CopyIcon />
+        <DuplicateIcon />
         {duplicatePending ? t("common.duplicating") : t("common.duplicate")}
       </MenuItem>
       <MenuItem onClick={onCopyToMatter}>

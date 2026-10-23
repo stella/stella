@@ -17,35 +17,35 @@ import {
 } from "../packages/scripts/src/code-quality-partition";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
+  cgroupMemoryLimitFiles,
+  cgroupMounts,
   CODE_CHECK_EXECUTION_BUDGET_MS,
-  WORKSPACE_TYPECHECK_CACHE_INPUTS,
-  CommandFailedError,
   codeCheckConcurrency,
+  CommandFailedError,
   configuredCodeCheckConcurrency,
-  discoverAffectedWorkspaces,
-  prioritizeWebLint,
   DEPENDENCY_CACHE_INPUTS,
+  discoverAffectedWorkspaces,
+  executeCheckCommands,
   failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
-  cgroupMemoryLimitFiles,
-  cgroupMounts,
   memoryLimitBytes,
-  separateApiLintFromTypecheck,
-  executeCheckCommands,
   planCheck,
-  planningCommandTimeout,
   planFullCheck,
+  planningCommandTimeout,
   planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
-  ROOT_SCRIPT_LINT_INPUTS,
-  SHARED_COMPILER_CACHE_INPUTS,
+  prioritizeWebLint,
   resultBoundaryLintCommand,
+  ROOT_SCRIPT_LINT_INPUTS,
   scopedCommands,
+  separateApiLintFromTypecheck,
+  SHARED_COMPILER_CACHE_INPUTS,
   summarizeCheckFailure,
+  WORKSPACE_TYPECHECK_CACHE_INPUTS,
 } from "./code-check-affected";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
@@ -1486,7 +1486,7 @@ describe("parallel code-quality legs", () => {
     const css = ["bun", "run", "lint:css"];
     for (const scope of [
       [],
-      ["--filter=./apps/api", "--filter=./packages/time"],
+      ["--filter=./apps/api", "--filter=./packages/agent-input"],
     ]) {
       expect(
         separateApiLintFromTypecheck([css, turbo(...scope)], 16 * GiB),

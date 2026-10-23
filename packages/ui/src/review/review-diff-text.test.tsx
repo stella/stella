@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import type { ReviewDiffSegment } from "./review-diff-text";
-import { ReviewDiffText, reviewDiffSegmentKeys } from "./review-diff-text";
+import { reviewDiffSegmentKeys, ReviewDiffText } from "./review-diff-text";
 
 describe("reviewDiffSegmentKeys", () => {
   test("distinguishes repeated segments by occurrence", () => {

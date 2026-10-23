@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 
+import { APP_FRAME_SCOPE } from "./-app-frame-scope";
+import type { AppFrameScope } from "./-app-frame-scope";
+
 /**
  * Which frame the root renders around the matched routes.
  *
@@ -18,7 +21,6 @@ import { panic } from "better-result";
 export type AppFrame =
   | "none"
   | "member"
-  | "admin"
   | "public"
   | "checking"
   | "neutral"
@@ -33,9 +35,6 @@ export type AppFrameAudience =
   | "unavailable"
   | "member";
 
-const PROTECTED_ROUTE_ID = "/_protected";
-const KNOWLEDGE_ROUTE_ID = "/knowledge";
-
 // Pages that show the same to every visitor: published catalogue entries.
 const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [
   "/knowledge/templates_/catalogue/$packId/$templateId",
@@ -44,6 +43,7 @@ const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [
 ];
 
 type SelectAppFrameInput = {
+  scope: AppFrameScope;
   /** Ids of the matched routes, root first. */
   routeIds: readonly string[];
   /** Whether a matched route has put the signed-in user in its context. */
@@ -55,25 +55,25 @@ type SelectAppFrameInput = {
 };
 
 export const selectAppFrame = ({
+  scope,
   routeIds,
   hasRouteUser,
   publicKnowledge,
   audience,
 }: SelectAppFrameInput): AppFrame => {
-  if (routeIds.includes("/_protected/admin")) {
-    return hasRouteUser ? "admin" : "checking";
-  }
-  const isKnowledge = routeIds.includes(KNOWLEDGE_ROUTE_ID);
-  // The root owns the first-load shell while the guard resolves the user;
-  // route fallbacks remain content-only when the member frame mounts.
-  if (
-    routeIds.includes(PROTECTED_ROUTE_ID) ||
-    (isKnowledge && !publicKnowledge)
-  ) {
-    return hasRouteUser ? "member" : "checking";
-  }
-  if (!isKnowledge) {
-    return "none";
+  switch (scope) {
+    case APP_FRAME_SCOPE.none:
+      return "none";
+    case APP_FRAME_SCOPE.member:
+      return hasRouteUser ? "member" : "checking";
+    case APP_FRAME_SCOPE.knowledge:
+      if (!publicKnowledge) {
+        return hasRouteUser ? "member" : "checking";
+      }
+      break;
+    default:
+      scope satisfies never;
+      return panic(`Unhandled frame scope: ${String(scope)}`);
   }
   // Knowledge for everyone: the frame follows the session, and fails closed
   // while it is unknown.
@@ -109,7 +109,6 @@ export const frameVisitor = (
 ): string | null => {
   switch (frame) {
     case "member":
-    case "admin":
       return member === undefined
         ? null
         : `member:${member.userId}:${member.organizationId}`;

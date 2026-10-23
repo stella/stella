@@ -33,6 +33,7 @@ type CaseLawSearchWarningsOptions = {
    * Empty when the query required every word it carried.
    */
   droppedFunctionWords: readonly string[];
+  partialHitCount?: number;
   /** Filters the request narrowed with, empty for an unnarrowed search. */
   filters: CaseLawSearchFilterNames;
   /**
@@ -82,12 +83,21 @@ const noHitsFilteredWarning = (
  */
 export const caseLawSearchWarnings = ({
   droppedFunctionWords,
+  partialHitCount = 0,
   filters,
   emptyResultSet,
 }: CaseLawSearchWarningsOptions): CaseLawSearchWarning[] => {
   const warnings: CaseLawSearchWarning[] = [];
   if (droppedFunctionWords.length > 0) {
     warnings.push(functionWordsWarning(droppedFunctionWords));
+  }
+  if (partialHitCount > 0) {
+    warnings.push(
+      partialMatchesAppendedWarning({
+        partial: partialHitCount,
+        countsStrictSet: true,
+      }),
+    );
   }
   if (!emptyResultSet) {
     return warnings;
@@ -205,6 +215,24 @@ export const provisionCitedWidelyWarning = ({
   hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with an exact total.",
 });
 
+export const partialMatchesAppendedWarning = ({
+  partial,
+  countsStrictSet,
+}: {
+  /** How many returned hits hold only some of the phrasing's words. */
+  partial: number;
+  /**
+   * Whether the response's total and facets are this phrasing's strict set:
+   * true for a single phrasing, false once several are merged (the total is
+   * uncounted and the facets describe the first phrasing only).
+   */
+  countsStrictSet: boolean;
+}): CaseLawSearchWarning => ({
+  code: "partial_matches_appended",
+  message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did${countsStrictSet ? "; the total and facets count only the decisions holding every word" : ""}.`,
+  hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
+});
+
 /**
  * The values a facet counted for an empty page's filters, appended to its
  * `no_hits_filtered` hint so the next call can pick a value that exists
@@ -236,6 +264,8 @@ export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   function_words_optional: () => functionWordsWarning(["na"]),
   no_hits: noHitsWarning,
   no_hits_filtered: () => noHitsFilteredWarning(["court"]),
+  partial_matches_appended: () =>
+    partialMatchesAppendedWarning({ partial: 3, countsStrictSet: true }),
 } as const satisfies Record<
   CaseLawSearchWarningCode,
   () => CaseLawSearchWarning

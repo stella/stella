@@ -9,13 +9,12 @@
       "noOtherSessions": "Teisi aktiivseid seansse pole",
       "revokeOtherSessions": "Logi teistest seadmetest välja",
       "revokeOtherSessionsConfirm": "See lõpetab kõik seansid peale praeguse.",
+      "signedInFrom": "Sisse logitud rakenduse {clientName} kaudu",
       "unknownDevice": "Tundmatu seade"
     }
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Tagasi rakendusse",
-    "billingAndUsage": "Arveldus ja kasutus",
     "billingProfiles": "Arveldusprofiilid",
     "deleteDescription": "Kustutage see organisatsioon ja selle andmed jäädavalt. Seda toimingut ei saa tagasi võtta.",
     "deleteOrganization": "Kustuta organisatsioon",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Lahku organisatsioonist",
     "leaveRefusedOnlyOwner": "Olete ainus omanik. Enne lahkumist määrake omanikuks mõni teine liige.",
     "modelsAndProviders": "Mudelid ja pakkujad",
-    "noPlan": "Aktiivne pakett puudub",
     "organizationDeleted": "Organisatsioon on kustutatud.",
     "organizationId": "Organisatsiooni ID",
     "organizationLeft": "Olete organisatsioonist lahkunud.",
-    "overviewDescription": "Hallake oma organisatsiooni, inimesi ja tööriistu.",
-    "people": "Inimesed",
     "planAndUsage": "Pakett ja kasutus",
     "title": "Organisatsiooni haldus",
     "toolsDescription": "Lubage või keelake sisseehitatud tööriistad kõigile selles organisatsioonis."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Assistent küsib seda aadressi",
-    "copiedToast": "Juhised kopeeritud. Kleebi need vestlusesse oma assistendiga.",
     "copy": "Kopeeri talle juhised",
     "description": "Küsi Claude’ilt või ChatGPT-lt oma toimikute ja dokumentide kohta. Vali oma assistent, et avada lühike juhend; see võtab umbes minuti.",
     "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga. Järgi aadressil {guideUrl} jaotist „Instructions for AI agents“ ja kasuta seda serveri aadressi: {mcpUrl}",
     "openGuide": "Ava juhend: {assistant}",
+    "pasteHint": "Kleebi need vestlusesse oma assistendiga.",
     "selfSetupHint": "Kasutad Claude Code’i või Codexit?",
     "title": "Kasuta stellat oma AI-assistendis"
   },
@@ -142,6 +138,8 @@
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
+    "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",
+    "handoffTitle": "Jätka stellasse",
     "headline": "Selgus igas asjas.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",
@@ -162,6 +160,7 @@
     },
     "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
+    "reauthenticationRequired": "Selle toimingu jätkamiseks logige uuesti sisse.",
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
@@ -855,7 +854,6 @@
         "unavailable": "Selle lahendi AI-analüüs pole saadaval."
       },
       "generate": "Koosta AI lühikokkuvõtted",
-      "holdingAnchor": "Mine lõigu juurde",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
       "topics": "Teemad",
       "treatment": "Hilisem käsitlus"
@@ -932,13 +930,10 @@
     },
     "coverage": {
       "completeness": "Täielikkus",
-      "countedOn": "Loendatud {date} seisuga",
       "courtsHeading": "Kohtute kaupa",
       "courtsUnavailable": "Kohtute kaupa jaotus pole praegu saadaval.",
       "decisionYears": "Lahendite aastad",
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
-      "exceedsReportedTotal": "Sisaldab rohkem, kui avaldaja viimati {date} seisuga teatas",
-      "gapStatusUnknown": "Lünkade olek teadmata",
       "generatedAt": "Andmed seisuga {date}",
       "globeLabel": "Riigid, mille kohtupraktikat korpus sisaldab, gloobusel",
       "healthCurrent": "Ajakohane",
@@ -959,7 +954,8 @@
       "searchable": "Otsitavad",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
-      "unavailable": "Kaetuse andmed ei ole praegu saadaval."
+      "unavailable": "Kaetuse andmed ei ole praegu saadaval.",
+      "unreadListingPeriods": "Nimekirja lugemata perioodid"
     },
     "decisionNotFound": "Otsust ei leitud",
     "decisionTypes": {
@@ -1111,6 +1107,8 @@
         "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
         "message": "Miski ei vasta valitud filtritele."
       },
+      "partialMatch": "Osaline vaste",
+      "partialMatches": "Osalised vasted päringule: <bdi>{query}</bdi>",
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
@@ -1148,6 +1146,7 @@
       "judges": "Kohtunikud",
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
+      "paragraphReference": "Lõik {number}",
       "popularName": "Rahvanimi",
       "portraitCredit": "Portreede allikas: {source}",
       "provisionMentions": "{count, number}×",
@@ -1394,6 +1393,7 @@
     "credentialSendDescription": "Saada see ainult siis, kui soovid seda väärtust vestluses jagada.",
     "credentialSendTitle": "See sõnum võib sisaldada mandaati",
     "deleteThread": "Kustuta vestlus",
+    "diagramUnavailable": "Seda diagrammi ei õnnestunud kuvada. Selle lähtekood on allpool.",
     "editMode": {
       "autoDirect": "Automaatne · kirjuta ümber",
       "autoDirectDescription": "Tehisintellekti muudatused rakendatakse kohe ja dokument kirjutatakse otse ümber (muudatusi ei jälgita).",
@@ -2706,6 +2706,7 @@
       "aiConfigModelInvalid": "AI-mudeli seadistus ei kehti. Kontrollige valitud mudeleid.",
       "aiConfigProviderInvalid": "AI-teenusepakkuja seadistus ei kehti. Kontrollige teenusepakkuja seadeid.",
       "aiConfigProviderValidationFailed": "AI-teenusepakkuja lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",
+      "aiDeadlineExceeded": "AI ei vastanud õigeaegselt. Proovi hetke pärast uuesti.",
       "aiOutputInvalid": "Tehisintellekti vastus oli ootamatus vormingus. Proovige uuesti.",
       "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
       "aiProviderTaskUnsupported": "Seadistatud tehisintellekti teenusepakkuja ei saa seda ülesannet täita. Valige teenusepakkuja, kes saab.",
@@ -4195,7 +4196,9 @@
     "prompt": "Mida otsite?",
     "recent": "Hiljutised",
     "recentCasesFilter": "Kohtulahendid",
+    "recentLoadFailed": "Hiljutisi tegevusi ei saanud laadida.",
     "recentSearchFilter": "Otsingud",
+    "recentUpdateFailed": "Hiljutisi tegevusi ei saanud uuendada.",
     "recentlyInForce": "Hiljuti jõustunud",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
@@ -4939,7 +4942,7 @@
       "description": "Kasuta stellat oma AI-assistendist ja vaata, millel on juurdepääs sinu kontole.",
       "developerDescription": "Serveriaadressid ja käsureatööriist tehniliseks seadistamiseks.",
       "developerTitle": "Arendaja juurdepääs",
-      "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua.",
+      "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua. Ka selle ühenduse kaudu loodud brauseriseansid logitakse välja.",
       "disconnectConfirmTitle": "Katkestada ühendus rakendusega {clientName}?",
       "disconnectSuccess": "Ühendus rakendusega {clientName} katkestatud",
       "integrationsDescription": "Välised teenused, mida AI saab sinu eest kasutada, näiteks dokumendihoidla.",
@@ -5992,6 +5995,7 @@
       "downloadFailed": "Allalaadimine ebaõnnestus",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
+      "emptyFile": "Fail on tühi.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",

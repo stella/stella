@@ -1,6 +1,6 @@
 import {
-  Fragment,
   forwardRef,
+  Fragment,
   memo,
   useEffect,
   useEffectEvent,
@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -33,10 +34,10 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
@@ -45,10 +46,16 @@ import {
   hasClipboardPrimaryModifier,
 } from "./clipboard-logic";
 import {
+  CLIPBOARD_EDITOR_SESSION_EVENT,
+  CLIPBOARD_HISTORY_CHANGED_EVENT,
   isClipboardEditorContext,
+  isClipboardEditorSession,
   isClipboardSnapshot,
 } from "./clipboard-types";
-import type { ClipboardEditorContext } from "./clipboard-types";
+import type {
+  ClipboardEditorContext,
+  ClipboardEditorSession,
+} from "./clipboard-types";
 import {
   ClipboardGroupFields,
   nextClipboardGroupColor,
@@ -88,6 +95,10 @@ type EditorState =
 const closeEditor = async () => {
   await invoke("clipboard_close_editor");
 };
+
+const blankEditor = (
+  <main className="clipboard-editor-window bg-background min-h-dvh" />
+);
 
 type FormatCommand =
   | "bold"
@@ -539,8 +550,14 @@ const RichTextArea = memo(
 
 RichTextArea.displayName = "RichTextArea";
 
-const ClipboardEditor = () => {
+type ClipboardEditorProps = {
+  /** No clip is open: the window was prewarmed, or the session ended. */
+  onIdle: () => void;
+};
+
+const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const t = useTranslations("clipboard");
+  const reportIdle = useEffectEvent(onIdle);
   const formatter = useFormatter();
   const editorRef = useRef<HTMLDivElement>(null);
   // Text and HTML are regenerated from the DOM on save and never round-trip
@@ -578,6 +595,10 @@ const ClipboardEditor = () => {
       void invoke<unknown>("clipboard_get_editor_context")
         .then((value) => {
           if (disposed) {
+            return undefined;
+          }
+          if (value === null) {
+            reportIdle();
             return undefined;
           }
           if (!isClipboardEditorContext(value)) {
@@ -630,7 +651,7 @@ const ClipboardEditor = () => {
     // The source visual can resolve after the editor opened (a favicon fetched
     // in the background); the history event announces it.
     const stopListening = subscribeDesktopEvent({
-      event: "clipboard-history-changed",
+      event: CLIPBOARD_HISTORY_CHANGED_EVENT,
       handler: loadContext,
       onError: () => {
         reportDesktopError({
@@ -866,7 +887,7 @@ const ClipboardEditor = () => {
   }, []);
 
   if (state.type === "loading") {
-    return <main className="clipboard-editor-window bg-background min-h-dvh" />;
+    return blankEditor;
   }
 
   if (state.type === "error") {
@@ -1137,4 +1158,59 @@ const ClipboardEditor = () => {
   );
 };
 
-export default ClipboardEditor;
+/**
+ * The editor window outlives each edit. Every open session remounts the editor
+ * (a fresh draft and state machine), and an idle window renders nothing.
+ */
+const ClipboardEditorWindow = () => {
+  // Session 0 is "whatever is open at mount": a window created for an open
+  // reads its clip directly, before any session event could reach it.
+  const [session, setSession] = useState<ClipboardEditorSession>({
+    session: 0,
+    type: "open",
+  });
+
+  useEffect(
+    () =>
+      subscribeDesktopEvent<unknown>({
+        event: CLIPBOARD_EDITOR_SESSION_EVENT,
+        handler: ({ payload }) => {
+          if (!isClipboardEditorSession(payload)) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+            });
+            return;
+          }
+          setSession(payload);
+        },
+        onError: () => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+          });
+        },
+      }),
+    [],
+  );
+
+  switch (session.type) {
+    case "idle":
+      return blankEditor;
+    case "open":
+      return (
+        <ClipboardEditor
+          key={session.session}
+          onIdle={() => setSession({ type: "idle" })}
+        />
+      );
+    default: {
+      session satisfies never;
+      return panic(`Unhandled editor session: ${String(session)}`);
+    }
+  }
+};
+
+export default ClipboardEditorWindow;

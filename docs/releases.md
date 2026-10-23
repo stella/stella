@@ -92,8 +92,8 @@ or change deployed feature flags.
 
 1. Ensure CI is green on `main`.
 2. Generate and review any required migration files.
-3. Run `bun run marketing:stale`; if anything is stale, `bun run
-   marketing:reshoot` re-records only the stale captures (see
+3. Run `bun run marketing:stale`; if anything is stale,
+   `bun run marketing:reshoot` re-records only the stale captures (see
    `apps/landing/public/media/products/README.md`, "Reshooting on release").
 4. In one commit, bump `VERSION` and add the matching changelog note. A
    release other than a maintenance release (`bun run release:maintenance`)
@@ -130,8 +130,10 @@ or change deployed feature flags.
    `latest`, or equals it while the generated contract surface differs from
    the published tarball.
 
-5. Merge the commit to `main` and note its SHA. `main` stays open: later
-   merges do not affect this release.
+5. Merge the commit to `main` and note its SHA. This version commit is the
+   only commit that can ship under that version. The push dispatches
+   `release-tag.yml` with its exact SHA; missing gates fail the tag run.
+   `main` stays open: later merges do not affect this release.
 6. Deploy that exact commit to staging:
 
    ```bash
@@ -139,8 +141,8 @@ or change deployed feature flags.
    gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
    ```
 
-   Both gates first refuse a candidate whose VERSION is already tagged or differs
-   from the pending VERSION on main. Ordinary pinned dispatches leave
+   Both gates first refuse a candidate whose VERSION is already tagged or whose
+   SHA differs from the commit that set the pending VERSION on main. Ordinary pinned dispatches leave
    `release_candidate` false and skip this check. The release-candidate heavy run dispatches
    `main-pr-depth.yml` for the same SHA. The staging run also refuses a
    SHA that `main` does not contain. When its smokes pass,
@@ -180,12 +182,15 @@ or change deployed feature flags.
    `staging/verified` is `success` on it and it carries the merge-group
    receipt or `success` on both `main/heavy` and `main/pr-depth`; the refusal
    names each gate that is missing or not green. It checks them again right
-   before pushing the tag. Leaving `sha` blank selects the
-   newest commit on `main` that passes these gates. The workflow also runs the CLI
-   coupling check; if it fails (a CLI changeset merged after the release
-   commit), apply it with `bun run changeset:version` plus
-   `bun run changeset --empty` and release from the commit that merges it.
-   The tag then triggers `release.yml`.
+   before pushing the tag. Leaving `sha` blank selects the version commit;
+   an explicit SHA must name that same commit. Tree-identical release PR
+   evidence may satisfy the existing proof checks, but later main commits
+   cannot replace the version commit. The workflow also runs the CLI coupling
+   check against that commit. The other independent gates continue when one
+   fails, and one final verdict lists each gate that failed or did not run. If
+   dependency installation fails, the dependency-audit gate remains unrun.
+   `-F dry_run=true` evaluates all gates and reports them without pushing the
+   tag. The tag then triggers `release.yml`.
 
 8. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,

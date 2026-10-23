@@ -30,15 +30,15 @@ import {
 } from "@stll/ui/combobox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
-  BotIcon,
+  AiActionIcon,
   ChevronDownIcon,
   Clock3Icon,
   DownloadIcon,
-  LanguagesIcon,
   LandmarkIcon,
+  LanguagesIcon,
   ListChecksIcon,
-  ListIcon,
   ListFilterIcon,
+  ListIcon,
   MailIcon,
   UsersIcon,
   WorkflowIcon,
@@ -101,13 +101,13 @@ import {
   exportOverviewActivity,
   MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
-  overviewActivityActorsOptions,
-  overviewActivityOptions,
-  type MatterActivityActor,
   type MatterActivityAction,
+  type MatterActivityActor,
   type MatterActivityCategory,
   type MatterActivityFilters,
   type MatterActivityItem,
+  overviewActivityActorsOptions,
+  overviewActivityOptions,
 } from "@/lib/workspaces/queries";
 
 import type { ActivityGroup } from "./activity-panel.logic";
@@ -115,13 +115,13 @@ import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
-  resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
+  resolveVisibleActivityTriggerType,
   ROW_ACTION_LABEL_KEYS,
   TARGET_LABEL_KEYS,
-  toSingleActivityGroup,
-  toMatterActivityDateRange,
   toMatterActivityDatePickerValues,
+  toMatterActivityDateRange,
+  toSingleActivityGroup,
 } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
@@ -992,7 +992,7 @@ const HorizontalActivityMilestone = ({
 
   const marker =
     first.performer.type === "agent" ? (
-      <BotIcon className="size-4" />
+      <AiActionIcon className="size-4" />
     ) : (
       <WorkflowIcon className="size-4" />
     );
@@ -1103,7 +1103,7 @@ const ActivityRunRow = ({
     resolveVisibleActivityTriggerType(first.trigger.type) !== null;
   const marker =
     first.performer.type === "agent" ? (
-      <BotIcon className="size-3.5" />
+      <AiActionIcon className="size-3.5" />
     ) : (
       <WorkflowIcon className="size-3.5" />
     );
@@ -1597,7 +1597,7 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
     >
       <span className="flex size-5 items-center justify-center">
         {item.performer.type === "agent" ? (
-          <BotIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
         ) : (
           <WorkflowIcon className="size-3.5" />
         )}
@@ -1685,7 +1685,7 @@ const PerformerCells = ({ item }: { item: MatterActivityItem }) => {
     <>
       <span className="flex size-5 items-center justify-center">
         {item.performer.type === "agent" ? (
-          <BotIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
         ) : (
           <WorkflowIcon className="size-3.5" />
         )}

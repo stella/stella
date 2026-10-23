@@ -100,9 +100,9 @@ describe("removedCommandError", () => {
       baked: generatedRouteMap,
       delta: delta({ removed: ["list_matters"] }),
     });
-    expect(message).toContain("stella matter list is not available");
-    expect(message).toContain("list_matters");
-    expect(message).toContain("stella tools list");
+    expect(message).toBe(
+      "this CLI is too old for this server; run npm i -g @stll/cli@latest\n",
+    );
   });
 
   test("a capability leaf goes missing with read_capability", () => {
@@ -111,7 +111,7 @@ describe("removedCommandError", () => {
       baked: generatedRouteMap,
       delta: delta({ removed: ["read_capability"] }),
     });
-    expect(message).toContain("read_capability");
+    expect(message).toContain("this CLI is too old");
   });
 
   for (const access of ["read", "write"] as const) {
@@ -137,7 +137,7 @@ describe("removedCommandError", () => {
           baked,
           delta: delta({ removed: [removed] }),
         }),
-      ).toContain(removed);
+      ).toContain("this CLI is too old");
       expect(
         removedCommandError({
           argv: ["operation"],
@@ -159,7 +159,7 @@ describe("removedCommandError", () => {
         baked: generatedRouteMap,
         delta: delta({ removed: ["save_clause"], changed: ["list_matters"] }),
       }),
-    ).toBeUndefined();
+    ).toContain("this CLI is too old");
     expect(
       removedCommandError({
         argv: ["matter"],

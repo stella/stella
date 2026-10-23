@@ -6,7 +6,7 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,
@@ -1073,6 +1073,8 @@ export type CaseLawCorpusQueryOptions = {
   keywordFields?: readonly string[] | undefined;
   functionWords?: ReadonlySet<string> | null | undefined;
   legalAlternatives?: CorpusTermExpander | null | undefined;
+  /** "any" ranks partial matches by coverage; absent keeps the strict query. */
+  match?: "all" | "any" | undefined;
 };
 
 /**
@@ -1095,6 +1097,7 @@ export const caseLawCorpusQuery = ({
   functionWords,
   legalAlternatives,
   legacyStemming,
+  match,
 }: CaseLawCorpusQueryOptions): string | null => {
   // An empty id set admits nothing: the page is empty without asking.
   if (filters.decisionIds?.length === 0) {
@@ -1110,6 +1113,7 @@ export const caseLawCorpusQuery = ({
     functionWords,
     legalAlternatives,
     legacyStemming,
+    match,
   });
   if (freeText === null) {
     return null;

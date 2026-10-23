@@ -3,20 +3,20 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec";
 import {
-  EventType,
   convertSchemaToJsonSchema,
+  EventType,
   parsePartialJSON,
 } from "@tanstack/ai";
 import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
-  TokenUsage,
   StructuredOutputPart,
   SystemPrompt,
+  TokenUsage,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -39,8 +39,8 @@ import type {
   OrgAIConfig,
 } from "@/api/lib/ai-config";
 import {
-  classifyAIError,
   type AIErrorKind,
+  classifyAIError,
   providerErrorBody,
   providerStatusCode,
 } from "@/api/lib/ai-error";
@@ -63,8 +63,8 @@ import {
 } from "@/api/lib/chat/openrouter-credential";
 import { OUTPUT_CEILING_OPTION } from "@/api/lib/chat/output-ceiling";
 import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   checkManagedProviderAvailable,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";

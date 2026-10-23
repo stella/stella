@@ -5,8 +5,8 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import {
-  fileMetadataQueryKey,
   type FileMetadataQueryKey,
+  fileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
