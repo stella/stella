@@ -140,6 +140,25 @@ describe("release workflows name runs by tag", () => {
     );
   });
 
+  // retry.sh makes three attempts with 15 s and 45 s pauses; an uncached
+  // Windows install has taken up to 9 min, macOS about 30 s.
+  test("the install deadline leaves room for every retry on each runner OS", () => {
+    const jobs = isRecord(releaseDesktop["jobs"]) ? releaseDesktop["jobs"] : {};
+    const build = isRecord(jobs["build"]) ? jobs["build"] : {};
+    const steps = Array.isArray(build["steps"]) ? build["steps"] : [];
+    const install = steps.find(
+      (step: unknown) =>
+        isRecord(step) && step["name"] === "Install dependencies",
+    );
+    expect(isRecord(install) ? install["timeout-minutes"] : undefined).toBe(
+      githubExpression("matrix.os == 'windows' && 30 || 5"),
+    );
+    const retryBudgetMinutes = (worstAttemptMinutes: number) =>
+      3 * worstAttemptMinutes + (15 + 45) / 60;
+    expect(retryBudgetMinutes(9)).toBeLessThanOrEqual(30);
+    expect(retryBudgetMinutes(0.5)).toBeLessThanOrEqual(5);
+  });
+
   // scripts/check-desktop-release-policy.sh matches runs by these names.
   test("run names carry the tag on every trigger", () => {
     expect(release["run-name"]).toBe(

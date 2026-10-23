@@ -303,7 +303,11 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        timeout-minutes: 5
+        # Sized per runner OS like every fetching step: three attempts at the
+        # measured worst install plus backoff. An uncached install takes about
+        # 30 s on macOS but up to 9 min on Windows, where a shared 5 min
+        # deadline ends the first attempt before retry.sh can start another.
+        timeout-minutes: ${{ matrix.os == 'windows' && 30 || 5 }}
         # The pinned release checkout may predate retry.sh; the workflow
         # revision's copy is kept with the other release tooling.
         run: bash "$RELEASE_TOOLING/scripts/retry.sh" bun ci --ignore-scripts
