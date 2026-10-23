@@ -6,8 +6,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { rlsDb } from "@/api/db/root";
 import {
   API_KEY_REFUSAL_REASON,
-  describeApiKeyRefusal,
   type ApiKeyRefusalReason,
+  describeApiKeyRefusal,
 } from "@/api/lib/auth/api-key-refusal-log";
 import { createDesktopCredentialAuthorizers } from "@/api/lib/business-registries/desktop/auth";
 import {
@@ -16,9 +16,9 @@ import {
 } from "@/api/lib/business-registries/desktop/request-contract";
 import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
 import {
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 import {
   getCurrentRequestId,
@@ -155,7 +155,9 @@ afterEach(resetLogSinkForTesting);
 for (const reason of Object.values(API_KEY_REFUSAL_REASON)) {
   test(`logs one bounded refusal without the presented secret: ${reason}`, async () => {
     const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => records.push(record));
+    setLogSinkForTesting((record) => {
+      records.push(record);
+    });
     await runWithRequestIdScope(async () => {
       initRequestContext(new Request("https://example.test/mcp"));
       const requestId =
@@ -215,7 +217,9 @@ test("builds only bounded attributes without request context", () => {
 
 test("successful resolution emits no refusal", async () => {
   const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => records.push(record));
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
   const credential = await resolveMachineApiKeyCredential(
     PRESENTED,
     dependenciesFor(),
@@ -226,7 +230,9 @@ test("successful resolution emits no refusal", async () => {
 
 test("self inspection records its own mode without a request id", async () => {
   const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => records.push(record));
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
   expect(
     await rejectionOf(
       resolveOwnMachineApiKeyCredential(
@@ -257,7 +263,9 @@ test.each([
   "records malformed or unsupported stored permissions: %o",
   async (override) => {
     const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => records.push(record));
+    setLogSinkForTesting((record) => {
+      records.push(record);
+    });
     const dependencies = dependenciesFor();
     dependencies.verifyApiKey.mockResolvedValue({
       valid: true,
@@ -281,7 +289,9 @@ test.each([
   { permissions: { organizationSettings: ["update"] } },
 ])("records personal policy refusal: %o", async (override) => {
   const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => records.push(record));
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
   const dependencies = dependenciesFor();
   const key = createKey();
   dependencies.verifyApiKey.mockResolvedValue({
@@ -318,7 +328,9 @@ test.each([
   "records plugin refusal without a resolved key: %o",
   async ({ code, reason }) => {
     const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => records.push(record));
+    setLogSinkForTesting((record) => {
+      records.push(record);
+    });
     const dependencies = dependenciesFor();
     dependencies.verifyApiKey.mockResolvedValue({
       valid: false,
@@ -364,7 +376,9 @@ test.each([
   "desktop key refusal uses the shared bounded record: %o",
   async ({ reason, valid, key }) => {
     const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => records.push(record));
+    setLogSinkForTesting((record) => {
+      records.push(record);
+    });
     const verifyApiKey = mock();
     verifyApiKey.mockResolvedValue({ valid, key, error: null });
     const authorizers = createDesktopCredentialAuthorizers({

@@ -6,9 +6,9 @@ import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
 import {
   API_KEY_REFUSAL_REASON,
+  type ApiKeyRefusalReason,
   apiKeyVerificationRefusalReason,
   logApiKeyRefusal,
-  type ApiKeyRefusalReason,
 } from "@/api/lib/auth/api-key-refusal-log";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import {
