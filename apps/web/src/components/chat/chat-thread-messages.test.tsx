@@ -1206,6 +1206,45 @@ describe("chat thread messages", () => {
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
   });
 
+  test("does not render remote image attachment URLs", () => {
+    const remoteUrl = "https://untrusted.example/evidence.png";
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          {
+            type: "image",
+            source: {
+              type: "url",
+              value: remoteUrl,
+              mimeType: "image/png",
+            },
+            metadata: { filename: "evidence.png" },
+          },
+        ],
+        role: "user",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("evidence.png");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain(remoteUrl);
+  });
+
   test("shows retry only on the latest assistant response", () => {
     const chatMessages: ChatUIMessage[] = [
       {
