@@ -14,22 +14,27 @@ export const flowsRoute = new Elysia({ prefix: "/flows" })
   .guard({ validateAuth: true })
   .get("/", listFlowDefinitions.handler, {
     permissions: listFlowDefinitions.config.permissions,
+    accountAccess: listFlowDefinitions.config.accountAccess,
     query: listFlowDefinitions.config.query,
   })
   .post("/", createFlowDefinition.handler, {
     body: createFlowDefinition.config.body,
     permissions: createFlowDefinition.config.permissions,
+    accountAccess: createFlowDefinition.config.accountAccess,
   })
   .get("/:flowId", getFlowDefinition.handler, {
     params: getFlowDefinition.config.params,
     permissions: getFlowDefinition.config.permissions,
+    accountAccess: getFlowDefinition.config.accountAccess,
   })
   .put("/:flowId", updateFlowDefinition.handler, {
     body: updateFlowDefinition.config.body,
     params: updateFlowDefinition.config.params,
     permissions: updateFlowDefinition.config.permissions,
+    accountAccess: updateFlowDefinition.config.accountAccess,
   })
   .delete("/:flowId", deleteFlowDefinition.handler, {
     params: deleteFlowDefinition.config.params,
     permissions: deleteFlowDefinition.config.permissions,
+    accountAccess: deleteFlowDefinition.config.accountAccess,
   });

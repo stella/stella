@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, getColumns, isNull } from "drizzle-orm";
 
 import {
+  READER_ANSWER_ANCHOR_MISMATCH_CODE,
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_MAX_MESSAGES,
 } from "@stll/api-contract/reader-answers";
@@ -254,6 +255,7 @@ const readReaderAnswerContext = async ({
       return Result.err(
         new HandlerError({
           status: 400,
+          code: READER_ANSWER_ANCHOR_MISMATCH_CODE,
           message: "Selection does not match the decision paragraph",
         }),
       );

@@ -788,6 +788,12 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_docket_family_key_idx")
       .on(t.docketFamilyKey)
       .where(isNotNull(t.docketFamilyKey)),
+    // Bounded cross-publisher ruling lookup: jurisdiction and court first,
+    // then the normalized docket family shared by equivalent publications.
+    p
+      .index("case_law_decisions_republished_ruling_idx")
+      .on(t.country, t.court, t.docketFamilyKey, t.id)
+      .where(isNotNull(t.docketFamilyKey)),
     p
       .index("case_law_decisions_lang_group_idx")
       .on(t.languageGroupKey)
@@ -1314,6 +1320,15 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
       .varchar("source_document_id", { length: 256 })
       .notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** Raw payload for this publisher observation, including republished copies. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    sourceObservedAt: timestamptz("source_observed_at"),
+    /** The source's observation order of the provenance above; only a later order replaces it. */
+    sourceObservationOrder: p.bigint("source_observation_order", {
+      mode: "bigint",
+    }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1355,6 +1370,34 @@ export const caseLawDecisionAliases = p.pgTable(
       "case_law_decision_aliases_not_self",
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Exact source identities moved by a reversible decision-alias repair. */
+export const caseLawDecisionAliasMovedIdentities = p.pgTable(
+  "case_law_decision_alias_moved_identities",
+  {
+    retiredDecisionId: safeUuid<"caseLawDecision">(
+      "retired_decision_id",
+    ).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    sourceDocumentId: p
+      .varchar("source_document_id", { length: 1024 })
+      .notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.retiredDecisionId, t.sourceId, t.sourceDocumentId],
+      name: "case_law_decision_alias_moved_identities_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_decision_alias_moved_identities_alias_fk",
+        columns: [t.retiredDecisionId],
+        foreignColumns: [caseLawDecisionAliases.retiredDecisionId],
+      })
+      .onDelete("cascade"),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
@@ -1695,6 +1738,7 @@ export const caseLawCoverageSlices = p.pgTable(
       sql`${t.reported} IS NOT NULL OR ${t.walkError} IS NOT NULL`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -2430,6 +2474,32 @@ export const caseLawSitemapShards = p.pgTable(
       withCheck: sql`true`,
     }),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * One country's month counts, staged by the sitemap refresh until every
+ * public country is counted and `case_law_sitemap_shards` is replaced whole.
+ */
+export const caseLawSitemapShardCounts = p.pgTable(
+  "case_law_sitemap_shard_counts",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    months: p.jsonb().notNull(),
+    pages: p.integer().notNull(),
+    countedAt: timestamptz("counted_at").notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_sitemap_shard_counts_pages_positive",
+      sql`${t.pages} > 0`,
+    ),
+    p.pgPolicy("case_law_sitemap_shard_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
   ],
 );
 

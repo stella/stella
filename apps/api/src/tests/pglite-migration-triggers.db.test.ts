@@ -92,12 +92,22 @@ const triggersDefinedByMigrations = (): Map<string, string> => {
     .map((entry) => entry.name)
     .toSorted();
   for (const migration of migrations) {
-    const statements = readFileSync(
+    const migrationSql = readFileSync(
       nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
       "utf-8",
-    )
+    );
+    const statements = migrationSql
       .split("--> statement-breakpoint")
       .map((statement) => statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim());
+    if (migration === "20261020000100_stored_keys_organization_scope") {
+      const organizationKeyTrigger =
+        /CREATE TRIGGER user_files_organization_key_guard[\s\S]*?;/u.exec(
+          migrationSql,
+        );
+      if (organizationKeyTrigger !== null) {
+        statements.push(organizationKeyTrigger[0]);
+      }
+    }
     for (const statement of statements) {
       const created = triggerKey(CREATE_TRIGGER.exec(statement));
       if (created !== undefined) {

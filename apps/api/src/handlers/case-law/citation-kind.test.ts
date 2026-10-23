@@ -720,3 +720,110 @@ describe("Hungarian registries and published designations", () => {
     }
   });
 });
+
+describe("authority registry recognition is independent of citation prefixes", () => {
+  test("all supported Czech and Slovak prefixes expose the same registry", () => {
+    for (const prefix of [
+      "",
+      "sp. zn. ",
+      "sp.zn ",
+      "č. j. ",
+      "čj. ",
+      "č. k. ",
+      "sen. zn. ",
+    ]) {
+      for (const citationText of [
+        "21 As 123/2020",
+        "3 Cdo 12/2020",
+        "II. ÚS 12/2020",
+      ]) {
+        expect(
+          classifyCitationVerdict({
+            citationText: `${prefix}${citationText}`,
+            context: null,
+          }),
+        ).toEqual({
+          kind: CITATION_KIND.PRECEDENT,
+          evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+        });
+      }
+    }
+  });
+
+  test("insolvency review dockets are authority unless procedural evidence speaks", () => {
+    for (const citationText of [
+      "29 NSČR 12/2020",
+      "sen. zn. 31 NSČR 12/2020",
+    ]) {
+      expect(classifyCitationVerdict({ citationText, context: null })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.REGISTRY,
+      });
+      expect(
+        classifyCitation({
+          citationText,
+          context: `Napadené usnesení ${citationText}.`,
+        }),
+      ).toBe(CITATION_KIND.PROCEDURAL);
+    }
+  });
+});
+
+describe("only the citing sentence supplies kind cues", () => {
+  test("procedural cues in adjacent sentences cannot demote an authority", () => {
+    for (const neighbour of [
+      "Napadený rozsudek byl zrušen.",
+      "Odvolání bylo odmítnuto.",
+    ]) {
+      const sentence = "Soud otázku vyřešil v rozsudku čj. 21 As 123/2020.";
+      for (const context of [
+        `${neighbour} ${sentence}`,
+        `${sentence} ${neighbour}`,
+      ]) {
+        expect(
+          classifyCitation({ citationText: "čj. 21 As 123/2020", context }),
+        ).toBe(CITATION_KIND.PRECEDENT);
+      }
+    }
+  });
+
+  test("precedent cues in adjacent sentences cannot promote procedural history", () => {
+    for (const context of [
+      "Judikatura byla přezkoumána. Řízení 12 Co 123/2020 skončilo.",
+      "Řízení 12 Co 123/2020 skončilo. Judikatura byla přezkoumána.",
+    ]) {
+      expect(
+        classifyCitation({ citationText: "12 Co 123/2020", context }),
+      ).toBe(CITATION_KIND.PROCEDURAL);
+    }
+  });
+
+  test("abbreviations and dates keep the invocation attached to the docket", () => {
+    for (const citationText of ["12 Co 123/2020", "II. ÚS 12/2020"]) {
+      expect(
+        classifyCitationVerdict({
+          citationText,
+          context: `Srov. rozhodnutí ze dne 1. 2. 2020, sp. zn. ${citationText}. Napadený rozsudek byl zrušen.`,
+        }),
+      ).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+      });
+    }
+  });
+});
+
+test("a statement about the case's own numbered proceedings stays procedural", () => {
+  for (const proceedings of [
+    "řízení vedeného pod",
+    "řízení vedeném pod",
+    "řízení vedené pod",
+  ]) {
+    expect(
+      classifyCitation({
+        citationText: "9 C 123/2020",
+        context: `Soud konstatoval, že účastník nebyl stranou ${proceedings} sp. zn. 9 C 123/2020.`,
+      }),
+    ).toBe(CITATION_KIND.PROCEDURAL);
+  }
+});

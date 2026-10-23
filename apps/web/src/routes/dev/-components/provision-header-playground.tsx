@@ -4,7 +4,7 @@
  *
  * The header is one row that must never wrap and never lose its open button,
  * and that gives way in a fixed order as it narrows: the act's title, then
- * the provision label, then the date. Which part gives way is layout, so it
+ * the date, then the provision label. Which part gives way is layout, so it
  * is measured in a browser rather than asserted in a unit test. The label
  * names several cited parts, the widest a paragraph's card draws.
  */
