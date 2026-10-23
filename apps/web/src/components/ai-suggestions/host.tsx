@@ -39,13 +39,13 @@ import {
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   MessageSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
@@ -56,6 +56,7 @@ import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
   ChatInputDraft,
+  ChatSendOutcome,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
@@ -163,13 +164,14 @@ type PromptBarProps = {
    * Emitted on send. `files` carries any attachments the user added via
    * the shared (+) menu, always an array (empty for preset chips, which
    * never attach); callers thread them into `buildChatRequestMessage`
-   * without a fallback.
+   * without a fallback. The outcome says whether the composer keeps the
+   * draft (see `ChatSendOutcome`); preset sends carry no draft to keep.
    */
   onSubmit: (input: {
     prompt: string;
     presetId?: string;
     files: ChatInputDraft["files"];
-  }) => Promise<void> | void;
+  }) => Promise<ChatSendOutcome>;
   onSubmitError?: ((error: unknown) => void) | undefined;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
@@ -550,9 +552,8 @@ export const PromptBar = (props: PromptBarProps) => {
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
   const handleComposerSubmit = useCallback(
-    async (draft: ChatInputDraft) => {
-      await onSubmit({ prompt: draft.html, files: draft.files });
-    },
+    async (draft: ChatInputDraft): Promise<ChatSendOutcome> =>
+      await onSubmit({ prompt: draft.html, files: draft.files }),
     [onSubmit],
   );
 

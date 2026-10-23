@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
-import type { SQLChunk, SQL } from "drizzle-orm";
+import type { SQL, SQLChunk } from "drizzle-orm";
 
 import {
   oauthClient,

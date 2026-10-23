@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type {
-  ParsedCorrespondence,
   CorrespondenceScanVerdict,
+  ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 import {
   CORRESPONDENCE_MAX_ATTACHMENTS,

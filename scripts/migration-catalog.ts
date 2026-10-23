@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
 import { panic } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { createSqlClient } from "../apps/api/src/db/sql-client";
 import { REHEARSAL_ROWS_PER_DECISION } from "../apps/api/src/scripts/seed-migration-rehearsal-plan";
 
 type Row = Record<string, unknown>;
@@ -380,7 +381,7 @@ if (import.meta.main) {
     if (!url) {
       panic("DATABASE_URL is required");
     }
-    const client = new SQL({ url, max: 1, connectionTimeout: 30 });
+    const client = createSqlClient({ url, max: 1, connectionTimeout: 30 });
     try {
       console.log(JSON.stringify(await snapshotCatalog(client)));
     } finally {

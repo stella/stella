@@ -11,8 +11,8 @@ import {
   withDerivedOutputs,
 } from "./ci-affected-selection";
 import {
-  readWorkingTreeCheckPool,
   type ReadCheckPool,
+  readWorkingTreeCheckPool,
 } from "./ci-check-pool-registry";
 import { rootCheckGate } from "./ci-root-check-gate";
 import declaredInputs from "./ci-root-check-inputs.json" with { type: "json" };

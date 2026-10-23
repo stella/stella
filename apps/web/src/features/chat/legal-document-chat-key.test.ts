@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   decisionChatKey,
-  LEGAL_DOCUMENT_CHAT_CORPUS,
   isOptionalLegalDocumentChatKey,
+  LEGAL_DOCUMENT_CHAT_CORPUS,
   parseLegalDocumentChatKey,
   statuteChatKey,
 } from "./legal-document-chat-key";

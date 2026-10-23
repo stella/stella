@@ -11,16 +11,16 @@ import { repoRelativePath } from "@stll/portable-path";
 import { BASELINE_PATHS } from "../scripts/baseline-paths.ts";
 import { parseTestBaseline } from "../scripts/check-test-state-baseline.ts";
 import {
-  type ScopeContext,
   type FilenameContext,
   filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifierReference,
-  resolveVariable,
-  resolveImport,
-  stableInitializer,
   memberPropertyName,
+  resolveImport,
+  resolveVariable,
+  type ScopeContext,
+  stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
 
