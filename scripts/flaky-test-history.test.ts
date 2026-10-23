@@ -714,6 +714,50 @@ describe("evidence collection", () => {
     }
   });
 
+  test("counts workflow runs without a head branch", async () => {
+    const gh: Gh = async (args) => {
+      const url = args.at(-1) ?? "";
+      if (
+        url.includes("/workflows/ci.yml/runs?") &&
+        url.includes("created=2026-10-10")
+      ) {
+        return Result.ok(
+          JSON.stringify([
+            {
+              total_count: 1,
+              workflow_runs: [
+                {
+                  id: 1,
+                  head_sha: sha(1),
+                  head_branch: null,
+                  conclusion: "success",
+                  run_started_at: at(1),
+                },
+              ],
+            },
+          ]),
+        );
+      }
+      return Result.ok(
+        url.includes("/runs?")
+          ? JSON.stringify([{ total_count: 0, workflow_runs: [] }])
+          : artifacts([]),
+      );
+    };
+    const collected = await collectEvidence({
+      gh,
+      repository: "stella/stella",
+      now: NOW,
+      workdir: tmpdir(),
+    });
+    expect(collected.isOk()).toBe(true);
+    if (!collected.isOk()) {
+      return;
+    }
+    expect(collected.value.evidence.runs).toHaveLength(1);
+    expect(collected.value.evidence.runs.at(0)?.headBranch).toBeNull();
+  });
+
   test("a failed GitHub call is returned, not thrown", async () => {
     const gh: Gh = async () =>
       Result.err(new GhCommandError({ message: "offline" }));

@@ -132,7 +132,7 @@ export type History = v.InferOutput<typeof historySchema>;
 export type CiRun = {
   readonly id?: number;
   readonly headSha: string;
-  readonly headBranch?: string;
+  readonly headBranch?: string | null;
   readonly fullDepth?: boolean;
   readonly conclusion: string | null;
   readonly url?: string;
@@ -147,7 +147,7 @@ export type CiRun = {
 type ArtifactSource = {
   readonly runId?: number;
   readonly headSha: string;
-  readonly headBranch?: string;
+  readonly headBranch?: string | null;
   readonly fullDepth?: boolean;
   readonly createdAt: string;
   readonly url: string;
@@ -324,7 +324,9 @@ const addFailurePatternEvidence = ({
       const heads = new Set(familyFailures.map(({ source }) => source.headSha));
       const branches = new Set(
         familyFailures.flatMap(({ source }) =>
-          source.headBranch === undefined ? [] : [source.headBranch],
+          source.headBranch === undefined || source.headBranch === null
+            ? []
+            : [source.headBranch],
         ),
       );
       const first = familyFailures.at(0);
@@ -967,7 +969,7 @@ const runPagesSchema = v.array(
       v.object({
         id: v.number(),
         head_sha: v.string(),
-        head_branch: v.string(),
+        head_branch: v.nullable(v.string()),
         conclusion: v.nullable(v.string()),
         run_started_at: v.string(),
       }),
