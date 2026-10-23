@@ -51,6 +51,8 @@ if (import.meta.main) {
   const [command] = process.argv.slice(2);
   if (command === "all") {
     process.stdout.write(JSON.stringify(allE2eMatrix()));
+  } else if (command === "count") {
+    process.stdout.write(String(E2E_SHARD_COUNT));
   } else {
     assert.fail(`Unknown e2e shard command: ${command ?? "missing"}`);
   }

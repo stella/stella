@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
-  readFileSync,
-  readdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -18,8 +18,8 @@ import {
   allowanceAdjustmentCommand,
   allowanceRemovalCommand,
   inspectConfiguration,
-  scanAll,
   type RatchetMetric,
+  scanAll,
 } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";

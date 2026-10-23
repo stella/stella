@@ -571,10 +571,7 @@ type GateDecision =
   | {
       readonly type: "pass";
       readonly reason:
-        | "no_previous_release"
-        | "healthy"
-        | "acknowledged"
-        | "no_verdict";
+        "no_previous_release" | "healthy" | "acknowledged" | "no_verdict";
     }
   | {
       readonly type: "refuse";

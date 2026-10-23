@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 const DEFAULT_MANIFEST_PATH = "docs/policies/evidence.json";

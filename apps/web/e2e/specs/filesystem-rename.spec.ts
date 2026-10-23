@@ -4,9 +4,9 @@ import path from "node:path";
 import { apiStatus, apiUploadDocx } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =

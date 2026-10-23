@@ -67,9 +67,7 @@ export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
 }> {}
 
 type ConvertToPdfError =
-  | DerivativeAdmissionError
-  | GotenbergError
-  | ImageTranscodeError;
+  DerivativeAdmissionError | GotenbergError | ImageTranscodeError;
 
 const IMAGE_EMBED_FAILED_SINK = failureSink({
   event: "file_conversion.image_embed_failed",

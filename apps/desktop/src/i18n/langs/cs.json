@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Zkratky s klávesou Windows si Windows vyhrazují pro sebe. Použijte Ctrl nebo Alt.",
     "taken": "Zkratku {shortcut} už používá jiná aplikace. Vyberte jinou.",
     "unavailable": "Zkratku {shortcut} používá jiná aplikace, takže schránku neotevře. Vyberte jinou zkratku.",
+    "managed": "Vaše organizace vypnula historii schránky.",
     "action": {
       "copy": "Kopírovat",
       "paste": "Vložit",
