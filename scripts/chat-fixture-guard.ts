@@ -2,8 +2,8 @@
 //
 // A messages snapshot written by hand in a test agrees with TanStack's engine
 // only until the engine changes. Valid-path snapshots come from
-// the builders in `apps/api/src/tests/helpers/chat-fixtures.ts`, which run the
-// engine's own converters. This guard rejects a `MESSAGES_SNAPSHOT` object
+// the owning API and web fixture builders, which run the engine's own
+// converters. This guard rejects a `MESSAGES_SNAPSHOT` object
 // literal in any chat test or test helper outside that owner, unless it is an
 // argument of `unsafeFixture(reason, ...)`, the explicit escape for malformed
 // input and exhaustive state matrices. Hand-built UI state matrices are not
@@ -35,7 +35,10 @@ import { compareCodeUnit } from "@stll/collation";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LEDGER_REL = "scripts/chat-fixture-guard-ledger.json";
-const OWNER_REL = "apps/api/src/tests/helpers/chat-fixtures.ts";
+const OWNER_RELS = [
+  "apps/api/src/tests/helpers/chat-fixtures.ts",
+  "apps/web/src/features/chat/chat-test-fixtures.ts",
+] as const;
 const SCAN_GLOBS = [
   "apps/api/src/**/*.test.ts",
   "apps/api/src/tests/**/*.ts",
@@ -258,7 +261,7 @@ const scanTree = async (): Promise<SnapshotLiteral[]> => {
     })) {
       if (
         seen.has(relativePath) ||
-        relativePath === OWNER_REL ||
+        OWNER_RELS.some((owner) => relativePath === owner) ||
         relativePath.includes("node_modules")
       ) {
         continue;
@@ -305,7 +308,7 @@ const check = async (): Promise<number> => {
   }
   for (const { line, path: file } of unlisted) {
     console.error(
-      `  ${file}:${String(line)}: a hand-built messages snapshot beyond the file's ledger entry. Build it with ${OWNER_REL}, or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
+      `  ${file}:${String(line)}: a hand-built messages snapshot beyond the file's ledger entry. Build it with an owning fixture builder (${OWNER_RELS.join(", ")}), or wrap malformed input in ${ESCAPE_CALL}(reason, ...).`,
     );
   }
   for (const file of stale) {
