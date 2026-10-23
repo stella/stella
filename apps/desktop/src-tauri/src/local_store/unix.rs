@@ -111,13 +111,20 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   let temporary_anchor = false;
   let relative = path
     .strip_prefix(&root_path)
-    .map_err(|_| invalid_path())?
+    .map_err(|error| {
+      io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("invalid local file path: {error}"),
+      )
+    })?
     .to_path_buf();
   static ROOTS: OnceLock<Mutex<HashMap<PathBuf, Arc<File>>>> = OnceLock::new();
+  // The registry only caches opened handles, so a panic elsewhere cannot leave
+  // it inconsistent.
   let mut opened = ROOTS
     .get_or_init(Mutex::default)
     .lock()
-    .map_err(|_| io::Error::other("local directory registry unavailable"))?;
+    .unwrap_or_else(std::sync::PoisonError::into_inner);
   if let Some(directory) = opened.get(&root_path) {
     if !temporary_anchor {
       check_owner(directory)?;
@@ -146,6 +153,7 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   }
   let directory = Arc::new(directory);
   opened.insert(root_path, Arc::clone(&directory));
+  drop(opened);
   Ok((directory, relative))
 }
 

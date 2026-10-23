@@ -887,6 +887,7 @@ pub async fn link(
       Some(account) => Some(account.clone()),
       None => store.load_usable().await?,
     };
+    drop(store);
     let owner = current
       .as_ref()
       .map(crate::document_sessions::AccountOwner::for_account);
@@ -902,11 +903,13 @@ pub async fn link(
       let mut store = state.lock().await;
       store.stage(None).await?;
       store.save(account).await?;
+      drop(store);
       LinkOutcome::Linked
     }
     None => LinkOutcome::Unchanged,
   };
   manager.set_account_owner(owner).await?;
+  drop(manager);
   Ok(outcome)
 }
 
