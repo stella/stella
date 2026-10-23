@@ -102,7 +102,13 @@ const failClosedServiceSuites = (
     widenScope(
       `service suite detector failed (${String(error)}); running every service suite`,
     );
-    return { postgres: true, corpus: true, valkey: true, collab: true };
+    return {
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: true,
+      devSeed: true,
+    };
   }
 };
 
@@ -320,6 +326,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     api_image_platforms: BOTH_PLATFORMS,
     api_image_smoke_required: TRUE,
     postgres_suites_required: TRUE,
+    dev_seed_required: TRUE,
     corpus_suites_required: TRUE,
     valkey_suites_required: TRUE,
     collaboration_suite_required: TRUE,
@@ -404,6 +411,7 @@ const deriveScopeFacts = (
         api_image_platforms: "[]",
         api_image_smoke_required: FALSE,
         postgres_suites_required: api,
+        dev_seed_required: api,
         corpus_suites_required: api,
         valkey_suites_required: api,
         collaboration_suite_required: FALSE,
@@ -590,6 +598,7 @@ const deriveNormalScopeFacts = (
   ]);
   const legal = legalAtlasImageSelected(files);
   const postgres = full ? packageChecks : services.postgres;
+  const devSeed = full ? packageChecks : services.devSeed;
   const corpus = full ? packageChecks : services.corpus;
   const valkey = full ? packageChecks : services.valkey;
   const collaboration = full ? collab : services.collab;
@@ -629,6 +638,7 @@ const deriveNormalScopeFacts = (
     sandbox,
     legal,
     postgres,
+    devSeed,
     corpus,
     valkey,
     collaboration,
@@ -648,6 +658,7 @@ export const OUTPUT_ORDER = [
   "api_image_platforms",
   "api_image_smoke_required",
   "postgres_suites_required",
+  "dev_seed_required",
   "corpus_suites_required",
   "valkey_suites_required",
   "collaboration_suite_required",
@@ -760,6 +771,8 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "postgres_suites_required", ({ postgres }) =>
       bool(postgres),
     ),
+  dev_seed_required: (facts) =>
+    scopeRule(facts, "dev_seed_required", ({ devSeed }) => bool(devSeed)),
   corpus_suites_required: (facts) =>
     scopeRule(facts, "corpus_suites_required", ({ corpus }) => bool(corpus)),
   valkey_suites_required: (facts) =>
