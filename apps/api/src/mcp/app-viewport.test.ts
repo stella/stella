@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { MCP_APPS } from "@stll/mcp-apps/manifest";
 

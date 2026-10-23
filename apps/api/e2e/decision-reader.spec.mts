@@ -3,7 +3,7 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { panic } from "better-result";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
@@ -1459,11 +1459,13 @@ test("court multi-selection respects the declared cap, tier unions, search and a
       ],
     },
   } satisfies SearchResults;
+  const searchInput = { queries: ["náhrada škody"], country: "CZE", limit: 20 };
   const app = await mountReader({
     page,
     host: "ChatGPT",
     surface: "results",
     search,
+    searchInput,
   });
   const trigger = app.getByRole("button", { name: /^Court/u });
   await trigger.click();
@@ -1534,9 +1536,7 @@ test("court multi-selection respects the declared cap, tier unions, search and a
   expect(calls).toContainEqual({
     name: "search_case_law",
     arguments: {
-      queries: ["náhrada škody"],
-      country: "CZE",
-      limit: 20,
+      ...searchInput,
       courts: [
         "Ústavní soud",
         ...regionalCourts.slice(0, maxCourts - 1).map(({ value }) => value),
