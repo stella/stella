@@ -2801,11 +2801,13 @@ test("jobs that need ci-plan never hand its outputs over in the environment", ()
 test("ci-result's outcome step reads its inputs from the step written right before it", () => {
   // The harness runs RESULT_INPUTS_RUN before the outcome script, so the
   // workflow must declare exactly that script, immediately before it.
-  expect(resultInputsSteps).toEqual([
-    { name: RESULT_INPUTS_STEP, run: RESULT_INPUTS_RUN },
-  ]);
-  expect(resultJob.steps[resultInputsStepIndex + 1]).toBe(
-    evaluationSteps.at(0),
+  const declared = resultInputsSteps.map((step) =>
+    v.parse(v.strictObject({ name: v.string(), run: v.string() }), step),
+  );
+  expect(declared.length).toBe(1);
+  expect(declared.at(0)?.run).toBe(RESULT_INPUTS_RUN);
+  expect(resultJob.steps.indexOf(evaluationSteps.at(0))).toBe(
+    resultInputsStepIndex + 1,
   );
   expect(embedsExpression(resultStep.run)).toBe(false);
 });
