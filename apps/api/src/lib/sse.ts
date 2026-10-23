@@ -875,8 +875,7 @@ export const broadcast = (
     publishWorkspace: publishWorkspaceOverride,
   }: {
     publishWorkspace?:
-      | SseBroadcastPublisher["publishWorkspaceEvent"]
-      | undefined;
+      SseBroadcastPublisher["publishWorkspaceEvent"] | undefined;
   } = {},
 ): void => {
   // When this instance has no attached subscriber it never receives its
