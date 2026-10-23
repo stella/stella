@@ -33,6 +33,7 @@ import type { OnlineIndexHoldRef } from "./online-index-gate";
 import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import {
+  ALL_WORK_SCOPE,
   assertOnlineMigrationsApplied,
   FINALIZED_SCOPE,
   runOnlineMigrations,
@@ -474,6 +475,12 @@ const emitFailedPhase = (
   }
 };
 
+/** What each building mode walks; `verify_finalized` builds nothing. */
+const BUILD_SCOPE = {
+  [MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED]: FINALIZED_SCOPE,
+  [MIGRATE_ONLINE_WORK_MODE.BUILD_ALL]: ALL_WORK_SCOPE,
+} as const;
+
 type RunMigrationsOptions = {
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
@@ -662,8 +669,9 @@ export const runMigrations = async ({
     let online: Awaited<ReturnType<typeof runOnlineMigrations>>;
     switch (onlineWorkMode) {
       case MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED:
+      case MIGRATE_ONLINE_WORK_MODE.BUILD_ALL:
         online = await runOnline(pool, {
-          scope: FINALIZED_SCOPE,
+          scope: BUILD_SCOPE[onlineWorkMode],
           indexGate: { ebs, hold: onlineIndexHold },
           reserveObserver: async () =>
             await openOnlineIndexObserver(databaseUrl),

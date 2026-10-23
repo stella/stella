@@ -12,4 +12,8 @@ CREATE TABLE "online_work_state" (
   CONSTRAINT "online_work_state_state_check" CHECK ("state" IN ('building', 'finalized', 'failed'))
 );--> statement-breakpoint
 ALTER TABLE "online_work_state" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE POLICY "online_work_state_no_stella_access" ON "online_work_state" AS PERMISSIVE FOR ALL TO "stella" USING (false) WITH CHECK (false);
+ALTER TABLE "online_work_state" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "online_work_state_owner_access" ON "online_work_state" AS PERMISSIVE FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass));--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "online_work_state" FROM stella;

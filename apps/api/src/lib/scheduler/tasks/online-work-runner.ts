@@ -5,11 +5,13 @@ import { openMaintenanceSql } from "@/api/db/long-running-connection";
 import { onlineWorkState, type ONLINE_WORK_STATES } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
 } from "@/api/lib/db/ebs-signal-reader";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   type SchedulerDb,
   type SchedulerTask,
@@ -75,7 +77,7 @@ type OnlineWorkRunnerDependencies = {
   lifecycle: Readonly<Record<OnlineWorkName, OnlineWorkLifecycle>>;
   store: OnlineWorkStateStore;
   claim: (
-    options: Pick<ClaimOnlineWorkUnitOptions, "name" | "lifecycle">,
+    options: Required<Pick<ClaimOnlineWorkUnitOptions, "name" | "lifecycle">>,
   ) => Promise<OnlineWorkUnitClaim>;
   /** Runs the claimed walk past this tick; its failure is reported, never returned to the tick. */
   detach: (work: Promise<UnitResult>) => void;
@@ -259,30 +261,35 @@ export const createDrizzleOnlineWorkStateStore = (
       .onConflictDoUpdate({ target: onlineWorkState.name, set: building });
   },
   markFinalized: async (name) => {
-    // audit: skip - system migration lifecycle checkpoint
-    await db
-      .update(onlineWorkState)
-      .set({
-        state: "finalized",
-        lastError: null,
-        finishedAt: sql`now()`,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(onlineWorkState.name, name));
+    await finishOnlineWork(db, { name, state: "finalized", lastError: null });
   },
   markFailed: async ({ name, error }) => {
-    // audit: skip - system migration lifecycle checkpoint
-    await db
-      .update(onlineWorkState)
-      .set({
-        state: "failed",
-        lastError: error,
-        finishedAt: sql`now()`,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(onlineWorkState.name, name));
+    await finishOnlineWork(db, { name, state: "failed", lastError: error });
   },
 });
+
+type FinishOnlineWorkOptions = {
+  name: OnlineWorkName;
+  state: Extract<(typeof ONLINE_WORK_STATES)[number], "finalized" | "failed">;
+  lastError: string | null;
+};
+
+/** A unit's end, dated by the database: it finishes hours after its claim. */
+const finishOnlineWork = async (
+  db: SchedulerDb,
+  { name, state, lastError }: FinishOnlineWorkOptions,
+): Promise<void> => {
+  // audit: skip - system migration lifecycle checkpoint
+  await db
+    .update(onlineWorkState)
+    .set({
+      state,
+      lastError,
+      finishedAt: sql`now()`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(onlineWorkState.name, name));
+};
 
 const maintenancePool = (): OnlineMigrationPool => ({
   reserve: async () => {
@@ -300,11 +307,16 @@ const maintenancePool = (): OnlineMigrationPool => ({
 
 type RunnerByDb = (db: SchedulerDb) => OnlineWorkRunnerTick;
 
-/** A unit that failed after writing its checkpoint is reported like a rejection. */
+const unitFailed = failureSink({
+  event: "scheduler.online_work_unit_failed",
+  expected: [],
+});
+
+/** A unit that failed after writing its checkpoint is observed as a failure. */
 const reportUnitFailure = async (work: Promise<UnitResult>): Promise<void> => {
   const result = await work;
   if (Result.isError(result)) {
-    captureError(result.error, { detached: "online-work.build-unit" });
+    observeFailure(result.error, { sink: unitFailed });
   }
 };
 

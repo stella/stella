@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { ReservedSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
@@ -121,7 +121,9 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             type: "started",
             name: index.name,
           });
-          await Promise.all(work);
+          // The detached unit's own result first: a failed walk names its
+          // cause here rather than as a missing index below.
+          expect(await Promise.all(work)).toEqual([Result.ok(undefined)]);
 
           const built = await main.sql.unsafe<
             { valid: boolean; ready: boolean }[]

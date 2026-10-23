@@ -194,28 +194,20 @@ describe("online migrations", () => {
   });
 
   describe("claiming one pending unit", () => {
-    const buildable = (): OnlineIndexDeclaration => {
-      const indexes: readonly OnlineIndexDeclaration[] =
-        ONLINE_MIGRATION_INDEXES;
-      return (
-        indexes.find(declaresOnlineBuild) ??
-        (() => {
-          throw new TypeError("Expected a buildable online index");
-        })()
-      );
-    };
-    const otherBuildable = (name: string): OnlineIndexDeclaration => {
-      const indexes: readonly OnlineIndexDeclaration[] =
-        ONLINE_MIGRATION_INDEXES;
-      return (
-        indexes.find(
-          (index) => declaresOnlineBuild(index) && index.name !== name,
-        ) ??
-        (() => {
-          throw new TypeError("Expected a second buildable online index");
-        })()
-      );
-    };
+    // Registered entries keep their literal names, which a claim requires.
+    type RegisteredIndex = (typeof ONLINE_MIGRATION_INDEXES)[number];
+    const buildable = (): RegisteredIndex =>
+      ONLINE_MIGRATION_INDEXES.find((index) => declaresOnlineBuild(index)) ??
+      (() => {
+        throw new TypeError("Expected a buildable online index");
+      })();
+    const otherBuildable = (name: string): RegisteredIndex =>
+      ONLINE_MIGRATION_INDEXES.find(
+        (index) => declaresOnlineBuild(index) && index.name !== name,
+      ) ??
+      (() => {
+        throw new TypeError("Expected a second buildable online index");
+      })();
     const claimOptions = {
       indexGate: healthyIndexGate,
       timing: { clock: () => 0, emit: () => undefined },
@@ -246,9 +238,9 @@ describe("online migrations", () => {
         recorded.push({ result, released: harness.released() });
       });
       // The result reaches the caller while the session still holds the lock.
-      expect(recorded).toEqual([
-        { result: Result.ok({ type: "complete" }), released: false },
-      ]);
+      expect(recorded).toHaveLength(1);
+      expect(recorded.at(0)?.released).toBe(false);
+      expect(recorded.at(0)?.result).toEqual(Result.ok({ type: "complete" }));
       expect(harness.statements).toContain(index.createSql);
       expect(harness.statements).not.toContain(other.createSql);
       expect(

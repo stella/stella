@@ -1,4 +1,4 @@
-import { p, sql, stella, timestamptz } from "./common";
+import { p, sql, timestamptz } from "./common";
 
 export const ONLINE_WORK_STATES = ["building", "finalized", "failed"] as const;
 
@@ -22,11 +22,11 @@ export const onlineWorkState = p.pgTable(
         sql`, `,
       )})`,
     ),
-    p.pgPolicy("online_work_state_no_stella_access", {
+    p.pgPolicy("online_work_state_owner_access", {
       for: "all",
-      to: stella,
-      using: sql`false`,
-      withCheck: sql`false`,
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.online_work_state'::regclass)`,
     }),
   ],
 );

@@ -774,14 +774,20 @@ type OnlineMigrationOptions = {
 
 /**
  * Which registered work a walk touches. Releases and startup touch finalized
- * work only; the post-deploy runner touches one pending unit at a time.
+ * work only; the post-deploy runner touches one pending unit at a time; a
+ * fresh database compared with the declared schema touches all of it.
  */
 type OnlineWorkScope =
   | { type: "finalized" }
+  | { type: "all" }
   | { type: "unit"; name: OnlineWorkName };
 
 export const FINALIZED_SCOPE = {
   type: "finalized",
+} as const satisfies OnlineWorkScope;
+
+export const ALL_WORK_SCOPE = {
+  type: "all",
 } as const satisfies OnlineWorkScope;
 
 type OnlineWorkInScope = (name: string) => boolean;
@@ -804,6 +810,8 @@ const onlineWorkInScope =
     switch (scope.type) {
       case "unit":
         return name === scope.name;
+      case "all":
+        return true;
       case "finalized":
         switch (entry.state) {
           case "pending":
@@ -933,7 +941,7 @@ const processOnlineMigrations = async ({
 };
 
 /** What a claimed walk ended with: its outcome, or what it threw. */
-export type OnlineWorkRunResult = Result<OnlineMigrationOutcome, unknown>;
+type OnlineWorkRunResult = Result<OnlineMigrationOutcome, unknown>;
 
 export type OnlineWorkUnitClaim =
   | { type: "lock_held" }
