@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { aiUnavailableResponse } from "@/__fixtures__/ai-availability";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
@@ -19,15 +20,7 @@ globalThis.fetch = Object.assign(
       return Response.json(null);
     }
     if (url.pathname.endsWith("/organization-settings/ai-availability")) {
-      return Response.json({
-        available: false,
-        instanceProvisioned: false,
-        orgConfigured: false,
-        unavailableReason: "provider_not_configured",
-        providerConfiguration,
-        deferredServiceTierAvailable: false,
-        mockAnswers: false,
-      });
+      return Response.json(aiUnavailableResponse({ providerConfiguration }));
     }
     if (
       url.pathname.endsWith("/organization-settings/ai-config/defaults-preview")
