@@ -33,10 +33,10 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import {
-  isExcludedHtmlTag,
-  ownTableRows,
   appendTextInline,
   inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 

@@ -80,9 +80,9 @@ import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidan
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import {
+  type ReadOutcome,
   readPresent,
   readUnavailable,
-  type ReadOutcome,
 } from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
@@ -292,8 +292,7 @@ export type McpRequestContext = {
    * registry and the tool is dropped.
    */
   loadEnabledRegistrySlugs?:
-    | (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>)
-    | undefined;
+    (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>) | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -308,8 +307,7 @@ export type McpRequestContext = {
   createOperationDatabaseScope?: (() => McpOperationDatabaseScope) | undefined;
   /** Pin one workspace only after an MCP access/status gate proves it. */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   /**
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
@@ -599,8 +597,7 @@ export const resolveMcpSessionContext = async (
   // Read once, on first use within this request: settings and decrypted
   // registry credentials in one scoped transaction.
   let enabledRegistrySlugs:
-    | Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>
-    | undefined;
+    Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> | undefined;
   const loadEnabledRegistrySlugs = async () => {
     enabledRegistrySlugs ??= readEnabledRegistrySlugs({
       organizationId,

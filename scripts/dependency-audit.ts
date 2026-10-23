@@ -44,8 +44,8 @@ import { repoRelativePath } from "@stll/portable-path";
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
   expiringAcceptances,
-  lapsedAcceptances,
   type LapsedAcceptance,
+  lapsedAcceptances,
 } from "./dependency-audit-acceptance";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 

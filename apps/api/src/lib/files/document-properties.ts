@@ -28,8 +28,8 @@ import type {
 import { writeZipEntry } from "@stll/docx-utils";
 import {
   isOfficeCollaborationPart,
-  officeIdentityFields,
   officeIdentityAttributePolicy,
+  officeIdentityFields,
 } from "@stll/docx-utils/office-metadata";
 
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
@@ -39,8 +39,8 @@ import {
   firstXmlElement,
   removeXmlElements,
   replaceXmlElementContent,
-  XmlScanError,
   xmlElementText,
+  XmlScanError,
 } from "@/api/lib/files/xml-scan";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

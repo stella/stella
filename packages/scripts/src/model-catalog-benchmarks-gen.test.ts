@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  MODEL_BENCHMARK_RATINGS,
   MODEL_BENCHMARK_PUBLISH_DATE,
+  MODEL_BENCHMARK_RATINGS,
 } from "@stll/ai-catalog/benchmarks";
 import { Temporal } from "@stll/time";
 
