@@ -171,6 +171,12 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-tick.js \
     apps/api/src/scripts/replay-tick.ts
+# Weekly Czech Constitutional Court roster import and load-aware relink.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/import-cz-us-roster.js \
+    apps/api/src/scripts/import-cz-us-roster.ts
 # Bounded EU completion ticks and operator controls.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
@@ -412,6 +418,7 @@ COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
 COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
+COPY --chown=stella:stella --from=builder /app/import-cz-us-roster.js /app/import-cz-us-roster.js
 COPY --chown=stella:stella --from=builder /app/review-account.js /app/review-account.js
 COPY --chown=stella:stella --from=builder /app/eu-completion-tick.js /app/eu-completion-tick.js
 COPY --chown=stella:stella --from=builder /app/eu-completion-control.js /app/eu-completion-control.js

@@ -464,6 +464,12 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
+      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/import-cz-us-roster.js apps/api/src/scripts/import-cz-us-roster.ts",
+    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+  },
+  {
+    file: "apps/api/Dockerfile",
+    command:
       "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/review-account.js apps/api/src/scripts/review-account.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
