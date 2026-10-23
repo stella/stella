@@ -967,8 +967,8 @@ jobs:
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
             {
               echo 'ci_tests_required=true'
-              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}'
-              echo 'api_test_shards=3'
+              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}'
+              echo 'api_test_shards=6'
               echo 'test_scope='
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
@@ -2131,6 +2131,10 @@ jobs:
     runs-on: ubuntu-24.04
     # Retain the repository-check budget after moving optional compiler proofs.
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
     permissions:
       contents: read
       actions: write
@@ -2441,6 +2445,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
         run: |
@@ -2867,9 +2872,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The UI playground suite runs alone in three Playwright shards: on one
+        # The UI playground suite runs alone in six Playwright shards: on one
         # runner its dev-server page loads made it the longest merge-group job.
-        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3"]') }}
+        suite: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","ui","playground-1","playground-2","playground-3","playground-4","playground-5","playground-6"]') }}
     container:
       image: ${{ needs.ci-plan.outputs.playwright_image }}
       credentials: ${{ startsWith(needs.ci-plan.outputs.playwright_image, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
@@ -3056,13 +3061,13 @@ jobs:
           if-no-files-found: ignore
 
       - name: Test UI playground visuals
-        if: (matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3') && steps.ui-browser-tests.outputs.required == 'true'
+        if: (matrix.suite == 'playground-1' || matrix.suite == 'playground-2' || matrix.suite == 'playground-3' || matrix.suite == 'playground-4' || matrix.suite == 'playground-5' || matrix.suite == 'playground-6') && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-playground-visuals.json
           SUITE: ${{ matrix.suite }}
         run: |
           cd apps/web
-          bun run test:e2e:ui-playground --shard="${SUITE#playground-}/3"
+          bun run test:e2e:ui-playground --shard="${SUITE#playground-}/6"
 
       - name: Test extension browser boundary
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
@@ -4597,6 +4602,14 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      # Every Playwright invocation below consumes this output. Keeping the
+      # denominator beside the matrix planner makes a shard-count change
+      # atomic instead of leaving an invocation on the previous total.
+      - name: Read production E2E shard count
+        id: e2e-shards
+        timeout-minutes: 1
+        run: echo "count=$(bun scripts/e2e-spec-shards-core.ts count)" >> "$GITHUB_OUTPUT"
+
       - name: Resolve e2e shard budget
         id: e2e-budget
         timeout-minutes: 1
@@ -4682,7 +4695,7 @@ jobs:
           SECONDS=0
           case "$E2E_MODE" in
             full)
-              args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/2)
+              args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/${{ steps.e2e-shards.outputs.count }})
               ;;
             selected)
               specs_output=$(jq -r '.[]' <<< "$E2E_SPECS")
@@ -4713,7 +4726,7 @@ jobs:
             E2E_OUTPUT_DIR=test-results/geometry \
               PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/.cache/playwright-timings/run-geometry-shard.json" \
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
-              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
+              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/${{ steps.e2e-shards.outputs.count }} || status=$?
           fi
           bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
           exit "$status"
@@ -4745,7 +4758,7 @@ jobs:
         run: >-
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
-          --shard=${{ matrix.shard }}/2
+          --shard=${{ matrix.shard }}/${{ steps.e2e-shards.outputs.count }}
           --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report
@@ -6435,6 +6448,7 @@ jobs:
       # `ci-required-summary` artifact holds the same record.
       required_summary: ${{ steps.outcome.outputs.required_summary }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 55
     permissions:
       contents: read
       actions: write
@@ -6658,7 +6672,7 @@ jobs:
           # on this run's concurrency group, and a newer code run reports its
           # own ci-result, so waiting on either would only wait out the deadline.
           mirror_metadata_code_run() {
-            local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate run_status jobs plan_name result status attempt record evidence evidence_run running passed_through=""
+            local poll_seconds=30 max_wait_seconds=2700 waited=0 runs candidates candidate run_status jobs plan_name result status attempt record evidence evidence_run running passed_through=""
             while true; do
               runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100") || {
                 echo "::error::Metadata mirror could not list CI code runs."
@@ -6770,7 +6784,7 @@ jobs:
                 return 1
               fi
               if ((waited >= max_wait_seconds)); then
-                echo "::error::Metadata mirror: code run still running after 90 min."
+                echo "::error::Metadata mirror: timed out after 45 min waiting for a code run of head $HEAD_SHA to report. Re-run that code run, or push."
                 return 1
               fi
               sleep "$poll_seconds"
