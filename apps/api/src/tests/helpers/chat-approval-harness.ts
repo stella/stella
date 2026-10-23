@@ -54,8 +54,8 @@ import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type {
-  ChatHarnessProfile,
   ChatHarnessPhase,
+  ChatHarnessProfile,
 } from "@/api/tests/helpers/chat-harness-profile";
 import {
   findLiveViewViolations,

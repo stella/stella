@@ -10,7 +10,7 @@
 // dated-waiver-healing run rechecks it before the date.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {

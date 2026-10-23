@@ -15,9 +15,9 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   auditLogs,
   organizationProfessionalUseAcceptances,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";

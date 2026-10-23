@@ -11,12 +11,12 @@ import { copyRichToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
 import {
+  AddCommentIcon,
   Building2Icon,
   ChevronDownIcon,
   CopyFromMenuIcon,
   HighlighterIcon,
   LockIcon,
-  AddCommentIcon,
   SparklesIcon,
   StrikethroughIcon,
   Trash2Icon,

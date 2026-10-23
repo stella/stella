@@ -13,8 +13,8 @@ import {
   isDeltaEmpty,
   originHash,
   readCacheFile,
-  writeCacheFile,
   type RegistryCacheFile,
+  writeCacheFile,
 } from "./registry-cache.js";
 import type { RegistryToolListing } from "./route-types.js";
 

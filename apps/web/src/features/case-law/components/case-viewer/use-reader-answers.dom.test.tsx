@@ -6,8 +6,8 @@ import { DetachedWindowAPI } from "happy-dom";
 
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
-  ReaderAnswerErrorCode,
   ReaderAnswer,
+  ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";

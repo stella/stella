@@ -1,5 +1,5 @@
 import { detectPlatform, formatForDisplay } from "@tanstack/react-hotkeys";
-import type { IndividualKey, Hotkey } from "@tanstack/react-hotkeys";
+import type { Hotkey, IndividualKey } from "@tanstack/react-hotkeys";
 
 import type { TranslationKey } from "@/i18n/types";
 
