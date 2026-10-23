@@ -47,6 +47,13 @@ import {
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { prHeavyJobs } from "./ci-pr-jobs";
+import {
+  embedsExpression,
+  GITHUB_EXPRESSION_LIMIT,
+  renderResultInputs,
+  RESULT_INPUTS_RUN,
+  RESULT_INPUTS_STEP,
+} from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { GENERATORS } from "./generated-files";
@@ -570,6 +577,12 @@ const resultStep = v.parse(
   }),
   evaluationSteps.at(0),
 );
+const resultInputsSteps = resultJob.steps.filter((step) =>
+  v.is(v.object({ name: v.literal(RESULT_INPUTS_STEP) }), step),
+);
+const resultInputsStepIndex = resultJob.steps.findIndex((step) =>
+  v.is(v.object({ name: v.literal(RESULT_INPUTS_STEP) }), step),
+);
 
 const jobScopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
@@ -945,7 +958,15 @@ const resultGateCase = ({
   const codeRun = metadataCodeRunFixtures(metadataCodeRun);
   return {
     flags: ["-eu"],
-    script: outcomeScript,
+    script: renderResultInputs(outcomeScript, {
+      needs: JSON.stringify(needs),
+      plan: JSON.stringify({
+        ...plan,
+        ...plannedOutputs,
+        suite_depth: suiteDepth,
+        trusted,
+      }),
+    }),
     args: [],
     env: {
       GH_RETRY_SCRIPT: nodePath.resolve(import.meta.dir, "gh-retry.sh"),
@@ -981,7 +1002,6 @@ const resultGateCase = ({
       FAKE_CODE_JOBS_FIRST: JSON.stringify(codeRun.firstJobs),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
-      NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       FAST_JOB_SCOPES: resultStep.env["FAST_JOB_SCOPES"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
@@ -990,12 +1010,6 @@ const resultGateCase = ({
       HEAD_SHA: "a".repeat(40),
       METADATA_ONLY: codeRun.enabled,
       RUN_REQUIRED: codeRun.runRequired,
-      PLAN: JSON.stringify({
-        ...plan,
-        ...plannedOutputs,
-        suite_depth: suiteDepth,
-        trusted,
-      }),
       PLAN_RESULT: needs["ci-plan"]?.result ?? "",
       SUITE_DEPTH: suiteDepth,
       TRUSTED: trusted,
@@ -1098,7 +1112,6 @@ test("the result gate evaluates every job in the workflow", () => {
   }
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
-  expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   for (const {
     item: { label },
     exitCode,
@@ -2738,6 +2751,95 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     "format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '')",
   );
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
+});
+
+test("jobs that need ci-plan never hand its outputs over in the environment", () => {
+  // One environment or input value above Linux's 128 KiB limit stops a step
+  // before it starts, and ci-plan's change lists and test plans exceed it.
+  // Such jobs read `needs` from their script text instead.
+  const stepSchema = v.looseObject({
+    name: v.optional(v.string()),
+    env: v.optional(v.record(v.string(), v.unknown())),
+    with: v.optional(v.record(v.string(), v.unknown())),
+  });
+  const unbounded = /toJSON\(\s*needs\s*(?:\.\s*ci-plan\s*\.\s*outputs\s*)?\)/u;
+  const offenders = Object.entries(ciJobs).flatMap(([name, job]) => {
+    const parsed = v.parse(
+      v.looseObject({
+        needs: v.optional(v.union([v.string(), v.array(v.string())])),
+        env: v.optional(v.record(v.string(), v.unknown())),
+        steps: v.optional(v.array(v.unknown())),
+      }),
+      job,
+    );
+    if (![parsed.needs ?? []].flat().includes("ci-plan")) {
+      return [];
+    }
+    const steps = flattenWorkflowSteps(parsed.steps ?? []).map((step) =>
+      v.parse(stepSchema, step),
+    );
+    return [
+      ...Object.entries(parsed.env ?? {}).map(([key, value]) => ({
+        where: `${name}/env`,
+        key,
+        value,
+      })),
+      ...steps.flatMap((step) =>
+        Object.entries({ ...step.env, ...step.with }).map(([key, value]) => ({
+          where: `${name}/${step.name ?? "unnamed step"}`,
+          key,
+          value,
+        })),
+      ),
+    ]
+      .filter(({ value }) => typeof value === "string" && unbounded.test(value))
+      .map(({ where, key }) => `${where}: ${key}`);
+  });
+  expect(offenders).toEqual([]);
+});
+
+test("ci-result's outcome step reads its inputs from the step written right before it", () => {
+  // The harness runs RESULT_INPUTS_RUN before the outcome script, so the
+  // workflow must declare exactly that script, immediately before it.
+  expect(resultInputsSteps).toEqual([
+    { name: RESULT_INPUTS_STEP, run: RESULT_INPUTS_RUN },
+  ]);
+  expect(resultJob.steps[resultInputsStepIndex + 1]).toBe(
+    evaluationSteps.at(0),
+  );
+  expect(embedsExpression(resultStep.run)).toBe(false);
+});
+
+test("no workflow string that embeds an expression exceeds GitHub's expression limit", async () => {
+  // GitHub evaluates a string embedding an expression as one expression and
+  // refuses the whole workflow file when one exceeds the limit, so no
+  // pull_request run starts at all.
+  const directory = new URL("../.github/workflows/", import.meta.url);
+  const offenders: string[] = [];
+  const visit = (value: unknown, where: string) => {
+    if (typeof value === "string") {
+      if (embedsExpression(value) && value.length > GITHUB_EXPRESSION_LIMIT) {
+        offenders.push(`${where} (${value.length} characters)`);
+      }
+    } else if (Array.isArray(value)) {
+      for (const [index, item] of value.entries()) {
+        visit(item, `${where}[${index}]`);
+      }
+    } else if (typeof value === "object" && value !== null) {
+      for (const [key, item] of Object.entries(value)) {
+        visit(item, `${where}.${key}`);
+      }
+    }
+  };
+  for (const file of new Bun.Glob("*.{yml,yaml}").scanSync(
+    directory.pathname,
+  )) {
+    visit(
+      Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
+      file,
+    );
+  }
+  expect(offenders).toEqual([]);
 });
 
 test("metadata runs report the required result while scope-changing labels still run", () => {
