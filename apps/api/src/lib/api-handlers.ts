@@ -471,9 +471,7 @@ const requiresAccountCheck = (accountAccess: AccountAccess) =>
   accountAccess !== ACCOUNT_ACCESS.sandbox;
 
 export type HandlerConfigurationAdmission =
-  | "allowed"
-  | "permission_required"
-  | "account_restricted";
+  "allowed" | "permission_required" | "account_restricted";
 
 /**
  * Projects the permission and restricted-account checks performed by safe
