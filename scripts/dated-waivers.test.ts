@@ -458,15 +458,19 @@ test("exception identity survives sibling removal and rejects ambiguous covered 
   );
 });
 
+// Scoped like an unrelated pull request: the real inventory must load and
+// validate, but no waiver's date can fail this test on the day it elapses.
 test("check consumes validated tracked files without spawning under the offline preload", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
   const trackedFiles = path.join(directory, "tracked-files");
+  const changedFiles = path.join(directory, "changed-files");
   try {
     const git = Bun.spawnSync(["git", "ls-files", "-z"], {
       cwd: path.resolve(import.meta.dir, ".."),
     });
     expect(git.exitCode).toBe(0);
     writeFileSync(trackedFiles, git.stdout);
+    writeFileSync(changedFiles, "apps/web/src/unrelated.ts\0");
 
     const checked = Bun.spawnSync(
       [
@@ -477,6 +481,8 @@ test("check consumes validated tracked files without spawning under the offline 
         "--check",
         "--tracked-files",
         trackedFiles,
+        "--changed-files",
+        changedFiles,
       ],
       { cwd: path.resolve(import.meta.dir, "..") },
     );
