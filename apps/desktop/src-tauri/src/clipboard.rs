@@ -1762,15 +1762,66 @@ impl ClipboardManager {
   }
 
   pub fn set_item_name(&mut self, id: &str, name: &str) -> Result<bool, String> {
-    let name = name.trim();
-    if name.chars().count() > MAX_ITEM_NAME_CHARACTERS {
-      return Err("clipboard item name is invalid".to_string());
-    }
+    let name = valid_item_name(name)?;
     let checkpoint = self.checkpoint();
     let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
       return Ok(false);
     };
-    item.set_name((!name.is_empty()).then(|| name.to_string()));
+    item.set_name(name);
+    prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  /// The editor's Save: name, group and, for a text clip, its content land
+  /// together or not at all. `text` is required for text clips and refused
+  /// for images.
+  pub fn save_editor_item(
+    &mut self,
+    id: &str,
+    name: &str,
+    group_id: Option<String>,
+    text: Option<(&str, Option<&str>)>,
+  ) -> Result<bool, String> {
+    let name = valid_item_name(name)?;
+    if let Some(group_id) = &group_id
+      && !self.groups.iter().any(|group| group.id == *group_id)
+    {
+      return Err("clipboard group does not exist".to_string());
+    }
+    let text = text
+      .map(|(plain_text, html)| {
+        if plain_text.trim().is_empty() || plain_text.len() > MAX_ITEM_TEXT_BYTES {
+          return Err("clipboard item text is invalid".to_string());
+        }
+        if html.is_some_and(|html| html.len() > MAX_ITEM_HTML_BYTES) {
+          return Err("clipboard item formatting is invalid".to_string());
+        }
+        Ok((plain_text, html.and_then(sanitized_html)))
+      })
+      .transpose()?;
+    let checkpoint = self.checkpoint();
+    let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
+      return Ok(false);
+    };
+    match (matches!(&*item, ClipboardItem::Image { .. }), text) {
+      (true, Some(_)) => {
+        return Err("clipboard image cannot be edited as text".to_string());
+      }
+      (false, None) => {
+        return Err("clipboard item text is invalid".to_string());
+      }
+      (true, None) => {}
+      (false, Some((plain_text, html))) => {
+        if !item.same_text_content(plain_text, html.as_deref()) {
+          item.replace_content(plain_text.to_string(), html);
+        }
+      }
+    }
+    item.set_name(name);
+    if item.group_id() != group_id.as_deref() {
+      item.set_group_id(group_id, Utc::now());
+    }
     prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
@@ -3468,6 +3519,15 @@ fn read_bounded_image_file(path: &Path) -> Result<Vec<u8>, String> {
   .map_err(|error| format!("clipboard image file could not be read: {error}"))?;
   validate_clipboard_image_source_size(bytes.len())?;
   Ok(bytes)
+}
+
+/// A name the user typed: trimmed, and empty meaning unnamed.
+fn valid_item_name(name: &str) -> Result<Option<String>, String> {
+  let name = name.trim();
+  if name.chars().count() > MAX_ITEM_NAME_CHARACTERS {
+    return Err("clipboard item name is invalid".to_string());
+  }
+  Ok((!name.is_empty()).then(|| name.to_string()))
 }
 
 /// A name the capture itself supplies, held to the cap `set_item_name` keeps.
@@ -6225,6 +6285,94 @@ mod tests {
       Err("clipboard image cannot be edited as text".to_string())
     );
     assert_eq!(manager.items, vec![item]);
+  }
+
+  #[test]
+  fn editor_save_names_regroups_and_rewrites_a_text_clip_together() {
+    let mut manager = ready_manager();
+    assert!(capture(&mut manager, "old", None, Utc::now()));
+    let group_id = manager
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#34d399").unwrap(),
+        None,
+      )
+      .unwrap();
+    let item_id = manager.items[0].id().to_string();
+
+    assert!(
+      manager
+        .save_editor_item(
+          &item_id,
+          "  K 21/24  ",
+          Some(group_id.clone()),
+          Some(("new", None)),
+        )
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].name(), Some("K 21/24"));
+    assert_eq!(manager.items[0].group_id(), Some(group_id.as_str()));
+    assert_eq!(manager.items[0].plain_text(), Some("new"));
+
+    // Clearing the field unnames the clip.
+    assert!(
+      manager
+        .save_editor_item(&item_id, " ", None, Some(("new", None)))
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].name(), None);
+    assert_eq!(manager.items[0].group_id(), None);
+  }
+
+  #[test]
+  fn editor_save_names_an_image_without_text() {
+    let item = image_item("image", "image-blob", "image-checksum", 4);
+    let mut manager = ready_manager();
+    manager.items.push(item);
+
+    assert!(
+      manager
+        .save_editor_item("image", "Signature page", None, None)
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].name(), Some("Signature page"));
+    assert_eq!(
+      manager.save_editor_item("image", "Other", None, Some(("text", None))),
+      Err("clipboard image cannot be edited as text".to_string())
+    );
+    assert_eq!(manager.items[0].name(), Some("Signature page"));
+  }
+
+  #[test]
+  fn editor_save_with_an_invalid_part_changes_nothing() {
+    let mut manager = ready_manager();
+    assert!(capture(&mut manager, "old", None, Utc::now()));
+    let item_id = manager.items[0].id().to_string();
+    let before = manager.items.clone();
+
+    assert_eq!(
+      manager.save_editor_item(
+        &item_id,
+        &"界".repeat(MAX_ITEM_NAME_CHARACTERS + 1),
+        None,
+        Some(("new", None)),
+      ),
+      Err("clipboard item name is invalid".to_string())
+    );
+    assert_eq!(
+      manager.save_editor_item(&item_id, "Name", None, None),
+      Err("clipboard item text is invalid".to_string())
+    );
+    assert_eq!(
+      manager.save_editor_item(
+        &item_id,
+        "Name",
+        Some("missing".to_string()),
+        Some(("new", None)),
+      ),
+      Err("clipboard group does not exist".to_string())
+    );
+    assert_eq!(manager.items, before);
   }
 
   #[test]

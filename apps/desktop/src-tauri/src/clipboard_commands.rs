@@ -1,5 +1,5 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Instant};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
@@ -31,6 +31,14 @@ pub struct ClipboardEditorContext {
   groups: Vec<ClipboardGroup>,
   item: ClipboardItem,
   source_app_visual: Option<ClipboardSourceAppVisual>,
+}
+
+/// The edited content of a text clip; an image clip saves without one.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardEditorText {
+  plain_text: String,
+  html: Option<String>,
 }
 
 fn lock_error<T>(poisoned: PoisonError<T>) -> String {
@@ -435,15 +443,18 @@ pub fn clipboard_get_image_preview(
 pub fn clipboard_save_editor_item(
   _caller: ClipboardCaller,
   id: String,
-  plain_text: String,
-  html: Option<String>,
+  name: String,
+  text: Option<ClipboardEditorText>,
   group_id: Option<String>,
   app: AppHandle,
   state: State<'_, ClipboardAppState>,
 ) -> Result<(), String> {
+  let text = text
+    .as_ref()
+    .map(|text| (text.plain_text.as_str(), text.html.as_deref()));
   {
     let mut manager = state.lock().map_err(lock_error)?;
-    if !manager.update_item(&id, &plain_text, html.as_deref(), group_id)? {
+    if !manager.save_editor_item(&id, &name, group_id, text)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
   }

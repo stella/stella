@@ -18,6 +18,7 @@ import {
   clipboardRailWindow,
   clipboardSearchPreviewText,
   clipboardSourceTintIndex,
+  clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
@@ -978,5 +979,51 @@ describe("clipboardItemLink", () => {
         plainText: "https://example.com/exhibit",
       })?.host,
     ).toBe("example.com");
+  });
+});
+
+describe("clipboardUntitledName", () => {
+  const KIND_LABELS = { image: "Image", text: "Text" };
+  const BROWSER_SOURCE = {
+    identifier: "com.google.Chrome",
+    name: "Google Chrome",
+    page: {
+      host: "www.example.com",
+      origin: "https://www.example.com",
+      url: "https://www.example.com/ruling",
+    },
+    visualKey: null,
+  };
+
+  test("names a browser copy after its page", () => {
+    expect(
+      clipboardUntitledName(
+        { ...IMAGE_ITEM, sourceApp: BROWSER_SOURCE },
+        KIND_LABELS,
+      ),
+    ).toBe("example.com");
+  });
+
+  test("names a link after its host, else the clip after its kind", () => {
+    expect(
+      clipboardUntitledName(
+        { ...TEXT_ITEM, plainText: "https://court.example/decision" },
+        KIND_LABELS,
+      ),
+    ).toBe("court.example");
+    expect(clipboardUntitledName(TEXT_ITEM, KIND_LABELS)).toBe("Text");
+    expect(clipboardUntitledName(IMAGE_ITEM, KIND_LABELS)).toBe("Image");
+  });
+
+  test("skips an app source without a page", () => {
+    expect(
+      clipboardUntitledName(
+        {
+          ...TEXT_ITEM,
+          sourceApp: { ...BROWSER_SOURCE, name: "Word", page: null },
+        },
+        KIND_LABELS,
+      ),
+    ).toBe("Text");
   });
 });
