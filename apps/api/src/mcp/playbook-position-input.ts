@@ -31,7 +31,7 @@ import type {
   TierRule,
 } from "@/api/lib/workflow/playbook-positions";
 import { gradedPositionHasContent } from "@/api/lib/workflow/playbook-positions-validation";
-import { uuidInputSchema } from "@/api/mcp/tool-utils";
+import { uuidInputSchema } from "@/api/mcp/input-schemas";
 
 /** Answer types an AI ask can extract that need no further configuration. */
 export const PLAYBOOK_ANSWER_TYPES = ["text", "date", "int"] as const;

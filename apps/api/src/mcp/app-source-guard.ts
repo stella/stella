@@ -84,6 +84,65 @@ const importsServerModule = (node: ts.Node, file: string) => {
   return resolved === "apps/api" || resolved.startsWith("apps/api/");
 };
 
+const appMemberName = (node: ts.Node, source: ts.SourceFile) => {
+  if (ts.isPropertyAccessExpression(node)) {
+    return node.name.text;
+  }
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isStringLiteral(node.argumentExpression)
+  ) {
+    return node.argumentExpression.text;
+  }
+  if (ts.isBindingElement(node)) {
+    return node.propertyName?.getText(source) ?? node.name.getText(source);
+  }
+  return undefined;
+};
+
+type AppSizingOptions = { node: ts.Node; source: ts.SourceFile; file: string };
+const inspectAppSizing = ({ node, source, file }: AppSizingOptions) => {
+  const issues: string[] = [];
+  const member = appMemberName(node, source);
+  if (
+    file !== "shared/size.ts" &&
+    (member === "sendSizeChanged" ||
+      member === "setupSizeChangedNotifications" ||
+      (ts.isStringLiteralLike(node) &&
+        node.text === "ui/notifications/size-changed"))
+  ) {
+    issues.push(`App size reporting requires the shared viewport: ${file}`);
+  }
+  if (
+    !SDK_OWNERS.has(file) ||
+    !ts.isNewExpression(node) ||
+    !ts.isIdentifier(node.expression) ||
+    node.expression.text !== "App"
+  ) {
+    return issues;
+  }
+  const options = node.arguments?.at(2);
+  const disablesAutoResize =
+    options !== undefined &&
+    ts.isObjectLiteralExpression(options) &&
+    options.properties.every((property) => !ts.isSpreadAssignment(property)) &&
+    options.properties.filter(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        property.name.getText(source) === "autoResize",
+    ).length === 1 &&
+    options.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        property.name.getText(source) === "autoResize" &&
+        property.initializer.kind === ts.SyntaxKind.FalseKeyword,
+    );
+  if (!disablesAutoResize) {
+    issues.push(`App automatic resizing bypasses the shared viewport: ${file}`);
+  }
+  return issues;
+};
+
 export const inspectAppSources = (
   sources: Readonly<Record<string, string>>,
 ): string[] => {
@@ -108,7 +167,8 @@ export const inspectAppSources = (
       if (importsServerModule(node, file)) {
         issues.push(`Server modules must stay outside browser apps: ${file}`);
       }
-      if (SDK_OWNERS.has(file)) {
+      issues.push(...inspectAppSizing({ node, source, file }));
+      if (file === "shared/bridge.ts") {
         ts.forEachChild(node, visit);
         return;
       }
@@ -145,14 +205,15 @@ export const inspectAppSources = (
         }
       }
       if (
-        (ts.isPropertyAccessExpression(node) &&
+        !SDK_OWNERS.has(file) &&
+        ((ts.isPropertyAccessExpression(node) &&
           node.name.text === "callServerTool") ||
-        (ts.isElementAccessExpression(node) &&
-          ts.isStringLiteral(node.argumentExpression) &&
-          node.argumentExpression.text === "callServerTool") ||
-        (ts.isBindingElement(node) &&
-          (node.propertyName?.getText(source) ?? node.name.getText(source)) ===
-            "callServerTool")
+          (ts.isElementAccessExpression(node) &&
+            ts.isStringLiteral(node.argumentExpression) &&
+            node.argumentExpression.text === "callServerTool") ||
+          (ts.isBindingElement(node) &&
+            (node.propertyName?.getText(source) ??
+              node.name.getText(source)) === "callServerTool"))
       ) {
         issues.push(`App calls require the shared bridge: ${file}`);
       }

@@ -95,6 +95,14 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  countryInputSchema,
+  countryNormalization,
+  cursorInput,
+  ISO_DATE_SCHEMA,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
+import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
   runTextFieldSpecs,
@@ -109,21 +117,15 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  countryInputSchema,
-  countryNormalization,
-  cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   toolDataResult,
-  uuidInputSchema,
   entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";

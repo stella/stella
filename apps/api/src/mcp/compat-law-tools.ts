@@ -25,13 +25,10 @@ import {
   encodeCompatSearchCursor,
   invalidCompatIdResult,
 } from "@/api/mcp/compat-shared";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import {
-  cursorInput,
-  nullAsAbsent,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { validationErrorResult } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,

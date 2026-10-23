@@ -10,6 +10,7 @@ import type {
   ResolveResults,
   SearchResults,
 } from "../shared/generated/contracts";
+import { projectAppToolArguments } from "../shared/tool-input";
 
 type SearchPage = Extract<SearchResults, { results: unknown }>;
 type RowContent =
@@ -192,7 +193,7 @@ export type CaseLawView =
   | ReturnType<typeof searchView>
   | ReturnType<typeof resolveView>;
 
-export type CourtSelection =
+type CourtSelection =
   | { type: "all" }
   | { type: "court"; name: string }
   | { type: "courts"; names: readonly string[] };
@@ -212,6 +213,7 @@ export const searchFilterInput = ({
   from,
   to,
 }: SearchFilterArgs) => {
+  const declared = projectAppToolArguments("search_case_law", input);
   const {
     cursor: _cursor,
     court: _court,
@@ -220,7 +222,7 @@ export const searchFilterInput = ({
     date_to: _to,
     country: _country,
     ...rest
-  } = input;
+  } = declared;
   const base = {
     ...rest,
     country,

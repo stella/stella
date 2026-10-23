@@ -1,4 +1,7 @@
 import { panic } from "better-result";
+import path from "node:path";
+
+import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
 
 export const trackedMcpGeneratedFiles = (files: readonly string[]) =>
   files.filter(
@@ -26,6 +29,23 @@ export const checkMcpGeneratedTracking = (root: string) => {
   console.log("MCP generated outputs are untracked");
 };
 
+export const checkMcpGeneratedOutputs = async (root: string) => {
+  const files = ciGeneratedFiles(root).filter((file) =>
+    file.startsWith("packages/mcp-apps/src/"),
+  );
+  if (files.length === 0) {
+    panic("No MCP app generated outputs are declared");
+  }
+  for (const file of files) {
+    const output = Bun.file(path.join(root, file));
+    if (!(await output.exists()) || output.size === 0) {
+      panic(`MCP generated output is missing or empty: ${file}`);
+    }
+  }
+};
+
 if (import.meta.main) {
-  checkMcpGeneratedTracking(new URL("..", import.meta.url).pathname);
+  const root = new URL("..", import.meta.url).pathname;
+  checkMcpGeneratedTracking(root);
+  await checkMcpGeneratedOutputs(root);
 }

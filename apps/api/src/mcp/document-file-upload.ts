@@ -17,6 +17,7 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { nullAsAbsent, uuidInputSchema } from "@/api/mcp/input-schemas";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -24,10 +25,8 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
-  nullAsAbsent,
   structuredErrorResult,
   structuredEgressPlan,
-  uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 
 export const DOCUMENT_UPLOAD_APP_RESOURCE_URI =
