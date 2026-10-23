@@ -18,13 +18,10 @@ import {
 } from "@stll/ui/composer";
 import { cn } from "@stll/ui/utils";
 
-import {
-  ChatSubmitPreservedError,
-  useChatComposerWiring,
-} from "@/components/chat-editor-provider";
+import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
-  ChatInputDraft,
+  ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
@@ -62,7 +59,7 @@ type ChatInputSurfaceProps = {
    * Both variants keep the (+) at the start of the bottom action row.
    */
   variant?: "compact" | "large";
-  onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  onSubmit: ChatSend;
   onFocusChange?: ((focused: boolean) => void) | undefined;
   /**
    * When set, the surface renders an in-line stop button while
@@ -175,9 +172,6 @@ export const ChatInputSurface = ({
   // failure into telemetry alone leaves the send silently lost.
   const handleSubmitError = useCallback(
     (error: unknown): void => {
-      if (ChatSubmitPreservedError.is(error)) {
-        return;
-      }
       getAnalytics().captureError(error, {
         fingerprintKey: "ChatInputSurface:failure",
         scope: { type: "handler", handlerId: "ChatInputSurface:failure" },

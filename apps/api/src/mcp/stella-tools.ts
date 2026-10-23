@@ -1133,7 +1133,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+      "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -3956,8 +3956,8 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
               knownGaps:
-                source.knownGaps.type === "known"
-                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                source.knownGaps.type === "reconciled"
+                  ? { ...source.knownGaps, years: [...source.knownGaps.years] }
                   : source.knownGaps,
             })),
             courts: null,
@@ -3977,8 +3977,8 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
               decisionYearTo: source.decisionYearTo,
               pendingTextCount: source.pendingTextCount,
               knownGaps:
-                source.knownGaps.type === "known"
-                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                source.knownGaps.type === "reconciled"
+                  ? { ...source.knownGaps, years: [...source.knownGaps.years] }
                   : source.knownGaps,
             })),
             courts:

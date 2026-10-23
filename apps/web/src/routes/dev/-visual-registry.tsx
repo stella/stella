@@ -40,6 +40,13 @@ const visualLoaders = {
       return { default: OAuthConsentPlayground };
     },
   },
+  "upload-rejections": {
+    load: async () => {
+      const { UploadRejectionsPlayground } =
+        await import("./-components/upload-rejections-playground");
+      return { default: UploadRejectionsPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =
