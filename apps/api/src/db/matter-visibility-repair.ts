@@ -7,6 +7,7 @@ import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readMatterVisibilityCutoverSql } from "./matter-visibility-sql";
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
@@ -84,6 +85,10 @@ const backfill = async (
   }
 };
 
+// The new access rule commits before its constraint validates: the walk above
+// already wrote every row, the NOT VALID constraint checks every new write,
+// and completion still waits for the validation, so a crash or deferral in
+// between reruns this idempotent replacement before any deployment.
 const cutover = async (connection: OnlineMigrationConnection) => {
   await connection.execute("BEGIN");
   const result = await Result.tryPromise(async () => {
@@ -92,9 +97,6 @@ const cutover = async (connection: OnlineMigrationConnection) => {
     for (const statement of readMatterVisibilityCutoverSql()) {
       await connection.execute(statement);
     }
-    await connection.execute(
-      `ALTER TABLE public.workspaces VALIDATE CONSTRAINT "${CONSTRAINT_NAME}"`,
-    );
     await connection.execute("COMMIT");
   });
   if (result.isErr()) {
@@ -114,7 +116,7 @@ const readCompletion = async (connection: OnlineMigrationConnection) =>
 /**
  * Legacy access stays active throughout the bounded walk. New API tasks must
  * not start while it is pending: their visibility writes require the new SQL
- * rule. The validated constraint marks the atomic cutover, and the runtime
+ * rule. The validated constraint marks the completed cutover, and the runtime
  * cursor resumes interrupted batches without admitting a pending deployment.
  */
 export const createMatterVisibilityRepair = (
@@ -122,9 +124,9 @@ export const createMatterVisibilityRepair = (
 ): OnlineRepair => ({
   name: REPAIR_NAME,
   readCompletion,
-  repair: async (connection) => {
+  repair: async (connection, tables) => {
     if ((await readCompletion(connection)).type === "complete") {
-      return;
+      return { type: "complete" };
     }
     // A fresh database needs no health-gated walk or external metric source.
     if (
@@ -142,6 +144,11 @@ export const createMatterVisibilityRepair = (
       }
     }
     await cutover(connection);
+    return await validateOnlineConstraints({
+      connection,
+      tables,
+      constraints: [{ tableName: TABLE_NAME, constraintName: CONSTRAINT_NAME }],
+    });
   },
 });
 

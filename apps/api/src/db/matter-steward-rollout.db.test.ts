@@ -27,6 +27,7 @@ import {
 } from "@/api/tests/helpers/workspace-creation";
 
 import { createMatterVisibilityRepair } from "./matter-visibility-repair";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 /** Legacy mutation statements must preserve assigned-only matter stewardship. */
@@ -180,7 +181,8 @@ const connectionOver = (database: PGlite): OnlineMigrationConnection => ({
 
 const applyVisibility = async (database: PGlite) => {
   await database.exec(migrationSql);
-  await repair.repair(connectionOver(database));
+  const connection = connectionOver(database);
+  await repair.repair(connection, createUngatedTableGateForTests(connection));
 };
 
 const migrated = async (): Promise<PGlite> => {

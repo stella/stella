@@ -19,6 +19,7 @@ import {
 } from "@/api/tests/helpers/workspace-creation";
 
 import { createMatterVisibilityRepair } from "./matter-visibility-repair";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 /**
@@ -165,7 +166,8 @@ const connectionOver = (database: PGlite): OnlineMigrationConnection => ({
 
 const applyVisibility = async (database: PGlite) => {
   await database.exec(migrationSql);
-  await repair.repair(connectionOver(database));
+  const connection = connectionOver(database);
+  await repair.repair(connection, tables);
 };
 
 const migrated = async (): Promise<PGlite> => {
@@ -218,6 +220,7 @@ describe("matter visibility migration", () => {
     });
     await database.exec(migrationSql);
     const connection = connectionOver(database);
+    const tables = createUngatedTableGateForTests(connection);
     let now = Date.now();
     let reads = 0;
     const interrupted = createMatterVisibilityRepair({
@@ -231,9 +234,9 @@ describe("matter visibility migration", () => {
     expect(await interrupted.readCompletion(connection)).toMatchObject({
       type: "incomplete",
     });
-    expect(String(await rejectionOf(interrupted.repair(connection)))).toContain(
-      "Matter visibility backfill must finish before deployment",
-    );
+    expect(
+      String(await rejectionOf(interrupted.repair(connection, tables))),
+    ).toContain("Matter visibility backfill must finish before deployment");
     const checkpoint = await database.query<{ cursor: string | null }>(
       "SELECT cursor FROM database_backfill_states WHERE name = 'matter-visibility'",
     );
@@ -256,7 +259,7 @@ describe("matter visibility migration", () => {
       sleep: async () => {},
       readVerdict: async () => normalVerdict,
     });
-    await resumed.repair(connection);
+    await resumed.repair(connection, tables);
     expect(await resumed.readCompletion(connection)).toEqual({
       type: "complete",
     });
@@ -270,7 +273,7 @@ describe("matter visibility migration", () => {
       [MATTER.clientlessOfMember],
     );
     const beforeReplay = await visibilityById(database);
-    await resumed.repair(connection);
+    await resumed.repair(connection, tables);
     expect(await visibilityById(database)).toEqual(beforeReplay);
   });
 
