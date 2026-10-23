@@ -4893,6 +4893,16 @@
       "preferredNamePlaceholder": "Twoje imię",
       "profileDescription": "Zarządzaj swoimi preferencjami osobistymi",
       "sendOtpCode": "Wyślij kod weryfikacyjny",
+      "signInMethods": {
+        "confirmDescription": "Aby odłączyć tę metodę logowania, wpisz nowy kod wysłany na Twój adres e-mail.",
+        "confirmTitle": "Odłączyć {provider}?",
+        "description": "Połącz konta, które używają tego samego zweryfikowanego adresu e-mail.",
+        "emailCode": "Kod e-mail",
+        "emailCodeDescription": "Zawsze możesz zalogować się za pomocą kodu wysłanego na Twój adres e-mail.",
+        "lastMethod": "Pozostaw połączoną co najmniej jedną metodę logowania.",
+        "title": "Metody logowania",
+        "unavailable": "Aby odłączyć metody logowania, należy skonfigurować wysyłanie poczty e-mail."
+      },
       "timezone": "Strefa czasowa",
       "timezoneDescription": "Używana w datach i godzinach w powiadomieniach i e-mailach",
       "timezoneSaved": "Zaktualizowano strefę czasową",
