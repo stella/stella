@@ -422,7 +422,7 @@
   "candidate:.github/workflows/deploy-staging.yml/build-web": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "2e61dfd571bd3aa5dd67a7f4dbb5d9933e1d46ccbb447144c5071f7f165010fb"
+    "reviewedDigest": "c72d9101b6b58225c225ad1b4a1c77c809001580e43ef241a2fe55410fca6b9b"
   },
   "candidate:.github/workflows/deploy-staging.yml/promote-staging": {
     "kind": "priority",
@@ -807,7 +807,7 @@
   "candidate:.github/workflows/release.yml/prepare-web-image": {
     "kind": "priority",
     "qualifier": "Reuses a verified web receipt or builds, publishes and attests the resolved release web image.",
-    "reviewedDigest": "25bfac12343ed550c7a89d3777a4dc7b20caf325a06e73771f22fbc454acde97"
+    "reviewedDigest": "0d6af5ea4a87fb3e3cf2f236aa78bf1e16b65332d19d422659b147d0431496c0"
   },
   "candidate:.github/workflows/release.yml/manifest": {
     "kind": "priority",

@@ -204,10 +204,11 @@ runs:
       env:
         NEW_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-web@${{ steps.build.outputs.digest }}
         PREVIOUS_IMAGE: ${{ inputs.previous-web-image }}
+        TOOLING_PATH: ${{ inputs.tooling-path }}
       run: |
         set -euo pipefail
-        bash "${{ inputs.tooling-path }}/scripts/retry.sh" docker pull --platform linux/arm64 "$PREVIOUS_IMAGE" >/dev/null
-        bash "${{ inputs.tooling-path }}/scripts/retry.sh" docker pull --platform linux/arm64 "$NEW_IMAGE" >/dev/null
+        bash "${TOOLING_PATH}/scripts/retry.sh" docker pull --platform linux/arm64 "$PREVIOUS_IMAGE" >/dev/null
+        bash "${TOOLING_PATH}/scripts/retry.sh" docker pull --platform linux/arm64 "$NEW_IMAGE" >/dev/null
         container="$(docker create --platform linux/arm64 "$PREVIOUS_IMAGE")"
         trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
         mkdir -p "$RUNNER_TEMP/previous-web-assets"
