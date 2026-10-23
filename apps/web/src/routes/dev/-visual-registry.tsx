@@ -26,6 +26,13 @@ const visualLoaders = {
       return { default: ColumnComposerPlayground };
     },
   },
+  "handoff-confirmation": {
+    load: async () => {
+      const { HandoffConfirmationPlayground } =
+        await import("./-components/handoff-confirmation-playground");
+      return { default: HandoffConfirmationPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =
@@ -45,6 +52,13 @@ const visualLoaders = {
       const { OAuthConsentPlayground } =
         await import("./-components/oauth-consent-playground");
       return { default: OAuthConsentPlayground };
+    },
+  },
+  "upload-rejections": {
+    load: async () => {
+      const { UploadRejectionsPlayground } =
+        await import("./-components/upload-rejections-playground");
+      return { default: UploadRejectionsPlayground };
     },
   },
   "page-crop": {

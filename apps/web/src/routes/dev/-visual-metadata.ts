@@ -26,9 +26,14 @@ export const playbookEditorStates = Object.keys(playbookEditorFixtures);
 export const visualRegistry = {
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
   "column-composer": { label: "Column composer alignment", layout: "plain" },
+  "handoff-confirmation": {
+    label: "Connector sign-in confirmation",
+    layout: "plain",
+  },
   "table-chart": { label: "Chat table chart", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
+  "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "chat-status": { label: "Chat status motion", layout: "plain" },
   "chat-citations": { label: "Chat case-law citations", layout: "plain" },
