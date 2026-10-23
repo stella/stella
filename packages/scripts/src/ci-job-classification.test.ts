@@ -18,16 +18,18 @@ import {
   sha256,
 } from "../../../scripts/ci-job-classification/classification-values";
 import {
+  decisionKeyFromPath,
+  readDecisions,
+  writeDecision,
+} from "../../../scripts/ci-job-classification/decisions";
+import {
   generateClassification,
   readClassificationInputs,
 } from "../../../scripts/ci-job-classification/generate";
 import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_PATHS,
-  decisionKeyFromPath,
   decisionPathForKey,
-  readDecisions,
-  writeDecision,
 } from "../../../scripts/ci-job-classification/inputs";
 import {
   PUBLIC_METADATA,

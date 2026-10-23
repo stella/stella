@@ -9,9 +9,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { readDecisions } from "./ci-job-classification/decisions";
 import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
+  decisionPathForKey,
 } from "./ci-job-classification/inputs";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
@@ -96,10 +98,16 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   const write = ({ workflow, decisions }: Fixture) => {
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
-    writeFileSync(
-      path.join(root, CLASSIFICATION_DECISIONS_PATH),
-      `${JSON.stringify(decisions, null, 2)}\n`,
-    );
+    // One file per decision, the directory replaced as a whole.
+    rmSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), {
+      recursive: true,
+      force: true,
+    });
+    for (const [key, decision] of Object.entries(decisions)) {
+      const file = path.join(root, decisionPathForKey(key));
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, `${JSON.stringify(decision, null, 2)}\n`);
+    }
   };
   const git = (...args: string[]) => {
     const result = Bun.spawnSync(["git", "-C", root, ...args], {
@@ -150,9 +158,7 @@ const run = (root: string, ...args: string[]) => {
 };
 
 const decisionsIn = (root: string): Record<string, Decision> =>
-  JSON.parse(
-    readFileSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), "utf-8"),
-  );
+  readDecisions({ type: "working-tree", root }) as Record<string, Decision>;
 
 const BEFORE = "jobs: {check: {env: {MODE: one}, steps: []}}";
 const AFTER = "jobs: {check: {env: {MODE: two}, steps: []}}";
@@ -246,7 +252,7 @@ test("a new job is never classified by the refresh", () => {
   expect(decisionsIn(root)).toEqual(decisions);
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
-  expect(check.stderr).toContain(keyOf("added"));
+  expect(check.stderr).toContain(decisionPathForKey(keyOf("added")));
   expect(check.stderr).toContain("<choose ordinary, support, or priority>");
 });
 
@@ -318,7 +324,7 @@ test("pre-push refreshes a mechanical digest and asks for a commit, then passes"
   expect(first.exitCode).toBe(1);
   expect(first.stdout).toContain("Refreshed 1 mechanical");
   expect(first.stderr).toBe(
-    `Commit the refreshed ${CLASSIFICATION_DECISIONS_PATH} and push again.\n`,
+    `Commit the refreshed decision files (${decisionPathForKey(keyOf("check"))}) and push again.\n`,
   );
   commitAll("refresh");
   expect(run(root, "--pre-push")).toEqual({
