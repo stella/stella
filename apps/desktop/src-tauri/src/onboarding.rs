@@ -248,9 +248,9 @@ async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
 fn locked<'a>(
   state: &'a State<'_, OnboardingState>,
 ) -> Result<std::sync::MutexGuard<'a, Onboarding>, String> {
-  state
-    .lock()
-    .map_err(|_| "onboarding state is unavailable".to_string())
+  state.lock().map_err(crate::logging::with_cause_logged(
+    "onboarding state is unavailable",
+  ))
 }
 
 /// Opens the setup window at launch until setup is finished. A login launch
