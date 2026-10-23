@@ -5,7 +5,8 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
-import { decisionPathForKey, readDecisions } from "./inputs";
+import { readDecisions } from "./decisions";
+import { decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { PublicMetadata, MetadataReader } from "./public-metadata";
 import {

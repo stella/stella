@@ -21,13 +21,40 @@ test("the autofix generator reads every classification input and writes only the
     ({ id }) => id === "ci-job-classification-digests",
   );
   expect(generator?.inputs).toEqual(CLASSIFICATION_INPUT_GLOBS);
-  expect(generator?.outputs).toEqual([CLASSIFICATION_DECISIONS_PATH]);
+  expect(generator?.outputs).toEqual([`${CLASSIFICATION_DECISIONS_PATH}/**`]);
   expect(generator?.autofix).toBe(true);
   expect(generator?.write).toEqual([
     "bun",
     "scripts/check-ci-job-classification.ts",
     "--write",
   ]);
+});
+
+test("the classification input paths load alone, without packages or siblings", () => {
+  // The autofix planner reads them from a sparse checkout without package
+  // dependencies, so the module imports nothing beyond the runtime.
+  const root = mkdtempSync(path.join(tmpdir(), "classification-inputs-"));
+  try {
+    const copy = path.join(root, "inputs.ts");
+    writeFileSync(
+      copy,
+      readFileSync(
+        path.join(import.meta.dir, "ci-job-classification/inputs.ts"),
+        "utf-8",
+      ),
+    );
+    const loaded = Bun.spawnSync(
+      [
+        process.execPath,
+        "-e",
+        `const m = await import(${JSON.stringify(copy)}); if (!m.CLASSIFICATION_INPUT_GLOBS.length) process.exit(2);`,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(loaded.exitCode, loaded.stderr.toString()).toBe(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 const SCRIPT = path.join(import.meta.dir, "check-ci-job-classification.ts");

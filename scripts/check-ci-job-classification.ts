@@ -3,6 +3,7 @@ import { deepEquals } from "bun";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
+import { writeDecision } from "./ci-job-classification/decisions";
 import {
   generateClassification,
   readClassificationInputs,
@@ -13,7 +14,6 @@ import {
   CLASSIFICATION_DECISIONS_PATH,
   decisionPathForKey,
   isClassificationInput,
-  writeDecision,
 } from "./ci-job-classification/inputs";
 import { ReviewRequiredError } from "./ci-job-classification/review";
 import { AdmissionError } from "./ci-job-classification/yaml";
