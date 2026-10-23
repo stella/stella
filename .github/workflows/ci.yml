@@ -1234,6 +1234,7 @@ jobs:
               // step and no such evidence the jobs API may still be catching up, so cancel as before.
               const lost = jobs.filter((job) => job.conclusion === "failure"
                 && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
                 core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
@@ -3238,6 +3239,7 @@ jobs:
               // step and no such evidence the jobs API may still be catching up, so cancel as before.
               const lost = jobs.filter((job) => job.conclusion === "failure"
                 && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
                 core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
@@ -5233,6 +5235,7 @@ jobs:
               // step and no such evidence the jobs API may still be catching up, so cancel as before.
               const lost = jobs.filter((job) => job.conclusion === "failure"
                 && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
                 core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
@@ -6791,6 +6794,7 @@ jobs:
             runner_lost_jobs=$(jq -c '[.[].jobs[]
               | select(.conclusion == "failure"
                   and (any((.steps // [])[]; .conclusion == "failure") | not)
+                  and all((.steps // [])[]; (.status // "completed") == "completed")
                   and (((.steps // []) | length) == 0 or any((.steps // [])[]; .conclusion == "cancelled")))
               | .name] | unique' <<< "$cancelled_jobs") || exit 1
             # Job deadlines can appear as cancelled or failure in needs.

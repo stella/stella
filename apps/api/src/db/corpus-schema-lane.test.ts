@@ -183,7 +183,7 @@ test("the migration runner takes the lane before SQL and releases it in finally"
     "await connection.unsafe(takeLane);",
     "laneHeld = true;",
     "await connection.unsafe(restoreTimeout);",
-    "await pgCoreMigrate(migrations, database",
+    "await pgCoreMigrate(",
   ].map((needle) => {
     const at = source.indexOf(needle);
     expect(at, needle).toBeGreaterThan(-1);
@@ -192,10 +192,10 @@ test("the migration runner takes the lane before SQL and releases it in finally"
   expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
   expect(source).not.toContain("CORPUS_SCHEMA_LANE_LOCK_SQL");
 
-  const migrationAt = source.indexOf(
-    "await pgCoreMigrate(migrations, database",
-  );
-  const finallyAt = source.indexOf("} finally {");
+  const migrationAt = source.indexOf("await pgCoreMigrate(");
+  // The lane's release is the finally that follows the migration call; an
+  // earlier helper may own its own finally (the lock-timeout reset).
+  const finallyAt = source.indexOf("} finally {", migrationAt);
   expect(finallyAt).toBeGreaterThan(migrationAt);
   expect(source.slice(finallyAt)).toContain(
     "await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);",
