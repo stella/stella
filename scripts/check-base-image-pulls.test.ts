@@ -29,7 +29,7 @@ const RETRY_SCRIPT = "scripts/retry.sh";
 const DOCKER_PULL = /(?:^|[\s;&|(])docker\s+pull\b/u;
 /** Tolerates a checkout-path prefix, as in `.workflow-source/scripts/…`. */
 const WRAPPED_PULL =
-  /\bbash\s+(?:[\w.\-/]+\/)?scripts\/retry\.sh\s+docker\s+pull\b/u;
+  /\bbash\s+["']?(?:(?:\$\{\{\s*)?[\w.\-/]+(?:\s*\}\})?\/)?scripts\/retry\.sh["']?\s+docker\s+pull\b/u;
 /** The registry pulls the workflows run today, counted like the builds. */
 const MINIMUM_PULL_SITES = 3;
 

@@ -4,6 +4,7 @@ set -eu
 source_directory=$1
 manifest=$2
 destination_directory=$3
+output_manifest=${4:-}
 
 mkdir -p "$destination_directory"
 while IFS= read -r asset; do
@@ -27,3 +28,7 @@ while IFS= read -r asset; do
   mkdir -p "$(dirname "$destination_file")"
   cp -p "$source_file" "$destination_file"
 done < "$manifest"
+
+if [ -n "$output_manifest" ]; then
+  cp -p "$manifest" "$output_manifest"
+fi

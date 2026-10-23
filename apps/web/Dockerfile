@@ -20,8 +20,8 @@ RUN mkdir -p /previous-web-assets && : > /previous-web-assets.manifest && \
       /usr/local/bin/merge-web-assets \
         /app/apps/web/dist/client \
         /app/apps/web/dist/.stella-client-assets \
-        /previous-web-assets && \
-      cp /app/apps/web/dist/.stella-client-assets /previous-web-assets.manifest; \
+        /previous-web-assets \
+        /previous-web-assets.manifest; \
     fi
 
 FROM build-base AS install-inputs

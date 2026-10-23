@@ -31,8 +31,16 @@ test("copies only manifested assets without replacing the new build", async () =
   writeFileSync(path.join(current, "assets/shared.js"), "current");
   const manifest = path.join(root, "manifest");
   writeFileSync(manifest, "assets/shared.js\nassets/old.js\n");
+  const copiedManifest = path.join(root, "copied-manifest");
 
-  const result = Bun.spawnSync(["sh", script, previous, manifest, current]);
+  const result = Bun.spawnSync([
+    "sh",
+    script,
+    previous,
+    manifest,
+    current,
+    copiedManifest,
+  ]);
 
   expect(result.exitCode).toBe(0);
   expect(readFileSync(path.join(current, "assets/shared.js"), "utf-8")).toBe(
@@ -44,6 +52,9 @@ test("copies only manifested assets without replacing the new build", async () =
   expect(
     await Bun.file(path.join(current, "assets/inherited.js")).exists(),
   ).toBe(false);
+  expect(readFileSync(copiedManifest, "utf-8")).toBe(
+    "assets/shared.js\nassets/old.js\n",
+  );
 });
 
 test("rejects manifest paths outside the asset directory", () => {
