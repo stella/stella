@@ -1,6 +1,6 @@
 import {
-  apiKey,
   API_KEY_TABLE_NAME,
+  apiKey,
   defaultKeyHasher,
 } from "@better-auth/api-key";
 import type { ApiKey } from "@better-auth/api-key/types";
