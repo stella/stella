@@ -90,10 +90,10 @@ import { isRecord } from "@/api/lib/type-guards";
 
 import { resolveAnalysisInput } from "./analysis-input";
 import {
+  type AnalysisOutput,
   analysisOutputSchema,
   buildDecisionAnalysis,
   buildPartialAnalysisTree,
-  type AnalysisOutput,
 } from "./analysis-output";
 import { persistGeneratedAnalysis } from "./analysis-persistence";
 import { allowsDerivedAiAnalysis } from "./analysis-update";

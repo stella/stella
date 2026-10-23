@@ -5,8 +5,8 @@ import * as v from "valibot";
 import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
-  type CaseLawAnalysisProgressResponse,
   type CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  type CaseLawAnalysisProgressResponse,
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import {

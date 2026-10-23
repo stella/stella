@@ -173,9 +173,7 @@ export type AnalysisGenerating = {
 type LegacyAnalysisGenerating = Omit<AnalysisGenerating, "runId">;
 
 export type PersistedDecisionAnalysis =
-  | DecisionAnalysis
-  | AnalysisGenerating
-  | LegacyAnalysisGenerating;
+  DecisionAnalysis | AnalysisGenerating | LegacyAnalysisGenerating;
 
 export const analysisAnnotationSchema: v.GenericSchema<AnalysisAnnotation> =
   v.object({
