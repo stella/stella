@@ -1347,6 +1347,62 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
   });
 });
 
+test("code-quality pool preserves every moved check exactly once", () => {
+  const movedNames = [
+    "Code quality (web)",
+    "Result consumption (web)",
+    "Code quality (rest)",
+    "Query cache types",
+    "Dead columns",
+    "Projection totality",
+    "Aggregate ownership",
+    "Split-button census",
+    "Database awaits in loops",
+    "API timeout mutation guard",
+    "Result consumption (rest)",
+  ];
+  const originalSteps = v.parse(
+    headJobSchema,
+    baseJobs["code-quality-web-rest"],
+  ).steps;
+  const originals = originalSteps.filter(({ name }) =>
+    movedNames.includes(name),
+  );
+  const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
+
+  const withoutPoolMetadata = (step: Record<string, unknown>) => {
+    const normalized = { ...step };
+    if (normalized["if"] === ["$", "{{ success() }}"].join("")) {
+      delete normalized["if"];
+    } else if (typeof normalized["if"] === "string") {
+      normalized["if"] = normalized["if"].replace(
+        /^\$\{\{\s*([\s\S]*?)\s*\}\}$/u,
+        "$1",
+      );
+    }
+    const env = normalized["env"];
+    if (typeof env === "object" && env !== null && !Array.isArray(env)) {
+      const originalEnv = Object.fromEntries(
+        Object.entries(env).filter(
+          ([key]) =>
+            !["CI_CHECK_KIND", "CI_CHECK_INPUTS", "CI_CHECK_CONTEXT"].includes(
+              key,
+            ),
+        ),
+      );
+      if (Object.keys(originalEnv).length === 0) {
+        delete normalized["env"];
+      } else {
+        normalized["env"] = originalEnv;
+      }
+    }
+    return normalized;
+  };
+
+  expect(pooled.map(({ name }) => name)).toEqual(movedNames);
+  expect(pooled.map(withoutPoolMetadata)).toEqual(originals);
+});
+
 test("task result cache checks belong exactly once to the rest leg", () => {
   const checks = partitions.flatMap(({ steps }, index) =>
     ownedSteps(
