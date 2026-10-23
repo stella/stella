@@ -5,6 +5,10 @@ use std::time::Duration;
 use crate::{
   account::AccountRequest,
   http_client::{DesktopHttpClient, HttpClientOptions},
+  logging::{
+    json_cause_logged, log_json_error, log_request_error, replaced_logged,
+    request_cause_logged,
+  },
 };
 
 const FAILURE: &str = "draft time entry request failed";
@@ -80,18 +84,25 @@ fn client() -> Result<DesktopHttpClient, String> {
     redirect: reqwest::redirect::Policy::none(),
     timeout: Some(Duration::from_secs(15)),
   })
-  .map_err(|_| FAILURE.to_string())
+  .map_err(request_cause_logged(FAILURE))
 }
 
 async fn response_body(
   request: crate::http_client::DeviceProofRequest,
 ) -> Result<Vec<u8>, String> {
-  let mut response = request.send().await.map_err(|_| FAILURE.to_string())?;
+  let mut response = request
+    .send()
+    .await
+    .map_err(request_cause_logged(FAILURE))?;
   if !response.status().is_success() {
     return Err(FAILURE.to_string());
   }
   let mut body = Vec::new();
-  while let Some(chunk) = response.chunk().await.map_err(|_| FAILURE.to_string())? {
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(request_cause_logged(FAILURE))?
+  {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
       return Err(FAILURE.to_string());
     }
@@ -117,7 +128,7 @@ pub async fn search_matters(
   )?)
   .await?;
   let response: MattersResponse =
-    serde_json::from_slice(&body).map_err(|_| FAILURE.to_string())?;
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
   if response.matters.len() > 20
     || response.matters.iter().any(|matter| {
       matter.id.is_empty()
@@ -148,7 +159,7 @@ pub async fn candidates(
   )?)
   .await?;
   let result: CandidatesResponse =
-    serde_json::from_slice(&body).map_err(|_| FAILURE.to_string())?;
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
   if result.matters.len() > 100
     || result.matters.iter().any(|candidate| {
       candidate.matter.id.is_empty()
@@ -198,9 +209,11 @@ async fn submit_batch(
   account: &AccountRequest,
   batch: &ConfirmedBatch,
 ) -> Result<CreatedBatch, AttemptFailure> {
-  batch.validate().map_err(|_| AttemptFailure::Rejected)?;
+  batch
+    .validate()
+    .map_err(replaced_logged(FAILURE, AttemptFailure::Rejected))?;
   let request = client()
-    .map_err(|_| AttemptFailure::Rejected)?
+    .map_err(replaced_logged(FAILURE, AttemptFailure::Rejected))?
     .put(format!(
       "{}/v1/desktop/time-entries/batch",
       account.api_base_url
@@ -212,10 +225,13 @@ async fn submit_batch(
     Some(&account.credential.key),
     None,
   )
-  .map_err(|_| AttemptFailure::Rejected)?
+  .map_err(replaced_logged(FAILURE, AttemptFailure::Rejected))?
   .send()
   .await
-  .map_err(|_| AttemptFailure::Uncertain)?;
+  .map_err(|error| {
+    log_request_error(&error, FAILURE);
+    AttemptFailure::Uncertain
+  })?;
   if !response.status().is_success() {
     // Client rejection still needs ledger recovery: an earlier attempt may
     // have committed even when this retry cannot be accepted.
@@ -228,18 +244,19 @@ async fn submit_batch(
     );
   }
   let mut body = Vec::new();
-  while let Some(chunk) = response
-    .chunk()
-    .await
-    .map_err(|_| AttemptFailure::Uncertain)?
-  {
+  while let Some(chunk) = response.chunk().await.map_err(|error| {
+    log_request_error(&error, FAILURE);
+    AttemptFailure::Uncertain
+  })? {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
       return Err(AttemptFailure::Uncertain);
     }
     body.extend_from_slice(&chunk);
   }
-  let created: CreatedBatch =
-    serde_json::from_slice(&body).map_err(|_| AttemptFailure::Uncertain)?;
+  let created: CreatedBatch = serde_json::from_slice(&body).map_err(|error| {
+    log_json_error(&error, FAILURE);
+    AttemptFailure::Uncertain
+  })?;
   validate_created_batch(created, batch)
 }
 
@@ -285,7 +302,7 @@ pub async fn submit_batch_with_recovery(
       let body = response_body(
         crate::http_client::device_proof_request(
           client()
-            .map_err(|_| SubmitFailure::Uncertain)?
+            .map_err(replaced_logged(FAILURE, SubmitFailure::Uncertain))?
             .put(format!(
               "{}/v1/desktop/time-entries/batch/status",
               account.api_base_url
@@ -295,16 +312,20 @@ pub async fn submit_batch_with_recovery(
           Some(&account.credential.key),
           None,
         )
-        .map_err(|_| SubmitFailure::Uncertain)?,
+        .map_err(replaced_logged(FAILURE, SubmitFailure::Uncertain))?,
       )
       .await
-      .map_err(|_| SubmitFailure::Uncertain)?;
-      let status: BatchStatus =
-        serde_json::from_slice(&body).map_err(|_| SubmitFailure::Uncertain)?;
+      .map_err(replaced_logged(FAILURE, SubmitFailure::Uncertain))?;
+      let status: BatchStatus = serde_json::from_slice(&body).map_err(|error| {
+        log_json_error(&error, FAILURE);
+        SubmitFailure::Uncertain
+      })?;
       match status {
         BatchStatus::Committed { entries } => {
-          validate_created_batch(CreatedBatch { entries }, batch)
-            .map_err(|_| SubmitFailure::Uncertain)
+          validate_created_batch(CreatedBatch { entries }, batch).map_err(|failure| {
+            tracing::warn!(?failure, "recovered time entry batch does not match");
+            SubmitFailure::Uncertain
+          })
         }
         BatchStatus::Cancelled => Err(SubmitFailure::Cancelled),
       }
@@ -372,6 +393,7 @@ mod tests {
     });
     assert!(search_matters(&account, "A/101").await.unwrap().is_empty());
     assert!(candidates(&account).await.unwrap().is_empty());
+    drop(account);
     assert_eq!(requests.load(Ordering::SeqCst), 2);
     server.abort();
   }
@@ -426,6 +448,7 @@ mod tests {
       submit_batch(&account, &batch).await.unwrap().entries[0].id,
       "entry_fixture"
     );
+    drop(account);
     server.abort();
   }
 
@@ -498,6 +521,7 @@ mod tests {
       ));
       assert_eq!(recoveries.load(Ordering::SeqCst), 0);
       let outcome = submit_batch_with_recovery(&account, &batch).await;
+      drop(account);
       match status {
         "cancelled" => assert!(matches!(outcome, Err(SubmitFailure::Cancelled))),
         "committed" => assert_eq!(outcome.unwrap().entries[0].id, "original_entry"),

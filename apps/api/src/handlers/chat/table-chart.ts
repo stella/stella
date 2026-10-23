@@ -81,6 +81,7 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
             usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
             generation: {
               dataClass: "customer",
+              userId: user.id,
               orgAIConfig,
               managedAIResidency,
               organizationId: session.activeOrganizationId,

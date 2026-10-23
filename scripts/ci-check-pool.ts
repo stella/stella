@@ -449,6 +449,17 @@ const FAILURE_CAUSE_LIMIT = 500;
 const isResultMarker = (line: string) =>
   /^\((?:pass|fail|skip|todo)\) /u.test(line.trimStart());
 
+// Bun's own banner, per-file headers, totals and group commands.
+const TEST_RUNNER_LINE =
+  /^(?:bun test v|\d+ (?:pass|fail|skip|todo|snapshots?|expect\(\) calls)\b|Ran \d+ tests? |(?:::|##\[)(?:end)?group\b|\S+\.test\.[cm]?[jt]sx?:$)/u;
+const isTestRunnerLine = (line: string) =>
+  isResultMarker(line) || TEST_RUNNER_LINE.test(line.trim());
+// A line that starts with an error, possibly behind a workflow error command.
+const ERROR_LINE = /^(?:##\[error\]|::error[^:]*::)?\s*error\b/iu;
+// `path[:line[:column]]: finding`, the shape repository checks report in.
+const FINDING_LINE =
+  /^(?:[\w.@-]+\/)+[\w.@$()[\]-]+(?::\d+){0,2}: \S|^[\w.@-]+\.[a-z\d]+(?::\d+){0,2}: \S/iu;
+
 // Bun prints a test's diagnostics before its `(fail)` line, so the test's own
 // error lies between the previous result marker and its marker; output after
 // the marker belongs to the next test, even a passing one that logs errors.
@@ -499,8 +510,15 @@ export const failedCheckCause = (
         : `${failure}${FAILED_CHECK_SEPARATOR}${testError}`
     ).slice(0, FAILURE_CAUSE_LIMIT);
   }
+  // A check that runs its own tests and then reports findings prints the
+  // passing tests first; their names are never the finding.
+  const findings = lines
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !isTestRunnerLine(line));
   return (
-    lines.find((line) => /error/iu.test(line))?.trim() ?? result.detail
+    findings.find((line) => ERROR_LINE.test(line) || FINDING_LINE.test(line)) ??
+    findings.find((line) => /\berror\b/iu.test(line)) ??
+    result.detail
   ).slice(0, FAILURE_CAUSE_LIMIT);
 };
 
@@ -573,11 +591,39 @@ export const blockingFailures = (results: readonly CheckResult[]) =>
 const isPoolJob = (job: string): job is CheckPoolJob =>
   CHECK_POOL_JOBS.some((known) => known === job);
 
+/** Select an exact, comma-separated subset while retaining manifest order. */
+export const selectChecks = (
+  checks: readonly PoolCheck[],
+  only: string | undefined,
+): PoolCheck[] => {
+  if (only === undefined) {
+    return [...checks];
+  }
+  const requested = only.split(",").map((name) => name.trim());
+  if (requested.some((name) => name === "")) {
+    throw new CheckPoolError("--only requires one or more check names");
+  }
+  const names = new Set(checks.map(({ name }) => name));
+  const unknown = requested.filter((name) => !names.has(name));
+  if (unknown.length > 0) {
+    throw new CheckPoolError(`Unknown check name(s): ${unknown.join(", ")}`);
+  }
+  const selected = new Set(requested);
+  return checks.filter(({ name }) => selected.has(name));
+};
+
 const main = async () => {
-  const [mode, job = ""] = process.argv.slice(2);
-  if (mode !== "run" || !isPoolJob(job)) {
+  const [mode, job = "", option, value, ...extra] = process.argv.slice(2);
+  if (
+    mode !== "run" ||
+    !isPoolJob(job) ||
+    extra.length > 0 ||
+    (option !== undefined && option !== "--only") ||
+    (option === "--only" && value === undefined) ||
+    (option === undefined && value !== undefined)
+  ) {
     throw new CheckPoolError(
-      `Usage: bun scripts/ci-check-pool.ts run ${CHECK_POOL_JOBS.join("|")}`,
+      `Usage: bun scripts/ci-check-pool.ts run ${CHECK_POOL_JOBS.join("|")} [--only <name>[,<name>]]`,
     );
   }
   const root = path.resolve(import.meta.dir, "..");
@@ -602,7 +648,7 @@ const main = async () => {
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
     inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
-  const planned = planChecks(readCheckPool(job), context);
+  const planned = planChecks(selectChecks(readCheckPool(job), value), context);
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   // One check per CPU but one: four concurrent checks on a four-CPU runner
   // pushed default 5 s Bun test budgets past their limit; three did not.

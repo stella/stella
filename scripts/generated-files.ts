@@ -11,9 +11,23 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
-  | { check: null; checkedBy: string; unchecked?: never }
-  | { check: null; checkedBy?: never; unchecked: string };
+  | {
+      check: readonly string[];
+      checkedBy?: string;
+      checkedWith?: never;
+      unchecked?: never;
+    }
+  | {
+      check: null;
+      checkedBy: string;
+      /**
+       * The command the `checkedBy` step runs when it is neither `write` nor
+       * its `--check` form.
+       */
+      checkedWith?: readonly string[];
+      unchecked?: never;
+    }
+  | { check: null; checkedBy?: never; checkedWith?: never; unchecked: string };
 
 export type Generator = {
   id: string;
@@ -515,6 +529,35 @@ const GENERATOR_DECLARATIONS = [
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
     checkedBy: "Module ownership",
+    autofix: true,
+    after: [],
+  },
+  {
+    // Refreshes only the reviewed digests of jobs whose kind, qualifier and
+    // privilege are unchanged since the merge base; new, reclassified and
+    // privileged jobs keep failing the check until a human reviews them.
+    // This file loads without imports in reduced checkouts, so the paths are
+    // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
+    id: "ci-job-classification-digests",
+    outputKind: "committed",
+    outputs: [".github/ci-job-classification-decisions.json"],
+    inputs: [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-sources.json",
+      "scripts/check-ci-job-classification.ts",
+      "scripts/ci-job-classification/**",
+      "packages/collation/src/collation.ts",
+      "packages/sha256/src/node.ts",
+      "packages/sha256/src/types.ts",
+    ],
+    write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
+    check: null,
+    checkedBy: "Check workflow job classifications",
+    // The check reads git history, so it cannot load the offline network
+    // preload every `--check` command must use; it runs as the default mode.
+    checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     autofix: true,
     after: [],
   },

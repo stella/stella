@@ -229,12 +229,7 @@ export const DOC_SOURCES = {
     url: "https://oxc.rs/llms.txt",
   },
   Streamdown: {
-    dependencies: [
-      "streamdown",
-      "@streamdown/cjk",
-      "@streamdown/math",
-      "@streamdown/mermaid",
-    ],
+    dependencies: ["streamdown", "@streamdown/cjk", "@streamdown/math"],
     url: "https://streamdown.dev/llms.txt",
   },
   BetterResult: {
@@ -327,7 +322,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@types/chrome",
   "@types/hast",
   "@types/node",
-  "@typescript/native",
   "@vscode/markdown-editor",
   "@vscode/observables",
   "astro",
@@ -356,6 +350,8 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "nodemailer",
   "onnxruntime-node",
   "oxlint-tailwindcss",
+  "parse5",
+  "parse5-htmlparser2-tree-adapter",
   "pdfjs-dist",
   "postal-mime",
   "prism-react-renderer",
@@ -373,6 +369,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "tailwindcss",
   "tw-animate-css",
   "typescript",
+  "typescript6",
   "unified",
   "uqr",
   "use-debounce",
@@ -405,6 +402,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
         }) satisfies NoLlmsTxtExclusion,
     ),
     {
+      checkedAt: "2026-10-20T00:00:00.000Z",
+      dependency: "lzma1",
+      explanation:
+        "https://xseman.github.io/lzma1/llms.txt and the repository's llms.txt return 404. Use the README and type declarations at https://github.com/xseman/lzma1 directly; PAY by square uses only compress() with explicit lc/lp/pb/dictSize options.",
+      expiresAt: "2026-11-19T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-17T00:00:00.000Z",
       dependency: "@embedpdf/pdfium",
       explanation:
@@ -434,6 +439,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       explanation:
         "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
       expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-19T00:00:00.000Z",
+      dependency: "pele",
+      explanation:
+        "https://pele.run/llms.txt and https://raw.githubusercontent.com/obsidianmd/pele/main/llms.txt return 404. Use the documentation at https://pele.run and the README at https://github.com/obsidianmd/pele#readme directly.",
+      expiresAt: "2026-11-18T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
@@ -621,11 +634,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-23T00:00:00.000Z",
+      checkedAt: "2026-10-23T00:00:00.000Z",
       dependency: "hyparquet",
       explanation:
         "https://hyparam.github.io/hyparquet/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/hyparam/hyparquet and the typed API in its package (src/types.d.ts) directly.",
-      expiresAt: "2026-10-23T00:00:00.000Z",
+      expiresAt: "2026-11-22T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {

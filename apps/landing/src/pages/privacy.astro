@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import LandingFooter from "../components/LandingFooter.astro";
+import Prose from "../components/Prose.astro";
 
 const sections = [
   {
@@ -46,7 +47,15 @@ const sections = [
     ],
   },
   {
-    title: "6. Who receives personal data",
+    title: "6. Browser extension",
+    body: [
+      "The optional stella extension for Chrome lets stella chat read and operate one browser tab that you connect. It reads a page only when chat asks to and you approve it, or when you chose to auto-approve page reads for that session. It never reads other tabs, your browsing history, or cookies, and it collects nothing in the background.",
+      "A page read contains the page address, its visible text, its links and controls, and the values of its form fields. The values of password, payment-card, and one-time-code fields are never read. What chat reads becomes part of the conversation: it is stored in your workspace's chat history and processed like any other chat message.",
+      "The extension keeps its pairing with your stella tab and its own settings in your browser's extension storage. Removing website access in the extension, or uninstalling it, stops all access.",
+    ],
+  },
+  {
+    title: "7. Who receives personal data",
     body: [
       "We use a small number of service providers under data processing terms: Amazon Web Services (hosting, storage, and email delivery; EU Frankfurt region), PostHog (product analytics; EU cloud), and Polar Software Inc. (payments, acting as merchant of record; payment card data is processed by their payment provider, Stripe).",
       "Beyond that, personal data leaves stella only where the service requires it under your organization's configuration: if your organization connects its own AI or machine-translation provider, prompts, relevant context, or documents submitted for translation are sent to that provider under the organization's own agreement with it.",
@@ -54,21 +63,21 @@ const sections = [
     ],
   },
   {
-    title: "7. International transfers",
+    title: "8. International transfers",
     body: [
       "The service is hosted and data is stored in the EU (AWS Frankfurt). Product analytics run on PostHog's EU cloud.",
       "Billing data is processed by our merchant of record, Polar Software Inc., established in the United States; transfers rely on the European Commission's Standard Contractual Clauses and, where applicable, adequacy decisions. Where your organization connects a non-EU AI or translation provider, that transfer happens under the organization's own agreement with the provider.",
     ],
   },
   {
-    title: "8. How long we keep data",
+    title: "9. How long we keep data",
     body: [
       "Account data is kept for the life of the account. When you delete data, a workspace, or an organization, database records are removed immediately, and associated files are removed from storage by an automatic cleanup process that normally completes within minutes. Encrypted database backups age out within 35 days, and object-storage version history within 12 months. Server logs are retained for up to 12 months; billing records for statutory periods.",
       "Data we no longer need is deleted or anonymized.",
     ],
   },
   {
-    title: "9. Your rights",
+    title: "10. Your rights",
     body: [
       "Under the GDPR you can request access to, correction, or deletion of your personal data; restriction of processing; object to processing based on legitimate interest (and to marketing, always); receive your data in a portable format; and withdraw consent at any time without affecting prior processing.",
       "Write to privacy@stll.app; we may need to verify your identity, and we respond within one month. You can also lodge a complaint with a supervisory authority; for us that is the Czech Office for Personal Data Protection (Úřad pro ochranu osobních údajů, uoou.gov.cz), or the authority of your habitual residence.",
@@ -76,14 +85,14 @@ const sections = [
     ],
   },
   {
-    title: "10. Cookies and analytics",
+    title: "11. Cookies and analytics",
     body: [
       "Our public websites set no analytics or advertising cookies, and no third-party trackers run on them.",
       "The signed-in application sets only cookies strictly necessary for authentication and security. Product analytics are collected without cookies and without cross-site tracking, tied to your account, and processed in the EU.",
     ],
   },
   {
-    title: "11. Security",
+    title: "12. Security",
     body: [
       "Data is encrypted in transit and at rest. Access is controlled per organization and workspace, backed by database-level isolation, role-based permissions, and audit logging. Our security controls and their evidence are documented publicly on our security page.",
       "If a personal data breach affects you, we notify you and the competent supervisory authority as required by law.",
@@ -91,13 +100,13 @@ const sections = [
     ],
   },
   {
-    title: "12. Children",
+    title: "13. Children",
     body: [
       "stella is a professional tool and is not directed at children under 16. We do not knowingly collect their data.",
     ],
   },
   {
-    title: "13. Changes to this policy",
+    title: "14. Changes to this policy",
     body: [
       "We post updates on this page with a new effective date. For material changes we notify you in the product or by email.",
     ],
@@ -123,7 +132,7 @@ const sections = [
             How stella processes personal data, and the rights you have over it.
           </p>
           <div class="mt-8 space-y-2 text-sm leading-relaxed" style="color: var(--muted-foreground)">
-            <p>Effective: October 10, 2026</p>
+            <p>Effective: October 21, 2026</p>
             <p>
               Controller:
               <a href="/imprint/" class="transition-opacity hover:opacity-70" style="color: var(--foreground)">
@@ -150,7 +159,7 @@ const sections = [
             <section>
               <h2 class="font-display text-xl font-medium tracking-tight">{section.title}</h2>
               <div class="mt-3 space-y-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
-                {section.body.map((paragraph) => <p>{paragraph}</p>)}
+                {section.body.map((paragraph) => <Prose>{paragraph}</Prose>)}
               </div>
             </section>
           ))}

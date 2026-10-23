@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   validateSavedSearchCriteria,
+  validateSavedSearchName,
   validateSavedSearchWorkspaceAccess,
 } from "./criteria";
 
@@ -23,6 +24,29 @@ const criteria = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("saved search criteria", () => {
+  test("rename validation trims names and rejects blank or oversized names", () => {
+    const renamed = validateSavedSearchName("  Spor o náhradu škody  ");
+    expect(Result.isOk(renamed)).toBe(true);
+    if (Result.isOk(renamed)) {
+      expect(renamed.value).toBe("Spor o náhradu škody");
+    }
+    expect(Result.isError(validateSavedSearchName(" \t\n "))).toBe(true);
+    expect(Result.isError(validateSavedSearchName("x".repeat(257)))).toBe(true);
+  });
+
+  test("accepts the maximum query length and rejects the next character", () => {
+    expect(
+      Result.isOk(
+        validateSavedSearchCriteria(criteria({ query: "x".repeat(500) })),
+      ),
+    ).toBe(true);
+    expect(
+      Result.isError(
+        validateSavedSearchCriteria(criteria({ query: "x".repeat(501) })),
+      ),
+    ).toBe(true);
+  });
+
   test("normalizes search text while retaining a relative date preset", () => {
     const result = validateSavedSearchCriteria(
       criteria({
