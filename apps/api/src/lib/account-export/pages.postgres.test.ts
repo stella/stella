@@ -1,12 +1,16 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
+import {
+  SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID,
+  SETTING_ACCOUNT_EXPORT_USER_ID,
+} from "@/api/db/rls";
 import {
   aiMemories,
   contacts,
@@ -29,6 +33,7 @@ import {
   buildAccountExportArchive,
   type AccountExportArchiveDeps,
 } from "@/api/lib/account-export/archive";
+import { readAccountExportAnnotationPage } from "@/api/lib/account-export/owner-read";
 import {
   exportAccountFiles,
   exportAccountRows,
@@ -45,7 +50,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)("account export personal data", () => {
-  test("exports only the requesting author's verification-claim comments", async () => {
+  test("exports only the requesting author's private annotations and verification-claim comments", async () => {
     if (databaseUrl === undefined) {
       panic("DATABASE_URL required");
     }
@@ -276,6 +281,88 @@ describe.skipIf(!enabled)("account export personal data", () => {
         );
         expect(annotationsOutsideExport).toEqual([]);
 
+        const annotationsWithAppExportSettings = await createMembershipScopedDb(
+          scopedDatabase,
+          {
+            organizationId,
+            serverValidatedWorkspaceIds: [],
+            userId: exportingUserId,
+          },
+        )(async (tx) => {
+          await tx.execute(sql`SELECT
+            set_config('${sql.raw(SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID)}', ${organizationId}, true),
+            set_config('${sql.raw(SETTING_ACCOUNT_EXPORT_USER_ID)}', ${exportingUserId}, true)`);
+          return await tx
+            .select({ id: legalReaderAnnotations.id })
+            .from(legalReaderAnnotations)
+            .where(
+              and(
+                eq(legalReaderAnnotations.organizationId, organizationId),
+                eq(legalReaderAnnotations.workspaceId, workspaceId),
+              ),
+            );
+        });
+        expect(annotationsWithAppExportSettings).toEqual([]);
+
+        const privateDocumentId = Bun.randomUUIDv7();
+        const privateNotes = users.map((userId) => ({
+          id: createSafeId<"legalReaderAnnotation">(),
+          organizationId,
+          userId,
+          targetType: "decision" as const,
+          targetId: privateDocumentId,
+          kind: "comment" as const,
+          visibility: "private" as const,
+          blockAnchorId: "private-note",
+          startOffset: 0,
+          endOffset: 5,
+          quote: "Notes",
+          body: "Private document note",
+          createdAt,
+          updatedAt,
+        }));
+        for (const note of privateNotes) {
+          await createScopedDb(
+            scopedDatabase,
+            [],
+            organizationId,
+            note.userId,
+          )(async (tx) => await tx.insert(legalReaderAnnotations).values(note));
+        }
+        const ownPrivateNote =
+          privateNotes.at(0) ?? panic("Own private note required");
+        const otherPrivateNote =
+          privateNotes.at(1) ?? panic("Other private note required");
+
+        // This query omits authorship deliberately: RLS must enforce it itself.
+        const ownerScopedAnnotations = await readAccountExportAnnotationPage({
+          database: db,
+          organizationId,
+          userId: exportingUserId,
+          where: and(
+            eq(legalReaderAnnotations.organizationId, organizationId),
+            isNull(legalReaderAnnotations.verificationClaimId),
+          ),
+          limit: 10,
+        });
+        expect(ownerScopedAnnotations.map(({ id }) => id).toSorted()).toEqual([
+          ownPrivateNote.id,
+        ]);
+        expect(ownerScopedAnnotations.map((row) => row.id)).not.toContain(
+          otherPrivateNote.id,
+        );
+
+        const ownerAnnotationsWithoutSettings = await db
+          .select({ id: legalReaderAnnotations.id })
+          .from(legalReaderAnnotations)
+          .where(
+            and(
+              eq(legalReaderAnnotations.organizationId, organizationId),
+              isNull(legalReaderAnnotations.verificationClaimId),
+            ),
+          );
+        expect(ownerAnnotationsWithoutSettings).toEqual([]);
+
         const exported = await Array.fromAsync(
           exportAccountRows({
             projections: ACCOUNT_EXPORT_PROJECTIONS,
@@ -287,35 +374,47 @@ describe.skipIf(!enabled)("account export personal data", () => {
           }),
         );
 
+        expect(exported).toHaveLength(ownComments.length + 1);
         expect(exported).toEqual(
-          ownComments
-            .toSorted((left, right) => compareCodeUnit(left.id, right.id))
-            .map((comment) => ({
+          expect.arrayContaining([
+            ...ownComments
+              .toSorted((left, right) => compareCodeUnit(left.id, right.id))
+              .map((comment) => ({
+                organizationId,
+                data: {
+                  id: comment.id,
+                  userId: exportingUserId,
+                  targetType: "verification-claim",
+                  targetId: verificationClaimId,
+                  workspaceId,
+                  verificationRunId,
+                  verificationClaimId,
+                  groupId: null,
+                  kind: "comment",
+                  visibility: comment.visibility,
+                  color: null,
+                  style: null,
+                  blockAnchorId: "claim",
+                  startOffset: 0,
+                  endOffset: 5,
+                  quote: "Claim",
+                  body: comment.body,
+                  createdAt: createdAt.toISOString(),
+                  updatedAt: updatedAt.toISOString(),
+                },
+              })),
+            {
               organizationId,
-              data: {
-                id: comment.id,
+              data: expect.objectContaining({
+                id: ownPrivateNote.id,
                 userId: exportingUserId,
-                targetType: "verification-claim",
-                targetId: verificationClaimId,
-                workspaceId,
-                verificationRunId,
-                verificationClaimId,
-                groupId: null,
-                kind: "comment",
-                visibility: comment.visibility,
-                color: null,
-                style: null,
-                blockAnchorId: "claim",
-                startOffset: 0,
-                endOffset: 5,
-                quote: "Claim",
-                body: comment.body,
-                createdAt: createdAt.toISOString(),
-                updatedAt: updatedAt.toISOString(),
-              },
-            })),
+                targetType: "decision",
+                visibility: "private",
+              }),
+            },
+          ]),
         );
-        for (const { id } of otherComments) {
+        for (const { id } of [...otherComments, otherPrivateNote]) {
           expect(exported).not.toContainEqual({
             organizationId,
             data: expect.objectContaining({ id }),
@@ -333,14 +432,14 @@ describe.skipIf(!enabled)("account export personal data", () => {
           }),
         );
 
-        expect(exportedAsOtherMember).toHaveLength(otherComments.length);
-        for (const { id } of otherComments) {
+        expect(exportedAsOtherMember).toHaveLength(otherComments.length + 1);
+        for (const { id } of [...otherComments, otherPrivateNote]) {
           expect(exportedAsOtherMember).toContainEqual({
             organizationId,
             data: expect.objectContaining({ id }),
           });
         }
-        for (const { id } of ownComments) {
+        for (const { id } of [...ownComments, ownPrivateNote]) {
           expect(exportedAsOtherMember).not.toContainEqual({
             organizationId,
             data: expect.objectContaining({ id }),

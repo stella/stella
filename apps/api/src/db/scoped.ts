@@ -9,7 +9,6 @@ import { DrizzleQueryError, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import {
-  SETTING_ACCOUNT_EXPORT_USER_ID,
   SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
@@ -282,34 +281,6 @@ export const createScopedDb =
       organizationId,
       userId,
       fn,
-    });
-
-/**
- * Read an account export under the application role without granting matter
- * access. The additional transaction-local identity is consumed only by
- * policies that expose rows authored by the exporting user.
- */
-export const createAccountExportScopedDb =
-  <TTransaction extends ScopedTransactionBase>(
-    database: RlsDatabase<TTransaction>,
-    organizationId: SafeId<"organization">,
-    userId: SafeId<"user">,
-  ) =>
-  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
-    await runScopedTransaction({
-      database,
-      workspaceScope: {
-        type: WORKSPACE_ACCESS_MODE.explicit,
-        workspaceIds: [],
-      },
-      organizationId,
-      userId,
-      fn: async (tx) => {
-        await tx.execute(
-          sql`SELECT set_config('${sql.raw(SETTING_ACCOUNT_EXPORT_USER_ID)}', ${userId}, true)`,
-        );
-        return await fn(tx);
-      },
     });
 
 /**

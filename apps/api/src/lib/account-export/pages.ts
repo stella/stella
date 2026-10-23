@@ -26,7 +26,8 @@ import {
   userProfessionalUseAcceptances,
   workspaceViewTemplates,
 } from "@/api/db/schema";
-import { createAccountExportScopedDb, createScopedDb } from "@/api/db/scoped";
+import { createScopedDb } from "@/api/db/scoped";
+import { readAccountExportAnnotationPage } from "@/api/lib/account-export/owner-read";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -39,7 +40,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { iterateCursorPages } from "@/api/lib/pagination";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
-export type AccountExportDataDb = Pick<typeof rootDb, "select">;
+export type AccountExportDataDb = Pick<typeof rootDb, "select" | "transaction">;
 const ACCOUNT_EXPORT_PAGE_SIZE = 10;
 
 const resolveScopedDatabase = async () => {
@@ -88,7 +89,7 @@ type FeedbackReportPageRow = Awaited<
 type ExportOrganizationPageOptions = {
   projections: AccountExportProjections;
   narrowScopedDb: ScopedDb;
-  accountExportScopedDb: ScopedDb;
+  db: AccountExportDataDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   table: Exclude<
@@ -109,7 +110,7 @@ const projectRows = <T extends { id: string }>(
 
 type OrganizationPageQueryOptions = Omit<
   ExportOrganizationPageOptions,
-  "table" | "accountExportScopedDb"
+  "table" | "db"
 >;
 type AccountExportOrganizationPageQueryOptions = Omit<
   ExportOrganizationPageOptions,
@@ -383,31 +384,29 @@ const readSearchHistoryPage = async ({
 
 const readLegalReaderAnnotationsPage = async ({
   projections,
-  accountExportScopedDb,
+  db,
   organizationId,
   userId,
   cursor,
-}: AccountExportOrganizationPageQueryOptions) =>
-  await accountExportScopedDb(async (tx) => {
-    const rows = await tx
-      .select()
-      .from(legalReaderAnnotations)
-      .where(
-        and(
-          eq(legalReaderAnnotations.organizationId, organizationId),
-          eq(legalReaderAnnotations.userId, userId),
-          or(
-            eq(legalReaderAnnotations.visibility, "private"),
-            eq(legalReaderAnnotations.targetType, "verification-claim"),
-          ),
-          stillMember(organizationId, userId),
-          after(legalReaderAnnotations.id, cursor),
-        ),
-      )
-      .orderBy(asc(legalReaderAnnotations.id))
-      .limit(ACCOUNT_EXPORT_PAGE_SIZE);
-    return projectRows(rows, projections.legal_reader_annotations);
+}: AccountExportOrganizationPageQueryOptions) => {
+  const rows = await readAccountExportAnnotationPage({
+    database: db,
+    organizationId,
+    userId,
+    limit: ACCOUNT_EXPORT_PAGE_SIZE,
+    where: and(
+      eq(legalReaderAnnotations.organizationId, organizationId),
+      eq(legalReaderAnnotations.userId, userId),
+      or(
+        eq(legalReaderAnnotations.visibility, "private"),
+        eq(legalReaderAnnotations.targetType, "verification-claim"),
+      ),
+      stillMember(organizationId, userId),
+      after(legalReaderAnnotations.id, cursor),
+    ),
   });
+  return projectRows(rows, projections.legal_reader_annotations);
+};
 
 const readLegalReaderAnswersPage = async ({
   projections,
@@ -669,17 +668,12 @@ export async function* exportAccountRows({
       membership.organizationId,
     );
     const narrowScopedDb = createScopedDb(database, [], organizationId, userId);
-    const accountExportScopedDb = createAccountExportScopedDb(
-      database,
-      organizationId,
-      userId,
-    );
     const pages = idPages(
       async (cursor) =>
         await readOrganizationPage({
           projections,
           narrowScopedDb,
-          accountExportScopedDb,
+          db,
           organizationId,
           userId,
           table,

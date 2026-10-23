@@ -11,7 +11,10 @@ import {
 } from "@stll/api-contract/legal-reader-annotations";
 
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
-import { SETTING_ACCOUNT_EXPORT_USER_ID } from "../rls";
+import {
+  SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID,
+  SETTING_ACCOUNT_EXPORT_USER_ID,
+} from "../rls";
 import {
   authoredOptionalMatterNotePolicies,
   isNotNull,
@@ -22,7 +25,6 @@ import {
   safeUuid,
   safeWorkspaceId,
   sql,
-  stella,
   timestamptz,
   user,
 } from "./common";
@@ -219,12 +221,11 @@ export const legalReaderAnnotations = p.pgTable(
       matterRowCheck: verificationClaimVisible(t),
       matterRowHold: verificationClaimHeld(t),
     }),
-    p.pgPolicy("account_export_author_select", {
+    p.pgPolicy("account_export_owner_select", {
       for: "select",
-      to: stella,
-      using: sql`${t.organizationId} = (SELECT current_setting('app.organization_id', true))
-        AND ${t.userId} = (SELECT current_setting('app.user_id', true))
-        AND ${t.userId} = (SELECT current_setting('${sql.raw(SETTING_ACCOUNT_EXPORT_USER_ID)}', true))`,
+      using: sql`${tableOwnerCheck}
+        AND ${t.organizationId} = nullif(current_setting('${sql.raw(SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID)}', true), '')
+        AND ${t.userId} = nullif(current_setting('${sql.raw(SETTING_ACCOUNT_EXPORT_USER_ID)}', true), '')`,
     }),
     ...reviewResetOwnerPolicies(LEGAL_READER_ANNOTATIONS),
     // The claim-cleanup trigger runs as the owner and removes every author's
