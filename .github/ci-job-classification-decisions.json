@@ -357,7 +357,7 @@
   "candidate:.github/workflows/db-migrations.yml/apply-fresh": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "b7bbc2fea9ef0ed00e28846dcc5b538645e43e90502a048b2964d39aabf8c44a"
+    "reviewedDigest": "77ce63eccaff1f9e721e133252e04e8098eadf468d381a45dc04e9afd7f93c8e"
   },
   "candidate:.github/workflows/dependency-audit.yml/audit": {
     "kind": "ordinary",
