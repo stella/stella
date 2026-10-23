@@ -1,4 +1,4 @@
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { desktopEditSessions } from "@/api/db/schema";
 import {

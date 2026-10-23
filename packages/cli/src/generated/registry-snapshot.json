@@ -327,7 +327,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5920,6 +5920,34 @@
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["web", "open"],
+      "excluded": true,
+      "scope": "read"
+    },
+    "name": "mint_web_handoff",
+    "description": "App-only: refresh a web link when the user opens it. Returns a plain link when sign-in handoff is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Web URL the user chose to open."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Open web link",
+      "readOnlyHint": false,
+      "idempotentHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
     }
   }
 ]

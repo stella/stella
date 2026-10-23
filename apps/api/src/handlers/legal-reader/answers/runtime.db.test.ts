@@ -13,6 +13,7 @@ import * as v from "valibot";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
+  READER_ANSWER_ANCHOR_MISMATCH_CODE,
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_ERROR_CODES,
   READER_ANSWER_MAX_MESSAGES,
@@ -40,8 +41,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getTestDb,
   releaseTestDb,
-  withQueryLogger,
   type TestDatabase,
+  withQueryLogger,
 } from "@/api/tests/security/test-utils";
 
 const organizationId = mintAuthProviderId<"organization">();
@@ -289,6 +290,7 @@ describe("reader answer turn lifecycle", () => {
       if (Result.isError(result)) {
         expect(result.error).toMatchObject({
           status: 400,
+          code: READER_ANSWER_ANCHOR_MISMATCH_CODE,
           message: "Selection does not match the decision paragraph",
         });
       }

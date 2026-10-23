@@ -223,6 +223,43 @@ test(
 );
 
 test(
+  "date bounds are inclusive and an upper bound alone leaves undated decisions out",
+  async () => {
+    const caseNumbers = async (bounds: {
+      dateFrom?: string;
+      dateTo?: string;
+    }) => {
+      const result = await listDecisionsHandler(
+        { country: "CZE", limit: 50, ...bounds },
+        caseLawDb,
+        async () => courtWeightMapFromSeed(),
+      );
+      if (!("items" in result)) {
+        throw new Error("list failed");
+      }
+      return result.items.map((item) => item.caseNumber);
+    };
+
+    expect(await caseNumbers({ dateTo: "2024-03-02" })).toEqual([
+      "2 Cdo 2/2024",
+      "1 Cdo 1/2024",
+    ]);
+    expect(await caseNumbers({ dateFrom: "2024-03-09" })).toEqual([
+      "10 Cdo 10/2024",
+      "9 Cdo 9/2024",
+    ]);
+    // One day: the Czech decision, and the CJEU judgment once.
+    expect(
+      (
+        await caseNumbers({ dateFrom: "2024-03-05", dateTo: "2024-03-05" })
+      ).toSorted(),
+    ).toEqual(["5 Cdo 5/2024", "C-131/12"]);
+    expect(await caseNumbers({ dateFrom: "2024-04-01" })).toEqual([]);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
   "a tampered cursor is rejected, not silently restarted",
   async () => {
     const result = await listDecisionsHandler(

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { getColumnTable, sql } from "drizzle-orm";
-import type { SQL, GetColumnData, SQLWrapper } from "drizzle-orm";
-import { getTableConfig, pgPolicy, PgDialect } from "drizzle-orm/pg-core";
+import type { GetColumnData, SQL, SQLWrapper } from "drizzle-orm";
+import { getTableConfig, PgDialect, pgPolicy } from "drizzle-orm/pg-core";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { EntityContextReference } from "@stll/api-contract/entity-reference";

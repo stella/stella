@@ -6,9 +6,9 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
-  resolveDesignatedExtractionFileField,
   resolveCurrentExtractionFileField,
   resolveCurrentFileSourceField,
+  resolveDesignatedExtractionFileField,
   selectCurrentExtractedContent,
 } from "@/api/lib/document-content-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

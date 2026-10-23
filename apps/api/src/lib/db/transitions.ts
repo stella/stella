@@ -4,10 +4,10 @@ import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type {
   AnyPgColumn,
-  PgTable,
   PgAsyncDatabase,
-  PgQueryResultHKT,
   PgInsertValue,
+  PgQueryResultHKT,
+  PgTable,
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
@@ -889,8 +889,7 @@ export const defineKeyedTransitions = <
     fence?: FenceKey<TTable>;
   },
   const TScope extends
-    | readonly (keyof TTable["_"]["columns"] & string)[]
-    | undefined = undefined,
+    readonly (keyof TTable["_"]["columns"] & string)[] | undefined = undefined,
 >({
   table,
   key,
@@ -975,15 +974,13 @@ type Move<TEdges extends Readonly<Record<string, readonly string[]>>> = {
     from: readonly [
       {
         [TSource in keyof TEdges & string]: TTarget extends
-          | TSource
-          | TEdges[TSource][number]
+          TSource | TEdges[TSource][number]
           ? TSource
           : never;
       }[keyof TEdges & string],
       ...{
         [TSource in keyof TEdges & string]: TTarget extends
-          | TSource
-          | TEdges[TSource][number]
+          TSource | TEdges[TSource][number]
           ? TSource
           : never;
       }[keyof TEdges & string][],
@@ -1362,8 +1359,7 @@ export const transitionBatch = async <
   const TEdges extends Readonly<Record<string, readonly string[]>>,
   TOptions extends { terminal: readonly string[]; fence?: string },
   const TScope extends
-    | readonly (keyof TTable["_"]["columns"] & string)[]
-    | undefined,
+    readonly (keyof TTable["_"]["columns"] & string)[] | undefined,
 >({
   tx,
   spec,

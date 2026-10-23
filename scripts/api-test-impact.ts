@@ -1,5 +1,5 @@
-import { Result, panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { panic, Result } from "better-result";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
 import ts from "typescript6";

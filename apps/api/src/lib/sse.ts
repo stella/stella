@@ -39,17 +39,18 @@ const KEEP_ALIVE_INTERVAL_MS = 20_000;
 type SSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
+  sessionId: string;
   userId: SafeId<"user">;
 };
 
 type WorkspaceConnectionAuthorizationLookup = {
-  userIds: readonly SafeId<"user">[];
+  sessionIds: readonly string[];
   workspaceId: SafeId<"workspace">;
 };
 
 type WorkspaceConnectionAuthorizer = (
   lookup: WorkspaceConnectionAuthorizationLookup,
-) => Promise<ReadonlySet<SafeId<"user">>>;
+) => Promise<ReadonlySet<string>>;
 
 /**
  * Whether one user still holds an active membership in the organization their
@@ -59,8 +60,9 @@ type WorkspaceConnectionAuthorizer = (
  */
 type UserConnectionAuthorizer = (lookup: {
   organizationId: SafeId<"organization">;
+  sessionIds: readonly string[];
   userId: SafeId<"user">;
-}) => Promise<boolean>;
+}) => Promise<ReadonlySet<string>>;
 
 /** Workspace ID → connected SSE streams on THIS instance. */
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
@@ -76,6 +78,7 @@ let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
 type UserSSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
+  sessionId: string;
 };
 
 /** User ID → that user's connected streams on THIS instance. */
@@ -290,6 +293,7 @@ const enqueueOrDrop = <TConnection extends StreamConnection>({
  */
 type SubscribeOptions = {
   organizationId: SafeId<"organization">;
+  sessionId: string;
   signal: AbortSignal;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -297,6 +301,7 @@ type SubscribeOptions = {
 
 export const subscribe = ({
   organizationId,
+  sessionId,
   signal,
   userId,
   workspaceId,
@@ -317,7 +322,12 @@ export const subscribe = ({
         return;
       }
 
-      const conn: SSEConnection = { controller, organizationId, userId };
+      const conn: SSEConnection = {
+        controller,
+        organizationId,
+        sessionId,
+        userId,
+      };
 
       let set = connections.get(workspaceId);
       if (!set) {
@@ -343,6 +353,7 @@ export const subscribe = ({
 
 type SubscribeUserOptions = {
   organizationId: SafeId<"organization">;
+  sessionId: string;
   signal: AbortSignal;
   userId: SafeId<"user">;
 };
@@ -354,6 +365,7 @@ type SubscribeUserOptions = {
  */
 export const subscribeUser = ({
   organizationId,
+  sessionId,
   signal,
   userId,
 }: SubscribeUserOptions): ReadableStream<Uint8Array> => {
@@ -368,7 +380,11 @@ export const subscribeUser = ({
         return;
       }
 
-      const conn: UserSSEConnection = { controller, organizationId };
+      const conn: UserSSEConnection = {
+        controller,
+        organizationId,
+        sessionId,
+      };
 
       let set = userConnections.get(userId);
       if (!set) {
@@ -469,11 +485,13 @@ const broadcastLocal = async (
     return;
   }
 
-  const userIds = [...new Set(targets.map((connection) => connection.userId))];
+  const sessionIds = [
+    ...new Set(targets.map((connection) => connection.sessionId)),
+  ];
   // The raw failure is what the log names, so it is carried through
   // unwrapped; wrapping it would rename `error.type` in the sink.
   const reauthorized = await Result.tryPromise({
-    try: async () => await authorizer({ userIds, workspaceId }),
+    try: async () => await authorizer({ sessionIds, workspaceId }),
     catch: (cause) => cause,
   });
   if (Result.isError(reauthorized)) {
@@ -488,7 +506,7 @@ const broadcastLocal = async (
     });
     return;
   }
-  const authorizedUserIds = reauthorized.value;
+  const authorizedSessionIds = reauthorized.value;
 
   const chunk = formatSSE(event);
 
@@ -496,7 +514,7 @@ const broadcastLocal = async (
     if (!set.has(conn)) {
       continue;
     }
-    if (!authorizedUserIds.has(conn.userId)) {
+    if (!authorizedSessionIds.has(conn.sessionId)) {
       closeConnection(set, conn);
       continue;
     }
@@ -549,7 +567,12 @@ const broadcastLocalToUser = async (
   }
 
   const reauthorized = await Result.tryPromise({
-    try: async () => await authorizer({ organizationId, userId }),
+    try: async () =>
+      await authorizer({
+        organizationId,
+        sessionIds: targets.map((connection) => connection.sessionId),
+        userId,
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(reauthorized)) {
@@ -560,14 +583,14 @@ const broadcastLocalToUser = async (
     return;
   }
 
-  if (!reauthorized.value) {
-    closeTargets();
-    return;
-  }
-
   const chunk = formatSSE(event);
   for (const conn of targets) {
     if (!set.has(conn)) {
+      continue;
+    }
+    if (!reauthorized.value.has(conn.sessionId)) {
+      set.delete(conn);
+      closeControllerQuietly(conn.controller);
       continue;
     }
     enqueueOrDrop({ chunk, connection: conn, set });

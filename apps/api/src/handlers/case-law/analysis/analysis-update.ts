@@ -27,7 +27,7 @@ import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 
-import { buildDecisionAnalysis, type AnalysisOutput } from "./analysis-output";
+import { type AnalysisOutput, buildDecisionAnalysis } from "./analysis-output";
 
 /** As much of a decision row as writing an analysis depends on. */
 export type AnalysisSubject = {
