@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 
-import { createDetached, sanitizeErrorForOutput } from "@stll/errors";
+import { createDetached } from "@stll/errors";
 import type { FailureGrade, FailureReason } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type { ExceptionProperties } from "@/api/lib/analytics/server-analytics";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
+import { sanitizeDiagnosticErrorForOutput } from "@/api/lib/errors/handoff-diagnostics";
 import {
   errorTag,
   logServerDevError,
@@ -307,7 +308,7 @@ const captureErrorWithOptions = (
           request: options.request,
         })
       : options.observed.grading;
-  const safeOutput = sanitizeErrorForOutput({
+  const safeOutput = sanitizeDiagnosticErrorForOutput({
     error,
     context: options.context,
   });

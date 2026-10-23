@@ -18,27 +18,46 @@ export const applyDecisionParagraphLanding = (
   container: HTMLElement,
   paragraphLanding: ReturnType<typeof decisionParagraphLanding>,
 ) => {
+  let anchorIds: readonly string[];
+  let firstAnchorId: string;
   switch (paragraphLanding.type) {
-    case "anchor":
+    case "anchor": {
+      const { anchorId } = paragraphLanding;
+      if (anchorId === undefined) {
+        return undefined;
+      }
+      anchorIds = [anchorId];
+      firstAnchorId = anchorId;
+      break;
+    }
     case "invalid":
     case "text-unavailable":
       return undefined;
     case "not-found":
       return holdTop(container);
     case "range":
+      anchorIds = paragraphLanding.anchorIds;
+      firstAnchorId = paragraphLanding.firstAnchorId;
       break;
     default:
       paragraphLanding satisfies never;
       return panic("Unhandled decision paragraph landing");
   }
-  const targets = paragraphLanding.anchorIds.map((id) => {
+  const targets: HTMLElement[] = [];
+  for (const id of anchorIds) {
     const target = readerBlockByAnchor(container, id);
-    return target ?? panic("Resolved court paragraph must be rendered");
-  });
-  const target = readerBlockByAnchor(container, paragraphLanding.firstAnchorId);
-  if (target === null) {
-    return panic("First resolved court paragraph must be rendered");
+    if (target === null) {
+      if (paragraphLanding.type === "anchor") {
+        return undefined;
+      }
+      return panic("Resolved court paragraph must be rendered");
+    }
+    targets.push(target);
   }
+  const target =
+    targets.find(
+      (candidate) => candidate.dataset["anchor"] === firstAnchorId,
+    ) ?? panic("First resolved court paragraph must be rendered");
   for (const paragraph of targets) {
     for (
       let disclosure = paragraph.closest("details");
@@ -55,7 +74,7 @@ export const applyDecisionParagraphLanding = (
   target.focus({ preventScroll: true });
   const article =
     target.closest("article") ??
-    panic("Court paragraph must belong to the reader article");
+    panic("Reader block must belong to the reader article");
   const release = holdLanding({ article, target });
   return () => {
     release();
