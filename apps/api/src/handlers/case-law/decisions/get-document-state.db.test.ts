@@ -70,7 +70,8 @@ if (!databaseUrl || !runPostgresTests) {
     };
 
     const readState = async (id: SafeId<"caseLawDecision">) => {
-      const subject =
+      // The subject is bound to the read transaction, so it is read inside it.
+      const decision =
         (await withRedistributableSubject(
           caseLawPublicReadDb,
           "pages",
@@ -78,9 +79,8 @@ if (!databaseUrl || !runPostgresTests) {
             kind: "id",
             id,
           },
-          async (gated) => gated,
+          async (subject) => await readDecisionHandler({ subject }),
         )) ?? panic("expected a redistributable subject");
-      const decision = await readDecisionHandler({ subject });
       if (!("documentPending" in decision)) {
         throw new Error("expected a readable decision");
       }

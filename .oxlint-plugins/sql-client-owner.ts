@@ -108,10 +108,13 @@ export default eslintCompatPlugin({
                 binding === null
                   ? null
                   : restrictedExport(binding.moduleId, binding.imported);
+              // Imports bind in the declaration's (module) scope.
               const variable =
                 kind === null
                   ? null
-                  : resolveVariable(context, specifier.local);
+                  : (context.sourceCode
+                      .getScope(node)
+                      .set.get(specifier.local.name) ?? null);
               if (kind === null || variable === null) {
                 continue;
               }
@@ -126,7 +129,11 @@ export default eslintCompatPlugin({
               }
             }
           },
-          MemberExpression(node) {
+          MemberExpression(member) {
+            const node = unwrapExpression(member);
+            if (node === null) {
+              return;
+            }
             if (
               memberPropertyName(node) !== "SQL" &&
               memberPropertyName(node) !== "drizzle"
