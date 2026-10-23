@@ -27,6 +27,7 @@ import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolJob,
+  checkPoolStepRun,
   parseCheckPool,
   readCheckPool,
   type PoolCheck,
@@ -168,6 +169,8 @@ test("each pooled job runs its registry from exactly one pool step", () => {
     expect(pools.map((step) => [step["name"], checkPoolJob(step)])).toEqual([
       [CHECK_POOL_STEP_NAMES[job], job],
     ]);
+    expect(pools.at(0)?.["run"]).toBe(checkPoolStepRun(job));
+    expect(checkPoolJob({ run: checkPoolStepRun(job) })).toBe(job);
     // Guards see every pooled check as a step of the job, right after the pool.
     const index = steps.indexOf(pools[0] ?? {});
     const pooled = readCheckPool(job).map(({ name }) => name);

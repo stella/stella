@@ -30,6 +30,19 @@ const POOL_COMMAND = new RegExp(
   "u",
 );
 
+/** The pool step's script for `job`, exactly as the workflow declares it. */
+export const checkPoolStepRun = (job: CheckPoolJob) =>
+  [
+    "needs_file=$(mktemp)",
+    `cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'`,
+    // Built, not written literally: a `${...}` in a plain string reads as a
+    // broken template literal to the linter.
+    ["$", "{{ toJSON(needs) }}"].join(""),
+    "CI_CHECK_POOL_NEEDS_JSON",
+    `CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ${job}`,
+    "",
+  ].join("\n");
+
 /** One check: the fields of the workflow step it replaced, verbatim. */
 export type PoolCheck = {
   name: string;
