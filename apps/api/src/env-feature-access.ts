@@ -8,7 +8,7 @@ import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema
 import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
-import { isLocalDevOpen } from "@/api/runtime-mode";
+import { isLocalTestRun } from "@/api/runtime-mode";
 
 /** Metadata polling bounds grant propagation without adding work to requests. */
 export const FEATURE_ACCESS_REFRESH_INTERVAL_MS = 60_000;
@@ -80,7 +80,7 @@ let featureAccessGrantsState: FeatureAccessGrantsState = Object.freeze({
 export const readFeatureAccessGrants = (): FeatureAccessGrantsState =>
   featureAccessGrantsState;
 
-/** Test-only open-mode replacement, retained for existing integration fixtures. */
+/** Test-run replacement, including fixtures exercising strict access decisions. */
 const replaceFeatureAccessGrants = (grants: FeatureAccessGrants): void => {
   featureAccessGrantsState = Object.freeze({ grants, version: null });
 };
@@ -91,13 +91,13 @@ export const envFeatureAccess = {
     return readFeatureAccessGrants().grants;
   },
   set API_FEATURE_ACCESS_GRANTS(grants: FeatureAccessGrants) {
-    if (!isLocalDevOpen()) {
-      panic("Feature access grants cannot be replaced outside open mode");
+    if (!isLocalTestRun()) {
+      panic("Feature access grants cannot be replaced outside local test runs");
     }
     replaceFeatureAccessGrants(grants);
   },
 };
-if (!isLocalDevOpen()) {
+if (!isLocalTestRun()) {
   Object.freeze(envFeatureAccess);
 }
 

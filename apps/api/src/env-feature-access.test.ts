@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { createFeatureAccessGrantsOwner } from "@/api/env-feature-access";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
+import {
+  createFeatureAccessGrantsOwner,
+  envFeatureAccess,
+  readFeatureAccessGrants,
+} from "@/api/env-feature-access";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const ORGANIZATION_ID = "org_12345678901234567890123456789012";
 const initialGrants = {} satisfies FeatureAccessGrants;
@@ -42,6 +49,22 @@ const createOwner = (client: FakeSsmClient, failures: unknown[]) =>
     },
     source: client.source,
   });
+
+test("test fixtures can replace the snapshot while exercising strict access", () => {
+  const initial = readFeatureAccessGrants();
+  const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    envFeatureAccess.API_FEATURE_ACCESS_GRANTS = updatedGrants;
+    expect(readFeatureAccessGrants()).toEqual({
+      grants: updatedGrants,
+      version: null,
+    });
+    expect(envFeatureAccess.API_FEATURE_ACCESS_GRANTS).toBe(updatedGrants);
+  } finally {
+    restore();
+    envFeatureAccess.API_FEATURE_ACCESS_GRANTS = initial.grants;
+  }
+});
 
 describe("feature access grant refresh", () => {
   test("unchanged versions perform only the metadata check", async () => {
