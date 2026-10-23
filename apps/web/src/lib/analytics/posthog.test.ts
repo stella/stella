@@ -211,14 +211,16 @@ describe("PostHog browser analytics adapter", () => {
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.pageLeft,
       properties: {
-        $current_url: "https://app.example.test/workspaces/ws_1",
+        $current_url: "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $pathname: "/workspaces/ws_1",
         $host: "app.example.test",
         $prev_pageview_pathname: "/workspaces/ws_1",
-        $session_entry_url: "https://app.example.test/workspaces/ws_1",
+        $session_entry_url:
+          "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $session_entry_pathname: "/workspaces/ws_1",
         $referrer: "https://app.example.test/workspaces/ws_1",
-        $session_entry_referrer: "https://www.google.com/",
+        $session_entry_referrer:
+          "https://www.google.com/?sh=sh1_sample#sh=sh1_sample",
         $prev_pageview_duration: 12,
         title: "Client Smith v Example",
         $session_id: "session-1",
@@ -370,6 +372,30 @@ describe("PostHog browser analytics adapter", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  test.each([
+    ["AuthClientError", undefined],
+    ["ApiError", 403],
+  ])("keeps a user-visible %s", (type, status) => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [{ type, value: "private detail" }],
+        feature: "auth",
+        route_template: "/auth/error",
+        user_visible: true,
+        ...(status === undefined ? {} : { error_status: status }),
+      },
+    });
+
+    expect(sanitized?.properties).toMatchObject({
+      feature: "auth",
+      route_template: "/auth/error",
+      user_visible: true,
+    });
   });
 
   test.each([
