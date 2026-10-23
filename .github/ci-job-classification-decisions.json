@@ -312,7 +312,7 @@
   "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
     "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-    "reviewedDigest": "4f008679e8a6c668b954a62e2816dd9accb659c4d0391afd5f7e8a4ae3081c70"
+    "reviewedDigest": "b93039b77736d0eb5381d308d5b3b2f83abc331841e351b95a126f2d104a6119"
   },
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "cf6cda1f63b7d3d0b88a5f657d5402dee93a433400baa8453d556fe88964acee"
+    "reviewedDigest": "f068ec6bf111fb99197f958ab5b3c9453c042fc583d3744c744bd1f731c1f6e0"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "9486dee249a8f74b17b6136f1e09a0cdf43d2b9b4fb16c52428172d40c7b0552"
+    "reviewedDigest": "d646eb4723ea110f391cf184c0ff2127a987252fcac35fe253c35359a643c488"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
