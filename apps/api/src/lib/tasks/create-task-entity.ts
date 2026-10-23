@@ -43,6 +43,7 @@ import {
   type TaskDeploymentFeatures,
 } from "@/api/lib/tasks/deployment-features";
 import { rejectUnavailableTaskListInput } from "@/api/lib/tasks/legal-list-access";
+import { areStorableCalendarDates } from "@/api/lib/tasks/task-dates";
 import { includes } from "@/api/lib/type-guards";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
@@ -175,6 +176,17 @@ export const createTaskEntityHandler = async function* ({
   if (!includes(ENTITY_PRIORITIES, taskPriority)) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid task priority" }),
+    );
+  }
+  if (
+    !areStorableCalendarDates([
+      body.dueDate,
+      body.workingTargetDate,
+      body.hardDeadlineDate,
+    ])
+  ) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid task date" }),
     );
   }
   if (

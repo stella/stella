@@ -204,6 +204,28 @@ describe("createTaskHandler validation", () => {
     });
   });
 
+  test.each([
+    { dueDate: "2026-04-31" },
+    { dueDate: "0000-01-01" },
+    { workingTargetDate: "2026/09/11" },
+    { hardDeadlineDate: "2025-02-29" },
+  ])("rejects a date that is not a calendar day: %o", async (dates) => {
+    const scopedDb = throwingScopedDb();
+
+    const result = await createTaskHandler(
+      createHandlerContext({
+        body: { name: "File response", ...dates },
+        safeDb: toSafeDbMock(scopedDb),
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid task date" },
+    });
+  });
+
   test("rejects workflow-only fields while Governed Workflow is disabled", async () => {
     const scopedDb = throwingScopedDb();
 

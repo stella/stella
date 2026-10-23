@@ -61,6 +61,36 @@ describe("updateTaskHandler feature compatibility", () => {
     }
   });
 
+  test.each(["2026-02-30", "2026-1-5", "0000-01-01"])(
+    "rejects due date %s, which is not a calendar day",
+    async (dueDate) => {
+      const { safeDb } = createScopedDbMock({
+        update: () => {
+          throw new Error("database should not be accessed");
+        },
+      });
+
+      const result = await Result.gen(() =>
+        updateTaskHandler({
+          safeDb,
+          workspaceId: createSafeId<"workspace">(),
+          userId: mintAuthProviderId<"user">(),
+          recordAuditEvent: async () => {},
+          body: { taskId: createSafeId<"entity">(), dueDate },
+          features: TASK_FEATURES_ENABLED,
+        }),
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toMatchObject({
+          status: 400,
+          message: "Invalid task date",
+        });
+      }
+    },
+  );
+
   test("permits the ordinary task item type while Legal Lists is disabled", async () => {
     const taskId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();

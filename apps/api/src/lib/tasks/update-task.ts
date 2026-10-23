@@ -48,6 +48,7 @@ import {
   type TaskDeploymentFeatures,
 } from "@/api/lib/tasks/deployment-features";
 import { rejectUnavailableTaskListInput } from "@/api/lib/tasks/legal-list-access";
+import { areStorableCalendarDates } from "@/api/lib/tasks/task-dates";
 import { includes } from "@/api/lib/type-guards";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
@@ -127,6 +128,12 @@ const validateListItemType = (
 const validateTaskFields = (
   body: UpdateTaskBody,
 ): ListItemTypeValidationResult => {
+  if (!areStorableCalendarDates([body.dueDate])) {
+    return {
+      error: new HandlerError({ status: 400, message: "Invalid task date" }),
+      status: "error",
+    };
+  }
   if (body.status !== undefined && !includes(TASK_STATUSES, body.status)) {
     return {
       error: new HandlerError({ status: 400, message: "Invalid task status" }),
