@@ -33,8 +33,7 @@ type DriveArgs = {
 };
 
 type DriveArgsResult =
-  | { type: "ok"; args: DriveArgs }
-  | { type: "error"; message: string };
+  { type: "ok"; args: DriveArgs } | { type: "error"; message: string };
 
 const DRIVE_USAGE = `Usage:
   agent:drive snap <path>... [--wait-for <selector>] [--viewport 1440x900]

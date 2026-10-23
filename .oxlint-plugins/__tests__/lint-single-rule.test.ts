@@ -4,8 +4,8 @@ import { expect, test } from "bun:test";
 import {
   claimedBatches,
   holdSharedRunUntilPendingForTest,
-  lintSingleRule,
   lintsAlone,
+  lintSingleRule,
   runSingleRule,
   setLintRunnerForTest,
   sharedLines,

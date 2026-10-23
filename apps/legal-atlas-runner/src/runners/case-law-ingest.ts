@@ -27,7 +27,7 @@ import {
 import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
 import { Temporal } from "@stll/time";
 
-import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
+import { caseLawIngestionEvents, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
   hasResolvedCitations,
@@ -106,14 +106,14 @@ import {
 } from "./citation-resolution-drain";
 import { executeIngestionCycle } from "./cycle-execution";
 import {
+  type CadenceStreaks,
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
   CYCLE_OUTCOME,
-  type CadenceStreaks,
   type CycleCadence,
+  cycleMadeProgress,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
-  cycleMadeProgress,
   stepCadence,
 } from "./cycle-progress";
 import {
@@ -123,9 +123,9 @@ import {
 import { createIngestionHealthRefresh } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
+  nextRecomputeDelayMs,
   RECOMPUTE_OUTCOME,
   type RecomputeOutcome,
-  nextRecomputeDelayMs,
 } from "./recompute-schedule";
 import { createSettlingDeadlineSignal } from "./settling-deadline";
 import {
@@ -133,8 +133,8 @@ import {
   runDeferredDocumentDrain,
 } from "./sk-document-drain";
 import {
-  SOURCE_TOTAL_POLL_TIMING,
   runSourceTotalPoll,
+  SOURCE_TOTAL_POLL_TIMING,
 } from "./source-total-poll";
 import { isTransientConnectionError } from "./transient-connection-error";
 
@@ -407,8 +407,7 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
 let storedTotalMaintenance:
-  | ReturnType<typeof createSourceStoredTotalMaintenanceRuntime>
-  | undefined;
+  ReturnType<typeof createSourceStoredTotalMaintenanceRuntime> | undefined;
 const getStoredTotalMaintenance = () => {
   storedTotalMaintenance ??=
     createSourceStoredTotalMaintenanceRuntime(ingestionDb);

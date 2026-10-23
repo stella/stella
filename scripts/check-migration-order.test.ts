@@ -16,8 +16,8 @@ import path from "node:path";
 import { createSha256 } from "@stll/sha256/node";
 
 import {
-  findMigrationImmutabilityViolation,
   findMigrationIdentityViolation,
+  findMigrationImmutabilityViolation,
   formatAliasSummary,
   readMigrationBaseSnapshot,
   readMigrationChanges,

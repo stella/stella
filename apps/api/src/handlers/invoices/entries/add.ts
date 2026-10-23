@@ -18,8 +18,8 @@ import {
   attachedEntryLineDrafts,
   checkInvoiceLineCapacity,
   insertInvoiceLines,
-  requireDraftInvoiceForEntryChanges,
   recalculateInvoiceTotals,
+  requireDraftInvoiceForEntryChanges,
 } from "@/api/handlers/invoices/invoice-lines";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

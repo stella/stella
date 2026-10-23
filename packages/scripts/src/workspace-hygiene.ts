@@ -105,7 +105,7 @@ const BABEL_TOOLCHAINS = [
 // supports only TypeScript 5 and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
   oxlint: "1.87.0",
-  oxlintConfig: "1.4.0",
+  oxlintConfig: "1.7.0",
   tsgolint: "7.0.2003",
   typescript: "7.0.2",
   typescript6Api: "npm:typescript@6.0.3",

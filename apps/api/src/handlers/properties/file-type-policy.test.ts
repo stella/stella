@@ -7,7 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { fields, properties } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
-import { createScopedDb, createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";

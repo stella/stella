@@ -11,14 +11,13 @@
  * more fails loudly instead of silently needing a wider login.
  */
 
-import { SQL } from "bun";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL as SqlFragment } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -36,8 +35,8 @@ const POOL_SIZE = 4;
 export type AnalysisDatabase = ReturnType<typeof openAnalysisDatabase>;
 
 export const openAnalysisDatabase = (url: string) =>
-  drizzle({
-    client: new SQL({ url, max: POOL_SIZE }),
+  createDatabase({
+    client: createSqlClient({ url, max: POOL_SIZE }),
     relations: databaseRelations,
   });
 
