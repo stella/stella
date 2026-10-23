@@ -1629,8 +1629,8 @@ test("the required-jobs record names every workflow job once and carries the ver
       },
     },
     {
-      // A verified supersession accepts a cancelled job; the verdict still
-      // evaluated it, so the record names it with its conclusion.
+      // A verified supersession accepts a cancelled job but evaluated
+      // nothing: the record names the job and passes through as superseded.
       label: "pull-request-fast-superseded-cancel",
       options: {
         event: EVENT.pullRequest,
@@ -1745,7 +1745,11 @@ test("the required-jobs record names every workflow job once and carries the ver
   });
   expect(superseded.record.not_required).not.toContain("e2e-vite-canary");
   expect(superseded.exitCode).toBe(0);
-  expect(superseded.record.verdict).toBe("success");
+  expect(superseded.record).toMatchObject({
+    verdict: "success",
+    basis: "pass_through",
+    pass_through_reason: "superseded",
+  });
 
   // Every evaluating branch says so; an exit that evaluated nothing names
   // why, so a consumer never reads its success as evidence.
@@ -1754,7 +1758,6 @@ test("the required-jobs record names every workflow job once and carries the ver
     "merge-group-failure",
     "pull-request-fast",
     "pull-request-fast-outside-failure",
-    "pull-request-fast-superseded-cancel",
   ]) {
     expect(take(label).record, label).toMatchObject({
       basis: "evaluated",
