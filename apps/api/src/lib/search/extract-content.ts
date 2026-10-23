@@ -16,8 +16,8 @@ import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
-  extractionWorkerErrorCode,
   ExtractionWorkerError,
+  extractionWorkerErrorCode,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";

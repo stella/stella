@@ -17,8 +17,8 @@ import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import {
   type AuthorizedWorkspaceIds,
-  type AuthorizedWorkspaceReadError,
   authorizedWorkspaceIds,
+  type AuthorizedWorkspaceReadError,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
@@ -41,11 +41,11 @@ import {
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
+  type CompatSearchPosition,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
   publicLawDisabledResult,
-  type CompatSearchPosition,
 } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";

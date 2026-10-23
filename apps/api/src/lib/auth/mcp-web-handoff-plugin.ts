@@ -5,7 +5,7 @@ import {
   originCheckMiddleware,
   sessionMiddleware,
 } from "better-auth/api";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
@@ -13,8 +13,8 @@ import {
   canonicalHandoffPath,
   type createWebHandoffService,
   hasWebHandoffScopes,
-  webHandoffFailure,
   WEB_HANDOFF_CODE_PATTERN,
+  webHandoffFailure,
 } from "@/api/lib/auth/mcp-web-handoff";
 import { MCP_HANDOFF_REDEEM_PATH } from "@/api/lib/auth/mcp-web-handoff-paths";
 import { completeHandoffSession } from "@/api/lib/auth/mcp-web-handoff-session";
