@@ -85,7 +85,7 @@ export type LinkIconTarget = RegistrableIconSite | ExactIconUrl;
 const isHttpsIconUrl = (url: string): url is HttpsIconUrl =>
   url.startsWith("https://");
 
-export const normalizeExactIconUrl = (value: string): HttpsIconUrl | null => {
+const normalizeExactIconUrl = (value: string): HttpsIconUrl | null => {
   if (value.length > ICON_URL_MAX_LENGTH) {
     return null;
   }
