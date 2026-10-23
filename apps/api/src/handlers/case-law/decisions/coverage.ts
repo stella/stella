@@ -118,6 +118,11 @@ type CaseLawCoverageSource = {
   decisionYearTo: number | null;
   /** Publisher-listed decisions whose text has not arrived. */
   pendingTextCount: number;
+  /**
+   * Everything the corpus holds for this source, as the ingestion side last
+   * counted it; null before the first count, never a zero standing in for one.
+   */
+  storedDecisions: number | null;
   /** Registry-reviewed gaps; unknown is never presented as no gaps. */
   knownGaps:
     | { type: "unknown" }
@@ -439,6 +444,8 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
       pendingTextCount: source.pendingTextCount,
+      storedDecisions:
+        source.storedTotalAsOf === null ? null : source.storedTotal,
       knownGaps: manifest.knownGaps,
       completeness: caseLawSourceCompleteness({
         reportedTotal: source.reportedTotal,

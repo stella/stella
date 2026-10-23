@@ -436,10 +436,16 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
         return panic("Unhandled law history list state");
     }
   })();
+  // Until the session says who is visiting (always so in the server render),
+  // their history is unknown, not empty.
+  const visitorList =
+    sessionView.type === "pending"
+      ? ({ status: "pending" } as const)
+      : ({ status: "ready", entries: [] } as const);
   return {
     enabled,
     scope,
-    list: enabled ? list : ({ status: "ready", entries: [] } as const),
+    list: enabled ? list : visitorList,
     importStatus: importView,
     record: { mutate: recordEntry },
     remove: { mutate: removeEntry, isPending: mutation.isPending },
