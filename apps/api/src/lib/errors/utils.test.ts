@@ -7,6 +7,7 @@ import {
   connectionErrorFields,
   errorFingerprint,
   errorSystemFields,
+  serializeDevError,
   unredactedErrorFields,
 } from "@/api/lib/errors/utils";
 import { errorFields } from "@/api/lib/observability/failure";
@@ -411,4 +412,17 @@ describe("unredactedErrorFields", () => {
     });
     expect(unredactedErrorFields(error)).toEqual({});
   });
+});
+
+test("diagnostic logging boundaries redact handoff credentials", () => {
+  const code = `sh1_${"a".repeat(43)}`;
+  const error = new Error(`Request ${code} refused`);
+  expect(connectionErrorFields(error)["error.msg"]).toBe(
+    "Request [redacted] refused",
+  );
+  expect(unredactedErrorFields(error)["error.msg"]).toBe(
+    "Request [redacted] refused",
+  );
+  expect(JSON.stringify(serializeDevError(error))).not.toContain(code);
+  expect(error.message).toContain(code);
 });
