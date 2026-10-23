@@ -57,7 +57,7 @@ details unless they are already public in the repository.
 ## Meta Preferences
 
 - Never manually reformat code you did not semantically change (auto-formatter output
-  is fine to include)
+  from `bun run format` is fine to include)
 - In prose, vary punctuation: prefer colons, semicolons, commas, and parentheses
   over em dashes. This does not apply to source code, command syntax, generated
   content, or exact identifiers.

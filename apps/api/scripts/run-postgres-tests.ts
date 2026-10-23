@@ -4,8 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createSqlClient } from "@/api/db/sql-client";
-
+import { createSqlClient } from "../src/db/sql-client";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   mergeJunitReports,

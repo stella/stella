@@ -101,12 +101,14 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
         await readFile(entrypoint, "utf-8"),
       );
       for (const { path: dependency } of imports) {
-        if (!dependency.startsWith("./") || dependency === "./load-test-env") {
+        if (!dependency.startsWith(".") || dependency === "./load-test-env") {
           continue;
         }
+        const staged = path.join(directory, "scripts", `${dependency}.ts`);
+        await mkdir(path.dirname(staged), { recursive: true });
         await symlink(
           path.join(apiRoot, "scripts", `${dependency}.ts`),
-          path.join(directory, "scripts", `${dependency}.ts`),
+          staged,
         );
       }
       await Bun.write(
