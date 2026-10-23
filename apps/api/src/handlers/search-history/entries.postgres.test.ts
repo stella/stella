@@ -202,17 +202,51 @@ const readHistory = async (
   return result;
 };
 
-const recordQuery = async (fixture: HistoryFixture, query: string) => {
+const recordQuery = async (
+  fixture: HistoryFixture,
+  query: string,
+  jurisdiction: "CZE" | "POL" = "CZE",
+) => {
   const result = await record.handler(
     createTestHandlerContext<Parameters<typeof record.handler>[0]>({
       ...identity(fixture),
-      body: { kind: "search", query },
+      body: { kind: "search", query, jurisdiction },
     }),
   );
   if (result instanceof ElysiaCustomStatusResponse) {
     return panic(`Expected record success, received status ${result.code}`);
   }
   return result;
+};
+
+/** What a browser kept before history was stored per country. */
+const importKept = async (
+  fixture: HistoryFixture,
+  entries: readonly { entry: unknown; usedAt: string }[],
+) =>
+  await importEntries.handler(
+    createTestHandlerContext<Parameters<typeof importEntries.handler>[0]>({
+      ...identity(fixture),
+      body: { ...(await getImportClockBody(fixture)), entries: [...entries] },
+    }),
+  );
+
+const clearCountry = async (
+  fixture: HistoryFixture,
+  jurisdiction: "CZE" | "POL",
+) =>
+  await clear.handler(
+    createTestHandlerContext<Parameters<typeof clear.handler>[0]>({
+      ...identity(fixture),
+      query: { ...identity(fixture).query, jurisdiction },
+    }),
+  );
+
+const POLISH_DECISION = {
+  kind: "decision",
+  documentId: "decision-polish",
+  title: "II CSKP 766/24",
+  path: "/law/pol/cases/sn/ii-cskp-766-24",
 };
 
 if (!databaseUrl || !enabled) {
@@ -797,7 +831,11 @@ if (!databaseUrl || !enabled) {
         const rows = await prepareSearchHistoryRows(
           fixture,
           Array.from({ length: 25 }, (_, index) => ({
-            entry: { kind: "search" as const, query: `Query ${index}` },
+            entry: {
+              kind: "search" as const,
+              query: `Query ${index}`,
+              jurisdiction: "CZE",
+            },
             usedAt,
           })),
         );
@@ -900,6 +938,137 @@ if (!databaseUrl || !enabled) {
       });
     });
 
+    test("a search is one entry per country, and entries without a country list in every country", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const czech = await recordQuery(fixture, "Náhrada škody", "CZE");
+        const polish = await recordQuery(fixture, "náhrada  ŠKODY", "POL");
+        expect(polish.id).not.toBe(czech.id);
+        expect(
+          await importKept(fixture, [
+            {
+              entry: { kind: "search", query: "Kept query" },
+              usedAt: "2020-01-01T00:00:00Z",
+            },
+            { entry: POLISH_DECISION, usedAt: "2020-01-02T00:00:00Z" },
+          ]),
+        ).toEqual({ entries: 2, skipped: 0, rejected: 0 });
+
+        const listed = async (jurisdiction?: "CZE" | "POL") =>
+          (
+            await readHistory(
+              fixture,
+              jurisdiction === undefined ? {} : { jurisdiction },
+            )
+          ).items.map((item) => [item.kind, item.jurisdiction]);
+        expect(await listed("CZE")).toEqual([
+          ["search", "CZE"],
+          ["search", null],
+        ]);
+        expect(await listed("POL")).toEqual([
+          ["search", "POL"],
+          ["decision", "POL"],
+          ["search", null],
+        ]);
+        expect(await listed()).toEqual([
+          ["search", "POL"],
+          ["search", "CZE"],
+          ["decision", "POL"],
+          ["search", null],
+        ]);
+      });
+    });
+
+    test("running a search kept without a country moves it into that country once", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const kept = {
+          entry: { kind: "search", query: "Kept query" },
+          usedAt: "2020-01-01T00:00:00.000Z",
+        };
+        await importKept(fixture, [kept]);
+        await recordQuery(fixture, "kept  QUERY", "CZE");
+
+        expect((await readHistory(fixture)).items).toMatchObject([
+          {
+            kind: "search",
+            query: "kept QUERY",
+            jurisdiction: "CZE",
+            useCount: 2,
+            firstUsedAt: kept.usedAt,
+          },
+        ]);
+        expect(
+          (await readHistory(fixture, { jurisdiction: "POL" })).items,
+        ).toEqual([]);
+        // Another browser handing over the same old use cannot list it twice.
+        expect(await importKept(fixture, [kept])).toEqual({
+          entries: 0,
+          skipped: 1,
+          rejected: 0,
+        });
+        expect((await readHistory(fixture)).items).toHaveLength(1);
+      });
+    });
+
+    test("a document opened before history was per country gains its country at the next write", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        await importKept(fixture, [
+          { entry: POLISH_DECISION, usedAt: "2020-01-01T00:00:00Z" },
+        ]);
+        await fixture.db
+          .update(searchHistoryEntries)
+          .set({ jurisdiction: null })
+          .where(
+            and(
+              eq(searchHistoryEntries.organizationId, fixture.organizationId),
+              eq(searchHistoryEntries.userId, fixture.userId),
+            ),
+          );
+        expect(
+          (await readHistory(fixture, { jurisdiction: "CZE" })).items,
+        ).toMatchObject([{ kind: "decision", jurisdiction: null }]);
+
+        await recordQuery(fixture, "Czech query", "CZE");
+
+        expect(
+          (await readHistory(fixture, { jurisdiction: "CZE" })).items,
+        ).toMatchObject([{ kind: "search", query: "Czech query" }]);
+        expect(
+          (await readHistory(fixture, { jurisdiction: "POL" })).items,
+        ).toMatchObject([{ kind: "decision", jurisdiction: "POL" }]);
+      });
+    });
+
+    test("clearing one country erases what it lists and keeps other countries", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        await recordQuery(fixture, "Czech query", "CZE");
+        const polish = await recordQuery(fixture, "Polish query", "POL");
+        const kept = {
+          entry: { kind: "search", query: "Kept query" },
+          usedAt: "2020-01-01T00:00:00.000Z",
+        };
+        await importKept(fixture, [
+          kept,
+          { entry: POLISH_DECISION, usedAt: "2020-01-02T00:00:00Z" },
+        ]);
+
+        expect(await clearCountry(fixture, "CZE")).toEqual({ deleted: 2 });
+
+        expect(
+          (await readHistory(fixture)).items.map((item) => item.id),
+        ).toEqual([polish.id, expect.any(String)]);
+        expect((await readHistory(fixture)).items.at(1)).toMatchObject({
+          kind: "decision",
+          jurisdiction: "POL",
+        });
+        // The erased entries stay erased; other countries still import.
+        expect(await importKept(fixture, [kept])).toEqual({
+          entries: 0,
+          skipped: 1,
+          rejected: 0,
+        });
+      });
+    });
+
     test("member removal clears that organization's history and rejoining starts empty", async () => {
       await withHistory(databaseUrl, async (fixture) => {
         const own = await recordQuery(fixture, "Departing");
@@ -962,7 +1131,11 @@ if (!databaseUrl || !enabled) {
         const staleRecord = await record.handler(
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
-            body: { kind: "search", query: "Stale record" },
+            body: {
+              kind: "search",
+              query: "Stale record",
+              jurisdiction: "CZE",
+            },
           }),
         );
         const staleImport = await importEntries.handler(
@@ -1079,7 +1252,11 @@ if (!databaseUrl || !enabled) {
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
             audit: interruptedRecorder,
-            body: { kind: "search", query: "Atomic record" },
+            body: {
+              kind: "search",
+              query: "Atomic record",
+              jurisdiction: "CZE",
+            },
           }),
         );
         expect(auditInserted).toBe(true);

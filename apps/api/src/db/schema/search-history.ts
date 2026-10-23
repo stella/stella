@@ -26,6 +26,12 @@ export type SearchHistoryKind = (typeof SEARCH_HISTORY_KINDS)[number];
  * and plain document identity) is encrypted at rest like document content. Repeats are found by
  * `lookup_key`, a keyed hash of the normalized entry, so using a query again
  * bumps `last_used_at` and `use_count` on its row instead of adding one.
+ *
+ * `jurisdiction` is the country the entry belongs to: the one a search ran
+ * in, or the one whose page an opened document lives on. The law page lists
+ * one country's history. It is null only on entries recorded before history
+ * was kept per country: old searches, which never said where they ran, and
+ * opened documents until the owner's next write fills theirs in from the path.
  */
 export const searchHistoryEntries = p.pgTable(
   "search_history_entries",
@@ -40,6 +46,7 @@ export const searchHistoryEntries = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     kind: p.text("kind", { enum: SEARCH_HISTORY_KINDS }).notNull(),
     courtId: p.varchar("court_id", { length: 128 }),
+    jurisdiction: p.varchar("jurisdiction", { length: 8 }),
     lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
     ciphertext: bytea("ciphertext").notNull(),
     iv: bytea("iv").notNull(),
@@ -54,6 +61,15 @@ export const searchHistoryEntries = p.pgTable(
     p
       .index("search_history_entries_owner_recent_idx")
       .on(table.organizationId, table.userId, table.lastUsedAt, table.id),
+    p
+      .index("search_history_entries_owner_jurisdiction_recent_idx")
+      .on(
+        table.organizationId,
+        table.userId,
+        table.jurisdiction,
+        table.lastUsedAt,
+        table.id,
+      ),
     p
       .index("search_history_entries_owner_kind_recent_idx")
       .on(

@@ -1,10 +1,12 @@
 import { Result } from "better-result";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, or, sql } from "drizzle-orm";
+import { t } from "elysia";
 
 import {
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
+  SEARCH_HISTORY_KINDS,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -13,8 +15,11 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import {
+  fillOpenedDocumentJurisdictions,
   holdSearchHistoryOwnerAccess,
   lockSearchHistoryOwner,
+  recordSearchHistoryTombstones,
+  searchHistoryJurisdictionSchema,
 } from "./entries";
 import {
   assertSearchHistoryScope,
@@ -27,8 +32,11 @@ const config = {
     "Personal history refreshes through the caller-owned query cache",
   ),
   description:
-    "Delete your whole search history in the active organization: every search and opened decision or statute it holds. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
-  query: searchHistoryScopeQuery,
+    "Delete your search history in the active organization: every search and opened decision or statute it holds, or with `jurisdiction` only what `search-history.list` lists for that country. Entries are erased, not hidden; this cannot be undone. Your history in other organizations stays. Pass the scope from `search-history.list` to reject a changed sign-in scope; these fields never select a different owner.",
+  query: t.Object({
+    ...searchHistoryScopeQuery.properties,
+    jurisdiction: t.Optional(searchHistoryJurisdictionSchema),
+  }),
   permissions: { searchHistory: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -58,6 +66,43 @@ const clearSearchHistory = createSafeRootHandler(
           .values(owner)
           .onConflictDoNothing();
         await lockSearchHistoryOwner(tx, owner);
+        if (query.jurisdiction !== undefined) {
+          // Other countries' history stays, so there is no owner-wide import
+          // cutoff: each erased entry gets its own tombstone instead.
+          await fillOpenedDocumentJurisdictions(tx, owner);
+          const erased = await tx
+            .delete(searchHistoryEntries)
+            .where(
+              and(
+                eq(
+                  searchHistoryEntries.organizationId,
+                  session.activeOrganizationId,
+                ),
+                eq(searchHistoryEntries.userId, user.id),
+                or(
+                  eq(searchHistoryEntries.jurisdiction, query.jurisdiction),
+                  isNull(searchHistoryEntries.jurisdiction),
+                ),
+              ),
+            )
+            .returning({
+              kind: searchHistoryEntries.kind,
+              lookupKey: searchHistoryEntries.lookupKey,
+            });
+          await recordSearchHistoryTombstones(tx, owner, erased);
+          await recordAuditEvent(
+            tx,
+            searchHistoryAuditEvent({
+              resourceId: user.id,
+              operation: "clear",
+              entryCount: erased.length,
+              kinds: SEARCH_HISTORY_KINDS.filter((kind) =>
+                erased.some((row) => row.kind === kind),
+              ),
+            }),
+          );
+          return erased.length;
+        }
         await tx
           .update(searchHistoryOwners)
           .set({

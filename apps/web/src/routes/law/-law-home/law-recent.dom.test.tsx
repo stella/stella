@@ -315,7 +315,7 @@ test("signed-in recents import local data once and always display server data", 
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent jurisdiction="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,
@@ -452,7 +452,7 @@ const mountServerHistory = async (
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent jurisdiction="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,
@@ -1318,7 +1318,7 @@ test(
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent jurisdiction="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,

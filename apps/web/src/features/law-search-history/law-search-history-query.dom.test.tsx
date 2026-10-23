@@ -107,7 +107,7 @@ test("server history stays visible while a local import recovers", async () => {
   });
   client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
   try {
-    const { result } = renderHook(() => useLawHistory(), {
+    const { result } = renderHook(() => useLawHistory("CZE"), {
       wrapper: ({ children }) => (
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -214,7 +214,7 @@ test("leaving the page during a local import does not report its cancellation", 
   });
   client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
   try {
-    const { result } = renderHook(() => useLawHistory(), {
+    const { result } = renderHook(() => useLawHistory("CZE"), {
       wrapper: ({ children }) => (
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
