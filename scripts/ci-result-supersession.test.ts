@@ -238,7 +238,7 @@ const supersessionFixtures = ({
   return fixtures;
 };
 
-const YIELD = "The run was canceled by @jan-kubica.";
+const YIELD = "The run was canceled by @ci-operator.";
 const CONCURRENCY = `Canceling since a higher priority waiting request for CI Checks-pr-${PR} exists`;
 const metadataRun = { status: "in_progress", jobs: ["ci-metadata-plan"] };
 const codeRun = { status: "in_progress", jobs: ["ci-plan"] };
@@ -249,7 +249,7 @@ test("a run cancelled by an actor, with only a metadata run after it, is not gre
     supersessionFixtures({ annotation: YIELD, newer: [metadataRun] }),
   );
   expect(run.exitCode, run.log).toBe(1);
-  expect(run.log).toContain("cancelled by @jan-kubica");
+  expect(run.log).toContain("cancelled by @ci-operator");
   expect(run.record?.verdict).toBe("failure");
 });
 
