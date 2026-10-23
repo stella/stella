@@ -1307,7 +1307,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       };
     case "readerAnnotation":
       return {
-        first: sql`${0x0f_10_cc_ae}::integer`,
+        first: sql`${0x0f_10_cc_af}::integer`,
         second: sql`hashtext(${JSON.stringify([options.id.userId, options.id.id])})`,
         order: [
           options.aggregate,
