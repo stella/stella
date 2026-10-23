@@ -49,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asystent poprosi o ten adres",
-    "copiedToast": "Instrukcje skopiowane. Wklej je do czatu z asystentem.",
     "copy": "Skopiuj mu instrukcje",
     "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
     "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
     "openGuide": "Otwórz instrukcję dla {assistant}",
+    "pasteHint": "Wklej je do czatu z asystentem.",
     "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
     "title": "Korzystaj ze stelli w swoim asystencie AI"
   },
@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Kompletność",
-      "countedOn": "Policzono {date}",
       "courtsHeading": "Według sądu",
       "courtsUnavailable": "Zestawienie według sądów jest obecnie niedostępne.",
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
-      "exceedsReportedTotal": "Zawiera więcej, niż wydawca podał ostatnio na {date}",
-      "gapStatusUnknown": "Stan luk nieznany",
       "generatedAt": "Dane na {date}",
       "globeLabel": "Państwa, których orzecznictwo zawiera korpus, na globusie",
       "healthCurrent": "Aktualne",
