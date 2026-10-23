@@ -479,6 +479,78 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       ).toEqual([]);
     }));
 
+  test("another organization neither reads nor writes a claim's comments, even naming its matter", async () =>
+    await withTenants(async ({ db, tenant }) => {
+      const shared = createdId(
+        await create(db, tenant, { visibility: "shared" }),
+      );
+      const outsider = await seedTenant(db);
+      try {
+        const readAs = async (
+          organizationId: SafeId<"organization">,
+          userId: SafeId<"user">,
+        ) =>
+          await createScopedDb(
+            markRlsDatabase(db),
+            [tenant.workspaceId],
+            organizationId,
+            userId,
+          )(
+            async (tx) =>
+              await tx
+                .select({ id: legalReaderAnnotations.id })
+                .from(legalReaderAnnotations)
+                .where(
+                  eq(
+                    legalReaderAnnotations.verificationClaimId,
+                    tenant.claimId,
+                  ),
+                ),
+          );
+        // The same matter scope reads the comment inside its organization...
+        expect(await readAs(tenant.organizationId, tenant.colleague)).toEqual([
+          { id: shared },
+        ]);
+        // ...and nothing from another organization.
+        expect(await readAs(outsider.organizationId, outsider.author)).toEqual(
+          [],
+        );
+
+        // A comment aimed at this claim from the other organization is refused
+        // and leaves no row under either organization.
+        expect(
+          await create(db, {
+            ...outsider,
+            workspaceId: tenant.workspaceId,
+            otherWorkspaceId: tenant.otherWorkspaceId,
+            runId: tenant.runId,
+            claimId: tenant.claimId,
+          }),
+        ).toMatchObject({ code: 404 });
+        expect(
+          await readAccountExportAnnotationPage({
+            database: db,
+            organizationId: outsider.organizationId,
+            userId: outsider.author,
+            extraWhere: eq(
+              legalReaderAnnotations.verificationClaimId,
+              tenant.claimId,
+            ),
+            limit: 20,
+          }),
+        ).toEqual([]);
+        expect((await storedComments(db, tenant)).map(({ id }) => id)).toEqual([
+          shared,
+        ]);
+      } finally {
+        await db
+          .delete(organization)
+          .where(eq(organization.id, outsider.organizationId));
+        await db.delete(user).where(eq(user.id, outsider.author));
+        await db.delete(user).where(eq(user.id, outsider.colleague));
+      }
+    }));
+
   test("concurrent updates of one comment serialize", async () =>
     await withTenants(async ({ db, tenant }) => {
       const id = createdId(await create(db, tenant));
