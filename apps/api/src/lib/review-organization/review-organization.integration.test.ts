@@ -22,13 +22,13 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
+  chatThreads,
   clauses,
   contacts,
   CORRESPONDENCE_ERASURE_SETTING,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
   correspondenceAllowedSenders,
   entities,
-  chatThreads,
   entityDeletionCleanupRequests,
   featureEnrolments,
   fileComparisonUploads,
@@ -55,8 +55,8 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { reviewOrganizationConfigFrom } from "@/api/lib/review-organization/config";
 import {
-  REVIEW_RESET_REFUSAL,
   resetReviewOrganization,
+  REVIEW_RESET_REFUSAL,
 } from "@/api/lib/review-organization/reset";
 import type {
   ReviewResetDependencies,

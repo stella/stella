@@ -9,9 +9,12 @@ import { assertProperty } from "@stll/property-testing";
 import {
   blockingFailures,
   checkLogText,
+  type CheckResult,
   continueOnErrorHolds,
   failedCheckAnnotation,
+  type Launched,
   planChecks,
+  type PlannedCheck,
   POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
@@ -19,17 +22,15 @@ import {
   runChecks,
   selectChecks,
   summaryTable,
-  type CheckResult,
-  type Launched,
-  type PlannedCheck,
 } from "./ci-check-pool";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolJob,
+  checkPoolStepRun,
   parseCheckPool,
-  readCheckPool,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { evaluate, type Value } from "./github-expression";
@@ -168,6 +169,8 @@ test("each pooled job runs its registry from exactly one pool step", () => {
     expect(pools.map((step) => [step["name"], checkPoolJob(step)])).toEqual([
       [CHECK_POOL_STEP_NAMES[job], job],
     ]);
+    expect(pools.at(0)?.["run"]).toBe(checkPoolStepRun(job));
+    expect(checkPoolJob({ run: checkPoolStepRun(job) })).toBe(job);
     // Guards see every pooled check as a step of the job, right after the pool.
     const index = steps.indexOf(pools[0] ?? {});
     const pooled = readCheckPool(job).map(({ name }) => name);

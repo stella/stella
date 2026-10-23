@@ -1,8 +1,8 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import {
-  isTerminalFlowRunStatus,
   type FlowRunStatus,
+  isTerminalFlowRunStatus,
 } from "@/components/flows/flow-meta";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
