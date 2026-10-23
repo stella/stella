@@ -42,7 +42,9 @@ export const useLoadSampleCase = ({
         openList: async (listId) =>
           await updateView.mutateAsync({
             viewId: view.id,
-            layout: mergeLayout(view.layout, { listId }),
+            layout: mergeLayout(view.layout, {
+              listId: toSafeId<"legalList">(listId),
+            }),
           }),
       }),
     onSettled: async () => {

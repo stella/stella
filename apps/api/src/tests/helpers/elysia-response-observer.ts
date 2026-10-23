@@ -33,12 +33,28 @@ type ObserverSubscription = {
 
 const subscriptions = new Set<ObserverSubscription>();
 let restorePrototype: (() => void) | undefined;
+let suspensions = 0;
+
+export const suspendElysiaResponseObservation = (): (() => void) => {
+  suspensions += 1;
+  let restored = false;
+  return () => {
+    if (restored) {
+      return;
+    }
+    restored = true;
+    suspensions -= 1;
+  };
+};
 
 const dispatchObservation = async ({
   app,
   request,
   response,
 }: ElysiaResponseObservation) => {
+  if (suspensions > 0) {
+    return;
+  }
   // Local expectations run before an earlier process-wide conformance observer.
   for (const { observer } of Array.from(subscriptions).toReversed()) {
     await observer({ app, request, response });

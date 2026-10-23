@@ -125,7 +125,7 @@ describe("Elysia response observation", () => {
     )?.get;
     const originalCompile = Elysia.prototype.compile;
     uninstall = installElysiaResponseObserver(async ({ response }) => {
-      order.push(`outer:${response.headers.get("x-value")}`);
+      order.push(`outer:${String(response.headers.get("x-value"))}`);
     });
     const patchedFetch = Object.getOwnPropertyDescriptor(
       Elysia.prototype,
@@ -133,7 +133,7 @@ describe("Elysia response observation", () => {
     )?.get;
     const patchedCompile = Elysia.prototype.compile;
     const stopInner = installElysiaResponseObserver(async ({ response }) => {
-      order.push(`inner:${response.headers.get("x-value")}`);
+      order.push(`inner:${String(response.headers.get("x-value"))}`);
     });
     try {
       await new Elysia()

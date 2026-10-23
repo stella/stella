@@ -22,6 +22,7 @@ import type { GatewayDispatchResult } from "@/api/mcp/gateway/dispatch-call";
 import { gatewayLoadErrorResult } from "@/api/mcp/gateway/external-tools";
 import { withInputNotes } from "@/api/mcp/input-normalization";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
+import { setMcpResponseConformanceObserver } from "@/api/mcp/response-conformance-observer";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
@@ -404,12 +405,20 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
               { type: "internal" }
             >["result"]),
       } satisfies GatewayDispatchResult;
-      const result = await handleMcpToolCall({
-        toolName: `skill__${PRIVATE_TEXT}`,
-        args: {},
-        context: contextFor(),
-        dependencies: { dispatchGatewayToolCall: async () => gatewayResult },
-      });
+      const restoreConformance = valid
+        ? undefined
+        : setMcpResponseConformanceObserver(undefined);
+      let result: Awaited<ReturnType<typeof handleMcpToolCall>>;
+      try {
+        result = await handleMcpToolCall({
+          toolName: `skill__${PRIVATE_TEXT}`,
+          args: {},
+          context: contextFor(),
+          dependencies: { dispatchGatewayToolCall: async () => gatewayResult },
+        });
+      } finally {
+        restoreConformance?.();
+      }
       expect(result.isError === true).toBe(!valid);
       expectOutcome({
         tool: "skill",

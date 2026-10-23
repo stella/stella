@@ -617,6 +617,57 @@ describe("response conformance validation", () => {
     },
   );
 
+  test("validates every framework request-validation response against its shared envelope", async () => {
+    const valid = Response.json(
+      {
+        type: "validation",
+        on: "body",
+        property: "/name",
+        message: "Expected string",
+        summary: "Property 'name' must be a string",
+        found: {},
+        errors: [],
+      },
+      { status: 422 },
+    );
+    expect(
+      await assertHttpResponseConformance({
+        route,
+        response: valid,
+        method: "POST",
+        schema: undefined,
+      }),
+    ).toBe("valid");
+
+    const malformed = Response.json(
+      { type: "different", on: "body" },
+      { status: 422 },
+    );
+    expect(
+      await rejectionOf(
+        assertHttpResponseConformance({
+          route,
+          response: malformed,
+          method: "POST",
+          schema: undefined,
+        }),
+      ),
+    ).toMatchObject({ status: 422, issuePath: "(root)" });
+  });
+
+  test("accepts only the framework's exact hidden-route response", async () => {
+    const hidden = new Response("NOT_FOUND", { status: 404 });
+    hidden.headers.delete("content-type");
+    expect(
+      await assertHttpResponseConformance({
+        route,
+        response: hidden,
+        method: "GET",
+        schema: undefined,
+      }),
+    ).toBe("valid");
+  });
+
   test("checks constrained +json bodies using the effective status override", async () => {
     const response = new Response(JSON.stringify({ count: "wrong" }), {
       headers: { "content-type": "application/problem+json; charset=utf-8" },

@@ -2,7 +2,14 @@ import { Kind, TypeGuard, type TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 
+import { frameworkRequestValidationResponseSchema } from "@/api/lib/errors/request-validation-response";
 import { ResponseConformanceError } from "@/api/lib/response-conformance-error";
+
+const hiddenRouteResponseSchema = {
+  [Kind]: "Literal",
+  const: "NOT_FOUND",
+  type: "string",
+} as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -255,7 +262,19 @@ export const assertHttpResponseConformance = async ({
 }: AssertHttpResponseConformanceOptions): Promise<"missing" | "valid"> => {
   const identity = { route, status };
   const resolvedReferences = collectReferences({ models, references });
-  const selected = selectSchema(schema, identity, {
+  const contentType = response.headers
+    .get("content-type")
+    ?.split(";")
+    .at(0)
+    ?.trim()
+    .toLowerCase();
+  let frameworkSchema: unknown;
+  if (status === 422) {
+    frameworkSchema = { 422: frameworkRequestValidationResponseSchema };
+  } else if (status === 404 && contentType === undefined) {
+    frameworkSchema = { 404: hiddenRouteResponseSchema };
+  }
+  const selected = selectSchema(frameworkSchema ?? schema, identity, {
     models,
     references: resolvedReferences,
   });
@@ -298,12 +317,6 @@ export const assertHttpResponseConformance = async ({
   ) {
     return "valid";
   }
-  const contentType = response.headers
-    .get("content-type")
-    ?.split(";")
-    .at(0)
-    ?.trim()
-    .toLowerCase();
   const jsonBody =
     contentType === "application/json" ||
     contentType?.endsWith("+json") === true;

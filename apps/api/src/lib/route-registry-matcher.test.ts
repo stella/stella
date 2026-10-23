@@ -25,7 +25,7 @@ test("matching returns original mounted route identities without dispatching the
     for (const [index, route] of app.routes.entries()) {
       const pathname = paths.at(index);
       expect(pathname).toBeDefined();
-      const request = new Request(`http://localhost${pathname}`, {
+      const request = new Request(`http://localhost${String(pathname)}`, {
         method: route.method === "ALL" ? "DELETE" : route.method,
       });
       expect(match(request)).toBe(route);

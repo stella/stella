@@ -5,6 +5,8 @@ import {
   elysiaErrorAnswer,
   elysiaErrorBody,
 } from "@/api/lib/errors/elysia-error";
+import { setResponseConformanceObserver } from "@/api/lib/response-conformance-observer";
+import { suspendElysiaResponseObservation } from "@/api/tests/helpers/elysia-response-observer";
 
 // A body whose declared type matches the response schema and whose runtime
 // value does not: the drift a response schema exists to catch, and the only
@@ -84,7 +86,26 @@ describe("answering a framework-raised error", () => {
   });
 
   test("a handler output that does not match its response schema is a server fault", async () => {
-    const response = await get("/typed-response");
+    const restoreConformance = setResponseConformanceObserver(undefined);
+    const restoreHttpConformance = suspendElysiaResponseObservation();
+    let response: Response;
+    try {
+      const mismatchApp = new Elysia()
+        .onError(({ code, error, set }) => {
+          const answer = elysiaErrorAnswer(code, error);
+          set.status = answer.status;
+          return elysiaErrorBody(answer);
+        })
+        .get("/typed-response", () => driftedBody(), {
+          response: t.Object({ ok: t.String() }),
+        });
+      response = await mismatchApp.handle(
+        new Request("http://localhost/typed-response"),
+      );
+    } finally {
+      restoreHttpConformance();
+      restoreConformance();
+    }
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({

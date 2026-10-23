@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 export type ConformanceTestSource = { file: string; source: string };
 type HttpCallSource = "composed-api" | "standalone-app" | "fetch";
