@@ -182,12 +182,12 @@
   "candidate:.github/workflows/ci.yml/postgres-service-suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "9e7d2484363b720f06d4d3e551096c16c2fabdccefd6aec32de54980129c7a38"
+    "reviewedDigest": "8b29bfd836b057b3781019a1183944164d2c7487182bbfe2d5adcec3545bab65"
   },
   "candidate:.github/workflows/ci.yml/service-suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "694be3cbde476561a7c6f2b16545a0f4cd4e1e09ce95938705da4573759f88fb"
+    "reviewedDigest": "d4841be36a919007fafff26616bdbd01f853c1ae7c22c6a2f3ddfdafe01df2b1"
   },
   "candidate:.github/workflows/ci.yml/migration-upgrade-rehearsal": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "81d0a13968bf4eb47be1abcaa8f10ac437f0e1221d92d281ffdbdc99f8ec1177"
+    "reviewedDigest": "a7a5457e596fc0544b5796f71fa2746c4a3b6e872b3cb1edd2f42827a5721ae1"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "70d2ede4d3c8fc555c77297036967b0b1090e85dd14f722ff85eb43d137665e7"
+    "reviewedDigest": "32d5089dc9ee145dcd61712d7b9e84b7d623692cd87db3887c269fd846414606"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
