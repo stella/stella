@@ -6,6 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
+import { TooltipProvider } from "@stll/ui/tooltip";
+
 import ClipboardApp from "../clipboard/ClipboardApp";
 import {
   applyDocumentLanguage,
@@ -37,6 +39,7 @@ const ClipboardEditorWindow = lazy(
   async () => import("../clipboard/ClipboardEditor"),
 );
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
+const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
@@ -128,6 +131,12 @@ const Root = () => {
         <ActivityApp />
       </Suspense>
     );
+  } else if (windowLabel === "onboarding") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <OnboardingApp />
+      </Suspense>
+    );
   } else if (windowLabel === "clipboard-editor") {
     content = (
       <Suspense
@@ -142,9 +151,11 @@ const Root = () => {
 
   return (
     <StrictMode>
-      <DesktopIntlProvider language={language} messages={messages}>
-        {content}
-      </DesktopIntlProvider>
+      <TooltipProvider>
+        <DesktopIntlProvider language={language} messages={messages}>
+          {content}
+        </DesktopIntlProvider>
+      </TooltipProvider>
     </StrictMode>
   );
 };

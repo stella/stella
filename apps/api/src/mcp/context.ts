@@ -5,7 +5,7 @@ import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -55,10 +55,12 @@ import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveCredentialMemberAuthorization,
+} from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -78,9 +80,7 @@ import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-fil
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
-import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -278,17 +278,30 @@ export type McpRequestContext = {
    * AND enabled for the org). The `lookup_business_registry` list projection narrows its
    * `registry` enum to these and drops the tool when empty, mirroring the
    * in-app chat tool so the MCP surface never advertises a registry the
-   * call cannot execute. Computed once from organization settings and registry
-   * credential availability.
+   * call cannot execute.
    *
-   * `undefined` means "not resolved" (a synthetic/test context, or a settings
-   * read fault): the projection then leaves the full enum advertised and the
-   * call-time gate stays the backstop. It is NOT the same as an empty array,
-   * which means the org can reach no registry and the tool is dropped.
+   * Loaded on first use within this request only: reading organization
+   * settings and decrypting registry credentials is paid by a projection that
+   * offers the registry tool, never by a call that does not.
+   *
+   * An absent loader, or a failed read (a settings or credential read
+   * fault), means "not resolved": the projection then leaves the full enum
+   * advertised and the call-time gate stays the backstop. It is NOT the same
+   * as an empty array, which means the org can reach no registry and the tool
+   * is dropped.
    */
-  enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
-  /** Provider is present only when web search is configured and enabled. */
-  webSearchProvider?: WebSearchProvider | null | undefined;
+  loadEnabledRegistrySlugs?:
+    | (() => Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>>)
+    | undefined;
+  /**
+   * The web search provider, loaded on first use within this request only, so
+   * a call that does no web search never reads or decrypts the stored key.
+   * An error means the settings read failed; an unavailable result names why
+   * web search is off (not configured, turned off, or an unreadable key).
+   */
+  loadWebSearchProvider?:
+    | (() => Promise<Result<McpWebSearchAvailability, SafeDbError>>)
+    | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -392,7 +405,7 @@ export const loadAccessibleMcpWorkspaces = async ({
   return outcome.value.workspaces;
 };
 
-type McpWebSearchAvailability =
+export type McpWebSearchAvailability =
   | { status: "available"; provider: WebSearchProvider }
   | {
       status: "unavailable";
@@ -433,20 +446,26 @@ const credentialPermissionContext = (
     ? { credentialPermissions: session.credential.permissions }
     : {};
 
-const providerFromMcpWebSearchAvailability = (
+export const providerFromMcpWebSearchAvailability = (
   availability: McpWebSearchAvailability,
 ): WebSearchProvider | null =>
   availability.status === "available" ? availability.provider : null;
 
-const loadMcpOrganizationSettings = async (
-  safeDb: SafeDb,
-  organizationId: SafeId<"organization">,
-) =>
-  await safeDb((tx) =>
+/**
+ * The web search provider one organization can use, from its settings row
+ * (native tool overrides and the stored key) in one scoped read.
+ */
+const readMcpWebSearchProvider = async ({
+  organizationId,
+  safeDb,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}): Promise<Result<McpWebSearchAvailability, SafeDbError>> => {
+  const settings = await safeDb((tx) =>
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
       columns: {
-        practiceJurisdictions: true,
         nativeToolOverrides: true,
         webSearchApiKeyEncrypted: true,
         webSearchApiKeyIv: true,
@@ -455,6 +474,52 @@ const loadMcpOrganizationSettings = async (
       },
     }),
   );
+  if (Result.isError(settings)) {
+    return settings;
+  }
+  return Result.ok(
+    await resolveEnabledMcpWebSearchProvider({
+      disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
+        settings.value ?? undefined,
+      ),
+      organizationId,
+      row: settings.value,
+    }),
+  );
+};
+
+/**
+ * The registries one organization can reach, from its settings and its stored
+ * credentials, read in one scoped transaction.
+ */
+const readEnabledRegistrySlugs = async ({
+  organizationId,
+  safeDb,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}): Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>> => {
+  const read = await safeDb(async (tx) => {
+    const settings = await tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+    });
+    const dispatch = await getOrganizationRegistryDispatch({
+      organizationId,
+      // Same transaction: the credential read joins the settings read.
+      scopedDb: async (run) => await run(tx),
+    });
+    return { dispatch, settings };
+  });
+  return read.map(({ dispatch, settings }) =>
+    availableRegistryHandlersForOrg({
+      disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
+        settings ?? undefined,
+      ),
+      dispatch,
+    }).map((handler) => handler.slug),
+  );
+};
 
 export const resolveMcpSessionContext = async (
   session: McpSession,
@@ -577,49 +642,36 @@ export const resolveMcpSessionContext = async (
     };
   };
   const requestDatabaseScope = createOperationDatabaseScope();
-  const featureAccessSnapshot =
-    Object.keys(FEATURE_REGISTRY).length === 0
-      ? createFeatureAccessSnapshot({
-          organizationId,
-          userId,
-          decisions: new Map(),
-        })
-      : await requestDatabaseScope.scopedDb(
-          async (tx) =>
-            await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
-        );
+  // The membership read above already carries every feature-access fact, so
+  // the snapshot is derived from it rather than read again.
+  const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
+    organizationId,
+    userId,
+    authorization,
+  });
 
-  const [settingsResult, registryDispatch] = await Promise.all([
-    loadMcpOrganizationSettings(requestDatabaseScope.safeDb, organizationId),
-    getOrganizationRegistryDispatch({
+  // Read once, on first use within this request: settings and decrypted
+  // registry credentials in one scoped transaction.
+  let enabledRegistrySlugs:
+    | Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>>
+    | undefined;
+  const loadEnabledRegistrySlugs = async () => {
+    enabledRegistrySlugs ??= readEnabledRegistrySlugs({
       organizationId,
-      scopedDb: requestDatabaseScope.scopedDb,
-    }),
-  ]);
-  const disabledNativeToolSlugs = Result.isError(settingsResult)
-    ? undefined
-    : getDisabledNativeToolSlugsFromSettingsRow(
-        settingsResult.value ?? undefined,
-      );
-  const enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined =
-    Result.isError(settingsResult)
-      ? undefined
-      : availableRegistryHandlersForOrg({
-          disabledNativeToolSlugs,
-          dispatch: registryDispatch,
-        }).map((handler) => handler.slug);
-  const webSearchAvailability: McpWebSearchAvailability = Result.isError(
-    settingsResult,
-  )
-    ? { status: "unavailable", reason: "not-configured" }
-    : await resolveEnabledMcpWebSearchProvider({
-        disabledNativeToolSlugs,
-        organizationId,
-        row: settingsResult.value,
-      });
-  const webSearchProvider = providerFromMcpWebSearchAvailability(
-    webSearchAvailability,
-  );
+      safeDb: requestDatabaseScope.safeDb,
+    });
+    return await enabledRegistrySlugs;
+  };
+  let webSearchAvailability:
+    | Promise<Result<McpWebSearchAvailability, SafeDbError>>
+    | undefined;
+  const loadWebSearchProvider = async () => {
+    webSearchAvailability ??= readMcpWebSearchProvider({
+      organizationId,
+      safeDb: requestDatabaseScope.safeDb,
+    });
+    return await webSearchAvailability;
+  };
 
   return {
     ...(auditExecution ? { auditExecution } : {}),
@@ -636,8 +688,8 @@ export const resolveMcpSessionContext = async (
     ...(session.credential?.type === "agent_run"
       ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
-    enabledRegistrySlugs,
-    webSearchProvider,
+    loadEnabledRegistrySlugs,
+    loadWebSearchProvider,
     grantedScopes: session.scopes,
     memberRole,
     organizationId,

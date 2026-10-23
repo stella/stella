@@ -8,9 +8,11 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { fields } from "@/api/db/schema";
+import { extractionRuns, fields } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   errorPendingCells,
+  selectPendingCellPage,
   selectWorkspacesWithPendingCells,
 } from "@/api/lib/workflow/orphan-cells";
 import type { OrphanCellsDatabase } from "@/api/lib/workflow/orphan-cells";
@@ -81,6 +83,31 @@ const recordingDatabase = (): {
 };
 
 describe("orphan cell reconciliation", () => {
+  test("does not borrow another member's identity for an unowned cell", async () => {
+    await testDb.insert(extractionRuns).values({
+      id: createSafeId<"extractionRun">(),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      requestedBy: ids.userA2,
+      scope: "workspace",
+    });
+    await testDb
+      .update(fields)
+      .set({
+        content: { type: "pending", version: 1 },
+        ownerRunId: null,
+        attempt: null,
+      })
+      .where(eq(fields.id, ids.fieldA1));
+
+    const cells = await selectPendingCellPage(testDb, null, 10);
+    const unowned = cells.find(({ id }) => id === ids.fieldA1);
+    expect(unowned).toMatchObject({
+      ownerRunId: null,
+      requestedBy: null,
+    });
+  });
+
   test("scans for pending cells on the handle it is given", async () => {
     await setContentType([ids.fieldA1, ids.fieldB1], "pending");
     const { calls, database } = recordingDatabase();

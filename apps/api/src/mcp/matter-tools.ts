@@ -36,6 +36,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
 import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -93,6 +94,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
@@ -1028,6 +1030,10 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     context.organizationId,
     ACTION_COST_CALL_KIND.registryRequest,
   );
+  const webSearch = await context.loadWebSearchProvider?.();
+  if (webSearch !== undefined && Result.isError(webSearch)) {
+    captureError(webSearch.error, { source: "mcp-web-search-settings-read" });
+  }
   const result = await lookupBusinessRegistryShared({
     observer,
     permit,
@@ -1037,7 +1043,12 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     q: parsed.output.query,
     detail: parsed.output.detail,
     executeLookup: context.testDependencies?.executeRegistryLookup,
-    webSearchProvider: context.webSearchProvider,
+    // A failed settings read leaves web search off: identifier lookups still
+    // run, and a KRS name lookup answers without web-verified candidates.
+    webSearchProvider:
+      webSearch !== undefined && Result.isOk(webSearch)
+        ? providerFromMcpWebSearchAvailability(webSearch.value)
+        : null,
     observeWebSearch: actionRequestObserver(
       context.organizationId,
       ACTION_COST_CALL_KIND.webSearchRequest,

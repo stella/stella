@@ -123,3 +123,39 @@ export const wordPrefixMatchEnd = (
     end += codePointWidth(codePoint);
   }
 };
+
+/** One word of a lowercased text, as offsets into it. */
+export type WordSpan = { end: number; start: number };
+
+/**
+ * Every place {@link wordPrefixMatchEnd} can mark, with the end it would mark
+ * to: each word, from its first code point to its last.
+ *
+ * A match starts only where a word starts and always runs to that word's end,
+ * so the words are the whole set of candidate marks. Listing them once lets a
+ * reader index its text a single time and answer each query by looking the
+ * query's tokens up among the words, instead of scanning every character
+ * again.
+ */
+export const wordSpans = (lowered: string): WordSpan[] => {
+  const spans: WordSpan[] = [];
+  let index = 0;
+  while (index < lowered.length) {
+    const codePoint = wordCodePointAt(lowered, index);
+    if (codePoint === null || endsWithWordCharacter(lowered, index)) {
+      index += 1;
+      continue;
+    }
+    let end = index;
+    for (;;) {
+      const next = wordCodePointAt(lowered, end);
+      if (next === null) {
+        break;
+      }
+      end += codePointWidth(next);
+    }
+    spans.push({ end, start: index });
+    index = end;
+  }
+  return spans;
+};
