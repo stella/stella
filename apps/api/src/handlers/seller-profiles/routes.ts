@@ -23,26 +23,32 @@ export const sellerProfilesRoute = new Elysia({ prefix: "/seller-profiles" })
   .guard({ validateAuth: true })
   .get("/", listSellerProfiles.handler, {
     permissions: listSellerProfiles.config.permissions,
+    accountAccess: listSellerProfiles.config.accountAccess,
     query: listSellerProfiles.config.query,
   })
   .post("/", createSellerProfile.handler, {
     permissions: createSellerProfile.config.permissions,
+    accountAccess: createSellerProfile.config.accountAccess,
     body: createSellerProfile.config.body,
   })
   .get("/:sellerProfileId", getSellerProfile.handler, {
     permissions: getSellerProfile.config.permissions,
+    accountAccess: getSellerProfile.config.accountAccess,
     params: getSellerProfile.config.params,
   })
   .patch("/:sellerProfileId", updateSellerProfile.handler, {
     permissions: updateSellerProfile.config.permissions,
+    accountAccess: updateSellerProfile.config.accountAccess,
     params: updateSellerProfile.config.params,
     body: updateSellerProfile.config.body,
   })
   .post("/:sellerProfileId/default", updateSellerProfileDefault.handler, {
     permissions: updateSellerProfileDefault.config.permissions,
+    accountAccess: updateSellerProfileDefault.config.accountAccess,
     params: updateSellerProfileDefault.config.params,
   })
   .post("/:sellerProfileId/archive", archiveSellerProfile.handler, {
     permissions: archiveSellerProfile.config.permissions,
+    accountAccess: archiveSellerProfile.config.accountAccess,
     params: archiveSellerProfile.config.params,
   });
