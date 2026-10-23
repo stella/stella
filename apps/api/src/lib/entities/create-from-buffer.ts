@@ -65,6 +65,8 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const ENTITY_BUFFER_INTENT_TELEMETRY = {
@@ -112,6 +114,8 @@ export type CreateEntityFromBufferDependencies = {
   enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
   processExtraction: typeof processExtraction;
   requestNativeExtractionRun: typeof requestNativeExtractionRun;
+  enqueueEntitySearchRepairs: typeof enqueueEntitySearchRepairs;
+  flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
 };
 
 const defaultCreateEntityFromBufferDependencies = {
@@ -119,6 +123,8 @@ const defaultCreateEntityFromBufferDependencies = {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
   processExtraction,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
   requestNativeExtractionRun: async (options) =>
     await requestNativeExtractionRun(options),
 } satisfies CreateEntityFromBufferDependencies;
@@ -487,6 +493,7 @@ export const createEntityFromBuffer = async ({
         // Durable extraction request, committed with the file it reads. The
         // post-commit call below only accelerates the queue handoff.
         await dependencies.requestNativeExtractionRun({ entityId, tx });
+        await dependencies.enqueueEntitySearchRepairs(tx, [entityId]);
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
@@ -607,6 +614,7 @@ export const createEntityFromBuffer = async ({
   // fire the file-upload trigger, so a flow-created document can never spawn
   // another flow run. Keep the upload trigger out of this call site.
   dependencies.processExtraction(entityId).catch(captureError);
+  dependencies.flushEntitySearchRepairs([entityId]).catch(captureError);
 
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({

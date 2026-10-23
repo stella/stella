@@ -52,6 +52,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // Matrix metadata selects a disjoint slice of the same pool;
+                // it does not change the check represented by this step.
+                "CI_CHECK_POOL_PARTITION",
               ].includes(key),
           ),
         );
@@ -1006,6 +1009,20 @@ const expectScope = ({
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     });
   const migrated = { ...scope };
+  // A check-pool matrix changes scheduling, not the inherited job scope.
+  // Accept only the exact exhaustive two-way partition used by the runner;
+  // arbitrary strategy changes remain visible to this comparison. Normalize
+  // only an added partition: a baseline that owns it must retain it.
+  if (
+    job === "ci-checks-rest" &&
+    originalScope["strategy"] === undefined &&
+    isDeepStrictEqual(migrated["strategy"], {
+      "fail-fast": false,
+      matrix: { partition: [1, 2] },
+    })
+  ) {
+    delete migrated["strategy"];
+  }
   // The retired changeset hold was the check legs' only pull-request reader.
   if (
     job !== undefined &&

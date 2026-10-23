@@ -884,8 +884,10 @@
       "name": "@stll/collation",
       "version": "0.0.0",
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/concurrency": {

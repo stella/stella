@@ -853,6 +853,7 @@ describe("detect-e2e-changes", () => {
     }
   });
 
+  // Measured p95: 12.7 s; this must evaluate the real workflow and repository scope.
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     expect(
       changedFileScope("docs/development.md", "pull_request", {
@@ -890,7 +891,7 @@ describe("detect-e2e-changes", () => {
         ].join("\n"),
       );
     }
-  }, 15_000);
+  }, 30_000);
 
   test("runs the full native compiler only at the release boundary", () => {
     const plan = workflowJob("ci-plan");

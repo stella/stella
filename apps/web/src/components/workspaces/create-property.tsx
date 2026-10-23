@@ -803,7 +803,7 @@ const PropertyComposerBody = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-base font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full text-base font-semibold tracking-tight"
           maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
