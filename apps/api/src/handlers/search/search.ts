@@ -9,7 +9,7 @@ import type { DocumentProcessingStatus } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
-import { getCurrentVersionProcessingStatuses } from "@/api/lib/document-processing-status";
+import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { searchGlobal } from "@/api/lib/search/index-global";

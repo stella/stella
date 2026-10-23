@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { documentProcessingRuns } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
-import { getCurrentVersionProcessingStatuses } from "@/api/lib/document-processing-status";
+import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
   createTestIds,

@@ -55,8 +55,8 @@ import {
   pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
-import { getCurrentVersionProcessingStatuses } from "@/api/lib/document-processing-status";
 import { isValidDateCursorValue } from "@/api/lib/entities/cursor-validation";
+import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import {
   entityQueryScopeCondition,
   type EntityQueryScope,
