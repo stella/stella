@@ -16,23 +16,37 @@ type LinkIcon =
   | { type: "no-icon" }
   | { type: "temporary"; attempt: number };
 
-export const linkIconOptions = (hostname: string) => {
+export const linkIconOptions = (hostname: string) =>
+  iconOptions({ type: "hostname", value: hostname });
+
+export const exactIconOptions = (url: string) =>
+  iconOptions({ type: "url", value: url });
+
+type IconTarget =
+  | { type: "hostname"; value: string }
+  | { type: "url"; value: string };
+
+function iconOptions(target: IconTarget) {
   const options = queryOptions({
-    queryKey: ["chat-link-icon", hostname],
+    queryKey: ["chat-link-icon", target.type, target.value],
     retry: false,
     gcTime: 60 * 1000,
     queryFn: async ({ signal, client }): Promise<LinkIcon> => {
       const temporary = nextTemporaryOutcome(client);
-      const result = await Result.tryPromise(async () =>
-        linkIconsApi({ hostname }).get({
-          fetch: {
-            signal: AbortSignal.any([
-              signal,
-              AbortSignal.timeout(LINK_ICON_REQUEST_TIMEOUT_MS),
-            ]),
-          },
-        }),
-      );
+      const result = await Result.tryPromise(async () => {
+        const fetch = {
+          signal: AbortSignal.any([
+            signal,
+            AbortSignal.timeout(LINK_ICON_REQUEST_TIMEOUT_MS),
+          ]),
+        };
+        return target.type === "hostname"
+          ? await linkIconsApi({ hostname: target.value }).get({ fetch })
+          : await linkIconsApi.exact.get({
+              query: { url: target.value },
+              fetch,
+            });
+      });
       if (Result.isError(result) || result.value.error) {
         getAnalytics().captureError(
           new ClientOperationError({
@@ -113,4 +127,4 @@ export const linkIconOptions = (hostname: string) => {
       }
     },
   });
-};
+}
