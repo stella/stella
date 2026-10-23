@@ -86,9 +86,8 @@ describe("Button loading icon", () => {
     expect(markup).toContain('data-slot="button-loader"');
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('aria-hidden="true"');
-    expect(markup).not.toContain("animate-spin");
-    // The ampersand of the arbitrary variant is HTML-escaped in markup.
-    expect(markup).toContain("_svg:not([data-slot=button-loader]_svg)]:hidden");
+    expect(markup.match(/<svg/gu)).toHaveLength(1);
+    expect(markup).not.toContain('data-testid="retry-icon"');
   });
 
   test("the caller's icon shows once the button is idle", () => {

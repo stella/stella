@@ -1,6 +1,10 @@
 "use client";
 
-import type * as React from "react";
+import {
+  isValidElement,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
@@ -101,8 +105,11 @@ type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
-  tooltip?: React.ReactNode;
+  tooltip?: ReactNode;
 } & useRender.ComponentProps<"button">;
+
+const isReactNodeArray = (value: ReactNode): value is ReactNode[] =>
+  Array.isArray(value);
 
 function Button({
   className,
@@ -115,8 +122,13 @@ function Button({
   tooltip,
   ...props
 }: ButtonProps) {
-  const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
-    render ? undefined : "button";
+  const typeValue: ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
+    ? undefined
+    : "button";
+  const loadingChildren =
+    isReactNodeArray(children) && isValidElement(children.at(0))
+      ? children.slice(1)
+      : children;
 
   // Same value `renderTooltipTrigger` mounts below, so the disposition and the
   // popup cannot disagree about whether this button has a tooltip.
@@ -138,7 +150,7 @@ function Button({
           size="sm"
           variant="decorative"
         />
-        {children}
+        {loadingChildren}
       </>
     ) : (
       children
@@ -149,9 +161,6 @@ function Button({
         variant !== "link" &&
         buttonPressClass,
       buttonVariants({ className, size, variant }),
-      // While loading, the loader is the button's only icon: a caller's own
-      // leading icon would otherwise sit beside it as a second spinner.
-      loading && "[&_svg:not([data-slot=button-loader]_svg)]:hidden",
       isAccessibleDisabled && buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",
