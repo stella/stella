@@ -3,7 +3,13 @@ import { afterAll, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register();
+GlobalRegistrator.register({
+  settings: {
+    enableJavaScriptEvaluation: true,
+    // Only trusted, locally generated router hydration scripts execute here.
+    suppressInsecureJavaScriptEnvironmentWarning: true,
+  },
+});
 
 const {
   createMemoryHistory,
@@ -118,8 +124,9 @@ test("a read the server gave up on does not reach the browser as an untyped erro
   for (const [, source = ""] of html.matchAll(
     /<script[^>]*>([\s\S]*?)<\/script>/gu,
   )) {
-    // oxlint-disable-next-line no-new-func -- runs the router's own hydration payload rendered above
-    new Function(source.replaceAll("document.currentScript.remove()", "0"))();
+    const script = document.createElement("script");
+    script.textContent = source;
+    document.body.append(script);
   }
   const client = createAppRouter(false);
   await hydrate(client.router);
