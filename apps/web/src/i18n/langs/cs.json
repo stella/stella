@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Úplnost",
-      "countedOn": "Spočítáno k {date}",
       "courtsHeading": "Podle soudu",
       "courtsUnavailable": "Rozpis podle soudů není momentálně k dispozici.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Kolik judikatury korpus obsahuje podle států a soudů a jak aktuální je každý zdroj.",
-      "exceedsReportedTotal": "Obsahuje víc, než vydavatel naposledy uvedl k {date}",
-      "gapStatusUnknown": "Stav mezer není znám",
       "generatedAt": "Údaje k {date}",
       "globeLabel": "Státy, jejichž judikaturu korpus obsahuje, na glóbu",
       "healthCurrent": "Aktuální",
