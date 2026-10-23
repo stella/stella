@@ -187,6 +187,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
+  fixtureRuleOverride("require-stable-geometry.fixture.ts", [
+    "require-stable-geometry/require-stable-geometry",
+  ]),
   fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
     "no-raw-eden-telemetry/no-raw-eden-telemetry",
   ]),
@@ -1680,6 +1683,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/require-json-import-attribute.ts",
+    "./.oxlint-plugins/require-stable-geometry.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
@@ -1850,6 +1854,15 @@ const config = defineConfig({
       files: ["apps/web/e2e/**", "scripts/**"],
       rules: {
         "require-json-import-attribute/require-json-import-attribute": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/e2e/**/*.geometry.spec.ts",
+        "apps/web/e2e/**/*-geometry.spec.ts",
+      ],
+      rules: {
+        "require-stable-geometry/require-stable-geometry": "error",
       },
     },
     {

@@ -1,14 +1,19 @@
-import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  expect,
+  stableBoundingBox,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
+
 const directory = mkdtempSync(path.join(tmpdir(), "selection-toolbar-"));
 const fixture = { bundle: "" };
 test.use({
   storageState: { cookies: [], origins: [] },
-  viewport: { width: 900, height: 700 },
 });
 test.beforeAll(() => {
   const output = path.join(directory, "fixture.js");
@@ -131,9 +136,8 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     }
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toHaveCSS("position", "fixed");
-    await expect
-      .poll(async () => (await toolbar.boundingBox())?.width ?? 0)
-      .toBeGreaterThan(200);
+    await waitForStableGeometry(page, [pane, toolbar]);
+    expect((await stableBoundingBox(page, toolbar)).width).toBeGreaterThan(200);
     const geometry = await page.evaluate((usePointer) => {
       const paneElement = window.document.querySelector<HTMLElement>(
         '[data-testid="pane"]',

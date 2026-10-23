@@ -11,8 +11,13 @@
  * project runs it, so it holds right to left (`ar`) as well.
  */
 
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 const SECTION = '[data-playground-section="provision-header"]';
 const BENCH_WIDTHS = [72, 120, 180, 240, 300, 360, 440, 560, 720];
@@ -36,8 +41,9 @@ type HeaderGeometry = {
   oneRow: boolean;
 };
 
-const readGeometry = async (page: Page): Promise<HeaderGeometry[]> =>
-  page.evaluate(
+const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
+  await waitForStableGeometry(page, page.locator(SECTION));
+  return await page.evaluate(
     ({ sectionSelector, tolerance }) => {
       const part = (section: Element, slot: string): HTMLElement => {
         const element = section.querySelector(`[data-slot="${slot}"]`);
@@ -86,6 +92,7 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> =>
     },
     { sectionSelector: SECTION, tolerance: TOLERANCE_PX },
   );
+};
 
 test("the header keeps one row and its open button, and gives way act first, then date, then label", async ({
   page,

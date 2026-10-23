@@ -1,5 +1,6 @@
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import { expect, stableBoundingBox, test } from "../helpers/stable-geometry";
 
 type FrameSample = {
   anchorInsideReader: boolean;
@@ -71,15 +72,11 @@ const stopSelectionFrames = async (page: Page): Promise<FrameSample[]> =>
     );
   });
 
-const paragraphBox = async (page: Page, index: number) => {
-  const box = await page
-    .locator(`[data-testid="reader"] p[data-anchor="p-${index}"]`)
-    .boundingBox();
-  if (box === null) {
-    throw new Error(`Paragraph ${index} has no box`);
-  }
-  return box;
-};
+const paragraphBox = async (page: Page, index: number) =>
+  await stableBoundingBox(
+    page,
+    page.locator(`[data-testid="reader"] p[data-anchor="p-${index}"]`),
+  );
 
 // Paragraph boxes include the part the reader's scroll area clips, so a
 // later paragraph can sit far below the visible reader. A drag point aimed
@@ -91,14 +88,12 @@ const READER_EDGE_INSET = 48;
 
 /** The lowest drag point that is still inside the visible reader. */
 const readerDragFloor = async (page: Page): Promise<number> => {
-  const viewport = await page
-    .locator('[data-slot="scroll-area-viewport"]', {
+  const viewport = await stableBoundingBox(
+    page,
+    page.locator('[data-slot="scroll-area-viewport"]', {
       has: page.getByTestId("reader"),
-    })
-    .boundingBox();
-  if (viewport === null) {
-    throw new Error("The reader viewport has no box");
-  }
+    }),
+  );
   return viewport.y + viewport.height - READER_EDGE_INSET;
 };
 
@@ -162,25 +157,8 @@ test("the selection bar keeps its place once the drag ends", async ({
   const duringDrag = await selectionBar(page).count();
   await page.mouse.up();
   await expect(selectionBar(page)).toBeVisible();
-  const shown = await selectionBar(page).boundingBox();
-  // About 300 ms at 60 Hz: long enough for any settle or enter animation.
-  await page.evaluate(
-    async () =>
-      await new Promise<void>((resolve) => {
-        let frames = 0;
-        const next = () => {
-          frames += 1;
-          if (frames >= 18) {
-            resolve();
-            return;
-          }
-          requestAnimationFrame(next);
-        };
-        requestAnimationFrame(next);
-      }),
-  );
-  const settled = await selectionBar(page).boundingBox();
+  const shown = await stableBoundingBox(page, selectionBar(page));
+  const settled = await stableBoundingBox(page, selectionBar(page));
   expect(duringDrag).toBe(0);
-  expect(shown).not.toBeNull();
   expect(settled).toEqual(shown);
 });

@@ -14,8 +14,13 @@
  * holds whichever edge the inline start is.
  */
 
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 const SECTION = '[data-playground-section="workspace-table"]';
 const SCROLL_BOX = `${SECTION} [data-slot="workspace-table-scroll"]`;
@@ -49,8 +54,9 @@ type TableGeometry = {
   firstRowCells: CellBox[];
 };
 
-const readGeometry = async (page: Page) =>
-  page.evaluate(
+const readGeometry = async (page: Page) => {
+  await waitForStableGeometry(page, page.locator(SCROLL_BOX));
+  return await page.evaluate(
     ([sectionSelector, scrollSelector]): TableGeometry => {
       const section = document.querySelector(sectionSelector);
       const scroll = section?.querySelector(scrollSelector);
@@ -100,6 +106,7 @@ const readGeometry = async (page: Page) =>
     },
     [SECTION, '[data-slot="workspace-table-scroll"]'] as const,
   );
+};
 
 /**
  * Scroll the table's own box to the middle of an axis, or of both.
@@ -128,12 +135,7 @@ const scrollToMiddle = async (
     },
     [SCROLL_BOX, axes.inline, axes.block] as const,
   );
-  // One frame for the sticky offsets to settle before anything is measured.
-  await page.evaluate(async () => {
-    await new Promise((resolve) => {
-      requestAnimationFrame(() => resolve(null));
-    });
-  });
+  await waitForStableGeometry(page, page.locator(SCROLL_BOX));
 };
 
 test.beforeEach(async ({ page }) => {
@@ -167,12 +169,15 @@ test("a viewport too short for the table keeps what is below it reachable", asyn
   // the stack. The bench's chrome is lighter than the results page's, so the
   // height at which that bites is lower here; the assertion below checks the
   // page really did overflow rather than trusting the number.
-  await page.setViewportSize({ width: 1440, height: 300 });
+  await page.addStyleTag({
+    content: "main { block-size: 300px !important; }",
+  });
   const belowTable = page.locator(`${SECTION} > div:last-child`);
   await expect(belowTable).toBeVisible();
 
-  const readReach = async () =>
-    page.evaluate(
+  const readReach = async () => {
+    await waitForStableGeometry(page, belowTable);
+    return await page.evaluate(
       ([sectionSelector]) => {
         const section = document.querySelector(sectionSelector);
         const pageScroller = section?.closest("main");
@@ -195,6 +200,7 @@ test("a viewport too short for the table keeps what is below it reachable", asyn
       },
       [SECTION] as const,
     );
+  };
 
   const before = await readReach();
   // The premise: the stack genuinely does not fit, so a fallback scroller is
@@ -282,6 +288,7 @@ test("a column is one width in the header and in the body", async ({
 
 test("a row shown whole is as tall as what it holds", async ({ page }) => {
   await page.locator('[data-playground-content-mode="fit-content"]').click();
+  await waitForStableGeometry(page, page.locator(BODY_ROW).first());
 
   // Rows regrow and the virtualizer re-measures them, so the whole verdict is
   // polled rather than read once after a separate wait: reading the row's box
@@ -330,8 +337,9 @@ test("a row shown whole is as tall as what it holds", async ({ page }) => {
  * rendered row. Text centres, not boxes: what must line up is what the reader
  * sees, whatever padding each cell's content carries above its text.
  */
-const readFirstLineOffsets = async (page: Page) =>
-  page.evaluate(
+const readFirstLineOffsets = async (page: Page) => {
+  await waitForStableGeometry(page, page.locator(BODY_ROW).first());
+  return await page.evaluate(
     ([bodyRowSelector]) => {
       const lineCentre = (node: Node) => {
         const range = document.createRange();
@@ -373,6 +381,7 @@ const readFirstLineOffsets = async (page: Page) =>
     },
     [BODY_ROW] as const,
   );
+};
 
 for (const contentMode of ["tight", "fit-content"] as const) {
   test(`the row number sits on its row's first text line (${contentMode})`, async ({

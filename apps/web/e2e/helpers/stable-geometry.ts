@@ -1,0 +1,112 @@
+import { expect, test as base } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+
+const VIEWPORT = { width: 1440, height: 900 } as const;
+const STABLE_GEOMETRY_TIMEOUT_MS = 10_000;
+const EXPECTED_FONTS = ['16px "DM Sans"', '16px "Noto Sans Arabic"'] as const;
+const MOTION_STYLE_ID = "stable-geometry-motion";
+
+export const test = base.extend({});
+
+test.use({
+  deviceScaleFactor: 1,
+  reducedMotion: "reduce",
+  viewport: VIEWPORT,
+});
+
+export { expect };
+
+type Rect = { x: number; y: number; width: number; height: number };
+
+/** Prepare the page and wait until every measured box is unchanged for two frames. */
+export const waitForStableGeometry = async (
+  page: Page,
+  measured: Locator | readonly Locator[],
+): Promise<void> => {
+  const locators = "elementHandles" in measured ? [measured] : measured;
+  await page.evaluate(
+    async ({ fonts, styleId }) => {
+      await document.fonts.ready;
+      const missing = fonts.filter((font) => !document.fonts.check(font));
+      if (missing.length > 0) {
+        throw new Error(
+          `Stable geometry requires bundled fonts: ${missing.join(", ")}`,
+        );
+      }
+      if (document.querySelector(`#${styleId}`) === null) {
+        const style = document.createElement("style");
+        style.id = styleId;
+        style.textContent =
+          "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition-duration: 0s !important; transition-delay: 0s !important; }";
+        document.head.append(style);
+      }
+    },
+    { fonts: EXPECTED_FONTS, styleId: MOTION_STYLE_ID },
+  );
+
+  await expect
+    .poll(
+      async () => {
+        const results = await Promise.all(
+          locators.map(
+            async (locator) =>
+              await locator.evaluateAll(async (stableElements) => {
+                if (stableElements.length === 0) {
+                  return false;
+                }
+                const snapshot = () =>
+                  stableElements.map((element) => {
+                    const { x, y, width, height } =
+                      element.getBoundingClientRect();
+                    return { x, y, width, height };
+                  });
+                const first = snapshot();
+                await new Promise<void>((resolve) => {
+                  requestAnimationFrame(() => resolve());
+                });
+                const second = snapshot();
+                await new Promise<void>((resolve) => {
+                  requestAnimationFrame(() => resolve());
+                });
+                const third = snapshot();
+                return (
+                  JSON.stringify(first) === JSON.stringify(second) &&
+                  JSON.stringify(second) === JSON.stringify(third)
+                );
+              }),
+          ),
+        );
+        return results.every(Boolean);
+      },
+      {
+        message:
+          "Geometry did not become stable: expected equal bounding boxes on two consecutive animation frames",
+        timeout: STABLE_GEOMETRY_TIMEOUT_MS,
+      },
+    )
+    .toBe(true);
+};
+
+/** Read a Playwright box only after its layout is stable. */
+export const stableBoundingBox = async (
+  page: Page,
+  locator: Locator,
+): Promise<Rect> => {
+  await waitForStableGeometry(page, locator);
+  const box = await locator.boundingBox();
+  if (box === null) {
+    throw new Error("Stable geometry target has no bounding box");
+  }
+  return box;
+};
+
+/** Assert a CSS-pixel measurement with a tolerance chosen at the call site. */
+export const expectGeometry = (
+  actualCssPx: number,
+  expectedCssPx: number,
+  toleranceCssPx: number,
+): void => {
+  expect(Math.abs(actualCssPx - expectedCssPx)).toBeLessThanOrEqual(
+    toleranceCssPx,
+  );
+};
