@@ -66,8 +66,7 @@ let responseBody: unknown;
  * single-window cases.
  */
 let engineHits:
-  | { document_id: string; anchor_id?: string; chunk_id?: string }[]
-  | null;
+  { document_id: string; anchor_id?: string; chunk_id?: string }[] | null;
 let requestBodies: Record<string, unknown>[];
 /**
  * Wall time the fake engine spends on every request. Zero by default, so only

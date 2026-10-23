@@ -110,8 +110,7 @@ type SeedSignalOptions = {
   /** A task proposal due that day, or none. */
   dueAt: string | null;
   proposes?:
-    | typeof SUGGESTION_KIND.CREATE_TASK
-    | typeof SUGGESTION_KIND.CREATE_DEADLINE;
+    typeof SUGGESTION_KIND.CREATE_TASK | typeof SUGGESTION_KIND.CREATE_DEADLINE;
 };
 
 const seedSignal = async ({

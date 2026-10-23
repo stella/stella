@@ -455,8 +455,7 @@ export const PL_KIS_STATUSES = {
 } as const satisfies Record<number, string>;
 
 type PlKisStatus =
-  | (typeof PL_KIS_STATUSES)[keyof typeof PL_KIS_STATUSES]
-  | "unknown";
+  (typeof PL_KIS_STATUSES)[keyof typeof PL_KIS_STATUSES] | "unknown";
 
 const statusOf = (id: string | undefined): PlKisStatus => {
   const entry = Object.entries(PL_KIS_STATUSES).find(

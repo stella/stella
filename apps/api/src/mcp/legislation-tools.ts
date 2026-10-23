@@ -883,8 +883,7 @@ const provisionRequestKey = (item: ProvisionRequest): string =>
   ]);
 
 type ProvisionItemBuildResult =
-  | { type: "item"; item: ProvisionItemResult }
-  | { type: "invalid-cursor" };
+  { type: "item"; item: ProvisionItemResult } | { type: "invalid-cursor" };
 
 const provisionItemResult = ({
   blocksByDocumentId,

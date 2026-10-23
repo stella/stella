@@ -176,8 +176,7 @@ export type RpoRelatedEntity = {
 // `termination` is the canonical end-of-existence signal. Legal-status
 // notes (liquidation, dissolution grounds) stay textual in `legalStatuses`.
 export type RpoStatus =
-  | { type: "active" }
-  | { type: "terminated"; terminatedAt: string };
+  { type: "active" } | { type: "terminated"; terminatedAt: string };
 
 export type RpoEntity = {
   ico: string;

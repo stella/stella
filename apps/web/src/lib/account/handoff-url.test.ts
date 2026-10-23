@@ -12,8 +12,8 @@ const capture = async (href: string) => {
   const window = {
     location,
     takeStellaHandoff: ():
-      | { code: string; path: string; destination: string }
-      | undefined => undefined,
+      { code: string; path: string; destination: string } | undefined =>
+      undefined,
     history: {
       state: { preserved: true },
       replaceState: (_state: unknown, _title: string, url: URL) => {

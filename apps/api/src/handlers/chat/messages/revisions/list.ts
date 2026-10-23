@@ -216,9 +216,7 @@ type RevisionListItem = NonNullable<
 // Successor/current snapshots are used only to derive the displayed text;
 // raw replaced snapshots keep their existing serialized contract.
 type InternalRevisionColumns =
-  | "nextContent"
-  | "currentContent"
-  | "currentRevision";
+  "nextContent" | "currentContent" | "currentRevision";
 type StoredRevisionProjection = Omit<
   RevisionListItem,
   "beforeText" | "afterText"
