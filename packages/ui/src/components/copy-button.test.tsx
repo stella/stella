@@ -3,7 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 
-import { COPIED_RESET_MS, CopyButton, useCopiedFeedback } from "./copy-button";
+import {
+  COPIED_RESET_MS,
+  CopyButton,
+  useCopiedFeedback,
+  useCopyConfirmation,
+} from "./copy-button";
 
 GlobalRegistrator.register({ url: "https://example.test" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
@@ -36,6 +41,17 @@ describe("CopyButton", () => {
     expect(markup).toContain('aria-label="Copy"');
     expect(markup).not.toMatch(/>Copy</u);
   });
+  test("keeps caller label styling on shared feedback", () => {
+    const markup = renderToStaticMarkup(
+      <CopyButton
+        copiedLabel="Copied"
+        label="Copy"
+        labelClassName="hidden sm:grid"
+        onCopy={copy}
+      />,
+    );
+    expect(markup).toContain('class="hidden sm:grid"');
+  });
 });
 
 describe("copied feedback", () => {
@@ -53,5 +69,14 @@ describe("copied feedback", () => {
 
     await act(() => jest.advanceTimersByTime(1));
     expect(hook.result.current.copied).toBe(false);
+  });
+  test("the callback entry point confirms only successful copies", async () => {
+    let succeeds = false;
+    const hook = renderHook(() => useCopyConfirmation(async () => succeeds));
+    await act(async () => await hook.result.current.copy());
+    expect(hook.result.current.copied).toBe(false);
+    succeeds = true;
+    await act(async () => await hook.result.current.copy());
+    expect(hook.result.current.copied).toBe(true);
   });
 });

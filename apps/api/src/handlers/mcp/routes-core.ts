@@ -8,6 +8,7 @@ import {
   readLawMetadata,
 } from "@/api/handlers/mcp/read-discovery-metadata";
 import type { createMcpAuthenticationFailureLimiter } from "@/api/handlers/mcp/transport-rate-limit";
+import { dropCredentialedCors } from "@/api/handlers/public-cors";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { createRequestRouteClassifier } from "@/api/lib/rate-limit/tenant-action-boundary";
@@ -27,7 +28,6 @@ import {
 import type { McpMode } from "@/api/mcp/constants";
 import {
   createMcpDiscoveryPreflightHeaders,
-  createMcpMetadataHeaders,
   createMcpPreflightHeaders,
 } from "@/api/mcp/metadata";
 
@@ -43,24 +43,6 @@ type RouteSet = {
 
 const MCP_HTTP_METHOD_ALLOW_HEADER = "OPTIONS, GET, POST, DELETE";
 const MCP_HTTP_METHODS = new Set(MCP_HTTP_METHOD_ALLOW_HEADER.split(", "));
-
-const ALLOW_CREDENTIALS_HEADER = "access-control-allow-credentials";
-
-/**
- * The global CORS layer stamps `Access-Control-Allow-Credentials: true` on every
- * response as a default header. MCP paths are bearer-authenticated and never
- * read cookies, and a browser refuses a credentialed request answered with
- * `Access-Control-Allow-Origin: *`, so the combination is dropped here. Matched
- * case-insensitively: the header comes from a plugin default, and a casing
- * change there must not silently restore the pairing browsers reject.
- */
-const dropCredentialedCors = (set: RouteSet) => {
-  set.headers = Object.fromEntries(
-    Object.entries(set.headers).filter(
-      ([key]) => key.toLowerCase() !== ALLOW_CREDENTIALS_HEADER,
-    ),
-  );
-};
 
 const applyHeaders = ({
   headers,
@@ -115,7 +97,7 @@ export const handleMcpPreflightRequest = (
 
 const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
   applyHeaders({
-    headers: createMcpMetadataHeaders(),
+    headers: createMcpDiscoveryPreflightHeaders(),
     set,
   });
   set.status = 204;

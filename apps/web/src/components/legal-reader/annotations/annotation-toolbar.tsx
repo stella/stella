@@ -13,6 +13,7 @@ import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
 import {
   Building2Icon,
   ChevronDownIcon,
+  CopyFromMenuIcon,
   HighlighterIcon,
   LockIcon,
   AddCommentIcon,
@@ -727,6 +728,7 @@ export const AnnotationToolbar = ({
             <CopyFeedback
               copied={copied}
               copiedLabel={t("common.copied")}
+              icon={CopyFromMenuIcon}
               label={t("common.copy")}
             />
             <ChevronDownIcon className="size-3" />

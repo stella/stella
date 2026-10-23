@@ -6,6 +6,7 @@ import { styleSets } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import {
   scanErrorForHandler,
@@ -193,11 +194,17 @@ export const readStyleSetPackage = async ({
     );
   }
   const { name, s3Key, scanState, updatedAt } = styleSetResult.value;
+  const ownedS3Key = storedKeyForOrganization(s3Key, organizationId);
+  if (ownedS3Key === null) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Style set not found" }),
+    );
+  }
 
   const read = await Result.tryPromise({
     try: async () =>
       await readStoredObject({
-        object: storedObject({ key: s3Key, scanState }),
+        object: storedObject({ key: ownedS3Key, scanState }),
         fileName: styleSetExportFileName(name),
         mimeType: DOCX_MIME_TYPE,
         markScanned: async (object) =>
