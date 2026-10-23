@@ -10,6 +10,7 @@ const { act } = await import("react");
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { ToastProvider, stellaToast } = await import("@stll/ui/toast");
 const { toAPIError } = await import("@/lib/errors/api");
+const { readQueryResult } = await import("@/lib/errors/query-result");
 const { ACTION_ADMISSION_CODES, ACTION_ADMISSION_REFUSALS } =
   await import("@stll/api-contract/action-admission");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -86,13 +87,15 @@ test("a mixed upload batch explains an empty file without presigning or retrying
     await import("./create-file-upload-payload.logic");
   const presignedNames: string[] = [];
   const queue = new UploadQueue(async (file) => {
-    const payload = buildEntityCreatePresignPayload({
-      propertyId: "property_upload",
-      name: file.name,
-      mimeType: file.type,
-      size: file.size,
-      sha256Hex: "a".repeat(64),
-    });
+    const payload = readQueryResult(
+      buildEntityCreatePresignPayload({
+        propertyId: "property_upload",
+        name: file.name,
+        mimeType: file.type,
+        size: file.size,
+        sha256Hex: "a".repeat(64),
+      }),
+    );
     presignedNames.push(payload.name);
     if (file.name === "wrong.pdf") {
       throw toAPIError({

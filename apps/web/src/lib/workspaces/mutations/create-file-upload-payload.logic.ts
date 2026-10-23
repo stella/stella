@@ -1,4 +1,4 @@
-import { assertUploadFileNotEmpty } from "@/lib/files/upload-file-validation";
+import { validateUploadFileNotEmpty } from "@/lib/files/upload-file-validation";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -19,9 +19,8 @@ export const buildEntityCreatePresignPayload = ({
   mimeType,
   size,
   sha256Hex,
-}: EntityCreatePresignPayloadInput) => {
-  assertUploadFileNotEmpty(size);
-  return {
+}: EntityCreatePresignPayloadInput) =>
+  validateUploadFileNotEmpty(size).map(() => ({
     purpose: "entity_create" as const,
     propertyId: toSafeId<"property">(propertyId),
     parentId: parentId ? toSafeId<"entity">(parentId) : null,
@@ -29,8 +28,7 @@ export const buildEntityCreatePresignPayload = ({
     mimeType,
     size,
     sha256Hex,
-  };
-};
+  }));
 
 export const entityCreateLocalInvalidationKeys = (workspaceId: string) => [
   entitiesKeys.all(workspaceId),

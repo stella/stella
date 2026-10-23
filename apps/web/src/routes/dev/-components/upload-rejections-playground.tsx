@@ -1,11 +1,9 @@
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { toAPIError } from "@/lib/errors/api";
-import { transformUnknownError } from "@/lib/errors/client";
 import { uploadFailureDisposition } from "@/lib/upload-queue";
 import { buildEntityCreatePresignPayload } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
 import { showUploadFailureToast } from "@/lib/workspaces/mutations/upload-failure-toast";
@@ -13,17 +11,13 @@ import { showUploadFailureToast } from "@/lib/workspaces/mutations/upload-failur
 export const UploadRejectionsPlayground = () => {
   const t = useTranslations();
   const showFailures = () => {
-    const prepared = Result.try({
-      try: () =>
-        buildEntityCreatePresignPayload({
-          propertyId: "visual-upload-property",
-          name: "empty.pdf",
-          mimeType: "application/pdf",
-          size: 0,
-          sha256Hex:
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        }),
-      catch: transformUnknownError,
+    const prepared = buildEntityCreatePresignPayload({
+      propertyId: "visual-upload-property",
+      name: "empty.pdf",
+      mimeType: "application/pdf",
+      size: 0,
+      sha256Hex:
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     });
     // The old producer sends size zero and receives this schema rejection;
     // the current producer rejects the same input locally before presign.

@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { getTranslator } from "@/i18n/translator";
 
@@ -6,11 +6,13 @@ export class EmptyUploadFileError extends TaggedError("EmptyUploadFileError")<{
   message: string;
 }> {}
 
-export const assertUploadFileNotEmpty = (size: number): void => {
+export const validateUploadFileNotEmpty = (size: number) => {
   if (size !== 0) {
-    return;
+    return Result.ok();
   }
-  throw new EmptyUploadFileError({
-    message: getTranslator()("workspaces.files.emptyFile"),
-  });
+  return Result.err(
+    new EmptyUploadFileError({
+      message: getTranslator()("workspaces.files.emptyFile"),
+    }),
+  );
 };

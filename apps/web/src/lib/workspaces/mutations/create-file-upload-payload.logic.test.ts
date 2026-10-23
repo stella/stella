@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -22,7 +23,7 @@ describe("entity-create upload payload", () => {
     const payload = buildEntityCreatePresignPayload({
       ...baseInput,
       parentId: "entity_folder",
-    });
+    }).unwrap();
 
     expect(payload).toEqual({
       purpose: "entity_create",
@@ -36,15 +37,18 @@ describe("entity-create upload payload", () => {
   });
 
   test("sends root uploads as an explicit null parent", () => {
-    const payload = buildEntityCreatePresignPayload(baseInput);
+    const payload = buildEntityCreatePresignPayload(baseInput).unwrap();
 
     expect(payload.parentId).toBeNull();
   });
 
   test("rejects an empty file before a presign payload can be sent", () => {
-    expect(() =>
-      buildEntityCreatePresignPayload({ ...baseInput, size: 0 }),
-    ).toThrow("The file is empty.");
+    const result = buildEntityCreatePresignPayload({ ...baseInput, size: 0 });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(EmptyUploadFileError.is(result.error)).toBe(true);
+      expect(result.error.message).toBe("The file is empty.");
+    }
   });
 
   test("invalidates overview and activity once after the upload operation", () => {
