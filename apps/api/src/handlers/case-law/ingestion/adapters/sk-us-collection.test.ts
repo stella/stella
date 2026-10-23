@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
-  encodeSourceRawEnvelope,
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";

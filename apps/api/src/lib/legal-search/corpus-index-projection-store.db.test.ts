@@ -15,7 +15,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   type CorpusIndexClient,
   CorpusIndexError,

@@ -79,9 +79,7 @@ export type CatalogueNativeTool = CommonFields & {
 };
 
 export type CatalogueDisplayEntry =
-  | CatalogueSkill
-  | CatalogueMcp
-  | CatalogueNativeTool;
+  CatalogueSkill | CatalogueMcp | CatalogueNativeTool;
 
 /**
  * Binary "is this tool in use" check.

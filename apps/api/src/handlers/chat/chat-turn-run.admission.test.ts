@@ -1,6 +1,6 @@
 import {
-  memoryStream,
   EventType,
+  memoryStream,
   StreamProcessor,
   toServerSentEventsResponse,
 } from "@tanstack/ai";

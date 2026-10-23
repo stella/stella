@@ -5,9 +5,9 @@ import previewAIConfigDefaults from "@/api/handlers/organization-settings/ai-con
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/get";
 import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/update";
 import {
+  deleteBusinessRegistryCredential,
   readBusinessRegistryCredentials,
   saveBusinessRegistryCredential,
-  deleteBusinessRegistryCredential,
 } from "@/api/handlers/organization-settings/business-registry-credentials";
 import createCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
 import deleteCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/delete";

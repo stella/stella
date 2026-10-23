@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 
@@ -16,8 +16,7 @@ export const documentSourceFixture = () => {
     { aggregate: "field", id: { id: fieldId, workspaceId } },
   ] as const;
   const select = () =>
-    drizzle
-      .mock()
+    createMockDatabase()
       .select({
         entityId: entities.id,
         workspaceId: entities.workspaceId,

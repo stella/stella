@@ -13,13 +13,13 @@ import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   bindChatTurnRunId,
+  CHAT_TURN_RUN_LEASE_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
   isChatTurnRunIdTaken,
   OWNER_LOST_OUTCOME,
   reapOwnerlessChatTurnOnTx,
-  CHAT_TURN_RUN_LEASE_MS,
   settleChatTurnOnTx,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";

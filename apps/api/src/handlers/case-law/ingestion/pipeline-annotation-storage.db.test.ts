@@ -18,9 +18,9 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CITATION_SCOPE_METADATA_KEY,
-  CitationScopesRejectedError,
   citationScopeAstHash,
   citationScopeEnvelope,
+  CitationScopesRejectedError,
   validatedCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -29,8 +29,8 @@ import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipel
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";

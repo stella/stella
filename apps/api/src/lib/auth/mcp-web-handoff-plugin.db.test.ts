@@ -29,8 +29,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  authSchema,
   account,
+  authSchema,
   member,
   oauthClient,
   oauthConsent,
@@ -41,8 +41,8 @@ import {
 import { databaseRelations } from "@/api/db/database-relations";
 import { auditLogs } from "@/api/db/schema";
 import {
-  mcpWebHandoff,
   MCP_WEB_HANDOFF_KINDS,
+  mcpWebHandoff,
 } from "@/api/db/schema/mcp-web-handoff";
 import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
