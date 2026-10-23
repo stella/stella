@@ -28,6 +28,7 @@ const MUTATION_OWNERS = {
   },
   "handlers/case-law/erasure.ts": {
     redactCaseLawDecision: "redactCaseLawDecision",
+    eraseFencedDecision: "redactCaseLawDecision",
   },
   "handlers/case-law/withdraw-document.ts": {
     withdrawCaseLawDecisionDocument: "withdrawCaseLawDecisionDocument",
