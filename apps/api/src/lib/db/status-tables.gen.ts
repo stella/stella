@@ -72,7 +72,6 @@ export const STATUS_COLUMNS = {
   mcpOAuthState: ["state"],
   mcpUserConnections: ["status"],
   microsoft365Connections: ["status"],
-  microsoft365OAuthState: ["state"],
   officeFileEvidence: ["status"],
   organizationAccessStates: ["state"],
   organizationConfiguredAccess: [
@@ -192,7 +191,6 @@ export const WRITABLE_STATUS_COLUMNS = {
   mcpOAuthState: ["state"],
   mcpUserConnections: ["status"],
   microsoft365Connections: ["status"],
-  microsoft365OAuthState: ["state"],
   officeFileEvidence: ["status"],
   organizationAccessStates: ["state"],
   organizationConfiguredAccess: [
