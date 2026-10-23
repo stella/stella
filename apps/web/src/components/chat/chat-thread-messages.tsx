@@ -67,8 +67,8 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
-  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
+  CHAT_MESSAGE_RENDER_POLICY,
   collectAnonRestorations,
   DATA_URL_PREFIX,
   decodeBase64DataUrl,
@@ -131,8 +131,8 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
-  findChatRequestError,
   type ChatRequestError,
+  findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
@@ -953,9 +953,9 @@ const UserAttachments = ({
         const filename = getAttachmentFilename(part);
         const mimeType = getAttachmentMimeType(part);
         const key = `${filename ?? "attachment"}-${index}`;
-        const contentUrl = getUserFileContentUrl(url) ?? url;
+        const contentUrl = getUserFileContentUrl(url);
         const fallbackLabel = t("chat.attachment");
-        if (IMAGE_MEDIA_TYPES.includes(mimeType)) {
+        if (IMAGE_MEDIA_TYPES.includes(mimeType) && contentUrl) {
           // The backend sets `placeholder` (a blur data URL) only when a
           // thumbnail was generated, so its presence doubles as "serve the
           // smaller thumbnail instead of the full original."
@@ -994,7 +994,7 @@ const UserAttachments = ({
           "text-muted-foreground text-xs",
         );
 
-        if (contentUrl.startsWith(DATA_URL_PREFIX)) {
+        if (contentUrl?.startsWith(DATA_URL_PREFIX)) {
           return (
             <button
               className={attachmentClassName}
@@ -1014,16 +1014,24 @@ const UserAttachments = ({
           );
         }
 
+        if (contentUrl) {
+          return (
+            <a
+              className={attachmentClassName}
+              href={sanitizeHref(contentUrl)}
+              key={key}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {attachmentContent}
+            </a>
+          );
+        }
+
         return (
-          <a
-            className={attachmentClassName}
-            href={sanitizeHref(contentUrl)}
-            key={key}
-            rel="noreferrer"
-            target="_blank"
-          >
+          <span className={attachmentClassName} key={key}>
             {attachmentContent}
-          </a>
+          </span>
         );
       })}
     </div>
@@ -1110,8 +1118,7 @@ export const ChatErrorMessage = ({
   error: Error;
   isGenerating: boolean;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
@@ -1269,8 +1276,7 @@ const AssistantMessageActions = ({
   exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   /** Present on the main chat surface; enables the export action. Omitted on
    *  embedded surfaces (file-chat overlay, template studio) that don't export. */
   threadRef?: ChatThreadRef | undefined;
@@ -1376,10 +1382,7 @@ type ChatThreadMessagesProps = {
   messages: ChatUIMessage[];
   onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
   answerRewriteAvailability?:
-    | "available"
-    | "anonymized"
-    | "unknown"
-    | undefined;
+    "available" | "anonymized" | "unknown" | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1387,8 +1390,7 @@ type ChatThreadMessagesProps = {
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
@@ -1406,8 +1408,7 @@ type ChatThreadMessagesProps = {
   /** Mirrors an ask-user card's local edit-mode up to the page so it can
    *  keep treating a reopened answered card as a live clarification. */
   onAskUserEditingChange?:
-    | ((toolCallId: string, isEditing: boolean) => void)
-    | undefined;
+    ((toolCallId: string, isEditing: boolean) => void) | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
     destination: CreateDocumentDestination,
@@ -1772,8 +1773,7 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
 };
 
 type ProcessStepTitleKey =
-  | ReturnType<typeof getChatToolTitleKey>
-  | "chat.reasoning";
+  ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
 
 const getProcessStepTitleKey = (
   entry: AssistantPartRenderEntry,
@@ -1882,6 +1882,7 @@ const AssistantMessageParts = ({
   // already did so.
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
+  const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1906,7 +1907,7 @@ const AssistantMessageParts = ({
         <AssistantThinkingPart
           components={streamdownComponents}
           displayState={thinkingDisplayState}
-          isStreaming={isTurnActive && index === renderEntries.length - 1}
+          isStreaming={index === streamingEntryIndex}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1928,6 +1929,7 @@ const AssistantMessageParts = ({
               "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
           )}
           components={streamdownComponents}
+          isStreaming={index === streamingEntryIndex}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
           partIndex={index}
@@ -2336,6 +2338,7 @@ const AssistantThinkingPart = ({
       </summary>
       <AssistantThinkingBody
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2404,10 +2407,12 @@ const AssistantThinkingHeader = ({
 
 const AssistantThinkingBody = ({
   components,
+  isStreaming,
   restorationPairs,
   text,
 }: {
   components: ChatThreadMessagesProps["streamdownComponents"];
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => (
@@ -2424,6 +2429,7 @@ const AssistantThinkingBody = ({
           "[&_code]:text-2xs",
         )}
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2434,6 +2440,7 @@ const AssistantThinkingBody = ({
 const AssistantTextPart = ({
   className,
   components,
+  isStreaming,
   restorationPairs,
   partIndex,
   sourceOffsets = false,
@@ -2441,6 +2448,8 @@ const AssistantTextPart = ({
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
+  /** The model is still writing this turn: the last block may be incomplete. */
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   partIndex?: number;
   sourceOffsets?: boolean;
@@ -2463,6 +2472,7 @@ const AssistantTextPart = ({
       <MessageResponse
         components={components}
         data-text-part-index={partIndex}
+        isAnimating={isStreaming}
         sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
@@ -2475,6 +2485,7 @@ const AssistantTextPart = ({
     <MessageResponse
       components={components}
       data-text-part-index={partIndex}
+      isAnimating={isStreaming}
       sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}

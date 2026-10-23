@@ -11,8 +11,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   createPrivateTaskSink,
   DATED_WAIVER_AUTOFIX_LABEL,
-  FIX_TASK_IDENTITY_LABEL,
   EXPIRY_ALERT_LABEL,
+  FIX_TASK_IDENTITY_LABEL,
   probeSourceFingerprint,
   RESOLUTION_POLICY,
   waiverKey,
@@ -22,37 +22,38 @@ import {
   applyHealing,
   armRemoval,
   armRemovalUnlessHeld,
-  disarmRemoval,
   collectProbeReport,
-  readReport,
-  renderHealingFailureSignal,
-  runHealingBoundary,
-  healingWriteNeeded,
+  disarmRemoval,
   executeProbeCommand,
-  redactProbeOutput,
-  renderRemovalEvidence,
+  type HealingActions,
   type HealingEntry,
-  HealingRunError,
   HealingError,
   type HealingFailure,
-  type HealingActions,
+  HealingRunError,
+  healingWriteNeeded,
+  readReport,
+  redactProbeOutput,
+  renderHealingFailureSignal,
+  renderRemovalEvidence,
+  runHealingBoundary,
 } from "./dated-waiver-healing";
 import {
   createProbeBudget,
   PROBE_PHASE_BUDGET_MS,
+  removeWaiver,
   runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
-  type PublishedRemoval,
   listRemovalProposals,
   orphanRemovalProposals,
+  type PublishedRemoval,
   retireRemoval,
 } from "./dated-waiver-publish";
 import {
   collectWaivers,
+  type DatedWaiver,
   dueWaivers,
   RECHECK_INSTRUCTIONS,
-  type DatedWaiver,
 } from "./dated-waivers";
 
 const entry = {
@@ -896,6 +897,7 @@ const recoveryCases = {
   "suppression-waiver": "changed-source",
   "quarantined-test": "changed-source",
   "flaky-test-quarantine": "changed-source",
+  "pending-contract-migration": "changed-source",
 } as const satisfies Record<
   DatedWaiver["kind"],
   "later-green" | "changed-source"
@@ -907,6 +909,22 @@ test("every inventory kind has an exercised resolution policy", () => {
   );
   expect(Object.keys(recoveryCases).toSorted()).toEqual(
     Object.keys(RECHECK_INSTRUCTIONS).toSorted(),
+  );
+});
+
+test("automated healing never removes an unshipped pending contract entry", () => {
+  const pending = {
+    ...entry,
+    source: "apps/api/src/lib/db/pending-contract-migrations/registry.ts",
+    id: "20261015060000_contract",
+    kind: "pending-contract-migration",
+    probe: {
+      command: ["test", "-d", "apps/api/drizzle/20261015060000_contract"],
+      attempts: 20,
+    },
+  } as const satisfies DatedWaiver;
+  expect(() => removeWaiver(pending, () => "registry contents")).toThrow(
+    "Automatic removal is disabled for pending-contract-migration",
   );
 });
 

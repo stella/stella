@@ -6,6 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
+import { TooltipProvider } from "@stll/ui/tooltip";
+
 import ClipboardApp from "../clipboard/ClipboardApp";
 import {
   applyDocumentLanguage,
@@ -22,9 +24,9 @@ import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
-  describeError,
   desktopTelemetryWindowFromLabel,
   installDesktopErrorTelemetry,
   reportDesktopError,
@@ -149,9 +151,11 @@ const Root = () => {
 
   return (
     <StrictMode>
-      <DesktopIntlProvider language={language} messages={messages}>
-        {content}
-      </DesktopIntlProvider>
+      <TooltipProvider>
+        <DesktopIntlProvider language={language} messages={messages}>
+          {content}
+        </DesktopIntlProvider>
+      </TooltipProvider>
     </StrictMode>
   );
 };

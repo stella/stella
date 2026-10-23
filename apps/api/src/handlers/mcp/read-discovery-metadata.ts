@@ -1,6 +1,7 @@
 import { Result } from "better-result";
-import { t, type Context, type Static } from "elysia";
+import { type Context, type Static, t } from "elysia";
 
+import { dropOriginBoundCors } from "@/api/handlers/public-cors";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -12,9 +13,9 @@ import type {
 } from "@/api/lib/api-handlers";
 import { DISCOVERY_METADATA_CACHE_POLICY } from "@/api/lib/security-headers";
 import {
+  type McpMode,
   STELLA_API_CONTRACT,
   STELLA_MCP_API_CONTRACT_VERSION,
-  type McpMode,
 } from "@/api/mcp/constants";
 import {
   createMcpMetadataHeaders,
@@ -75,6 +76,7 @@ const readMetadata = async function* (
   mode: McpMode,
   set: Context["set"],
 ): SafeHandlerGenerator<DiscoveryMetadata> {
+  dropOriginBoundCors(set);
   for (const [key, value] of createMcpMetadataHeaders()) {
     set.headers[key] = value;
   }

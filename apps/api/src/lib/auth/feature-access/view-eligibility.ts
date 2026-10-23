@@ -12,8 +12,8 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
-  isFeatureEnabled,
   type FeatureAccessSnapshot,
+  isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";

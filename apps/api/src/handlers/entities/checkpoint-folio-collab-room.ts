@@ -53,8 +53,8 @@ import {
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import type {
-  S3ObjectWriteOwnership,
   S3ObjectWriteCertainty,
+  S3ObjectWriteOwnership,
 } from "@/api/lib/s3";
 import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";

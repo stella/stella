@@ -35,6 +35,7 @@ import {
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
+import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
@@ -59,8 +60,8 @@ import {
 import {
   authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
-  rootDb,
   rlsDb,
+  rootDb,
 } from "@/api/db/root";
 import {
   featureEnrolments,
@@ -88,6 +89,7 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
@@ -108,9 +110,9 @@ import {
   getDemoAccountConfig,
 } from "@/api/lib/auth/demo-account";
 import {
-  requireDemoAccountAccess,
   createDemoAuthSessionGuard,
   createDemoSessionPolicy,
+  requireDemoAccountAccess,
 } from "@/api/lib/auth/demo-account-hooks";
 import {
   createDemoSessionFilter,
@@ -120,6 +122,18 @@ import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
+import {
+  createHandoffStepUpGuard,
+  HANDOFF_ACCESS_DETAIL,
+  requiresHandoffStepUpForAuthPath,
+  requiresHandoffStepUpForRequest,
+} from "@/api/lib/auth/handoff-step-up-policy";
+import {
+  type createWebHandoffService,
+  webHandoffFailure,
+} from "@/api/lib/auth/mcp-web-handoff";
+import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
+import { getWebHandoffService } from "@/api/lib/auth/mcp-web-handoff-service";
 import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
@@ -148,8 +162,8 @@ import type { UserProfessionalUseState } from "@/api/lib/auth/professional-use";
 import {
   admitOpenClient,
   authorizationClientId,
-  requireAuthRetention,
   REGISTRATION_RETENTION_SCHEMA_PLUGIN,
+  requireAuthRetention,
   withAuthRetention,
 } from "@/api/lib/auth/registration-adapter";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
@@ -162,8 +176,8 @@ import {
   createReviewAccountDatabaseHooks,
   createReviewAccountPlugin,
   createReviewAccountUserPlugin,
-  REVIEW_ACCOUNT_SIGN_IN_BUDGET,
   requireReviewAccountAccess,
+  REVIEW_ACCOUNT_SIGN_IN_BUDGET,
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
@@ -179,6 +193,7 @@ import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
+import { createSessionTokenRedactionPlugin } from "@/api/lib/auth/session-token-redaction";
 import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
@@ -194,12 +209,12 @@ import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fiel
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  createDesktopLinkGrant,
   consumeDesktopLinkGrant,
+  createDesktopLinkGrant,
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import type {
-  CreateDesktopLinkGrantOptions,
   ConsumeDesktopLinkGrantOptions,
+  CreateDesktopLinkGrantOptions,
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
@@ -281,8 +296,8 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { typedPgArray } from "@/api/lib/search/sql";
 import {
-  assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
+  assertSelfhostEmailOtpAllowed,
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
@@ -585,6 +600,50 @@ export const TWO_FACTOR_SESSION_PATHS = {
   "/two-factor/send-otp": "challenge",
 } as const satisfies Record<`/two-factor/${string}`, "manage" | "challenge">;
 
+/**
+ * Every HTTP endpoint registered by the OAuth provider, classified by whether
+ * it reads the caller's browser session. The registry test deliberately also
+ * includes server-only endpoints: an upstream endpoint cannot start trusting
+ * a browser session without an explicit decision here.
+ */
+export const OAUTH_PROVIDER_SESSION_PATHS = {
+  "/.well-known/oauth-authorization-server": "no-browser-session",
+  "/.well-known/openid-configuration": "no-browser-session",
+  "/admin/oauth2/create-client": "no-browser-session",
+  "/admin/oauth2/resources": "no-browser-session",
+  "/admin/oauth2/resources/:identifier": "no-browser-session",
+  "/admin/oauth2/resources/:identifier/clients/:client_id":
+    "no-browser-session",
+  "/admin/oauth2/update-client": "no-browser-session",
+  "/oauth2/authorize": "browser-session",
+  "/oauth2/client/rotate-secret": "browser-session",
+  "/oauth2/consent": "browser-session",
+  "/oauth2/continue": "browser-session",
+  "/oauth2/create-client": "browser-session",
+  "/oauth2/delete-client": "browser-session",
+  "/oauth2/delete-consent": "browser-session",
+  "/oauth2/end-session": "browser-session",
+  "/oauth2/end-session/confirm": "browser-session",
+  "/oauth2/get-client": "browser-session",
+  "/oauth2/get-clients": "browser-session",
+  "/oauth2/get-consent": "browser-session",
+  "/oauth2/get-consents": "browser-session",
+  "/oauth2/introspect": "no-browser-session",
+  "/oauth2/public-client": "browser-session",
+  "/oauth2/public-client-prelogin": "no-browser-session",
+  "/oauth2/register": "browser-session",
+  "/oauth2/revoke": "no-browser-session",
+  "/oauth2/token": "no-browser-session",
+  "/oauth2/update-client": "browser-session",
+  "/oauth2/update-consent": "browser-session",
+  "/oauth2/userinfo": "no-browser-session",
+} as const satisfies Record<string, "browser-session" | "no-browser-session">;
+
+const isOAuthProviderSessionPath = (
+  path: string,
+): path is keyof typeof OAUTH_PROVIDER_SESSION_PATHS =>
+  Object.hasOwn(OAUTH_PROVIDER_SESSION_PATHS, path);
+
 const isTwoFactorSessionPath = (
   path: string,
 ): path is keyof typeof TWO_FACTOR_SESSION_PATHS =>
@@ -603,8 +662,9 @@ export const TWO_FACTOR_MANAGE_PATHS: ReadonlySet<string> = new Set(
  */
 export const AUTHORITATIVE_SESSION_PATHS: ReadonlySet<string> = new Set([
   ...Object.keys(TWO_FACTOR_SESSION_PATHS),
-  "/oauth2/authorize",
-  "/oauth2/consent",
+  ...Object.entries(OAUTH_PROVIDER_SESSION_PATHS).flatMap(([path, use]) =>
+    use === "browser-session" ? [path] : [],
+  ),
 ]);
 const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
 
@@ -624,17 +684,58 @@ type RequireTwoFactorManageOtpArgs = {
 
 type SensitiveAuthPathContext = {
   body?: unknown;
+  context?:
+    | {
+        authCookies?:
+          | {
+              sessionData: { name: string };
+              sessionToken: { name: string };
+            }
+          | undefined;
+      }
+    | undefined;
+  headers?: Headers | undefined;
   path?: string | undefined;
   query?: Record<string, unknown> | undefined;
   request?: Request | undefined;
 };
 type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
   path: string;
-  request: Request;
 };
 /** A `before` hook result whose context Better Auth merges into the endpoint's. */
 type StorageSessionHookResult = {
   context: { query: Record<string, unknown> };
+};
+
+const removeSessionCookies = (ctx: SensitiveAuthPathContext): void => {
+  const headers = ctx.headers;
+  const authCookies = ctx.context?.authCookies;
+  if (!headers || !authCookies) {
+    panic("Authoritative-session hook is missing the auth cookie context");
+  }
+  const sessionCookieNames = new Set([
+    authCookies.sessionToken.name,
+    authCookies.sessionData.name,
+  ]);
+  // Better Auth splits a large session-data cookie into `<name>.<index>`
+  // chunks and reassembles them on read, so the chunks go too.
+  const sessionDataChunkPrefix = `${authCookies.sessionData.name}.`;
+  const isSessionDataChunk = (name: string): boolean =>
+    name.startsWith(sessionDataChunkPrefix) &&
+    /^\d+$/u.test(name.slice(sessionDataChunkPrefix.length));
+  const remainingCookies = (headers.get("cookie") ?? "")
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .filter((cookie) => {
+      const separator = cookie.indexOf("=");
+      const name = separator === -1 ? cookie : cookie.slice(0, separator);
+      return !sessionCookieNames.has(name) && !isSessionDataChunk(name);
+    });
+  if (remainingCookies.length === 0) {
+    headers.delete("cookie");
+    return;
+  }
+  headers.set("cookie", remainingCookies.join("; "));
 };
 /**
  * Establish database-backed session state before a sensitive plugin endpoint
@@ -664,11 +765,29 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
     return Result.ok(undefined);
   }
-  const request = ctx.request;
-  if (request === undefined) {
+  if (isOAuthProviderSessionPath(path)) {
+    // HTTP requests and server-side `auth.api.*` calls alike: whenever the
+    // call carries cookies, the endpoint could read the cookie snapshot, so
+    // resolve the session from storage. A call without cookies has no
+    // snapshot to fall back to.
+    if (
+      OAUTH_PROVIDER_SESSION_PATHS[path] === "browser-session" &&
+      (ctx.headers?.get("cookie") ?? "") !== ""
+    ) {
+      const session = await resolveSession({ ...ctx, path });
+      if (!session) {
+        // OAuth authorization queries are signed and survive the login
+        // redirect, so pin the absent result by removing only Better Auth's
+        // session cookies from the headers the endpoint's middleware reads.
+        removeSessionCookies(ctx);
+      }
+    }
+    return Result.ok(undefined);
+  }
+  if (ctx.request === undefined) {
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
-  const session = await resolveSession({ ...ctx, path, request });
+  const session = await resolveSession({ ...ctx, path });
   if (!isTwoFactorSessionPath(path)) {
     return Result.ok(undefined);
   }
@@ -1120,6 +1239,32 @@ const socialSignInOutcomePlugin = {
 type CreateAuthOptions = {
   rateLimitStorage?: ReturnType<typeof createAuthRateLimitStorage>;
   rateLimitEnabled?: boolean;
+};
+
+const WEB_HANDOFF_MINT_FAILURE_SINK = failureSink({
+  event: "mcp_web_handoff.mint_failed",
+  expected: [],
+});
+type WebHandoffMintArgs = Parameters<
+  ReturnType<typeof createWebHandoffService>["mint"]
+>;
+export const mintWebHandoff = async (
+  ctx: WebHandoffMintArgs[0],
+  paths: readonly string[],
+  kind: WebHandoffMintArgs[2],
+) => {
+  const outcome = await Result.tryPromise({
+    try: async () => await getWebHandoffService().mint(ctx, paths, kind),
+    catch: webHandoffFailure("mint", "Web handoff could not be created."),
+  });
+  if (Result.isOk(outcome)) {
+    return outcome.value;
+  }
+  observeFailure(outcome.error, {
+    sink: WEB_HANDOFF_MINT_FAILURE_SINK,
+    ctx: { operation: "mint" },
+  });
+  return null;
 };
 
 export const createAuth = (
@@ -1960,6 +2105,7 @@ export const createAuth = (
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
+      createMcpWebHandoffPlugin({ service: getWebHandoffService }),
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
       createReviewAccountPlugin({
@@ -2255,6 +2401,7 @@ export const createAuth = (
       ),
       oauthUiFragmentBridgePlugin,
       createSocialLinkHintPlugin(getOAuthState),
+      createSessionTokenRedactionPlugin(createAuthMiddleware),
       // Last, so it records the answer every other hook has settled on.
       createAuthRefusalLogPlugin(createAuthMiddleware),
     ],
@@ -2263,7 +2410,8 @@ export const createAuth = (
         markAuthRequestRoute(ctx);
         await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
-        if (!ctx.path) {
+        // Better Call gives pathless server-only operations the middleware path "/".
+        if (!ctx.path || ctx.path === "/") {
           return undefined;
         }
         if (demoConfig.email) {
@@ -2307,6 +2455,16 @@ export const createAuth = (
             }
           }
         }
+        // Better Call supplies `/` to hooks for server-only, pathless helpers.
+        if (ctx.path !== "/" && requiresHandoffStepUpForAuthPath(ctx.path)) {
+          const current = await getAuthoritativeSessionFromCtx(ctx);
+          if (typeof current?.session["originConsentId"] === "string") {
+            throw new APIError("FORBIDDEN", {
+              code: MCP_HANDOFF_STEP_UP_REQUIRED,
+              message: "Sign in again to continue.",
+            });
+          }
+        }
         await assertSelfhostEmailOtpAllowed(ctx.path);
         const resetConfirmation = await requireEmailOtpResetConfirmation({
           path: ctx.path,
@@ -2325,8 +2483,8 @@ export const createAuth = (
           async () =>
             await resolveAuthoritativeSessionForSensitiveAuthPath({
               ctx,
-              resolveSession: async ({ path, request }) =>
-                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+              resolveSession: async ({ path }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path }),
             }),
         );
         // Better Auth rejects a request from a `before` hook by the APIError
@@ -2525,6 +2683,8 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set">;
+
 /**
  * Account routes confirm the session still exists in storage. Organization
  * routes may serve the cached cookie snapshot because their member lookup runs
@@ -2533,66 +2693,98 @@ const VALIDATE_AUTH_REJECTION_BODY = {
  * The snapshot still supplies the session itself; one indexed read checks it
  * is live, instead of a full uncached session load.
  */
-export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
-  validateSession: {
-    async resolve({ status, request, set }) {
-      const sessionResult = await Result.tryPromise(async () => {
-        const resolved = await getAuth().api.getSession({
-          headers: request.headers,
-          returnHeaders: true,
-        });
-        forwardAuthResponseCookies(set.headers, resolved.headers);
-        return resolved.response;
-      });
+const resolveSessionAuth = async ({
+  status,
+  request,
+  set,
+}: ResolveSessionAuthOptions) => {
+  const sessionResult = await Result.tryPromise(async () => {
+    const resolved = await getAuth().api.getSession({
+      headers: request.headers,
+      returnHeaders: true,
+    });
+    forwardAuthResponseCookies(set.headers, resolved.headers);
+    return resolved.response;
+  });
 
-      if (Result.isError(sessionResult)) {
-        return status(500, AUTH_REJECTION_BODY[500]);
-      }
+  if (Result.isError(sessionResult)) {
+    return status(500, AUTH_REJECTION_BODY[500]);
+  }
 
-      const session = sessionResult.value?.session;
-      const user = sessionResult.value?.user;
-      if (!session || !user) {
-        return status(401, AUTH_REJECTION_BODY[401]);
-      }
+  const session = sessionResult.value?.session;
+  const user = sessionResult.value?.user;
+  if (!session || !user) {
+    return status(401, AUTH_REJECTION_BODY[401]);
+  }
 
-      // The signed snapshot may outlive its stored session for its cache
-      // lifetime; one indexed read confirms the session still exists. Signing
-      // out elsewhere deletes the row, and deleting the account cascades.
-      // The read goes through the auth layer's own database adapter, which
-      // only reaches auth tables.
-      const liveResult = await Result.tryPromise(async () => {
-        const { adapter } = await getAuth().$context;
-        return await adapter.findOne<{ id: string }>({
-          model: "session",
-          where: [
-            { field: "id", value: session.id },
-            { field: "userId", value: user.id },
-            { field: "expiresAt", operator: "gt", value: new Date() },
-          ],
-          select: ["id"],
-        });
-      });
-      if (Result.isError(liveResult)) {
-        return status(500, AUTH_REJECTION_BODY[500]);
-      }
-      if (liveResult.value === null) {
-        return status(401, AUTH_REJECTION_BODY[401]);
-      }
+  // The signed snapshot may outlive its stored session for its cache
+  // lifetime; one indexed read confirms the session still exists. Signing
+  // out elsewhere deletes the row, and deleting the account cascades.
+  // The read goes through the auth layer's own database adapter, which
+  // only reaches auth tables.
+  const liveResult = await Result.tryPromise(async () => {
+    const { adapter } = await getAuth().$context;
+    return await adapter.findOne<{ id: string }>({
+      model: "session",
+      where: [
+        { field: "id", value: session.id },
+        { field: "userId", value: user.id },
+        { field: "expiresAt", operator: "gt", value: new Date() },
+      ],
+      select: ["id"],
+    });
+  });
+  if (Result.isError(liveResult)) {
+    return status(500, AUTH_REJECTION_BODY[500]);
+  }
+  if (liveResult.value === null) {
+    return status(401, AUTH_REJECTION_BODY[401]);
+  }
 
-      const userId = toSafeId<"user">(user.id);
-      enrichRequestContext(request, {
-        posthogDistinctId: userId,
-      });
+  if (session.originConsentId && requiresHandoffStepUpForRequest(request)) {
+    return status(403, {
+      code: MCP_HANDOFF_STEP_UP_REQUIRED,
+      message: "Sign in again to continue.",
+    });
+  }
 
-      return {
-        user: {
-          id: userId,
-          email: user.email,
-        },
-      };
+  const userId = toSafeId<"user">(user.id);
+  enrichRequestContext(request, {
+    posthogDistinctId: userId,
+  });
+
+  return {
+    handoffOriginConsentId: session.originConsentId ?? null,
+    user: {
+      id: userId,
+      email: user.email,
     },
-  },
-});
+  };
+};
+
+// Guards and accountAccess may expand the same resolver more than once.
+const sessionAuthResolutionCache = new WeakMap<
+  Request,
+  ReturnType<typeof resolveSessionAuth>
+>();
+
+export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
+  .macro({
+    validateSession: {
+      async resolve(context) {
+        return await memoizePerRequest(
+          sessionAuthResolutionCache,
+          context.request,
+          async () => await resolveSessionAuth(context),
+        );
+      },
+    },
+  })
+  .macro("accountAccess", (accountAccess: AccountAccess) => ({
+    validateSession: true as const,
+    detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
+    beforeHandle: createHandoffStepUpGuard({ accountAccess }),
+  }));
 
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can
@@ -3024,6 +3216,53 @@ const createAuthDatabases = (
   safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
 });
 
+type AuthWorkspaceAccessOptions = {
+  initialAccess: {
+    workspaceId: SafeId<"workspace">;
+    workspace: AccessibleWorkspace | null;
+  } | null;
+  loadWorkspace: (
+    workspaceId: SafeId<"workspace">,
+    ownerDb: MemberAuthorizationDb,
+  ) => Promise<AccessibleWorkspace | null>;
+  onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => void;
+};
+
+/** `ownerDb` is the owner connection, handed to `loadWorkspace` for target lookups. */
+const createAuthWorkspaceAccess = (
+  {
+    initialAccess,
+    loadWorkspace,
+    onAuthorizedWorkspace,
+  }: AuthWorkspaceAccessOptions,
+  ownerDb: MemberAuthorizationDb,
+) => {
+  const accessPromises = new Map<
+    SafeId<"workspace">,
+    Promise<AccessibleWorkspace | null>
+  >();
+  if (initialAccess) {
+    accessPromises.set(
+      initialAccess.workspaceId,
+      Promise.resolve(initialAccess.workspace),
+    );
+  }
+  return async (
+    workspaceId: SafeId<"workspace">,
+  ): Promise<AccessibleWorkspace | null> => {
+    let access = accessPromises.get(workspaceId);
+    if (!access) {
+      access = loadWorkspace(workspaceId, ownerDb);
+      accessPromises.set(workspaceId, access);
+    }
+    const workspace = await access;
+    if (workspace) {
+      onAuthorizedWorkspace(workspace.id);
+    }
+    return workspace;
+  };
+};
+
 const readOrganizationWorkspaces = async (
   scopedDb: AuthScopedDb,
   organizationId: SafeId<"organization">,
@@ -3186,50 +3425,38 @@ const resolveValidateAuth = async ({
     return await activeWorkspaceIdsPromise;
   };
 
-  const workspaceAccessPromises = new Map<
-    SafeId<"workspace">,
-    Promise<AccessibleWorkspace | null>
-  >();
-  if (initialWorkspaceId) {
-    workspaceAccessPromises.set(
-      initialWorkspaceId,
-      Promise.resolve(authorization.workspace),
-    );
-  }
-  const getWorkspaceAccess = async (
-    workspaceId: SafeId<"workspace">,
-  ): Promise<AccessibleWorkspace | null> => {
-    let accessPromise = workspaceAccessPromises.get(workspaceId);
-    if (!accessPromise) {
-      accessPromise = accessibleWorkspacesPromise
-        ? accessibleWorkspacesPromise.then(
-            (items) => items.find((item) => item.id === workspaceId) ?? null,
-          )
-        : resolveMemberAuthorization(
-            {
-              organizationId: activeOrganizationId,
-              userId,
-              workspaceId,
-            },
-            rootDb,
-          ).then((targetAuthorization) => {
-            if (targetAuthorization?.workspace?.id !== workspaceId) {
-              return null;
-            }
-            return targetAuthorization.workspace;
-          });
-      workspaceAccessPromises.set(workspaceId, accessPromise);
-    }
-    const workspace = await accessPromise;
-    if (workspace) {
-      // The factories above intentionally retain this small array by
-      // reference. A later transaction therefore preserves only the target
-      // this request just proved, never the full accessible-workspace list.
-      validatedWorkspaceIdSet.add(workspace.id);
-      pinServerValidatedWorkspaceId(workspace.id);
-    }
-    return workspace;
-  };
+  const getWorkspaceAccess = createAuthWorkspaceAccess(
+    {
+      initialAccess: initialWorkspaceId
+        ? {
+            workspaceId: initialWorkspaceId,
+            workspace: authorization.workspace,
+          }
+        : null,
+      loadWorkspace: async (
+        workspaceId: SafeId<"workspace">,
+        ownerDb: MemberAuthorizationDb,
+      ) => {
+        if (accessibleWorkspacesPromise) {
+          const items = await accessibleWorkspacesPromise;
+          return items.find((item) => item.id === workspaceId) ?? null;
+        }
+        const targetAuthorization = await resolveMemberAuthorization(
+          { organizationId: activeOrganizationId, userId, workspaceId },
+          ownerDb,
+        );
+        return targetAuthorization?.workspace?.id === workspaceId
+          ? targetAuthorization.workspace
+          : null;
+      },
+      onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => {
+        // Keep only proved targets available to later transactions in this request.
+        validatedWorkspaceIdSet.add(workspaceId);
+        pinServerValidatedWorkspaceId(workspaceId);
+      },
+    },
+    rootDb,
+  );
 
   const recorderBindings = {
     organizationId: activeOrganizationId,
@@ -3242,6 +3469,7 @@ const resolveValidateAuth = async ({
   return {
     ok: true as const,
     value: {
+      handoffOriginConsentId: session.originConsentId ?? null,
       user: {
         id: toSafeId<"user">(user.id),
         email: user.email,
@@ -3249,6 +3477,7 @@ const resolveValidateAuth = async ({
       session: {
         id: session.id,
         activeOrganizationId,
+        originConsentId: session.originConsentId ?? null,
       },
       getActiveWorkspaceIds,
       getAccessibleWorkspaces,
@@ -3347,29 +3576,49 @@ export const createAuthMacro = ({
     ? createRequestAuthResolver(getSession)
     : resolveRequestAuth;
 
-  return new Elysia({ name: "authMacro" }).macro({
-    validateAuth: {
-      detail: { [TENANT_ACTION_DETAIL]: true },
-      async resolve({ params, query, status, request, server, set }) {
-        const result = await resolveAuth({
-          params,
-          query,
-          request,
-          server,
-          set,
-        });
+  return new Elysia({ name: "authMacro" })
+    .macro({
+      validateAuth: {
+        detail: { [TENANT_ACTION_DETAIL]: true },
+        async resolve({ params, query, status, request, server, set }) {
+          const result = await resolveAuth({
+            params,
+            query,
+            request,
+            server,
+            set,
+          });
 
-        if (!result.ok) {
-          return status(
-            result.statusCode,
-            VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
-          );
-        }
+          if (!result.ok) {
+            return status(
+              result.statusCode,
+              VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
+            );
+          }
 
-        return result.value;
+          if (
+            result.value.session.originConsentId &&
+            requiresHandoffStepUpForRequest(request)
+          ) {
+            return status(403, {
+              code: MCP_HANDOFF_STEP_UP_REQUIRED,
+              message: "Sign in again to continue.",
+            });
+          }
+          return result.value;
+        },
       },
-    },
-  });
+    })
+    .macro("accountAccess", (accountAccess: AccountAccess) => ({
+      validateAuth: true,
+      detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
+      beforeHandle: createHandoffStepUpGuard({ accountAccess }),
+    }))
+    .macro("permissions", (permissions: PermissionInput) => ({
+      validateAuth: true,
+      detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
+      beforeHandle: createHandoffStepUpGuard({ permissions }),
+    }));
 };
 
 export const authMacro = createAuthMacro();
@@ -3380,17 +3629,21 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" })
     // Reuse authMacro's resolved member role instead of asking better-auth to
     // perform the same permission check through a second session read.
     validateAuth: true,
+    detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
-    beforeHandle(ctx) {
-      const memberRole = readAuthorizedMemberRole(ctx);
-      if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
-        return ctx.status(403, AUTH_REJECTION_BODY[403]);
-      }
+    beforeHandle: [
+      createHandoffStepUpGuard({ permissions }),
+      (ctx) => {
+        const memberRole = readAuthorizedMemberRole(ctx);
+        if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
+          return ctx.status(403, AUTH_REJECTION_BODY[403]);
+        }
 
-      return undefined;
-    },
+        return undefined;
+      },
+    ],
   }));
 
 const bindWorkspaceRecorder = (

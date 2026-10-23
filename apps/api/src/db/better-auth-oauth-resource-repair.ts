@@ -53,7 +53,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { assertBetterAuthOAuthPolicyCensus } from "../lib/db/better-auth-oauth-policy-census";

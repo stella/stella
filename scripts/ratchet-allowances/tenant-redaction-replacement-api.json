@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 2,
+  "reason": "The guard and compiled-image probe call TextSearch.replaceAll(text, string[]), which inserts literals and does not accept a String.prototype replacement callback. The syntactic String-method rule cannot distinguish this API."
+}

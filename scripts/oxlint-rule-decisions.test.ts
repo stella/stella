@@ -10,9 +10,9 @@ import * as v from "valibot";
 
 import config from "../oxlint.config.ts";
 import {
-  SEVERITY,
   declaredBaseRules,
   flattenLayers,
+  SEVERITY,
 } from "./oxlint-effective-config.ts";
 import { builtinRules, ruleCanonicalizer } from "./oxlint-rule-ids.ts";
 
