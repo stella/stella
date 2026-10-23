@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0726ff8138bde86738a0a7b3ff2950a3ec6f2506 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0cbe51a036c30092a6d607e8e2de03016f56ef1a 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2480,7 +2480,8 @@ function isFatalError(err) {
@@ -35,43 +35,73 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0726ff8138bde86738a0a7b3ff2950a3
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3973,6 +3988,19 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -3973,6 +3988,26 @@ function precomputeLoadError(resolvedPath, cause) {
  	return new DesignSystemLoadError(`Failed to precompute design system from "${resolvedPath}": ${causeError?.message ?? String(cause)}`, precomputeHint(cause), { cause: causeError });
  }
  /**
-+* Wait until a worker writes `control[index]`. There is no deadline: a slow
-+* machine or runner makes lint slower, never red. Every worker script signals
-+* its outcome on success, on a load failure and on an unexpected exit of its
-+* main function, so a returned wait always carries a result or a real cause.
-+* A long wait prints one progress line per interval so a stuck load stays
-+* visible in the job log.
++* Wait until a worker writes `control[index]`. A slow machine or runner makes
++* lint slower, never red: every worker script signals its outcome on success,
++* on a load failure and on an unexpected exit of its main function, so a
++* returned wait carries a result or a real cause. A long wait prints one
++* progress line per interval so a stuck load stays visible in the job log.
++* Two fail-safes end a wait no answer can reach: `stopped` reports a worker
++* that marked itself gone, and a hard bound far past any slow load ends a wait
++* on a thread that can no longer signal. Returns false when either fires.
 +*/
 +const WORKER_WAIT_NOTICE_MS = 3e4;
-+function waitForWorkerSignal(control, index, describe) {
++const WORKER_WAIT_LIMIT_MS = 6e5;
++function waitForWorkerSignal(control, index, describe, stopped = () => false) {
 +	const started = Date.now();
-+	while (Atomics.load(control, index) === 0) if (Atomics.wait(control, index, 0, WORKER_WAIT_NOTICE_MS) === "timed-out") process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++	while (Atomics.load(control, index) === 0) {
++		if (stopped() || Date.now() - started >= WORKER_WAIT_LIMIT_MS) return false;
++		if (Atomics.wait(control, index, 0, WORKER_WAIT_NOTICE_MS) === "timed-out") process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++	}
++	return true;
 +}
 +/**
  * Run the precompute in a worker_thread (not a forked child). The worker loads
  * the design system in-process, writes the JSON straight to `cachePath`, and
  * signals completion over a SharedArrayBuffer; the main thread blocks on
-@@ -4012,7 +4040,7 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+@@ -4012,7 +4047,7 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
  	}
  	worker.on("error", () => {});
  	try {
 -		if (Atomics.wait(control, PRECOMPUTE_SIGNAL_INDEX, 0, timeout) === "timed-out") throw new DesignSystemLoadError(`Timed out precomputing design system from "${resolvedPath}" after ${timeout}ms.`, "Raise `settings.tailwindcss.timeout` if your machine or CI runner is slow, or verify the CSS imports resolve.");
-+		waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`);
++		if (!waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`)) throw new DesignSystemLoadError(`The design-system precompute of "${resolvedPath}" gave no answer within ${WORKER_WAIT_LIMIT_MS}ms.`, "The precompute worker stopped answering; verify the CSS imports resolve.");
  		if (control[PRECOMPUTE_SIGNAL_INDEX] === -1) {
  			const len = errLengthView.getUint32(0);
  			throw precomputeLoadError(resolvedPath, len > 0 ? new Error(Buffer.from(errDataArea.slice(0, len)).toString("utf-8")) : /* @__PURE__ */ new Error("precompute worker exited without reporting a cause (it may have been killed by the OS, e.g. under memory pressure)"));
-@@ -4522,7 +4550,23 @@ async function main() {
+@@ -4434,6 +4469,7 @@ function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
+ 	return `
+ ${preamble}
+ const { workerData } = require('worker_threads');
++let requestPending = false;
+ async function main() {
+   const { sharedBuffer, cssPath } = workerData;
+   const control = new Int32Array(sharedBuffer, 0, ${HEADER_INTS});
+@@ -4498,6 +4534,7 @@ async function main() {
+     const len = lengthView.getUint32(0);
+     const requestStr = Buffer.from(dataArea.slice(0, len)).toString('utf-8');
+     Atomics.store(control, 0, 0);
++    requestPending = true;
+ 
+     let response;
+     try {
+@@ -4518,11 +4555,33 @@ async function main() {
+ 
+     dataArea.set(response, 0);
+     lengthView.setUint32(0, response.length);
++    requestPending = false;
+     Atomics.store(control, 1, 1);
      Atomics.notify(control, 1);
    }
  }
 -main().catch(() => {});
 +main().catch(() => {
-+  // No deadline guards the host's wait, so an unexpected exit must still
-+  // answer it: a load not yet signaled fails, a pending request is rejected.
++  // An unexpected exit must still answer the host: a load not yet signaled
++  // fails. After the load the worker marks itself stopped (control[3]), so the
++  // host drops it instead of sending another request; only a request it had
++  // taken gets a rejected reply, so an idle exit never fakes a response.
 +  try {
 +    const control = new Int32Array(workerData.sharedBuffer, 0, ${HEADER_INTS});
 +    if (Atomics.load(control, 2) === 0) {
@@ -79,39 +109,49 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0726ff8138bde86738a0a7b3ff2950a3
 +      Atomics.notify(control, 2);
 +      return;
 +    }
-+    const reply = Buffer.from('null', 'utf-8');
-+    new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET}).set(reply, 0);
-+    new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4).setUint32(0, reply.length);
-+    Atomics.store(control, 1, 1);
++    Atomics.store(control, 3, 1);
++    if (requestPending) {
++      const reply = Buffer.from('null', 'utf-8');
++      new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET}).set(reply, 0);
++      new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4).setUint32(0, reply.length);
++      Atomics.store(control, 1, 1);
++    }
 +    Atomics.notify(control, 1);
 +  } catch {}
 +});
  `;
  }
  var DesignSystemWorker = class {
-@@ -4650,10 +4694,7 @@ var DesignSystemWorker = class {
+@@ -4650,9 +4709,9 @@ var DesignSystemWorker = class {
  	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
  	waitReady(state) {
  		const { worker, controlArray, lengthView, dataArea, cssPath } = state;
 -		if (Atomics.wait(controlArray, 2, 0, INIT_TIMEOUT) === "timed-out") {
--			this.terminateWorker(worker);
++		if (!waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`)) {
+ 			this.terminateWorker(worker);
 -			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker timed out loading the design system from "${cssPath}" after ${INIT_TIMEOUT}ms.`, "Verify the CSS imports resolve; this can also happen if the machine or CI runner is heavily loaded."));
--		}
-+		waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`);
++			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker gave no answer loading the design system from "${cssPath}" within ${WORKER_WAIT_LIMIT_MS}ms.`, "The worker stopped answering; verify the CSS imports resolve."));
+ 		}
  		if (controlArray[2] === -1) {
  			const len = lengthView.getUint32(0);
- 			const detail = len > 0 ? Buffer.from(dataArea.slice(0, len)).toString("utf-8") : "";
-@@ -4684,7 +4725,7 @@ var DesignSystemWorker = class {
+@@ -4680,11 +4739,14 @@ var DesignSystemWorker = class {
+ 		const state = this.ensure(cssPath);
+ 		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
+ 		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
++		// A worker that exited after its load marks itself stopped (control[3]);
++		// drop it so the next request starts a fresh one.
++		if (Atomics.load(state.controlArray, 3) === 1) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker exited after loading the design system.`, "The next request starts a new worker; please open an issue if this repeats."));
+ 		state.dataArea.set(requestBytes, 0);
  		state.lengthView.setUint32(0, requestBytes.length);
  		Atomics.store(state.controlArray, 0, 1);
  		Atomics.notify(state.controlArray, 0);
 -		if (Atomics.wait(state.controlArray, 1, 0, this.requestTimeoutMs) === "timed-out") throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker request timed out after ${this.requestTimeoutMs}ms.`, "A slow machine or CI runner can cause this. If the class lists are valid, raise OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT; otherwise please open an issue."));
-+		waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`);
++		if (!waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`, () => Atomics.load(state.controlArray, 3) === 1)) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped before answering a request.`, "The next request starts a new worker; please open an issue if this repeats."));
  		const responseLen = state.lengthView.getUint32(0);
  		const responseStr = Buffer.from(state.dataArea.slice(0, responseLen)).toString("utf-8");
  		Atomics.store(state.controlArray, 1, 0);
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..a1e2c792970a9bac38849ef364feac5b76185a7f 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..aed51813958ea7b323010e4fa689cfe925ae36fb 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -2483,7 +2483,8 @@ function isFatalError(err) {
@@ -147,43 +187,73 @@ index 61c624233238edcc998099f3d496c04caa7ba154..a1e2c792970a9bac38849ef364feac5b
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3976,6 +3991,19 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -3976,6 +3991,26 @@ function precomputeLoadError(resolvedPath, cause) {
  	return new DesignSystemLoadError(`Failed to precompute design system from "${resolvedPath}": ${causeError?.message ?? String(cause)}`, precomputeHint(cause), { cause: causeError });
  }
  /**
-+* Wait until a worker writes `control[index]`. There is no deadline: a slow
-+* machine or runner makes lint slower, never red. Every worker script signals
-+* its outcome on success, on a load failure and on an unexpected exit of its
-+* main function, so a returned wait always carries a result or a real cause.
-+* A long wait prints one progress line per interval so a stuck load stays
-+* visible in the job log.
++* Wait until a worker writes `control[index]`. A slow machine or runner makes
++* lint slower, never red: every worker script signals its outcome on success,
++* on a load failure and on an unexpected exit of its main function, so a
++* returned wait carries a result or a real cause. A long wait prints one
++* progress line per interval so a stuck load stays visible in the job log.
++* Two fail-safes end a wait no answer can reach: `stopped` reports a worker
++* that marked itself gone, and a hard bound far past any slow load ends a wait
++* on a thread that can no longer signal. Returns false when either fires.
 +*/
 +const WORKER_WAIT_NOTICE_MS = 3e4;
-+function waitForWorkerSignal(control, index, describe) {
++const WORKER_WAIT_LIMIT_MS = 6e5;
++function waitForWorkerSignal(control, index, describe, stopped = () => false) {
 +	const started = Date.now();
-+	while (Atomics.load(control, index) === 0) if (Atomics.wait(control, index, 0, WORKER_WAIT_NOTICE_MS) === "timed-out") process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++	while (Atomics.load(control, index) === 0) {
++		if (stopped() || Date.now() - started >= WORKER_WAIT_LIMIT_MS) return false;
++		if (Atomics.wait(control, index, 0, WORKER_WAIT_NOTICE_MS) === "timed-out") process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++	}
++	return true;
 +}
 +/**
  * Run the precompute in a worker_thread (not a forked child). The worker loads
  * the design system in-process, writes the JSON straight to `cachePath`, and
  * signals completion over a SharedArrayBuffer; the main thread blocks on
-@@ -4015,7 +4043,7 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+@@ -4015,7 +4050,7 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
  	}
  	worker.on("error", () => {});
  	try {
 -		if (Atomics.wait(control, PRECOMPUTE_SIGNAL_INDEX, 0, timeout) === "timed-out") throw new DesignSystemLoadError(`Timed out precomputing design system from "${resolvedPath}" after ${timeout}ms.`, "Raise `settings.tailwindcss.timeout` if your machine or CI runner is slow, or verify the CSS imports resolve.");
-+		waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`);
++		if (!waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`)) throw new DesignSystemLoadError(`The design-system precompute of "${resolvedPath}" gave no answer within ${WORKER_WAIT_LIMIT_MS}ms.`, "The precompute worker stopped answering; verify the CSS imports resolve.");
  		if (control[PRECOMPUTE_SIGNAL_INDEX] === -1) {
  			const len = errLengthView.getUint32(0);
  			throw precomputeLoadError(resolvedPath, len > 0 ? new Error(Buffer.from(errDataArea.slice(0, len)).toString("utf-8")) : /* @__PURE__ */ new Error("precompute worker exited without reporting a cause (it may have been killed by the OS, e.g. under memory pressure)"));
-@@ -4525,7 +4553,23 @@ async function main() {
+@@ -4437,6 +4472,7 @@ function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
+ 	return `
+ ${preamble}
+ const { workerData } = require('worker_threads');
++let requestPending = false;
+ async function main() {
+   const { sharedBuffer, cssPath } = workerData;
+   const control = new Int32Array(sharedBuffer, 0, ${HEADER_INTS});
+@@ -4501,6 +4537,7 @@ async function main() {
+     const len = lengthView.getUint32(0);
+     const requestStr = Buffer.from(dataArea.slice(0, len)).toString('utf-8');
+     Atomics.store(control, 0, 0);
++    requestPending = true;
+ 
+     let response;
+     try {
+@@ -4521,11 +4558,33 @@ async function main() {
+ 
+     dataArea.set(response, 0);
+     lengthView.setUint32(0, response.length);
++    requestPending = false;
+     Atomics.store(control, 1, 1);
      Atomics.notify(control, 1);
    }
  }
 -main().catch(() => {});
 +main().catch(() => {
-+  // No deadline guards the host's wait, so an unexpected exit must still
-+  // answer it: a load not yet signaled fails, a pending request is rejected.
++  // An unexpected exit must still answer the host: a load not yet signaled
++  // fails. After the load the worker marks itself stopped (control[3]), so the
++  // host drops it instead of sending another request; only a request it had
++  // taken gets a rejected reply, so an idle exit never fakes a response.
 +  try {
 +    const control = new Int32Array(workerData.sharedBuffer, 0, ${HEADER_INTS});
 +    if (Atomics.load(control, 2) === 0) {
@@ -191,34 +261,44 @@ index 61c624233238edcc998099f3d496c04caa7ba154..a1e2c792970a9bac38849ef364feac5b
 +      Atomics.notify(control, 2);
 +      return;
 +    }
-+    const reply = Buffer.from('null', 'utf-8');
-+    new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET}).set(reply, 0);
-+    new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4).setUint32(0, reply.length);
-+    Atomics.store(control, 1, 1);
++    Atomics.store(control, 3, 1);
++    if (requestPending) {
++      const reply = Buffer.from('null', 'utf-8');
++      new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET}).set(reply, 0);
++      new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4).setUint32(0, reply.length);
++      Atomics.store(control, 1, 1);
++    }
 +    Atomics.notify(control, 1);
 +  } catch {}
 +});
  `;
  }
  var DesignSystemWorker = class {
-@@ -4653,10 +4697,7 @@ var DesignSystemWorker = class {
+@@ -4653,9 +4712,9 @@ var DesignSystemWorker = class {
  	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
  	waitReady(state) {
  		const { worker, controlArray, lengthView, dataArea, cssPath } = state;
 -		if (Atomics.wait(controlArray, 2, 0, INIT_TIMEOUT) === "timed-out") {
--			this.terminateWorker(worker);
++		if (!waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`)) {
+ 			this.terminateWorker(worker);
 -			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker timed out loading the design system from "${cssPath}" after ${INIT_TIMEOUT}ms.`, "Verify the CSS imports resolve; this can also happen if the machine or CI runner is heavily loaded."));
--		}
-+		waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`);
++			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker gave no answer loading the design system from "${cssPath}" within ${WORKER_WAIT_LIMIT_MS}ms.`, "The worker stopped answering; verify the CSS imports resolve."));
+ 		}
  		if (controlArray[2] === -1) {
  			const len = lengthView.getUint32(0);
- 			const detail = len > 0 ? Buffer.from(dataArea.slice(0, len)).toString("utf-8") : "";
-@@ -4687,7 +4728,7 @@ var DesignSystemWorker = class {
+@@ -4683,11 +4742,14 @@ var DesignSystemWorker = class {
+ 		const state = this.ensure(cssPath);
+ 		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
+ 		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
++		// A worker that exited after its load marks itself stopped (control[3]);
++		// drop it so the next request starts a fresh one.
++		if (Atomics.load(state.controlArray, 3) === 1) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker exited after loading the design system.`, "The next request starts a new worker; please open an issue if this repeats."));
+ 		state.dataArea.set(requestBytes, 0);
  		state.lengthView.setUint32(0, requestBytes.length);
  		Atomics.store(state.controlArray, 0, 1);
  		Atomics.notify(state.controlArray, 0);
 -		if (Atomics.wait(state.controlArray, 1, 0, this.requestTimeoutMs) === "timed-out") throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker request timed out after ${this.requestTimeoutMs}ms.`, "A slow machine or CI runner can cause this. If the class lists are valid, raise OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT; otherwise please open an issue."));
-+		waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`);
++		if (!waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`, () => Atomics.load(state.controlArray, 3) === 1)) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped before answering a request.`, "The next request starts a new worker; please open an issue if this repeats."));
  		const responseLen = state.lengthView.getUint32(0);
  		const responseStr = Buffer.from(state.dataArea.slice(0, responseLen)).toString("utf-8");
  		Atomics.store(state.controlArray, 1, 0);

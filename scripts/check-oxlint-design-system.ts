@@ -5,8 +5,9 @@ import path from "node:path";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-// No deadline: the plugin waits its design-system workers out, so a slow
-// runner makes this probe slower, never red. Phase timings go to stderr.
+// No probe deadline: the plugin waits its design-system workers out, bounded
+// only far past any slow load, so a slow runner makes this probe slower, never
+// red. Phase timings go to stderr.
 const CHILD_MODE = "--probe";
 const RULE = "no-conflicting-classes";
 const BENIGN = "size-[1em] object-contain";
