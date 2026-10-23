@@ -802,6 +802,21 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/TryItStep.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/registry/RegistrySearch.tsx#1"
           },
           {
@@ -965,12 +980,6 @@
           },
           {
             "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#2"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
@@ -1634,6 +1643,12 @@
           },
           {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#2"
           },
           {
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
@@ -2372,6 +2387,9 @@
           },
           {
             "location": "apps/web/src/lib/render-justification-content.tsx#2"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
             "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
@@ -5435,6 +5453,21 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/TryItStep.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/registry/RegistrySearch.tsx#1"
           },
           {
@@ -5598,12 +5631,6 @@
           },
           {
             "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#2"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
@@ -6267,6 +6294,12 @@
           },
           {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#2"
           },
           {
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
@@ -7005,6 +7038,9 @@
           },
           {
             "location": "apps/web/src/lib/render-justification-content.tsx#2"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
             "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
@@ -14767,6 +14803,9 @@
             "location": "apps/web/src/components/pdf/versions-sidebar.tsx#3"
           },
           {
+            "location": "apps/web/src/components/proxied-icon.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/query-suspense-boundary.tsx#4"
           },
           {
@@ -15701,6 +15740,9 @@
           },
           {
             "location": "apps/web/src/features/guides/use-guide-runner.ts#4"
+          },
+          {
+            "location": "apps/web/src/features/law-search-history/law-search-history-query.ts#9"
           },
           {
             "location": "apps/web/src/features/statutes/open-statute-match.ts#2"
@@ -17053,6 +17095,12 @@
             "location": "apps/desktop/src/mainview/main.tsx#5"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#3"
+          },
+          {
             "location": "apps/desktop/src/registry/RegistrySearch.tsx#4"
           },
           {
@@ -17783,6 +17831,21 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/TryItStep.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/registry/RegistrySearch.tsx#1"
           },
           {
@@ -17946,12 +18009,6 @@
           },
           {
             "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#2"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
@@ -18615,6 +18672,12 @@
           },
           {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#2"
           },
           {
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
@@ -19353,6 +19416,9 @@
           },
           {
             "location": "apps/web/src/lib/render-justification-content.tsx#2"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
             "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
@@ -22246,6 +22312,21 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/TryItStep.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/registry/RegistrySearch.tsx#1"
           },
           {
@@ -22409,12 +22490,6 @@
           },
           {
             "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#2"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
@@ -23078,6 +23153,12 @@
           },
           {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#2"
           },
           {
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
@@ -23816,6 +23897,9 @@
           },
           {
             "location": "apps/web/src/lib/render-justification-content.tsx#2"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
             "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
@@ -27215,6 +27299,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/link-icons/cache.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/link-icons/get-exact.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/link-icons/get.ts#1"
@@ -31993,6 +32080,9 @@
             "location": "apps/api/src/mcp/gateway/skills.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/gateway/static-tool-visibility.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/input-normalization.ts#2"
           },
           {
@@ -32557,6 +32647,9 @@
             "location": "apps/web/src/components/chat/public-law-open.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/rehype-scope-answer-ids.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/side-panel-chat-status.logic.ts#1"
           },
           {
@@ -32666,6 +32759,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/pdf-signing.logic.ts#7"
+          },
+          {
+            "location": "apps/web/src/components/inspector/reader-find-index.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/skill-history.logic.ts#1"
@@ -32977,7 +33073,7 @@
             "location": "apps/web/src/features/knowledge/public/tools/add-to-stella.logic.ts#1"
           },
           {
-            "location": "apps/web/src/features/law-search-history/law-search-history-query.ts#9"
+            "location": "apps/web/src/features/law-search-history/law-search-history-query.ts#10"
           },
           {
             "location": "apps/web/src/features/statutes/open-statute-match.ts#3"
@@ -33811,7 +33907,7 @@
             "location": "packages/docx-utils/src/archive.ts#2"
           },
           {
-            "location": "packages/errors/src/failure.ts#4"
+            "location": "packages/errors/src/failure.ts#5"
           },
           {
             "location": "packages/errors/src/index.ts#2"
@@ -33821,6 +33917,9 @@
           },
           {
             "location": "packages/errors/src/script-error.ts#1"
+          },
+          {
+            "location": "packages/fetch/src/publisher.ts#1"
           },
           {
             "location": "packages/infosoud/scripts/extract-codes.ts#1"
@@ -33997,6 +34096,9 @@
             "location": "packages/runtime-mode/src/index.ts#1"
           },
           {
+            "location": "packages/sanctions/scripts/prove-real-editions.ts#1"
+          },
+          {
             "location": "packages/sanctions/src/compact-storage.ts#1"
           },
           {
@@ -34016,6 +34118,9 @@
           },
           {
             "location": "packages/sanctions/src/replacement.ts#1"
+          },
+          {
+            "location": "packages/sanctions/src/screening-work-bound.ts#1"
           },
           {
             "location": "packages/sanctions/src/screening.ts#1"
@@ -34288,7 +34393,7 @@
             "location": "scripts/audit-mutation-ledger.ts#12"
           },
           {
-            "location": "scripts/bundle-baseline.ts#32"
+            "location": "scripts/bundle-baseline.ts#33"
           },
           {
             "location": "scripts/chat-fixture-guard.ts#29"
@@ -34474,7 +34579,7 @@
             "location": "scripts/dependency-audit-scope.ts#1"
           },
           {
-            "location": "scripts/dependency-audit.ts#30"
+            "location": "scripts/dependency-audit.ts#34"
           },
           {
             "location": "scripts/design-lint-baseline.ts#30"
@@ -34633,6 +34738,9 @@
             "location": "scripts/published-export-guards.ts#1"
           },
           {
+            "location": "scripts/publisher-fetch.ts#2"
+          },
+          {
             "location": "scripts/query-data-state-baseline.ts#4"
           },
           {
@@ -34753,6 +34861,15 @@
             "location": "apps/desktop/src/mainview/main.tsx#7"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/TryItStep.tsx#3"
+          },
+          {
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#5"
           },
           {
@@ -34798,7 +34915,7 @@
             "location": "apps/web/src/components/assistant-setup.tsx#4"
           },
           {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#4"
+            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#1"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#6"
@@ -34979,9 +35096,6 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/inspector/inspector-find.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#5"
@@ -35288,12 +35402,6 @@
           },
           {
             "location": "apps/web/src/features/statutes/components/citing-decision-item.tsx#3"
-          },
-          {
-            "location": "apps/web/src/features/statutes/components/provision-citing-decisions.tsx#2"
-          },
-          {
-            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#6"
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-leading-decisions.tsx#3"
@@ -35793,6 +35901,10 @@
         {
           "name": "SrcFile",
           "value": "packages/infosoud/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/fetch/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -38134,9 +38246,6 @@
             "location": "apps/api/src/handlers/files/email-attachment-loader.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/files/ocr-export.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/files/update-document-properties.ts#1"
           },
           {
@@ -38821,9 +38930,6 @@
             "location": "apps/api/src/handlers/templates/lookup-formats/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/prefill.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/templates/update.ts#2"
           },
           {
@@ -39220,7 +39326,7 @@
             "location": "apps/api/src/lib/auth-artifacts.ts#4"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#33"
+            "location": "apps/api/src/lib/auth.ts#34"
           },
           {
             "location": "apps/api/src/lib/bilingual/run-queue.ts#14"
@@ -39623,6 +39729,9 @@
           },
           {
             "location": "apps/api/src/lib/desktop-edit-sessions.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-content-provenance.ts#1"
           },
           {
             "location": "apps/api/src/lib/document-counter.ts#2"
@@ -40768,9 +40877,6 @@
             "location": "apps/api/src/mcp/billing-tools.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/compat-tools.ts#2"
-          },
-          {
             "location": "apps/api/src/mcp/document-compare-tool.ts#8"
           },
           {
@@ -41602,6 +41708,9 @@
             "location": "apps/api/src/handlers/chat/improve-prompt.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/link-icons/get-exact.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/link-icons/get.ts#2"
           },
           {
@@ -42193,7 +42302,7 @@
             "location": "apps/api/src/handlers/files/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/files/ocr-export.ts#2"
+            "location": "apps/api/src/handlers/files/ocr-export.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/office-citation.ts#2"
@@ -43216,7 +43325,7 @@
             "location": "apps/api/src/handlers/templates/outdated-clauses/sync.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/prefill.ts#3"
+            "location": "apps/api/src/handlers/templates/prefill.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/prepare.ts#2"
@@ -43558,10 +43667,10 @@
             "location": "apps/api/src/lib/auth/feature-access/route.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#34"
+            "location": "apps/api/src/lib/auth.ts#35"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#35"
+            "location": "apps/api/src/lib/auth.ts#36"
           },
           {
             "location": "apps/api/src/lib/billing/daily-target.ts#4"
@@ -47908,6 +48017,21 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/TryItStep.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/registry/RegistrySearch.tsx#1"
           },
           {
@@ -48071,12 +48195,6 @@
           },
           {
             "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#2"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
@@ -48740,6 +48858,12 @@
           },
           {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/proxied-icon.tsx#2"
           },
           {
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
@@ -49478,6 +49602,9 @@
           },
           {
             "location": "apps/web/src/lib/render-justification-content.tsx#2"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
             "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
@@ -52275,7 +52402,7 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#4"
           },
           {
-            "location": "apps/web/src/features/law-search-history/law-search-history-query.ts#10"
+            "location": "apps/web/src/features/law-search-history/law-search-history-query.ts#11"
           },
           {
             "location": "apps/web/src/hooks/use-external-file-drop.ts#5"
@@ -52398,6 +52525,30 @@
             "location": "apps/desktop/src/mainview/ShortcutSetting.tsx#5"
           },
           {
+            "location": "apps/desktop/src/onboarding/ConnectStep.tsx#5"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/DoneStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/HowItWorksStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#5"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/PermissionsStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/StepFooter.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/TryItStep.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/WelcomeStep.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/registry/RegistrySearch.tsx#5"
           },
           {
@@ -52488,7 +52639,7 @@
             "location": "apps/web/src/components/auth/inbox-quick-jump.tsx#1"
           },
           {
-            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#5"
+            "location": "apps/web/src/components/auth/last-used-sign-in.tsx#2"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#7"
@@ -52851,7 +53002,7 @@
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-find.tsx#5"
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#6"
@@ -53610,13 +53761,13 @@
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#3"
           },
           {
-            "location": "apps/web/src/features/statutes/components/provision-citing-decisions.tsx#3"
+            "location": "apps/web/src/features/statutes/components/provision-citing-decisions.tsx#2"
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-history.tsx#5"
           },
           {
-            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#7"
+            "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#6"
           },
           {
             "location": "apps/web/src/features/statutes/components/provision-leading-decisions.tsx#4"
@@ -55040,7 +55191,7 @@
             "location": "apps/api/src/handlers/template-recipes/recipes.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/templates/prefill.ts#4"
+            "location": "apps/api/src/handlers/templates/prefill.ts#3"
           },
           {
             "location": "apps/api/src/handlers/usage/entitlement/get.ts#3"
@@ -55469,7 +55620,7 @@
             "location": "apps/api/src/mcp/compat-law-tools.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/compat-tools.ts#3"
+            "location": "apps/api/src/mcp/compat-tools.ts#2"
           },
           {
             "location": "apps/api/src/mcp/decision-reader-contract.ts#1"
@@ -56096,7 +56247,7 @@
             "location": "scripts/api-test-impact.ts#6"
           },
           {
-            "location": "scripts/bundle-baseline.ts#43"
+            "location": "scripts/bundle-baseline.ts#44"
           },
           {
             "location": "scripts/check-aggregate-locks.ts#4"

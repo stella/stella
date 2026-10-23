@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
+import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -20,6 +21,23 @@ test("favicon bytes require an authenticated chat principal", async () => {
     );
   const response = await app.handle(
     new Request("http://localhost/chat/link-icons/example.com"),
+  );
+  expect(response.status).toBe(401);
+});
+
+test("exact icon bytes require an authenticated chat principal", async () => {
+  const app = new Elysia()
+    .use(workspaceAccessMacro)
+    .use(permissionMacro)
+    .guard({ validateAuth: true })
+    .get("/chat/link-icons/exact", getExactIcon.handler, {
+      query: getExactIcon.config.query,
+      permissions: getExactIcon.config.permissions,
+    });
+  const response = await app.handle(
+    new Request(
+      "http://localhost/chat/link-icons/exact?url=https%3A%2F%2Fexample.com%2Ficon.png",
+    ),
   );
   expect(response.status).toBe(401);
 });
