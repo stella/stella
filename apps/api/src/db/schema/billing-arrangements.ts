@@ -1,3 +1,4 @@
+import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {
   centsColumn,
   organization,
@@ -80,12 +81,7 @@ export const billingArrangements = p.pgTable(
       "billing_arrangements_crossing_check",
       sql`${table.currencyState} IN (${sql.join(BILLING_CURRENCY_STATE_SQL_VALUES, sql`, `)}) AND ${table.thresholdState} IN (${sql.join(BILLING_CAP_BOUNDARY_STATE_SQL_VALUES, sql`, `)}) AND ${table.capState} IN (${sql.join(BILLING_CAP_BOUNDARY_STATE_SQL_VALUES, sql`, `)}) AND ${table.crossingSequence} >= 0 AND ${table.revision} > 0`,
     ),
-    p.pgPolicy("billing_arrangements_owner", {
-      for: "all",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.billing_arrangements'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.billing_arrangements'::regclass)`,
-    }),
+    ...reviewResetOwnerPolicies("billing_arrangements"),
     ...wsOrganizationPolicies("billing_arrangements", { columns: table }),
   ],
 );

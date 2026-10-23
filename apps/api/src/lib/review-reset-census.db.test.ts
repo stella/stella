@@ -75,7 +75,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           .filter(
             (policy) =>
               OWNER_ERASURE_TABLES.some((table) => table === policy.table) &&
-              policy.name === `${policy.table}_owner`,
+              policy.name === "review_reset_owner_delete",
           )
           .map(({ table }) => table)
           .toSorted(),
