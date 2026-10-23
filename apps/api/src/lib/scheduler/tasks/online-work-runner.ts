@@ -1,15 +1,22 @@
 import { panic, Result } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { openMaintenanceSql } from "@/api/db/long-running-connection";
 import { onlineWorkState, type ONLINE_WORK_STATES } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
 import { detached } from "@/api/lib/analytics/capture";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
 } from "@/api/lib/db/ebs-signal-reader";
+import { ONLINE_WORK_STATE_TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  transitionScopedBatch,
+  transitionUpsertBatch,
+} from "@/api/lib/db/transitions";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -17,6 +24,7 @@ import {
   type SchedulerTask,
   SchedulerTaskFailure,
 } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import { createOnlineIndexHold } from "../../../db/online-index-gate";
 import { openOnlineIndexObserver } from "../../../db/online-index-observer";
@@ -49,7 +57,13 @@ export type OnlineWorkStateSnapshot = {
   name: string;
   state: (typeof ONLINE_WORK_STATES)[number];
   attempts: number;
+  finishedAt: Date | null;
 };
+
+const RETRY_BASE_MS = 60_000;
+const RETRY_MAX_MS = 6 * 60 * 60 * 1000;
+const retryDelayMs = (attempts: number) =>
+  Math.min(RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1), RETRY_MAX_MS);
 
 /**
  * The runner's only access to `online_work_state`. A unit finishes hours
@@ -175,12 +189,22 @@ export const createOnlineWorkRunner = ({
       return Result.ok(IDLE);
     }
     const states = await store.readStates();
-    const finalized = new Set(
-      states.flatMap(({ name, state }) =>
-        state === "finalized" ? [name] : [],
-      ),
-    );
-    const name = pending.find((candidate) => !finalized.has(candidate));
+    const stateByName = new Map(states.map((state) => [state.name, state]));
+    const name = pending.find((candidate) => {
+      const state = stateByName.get(candidate);
+      if (state === undefined) {
+        return true;
+      }
+      if (state.state === "finalized") {
+        return false;
+      }
+      return !(
+        state.state === "failed" &&
+        state.finishedAt !== null &&
+        now.getTime() <
+          state.finishedAt.getTime() + retryDelayMs(state.attempts)
+      );
+    });
     if (name === undefined) {
       return Result.ok(IDLE);
     }
@@ -236,6 +260,9 @@ export const createOnlineWorkRunner = ({
 
 export const createDrizzleOnlineWorkStateStore = (
   db: SchedulerDb,
+  auditSubject:
+    | SafeId<"schedulerJobRun">
+    | SafeId<"systemScriptRun"> = createSafeId<"systemScriptRun">(),
 ): OnlineWorkStateStore => ({
   readStates: async () =>
     await db
@@ -243,6 +270,7 @@ export const createDrizzleOnlineWorkStateStore = (
         name: onlineWorkState.name,
         state: onlineWorkState.state,
         attempts: onlineWorkState.attempts,
+        finishedAt: onlineWorkState.finishedAt,
       })
       .from(onlineWorkState),
   markBuilding: async ({ name, attempts, at }) => {
@@ -254,17 +282,33 @@ export const createDrizzleOnlineWorkStateStore = (
       finishedAt: null,
       updatedAt: at,
     } as const;
-    // audit: skip - system migration lifecycle checkpoint
-    await db
-      .insert(onlineWorkState)
-      .values({ name, ...building })
-      .onConflictDoUpdate({ target: onlineWorkState.name, set: building });
+    await withAggregateTransaction(db, async (tx) => {
+      await transitionUpsertBatch({
+        tx,
+        spec: ONLINE_WORK_STATE_TRANSITIONS,
+        values: [{ name, ...building }],
+        recordTransitionAuditEvent: async (auditTx, rows) => {
+          await recordSystemAudit(auditTx, "system:online-work", {
+            subject: auditSubject,
+            counts: { transitions: rows.length },
+          });
+        },
+      });
+    });
   },
   markFinalized: async (name) => {
-    await finishOnlineWork(db, { name, state: "finalized", lastError: null });
+    await finishOnlineWork(db, auditSubject, {
+      name,
+      state: "finalized",
+      lastError: null,
+    });
   },
   markFailed: async ({ name, error }) => {
-    await finishOnlineWork(db, { name, state: "failed", lastError: error });
+    await finishOnlineWork(db, auditSubject, {
+      name,
+      state: "failed",
+      lastError: error,
+    });
   },
 });
 
@@ -277,18 +321,27 @@ type FinishOnlineWorkOptions = {
 /** A unit's end, dated by the database: it finishes hours after its claim. */
 const finishOnlineWork = async (
   db: SchedulerDb,
+  auditSubject: SafeId<"schedulerJobRun"> | SafeId<"systemScriptRun">,
   { name, state, lastError }: FinishOnlineWorkOptions,
 ): Promise<void> => {
-  // audit: skip - system migration lifecycle checkpoint
-  await db
-    .update(onlineWorkState)
-    .set({
-      state,
-      lastError,
-      finishedAt: sql`now()`,
-      updatedAt: sql`now()`,
-    })
-    .where(eq(onlineWorkState.name, name));
+  await withAggregateTransaction(db, async (tx) => {
+    await transitionScopedBatch({
+      tx,
+      spec: ONLINE_WORK_STATE_TRANSITIONS,
+      identities: [{ name }],
+      options: {
+        from: ["building"],
+        to: state,
+        set: { lastError, finishedAt: sql`now()`, updatedAt: sql`now()` },
+      },
+      recordTransitionAuditEvent: async (auditTx, rows) => {
+        await recordSystemAudit(auditTx, "system:online-work", {
+          subject: auditSubject,
+          counts: { transitions: rows.length },
+        });
+      },
+    });
+  });
 };
 
 const maintenancePool = (): OnlineMigrationPool => ({

@@ -36,6 +36,7 @@ type StoredRow = {
   state: OnlineWorkStateSnapshot["state"];
   attempts: number;
   lastError: string | null;
+  finishedAt: Date | null;
 };
 
 const createMemoryStore = () => {
@@ -49,19 +50,25 @@ const createMemoryStore = () => {
   };
   const store: OnlineWorkStateStore = {
     readStates: async () =>
-      [...rows].map(([name, { state, attempts }]) => ({
+      [...rows].map(([name, { state, attempts, finishedAt }]) => ({
         name,
         state,
         attempts,
+        finishedAt,
       })),
     markBuilding: async ({ name, attempts }) => {
-      rows.set(name, { state: "building", attempts, lastError: null });
+      rows.set(name, {
+        state: "building",
+        attempts,
+        lastError: null,
+        finishedAt: null,
+      });
     },
     markFinalized: async (name) => {
-      update(name, { state: "finalized", lastError: null });
+      update(name, { state: "finalized", lastError: null, finishedAt: START });
     },
     markFailed: async ({ name, error }) => {
-      update(name, { state: "failed", lastError: error });
+      update(name, { state: "failed", lastError: error, finishedAt: START });
     },
   };
   return { rows, store };
@@ -140,7 +147,7 @@ const createHarness = ({
     claims,
     releases,
     statesAtRelease,
-    tick: async () => (await runner(START)).unwrap(),
+    tick: async (now = START) => (await runner(now)).unwrap(),
     walkOf,
     settle,
   };
@@ -259,7 +266,7 @@ describe("online work runner", () => {
     expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 1 });
   });
 
-  test("a failed unit records a bounded error without the database URL, reports it, and is retried", async () => {
+  test("a failed unit waits for its retry delay, then is claimed again", async () => {
     const harness = createHarness({ pending: [FIRST] });
     await harness.tick();
 
@@ -283,12 +290,33 @@ describe("online work runner", () => {
     expect(failed?.lastError?.length).toBe(2000);
     expect(harness.releases).toEqual([FIRST]);
 
-    expect(await harness.tick()).toEqual({ type: "started", name: FIRST });
+    expect(await harness.tick(new Date(START.getTime() + 59_999))).toEqual({
+      type: "idle",
+    });
+    expect(harness.claims).toEqual([FIRST]);
+
+    expect(await harness.tick(new Date(START.getTime() + 60_000))).toEqual({
+      type: "started",
+      name: FIRST,
+    });
     expect(harness.rows.get(FIRST)).toMatchObject({
       state: "building",
       attempts: 2,
       lastError: null,
     });
+  });
+
+  test("a later pending unit runs while an earlier failed unit waits", async () => {
+    const harness = createHarness();
+    await harness.tick();
+    harness.walkOf(FIRST).reject(new Error("deterministic failure"));
+    await harness.settle();
+
+    expect(await harness.tick(new Date(START.getTime() + 30_000))).toEqual({
+      type: "started",
+      name: SECOND,
+    });
+    expect(harness.claims).toEqual([FIRST, SECOND]);
   });
 
   test("a deferred unit stays building and the next tick claims it again", async () => {

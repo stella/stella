@@ -44,6 +44,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:legislation-expression-id-backfill",
   "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts":
     "system:audit-retention",
+  "apps/api/src/lib/scheduler/tasks/online-work-runner.ts":
+    "system:online-work",
   "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts":
     "system:case-law-background-replay",
   "apps/api/src/lib/legal-search/case-law-replay-audit.ts":

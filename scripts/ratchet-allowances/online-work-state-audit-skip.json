@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 2,
-  "reason": "The post-deploy online work runner checkpoints its own progress in online_work_state (a unit claimed building, then finalized or failed): system migration bookkeeping with no user actor, written at two sites."
-}

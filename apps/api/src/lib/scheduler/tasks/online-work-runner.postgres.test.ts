@@ -8,7 +8,6 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { declaresOnlineBuild } from "../../../db/online-ddl";
-import type { OnlineIndexDeclaration } from "../../../db/online-ddl";
 import type { OnlineIndexGateOptions } from "../../../db/online-index-gate";
 import type { OnlineMigrationConnection } from "../../../db/online-migration-connection";
 import {
@@ -35,9 +34,13 @@ const TICK = new Date("2026-10-23T10:00:00.000Z");
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const pendingIndex = () => {
-  const indexes: readonly OnlineIndexDeclaration[] = ONLINE_MIGRATION_INDEXES;
+  type RegisteredIndex = (typeof ONLINE_MIGRATION_INDEXES)[number];
+  const isBuildable = (
+    index: RegisteredIndex,
+  ): index is RegisteredIndex & { createSql: string } =>
+    declaresOnlineBuild(index);
   return (
-    indexes.find(declaresOnlineBuild) ??
+    ONLINE_MIGRATION_INDEXES.find(isBuildable) ??
     panic("Expected a buildable online index")
   );
 };
@@ -121,6 +124,15 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             type: "started",
             name: index.name,
           });
+          const state = await main.sql.unsafe<
+            { state: string; attempts: number; last_error: string | null }[]
+          >(
+            "SELECT state, attempts, last_error FROM online_work_state WHERE name = $1",
+            [index.name],
+          );
+          expect(state).toEqual([
+            { state: "finalized", attempts: 1, last_error: null },
+          ]);
           // The detached unit's own result first: a failed walk names its
           // cause here rather than as a missing index below.
           expect(await Promise.all(work)).toEqual([Result.ok(undefined)]);

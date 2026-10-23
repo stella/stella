@@ -196,14 +196,19 @@ describe("online migrations", () => {
   describe("claiming one pending unit", () => {
     // Registered entries keep their literal names, which a claim requires.
     type RegisteredIndex = (typeof ONLINE_MIGRATION_INDEXES)[number];
-    const buildable = (): RegisteredIndex =>
-      ONLINE_MIGRATION_INDEXES.find((index) => declaresOnlineBuild(index)) ??
+    const isBuildable = (
+      index: RegisteredIndex,
+    ): index is RegisteredIndex & { createSql: string } =>
+      declaresOnlineBuild(index);
+    const buildable = () =>
+      ONLINE_MIGRATION_INDEXES.find(isBuildable) ??
       (() => {
         throw new TypeError("Expected a buildable online index");
       })();
-    const otherBuildable = (name: string): RegisteredIndex =>
+    const otherBuildable = (name: string) =>
       ONLINE_MIGRATION_INDEXES.find(
-        (index) => declaresOnlineBuild(index) && index.name !== name,
+        (index): index is RegisteredIndex & { createSql: string } =>
+          isBuildable(index) && index.name !== name,
       ) ??
       (() => {
         throw new TypeError("Expected a second buildable online index");

@@ -84,10 +84,17 @@ test("state-column ownership covers every scoped runtime transition", () => {
     scope: ["organizationId", "userId"],
     stateColumn: "status",
   };
+  const onlineWorkLifecycle = {
+    tableName: "onlineWorkState",
+    key: "name",
+    scope: [],
+    stateColumn: "state",
+  };
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
       desktopBatchReceipt,
+      onlineWorkLifecycle,
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
     ].toSorted(order),
