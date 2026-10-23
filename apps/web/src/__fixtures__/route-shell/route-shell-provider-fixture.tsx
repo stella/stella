@@ -70,6 +70,7 @@ const setupFixtureEnvironment = (
 ) => {
   GlobalRegistrator.register({ url: "http://localhost:3000/law" });
   Object.assign(import.meta.env, {
+    DEV: true,
     VITE_PUBLIC_LAW_ENABLED: "true",
     VITE_PUBLIC_KNOWLEDGE_ENABLED:
       mode === "public-knowledge" ? "true" : "false",
@@ -526,7 +527,15 @@ const loadFixtureRuntime = async (
   } = await import("@testing-library/react");
   const waitFor = async (assertion: () => void) =>
     waitForDom(assertion, { onTimeout: (error) => error });
-  const { initializeI18n } = await import("@/i18n/i18n-store");
+  const { initializeI18n, useI18nStore } = await import("@/i18n/i18n-store");
+  const initializeFixtureI18n = async () => {
+    if (!Object.hasOwn(useI18nStore, "persist")) {
+      const state = useI18nStore.getState();
+      await state.loadMessages(state.lang);
+      return;
+    }
+    await initializeI18n();
+  };
   const { useFormatter, useLocale } = await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
     await import("@/lib/analytics/route-error-lifecycle-context");
@@ -649,7 +658,7 @@ const loadFixtureRuntime = async (
     cleanup,
     render,
     waitFor,
-    initializeI18n,
+    initializeI18n: initializeFixtureI18n,
     useFormatter,
     useLocale,
     useRouteErrorLifecycle,
