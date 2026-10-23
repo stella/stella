@@ -10,6 +10,7 @@ import {
   ensureMicrosoft365AccessToken,
   listDriveRootChildren,
 } from "@/api/lib/auth/microsoft365/graph-client";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -86,6 +87,7 @@ const listMicrosoft365DriveRoot = createSafeRootHandler(
       );
     }
 
+    const permit = grantThirdPartyOutboundPermit();
     const accessToken = yield* Result.await(
       ensureMicrosoft365AccessToken({
         capability: "files.read",
@@ -97,6 +99,7 @@ const listMicrosoft365DriveRoot = createSafeRootHandler(
           userId: brandPersistedUserId(connection.userId),
         },
         safeDb,
+        permit,
       }),
     );
 
@@ -105,6 +108,7 @@ const listMicrosoft365DriveRoot = createSafeRootHandler(
         accessToken,
         cursor: input.cursor ?? null,
         limit: normalizeTenantPageLimit(input.limit ?? DEFAULT_PAGE_SIZE),
+        permit,
       }),
     );
 

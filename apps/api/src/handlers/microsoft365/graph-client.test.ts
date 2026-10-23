@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -8,7 +8,12 @@ import {
   mapDriveChildrenToPage,
   type DriveChildrenResponse,
 } from "@/api/lib/auth/microsoft365/graph-client";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  SafeOutboundFetchError,
+  type safeOutboundFetchBytes,
+} from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";
 
 const folder = {
@@ -69,51 +74,80 @@ describe("mapDriveChildrenToPage", () => {
 });
 
 test("Graph account and drive reads parse successful responses and report HTTP failures", async () => {
-  const fetch = spyOn(globalThis, "fetch");
-  fetch
-    .mockResolvedValueOnce(
-      Response.json({
-        userPrincipalName: "person@example.test",
-        displayName: "Person",
-      }),
-    )
-    .mockResolvedValueOnce(
-      Response.json({
-        value: [{ id: "item-1", name: "Folder", folder: { childCount: 2 } }],
-        "@odata.nextLink":
-          "https://graph.microsoft.com/v1.0/me/drive/root/children?$skiptoken=next-1",
-      }),
-    )
-    .mockResolvedValueOnce(new Response("", { status: 503 }));
-
-  try {
-    const account = await fetchAccountLabel("access-token");
-    expect(Result.isOk(account) && account.value).toBe("person@example.test");
-
-    const page = await listDriveRootChildren({
-      accessToken: v.parse(secretSchema, "access-token"),
-      cursor: null,
-      limit: 25,
-    });
-    expect(Result.isOk(page) && page.value).toMatchObject({
-      limit: 25,
-      nextCursor: "next-1",
-      items: [{ id: "item-1", kind: "folder" }],
-    });
-
-    const unavailable = await listDriveRootChildren({
-      accessToken: v.parse(secretSchema, "access-token"),
-      cursor: null,
-      limit: 25,
-    });
-    expect(Result.isError(unavailable)).toBe(true);
-    if (Result.isError(unavailable)) {
-      expect(HandlerError.is(unavailable.error)).toBe(true);
-      expect(unavailable.error.message).toBe(
-        "Microsoft Graph returned HTTP 503",
-      );
+  const permit = grantThirdPartyOutboundPermit();
+  const responses = [
+    { userPrincipalName: "person@example.test", displayName: "Person" },
+    {
+      value: [{ id: "item-1", name: "Folder", folder: { childCount: 2 } }],
+      "@odata.nextLink":
+        "https://graph.microsoft.com/v1.0/me/drive/root/children?$skiptoken=next-1",
+    },
+  ];
+  const fetchBytes: typeof safeOutboundFetchBytes = async ({ maxBytes }) => {
+    const value = responses.shift();
+    if (value === undefined) {
+      return Result.ok({
+        body: new ArrayBuffer(0),
+        headers: new Headers(),
+        ok: false,
+        status: 503,
+      });
     }
-  } finally {
-    fetch.mockRestore();
+    expect(maxBytes === 64 * 1024 || maxBytes === 2 * 1024 * 1024).toBe(true);
+    return Result.ok({
+      body: new TextEncoder().encode(JSON.stringify(value)).buffer,
+      headers: new Headers(),
+      ok: true,
+      status: 200,
+    });
+  };
+  const account = await fetchAccountLabel("access-token", permit, fetchBytes);
+  expect(Result.isOk(account) && account.value).toBe("person@example.test");
+  const options = {
+    accessToken: v.parse(secretSchema, "access-token"),
+    cursor: null,
+    limit: 25,
+    permit,
+    fetchBytes,
+  };
+  const page = await listDriveRootChildren(options);
+  expect(Result.isOk(page) && page.value).toMatchObject({
+    limit: 25,
+    nextCursor: "next-1",
+    items: [{ id: "item-1", kind: "folder" }],
+  });
+  const unavailable = await listDriveRootChildren(options);
+  expect(Result.isError(unavailable)).toBe(true);
+  if (Result.isError(unavailable)) {
+    expect(HandlerError.is(unavailable.error)).toBe(true);
+    expect(unavailable.error.message).toBe("Microsoft Graph returned HTTP 503");
   }
+});
+
+test("Graph reads delegate byte ceilings to safe outbound transport", async () => {
+  const permit = grantThirdPartyOutboundPermit();
+  const ceilings: number[] = [];
+  const fetchBytes: typeof safeOutboundFetchBytes = async ({ maxBytes }) => {
+    ceilings.push(maxBytes);
+    return Result.err(
+      new SafeOutboundFetchError({
+        message: "Response body exceeded size limit",
+      }),
+    );
+  };
+  expect(
+    Result.isError(await fetchAccountLabel("token", permit, fetchBytes)),
+  ).toBe(true);
+  expect(
+    Result.isError(
+      await listDriveRootChildren({
+        accessToken: v.parse(secretSchema, "token"),
+        cursor: null,
+        limit: 1,
+        permit,
+        fetchBytes,
+      }),
+    ),
+  ).toBe(true);
+  expect(ceilings).toEqual([64 * 1024, 2 * 1024 * 1024]);
 });

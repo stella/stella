@@ -18,8 +18,6 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Microsoft365Capability } from "@stll/api-contract/microsoft365";
-import { fetchWithTimeout } from "@stll/fetch";
-import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -42,12 +40,14 @@ import {
   refreshAccessToken,
   tokenExpiresAt,
 } from "@/api/lib/auth/microsoft365/graph-oauth";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import type { TransitionResult } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Page } from "@/api/lib/pagination";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
 const GRAPH_FETCH_TIMEOUT_MS = 10_000;
@@ -133,11 +133,13 @@ export const ensureMicrosoft365AccessToken = async (
     safeDb,
     capability,
     recordAuditEvent,
+    permit,
   }: {
     connection: Microsoft365ConnectionTokens;
     safeDb: SafeDb;
     capability: Microsoft365Capability;
     recordAuditEvent: AuditRecorder;
+    permit: ThirdPartyOutboundPermit;
   },
   dependencies = TOKEN_REFRESH_DEPENDENCIES,
 ): Promise<
@@ -201,6 +203,7 @@ export const ensureMicrosoft365AccessToken = async (
       clientSecret: config.value.clientSecret,
       refreshToken,
       tenantId: config.value.tenantId,
+      permit,
     });
 
     if (Result.isError(refreshed)) {
@@ -390,31 +393,36 @@ const meResponseSchema = v.looseObject({
 /** Read a display label without treating a provider failure as an empty account. */
 export const fetchAccountLabel = async (
   accessToken: string,
+  permit: ThirdPartyOutboundPermit,
+  fetchBytes = safeOutboundFetchBytes,
 ): Promise<Result<string | null, HandlerError<502>>> =>
   await Result.gen(async function* () {
     const url = new URL(`${GRAPH_API_BASE_URL}/me`);
     url.searchParams.set("$select", "userPrincipalName,displayName,mail");
     const response = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await fetchWithTimeout(url, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              Accept: "application/json",
-            },
-            timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
-            redirect: "error",
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 502,
-            code: "upstream_unavailable",
-            message: "Microsoft account lookup failed",
-            cause,
-          }),
-      }),
+      fetchBytes({
+        url,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+        maxBytes: GRAPH_ACCOUNT_RESPONSE_MAX_BYTES,
+        permit,
+        timeout: { type: "headers", ms: GRAPH_FETCH_TIMEOUT_MS },
+        redirect: "error",
+      }).then((result) =>
+        result.mapError(
+          (cause) =>
+            new HandlerError({
+              status: 502,
+              code: "upstream_unavailable",
+              message: "Microsoft account lookup failed",
+              cause,
+            }),
+        ),
+      ),
     );
-    if (!response.ok || !response.body) {
+    if (!response.ok) {
       return Result.err(
         new HandlerError({
           status: 502,
@@ -423,35 +431,12 @@ export const fetchAccountLabel = async (
         }),
       );
     }
-    const body = response.body;
-    const bytes = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await readCappedBytes(body, GRAPH_ACCOUNT_RESPONSE_MAX_BYTES),
-        catch: (cause) =>
-          new HandlerError({
-            status: 502,
-            code: "upstream_unavailable",
-            message: "Microsoft account lookup failed",
-            cause,
-          }),
-      }),
-    );
-    if (!bytes) {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          code: "upstream_unavailable",
-          message: "Microsoft account response exceeds byte limit",
-        }),
-      );
-    }
     const parsed = yield* Result.await(
       Promise.resolve(
         Result.try(() =>
           v.parse(
             meResponseSchema,
-            JSON.parse(new TextDecoder().decode(bytes)),
+            JSON.parse(new TextDecoder().decode(response.body)),
           ),
         ).mapError(
           (cause) =>
@@ -473,10 +458,14 @@ export const listDriveRootChildren = async ({
   accessToken,
   cursor,
   limit,
+  permit,
+  fetchBytes = safeOutboundFetchBytes,
 }: {
   accessToken: AccessToken;
   cursor: string | null;
   limit: number;
+  permit: ThirdPartyOutboundPermit;
+  fetchBytes?: typeof safeOutboundFetchBytes;
 }): Promise<Result<Page<Microsoft365DriveItem>, HandlerError<502>>> =>
   await Result.gen(async function* () {
     const url = new URL(`${GRAPH_API_BASE_URL}/me/drive/root/children`);
@@ -484,28 +473,29 @@ export const listDriveRootChildren = async ({
     if (cursor) {
       url.searchParams.set("$skiptoken", cursor);
     }
-
     const response = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await fetchWithTimeout(url, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              Accept: "application/json",
-            },
-            timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
-            redirect: "error",
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 502,
-            code: "upstream_unavailable",
-            message: "Failed to reach Microsoft Graph",
-            cause,
-          }),
-      }),
+      fetchBytes({
+        url,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+        maxBytes: GRAPH_DRIVE_RESPONSE_MAX_BYTES,
+        permit,
+        timeout: { type: "headers", ms: GRAPH_FETCH_TIMEOUT_MS },
+        redirect: "error",
+      }).then((result) =>
+        result.mapError(
+          (cause) =>
+            new HandlerError({
+              status: 502,
+              code: "upstream_unavailable",
+              message: "Failed to reach Microsoft Graph",
+              cause,
+            }),
+        ),
+      ),
     );
-
     if (!response.ok) {
       return Result.err(
         new HandlerError({
@@ -515,52 +505,19 @@ export const listDriveRootChildren = async ({
         }),
       );
     }
-
-    if (!response.body) {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          code: "upstream_unavailable",
-          message: "Missing Microsoft drive response",
-        }),
-      );
-    }
-    const body = response.body;
-    const bytes = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await readCappedBytes(body, GRAPH_DRIVE_RESPONSE_MAX_BYTES),
-        catch: (cause) =>
-          new HandlerError({
-            status: 502,
-            code: "upstream_unavailable",
-            message: "Failed to reach Microsoft Graph",
-            cause,
-          }),
-      }),
-    );
-    if (!bytes) {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          code: "upstream_unavailable",
-          message: "Microsoft drive response exceeds byte limit",
-        }),
-      );
-    }
     const parsed = yield* Result.await(
       Promise.resolve(
         Result.try(() =>
           v.parse(
             driveChildrenResponseSchema,
-            JSON.parse(new TextDecoder().decode(bytes)),
+            JSON.parse(new TextDecoder().decode(response.body)),
           ),
         ).mapError(
           (cause) =>
             new HandlerError({
               status: 502,
               code: "upstream_unavailable",
-              message: "Failed to reach Microsoft Graph",
+              message: "Invalid Microsoft drive response",
               cause,
             }),
         ),

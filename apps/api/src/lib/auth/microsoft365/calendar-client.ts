@@ -7,10 +7,10 @@ import {
   microsoft365CalendarRangeEntries,
   MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
 } from "@stll/api-contract/microsoft365";
-import { fetchWithTimeout } from "@stll/fetch";
-import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -175,7 +175,8 @@ const requestGraph = async (
   options: {
     accessToken: AccessToken;
     body?: string;
-    fetcher?: typeof fetchWithTimeout;
+    permit: ThirdPartyOutboundPermit;
+    fetchBytes?: typeof safeOutboundFetchBytes;
   },
 ) => {
   const fetched = await Result.tryPromise({
@@ -183,7 +184,8 @@ const requestGraph = async (
       const url = new URL(GRAPH_BASE);
       url.pathname = request.path;
       url.search = request.search ?? "";
-      const response = await (options.fetcher ?? fetchWithTimeout)(url, {
+      const response = await (options.fetchBytes ?? safeOutboundFetchBytes)({
+        url,
         method: options.body === undefined ? "GET" : "POST",
         headers: {
           Authorization: `Bearer ${options.accessToken}`,
@@ -193,11 +195,15 @@ const requestGraph = async (
         },
         ...(options.body === undefined ? {} : { body: options.body }),
         redirect: "error",
-        timeout: { type: "idle", ms: REQUEST_TIMEOUT_MS },
+        maxBytes: RESPONSE_MAX_BYTES,
+        permit: options.permit,
+        timeout: { type: "headers", ms: REQUEST_TIMEOUT_MS },
       });
-      if (!response.ok) {
-        await response.body?.cancel();
-        const retryHeader = response.headers.get("Retry-After");
+      if (Result.isError(response)) {
+        return Result.err(upstreamError(response.error));
+      }
+      if (!response.value.ok) {
+        const retryHeader = response.value.headers.get("Retry-After");
         const retrySeconds =
           retryHeader === null ? Number.NaN : Number(retryHeader);
         const retryAfter =
@@ -206,21 +212,14 @@ const requestGraph = async (
             : null;
         return Result.err(
           new CalendarGraphError({
-            ...failureForStatus(response.status),
+            ...failureForStatus(response.value.status),
             retryAfter,
           }),
         );
       }
-      if (!response.body) {
-        return Result.err(upstreamError("Missing calendar response body"));
-      }
-      const bytes = await readCappedBytes(response.body, RESPONSE_MAX_BYTES);
-      if (!bytes) {
-        return Result.err(
-          upstreamError("Calendar response exceeds byte limit"),
-        );
-      }
-      const data: unknown = JSON.parse(new TextDecoder().decode(bytes));
+      const data: unknown = JSON.parse(
+        new TextDecoder().decode(response.value.body),
+      );
       return Result.ok(data);
     },
     catch: upstreamError,
@@ -230,7 +229,8 @@ const requestGraph = async (
 
 type CalendarClientOptions = {
   accessToken: AccessToken;
-  fetcher?: typeof fetchWithTimeout;
+  permit: ThirdPartyOutboundPermit;
+  fetchBytes?: typeof safeOutboundFetchBytes;
 };
 
 type CalendarContinuation = {

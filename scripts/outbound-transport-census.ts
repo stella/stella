@@ -41,13 +41,6 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
-    path: "apps/api/src/handlers/microsoft365/calendar-client.ts",
-    class: "third-party",
-    reason:
-      "Reads delegated calendar metadata through fixed Graph endpoints with timeout, byte, range, and paging bounds.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:
@@ -205,18 +198,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/handlers/files/get.ts",
     class: "operator-configured-infrastructure",
     reason: "Streams file bytes from configured object storage URLs.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
-    path: "apps/api/src/handlers/microsoft365/graph-client.ts",
-    class: "third-party",
-    reason: "Reads Microsoft Graph resources for connected accounts.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
-    path: "apps/api/src/handlers/microsoft365/graph-oauth.ts",
-    class: "third-party",
-    reason: "Exchanges credentials with Microsoft identity endpoints.",
     transports: ["module:@stll/fetch"],
   },
   {
@@ -1324,6 +1305,10 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Native chat tool boundary for counterparty checks.",
   },
   {
+    path: "apps/api/src/handlers/chat/tools/calendar-tools.ts",
+    reason: "Native chat tool boundary for delegated calendar reads.",
+  },
+  {
     path: "apps/api/src/handlers/chat/tools/template-tools.ts",
     reason: "Native chat tool boundary for template lookups.",
   },
@@ -1338,6 +1323,15 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/desktop-registry/service.ts",
     reason: "Direct service boundary for desktop registry requests.",
+  },
+  {
+    path: "apps/api/src/handlers/microsoft365/list-drive-root.ts",
+    reason: "Direct route boundary for delegated Microsoft drive reads.",
+  },
+  {
+    path: "apps/api/src/handlers/microsoft365/oauth-callback.ts",
+    reason:
+      "Direct OAuth callback boundary for token exchange and account lookup.",
   },
   {
     path: "apps/api/src/handlers/entities/pdf-signing-certificate.ts",

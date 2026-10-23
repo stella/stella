@@ -26,10 +26,11 @@ import {
 } from "@/api/lib/auth/microsoft365/crypto";
 import { fetchAccountLabel } from "@/api/lib/auth/microsoft365/graph-client";
 import {
-  exchangeAuthorizationCode,
+  exchangeMicrosoft365AuthorizationCode,
   getMicrosoft365OAuthConfig,
   tokenExpiresAt,
 } from "@/api/lib/auth/microsoft365/graph-oauth";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
@@ -80,14 +81,14 @@ const redirect = (input: CallbackRedirectInput) =>
 // an error body.
 export type Microsoft365OAuthCallbackDependencies = {
   assertMicrosoft365ConnectionEnabled: typeof assertMicrosoft365ConnectionEnabled;
-  exchangeAuthorizationCode: typeof exchangeAuthorizationCode;
+  exchangeMicrosoft365AuthorizationCode: typeof exchangeMicrosoft365AuthorizationCode;
   getMicrosoft365OAuthConfig: typeof getMicrosoft365OAuthConfig;
   fetchAccountLabel: typeof fetchAccountLabel;
 };
 
 const defaultMicrosoft365OAuthCallbackDependencies = {
   assertMicrosoft365ConnectionEnabled,
-  exchangeAuthorizationCode,
+  exchangeMicrosoft365AuthorizationCode,
   getMicrosoft365OAuthConfig,
   fetchAccountLabel,
 } satisfies Microsoft365OAuthCallbackDependencies;
@@ -190,13 +191,15 @@ export const createMicrosoft365OAuthCallback = (
               );
             }
 
-            const token = await resolved.exchangeAuthorizationCode({
+            const permit = grantThirdPartyOutboundPermit();
+            const token = await resolved.exchangeMicrosoft365AuthorizationCode({
               clientId: oauthConfig.value.clientId,
               clientSecret: oauthConfig.value.clientSecret,
               tenantId: oauthConfig.value.tenantId,
               code,
               codeVerifier: row.codeVerifier,
               redirectUri: row.redirectUri,
+              permit,
             });
             if (Result.isError(token)) {
               return Result.ok(
@@ -207,6 +210,7 @@ export const createMicrosoft365OAuthCallback = (
             const rowUserId = brandPersistedUserId(row.userId);
             const account = await resolved.fetchAccountLabel(
               token.value.access_token,
+              permit,
             );
 
             if (Result.isError(account)) {

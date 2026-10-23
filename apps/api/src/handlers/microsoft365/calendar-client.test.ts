@@ -2,15 +2,27 @@ import { Result, panic } from "better-result";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
-import type { fetchWithTimeout } from "@stll/fetch";
-
 import {
   calendarEventsInputSchema,
   calendarFreeBusyInputSchema,
   calendarFreeBusy,
   listCalendarEvents,
 } from "@/api/lib/auth/microsoft365/calendar-client";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import {
+  SafeOutboundFetchError,
+  type safeOutboundFetchBytes,
+} from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";
+
+const permit = grantThirdPartyOutboundPermit();
+const jsonResponse = (value: unknown, status = 200, headers = new Headers()) =>
+  Result.ok({
+    body: new TextEncoder().encode(JSON.stringify(value)).buffer,
+    headers,
+    ok: status >= 200 && status < 300,
+    status,
+  });
 
 const accessToken = v.parse(secretSchema, "calendar-token");
 const range = { start: "2026-10-01T00:00:00Z", end: "2026-10-02T00:00:00Z" };
@@ -51,20 +63,20 @@ test("calendar schemas bound ranges, event limits, and attendee counts", () => {
 
 test("event reads select metadata, omit bodies and stop at the total paging cap", async () => {
   const requests: URL[] = [];
-  const fetcher: typeof fetchWithTimeout = async (input, init) => {
-    const url = new URL(input instanceof Request ? input.url : input);
+  const fetchBytes: typeof safeOutboundFetchBytes = async (input) => {
+    const url = new URL(input.url);
     requests.push(url);
-    expect(init.redirect).toBe("error");
+    expect(input.redirect).toBe("error");
     expect(url.searchParams.get("$select")).not.toContain("body");
-    expect(init.timeout).toEqual({ type: "idle", ms: 10_000 });
-    return Response.json({
+    expect(input.timeout).toEqual({ type: "headers", ms: 10_000 });
+    return jsonResponse({
       value: Array.from({ length: 50 }, () => event),
       "@odata.nextLink": `https://graph.microsoft.com/v1.0/me/calendarView?$skiptoken=page${requests.length}`,
     });
   };
   const result = await listCalendarEvents(
     { ...range, limit: 200 },
-    { accessToken, fetcher },
+    { accessToken, fetchBytes, permit },
   );
   expect(Result.isOk(result)).toBe(true);
   if (Result.isError(result)) {
@@ -91,8 +103,9 @@ test("Graph failures retain actionable reconnect, permission and throttle semant
       { ...range, limit: 1 },
       {
         accessToken,
-        fetcher: async () =>
-          new Response(null, { status, headers: { "Retry-After": "60" } }),
+        permit,
+        fetchBytes: async () =>
+          jsonResponse(null, status, new Headers({ "Retry-After": "60" })),
       },
     );
     expect(Result.isError(result)).toBe(true);
@@ -107,15 +120,16 @@ test("free/busy sends bounded attendee schedules and strips subject fields", asy
     { ...range, attendees: ["a@example.test"] },
     {
       accessToken,
-      fetcher: async (url, init) => {
-        expect(new URL(url instanceof Request ? url.url : url).pathname).toBe(
+      permit,
+      fetchBytes: async (request) => {
+        expect(new URL(request.url).pathname).toBe(
           "/v1.0/me/calendar/getSchedule",
         );
-        if (typeof init.body !== "string") {
+        if (typeof request.body !== "string") {
           return panic("Expected serialized schedule body");
         }
-        expect(JSON.parse(init.body).schedules).toEqual(["a@example.test"]);
-        return Response.json({
+        expect(JSON.parse(request.body).schedules).toEqual(["a@example.test"]);
+        return jsonResponse({
           value: [
             {
               scheduleId: "a@example.test",
@@ -143,9 +157,10 @@ test("calendar continuations stay on the original Graph endpoint", async () => {
   let requests = 0;
   const result = await listCalendarEvents(range, {
     accessToken,
-    fetcher: async () => {
+    permit,
+    fetchBytes: async () => {
       requests += 1;
-      return Response.json({
+      return jsonResponse({
         value: [],
         "@odata.nextLink":
           "https://calendar.example.test/v1.0/me/calendarView?$skiptoken=next",
@@ -162,11 +177,12 @@ test("calendar reads follow numeric $skip continuations to the last page", async
     { ...range, limit: 120 },
     {
       accessToken,
-      fetcher: async (input) => {
-        const url = new URL(input instanceof Request ? input.url : input);
+      permit,
+      fetchBytes: async (input) => {
+        const url = new URL(input.url);
         requests.push(url);
         const skip = Number(url.searchParams.get("$skip") ?? "0");
-        return Response.json({
+        return jsonResponse({
           value: Array.from({ length: skip === 100 ? 20 : 50 }, () => event),
           "@odata.nextLink":
             skip < 100
@@ -196,9 +212,10 @@ test("calendar continuations reject non-numeric $skip offsets", async () => {
   let requests = 0;
   const result = await listCalendarEvents(range, {
     accessToken,
-    fetcher: async () => {
+    permit,
+    fetchBytes: async () => {
       requests += 1;
-      return Response.json({
+      return jsonResponse({
         value: [],
         "@odata.nextLink":
           "https://graph.microsoft.com/v1.0/me/calendarView?$skip=1e9",
@@ -210,10 +227,22 @@ test("calendar continuations reject non-numeric $skip offsets", async () => {
 });
 
 test("calendar responses enforce the byte ceiling before parsing", async () => {
+  // Recorded rather than asserted in the transport: the client converts a
+  // throwing transport into the same upstream error this test expects.
+  const ceilings: number[] = [];
   const result = await listCalendarEvents(range, {
     accessToken,
-    fetcher: async () => new Response(" ".repeat(2 * 1024 * 1024 + 1)),
+    permit,
+    fetchBytes: async ({ maxBytes }) => {
+      ceilings.push(maxBytes);
+      return Result.err(
+        new SafeOutboundFetchError({
+          message: "Response body exceeded size limit",
+        }),
+      );
+    },
   });
+  expect(ceilings).toEqual([2 * 1024 * 1024]);
   expect(Result.isError(result)).toBe(true);
   if (Result.isError(result)) {
     expect(result.error.kind).toBe("upstream");
@@ -226,8 +255,9 @@ test("calendar event text fields have independent model-facing length bounds", a
     { ...range, limit: 1 },
     {
       accessToken,
-      fetcher: async () =>
-        Response.json({
+      permit,
+      fetchBytes: async () =>
+        jsonResponse({
           value: [
             {
               ...event,

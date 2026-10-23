@@ -26,6 +26,7 @@ import {
   encryptMicrosoft365Secret,
 } from "@/api/lib/auth/microsoft365/crypto";
 import { ensureMicrosoft365AccessToken } from "@/api/lib/auth/microsoft365/graph-client";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -46,6 +47,8 @@ import type {
   TestDatabase,
   TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
+
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 setDefaultTimeout(120_000);
 
@@ -295,7 +298,7 @@ test("callback persists the scope returned by consent and consumes the bound sta
         clientSecret: "secret",
         tenantId: "tenant",
       }),
-    exchangeAuthorizationCode: async () =>
+    exchangeMicrosoft365AuthorizationCode: async () =>
       Result.ok({
         access_token: "calendar-access",
         refresh_token: "calendar-refresh",
@@ -411,6 +414,7 @@ test("a token refresh preserves a newer consent grant", async () => {
       safeDb,
       capability: "calendar.read",
       recordAuditEvent: async () => {},
+      permit: outboundPermit,
     },
     {
       getMicrosoft365OAuthConfig: () =>
@@ -496,6 +500,7 @@ test("an existing delegated connection refreshes its original ciphertext and ret
       safeDb,
       capability: "files.read",
       recordAuditEvent: async () => {},
+      permit: outboundPermit,
     },
     {
       getMicrosoft365OAuthConfig: () =>
@@ -640,7 +645,7 @@ const runConsent = async ({
         clientSecret: "secret",
         tenantId: "tenant",
       }),
-    exchangeAuthorizationCode: async () =>
+    exchangeMicrosoft365AuthorizationCode: async () =>
       Result.ok({
         access_token: "access",
         refresh_token: "refresh",
@@ -774,6 +779,7 @@ test("a refreshed scope set change is audited with the credential update", async
       recordAuditEvent: async (_tx, event) => {
         audit.push(event);
       },
+      permit: outboundPermit,
     },
     {
       getMicrosoft365OAuthConfig: () =>
@@ -865,6 +871,7 @@ test("a refreshed calendar connection retains its authorized scope ceiling", asy
       safeDb,
       capability: "calendar.read",
       recordAuditEvent: async () => {},
+      permit: outboundPermit,
     },
     {
       getMicrosoft365OAuthConfig: () =>
@@ -966,6 +973,7 @@ test("a failed refresh leaves a newer consent connected", async () => {
       safeDb,
       capability: "calendar.read",
       recordAuditEvent: async () => {},
+      permit: outboundPermit,
     },
     {
       getMicrosoft365OAuthConfig: () =>

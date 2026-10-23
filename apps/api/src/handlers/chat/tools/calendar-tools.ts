@@ -20,6 +20,7 @@ import {
   grantedCapabilities,
 } from "@/api/lib/auth/microsoft365/capabilities";
 import { ensureMicrosoft365AccessToken } from "@/api/lib/auth/microsoft365/graph-client";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -94,6 +95,7 @@ export const createCalendarTools = (
   context: CalendarContext,
   dependencies = CALENDAR_DEPENDENCIES,
 ) => {
+  const permit = grantThirdPartyOutboundPermit();
   const accessToken = async () => {
     const loaded = await loadCalendarConnection(
       context,
@@ -110,6 +112,7 @@ export const createCalendarTools = (
       safeDb: context.safeDb,
       recordAuditEvent: context.recordAuditEvent,
       capability: "calendar.read",
+      permit,
     });
   };
   return {
@@ -143,6 +146,7 @@ export const createCalendarTools = (
       }
       const result = await dependencies.listCalendarEvents(input, {
         accessToken: token.value,
+        permit,
       });
       if (Result.isError(result)) {
         return raiseChatToolError(
@@ -195,6 +199,7 @@ export const createCalendarTools = (
       }
       const result = await dependencies.calendarFreeBusy(input, {
         accessToken: token.value,
+        permit,
       });
       if (Result.isError(result)) {
         return raiseChatToolError(
