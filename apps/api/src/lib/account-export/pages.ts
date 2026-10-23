@@ -5,7 +5,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 
 import { member } from "@/api/db/auth-schema";
-import type { rootDb, rlsDb } from "@/api/db/root";
+import type { rlsDb, rootDb, Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   agentSkillResources,
@@ -27,6 +27,7 @@ import {
   workspaceViewTemplates,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import { readAccountExportAnnotationPage } from "@/api/lib/account-export/owner-read";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
@@ -40,7 +41,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { iterateCursorPages } from "@/api/lib/pagination";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
-export type AccountExportDataDb = Pick<typeof rootDb, "select" | "transaction">;
+// Selects keep the owner connection shape; owner reads take the shared
+// transaction contract, so test databases satisfy it too.
+export type AccountExportDataDb = Pick<typeof rootDb, "select"> &
+  AnyDrizzle<Transaction>;
 const ACCOUNT_EXPORT_PAGE_SIZE = 10;
 
 const resolveScopedDatabase = async () => {
