@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
+      "accountRestricted": "DI teikėjo nustatymai šiai paskyrai nepasiekiami.",
+      "configUnreadable": "DI teikėjo konfigūracijos nuskaityti nepavyko. Paprašykite organizacijos administratoriaus prijungti jį iš naujo.",
       "cta": "Atidaryti DI nustatymus",
       "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti DI funkcijas.",
+      "permissionRequired": "DI teikėją gali prijungti tik organizacijos administratorius.",
+      "seatRequired": "Paprašykite organizacijos administratoriaus priskirti jums vietą.",
       "title": "Prijungti DI teikėją"
     },
     "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?",
