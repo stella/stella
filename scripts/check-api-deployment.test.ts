@@ -525,7 +525,7 @@ describe("API deployment health receipt", () => {
     // deploy into it anyway.
     expect(healthJob).toContain("DEPLOY_WHEN_UNREACHABLE");
     expect(healthJob).toContain(
-      "Start staging, then dispatch this workflow again.",
+      "The readiness check did not pass after acquiring staging capacity.",
     );
     expect(apiBuild).toContain("needs: [resolve, staging-health]");
     expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
@@ -533,8 +533,12 @@ describe("API deployment health receipt", () => {
     expect(webBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
     expect(apiBuild).toContain("cancel-in-progress: true");
     expect(webBuild).toContain("cancel-in-progress: true");
-    expect(promoteJob).toContain("cancel-in-progress: false");
-    expect(promoteJob).toContain("needs: [resolve, build-api, build-web]");
+    expect(workflow).toContain(
+      "group: deploy-staging\n  cancel-in-progress: false",
+    );
+    expect(promoteJob).toContain(
+      "needs: [resolve, staging-health, build-api, build-web]",
+    );
     expect(promoteJob).not.toContain("Confirm this SHA is still main");
     expect(promoteJob).toContain("web-image-digest:");
     expect(promoteJob).toContain("Run staging web smoke");
@@ -606,6 +610,7 @@ describe("API deployment health receipt", () => {
       releaseDesktopWorkflow,
       stagingWorkflow,
       promoteAction,
+      tokenHelper,
     ] = await Promise.all([
       Bun.file(
         new URL("../.github/workflows/release.yml", import.meta.url),
@@ -622,6 +627,7 @@ describe("API deployment health receipt", () => {
           import.meta.url,
         ),
       ).text(),
+      Bun.file(new URL("github-app-token.sh", import.meta.url)).text(),
     ]);
     const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
     const stagingJobStart = releaseWorkflow.indexOf(
@@ -733,11 +739,14 @@ describe("API deployment health receipt", () => {
     );
     expect(promoteAction).toContain('"/installation/token"');
     expect(promoteAction).toContain('if ! token="$(mint_app_token)"');
-    expect(promoteAction).toContain(`echo "::add-mask::\${jwt}" >&2`);
-    expect(promoteAction).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
-    expect(
-      promoteAction.match(/Authorization: Bearer \$\{jwt\}/gu),
-    ).toHaveLength(2);
+    expect(promoteAction).toContain(
+      'source "$GITHUB_ACTION_PATH/../../../scripts/github-app-token.sh"',
+    );
+    expect(tokenHelper).toContain(`echo "::add-mask::\${jwt}" >&2`);
+    expect(tokenHelper).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
+    expect(tokenHelper.match(/Authorization: Bearer \$\{jwt\}/gu)).toHaveLength(
+      2,
+    );
     expect(promoteAction).not.toMatch(/(?:gh|gh-retry\.sh"?) run watch/u);
     expect(promoteAction).toContain(
       `run_url="https://github.com/\${INFRA_REPO}/actions/runs/\${run_id}"`,

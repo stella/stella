@@ -100,6 +100,15 @@ checks:
       bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
       bun scripts/check-gh-retry.ts
 
+  - name: Staging lease lifecycle
+    id: static_check_staging_power
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+      STELLA_VERIFY: check
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Staging lease lifecycle')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_staging_power != 'true') }}
+    run: bun test scripts/staging-power.test.ts
+
   # Network fetches retry through scripts/retry.sh and carry a step
   # timeout; the allowlist may only shrink against the measured base.
   - name: CI network step retries and timeouts

@@ -90,6 +90,7 @@
     "typecheck-base.yml/record": "main",
     "deploy-staging.yml/resolve": "main",
     "deploy-staging.yml/staging-health": "main",
+    "deploy-staging.yml/staging-power-off": "main",
     "deploy-staging.yml/build-api": "main",
     "deploy-staging.yml/build-web": "main",
     "deploy-staging.yml/promote-staging": "main",

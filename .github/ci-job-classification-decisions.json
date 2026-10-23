@@ -407,27 +407,27 @@
   "candidate:.github/workflows/deploy-staging.yml/resolve": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "69f9fc243ca519dd7171a21f6ef08d8090388a0df5ab640b8984cb0408a19504"
+    "reviewedDigest": "ebb527c7c9ab85590cc5d77542b6d86364213c201c5f119e2ca5cc806dc5bd32"
   },
   "candidate:.github/workflows/deploy-staging.yml/staging-health": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "290da2e9c9706d47792db95d5cde1f97b26ec50082c076fb5684a0c6b33be10b"
+    "reviewedDigest": "cfce5a06a10e39c0dcb5ea4574d74999e4d9d6aa3dba87175e332189b91b3a2a"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-api": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "0d4bc3a4dc098b5a23b23abceb0bd2b777e7ba0e1f2fc481593c0e080b525e41"
+    "reviewedDigest": "ec2466e2c1db2b29a590b76b2274b23cf0a6b1f5138b82e54d1fec03d4722f2e"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-web": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "91b8f046a2658b073bd7da59dfda6b2c3c583ffabef5c52cba040ecdae9f8dae"
+    "reviewedDigest": "4ac89d350027303d60588b8e08df4a5004ee7ab1c2612af09fcf8bc365059546"
   },
   "candidate:.github/workflows/deploy-staging.yml/promote-staging": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "8d4b29016ce0c0392e9ac16dae146ef0152700c4ce001c336444d3e9a9d678e4"
+    "reviewedDigest": "69e46bb598f57af5697a884e9260bcb5d3f5ed44762315e5b7af6f08df8b35ac"
   },
   "candidate:.github/workflows/desktop-release-canary.yml/check-latest": {
     "kind": "ordinary",
@@ -943,5 +943,10 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "d7314118f0938bde6fef2c4bbcdad6f3638726507a776fe89b86537b858188f9"
+  },
+  "candidate:.github/workflows/deploy-staging.yml/staging-power-off": {
+    "kind": "priority",
+    "qualifier": "Releases staging capacity after deployment and verification.",
+    "reviewedDigest": "4add3e12a3cfbdbcb488e409824ce3e6b669c2fac3a11a93bec75a9116a64c92"
   }
 }

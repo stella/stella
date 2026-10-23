@@ -10,11 +10,11 @@ defaults:
 # release candidate can be verified while main keeps moving. Evidence reuse requires an identical tree
 # and a verified main/PR chain. Tags remain the production path.
 #
-# Staging is off unless someone starts it, so this runs only when
-# dispatched. A dispatch while staging is not answering deploys nothing and
-# fails with a staging/verified error: start staging first, then dispatch again. To
-# deploy a fix to a staging that is up but unhealthy, dispatch with
-# deploy_when_unreachable.
+# The workflow holds a staging lease through deployment and verification.
+# Serialize the entire lifecycle so cleanup cannot interrupt another run.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
 
 on:
   workflow_dispatch:
@@ -174,12 +174,14 @@ jobs:
     needs: resolve
     if: github.ref == 'refs/heads/main' && needs.resolve.outputs.reused != 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 70
+    environment: release-app
     permissions:
       contents: read
       statuses: write
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
+      lease-attempt: ${{ github.run_attempt }}
 
     steps:
       - name: Checkout GitHub API tooling
@@ -197,12 +199,28 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
+      - name: Checkout workflow actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      # Includes a bounded readiness wait after the start request.
+      - name: Acquire staging lease
+        timeout-minutes: 50
+        uses: ./.github/actions/staging-power
+        with:
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          infra-repo: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          action: "on"
+          lease-attempt: ${{ github.run_attempt }}
+
       - name: Probe staging health
-        timeout-minutes: 3
+        timeout-minutes: 15
         id: probe
         env:
           STAGING_HEALTH_URL: https://api-staging.stll.app/ready
-          STAGING_LEGACY_HEALTH_URL: https://api-staging.stll.app/health
           EDGE_HEADER_NAME: x-stella-edge-token
           EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
         run: |
@@ -216,7 +234,7 @@ jobs:
 
           readonly READY_STATUS="ready"
           readonly NOT_READY_STATUS="not_ready"
-          readonly MAX_ATTEMPTS=3
+          readonly MAX_ATTEMPTS=60
           readonly RETRY_SECONDS=5
 
           response_file="$RUNNER_TEMP/staging-health.json"
@@ -238,23 +256,6 @@ jobs:
               http_status="000"
             fi
 
-            if [[ "$http_status" == "404" ]]; then
-              echo "Staging does not expose /ready; checking the legacy /health endpoint."
-              if ! http_status="$(
-                curl \
-                  --connect-timeout 5 \
-                  --max-time 10 \
-                  --output "$response_file" \
-                  --silent \
-                  --show-error \
-                  --write-out '%{http_code}' \
-                  ${curl_edge_args[@]+"${curl_edge_args[@]}"} \
-                  "$STAGING_LEGACY_HEALTH_URL"
-              )"; then
-                http_status="000"
-              fi
-            fi
-
             if [[ "$http_status" == "200" ]] &&
               jq -e '.status == "ok"' "$response_file" >/dev/null 2>&1; then
               status="$READY_STATUS"
@@ -271,8 +272,7 @@ jobs:
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           echo "served_commit=${served_commit}" >> "$GITHUB_OUTPUT"
 
-      # Staging that does not answer is normally off. Deploying into it would
-      # leave the smoke below measuring an environment that is not running.
+      # A successful power transition is followed by dependency readiness.
       - name: Decide whether staging can deploy
         id: decide
         env:
@@ -296,11 +296,11 @@ jobs:
 
           echo "deploy=false" >> "$GITHUB_OUTPUT"
           {
-            echo "### Staging is off"
+            echo "### Staging is unavailable"
             echo "Staging is not answering its health probe, so \`${DEPLOY_SHA}\` was not deployed."
-            echo "Start staging, then dispatch this workflow again."
+            echo "The readiness check did not pass after acquiring staging capacity."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error::staging off: nothing was deployed. Start staging, then dispatch again."
+          echo "::error::Staging readiness failed; nothing was deployed."
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg url "$run_url" \
             '{state: "error", context: "staging/verified", description: "staging off", target_url: $url}' |
@@ -330,6 +330,15 @@ jobs:
       release-ref: ${{ steps.ref.outputs.release_ref }}
 
     steps:
+      - name: Check staging lease attempt
+        env:
+          LEASE_ATTEMPT: ${{ needs.staging-health.outputs.lease-attempt }}
+        run: |
+          if [[ "$LEASE_ATTEMPT" != "$GITHUB_RUN_ATTEMPT" ]]; then
+            echo "::error::Rerun all jobs to acquire staging capacity for this attempt."
+            exit 1
+          fi
+
       - name: Resolve synthetic ref
         id: ref
         env:
@@ -451,6 +460,15 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
 
     steps:
+      - name: Check staging lease attempt
+        env:
+          LEASE_ATTEMPT: ${{ needs.staging-health.outputs.lease-attempt }}
+        run: |
+          if [[ "$LEASE_ATTEMPT" != "$GITHUB_RUN_ATTEMPT" ]]; then
+            echo "::error::Rerun all jobs to acquire staging capacity for this attempt."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -502,16 +520,11 @@ jobs:
 
   promote-staging:
     name: Promote staging images
-    needs: [resolve, build-api, build-web]
+    needs: [resolve, staging-health, build-api, build-web]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
-    # Deployment and its smoke verification are one serialized side-effecting
-    # unit. Public builds may be cancelled; this job may not be interrupted
-    # after it dispatches Terraform work into the private repository.
-    concurrency:
-      group: deploy-staging
-      cancel-in-progress: false
+    # The workflow lock covers deployment and smoke verification together.
     permissions:
       contents: read
       packages: read
@@ -522,6 +535,15 @@ jobs:
     env:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
+      - name: Check staging lease attempt
+        env:
+          LEASE_ATTEMPT: ${{ needs.staging-health.outputs.lease-attempt }}
+        run: |
+          if [[ "$LEASE_ATTEMPT" != "$GITHUB_RUN_ATTEMPT" ]]; then
+            echo "::error::Rerun all jobs to acquire staging capacity for this attempt."
+            exit 1
+          fi
+
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -830,3 +852,30 @@ jobs:
             '{state: $state, environment_url: "https://staging.stll.app", log_url: $url}' |
             bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
               --method POST --input - >/dev/null
+
+  staging-power-off:
+    name: Release staging lease
+    needs: [resolve, staging-health, build-api, build-web, promote-staging]
+    if: ${{ always() && needs.staging-health.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release-app
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout workflow actions
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Release staging lease
+        if: always()
+        timeout-minutes: 25
+        uses: ./.github/actions/staging-power
+        with:
+          app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          infra-repo: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          action: "off"
+          lease-attempt: ${{ needs.staging-health.outputs.lease-attempt }}

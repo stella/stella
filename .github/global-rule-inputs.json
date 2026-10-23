@@ -256,6 +256,7 @@
     "scripts/sql-perf-detector.test.ts",
     "scripts/sql-perf-suppressions.ts",
     "scripts/stage-web-runtime.test.ts",
+    "scripts/staging-power.test.ts",
     "scripts/stll-registry-resolutions.test.ts",
     "scripts/suppression-waivers.ts",
     "scripts/task-result-cache.test.ts",
