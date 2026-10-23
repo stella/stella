@@ -211,7 +211,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   const createTaskOnce = useSingleFlight();
-  const handleCreateTask = () =>
+  const handleCreateTask = async () =>
     createTaskOnce.run(async () => {
       const { data: taskData, error: taskError } = await api
         .tasks({ workspaceId })
