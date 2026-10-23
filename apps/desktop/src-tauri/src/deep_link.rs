@@ -56,8 +56,9 @@ fn is_safe_handoff_token(value: &str) -> bool {
 }
 
 fn normalize_and_validate_api_base_url(value: &str) -> Result<String, String> {
-  config::normalize_self_host_api_base_url(value)
-    .map_err(|_| "Invalid desktop edit API URL.".to_string())
+  config::normalize_self_host_api_base_url(value).map_err(
+    crate::logging::with_cause_logged("Invalid desktop edit API URL."),
+  )
 }
 
 /// Reserves the approval channel for a single in-flight prompt. Returns the
@@ -879,8 +880,12 @@ pub(crate) async fn show_connection_confirmation(
       let _ = window.close();
       tokio::time::timeout(ACKNOWLEDGE_TIMEOUT, closed_receiver)
         .await
-        .map_err(|_| "A self-host connection dialog is already open.".to_string())?
-        .map_err(|_| "A self-host connection dialog is already open.".to_string())?;
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?;
       Ok(outcome)
     }
     Err(error) => {

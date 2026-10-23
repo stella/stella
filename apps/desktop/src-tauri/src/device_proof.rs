@@ -8,6 +8,8 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+use crate::logging::{json_cause_logged, with_cause_logged};
+
 pub(crate) const RECONNECT: &str =
   "Desktop device key is unavailable; disconnect and reconnect the desktop account";
 
@@ -30,13 +32,13 @@ impl DeviceKey {
       &SystemRandom::new(),
     )
     .map(|key| Self(Some(Arc::new(key))))
-    .map_err(|_| RECONNECT.into())
+    .map_err(with_cause_logged(RECONNECT))
   }
 
   pub(crate) fn generate() -> Result<zeroize::Zeroizing<Vec<u8>>, String> {
     EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &SystemRandom::new())
       .map(|key| zeroize::Zeroizing::new(key.as_ref().to_vec()))
-      .map_err(|_| "Could not create desktop device key".into())
+      .map_err(with_cause_logged("Could not create desktop device key"))
   }
 
   fn public_jwk(&self) -> Result<PublicJwk, String> {
@@ -53,7 +55,7 @@ impl DeviceKey {
   pub(crate) fn thumbprint(&self) -> Result<String, String> {
     // RFC 7638 lexicographic member order is preserved by PublicJwk.
     let canonical = serde_json::to_vec(&self.public_jwk()?)
-      .map_err(|_| "Could not encode desktop device key")?;
+      .map_err(json_cause_logged("Could not encode desktop device key"))?;
     Ok(URL_SAFE_NO_PAD.encode(Sha256::digest(canonical)))
   }
 
@@ -84,12 +86,12 @@ impl DeviceKey {
     let encode = |value: &serde_json::Value| {
       serde_json::to_vec(value)
         .map(|bytes| URL_SAFE_NO_PAD.encode(bytes))
-        .map_err(|_| "Could not encode desktop device proof".to_string())
+        .map_err(json_cause_logged("Could not encode desktop device proof"))
     };
     let signing_input = format!("{}.{}", encode(&header)?, encode(&payload)?);
     let signature = key
       .sign(&SystemRandom::new(), signing_input.as_bytes())
-      .map_err(|_| "Could not sign desktop device proof")?;
+      .map_err(with_cause_logged("Could not sign desktop device proof"))?;
     Ok(format!(
       "{signing_input}.{}",
       URL_SAFE_NO_PAD.encode(signature.as_ref())
@@ -124,6 +126,10 @@ impl DeviceKeyStorage for KeychainStorage {
 }
 
 fn decode_key(value: &str) -> Result<DeviceKey, String> {
+  #[expect(
+    clippy::map_err_ignore,
+    reason = "the decode error quotes a byte of the stored private key"
+  )]
   let bytes = zeroize::Zeroizing::new(
     URL_SAFE_NO_PAD
       .decode(value.as_bytes())

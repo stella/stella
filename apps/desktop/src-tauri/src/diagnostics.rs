@@ -55,6 +55,7 @@ pub(crate) struct DiagnosticSession {
 struct DiagnosticManagedPolicy {
   updates_disabled: bool,
   activity_disabled: bool,
+  clipboard_disabled: bool,
   server_configured: bool,
 }
 
@@ -127,6 +128,7 @@ pub(crate) fn render_diagnostics(input: DiagnosticsInput<'_>) -> String {
     managed_policy: DiagnosticManagedPolicy {
       updates_disabled: policy.updates_disabled,
       activity_disabled: policy.activity_disabled,
+      clipboard_disabled: policy.clipboard_disabled,
       server_configured: policy.server.is_some(),
     },
     sessions: summarize_sessions(input.sessions),
