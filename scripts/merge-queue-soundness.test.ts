@@ -75,12 +75,10 @@ const readPair = () => {
   return { groupingStrategy, comparisonBase };
 };
 
+// HEADGREEN checks only the group head, so a prefix entry could land without
+// its own run whatever the comparison base; every entry needs ALLGREEN.
 const assertSoundPair = (groupingStrategy: string, comparisonBase: string) => {
-  const targetTip = comparisonBase.includes(TARGET_BASE_OUTPUT);
-  if (
-    groupingStrategy === "ALLGREEN" ||
-    (groupingStrategy === "HEADGREEN" && targetTip)
-  ) {
+  if (groupingStrategy === "ALLGREEN") {
     return;
   }
   throw new TypeError(
@@ -192,10 +190,13 @@ const git = (root: string, ...args: string[]) => {
 
 test("merge queue grouping and the planner comparison base form a sound pair", () => {
   const pair = readPair();
+  expect(pair.comparisonBase).toContain(TARGET_BASE_OUTPUT);
   expect(() =>
     assertSoundPair(pair.groupingStrategy, pair.comparisonBase),
   ).not.toThrow();
-  expect(() => assertSoundPair("HEADGREEN", pair.comparisonBase)).not.toThrow();
+  expect(() => assertSoundPair("HEADGREEN", pair.comparisonBase)).toThrow(
+    `grouping_strategy=HEADGREEN, comparison_base=${pair.comparisonBase}`,
+  );
   expect(() => assertSoundPair("HEADGREEN", QUEUE_BASE_EXPRESSION)).toThrow(
     `grouping_strategy=HEADGREEN, comparison_base=${QUEUE_BASE_EXPRESSION}`,
   );
