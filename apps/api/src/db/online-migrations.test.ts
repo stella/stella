@@ -77,6 +77,9 @@ const runOnlineMigrations = async (
         if (query.includes("pg_backend_pid() AS pid")) {
           return [{ pid: 2, database: "test" }];
         }
+        if (query.includes('"stateAgeMs"')) {
+          return [];
+        }
         if (query.includes("ageMs")) {
           return [
             { ageMs: 0, observedAt: new Date(testClock()).toISOString() },
@@ -1519,7 +1522,7 @@ const createHarness = ({
           }
           if (
             query.trim() ===
-            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+            "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
           }
