@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useTransition } from "react";
+import { lazy, Suspense, useRef, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
@@ -31,11 +31,13 @@ import { useSignOut } from "@/hooks/use-sign-out";
 import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
 
 // Lazy so the form stack is fetched only when someone reports the error.
 const FeedbackDialog = lazy(async () => {
@@ -156,7 +158,9 @@ export const DefaultErrorComponent = ({
     }
 
     if (retriesAtLimit) {
-      analytics.captureError(error);
+      reportErrorOnce(error, (caughtError) => {
+        analytics.captureError(caughtError);
+      });
     }
   }, [
     error,
@@ -253,6 +257,7 @@ const UnexpectedRouteError = ({
     null,
   );
   const [reportOpen, setReportOpen] = useState(false);
+  const recoveryStarted = useRef(false);
   // Mounted on first use so the form chunk is never fetched for an error
   // nobody reports, then kept for the exit transition.
   const [reportMounted, setReportMounted] = useState(false);
@@ -281,19 +286,19 @@ const UnexpectedRouteError = ({
   }
 
   useMountEffect(() => {
-    setErrorReference(createErrorReference());
-  });
-
-  useExternalSyncEffect(() => {
-    if (errorReference === null) {
+    if (recoveryStarted.current) {
       return;
     }
+    recoveryStarted.current = true;
+    const reference = createErrorReference();
+    setErrorReference(reference);
     routeErrorLifecycle.shown({
       error: routeError,
       recovery: recovery.type,
-      reference: errorReference,
+      reference,
     });
-  }, [routeErrorLifecycle, routeError, errorReference, recovery.type]);
+    recoverFromStaleDeploymentLoad(routeError);
+  });
 
   const handleCopyReference = async () => {
     if (errorReference === null) {
