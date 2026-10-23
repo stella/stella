@@ -72,7 +72,6 @@ import ledger from "../scripts/test-timing-ledger.json" with { type: "json" };
 import { createBudgetLedger } from "./budget-ledger.ts";
 import {
   type AstNode,
-  type ScopeContext,
   everyNode,
   filenameForContext,
   isAstNode,
@@ -81,6 +80,7 @@ import {
   memberPropertyName,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
