@@ -7,6 +7,9 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./mcp": "./src/mcp.ts",
+    "./mcp-web-handoff": "./src/mcp-web-handoff.ts",
+    "./redirect-path": "./src/redirect-path.ts",
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",
     "./public-crawl-rules": "./src/public-crawl-rules.ts",
@@ -84,6 +87,7 @@
     "./legal-citation-links": "./src/legal-citation-links.ts",
     "./legal-resolve": "./src/legal-resolve.ts",
     "./statute-version": "./src/statute-version.ts",
+    "./legislation-publisher-evidence": "./src/legislation-publisher-evidence.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./hosted-checkout": "./src/hosted-checkout.ts",
     "./professional-use": "./src/professional-use.ts",
