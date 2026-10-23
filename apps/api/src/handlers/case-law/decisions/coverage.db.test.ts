@@ -528,7 +528,7 @@ test("per-year missing counts sum to the source missing count", () => {
 });
 
 test(
-  "held decision dates fill year bounds when the serving index has none",
+  "year bounds span every held decision, indexed or not",
   async () => {
     const db = drizzle({ client });
     const sourceId = createSafeId<"caseLawSource">();
@@ -659,18 +659,13 @@ test(
         ),
       );
       const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
+        readCaseLawCoverageSourcesQuery(tx),
       );
-      const unknown = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
-      );
-      expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
+      // Held, not searchable: the unindexed endpoints still bound the years,
+      // while withdrawn and listing-only decisions never do.
+      expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
         decisionYearFrom: 1800,
         decisionYearTo: 2020,
-      });
-      expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: 2000,
-        decisionYearTo: 2010,
         pendingTextCount: 0,
       });
       expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({

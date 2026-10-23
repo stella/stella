@@ -53,15 +53,11 @@ import {
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { servedCaseLawSearchDocumentFor } from "@/api/lib/case-law/search-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
-import type {
-  LegalBrowseFacets,
-  LegalSearchEngine,
-} from "@/api/lib/legal-search/types";
+import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -251,13 +247,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
     tx: CaseLawPublicReadTransaction,
-    engine: LegalSearchEngine = envBase.LEGAL_SEARCH_PROVIDER,
   ): Promise<CaseLawCoverageSourceRow[]> => {
-    const eligibility = servedCaseLawSearchDocumentFor(
-      "coverage_decisions",
-      engine,
-    );
-    const served = eligibility ?? sql`FALSE`;
     const sources = await tx
       .select({
         id: caseLawSources.id,
@@ -269,38 +259,22 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
         storedTotal: caseLawSources.storedTotal,
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
-        decisionYearFrom: sql<number | null>`coalesce((
+        decisionYearFrom: sql<number | null>`(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date ASC
           LIMIT 1
-        ), (
-          SELECT extract(year FROM held_decisions.decision_date)::integer
-          FROM ${publishedCaseLawDecisions} AS held_decisions
-          WHERE held_decisions.source_id = case_law_sources.id
-            AND held_decisions.decision_date IS NOT NULL
-          ORDER BY held_decisions.decision_date ASC
-          LIMIT 1
-        ))`,
-        decisionYearTo: sql<number | null>`coalesce((
+        )`,
+        decisionYearTo: sql<number | null>`(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date DESC
           LIMIT 1
-        ), (
-          SELECT extract(year FROM held_decisions.decision_date)::integer
-          FROM ${publishedCaseLawDecisions} AS held_decisions
-          WHERE held_decisions.source_id = case_law_sources.id
-            AND held_decisions.decision_date IS NOT NULL
-          ORDER BY held_decisions.decision_date DESC
-          LIMIT 1
-        ))`,
+        )`,
       })
       .from(caseLawSources)
       .where(redistributableCaseLawSource)
