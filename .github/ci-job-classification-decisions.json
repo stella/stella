@@ -177,7 +177,7 @@
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "0f9857dacab6bc53fa568d66fd546f08927bbf3fafbcedea561bcf58b66409f8"
+    "reviewedDigest": "5ad08cb2530c01a0be96a84160f9c4b6186740b1786c2b58ccdab14d57b20a7d"
   },
   "candidate:.github/workflows/ci.yml/postgres-service-suites": {
     "kind": "support",
@@ -357,7 +357,7 @@
   "candidate:.github/workflows/db-migrations.yml/apply-fresh": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "e96c8095f0db77c3f6ae66babca3b9946eed936de05abf7c793659d6c449fa6b"
+    "reviewedDigest": "b7bbc2fea9ef0ed00e28846dcc5b538645e43e90502a048b2964d39aabf8c44a"
   },
   "candidate:.github/workflows/dependency-audit.yml/audit": {
     "kind": "ordinary",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "a7a5457e596fc0544b5796f71fa2746c4a3b6e872b3cb1edd2f42827a5721ae1"
+    "reviewedDigest": "c01b0bb5f6ba46c561eeb7c77a09e99a874ed31525236e07030c27303277b26d"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "32d5089dc9ee145dcd61712d7b9e84b7d623692cd87db3887c269fd846414606"
+    "reviewedDigest": "8719aa4fa2c2ee411756ecc982b36c0f080efc4b45441eafc52f7762358baff3"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -632,7 +632,7 @@
   "candidate:.github/workflows/nightly-test.yml/postgres-suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "992e7027e4dd783b724d392c2f8f65520cd960385546fa3235c4099d3a8ff7ba"
+    "reviewedDigest": "b178d1a926308ecac09091df2c0a84c161d00ff3835c76b1d4ff7ca690a79d9d"
   },
   "candidate:.github/workflows/nightly-test.yml/valkey-suites": {
     "kind": "ordinary",
@@ -717,7 +717,7 @@
   "candidate:.github/workflows/query-perf.yml/query-perf": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "b72ce2dee93b6a19cfeeb5338b331d947eb15f0f04916451b45fdb7d57708997"
+    "reviewedDigest": "1ae29e2abeff95cbf5f1b09b7ebef9f245ee0de772dbef739109e2f18f271b73"
   },
   "candidate:.github/workflows/railway-smoke.yml/smoke": {
     "kind": "ordinary",
