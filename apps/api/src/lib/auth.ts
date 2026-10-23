@@ -190,7 +190,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
-import { readLiveSseSessions } from "@/api/lib/auth/sse-session-liveness";
+import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -292,7 +292,6 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
-import type { SseSessionLivenessReader } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
 import { isSyntheticSessionPrincipal } from "@/api/lib/synthetic-principal/constants";
 import {
@@ -3026,8 +3025,7 @@ export const resolveWorkspaceRealtimeAudience = async (
  * the reasons given on each resolver.
  */
 export const realtimeAuthorizers = {
-  sessions: async (sessions: Parameters<SseSessionLivenessReader>[0]) =>
-    await readLiveSseSessions(rootDb, sessions),
+  sessions: readCurrentLiveSseSessions,
   user: async (
     lookup: Parameters<typeof resolveUserRealtimeAuthorization>[0],
   ) => await resolveUserRealtimeAuthorization(lookup, rootDb),

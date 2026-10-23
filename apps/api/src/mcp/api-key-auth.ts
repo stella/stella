@@ -89,6 +89,7 @@ type MachineApiKeyDependencies = {
 };
 
 type ReadMachineApiKeyDependencies = {
+  clock?: Pick<typeof Temporal.Now, "instant"> | undefined;
   getAuthContext?:
     | (() => Promise<{ adapter: Pick<AuthContext["adapter"], "findOne"> }>)
     | undefined;
@@ -99,6 +100,7 @@ const readMachineApiKey = async (
   credential: string,
   {
     getAuthContext = async () => getAuth().$context,
+    clock = Temporal.Now,
   }: ReadMachineApiKeyDependencies,
 ) => {
   const { adapter } = await getAuthContext();
@@ -111,6 +113,13 @@ const readMachineApiKey = async (
       { field: "configId", value: MACHINE_API_KEY_CONFIG_ID },
     ],
   });
+  if (
+    key !== null &&
+    key.expiresAt !== null &&
+    key.expiresAt.getTime() < clock.instant().epochMilliseconds
+  ) {
+    throw rejectCredential();
+  }
   return key === null
     ? null
     : {
@@ -137,6 +146,7 @@ const resolvePresentedMachineApiKey = async (
     metering,
     verifyApiKey,
     getAuthContext,
+    clock,
     resolveAuthorization = resolveCredentialMemberAuthorization,
     resolvePersonalPolicy = readPersonalApiKeyPolicy,
   }: PresentedMachineApiKeyOptions,
@@ -153,7 +163,7 @@ const resolvePresentedMachineApiKey = async (
         })
       : {
           valid: true,
-          key: await readMachineApiKey(credential, { getAuthContext }),
+          key: await readMachineApiKey(credential, { getAuthContext, clock }),
         };
 
   if (!verification.valid || !verification.key) {
@@ -164,11 +174,7 @@ const resolvePresentedMachineApiKey = async (
 
   // `enabled` is surfaced separately from validity by the plugin; a revoked key
   // is disabled rather than deleted so its audit trail survives.
-  if (
-    !key.enabled ||
-    (key.expiresAt !== null &&
-      key.expiresAt.getTime() < Temporal.Now.instant().epochMilliseconds)
-  ) {
+  if (!key.enabled) {
     throw rejectCredential();
   }
 

@@ -6,11 +6,12 @@ import {
 import type { ApiKey } from "@better-auth/api-key/types";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { errorOutputLogger } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { Temporal } from "@stll/time";
 
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
@@ -78,6 +79,7 @@ const createCredential = async () => {
     },
   });
   const membership: { role: string | null } = { role: "owner" };
+  const clock = { current: Temporal.Instant.from("2026-10-08T00:00:00Z") };
   const resolveAuthorization = async () =>
     membership.role === null
       ? null
@@ -99,6 +101,7 @@ const createCredential = async () => {
   const revalidate = async () =>
     await revalidateMachineApiKeySession(issued.key, {
       getAuthContext: async () => context,
+      clock: { instant: () => clock.current },
       resolveAuthorization,
     });
   const stored = async () => {
@@ -113,6 +116,7 @@ const createCredential = async () => {
     context,
     issued,
     membership,
+    clock,
     admit,
     revalidate,
     stored,
@@ -174,7 +178,13 @@ describe("machine credential stream revalidation", () => {
         await credential.context.adapter.update({
           model: API_KEY_TABLE_NAME,
           where: [{ field: "id", value: credential.issued.id }],
-          update: { expiresAt: new Date(0) },
+          update: {
+            expiresAt: new Date(credential.clock.current.epochMilliseconds),
+          },
+        });
+        expect((await credential.revalidate()).userId).toBe(OWNER_ID);
+        credential.clock.current = credential.clock.current.add({
+          milliseconds: 1,
         });
         break;
       case "membership_removed":
@@ -191,8 +201,8 @@ describe("machine credential stream revalidation", () => {
         });
         break;
       default: {
-        const exhaustive: never = change;
-        return exhaustive;
+        change satisfies never;
+        panic("Unhandled credential change");
       }
     }
     const before = await credential.stored();
