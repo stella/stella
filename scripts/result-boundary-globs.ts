@@ -28,6 +28,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/playwright-tools/src/**/*.ts",
+  "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
