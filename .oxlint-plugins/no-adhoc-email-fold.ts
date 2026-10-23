@@ -10,11 +10,11 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   getPropertyName,
   isAstNode,
   memberPropertyName,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 const EMAIL_NAME = /e-?mail|mailbox/iu;
