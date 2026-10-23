@@ -256,6 +256,19 @@ const resolveImport = (
           return { files: [], internal: true, complete: false };
         }
         candidates = targets.map((target) => `${packageRoot}/${target}`);
+      } else if (
+        typeof manifest === "object" &&
+        manifest !== null &&
+        "exports" in manifest
+      ) {
+        // Any other exports form (a string, an array) names the entry the
+        // package really loads: the src/index fallback would guess, so only
+        // a plain string root export resolves; everything else fails closed.
+        const exported = manifest.exports;
+        if (subpath !== "." || typeof exported !== "string") {
+          return { files: [], internal: true, complete: false };
+        }
+        candidates = [`${packageRoot}/${exported.replace(/^\.\//u, "")}`];
       }
       candidates ??= [
         `${packageRoot}/src${workspace[2] === undefined ? "/index" : `/${workspace[2]}`}`,
@@ -273,6 +286,77 @@ const resolveImport = (
     internal: true,
     complete: files.length === candidates.length,
   };
+};
+
+// Whether the package.json nearest to `file` declares `name` as a dependency.
+const declaresDependency = (
+  root: string,
+  file: string,
+  name: string,
+): boolean => {
+  for (
+    let directory = path.posix.dirname(file);
+    ;
+    directory = path.posix.dirname(directory)
+  ) {
+    const manifestPath = path.join(root, directory, "package.json");
+    if (existsSync(manifestPath)) {
+      const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
+      if (typeof manifest !== "object" || manifest === null) {
+        return false;
+      }
+      return ["dependencies", "devDependencies", "peerDependencies"].some(
+        (field) => {
+          const deps: unknown = Reflect.get(manifest, field);
+          return typeof deps === "object" && deps !== null && name in deps;
+        },
+      );
+    }
+    if (directory === "." || directory === "") {
+      return false;
+    }
+  }
+};
+
+// The files a stylesheet's `@import`s load, and whether all were resolved.
+const stylesheetImports = (
+  imports: readonly string[],
+  file: string,
+  root: string,
+  boundary: ReadonlySet<string>,
+): { files: string[]; complete: boolean } => {
+  const files: string[] = [];
+  let complete = true;
+  for (const imported of imports) {
+    const bare = !/^(?:[./@]|[a-z][a-z0-9+.-]*:)/iu.test(imported);
+    // CSS resolves a bare path against the stylesheet first; only a path
+    // with no such file is a package (`@import "tailwindcss"`).
+    const relative = bare
+      ? sourceCandidate(
+          root,
+          path.posix.join(path.posix.dirname(file), imported),
+        )
+      : undefined;
+    if (relative !== undefined) {
+      files.push(relative);
+      continue;
+    }
+    // A bare name that is neither next to the stylesheet nor a dependency its
+    // package declares (a deleted or misspelled local stylesheet) leaves the
+    // closure unknown rather than reading as an external package. Declared,
+    // not installed: planning runs before any install.
+    if (
+      bare &&
+      !declaresDependency(root, file, imported.split("/", 1)[0] ?? imported)
+    ) {
+      complete = false;
+      continue;
+    }
+    const resolved = resolveImport(imported, file, root, boundary);
+    files.push(...resolved.files);
+    complete &&= resolved.complete;
+  }
+  return { files, complete };
 };
 
 export const staticImportClosure = (
@@ -304,23 +388,9 @@ export const staticImportClosure = (
         .filter((imported): imported is string => imported !== undefined)
         // A resource query or hash names the same file (`tokens.css?theme`).
         .map((imported) => imported.split(/[?#]/u, 1)[0] ?? imported);
-      for (const imported of imports) {
-        // CSS resolves a bare path against the stylesheet first; only a path
-        // with no such file is a package (`@import "tailwindcss"`).
-        const relative = /^(?:[./@]|[a-z][a-z0-9+.-]*:)/iu.test(imported)
-          ? undefined
-          : sourceCandidate(
-              root,
-              path.posix.join(path.posix.dirname(file), imported),
-            );
-        if (relative !== undefined) {
-          pending.push(relative);
-          continue;
-        }
-        const resolved = resolveImport(imported, file, root, boundary);
-        pending.push(...resolved.files);
-        complete &&= resolved.complete;
-      }
+      const resolved = stylesheetImports(imports, file, root, boundary);
+      pending.push(...resolved.files);
+      complete &&= resolved.complete;
       // Assets a stylesheet references (`url(./background.svg)`) render with
       // it, so a local one joins the closure; one that cannot be found leaves
       // the closure unknown.

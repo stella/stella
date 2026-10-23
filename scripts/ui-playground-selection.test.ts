@@ -283,6 +283,41 @@ test("a browser export change selects the importing spec", () => {
   }
 });
 
+test("a string root export resolves to its entry, never the src/index guess", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import "@stll/fixture-package";\n',
+    );
+    write(
+      "packages/fixture/package.json",
+      JSON.stringify({
+        name: "@stll/fixture-package",
+        exports: "./src/browser.ts",
+      }),
+    );
+    write("packages/fixture/src/browser.ts", "export const target = 1;");
+    write("packages/fixture/src/index.ts", "export const target = 2;");
+    expect(
+      selectGeometrySpecs(["packages/fixture/src/browser.ts"], root),
+    ).toEqual([spec]);
+    // An exports form the selector cannot read fails closed.
+    write(
+      "packages/fixture/package.json",
+      JSON.stringify({
+        name: "@stll/fixture-package",
+        exports: ["./src/browser.ts"],
+      }),
+    );
+    expect(
+      selectGeometrySpecs(["apps/web/src/unrelated.ts"], root),
+    ).not.toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("an exported stylesheet outside src selects the importing spec", () => {
   const { root, spec, write } = createSelectionFixture();
   try {
@@ -326,6 +361,11 @@ test("bare and unquoted CSS imports resolve against the stylesheet", () => {
     write("apps/web/src/routes/dev/tokens.css", ":root {}\n");
     write("apps/web/src/routes/dev/layout.css", ".page {}\n");
     write("apps/web/src/routes/dev/theme.css", ":root {}\n");
+    // A declared dependency, so `@import "tailwindcss"` reads as external.
+    write(
+      "apps/web/package.json",
+      JSON.stringify({ name: "web", devDependencies: { tailwindcss: "1" } }),
+    );
     for (const file of [
       "apps/web/src/routes/dev/tokens.css",
       "apps/web/src/routes/dev/layout.css",
@@ -337,6 +377,11 @@ test("bare and unquoted CSS imports resolve against the stylesheet", () => {
     expect(selectGeometrySpecs(["apps/web/src/unrelated.ts"], root)).toEqual(
       [],
     );
+    // A bare stylesheet that is gone and is no package fails closed.
+    rmSync(path.join(root, "apps/web/src/routes/dev/tokens.css"));
+    expect(
+      selectGeometrySpecs(["apps/web/src/unrelated.ts"], root),
+    ).not.toEqual([]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
