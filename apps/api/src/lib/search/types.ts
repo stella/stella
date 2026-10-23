@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import {
   GLOBAL_SEARCH_RESULT_TYPES,
-  isEntityKind,
   type GlobalSearchResultType,
+  isEntityKind,
   type ResourceName,
   type ResourceRef,
 } from "@stll/api-contract";

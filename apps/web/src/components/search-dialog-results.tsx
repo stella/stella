@@ -11,11 +11,11 @@ import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
+  AiActionIcon,
   HistoryIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";

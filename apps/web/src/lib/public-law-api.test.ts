@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+  type PublicCountryCapabilities,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
-  PUBLIC_COUNTRY_CAPABILITIES,
-  type PublicCountryCapabilities,
 } from "@stll/api-contract/public-country-capability";
 
-import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
   isPublicLawMiss,

@@ -15,8 +15,8 @@ import {
   isAutofixProtectedPath,
 } from "./autofix-protected-paths";
 import {
-  GENERATORS,
   allowedOutputs,
+  GENERATORS,
   generatorsForFiles,
   matchesGeneratedGlob,
 } from "./generated-files";
@@ -33,8 +33,8 @@ const PURE_AUTOFIX = {
   // `generate` renders the env catalog and schema defaults plus the web
   // Dockerfile; only `doctor` reads the process environment or env files.
   "env-examples": "env:generate",
-  // Renders the env catalog and the self-host contract, formatted by the
-  // pinned oxfmt; `check` alone reads workflows and runs the manifest script.
+  // Renders the env catalog and the self-host contract, formatted by
+  // bun fmt; `check` alone reads workflows and runs the manifest script.
   selfhost: "selfhost:generate",
   // Parsers and AST repairs are pure (no clock, network or database on the
   // re-parse path); it fails rather than re-stamping an analysis.

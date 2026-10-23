@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   and,
   count,
@@ -58,18 +58,18 @@ import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session
 import { isValidDateCursorValue } from "@/api/lib/entities/cursor-validation";
 import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import {
-  entityQueryScopeCondition,
   type EntityQueryScope,
+  entityQueryScopeCondition,
 } from "@/api/lib/entities/query-scope";
 import {
   entityWindowUnionSource,
   windowRowKindColumn,
 } from "@/api/lib/entities/signal-window-rows";
 import {
-  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
-  readGeneratedCursorValues,
   type EntitiesWindowCursorValue,
   type EntitiesWindowCursorValues,
+  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
+  readGeneratedCursorValues,
 } from "@/api/lib/entities/window-cursor";
 import {
   AGENDA_ITEM_KIND,

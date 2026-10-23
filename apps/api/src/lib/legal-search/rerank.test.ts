@@ -12,8 +12,8 @@ import {
   LOWEST_COURT_TIER,
   rrfMerge,
   saturateAuthority,
-  stableBlendUpperBound,
   type ScoredCandidate,
+  stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 
 const authority = (entries: Record<string, number>): Map<string, number> =>

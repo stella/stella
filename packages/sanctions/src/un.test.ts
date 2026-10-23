@@ -108,6 +108,37 @@ describe("UN consolidated list parser", () => {
     expect(result.isErr() && result.error.code).toBe("invalid-value");
   });
 
+  test("rejects missing identity fields and deduplicates repeated aliases", async () => {
+    const source = await Bun.file(FIXTURE).text();
+    const missingId = await parseUnList(
+      once(source.replace("<DATAID>6908048</DATAID>", "")),
+    );
+    expect(missingId.isErr() && missingId.error.code).toBe("missing-field");
+
+    const nameless = await parseUnList(
+      once(
+        source
+          .replace("<FIRST_NAME>SADDAM</FIRST_NAME>", "")
+          .replace("<SECOND_NAME>HUSSEIN</SECOND_NAME>", "")
+          .replace("<THIRD_NAME>AL-TIKRITI</THIRD_NAME>", "")
+          .replace(
+            "<NAME_ORIGINAL_SCRIPT>صدام حسين التكريتي</NAME_ORIGINAL_SCRIPT>",
+            "",
+          )
+          .replace("<ALIAS_NAME>Abu Ali</ALIAS_NAME>", "<ALIAS_NAME/>"),
+      ),
+    );
+    expect(nameless.isErr() && nameless.error.code).toBe("missing-field");
+
+    const parsed = (await parseUnList(once(source))).unwrap();
+    const umarov = parsed.entries.find(
+      ({ sourceId }) => sourceId === "2960872",
+    );
+    expect(
+      umarov?.names.filter(({ name }) => name === "Dokka Umarov"),
+    ).toHaveLength(1);
+  });
+
   test("fails on a record element it does not know instead of skipping it", async () => {
     const source = await Bun.file(FIXTURE).text();
     for (const [from, to] of [

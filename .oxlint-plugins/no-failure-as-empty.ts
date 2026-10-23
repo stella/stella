@@ -25,13 +25,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import baseline from "./no-failure-as-empty-baseline.json" with { type: "json" };
 import {
+  type AstNode,
   isAstNode,
   isIdentifier,
   isMemberAccess,
   memberPropertyName,
   repoRelativeFilename,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 const RULE_NAME = "no-failure-as-empty";
