@@ -149,7 +149,7 @@ export const fetchWithResolvedAddress = async ({
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
-  timeoutPolicy?: "headers" | "total";
+  timeoutPolicy?: "headers" | "idle" | "total";
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   assertThirdPartyOutboundPermit(permit);
@@ -196,6 +196,24 @@ export const fetchWithResolvedAddress = async ({
           (response) => {
             if (timeoutPolicy === "headers") {
               guards?.clearHeaderTimeout();
+            }
+            if (timeoutPolicy === "idle") {
+              // The window restarts with every chunk, so a stalled body fails
+              // while a slow but progressing one completes.
+              guards?.clearHeaderTimeout();
+              const stalled = () => {
+                response.destroy(
+                  new SafeOutboundFetchError({ message: "Request timed out" }),
+                );
+              };
+              let idle = setTimeout(stalled, timeoutMs);
+              response.on("data", () => {
+                clearTimeout(idle);
+                idle = setTimeout(stalled, timeoutMs);
+              });
+              response.on("close", () => {
+                clearTimeout(idle);
+              });
             }
             const status = response.statusCode ?? 0;
             const responseHeaders = headersFromIncoming(response.headers);
@@ -710,7 +728,14 @@ export const safeOutboundFetchBytes = async ({
   url: string | URL;
 } & (
   | { timeoutMs: number; timeout?: never }
-  | { timeout: { type: "headers"; ms: number }; timeoutMs?: never }
+  // A header deadline stops timing once headers arrive, so the caller's
+  // signal is the only bound left on the body read.
+  | {
+      timeout: { type: "headers"; ms: number };
+      timeoutMs?: never;
+      signal: AbortSignal;
+    }
+  | { timeout: { type: "idle"; ms: number }; timeoutMs?: never }
 )): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   assertThirdPartyOutboundPermit(permit);
   const durationMs = timeout === undefined ? timeoutMs : timeout.ms;
@@ -739,7 +764,8 @@ export const safeOutboundFetchBytes = async ({
     method,
     redirect,
     signal,
-    timeoutMs: remainingTimeoutMs,
+    // Resolving the target is progress, so an idle window starts afresh.
+    timeoutMs: timeout?.type === "idle" ? durationMs : remainingTimeoutMs,
     timeoutPolicy: timeout?.type ?? "total",
     url: target.value.url,
   });

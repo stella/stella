@@ -151,7 +151,7 @@ const requestToken = async ({
         body,
         maxBytes: GRAPH_TOKEN_RESPONSE_MAX_BYTES,
         permit,
-        timeout: { type: "headers", ms: GRAPH_OAUTH_TIMEOUT_MS },
+        timeout: { type: "idle", ms: GRAPH_OAUTH_TIMEOUT_MS },
         redirect: "error",
       }).then((result) =>
         result.mapError(

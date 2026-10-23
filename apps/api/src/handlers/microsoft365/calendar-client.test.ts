@@ -68,7 +68,7 @@ test("event reads select metadata, omit bodies and stop at the total paging cap"
     requests.push(url);
     expect(input.redirect).toBe("error");
     expect(url.searchParams.get("$select")).not.toContain("body");
-    expect(input.timeout).toEqual({ type: "headers", ms: 10_000 });
+    expect(input.timeout).toEqual({ type: "idle", ms: 10_000 });
     return jsonResponse({
       value: Array.from({ length: 50 }, () => event),
       "@odata.nextLink": `https://graph.microsoft.com/v1.0/me/calendarView?$skiptoken=page${requests.length}`,

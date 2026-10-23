@@ -197,7 +197,7 @@ const requestGraph = async (
         redirect: "error",
         maxBytes: RESPONSE_MAX_BYTES,
         permit: options.permit,
-        timeout: { type: "headers", ms: REQUEST_TIMEOUT_MS },
+        timeout: { type: "idle", ms: REQUEST_TIMEOUT_MS },
       });
       if (Result.isError(response)) {
         return Result.err(upstreamError(response.error));

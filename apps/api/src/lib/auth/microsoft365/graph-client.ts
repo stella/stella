@@ -408,7 +408,7 @@ export const fetchAccountLabel = async (
         },
         maxBytes: GRAPH_ACCOUNT_RESPONSE_MAX_BYTES,
         permit,
-        timeout: { type: "headers", ms: GRAPH_FETCH_TIMEOUT_MS },
+        timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
         redirect: "error",
       }).then((result) =>
         result.mapError(
@@ -482,7 +482,7 @@ export const listDriveRootChildren = async ({
         },
         maxBytes: GRAPH_DRIVE_RESPONSE_MAX_BYTES,
         permit,
-        timeout: { type: "headers", ms: GRAPH_FETCH_TIMEOUT_MS },
+        timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
         redirect: "error",
       }).then((result) =>
         result.mapError(

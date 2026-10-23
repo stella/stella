@@ -64,7 +64,7 @@ test("token exchange parses successful responses and reports HTTP failures", asy
     timeout,
   }) => {
     expect(maxBytes).toBe(64 * 1024);
-    expect(timeout).toEqual({ type: "headers", ms: 10_000 });
+    expect(timeout).toEqual({ type: "idle", ms: 10_000 });
     call += 1;
     if (call === 2) {
       return Result.ok({

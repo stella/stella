@@ -168,6 +168,61 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("an idle timeout fails a body that stalls after headers", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200);
+        response.write("partial");
+      },
+      async (port) => {
+        const startedAt = performance.now();
+        const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: 100,
+          timeoutPolicy: "idle",
+          url: new URL(`http://example.test:${port}/stalled`),
+        });
+        expect(Result.isError(result)).toBe(true);
+        expect(performance.now() - startedAt).toBeLessThan(2000);
+      },
+    );
+  });
+
+  test("an idle timeout restarts with each body chunk", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200);
+        let sent = 0;
+        const interval = setInterval(() => {
+          sent += 1;
+          if (sent === 5) {
+            clearInterval(interval);
+            response.end("e");
+            return;
+          }
+          response.write("c");
+        }, 60);
+      },
+      async (port) => {
+        const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: 200,
+          timeoutPolicy: "idle",
+          url: new URL(`http://example.test:${port}/progressing`),
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        // The whole body takes longer than one window, yet never stalls.
+        expect(new TextDecoder().decode(result.value.body)).toBe("cccce");
+      },
+    );
+  });
+
   test("aborts a byte response that stops sending its body", async () => {
     await withHttpServer(
       (_request, response) => {
