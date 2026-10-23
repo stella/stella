@@ -40,7 +40,7 @@ export const createRequestRouteClassifier = ({
   const registry = new Elysia(configuration);
   const matchRoute = registry.router.dynamic.find.bind(registry.router.dynamic);
   const routeType = (route: InternalRoute) =>
-    classifyRoute(route) ? "included" : "excluded";
+    classifyRoute(route) ? ("included" as const) : ("excluded" as const);
   const routeMetadata = (route: InternalRoute) => ({
     type: routeType(route),
     routeTemplate: route.path,
