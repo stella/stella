@@ -8,6 +8,7 @@ import { stellaToast } from "@stll/ui/toast";
 import {
   holdInspectorRestoreSettle,
   isFileFacet,
+  resetInspectorRestoreForTest,
   startNewPageLoadForTest,
 } from "@/components/inspector/inspector-broadcast";
 import {
@@ -121,6 +122,7 @@ class FakeBroadcastChannel {
 }
 
 afterEach(() => {
+  resetInspectorRestoreForTest();
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
   restoreTemporalNow?.();

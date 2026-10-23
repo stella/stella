@@ -17,7 +17,7 @@ import {
 export const INSPECTOR_PANE_WIDTH_STORAGE_KEY =
   "stella:inspector-pane-width:v2";
 
-export type InspectorPaneSurface = "matter" | "public-law";
+type InspectorPaneSurface = "matter" | "public-law";
 
 const inspectorPaneWidthEntry = definePersistedState({
   key: INSPECTOR_PANE_WIDTH_STORAGE_KEY,

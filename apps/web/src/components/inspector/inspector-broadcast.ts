@@ -169,6 +169,17 @@ let restoreHolds = 0;
 let settlingScope: InspectorBroadcastScope | null = null;
 let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Restores module-owned page lifecycle state between isolated tests. */
+export const resetInspectorRestoreForTest = (): void => {
+  if (settleTimer !== null) {
+    clearTimeout(settleTimer);
+    settleTimer = null;
+  }
+  pageLoadId = createUuid();
+  restoreHolds = 0;
+  settlingScope = null;
+};
+
 /** Clears the flag once nothing restored is still loading and the page has
  *  stayed responsive for a moment: a busy main thread runs neither the timer
  *  nor the idle callback. */
