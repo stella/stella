@@ -1,4 +1,4 @@
-import { createContext, use, useId } from "react";
+import { createContext, createElement, use, useId } from "react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 
 import { queryOptions, useQuery } from "@tanstack/react-query";
@@ -136,9 +136,26 @@ export const CapabilityActionChrome = ({
   action: ActionDescriptor;
   children: ReactNode;
 }) =>
-  isCapabilityActionVisible(action, useActionCapabilities(action.capability))
-    ? children
-    : null;
+  createElement(
+    renderCapabilityActionChromeContent,
+    {
+      action,
+      capabilities: useActionCapabilities(action.capability),
+    },
+    children,
+  );
+
+async function renderCapabilityActionChromeContent({
+  action,
+  capabilities,
+  children,
+}: {
+  action: ActionDescriptor;
+  capabilities: ActionCapabilities;
+  children?: ReactNode;
+}) {
+  return isCapabilityActionVisible(action, capabilities) ? children : null;
+}
 
 type CapabilityActionChildProps = {
   disabled?: boolean;
