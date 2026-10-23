@@ -1,6 +1,14 @@
 import type { PropsWithChildren } from "react";
 
 /**
+ * Where the bar's band ends, in pixels from the top of the box it floats
+ * in: its inset and height, with a gap. A hover control that shares the
+ * bar's edge (the outline rail) starts below it, so a pointer reaching for
+ * the zoom controls never opens that control on the way.
+ */
+export const VIEWER_OVERLAY_BAR_BAND_PX = 48;
+
+/**
  * The glass bar a viewer's controls float in, pinned to the top inline-end
  * corner of the document: the PDF and DOCX preview, the search preview, and
  * the legal readers. One owner of the corner, the glass and the spacing, so
@@ -18,9 +26,11 @@ export const ViewerOverlayBar = ({ children }: PropsWithChildren) => (
 );
 
 /**
- * Inline-end space the first row of a document must leave free so the bar
- * cannot paint over it: the corner the bar takes, measured from the document
- * column's own inline padding. Sized for the zoom triad the readers float,
- * the widest bar that shares its corner with content.
+ * Block-start space a reader's document column leaves above its first row,
+ * so at the top of the scroll nothing the reader prints sits under the bar,
+ * whatever that row is and however it aligns. The bar's inset plus its own
+ * height, with a gap; the text scrolls under the glass after that. Every
+ * reader that floats the bar starts its column with this, not a number of
+ * its own.
  */
-export const VIEWER_OVERLAY_BAR_CLEARANCE = "pe-24";
+export const VIEWER_OVERLAY_BAR_TOP_CLEARANCE = "pt-12";

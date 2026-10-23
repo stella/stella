@@ -45,6 +45,7 @@ const createSeries = async (
   options: {
     documentType?: "invoice" | "advance" | "credit_note";
     pattern?: string;
+    padding?: number;
     isDefault?: boolean;
   } = {},
 ) => {
@@ -55,7 +56,7 @@ const createSeries = async (
     documentType: options.documentType ?? "invoice",
     name: `Series ${id}`,
     pattern: options.pattern ?? "INV-{YYYY}-{SEQ}",
-    padding: 3,
+    padding: options.padding ?? 3,
     isDefault: options.isDefault ?? false,
   });
   createdSeriesIds.push(id);
@@ -100,14 +101,21 @@ describe("number series allocation", () => {
     const seriesId = await createSeries(ids.orgA);
     const beforeRollover = new Date("2025-12-31T23:59:00.000Z");
 
-    const [first, second] = await Promise.all([
-      allocateInOrg(ids.orgA, seriesId, beforeRollover),
-      allocateInOrg(ids.orgA, seriesId, beforeRollover),
-    ]);
+    const allocations = await Promise.all(
+      Array.from(
+        { length: 8 },
+        async () => await allocateInOrg(ids.orgA, seriesId, beforeRollover),
+      ),
+    );
 
     expect(
-      [first, second].map((result) => result.unwrap().number).toSorted(),
-    ).toEqual(["INV-2025-001", "INV-2025-002"]);
+      allocations.map((result) => result.unwrap().number).toSorted(),
+    ).toEqual(
+      Array.from(
+        { length: 8 },
+        (_, index) => `INV-2025-${String(index + 1).padStart(3, "0")}`,
+      ),
+    );
 
     const nextPeriod = await allocateInOrg(
       ids.orgA,
@@ -115,6 +123,20 @@ describe("number series allocation", () => {
       new Date("2026-01-01T00:01:00.000Z"),
     );
     expect(nextPeriod.unwrap().number).toBe("INV-2026-001");
+  });
+
+  test("renders a custom prefix and the configured sequence padding", async () => {
+    const seriesId = await createSeries(ids.orgA, {
+      pattern: "CZ-FV/{YY}/{SEQ}",
+      padding: 5,
+    });
+    const allocated = await allocateInOrg(
+      ids.orgA,
+      seriesId,
+      new Date("2026-07-01T00:00:00.000Z"),
+    );
+
+    expect(allocated.unwrap().number).toBe("CZ-FV/26/00001");
   });
 
   test("resets a monthly series when the rendered month changes", async () => {
@@ -180,13 +202,22 @@ describe("number series allocation", () => {
     ).toBe("INV-2027-001");
     const collision = await allocateInOrg(ids.orgA, secondSeries, issuedAt);
     expect(collision.isErr()).toBe(true);
+    expect(
+      (await allocateInOrg(ids.orgA, firstSeries, issuedAt)).unwrap().number,
+    ).toBe("INV-2027-002");
     const receipts = await testDb
-      .select({ seriesId: numberSeriesAllocations.seriesId })
+      .select({
+        seriesId: numberSeriesAllocations.seriesId,
+        number: numberSeriesAllocations.number,
+      })
       .from(numberSeriesAllocations)
       .where(
         inArray(numberSeriesAllocations.seriesId, [firstSeries, secondSeries]),
       );
-    expect(receipts).toEqual([{ seriesId: firstSeries }]);
+    expect(receipts).toEqual([
+      { seriesId: firstSeries, number: "INV-2027-001" },
+      { seriesId: firstSeries, number: "INV-2027-002" },
+    ]);
   });
 
   test("rejects a seller profile from another organization", async () => {

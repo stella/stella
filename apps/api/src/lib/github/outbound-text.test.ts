@@ -3,6 +3,10 @@ import fc from "fast-check";
 
 import { FEEDBACK_LIMITS } from "@stll/api-contract/feedback";
 import { assertProperty } from "@stll/property-testing";
+import {
+  readCodeSpan,
+  readFencedBlock,
+} from "@stll/property-testing/commonmark-code-oracle";
 
 import {
   GITHUB_TITLE_MAX_LENGTH,
@@ -12,10 +16,6 @@ import {
   toGithubUserText,
   toGithubUserTitle,
 } from "@/api/lib/github/outbound-text";
-import {
-  readCodeSpan,
-  readFencedBlock,
-} from "@/api/tests/helpers/commonmark-code-oracle";
 
 const ZERO_WIDTH_SPACE = "\u200B";
 const LINE_BREAK = /\r\n|\r|\n/gu;
