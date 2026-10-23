@@ -5,6 +5,8 @@ import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
 import type { ChatSend } from "@/components/chat-editor-provider";
 
+type ExpectFalse<T extends false> = T;
+
 const SOURCE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sourceIndex = sourceFileIndex(SOURCE_ROOT);
 const sourceModules = sourceIndex
@@ -104,15 +106,24 @@ describe("chat composer census", () => {
   });
 
   test("a composer send cannot finish without saying whether the draft is kept", () => {
-    // @ts-expect-error a send that returns nothing would let the composer drop the draft
-    const quiet: ChatSend = async () => {};
-    const earlyReturn: ChatSend = async (draft) =>
-      // @ts-expect-error an early bare return is a declined send that forgot the draft
-      draft.html === "" ? undefined : { kind: "sent" };
+    type QuietSendIsAllowed = (() => Promise<void>) extends ChatSend
+      ? true
+      : false;
+    type EarlyReturnIsAllowed = ((
+      draft: Parameters<ChatSend>[0],
+    ) => Promise<undefined | { kind: "sent" }>) extends ChatSend
+      ? true
+      : false;
+    const quietIsAllowed: ExpectFalse<QuietSendIsAllowed> = false;
+    const earlyReturnIsAllowed: ExpectFalse<EarlyReturnIsAllowed> = false;
     const declining: ChatSend = async (draft) =>
       draft.html === "" ? { kind: "kept" } : { kind: "sent" };
 
-    expect([quiet, earlyReturn, declining]).toHaveLength(3);
+    expect({ quietIsAllowed, earlyReturnIsAllowed, declining }).toEqual({
+      quietIsAllowed: false,
+      earlyReturnIsAllowed: false,
+      declining,
+    });
   });
 
   test("pins every composer send entry point", () => {
