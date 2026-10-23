@@ -3,6 +3,7 @@ import { useState } from "react";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useSettingsMutation } from "@/lib/account/settings-mutation";
 import { api } from "@/lib/api";
 import { deepLKeys } from "@/lib/deepl/queries";
 import { APIError, unwrapEden } from "@/lib/errors/api";
@@ -12,7 +13,6 @@ import type {
   KeySettingsDraft,
   SectionFeedback,
 } from "../-components/organization/ai-settings-section";
-import { useSettingsMutation } from "./use-settings-mutation";
 
 const KEY_SECTIONS = {
   deepl: {

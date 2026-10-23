@@ -3,13 +3,12 @@ import { describe, expect, spyOn, test } from "bun:test";
 
 import { sha256Base64Url as legacyBase64Url } from "@stll/sha256/node";
 
+import { delegatedScopes } from "@/api/lib/auth/microsoft365/capabilities";
 import {
   buildAuthorizeUrl,
   createPkce,
   exchangeAuthorizationCode,
-} from "@/api/handlers/microsoft365/graph-oauth";
-
-import { delegatedScopes } from "./capabilities";
+} from "@/api/lib/auth/microsoft365/graph-oauth";
 
 describe("buildAuthorizeUrl", () => {
   test("carries the OAuth and PKCE parameters", () => {

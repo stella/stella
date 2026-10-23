@@ -24,6 +24,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { TranslationKey } from "@/i18n/types";
+import { useSettingsMutation } from "@/lib/account/settings-mutation";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
@@ -31,7 +32,6 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
   organizationAnonymizationBlacklistOptions,

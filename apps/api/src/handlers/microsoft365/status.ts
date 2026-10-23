@@ -4,10 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { microsoft365Connections } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantedCapabilities } from "@/api/lib/auth/microsoft365/capabilities";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { grantedCapabilities } from "./capabilities";
 
 const config = {
   contract: "patch",

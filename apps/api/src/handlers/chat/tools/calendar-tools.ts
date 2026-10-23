@@ -8,18 +8,18 @@ import {
 } from "@stll/api-contract/microsoft365";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   calendarEventsInputSchema,
   calendarFreeBusyInputSchema,
   listCalendarEvents,
   calendarFreeBusy,
-} from "@/api/handlers/microsoft365/calendar-client";
+} from "@/api/lib/auth/microsoft365/calendar-client";
 import {
   capabilityEnabled,
   grantedCapabilities,
-} from "@/api/handlers/microsoft365/capabilities";
-import { ensureMicrosoft365AccessToken } from "@/api/handlers/microsoft365/graph-client";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+} from "@/api/lib/auth/microsoft365/capabilities";
+import { ensureMicrosoft365AccessToken } from "@/api/lib/auth/microsoft365/graph-client";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";

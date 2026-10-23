@@ -1,0 +1,5 @@
+{
+  "metric": "cross-workspace-duplicate-export-names",
+  "delta": 1,
+  "reason": "The existing CLI token exchange export predates this Microsoft 365 ownership-only change and is unchanged by it."
+}

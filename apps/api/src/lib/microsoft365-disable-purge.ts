@@ -19,7 +19,6 @@ import { eq } from "drizzle-orm";
  * org's rows.
  */
 
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
   organizationSettings,
@@ -30,17 +29,14 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  withAggregateLock,
-  withAggregateTransaction,
-} from "@/api/lib/db/aggregate-lock";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 
 export type Microsoft365DisablePurgeResult = {
   purgedConnections: number;
   purgedPendingStates: number;
 };
 
-type PurgeOptions = {
+export type Microsoft365DisablePurgeOptions = {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
 };
@@ -51,7 +47,7 @@ type PurgeOptions = {
 // wrapper below or a test transaction.
 export const purgeMicrosoft365ForOrg = async (
   tx: Transaction,
-  { organizationId, recordAuditEvent }: PurgeOptions,
+  { organizationId, recordAuditEvent }: Microsoft365DisablePurgeOptions,
 ): Promise<Microsoft365DisablePurgeResult> => {
   await withAggregateLock({
     tx,
@@ -83,7 +79,7 @@ export const purgeMicrosoft365ForOrg = async (
   const purgedStates = await tx
     .delete(microsoft365OAuthState)
     .where(eq(microsoft365OAuthState.organizationId, organizationId))
-    .returning({ state: microsoft365OAuthState.state });
+    .returning({ state: microsoft365OAuthState.stateToken });
 
   await recordAuditEvent(tx, [
     {
@@ -117,11 +113,3 @@ export const purgeMicrosoft365ForOrg = async (
     purgedPendingStates: purgedStates.length,
   };
 };
-
-export const disableAndPurgeMicrosoft365ForOrg = async (
-  options: PurgeOptions,
-): Promise<Microsoft365DisablePurgeResult> =>
-  await withAggregateTransaction(
-    rootDb,
-    async (tx) => await purgeMicrosoft365ForOrg(tx, options),
-  );

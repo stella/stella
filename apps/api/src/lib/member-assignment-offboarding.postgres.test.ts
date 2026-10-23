@@ -939,7 +939,7 @@ if (!databaseUrl || !runPostgresTests) {
           })),
         );
         await db.insert(microsoft365OAuthState).values({
-          state: inviteId,
+          stateToken: inviteId,
           organizationId,
           userId: leaver.userId,
           codeVerifier: "fixture",

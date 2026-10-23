@@ -4,7 +4,7 @@ import {
   capabilityEnabled,
   delegatedScopes as scopesForPolicy,
   grantedCapabilities,
-} from "./capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
 
 const allCapabilitiesPolicy = {
   microsoft365ConnectionEnabled: true,

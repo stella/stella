@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useSettingsMutation } from "@/lib/account/settings-mutation";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError, unwrapEden } from "@/lib/errors/api";
@@ -15,7 +16,6 @@ import {
 import type { OrganizationSettings } from "@/queries/organization-settings";
 
 import type { SectionFeedback } from "../-components/organization/ai-settings-section";
-import { useSettingsMutation } from "./use-settings-mutation";
 
 const TOGGLE_SECTION = {
   promptCaching: "promptCachingEnabled",

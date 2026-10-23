@@ -5,7 +5,7 @@ import {
   MICROSOFT365_TOKEN_PURPOSE,
   decryptMicrosoft365Secret,
   encryptMicrosoft365Secret,
-} from "@/api/handlers/microsoft365/crypto";
+} from "@/api/lib/auth/microsoft365/crypto";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

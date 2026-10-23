@@ -6,21 +6,23 @@ import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
 
 import { microsoft365OAuthState } from "@/api/db/schema";
 import { assertMicrosoft365ConnectionEnabled } from "@/api/handlers/microsoft365/enablement";
+import { microsoft365RealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  capabilityEnabled,
+  delegatedScopes,
+} from "@/api/lib/auth/microsoft365/capabilities";
 import {
   buildAuthorizeUrl,
   createOAuthState,
   createPkce,
   getMicrosoft365OAuthConfig,
   getMicrosoft365RedirectUri,
-} from "@/api/handlers/microsoft365/graph-oauth";
-import { microsoft365RealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+} from "@/api/lib/auth/microsoft365/graph-oauth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { capabilityEnabled, delegatedScopes } from "./capabilities";
 
 const config = {
   body: t.Object({
@@ -112,7 +114,7 @@ const connectMicrosoft365 = createSafeRootHandler(
           );
         // audit: skip — ephemeral OAuth state row consumed by the callback; the resulting connection is recorded at callback time.
         await tx.insert(microsoft365OAuthState).values({
-          state,
+          stateToken: state,
           organizationId: session.activeOrganizationId,
           userId: user.id,
           codeVerifier: pkce.codeVerifier,

@@ -25,28 +25,30 @@ import { Temporal } from "@stll/time";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { microsoft365Connections } from "@/api/db/schema";
 import type { Microsoft365ConnectionStatus } from "@/api/db/schema";
-import {
-  MICROSOFT365_TOKEN_PURPOSE,
-  decryptMicrosoft365Secret,
-  encryptMicrosoft365Secret,
-} from "@/api/handlers/microsoft365/crypto";
-import {
-  getMicrosoft365OAuthConfig,
-  refreshAccessToken,
-  tokenExpiresAt,
-} from "@/api/handlers/microsoft365/graph-oauth";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { Page } from "@/api/lib/pagination";
-import type { AccessToken } from "@/api/lib/secret-brands";
-
 import {
   boundGrantedScope,
   grantedCapabilities,
   scopeSet,
-} from "./capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
+import {
+  MICROSOFT365_TOKEN_PURPOSE,
+  decryptMicrosoft365Secret,
+  encryptMicrosoft365Secret,
+} from "@/api/lib/auth/microsoft365/crypto";
+import {
+  getMicrosoft365OAuthConfig,
+  refreshAccessToken,
+  tokenExpiresAt,
+} from "@/api/lib/auth/microsoft365/graph-oauth";
+import type { SafeId } from "@/api/lib/branded-types";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transition } from "@/api/lib/db/transitions";
+import type { TransitionResult } from "@/api/lib/db/transitions";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { Page } from "@/api/lib/pagination";
+import type { AccessToken } from "@/api/lib/secret-brands";
 
 const GRAPH_FETCH_TIMEOUT_MS = 10_000;
 const GRAPH_ACCOUNT_RESPONSE_MAX_BYTES = 64 * 1024;
@@ -78,37 +80,47 @@ const reconnectRequiredError = (): HandlerError<409> =>
 const markReconnectRequired = async ({
   connection,
   safeDb,
+  recordAuditEvent,
 }: {
   connection: Microsoft365ConnectionTokens;
   safeDb: SafeDb;
-}): Promise<Result<void, SafeDbError>> =>
-  await Result.gen(async function* () {
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // audit: skip — token-refresh bookkeeping: flags the connection as
-        // needing reconnect. The user-facing lifecycle events (connect /
-        // disconnect / org-disable purge) are the audited surface.
-        await tx
-          .update(microsoft365Connections)
-          .set({ status: "reconnect_required", updatedAt: new Date() })
-          .where(
-            and(
-              eq(microsoft365Connections.id, connection.id),
-              eq(
-                microsoft365Connections.accessTokenEncrypted,
-                connection.accessTokenEncrypted,
-              ),
-              eq(
-                microsoft365Connections.organizationId,
-                connection.organizationId,
-              ),
-              eq(microsoft365Connections.userId, connection.userId),
-            ),
-          );
+  recordAuditEvent: AuditRecorder;
+}): Promise<
+  Result<
+    TransitionResult<
+      SafeId<"microsoft365Connection">,
+      Microsoft365ConnectionStatus
+    >,
+    SafeDbError
+  >
+> =>
+  // A stale result means newer credentials replaced this snapshot; they stay.
+  await safeDb(
+    async (tx) =>
+      await transition({
+        tx,
+        spec: TRANSITIONS.microsoft365Connections,
+        id: connection.id,
+        options: {
+          from: ["connected"],
+          to: "reconnect_required",
+          fence: connection.accessTokenEncrypted,
+          set: { updatedAt: new Date() },
+        },
+        recordTransitionAuditEvent: async (auditTx) => {
+          await recordAuditEvent(auditTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: connection.organizationId,
+            workspaceId: null,
+            metadata: {
+              operation: "microsoft365_reconnect_required",
+              connectionUserId: connection.userId,
+            },
+          });
+        },
       }),
-    );
-    return Result.ok(undefined);
-  });
+  );
 
 const TOKEN_REFRESH_DEPENDENCIES = {
   getMicrosoft365OAuthConfig,
@@ -163,7 +175,9 @@ export const ensureMicrosoft365AccessToken = async (
     }
 
     if (!connection.refreshTokenEncrypted || !connection.refreshTokenIv) {
-      yield* Result.await(markReconnectRequired({ connection, safeDb }));
+      yield* Result.await(
+        markReconnectRequired({ connection, safeDb, recordAuditEvent }),
+      );
       return Result.err(reconnectRequiredError());
     }
 
@@ -190,7 +204,9 @@ export const ensureMicrosoft365AccessToken = async (
     });
 
     if (Result.isError(refreshed)) {
-      yield* Result.await(markReconnectRequired({ connection, safeDb }));
+      yield* Result.await(
+        markReconnectRequired({ connection, safeDb, recordAuditEvent }),
+      );
       return Result.err(reconnectRequiredError());
     }
 
@@ -233,7 +249,6 @@ export const ensureMicrosoft365AccessToken = async (
             tokenType: token.token_type ?? "Bearer",
             scope,
             expiresAt: tokenExpiresAt(token),
-            status: "connected",
             lastUsedAt: new Date(),
             updatedAt: new Date(),
           })
@@ -393,6 +408,7 @@ export const fetchAccountLabel = async (
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "upstream_unavailable",
             message: "Microsoft account lookup failed",
             cause,
           }),
@@ -402,6 +418,7 @@ export const fetchAccountLabel = async (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: "Microsoft account lookup failed",
         }),
       );
@@ -414,6 +431,7 @@ export const fetchAccountLabel = async (
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "upstream_unavailable",
             message: "Microsoft account lookup failed",
             cause,
           }),
@@ -423,6 +441,7 @@ export const fetchAccountLabel = async (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: "Microsoft account response exceeds byte limit",
         }),
       );
@@ -438,6 +457,7 @@ export const fetchAccountLabel = async (
           (cause) =>
             new HandlerError({
               status: 502,
+              code: "upstream_unavailable",
               message: "Microsoft account lookup failed",
               cause,
             }),
@@ -479,6 +499,7 @@ export const listDriveRootChildren = async ({
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "upstream_unavailable",
             message: "Failed to reach Microsoft Graph",
             cause,
           }),
@@ -489,6 +510,7 @@ export const listDriveRootChildren = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: `Microsoft Graph returned HTTP ${response.status}`,
         }),
       );
@@ -498,6 +520,7 @@ export const listDriveRootChildren = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: "Missing Microsoft drive response",
         }),
       );
@@ -510,6 +533,7 @@ export const listDriveRootChildren = async ({
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "upstream_unavailable",
             message: "Failed to reach Microsoft Graph",
             cause,
           }),
@@ -519,6 +543,7 @@ export const listDriveRootChildren = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: "Microsoft drive response exceeds byte limit",
         }),
       );
@@ -534,6 +559,7 @@ export const listDriveRootChildren = async ({
           (cause) =>
             new HandlerError({
               status: 502,
+              code: "upstream_unavailable",
               message: "Failed to reach Microsoft Graph",
               cause,
             }),

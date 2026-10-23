@@ -90,7 +90,7 @@ const snapshot = async (tx: Transaction) => ({
   sharepointStates: await tx
     .select()
     .from(microsoft365OAuthState)
-    .orderBy(microsoft365OAuthState.state),
+    .orderBy(microsoft365OAuthState.stateToken),
   handoffs: await tx
     .select()
     .from(desktopEditHandoffs)
@@ -270,7 +270,7 @@ if (!databaseUrl || !enabled) {
                 status: "connected",
               });
               await tx.insert(microsoft365OAuthState).values({
-                state: Bun.randomUUIDv7(),
+                stateToken: Bun.randomUUIDv7(),
                 organizationId: scope.organizationId,
                 userId: scope.userId,
                 codeVerifier: "verifier",

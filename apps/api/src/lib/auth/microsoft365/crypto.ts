@@ -96,6 +96,7 @@ export const decryptMicrosoft365Secret = async <
         catch: (cause) =>
           new HandlerError({
             status: 500,
+            code: "upstream_unavailable",
             message: "Stored Microsoft 365 secret envelope is invalid",
             cause,
           }),
@@ -115,6 +116,7 @@ export const decryptMicrosoft365Secret = async <
       return Result.err(
         new HandlerError({
           status: 500,
+          code: "upstream_unavailable",
           message: "Stored Microsoft 365 secret envelope is invalid",
         }),
       );

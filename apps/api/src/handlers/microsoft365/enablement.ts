@@ -12,11 +12,10 @@ import type { Microsoft365Capability } from "@stll/api-contract/microsoft365";
  */
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { capabilityEnabled } from "@/api/lib/auth/microsoft365/capabilities";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { capabilityEnabled } from "./capabilities";
 
 export const assertMicrosoft365ConnectionEnabled = async ({
   organizationId,

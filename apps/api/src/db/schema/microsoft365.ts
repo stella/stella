@@ -1,4 +1,4 @@
-import type { BoundGrantedScope } from "@/api/handlers/microsoft365/capabilities";
+import type { BoundGrantedScope } from "@/api/lib/auth/microsoft365/capabilities";
 
 import {
   bytea,
@@ -81,7 +81,7 @@ export const microsoft365Connections = p.pgTable(
 export const microsoft365OAuthState = p.pgTable(
   "sharepoint_oauth_state",
   {
-    state: p.varchar({ length: 128 }).primaryKey(),
+    stateToken: p.varchar("state", { length: 128 }).primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),

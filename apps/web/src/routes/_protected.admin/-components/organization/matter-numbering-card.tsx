@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/select";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useSettingsMutation } from "@/lib/account/settings-mutation";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
@@ -26,7 +27,6 @@ import {
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
   { value: "{SEQ}", key: "sequential" as const },

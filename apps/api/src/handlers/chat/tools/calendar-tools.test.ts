@@ -10,7 +10,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   MICROSOFT365_TOKEN_PURPOSE,
   encryptMicrosoft365Secret,
-} from "@/api/handlers/microsoft365/crypto";
+} from "@/api/lib/auth/microsoft365/crypto";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";

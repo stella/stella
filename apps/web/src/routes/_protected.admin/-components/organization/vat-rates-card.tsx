@@ -27,6 +27,7 @@ import {
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useSettingsMutation } from "@/lib/account/settings-mutation";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
@@ -47,7 +48,6 @@ import {
   VatRateRefusal,
 } from "@/routes/_protected.admin/-components/organization/vat-rate-display";
 import { VatRateForm } from "@/routes/_protected.admin/-components/organization/vat-rate-form";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 type RateDialog =
   | { type: "closed" }

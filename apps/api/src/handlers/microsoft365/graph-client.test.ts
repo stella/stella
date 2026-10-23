@@ -7,7 +7,7 @@ import {
   listDriveRootChildren,
   mapDriveChildrenToPage,
   type DriveChildrenResponse,
-} from "@/api/handlers/microsoft365/graph-client";
+} from "@/api/lib/auth/microsoft365/graph-client";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { secretSchema } from "@/api/lib/secret-brands";
 

@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
 
+import { disableAndPurgeMicrosoft365ForOrg } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
 import { microsoft365RealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -13,7 +14,6 @@ import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { disableAndPurgeMicrosoft365ForOrg } from "@/api/lib/microsoft365-disable-purge";
 
 const requestBody = t.Object({
   enabled: t.Boolean(),
@@ -54,6 +54,7 @@ const setMicrosoft365Enablement = createSafeRootHandler(
         catch: (cause) =>
           new HandlerError({
             status: 500,
+            code: "upstream_unavailable",
             message: "Failed to disable the Microsoft 365 connection",
             cause,
           }),

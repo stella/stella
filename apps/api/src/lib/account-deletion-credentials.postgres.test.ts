@@ -83,7 +83,7 @@ const insertCredentials = async ({
         status: "connected",
       });
       await tx.insert(microsoft365OAuthState).values({
-        state: Bun.randomUUIDv7(),
+        stateToken: Bun.randomUUIDv7(),
         organizationId,
         userId,
         codeVerifier: Bun.randomUUIDv7(),
@@ -164,7 +164,7 @@ const countsForUser = async ({
       .select()
       .from(microsoft365OAuthState)
       .where(eq(microsoft365OAuthState.userId, userId))
-      .orderBy(asc(microsoft365OAuthState.state)),
+      .orderBy(asc(microsoft365OAuthState.stateToken)),
     agentRegistration: await tx
       .select()
       .from(agentRegistration)

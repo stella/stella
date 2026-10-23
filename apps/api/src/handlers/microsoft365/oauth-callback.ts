@@ -10,30 +10,31 @@ import {
   microsoft365OAuthState,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
-import {
-  MICROSOFT365_TOKEN_PURPOSE,
-  encryptMicrosoft365Secret,
-} from "@/api/handlers/microsoft365/crypto";
 import { assertMicrosoft365ConnectionEnabled } from "@/api/handlers/microsoft365/enablement";
-import { fetchAccountLabel } from "@/api/handlers/microsoft365/graph-client";
-import {
-  exchangeAuthorizationCode,
-  getMicrosoft365OAuthConfig,
-  tokenExpiresAt,
-} from "@/api/handlers/microsoft365/graph-oauth";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
-import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-
 import {
   capabilityEnabled,
   consentedScopes,
   grantedCapabilities,
   scopeSet,
-} from "./capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
+import {
+  MICROSOFT365_TOKEN_PURPOSE,
+  encryptMicrosoft365Secret,
+} from "@/api/lib/auth/microsoft365/crypto";
+import { fetchAccountLabel } from "@/api/lib/auth/microsoft365/graph-client";
+import {
+  exchangeAuthorizationCode,
+  getMicrosoft365OAuthConfig,
+  tokenExpiresAt,
+} from "@/api/lib/auth/microsoft365/graph-oauth";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transition } from "@/api/lib/db/transitions";
+import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -160,7 +161,7 @@ export const createMicrosoft365OAuthCallback = (
                   createdAt: microsoft365OAuthState.createdAt,
                 })
                 .from(microsoft365OAuthState)
-                .where(eq(microsoft365OAuthState.state, state))
+                .where(eq(microsoft365OAuthState.stateToken, state))
                 .limit(1),
             );
             if (Result.isError(stateRowsResult)) {
@@ -263,8 +264,8 @@ export const createMicrosoft365OAuthCallback = (
               // rows here and must not also persist a connection.
               const deletedState = await innerTx
                 .delete(microsoft365OAuthState)
-                .where(eq(microsoft365OAuthState.state, state))
-                .returning({ state: microsoft365OAuthState.state });
+                .where(eq(microsoft365OAuthState.stateToken, state))
+                .returning({ state: microsoft365OAuthState.stateToken });
               await innerTx
                 .delete(microsoft365OAuthState)
                 .where(lt(microsoft365OAuthState.createdAt, cutoff));
@@ -292,7 +293,7 @@ export const createMicrosoft365OAuthCallback = (
                 return { status: "capability-not-granted" as const };
               }
 
-              await innerTx
+              const [stored] = await innerTx
                 .insert(microsoft365Connections)
                 .values({
                   organizationId: row.organizationId,
@@ -321,10 +322,25 @@ export const createMicrosoft365OAuthCallback = (
                     scope,
                     accountLabel,
                     expiresAt: tokenExpiresAt(token.value),
-                    status: "connected",
                     updatedAt: new Date(),
                   },
-                });
+                })
+                .returning({ id: microsoft365Connections.id });
+              // Fresh consent revives a connection that needed reconnecting;
+              // a row that was already connected has no transition to make.
+              const revived = await transition({
+                tx: innerTx,
+                spec: TRANSITIONS.microsoft365Connections,
+                id:
+                  stored?.id ?? panic("The connection upsert returns its row"),
+                options: {
+                  from: ["reconnect_required"],
+                  to: "connected",
+                  fence: encryptedAccess.ciphertext,
+                },
+                // The connect audit below records this consent.
+                recordTransitionAuditEvent: async () => await Promise.resolve(),
+              });
               await recordAuditEvent(innerTx, {
                 action: AUDIT_ACTION.UPDATE,
                 resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
@@ -335,6 +351,7 @@ export const createMicrosoft365OAuthCallback = (
                   operation: "microsoft365_oauth_connect",
                   grantedScopes: scopeSet(scope),
                   grantedCapabilities: capabilities,
+                  reconnected: revived.type === "transitioned",
                 },
               });
               return { status: "connected" as const };

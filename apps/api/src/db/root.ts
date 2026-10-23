@@ -27,6 +27,8 @@ import type {
   ChangeServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
+import { purgeMicrosoft365ForOrg } from "@/api/lib/microsoft365-disable-purge";
+import type { Microsoft365DisablePurgeOptions } from "@/api/lib/microsoft365-disable-purge";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
 import {
   authorizeSyntheticSession,
@@ -213,4 +215,13 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     rootDb,
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
+  );
+
+/** Disabling Microsoft 365 revokes every delegated credential in one owner transaction. */
+export const disableAndPurgeMicrosoft365ForOrg = async (
+  options: Microsoft365DisablePurgeOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await purgeMicrosoft365ForOrg(tx, options),
   );

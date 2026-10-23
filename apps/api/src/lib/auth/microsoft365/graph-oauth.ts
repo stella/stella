@@ -22,10 +22,9 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import type { Microsoft365ReadScopes } from "@/api/lib/auth/microsoft365/capabilities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { RefreshToken } from "@/api/lib/secret-brands";
-
-import type { Microsoft365ReadScopes } from "./capabilities";
 
 const GRAPH_OAUTH_TIMEOUT_MS = 10_000;
 const GRAPH_TOKEN_RESPONSE_MAX_BYTES = 64 * 1024;
@@ -52,6 +51,7 @@ export const getMicrosoft365OAuthConfig = (): Result<
     return Result.err(
       new HandlerError({
         status: 500,
+        code: "upstream_unavailable",
         message: "Microsoft account connection is not configured",
       }),
     );
@@ -152,6 +152,7 @@ const requestToken = async ({
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "upstream_unavailable",
             message: "Failed to reach the Microsoft token endpoint",
             cause,
           }),
@@ -162,6 +163,7 @@ const requestToken = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: `Microsoft token endpoint returned HTTP ${response.status}`,
         }),
       );
@@ -171,6 +173,7 @@ const requestToken = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: "Missing Microsoft token response",
         }),
       );
@@ -183,6 +186,7 @@ const requestToken = async ({
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "upstream_unavailable",
             message: "Failed to reach the Microsoft token endpoint",
             cause,
           }),
@@ -192,6 +196,7 @@ const requestToken = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "upstream_unavailable",
           message: "Microsoft token response exceeds byte limit",
         }),
       );
@@ -207,6 +212,7 @@ const requestToken = async ({
           (cause) =>
             new HandlerError({
               status: 502,
+              code: "upstream_unavailable",
               message: "Failed to reach the Microsoft token endpoint",
               cause,
             }),

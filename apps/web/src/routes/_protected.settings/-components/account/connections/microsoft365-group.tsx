@@ -21,10 +21,10 @@ import {
 } from "@stll/ui/list";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSettingsMutation as useCapabilityMutation } from "@/lib/account/settings-mutation";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError, unwrapEden } from "@/lib/errors/api";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import { microsoft365Options } from "@/routes/_protected.settings/-queries/connections";
 
 import { Microsoft365ConnectionActions } from "./microsoft365-connection-actions";
@@ -38,7 +38,7 @@ export const Microsoft365Group = () => {
   });
   const { data, error } = useQuery(options);
   const canManage = usePermissions({ organizationSettings: ["update"] });
-  const connect = useSettingsMutation({
+  const connect = useCapabilityMutation({
     invalidate: options.queryKey,
     mutationFn: async (capability: Microsoft365Capability) =>
       unwrapEden(
@@ -47,7 +47,7 @@ export const Microsoft365Group = () => {
     onSuccess: ({ authorizeUrl }) => window.location.assign(authorizeUrl),
     errorToast: { title: t("common.error") },
   });
-  const policy = useSettingsMutation({
+  const policy = useCapabilityMutation({
     invalidate: options.queryKey,
     mutationFn: async (input: {
       enabled: boolean;
@@ -55,7 +55,7 @@ export const Microsoft365Group = () => {
     }) => unwrapEden(await api.microsoft365.enablement.put(input)),
     errorToast: { title: t("common.error") },
   });
-  const disconnect = useSettingsMutation({
+  const disconnect = useCapabilityMutation({
     invalidate: options.queryKey,
     mutationFn: async () =>
       unwrapEden(await api.microsoft365.connection.delete()),

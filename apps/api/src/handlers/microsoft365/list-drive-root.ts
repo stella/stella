@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import { microsoft365Connections } from "@/api/db/schema";
 import { assertMicrosoft365ConnectionEnabled } from "@/api/handlers/microsoft365/enablement";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   ensureMicrosoft365AccessToken,
   listDriveRootChildren,
-} from "@/api/handlers/microsoft365/graph-client";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+} from "@/api/lib/auth/microsoft365/graph-client";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";

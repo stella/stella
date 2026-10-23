@@ -79,14 +79,14 @@ beforeAll(async () => {
   ]);
 
   await testDb.insert(microsoft365OAuthState).values({
-    state: `spstate-${ids.orgB}`,
+    stateToken: `spstate-${ids.orgB}`,
     organizationId: ids.orgB,
     userId: ids.userB1,
     codeVerifier: "verifier",
     redirectUri: "https://api.example.test/v1/microsoft365/oauth/callback",
   });
   await testDb.insert(microsoft365OAuthState).values({
-    state: `spstate-${ids.orgA}`,
+    stateToken: `spstate-${ids.orgA}`,
     organizationId: ids.orgA,
     userId: ids.userA1,
     codeVerifier: "verifier",
@@ -125,7 +125,7 @@ describe("disabling the org toggle revokes stored tokens", () => {
       .where(eq(microsoft365Connections.organizationId, ids.orgA));
     expect(remaining).toHaveLength(0);
     const pending = await testDb
-      .select({ state: microsoft365OAuthState.state })
+      .select({ state: microsoft365OAuthState.stateToken })
       .from(microsoft365OAuthState)
       .where(eq(microsoft365OAuthState.organizationId, ids.orgA));
     expect(pending).toHaveLength(0);
@@ -190,7 +190,7 @@ describe("disconnect is never gated on org enablement", () => {
       .where(eq(microsoft365Connections.organizationId, ids.orgB));
     expect(remaining).toHaveLength(0);
     const pending = await testDb
-      .select({ state: microsoft365OAuthState.state })
+      .select({ state: microsoft365OAuthState.stateToken })
       .from(microsoft365OAuthState)
       .where(eq(microsoft365OAuthState.organizationId, ids.orgB));
     expect(pending).toHaveLength(0);

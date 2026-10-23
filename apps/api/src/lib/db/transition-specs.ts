@@ -7,6 +7,7 @@ import {
   folioCollabRooms,
   desktopTimeEntryBatches,
   legalReaderAnswerMessages,
+  microsoft365Connections,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
   euCompletionControls,
@@ -47,6 +48,14 @@ import {
   MATCH_REVIEW_TRANSITIONS,
   SCREENING_COVERAGE_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+
+const MICROSOFT365_CONNECTION_TRANSITIONS = defineTransitions(
+  microsoft365Connections,
+  { connected: ["reconnect_required"], reconnect_required: ["connected"] },
+  // A status change applies only to the token snapshot it was decided on, so
+  // a stale refresh failure never disables a newer grant.
+  { terminal: [], fence: "accessTokenEncrypted" },
+);
 
 // Each table chooses an ownership category explicitly; new status tables must
 // choose a category or declare a managed spec before the total map compiles.
@@ -395,8 +404,7 @@ export const TRANSITIONS = {
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
-  microsoft365Connections: { unmanaged: UNMANAGED_REASONS.connection },
-  microsoft365OAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
+  microsoft365Connections: MICROSOFT365_CONNECTION_TRANSITIONS,
   signals: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   softLawDocumentLocators: { unmanaged: UNMANAGED_REASONS.projection },
   softLawDocuments: { unmanaged: UNMANAGED_REASONS.projection },

@@ -15,20 +15,21 @@ import {
   microsoft365OAuthState,
   organizationSettings,
 } from "@/api/db/schema";
+import { createMicrosoft365OAuthCallback } from "@/api/handlers/microsoft365/oauth-callback";
 import {
   boundGrantedScope,
   grantedCapabilities,
-} from "@/api/handlers/microsoft365/capabilities";
+} from "@/api/lib/auth/microsoft365/capabilities";
 import {
   MICROSOFT365_TOKEN_PURPOSE,
   decryptMicrosoft365Secret,
   encryptMicrosoft365Secret,
-} from "@/api/handlers/microsoft365/crypto";
-import { ensureMicrosoft365AccessToken } from "@/api/handlers/microsoft365/graph-client";
-import { createMicrosoft365OAuthCallback } from "@/api/handlers/microsoft365/oauth-callback";
+} from "@/api/lib/auth/microsoft365/crypto";
+import { ensureMicrosoft365AccessToken } from "@/api/lib/auth/microsoft365/graph-client";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -118,14 +119,14 @@ beforeAll(async () => {
 
     await owner.insert(microsoft365OAuthState).values([
       {
-        state: stateOrgAUserA1,
+        stateToken: stateOrgAUserA1,
         organizationId: ids.orgA,
         userId: ids.userA1,
         codeVerifier: "verifier",
         redirectUri: "https://api.example.test/v1/microsoft365/oauth/callback",
       },
       {
-        state: stateOrgBUserB1,
+        stateToken: stateOrgBUserB1,
         organizationId: ids.orgB,
         userId: ids.userB1,
         codeVerifier: "verifier",
@@ -238,7 +239,7 @@ describe("microsoft365_oauth_state RLS", () => {
       ids.orgA,
       (tx) =>
         tx
-          .select({ state: microsoft365OAuthState.state })
+          .select({ state: microsoft365OAuthState.stateToken })
           .from(microsoft365OAuthState),
       ids.userA1,
     );
@@ -252,16 +253,16 @@ describe("microsoft365_oauth_state RLS", () => {
       (tx) =>
         tx
           .delete(microsoft365OAuthState)
-          .where(eq(microsoft365OAuthState.state, stateOrgAUserA1))
-          .returning({ state: microsoft365OAuthState.state }),
+          .where(eq(microsoft365OAuthState.stateToken, stateOrgAUserA1))
+          .returning({ state: microsoft365OAuthState.stateToken }),
       ids.userA2,
     );
     expect(deleted).toHaveLength(0);
 
     const survivor = await testDb
-      .select({ state: microsoft365OAuthState.state })
+      .select({ state: microsoft365OAuthState.stateToken })
       .from(microsoft365OAuthState)
-      .where(eq(microsoft365OAuthState.state, stateOrgAUserA1));
+      .where(eq(microsoft365OAuthState.stateToken, stateOrgAUserA1));
     expect(survivor).toHaveLength(1);
   });
 });
@@ -278,7 +279,7 @@ test("callback persists the scope returned by consent and consumes the bound sta
   await withTokenOwner(
     async (owner) =>
       await owner.insert(microsoft365OAuthState).values({
-        state,
+        stateToken: state,
         organizationId: ids.orgA,
         userId: ids.userA1,
         codeVerifier: "verifier",
@@ -356,7 +357,7 @@ test("callback persists the scope returned by consent and consumes the bound sta
   const pending = await testDb
     .select()
     .from(microsoft365OAuthState)
-    .where(eq(microsoft365OAuthState.state, state));
+    .where(eq(microsoft365OAuthState.stateToken, state));
   expect(pending).toHaveLength(0);
 });
 
@@ -552,7 +553,7 @@ test("a non-bypass table owner removes delegated credentials while another organ
       status: "connected",
     });
     await tx.insert(microsoft365OAuthState).values({
-      state,
+      stateToken: state,
       organizationId: ids.orgB,
       userId: ids.userA2,
       codeVerifier: "verifier",
@@ -571,8 +572,8 @@ test("a non-bypass table owner removes delegated credentials while another organ
     expect(
       await tx
         .delete(microsoft365OAuthState)
-        .where(eq(microsoft365OAuthState.state, state))
-        .returning({ state: microsoft365OAuthState.state }),
+        .where(eq(microsoft365OAuthState.stateToken, state))
+        .returning({ state: microsoft365OAuthState.stateToken }),
     ).toEqual([]);
     await tx.execute(sql`SET LOCAL ROLE microsoft365_test_owner`);
     expect(
@@ -584,8 +585,8 @@ test("a non-bypass table owner removes delegated credentials while another organ
     expect(
       await tx
         .delete(microsoft365OAuthState)
-        .where(eq(microsoft365OAuthState.state, state))
-        .returning({ state: microsoft365OAuthState.state }),
+        .where(eq(microsoft365OAuthState.stateToken, state))
+        .returning({ state: microsoft365OAuthState.stateToken }),
     ).toEqual([{ state }]);
     expect(
       await tx
@@ -597,7 +598,7 @@ test("a non-bypass table owner removes delegated credentials while another organ
       await tx
         .select()
         .from(microsoft365OAuthState)
-        .where(eq(microsoft365OAuthState.state, state)),
+        .where(eq(microsoft365OAuthState.stateToken, state)),
     ).toEqual([]);
   });
 });
@@ -623,7 +624,7 @@ const runConsent = async ({
   await withTokenOwner(
     async (owner) =>
       await owner.insert(microsoft365OAuthState).values({
-        state,
+        stateToken: state,
         organizationId: ids.orgA,
         userId: ids.userA1,
         codeVerifier: "verifier",
@@ -890,4 +891,109 @@ test("a refreshed calendar connection retains its authorized scope ceiling", asy
   expect(grantedCapabilities(current?.scope ?? null)).toEqual([
     "calendar.read",
   ]);
+});
+
+test("fresh consent reconnects a connection that required reconnecting", async () => {
+  await testDb
+    .update(microsoft365Connections)
+    .set({ status: "reconnect_required" })
+    .where(eq(microsoft365Connections.id, connOrgAUserA1));
+  const response = await runConsent({
+    requestedScope: "User.Read Calendars.Read",
+    returnedScope: "User.Read Calendars.Read",
+    filesEnabled: false,
+  });
+  if (!(response instanceof Response)) {
+    panic("Expected consent redirect");
+  }
+  expect(
+    new URL(response.headers.get("Location") ?? "").searchParams.get(
+      "microsoft365Status",
+    ),
+  ).toBe("connected");
+  const row = await testDb.query.microsoft365Connections.findFirst({
+    where: { id: { eq: connOrgAUserA1 } },
+  });
+  expect(row?.status).toBe("connected");
+});
+
+test("a failed refresh leaves a newer consent connected", async () => {
+  const access = await encryptMicrosoft365Secret({
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    purpose: MICROSOFT365_TOKEN_PURPOSE.access,
+    secret: "expired-access",
+  });
+  const refresh = await encryptMicrosoft365Secret({
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    purpose: MICROSOFT365_TOKEN_PURPOSE.refresh,
+    secret: "rotated-refresh",
+  });
+  await testDb
+    .update(microsoft365Connections)
+    .set({
+      accessTokenEncrypted: access.ciphertext,
+      accessTokenIv: access.iv,
+      refreshTokenEncrypted: refresh.ciphertext,
+      refreshTokenIv: refresh.iv,
+      status: "connected",
+      scope: boundGrantedScope({
+        ceiling: "Calendars.Read",
+        returned: "Calendars.Read",
+      }),
+      expiresAt: new Date(0),
+    })
+    .where(eq(microsoft365Connections.id, connOrgAUserA1));
+  const connection = await testDb.query.microsoft365Connections.findFirst({
+    where: { id: { eq: connOrgAUserA1 } },
+  });
+  if (!connection) {
+    throw new Error("Expected connection fixture");
+  }
+  const safeDb: SafeDb = async (run) =>
+    Result.ok(
+      await scopedQuery(
+        noWorkspaces,
+        ids.orgA,
+        async (tx) => await run(asTestRaw(tx)),
+        ids.userA1,
+      ),
+    );
+  const result = await ensureMicrosoft365AccessToken(
+    {
+      connection: { ...connection, userId: ids.userA1 },
+      safeDb,
+      capability: "calendar.read",
+      recordAuditEvent: async () => {},
+    },
+    {
+      getMicrosoft365OAuthConfig: () =>
+        Result.ok({
+          clientId: "client",
+          clientSecret: "secret",
+          tenantId: "tenant",
+        }),
+      // Another request already stored newer credentials, so this refresh
+      // token is no longer accepted.
+      refreshAccessToken: async () => {
+        await testDb
+          .update(microsoft365Connections)
+          .set({ accessTokenEncrypted: Buffer.from("newer-consent") })
+          .where(eq(microsoft365Connections.id, connOrgAUserA1));
+        return Result.err(
+          new HandlerError({
+            status: 502,
+            message: "Microsoft token endpoint returned HTTP 400",
+          }),
+        );
+      },
+    },
+  );
+  expect(Result.isError(result)).toBe(true);
+  const current = await testDb.query.microsoft365Connections.findFirst({
+    where: { id: { eq: connOrgAUserA1 } },
+  });
+  expect(current?.status).toBe("connected");
+  expect(current?.accessTokenEncrypted).toEqual(Buffer.from("newer-consent"));
 });

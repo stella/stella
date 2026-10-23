@@ -4,14 +4,13 @@ import * as v from "valibot";
 
 import type { fetchWithTimeout } from "@stll/fetch";
 
-import { secretSchema } from "@/api/lib/secret-brands";
-
 import {
   calendarEventsInputSchema,
   calendarFreeBusyInputSchema,
   calendarFreeBusy,
   listCalendarEvents,
-} from "./calendar-client";
+} from "@/api/lib/auth/microsoft365/calendar-client";
+import { secretSchema } from "@/api/lib/secret-brands";
 
 const accessToken = v.parse(secretSchema, "calendar-token");
 const range = { start: "2026-10-01T00:00:00Z", end: "2026-10-02T00:00:00Z" };
