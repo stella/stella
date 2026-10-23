@@ -218,7 +218,7 @@
       "policy": "docs/policies/vendor-management.md",
       "evidence": [
         {
-          "path": ".github/workflows/dependency-review.yml",
+          "path": ".github/workflows/ci.yml",
           "contains": ["fail-on-severity: high", "allow-licenses: >-"]
         },
         {

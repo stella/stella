@@ -68,7 +68,7 @@ skipped.
 
 ### Dependency changes
 
-6. **Dependency review.** The `dependency-review.yml` workflow
+6. **Dependency review.** The `ci.yml` workflow
    runs on every PR and blocks introduction of dependencies
    with high-severity CVEs or copyleft licenses incompatible
    with Apache-2.0 distribution (GPL, AGPL, LGPL, SSPL, BUSL,
