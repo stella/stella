@@ -2,20 +2,20 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import {
-  MODEL_OVERRIDE_GROUPS,
   MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import type { BYOKProvider, ModelOverrideGroup } from "@stll/ai-catalog";
 
 import { organizationSettings } from "@/api/db/schema";
 import {
-  supportsRegion,
   type DataRegion,
   type DecisionModelProvider,
   type OrgAIConfig,
   type OrgAIModelSelection,
   type OrgAIProviderConfig,
+  supportsRegion,
 } from "@/api/lib/ai-config";
 import {
   decryptAIConfig,

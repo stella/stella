@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 
 import {
-  sha256Hex as legacyHex,
   createSha256 as legacyHasher,
+  sha256Hex as legacyHex,
 } from "@stll/sha256/node";
 
 import { auditedSkillBody } from "./agent-skills/audited-body";
@@ -22,9 +22,9 @@ import {
 } from "./rate-limit/action-period-budget";
 import { createAccountAttemptBudget } from "./rate-limit/otp-account-budget";
 import {
+  brandDerivedCorrespondenceDropId,
   brandDerivedPropertyId,
   brandDerivedSampleId,
-  brandDerivedCorrespondenceDropId,
 } from "./safe-id-boundaries";
 
 const texts = [

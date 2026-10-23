@@ -13,8 +13,8 @@ import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
@@ -30,27 +30,27 @@ import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
+  ANNOTATIONS_SECTION_MAX_CHARS,
   appendAnonymizedModeHintToChatSafePrompt,
   buildActiveDecisionPrompt,
   buildActiveDecisionSection,
   buildActiveDraftPrompt,
   buildActiveFileSection,
-  ANNOTATIONS_SECTION_MAX_CHARS,
   buildActiveSkillSection,
   buildActiveStatutePrompt,
-  formatAnnotationsForPrompt,
   buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
   buildContextMatterScopeSection,
+  buildCorpusOnlyCaseLawSection,
   buildGlobalPrompt,
   buildGlobalPromptParts,
-  buildCorpusOnlyCaseLawSection,
   buildUserContextBlock,
   buildWorkspacePromptParts,
   buildWorkspacePromptText,
   chatSafePromptText,
   chatVolatilePromptSection,
   extractTitle,
+  formatAnnotationsForPrompt,
   NO_MATTER_SCOPE_SECTION,
 } from "./chat-prompt";
 import type {

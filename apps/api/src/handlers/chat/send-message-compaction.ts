@@ -3,8 +3,8 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import {
-  compactChatMessagesForModel,
   chatThreadNeedsCompaction,
+  compactChatMessagesForModel,
 } from "@/api/handlers/chat/compaction";
 import type { CompactedHistory } from "@/api/handlers/chat/compaction";
 import {

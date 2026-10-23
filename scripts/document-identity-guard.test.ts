@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   checkDocumentIdentitySources,
   missingRequiredSurfaces,
-  undetectedBadgeRemovals,
   REQUIRED_DOCUMENT_IDENTITY_SURFACES,
+  undetectedBadgeRemovals,
 } from "./document-identity-guard";
 
 const OWNER = "packages/ui/src/components/document-identity-badge.tsx";

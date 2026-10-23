@@ -9,6 +9,7 @@ import type {
 } from "@stll/api-contract/desktop-time-entries";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { PhoneIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
@@ -17,7 +18,6 @@ import {
   Tooltip,
   TooltipCreateHandle,
   TooltipPopup,
-  TooltipProvider,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
 
@@ -142,69 +142,73 @@ export const ActivityTimeline = ({
             </span>
           ))}
         </div>
-        <TooltipProvider>
-          <div
-            className={`bg-muted relative mt-1 h-9 touch-none overflow-clip rounded-lg ${mode === "review" ? "cursor-crosshair" : ""}`}
-            onPointerDown={(event) => pointerHandlers().onPointerDown(event)}
-            onPointerMove={(event) => pointerHandlers().onPointerMove(event)}
-            onPointerUp={(event) => pointerHandlers().onPointerUp(event)}
-            onPointerCancel={() => pointerHandlers().onPointerCancel()}
-          >
-            {segments.map((segment, index) => (
-              <TooltipTrigger
-                key={`${segment.startMs}-${segment.appIdentifier}`}
-                handle={tooltipHandle}
-                payload={segment}
-                render={<button type="button" />}
-                data-activity-segment=""
-                data-activity-away={segment.type === "idle" ? "" : undefined}
-                className={`absolute inset-y-1 flex min-w-0 items-center gap-1 overflow-clip rounded-md border px-1 ${segment.type === "idle" ? "" : "bg-card"} ${segment.drafted ? "opacity-50" : ""}`}
-                style={{
-                  left: `${pct(segment.startMs)}%`,
-                  width: `${pct(segment.endMs) - pct(segment.startMs)}%`,
-                  animationDelay: `${Math.min(index, 8) * 70}ms`,
-                }}
-                aria-label={`${time(segment.startMs)} – ${time(segment.endMs)} · ${segment.appName}`}
-                onClick={(event) => {
-                  if (
-                    !disabled &&
-                    !segment.drafted &&
-                    (!dragged.current || event.detail === 0)
-                  ) {
-                    setSelection({
-                      startMs: segment.startMs,
-                      endMs: segment.endMs,
-                    });
-                  }
-                  dragged.current = false;
-                }}
-              >
-                {segment.type === "idle" ? null : (
-                  <ActivitySourceIcon
-                    appIdentifier={segment.appIdentifier}
-                    sourceAppVisuals={snapshot.sourceAppVisuals}
-                  />
-                )}
-              </TooltipTrigger>
-            ))}
-            {selected ? (
-              <div
-                className="bg-info/15 border-info pointer-events-none absolute inset-y-0 border-x-2"
-                style={{
-                  left: `${pct(selected.startMs)}%`,
-                  width: `${pct(selected.endMs) - pct(selected.startMs)}%`,
-                }}
-              />
-            ) : null}
-          </div>
-          <Tooltip handle={tooltipHandle}>
-            {({ payload }) =>
-              payload ? (
-                <SegmentTooltip segment={payload} snapshot={snapshot} />
-              ) : null
-            }
-          </Tooltip>
-        </TooltipProvider>
+        <div
+          className={`bg-muted relative mt-1 h-9 touch-none overflow-clip rounded-lg ${mode === "review" ? "cursor-crosshair" : ""}`}
+          onPointerDown={(event) => pointerHandlers().onPointerDown(event)}
+          onPointerMove={(event) => pointerHandlers().onPointerMove(event)}
+          onPointerUp={(event) => pointerHandlers().onPointerUp(event)}
+          onPointerCancel={() => pointerHandlers().onPointerCancel()}
+        >
+          {segments.map((segment, index) => (
+            <TooltipTrigger
+              key={`${segment.startMs}-${segment.appIdentifier}`}
+              handle={tooltipHandle}
+              payload={segment}
+              render={<button type="button" />}
+              data-activity-segment=""
+              data-activity-away={segment.type === "idle" ? "" : undefined}
+              className={`absolute inset-y-1 flex min-w-0 items-center gap-1 overflow-clip rounded-md border px-1 ${segment.type === "idle" ? "" : "bg-card"} ${segment.drafted ? "opacity-50" : ""}`}
+              style={{
+                left: `${pct(segment.startMs)}%`,
+                width: `${pct(segment.endMs) - pct(segment.startMs)}%`,
+                animationDelay: `${Math.min(index, 8) * 70}ms`,
+              }}
+              aria-label={`${time(segment.startMs)} – ${time(segment.endMs)} · ${segmentLabel(segment, t)}`}
+              onClick={(event) => {
+                if (
+                  !disabled &&
+                  !segment.drafted &&
+                  (!dragged.current || event.detail === 0)
+                ) {
+                  setSelection({
+                    startMs: segment.startMs,
+                    endMs: segment.endMs,
+                  });
+                }
+                dragged.current = false;
+              }}
+            >
+              {segment.type === "idle" ? null : (
+                <ActivitySourceIcon
+                  appIdentifier={segment.appIdentifier}
+                  sourceAppVisuals={snapshot.sourceAppVisuals}
+                />
+              )}
+              {segment.call ? (
+                <PhoneIcon
+                  aria-hidden="true"
+                  className="text-muted-foreground size-3 shrink-0"
+                />
+              ) : null}
+            </TooltipTrigger>
+          ))}
+          {selected ? (
+            <div
+              className="bg-info/15 border-info pointer-events-none absolute inset-y-0 border-x-2"
+              style={{
+                left: `${pct(selected.startMs)}%`,
+                width: `${pct(selected.endMs) - pct(selected.startMs)}%`,
+              }}
+            />
+          ) : null}
+        </div>
+        <Tooltip handle={tooltipHandle}>
+          {({ payload }) =>
+            payload ? (
+              <SegmentTooltip segment={payload} snapshot={snapshot} />
+            ) : null
+          }
+        </Tooltip>
         <div
           data-activity-matter-lane=""
           className="relative mt-1 h-2.5 overflow-clip rounded"
@@ -414,9 +418,7 @@ const SegmentTooltip = ({
             minutes: Math.ceil((segment.endMs - segment.startMs) / 60_000),
           })}
         </span>
-        <bdi>
-          {segment.type === "idle" ? t("awayNotCounted") : segment.appName}
-        </bdi>
+        <bdi>{segmentLabel(segment, t)}</bdi>
         {snapshot.captureDetails &&
         (segment.document || segment.windowTitle) ? (
           <bdi className="text-muted-foreground wrap-break-word">
@@ -510,3 +512,16 @@ const RangeTimeField = ({
     </fieldset>
   );
 };
+
+function segmentLabel(
+  segment: TimelineSegment,
+  t: ReturnType<typeof useTranslations<"activity">>,
+) {
+  if (segment.type === "idle") {
+    return t("awayNotCounted");
+  }
+  if (segment.call) {
+    return t("callIn", { app: segment.appName });
+  }
+  return segment.appName;
+}
