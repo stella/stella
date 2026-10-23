@@ -27,6 +27,11 @@ type AnnotationChange = UpdateAnnotationInput extends infer Change
  */
 export type ReaderAnnotationInverse =
   | {
+      /**
+       * What the created mark held, one value per kind of change it can
+       * take: the step removes it only while it still holds all of them.
+       */
+      expected: readonly AnnotationChange[];
       op: "remove";
       rowIds: readonly string[];
       subject: AnnotationSubject;
@@ -223,12 +228,54 @@ const sameValue = (
   }
 };
 
+/** What a mark created from `input` holds for each change it can take. */
+const createdValues = (
+  input: CreateAnnotationInput,
+): readonly AnnotationChange[] => {
+  switch (input.kind) {
+    case "highlight": {
+      return [
+        { change: "color", color: input.color },
+        { change: "style", style: input.style },
+        { change: "visibility", visibility: input.visibility },
+      ];
+    }
+    case "comment": {
+      return [
+        { body: input.body, change: "body" },
+        { change: "visibility", visibility: input.visibility },
+      ];
+    }
+    default: {
+      input satisfies never;
+      return panic(`Unhandled annotation kind: ${String(input)}`);
+    }
+  }
+};
+
+/** Whether a mark still holds every value in `expected`. */
+const holdsValues = (
+  mark: readonly ReaderAnnotation[],
+  expected: readonly AnnotationChange[],
+): boolean =>
+  expected.every((value) => {
+    const now = currentValue(mark, value.change);
+    return now !== null && sameValue(now, value);
+  });
+
 /** The step back from a mark the reader just created. */
 export const inverseOfCreate = (
   input: CreateAnnotationInput,
   rowIds: readonly string[],
 ): ReaderAnnotationInverse | null =>
-  rowIds.length === 0 ? null : { op: "remove", rowIds, subject: input.kind };
+  rowIds.length === 0
+    ? null
+    : {
+        expected: createdValues(input),
+        op: "remove",
+        rowIds,
+        subject: input.kind,
+      };
 
 /**
  * The step back from a change, read off the mark before the change lands.
@@ -362,6 +409,9 @@ export const planReaderAnnotationStep = (
     case "remove": {
       if (present === undefined) {
         return { status: "gone" };
+      }
+      if (!holdsValues(markRows(rows, present), inverse.expected)) {
+        return { status: "changed" };
       }
       return {
         status: "ready",

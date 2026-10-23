@@ -179,7 +179,12 @@ const visible = (writes: ReaderAnnotationWrites) =>
 const removeStep = (
   seq: number,
 ): { inverse: ReaderAnnotationInverse; seq: number } => ({
-  inverse: { op: "remove", rowIds: [`row-${seq}`], subject: "highlight" },
+  inverse: {
+    expected: [],
+    op: "remove",
+    rowIds: [`row-${seq}`],
+    subject: "highlight",
+  },
   seq,
 });
 
@@ -373,6 +378,53 @@ describe("reader annotation history", () => {
     (await writes.remove(first)).unwrap();
     expect((await reader.step("undo"))?.result.status).toBe("gone");
     expect(reader.history().undo).toEqual([]);
+  });
+
+  test("a created mark changed elsewhere is not removed by undoing its creation", async () => {
+    const changes = [
+      { change: "color", color: "red" },
+      { change: "style", style: "underline" },
+      { change: "visibility", visibility: "shared" },
+    ] as const;
+    for (const change of changes) {
+      const { writes } = tabStore();
+      const reader = readerOn(writes);
+      const [first] = await reader.create(highlight);
+      if (first === undefined) {
+        throw new Error("The mark has no rows");
+      }
+      // Another tab changes the mark this tab created.
+      (await writes.update({ ...change, id: first })).unwrap();
+      const changed = visible(writes);
+
+      expect((await reader.step("undo"))?.result.status).toBe("changed");
+      expect(visible(writes)).toEqual(changed);
+      expect(reader.history()).toEqual(EMPTY_READER_ANNOTATION_HISTORY);
+    }
+
+    const { writes } = tabStore();
+    const reader = readerOn(writes);
+    const [first] = await reader.create(comment);
+    if (first === undefined) {
+      throw new Error("The comment has no rows");
+    }
+    (
+      await writes.update({
+        body: "Rewritten in another tab.",
+        change: "body",
+        id: first,
+      })
+    ).unwrap();
+    const changed = visible(writes);
+    expect((await reader.step("undo"))?.result.status).toBe("changed");
+    expect(visible(writes)).toEqual(changed);
+
+    // Unchanged, the same step removes the mark.
+    const fresh = tabStore();
+    const freshReader = readerOn(fresh.writes);
+    await freshReader.create(comment);
+    expect((await freshReader.step("undo"))?.result.status).toBe("done");
+    expect(fresh.writes.rows()).toEqual([]);
   });
 
   test("a step whose write fails stays owed and leaves the marks as they were", async () => {
