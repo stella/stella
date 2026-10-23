@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
   SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID,
@@ -11,8 +11,14 @@ import type { AnyDrizzle } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
+/** The read needs only these two capabilities, so every Postgres driver's
+ * transaction (production and test databases alike) satisfies it. */
+export type AccountExportReadTransaction = Pick<Transaction, "select"> & {
+  execute: (query: SQLWrapper) => PromiseLike<unknown>;
+};
+
 type ReadAccountExportAnnotationPageOptions = {
-  database: AnyDrizzle<Transaction>;
+  database: AnyDrizzle<AccountExportReadTransaction>;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   extraWhere: SQL | undefined;
