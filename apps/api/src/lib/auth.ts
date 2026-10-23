@@ -104,8 +104,10 @@ import {
   markAuthRequestRoute,
 } from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
-import { cimdMetadataValidationStore } from "@/api/lib/auth/cimd-metadata-validation-store";
-import { withStaleIfError } from "@/api/lib/auth/cimd-stale-if-error";
+import {
+  createCimdMetadataValidationStore,
+  withStaleIfError,
+} from "@/api/lib/auth/cimd-stale-if-error";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -1274,6 +1276,7 @@ export const createAuth = (
   roleAssignmentPolicy = assignableRoles,
   factoryOptions: CreateAuthOptions = {},
 ) => {
+  const cimdMetadataValidations = createCimdMetadataValidationStore(rootDb);
   const authRateLimitStorage =
     factoryOptions.rateLimitStorage ?? createAuthRateLimitStorage();
   const rateLimitEnabled =
@@ -2284,17 +2287,17 @@ export const createAuth = (
                     fetchClientMetadataResource,
                   ),
                   onClientCreated: async ({ client }) => {
-                    await cimdMetadataValidationStore.recordValidated(
+                    await cimdMetadataValidations.recordValidated(
                       client.clientId,
                     );
                   },
                   onClientRefreshed: async ({ client }) => {
-                    await cimdMetadataValidationStore.recordValidated(
+                    await cimdMetadataValidations.recordValidated(
                       client.clientId,
                     );
                   },
                 }),
-                cimdMetadataValidationStore,
+                cimdMetadataValidations,
               ),
             },
           ],

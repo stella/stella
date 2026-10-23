@@ -102,8 +102,12 @@ const refusalFrom = async (response: Response): Promise<string> => {
   const location = response.headers.get("location");
   if (location === null) {
     expect(response.status).toBeGreaterThanOrEqual(400);
-    const body: unknown = await response.json();
-    expect(body).toMatchObject({ error: expect.any(String) });
+    // Parsed rather than matched: Bun's toMatchObject writes an asymmetric
+    // matcher into the object it checks, so the text would lose the code.
+    const body = v.parse(
+      v.looseObject({ error: v.string() }),
+      await response.json(),
+    );
     return JSON.stringify(body);
   }
 

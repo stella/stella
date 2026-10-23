@@ -1,6 +1,9 @@
 import type { ClientDiscovery } from "@better-auth/oauth-provider";
 import { Result } from "better-result";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
+import { oauthClient } from "@/api/db/auth-schema";
+import type { RootDatabase } from "@/api/db/root";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -14,6 +17,40 @@ export type CimdMetadataValidationStore = {
   /** Seconds since the last recorded validation, or undefined when none is. */
   readValidationAgeSeconds: (clientId: string) => Promise<number | undefined>;
 };
+
+/**
+ * Persists validations on `oauth_client.metadata_validated_at`. The database
+ * clock stamps and measures them, so instances agree on one grace window
+ * whatever their own clocks say. The auth owner passes its connection.
+ */
+export const createCimdMetadataValidationStore = (
+  db: RootDatabase,
+): CimdMetadataValidationStore => ({
+  recordValidated: async (clientId) => {
+    // audit: skip - freshness bookkeeping for a discovery-owned client document.
+    await db
+      .update(oauthClient)
+      .set({ metadataValidatedAt: sql`now()` })
+      .where(eq(oauthClient.clientId, clientId));
+  },
+  readValidationAgeSeconds: async (clientId) => {
+    const row = (
+      await db
+        .select({
+          ageSeconds: sql<number>`extract(epoch from now() - ${oauthClient.metadataValidatedAt})::float8`,
+        })
+        .from(oauthClient)
+        .where(
+          and(
+            eq(oauthClient.clientId, clientId),
+            isNotNull(oauthClient.metadataValidatedAt),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+    return row?.ageSeconds;
+  },
+});
 
 // The discovery answers a document it could not fetch or validate with
 // `invalid_client`, and a fetch its budget refuses with HTTP 429.
