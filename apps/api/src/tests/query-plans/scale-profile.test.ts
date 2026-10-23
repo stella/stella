@@ -111,14 +111,6 @@ test(
         CREATE INDEX case_law_decision_identifiers_lookup_idx
           ON case_law_decision_identifiers (type, normalized_value, decision_id)
       `);
-      // An expression index takes its own statistics from the seed's ANALYZE:
-      // 120 ECLIs over the seed are each a common value, which scaled to the
-      // profile would read as hundreds of thousands of matches.
-      await db.execute(sql`
-        CREATE INDEX case_law_decisions_ecli_upper_idx
-          ON case_law_decisions (upper(ecli))
-      `);
-      await db.execute(sql`ANALYZE case_law_decisions`);
 
       await injectScaleProfile(db, SYNTHETIC_SCALE_PROFILE);
       await assertScaleProfileApplied(db, SYNTHETIC_SCALE_PROFILE);
@@ -192,31 +184,6 @@ test(
         const commonValues = row["values"];
         expect(commonValues === null || commonValues === "{}").toBe(true);
       }
-
-      const expressionStats = executedRows(
-        await db.execute(sql`
-          SELECT n_distinct, most_common_vals::text AS values
-            FROM pg_stats
-           WHERE schemaname = 'public'
-             AND tablename = 'case_law_decisions_ecli_upper_idx'
-        `),
-      ).at(0);
-      if (!isRecord(expressionStats)) {
-        panic("Missing synthetic stats for the ECLI expression index");
-      }
-      expect(expressionStats["n_distinct"]).toBeCloseTo(-0.8);
-      const expressionValues = expressionStats["values"];
-      expect(expressionValues === null || expressionValues === "{}").toBe(true);
-      const upperNodes = await explainNodes(
-        db,
-        sql`SELECT id FROM case_law_decisions WHERE upper(ecli) = 'ECLI:EU:C:2024:12'`,
-      );
-      expect(
-        upperNodes.every(
-          (node) =>
-            typeof node["Plan Rows"] === "number" && node["Plan Rows"] <= 10,
-        ),
-      ).toBe(true);
 
       const oldNodes = await explainNodes(
         db,

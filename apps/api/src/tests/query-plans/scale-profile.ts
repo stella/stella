@@ -217,77 +217,6 @@ const restored = (result: unknown, table: string): void => {
   }
 };
 
-const PROFILED_EXPRESSION_COLUMNS = sql`
-  SELECT t.relname AS table_name, c.relname AS index_name, a.attname,
-         pg_get_indexdef(i.indexrelid, k.position::int, true) AS expression
-    FROM pg_index AS i
-    JOIN pg_class AS c ON c.oid = i.indexrelid
-    JOIN pg_class AS t ON t.oid = i.indrelid
-    JOIN pg_namespace AS n ON n.oid = t.relnamespace
-    CROSS JOIN LATERAL unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, position)
-    JOIN pg_attribute AS a
-      ON a.attrelid = i.indexrelid AND a.attnum = k.position
-   WHERE n.nspname = current_schema()
-     AND k.attnum = 0
-     AND t.relname IN (${sql.join(
-       PLAN_GUARD_TABLES.map((table) => sql`${table}`),
-       sql`, `,
-     )})
-`;
-
-/**
- * An index expression column keeps statistics of its own, which ANALYZE takes
- * from the physical seed and the column restore above does not reach: scaled
- * to the profile's row count, a seed value's frequency reads as hundreds of
- * thousands of matches. Every expression over a profiled column takes that
- * column's null fraction and distinct share instead, so both access paths
- * plan against one distribution. Common values are not carried over; the
- * expression may transform them.
- */
-const restoreIndexExpressionStats = async (
-  db: ScaleDb,
-  profile: ScaleProfile,
-): Promise<void> => {
-  for (const row of executedRows(
-    await db.execute(PROFILED_EXPRESSION_COLUMNS),
-  )) {
-    if (
-      !isRecord(row) ||
-      typeof row["table_name"] !== "string" ||
-      typeof row["index_name"] !== "string" ||
-      typeof row["attname"] !== "string" ||
-      typeof row["expression"] !== "string"
-    ) {
-      return panic("Scale profile index expression row is malformed");
-    }
-    const { table_name: table, index_name: index, attname, expression } = row;
-    const attribute = profile.attributes.find(
-      (candidate) =>
-        candidate.table === table &&
-        new RegExp(`\\b${candidate.column}\\b`, "u").test(expression),
-    );
-    if (attribute === undefined) {
-      continue;
-    }
-    await db.execute(sql`
-      SELECT pg_clear_attribute_stats(
-        current_schema()::text, ${index}::text, ${attname}::text, false
-      )
-    `);
-    restored(
-      await db.execute(sql`
-        SELECT pg_restore_attribute_stats(
-          'schemaname', current_schema()::text, 'relname', ${index}::text,
-          'attname', ${attname}::text, 'inherited', false,
-          'null_frac', ${attribute.nullFraction}::real,
-          'n_distinct', ${attribute.distinctValues}::real
-        ) AS restored
-      `),
-      `${index}.${attname}`,
-    );
-  }
-};
-
 /** Run only after the physical seed and its final ANALYZE. */
 export const injectScaleProfile = async (
   db: ScaleDb,
@@ -342,7 +271,6 @@ export const injectScaleProfile = async (
       `${attribute.table}.${attribute.column}`,
     );
   }
-  await restoreIndexExpressionStats(db, profile);
   await assertScaleProfileApplied(db, profile);
 };
 
