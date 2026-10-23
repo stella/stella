@@ -50,6 +50,11 @@ type CollabLogEvent =
       roomId: string;
     }
   | {
+      event: "snapshot_store_retired";
+      level: "warn";
+      roomId: string;
+    }
+  | {
       event: "shutdown_drain_timeout";
       level: "error";
     };

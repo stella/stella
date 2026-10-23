@@ -1553,6 +1553,71 @@ describe("collaboration server", () => {
     },
   );
 
+  test("retires a snapshot store whose retry finds a newer room generation without an unhandled rejection", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+      snapshotStoreRetryBaseDelayMs: 50,
+      snapshotStoreRetryMaxDelayMs: 50,
+    });
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          collabServer.hocuspocus.getDocumentsCount() === 1,
+        "Provider did not load the room.",
+      );
+      fakeApi.setStoreFailureStatus(503);
+      ydoc.getText("body").insert(0, "retired state");
+
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length === 1,
+        "Initial snapshot store did not fail.",
+      );
+      collabServer.hocuspocus.storeDocumentHooks = async (
+        _document,
+        payload,
+      ) => {
+        await collabServer.hocuspocus.hooks("onStoreDocument", payload);
+      };
+      fakeApi.setStoreFailureStatus(null);
+      fakeApi.setGeneration(1);
+
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length === 2,
+        "Snapshot store retry did not reach the newer generation.",
+      );
+      await Bun.sleep(100);
+
+      expect(unhandledRejections).toEqual([]);
+      expect(fakeApi.latestSnapshotRevision()).toBe(0);
+      expect(fakeApi.storeRequestBodies()).toHaveLength(2);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
   test("stores a room whose last-disconnect store failed when the server shuts down", async () => {
     const fakeApi = createFakeStellaApi();
     const collabServer = await createCollabServer({

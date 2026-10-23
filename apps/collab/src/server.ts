@@ -957,6 +957,22 @@ export const createCollabServer = async (
           scheduleSnapshotStoreRetry(current.payload, current.failedAttempts);
         }
         return undefined;
+      })
+      .catch((error: unknown) => {
+        if (snapshotStoreFailureOutcome(error) === "retired") {
+          settleSnapshotStore(document);
+          logCollabEvent({
+            event: "snapshot_store_retired",
+            level: "warn",
+            roomId: snapshotRoomIdForLog(document),
+          });
+          return;
+        }
+
+        const current = pendingSnapshotStores.get(document);
+        if (current?.timer === null) {
+          scheduleSnapshotStoreRetry(current.payload, current.failedAttempts);
+        }
       });
   };
 
