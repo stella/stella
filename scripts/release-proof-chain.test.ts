@@ -741,7 +741,7 @@ test(
     // Only a pinned dispatch chains; schedules and pushes stay full anchors.
     const main = readWorkflow("main-heavy.yml");
     expect(main).toContain(
-      "if: steps.selection.outputs.run == 'true' && github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false",
+      `CHAIN_ENABLED: \${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false }}`,
     );
     expect(main).toContain(
       `chain_base: \${{ needs.validate.outputs.chain-base }}`,

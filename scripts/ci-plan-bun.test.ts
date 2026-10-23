@@ -108,6 +108,7 @@ const axes = [
   // Read by the patch-id steps: an enqueued head computes no patch identity.
   ["github.event.action", ["synchronize", "enqueued"]],
   ["inputs.heavy_only", [false, true]],
+  ["inputs.chain_base", [""]],
   ["steps.depth.outputs.suite_depth", ["fast", "full"]],
   ["steps.depth.outputs.queue_depth", ["", "full", "thin"]],
   ["steps.check.outputs.trusted", ["", "false", "true"]],

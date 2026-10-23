@@ -49,6 +49,7 @@ export type ModelledRunContext = {
   };
   inputs: Record<string, string | boolean> & {
     heavy_only: boolean;
+    chain_base: string;
     pr_depth_only: boolean;
     query_perf_mode: string;
     sha: string;
@@ -127,6 +128,7 @@ const defaultPlan = () => ({
 });
 
 const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
+  chain: { base: "", plan_event: "" },
   "api-test-durations": { hash: "", key: "" },
   "api-tests": {
     api_test_files: "[]",
@@ -307,6 +309,7 @@ export const ciExpressionContext = ({
       repository: REPOSITORY,
     },
     inputs: {
+      chain_base: "",
       heavy_only: heavyOnly,
       pr_depth_only: prDepthOnly,
       query_perf_mode: "compare",

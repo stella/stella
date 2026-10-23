@@ -465,6 +465,7 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
         values: {
           "steps.completed-depth.outputs.run_required": "false",
           "github.event_name": "pull_request",
+          "inputs.chain_base": "",
         },
       }),
       step.name,

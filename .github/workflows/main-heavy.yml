@@ -58,7 +58,7 @@ jobs:
       task_cache_producer: ${{ steps.ancestor.outputs.task_cache_producer }}
       proof: ${{ steps.reuse.outputs.proof }}
       main-base: ${{ steps.ancestor.outputs.main-base }}
-      chain-base: ${{ steps.chain.outputs.chain-base }}
+      chain-base: ${{ steps.ancestor.outputs.chain-base }}
       run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
       - name: Check release candidate
@@ -218,35 +218,25 @@ jobs:
           SHA: ${{ inputs.sha || github.sha }}
           GH_TOKEN: ${{ github.token }}
           GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
+          CHAIN_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false }}
         run: |
           {
             bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"
             echo "sha=$SHA"
             echo "task_cache_producer=validated-main"
           } >> "$GITHUB_OUTPUT"
-
-      # A pinned gate on a release candidate may chain its proof: plan against
-      # the nearest fully proven main ancestor and run only the affected jobs.
-      # Scheduled and push runs stay full; they produce the anchors. The
-      # selector is main's own copy and prints nothing whenever a full run is
-      # safer (forced paths, no anchor, unreadable evidence); the release gate
-      # verifies the chain again before it accepts the status.
-      - name: Select proof chain anchor
-        if: steps.selection.outputs.run == 'true' && github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false
-        id: chain
-        working-directory: ${{ runner.temp }}/main-heavy-validation
-        env:
-          SHA: ${{ inputs.sha }}
-          GH_TOKEN: ${{ github.token }}
-          GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
-        run: |
-          anchor=$(bash "$RUNNER_TEMP/release-proof-chain.sh" --select "$GITHUB_REPOSITORY" "$SHA") || anchor=''
-          if [[ -n "$anchor" && ! "$anchor" =~ ^[0-9a-f]{40}$ ]]; then
-            anchor=''
-          fi
-          echo "chain-base=$anchor" >> "$GITHUB_OUTPUT"
-          if [[ -n "$anchor" ]]; then
-            echo "Proof chained from fully proven main ancestor $anchor; jobs the diff does not affect are carried over." >> "$GITHUB_STEP_SUMMARY"
+          # A pinned gate may plan against the nearest fully proven main
+          # ancestor. Verification stays first, and the trusted selector falls
+          # back to a full run whenever chaining is unsafe.
+          if [[ "${CHAIN_ENABLED:-false}" == "true" ]]; then
+            anchor=$(bash "$RUNNER_TEMP/release-proof-chain.sh" --select "$GITHUB_REPOSITORY" "$SHA") || anchor=''
+            if [[ -n "$anchor" && ! "$anchor" =~ ^[0-9a-f]{40}$ ]]; then
+              anchor=''
+            fi
+            echo "chain-base=$anchor" >> "$GITHUB_OUTPUT"
+            if [[ -n "$anchor" ]]; then
+              echo "Proof chained from fully proven main ancestor $anchor; jobs the diff does not affect are carried over." >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
 
   suites:
