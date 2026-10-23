@@ -347,32 +347,32 @@
   "candidate:.github/workflows/db-migrations.yml/scope": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "f0cd2c219f6c68a915d8535c973c733b162edccef4c7f67d228ba2bdb76e1235"
+    "reviewedDigest": "d6dd0a610bbf1a5e33a3b549b29b8ccb7cdad3b540566a669d0fcbb911cedc8a"
   },
   "candidate:.github/workflows/db-migrations.yml/check": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "f07339989fe96ce4ad09c32c43dc665c09f41155e66728ae656815a6a6fef04e"
+    "reviewedDigest": "d266a52fa7af6da406ed2a6ddc948b7be810dfb72e28e7e1fb9539db168e28cd"
   },
   "candidate:.github/workflows/db-migrations.yml/apply-fresh": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "1ceba6f2043237316f2eddd132ee26334b82df466596ca9fd534f069d92850c4"
+    "reviewedDigest": "e96c8095f0db77c3f6ae66babca3b9946eed936de05abf7c793659d6c449fa6b"
   },
   "candidate:.github/workflows/dependency-audit.yml/audit": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "75b9017a55f250b889beff07e25511c72e618f83ced051b17af357df073d1fcb"
+    "reviewedDigest": "c648a3783a69072a8d7b6f1b5dfc3a0ae92f5023c23f2a8ff6ab2b3ef317888b"
   },
   "candidate:.github/workflows/dependency-audit.yml/remediate": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "d6904d49492d84de124ba279c30a563401ca45c6b19965117b67f19c53b988b9"
+    "reviewedDigest": "e0afe9bb68db8eee91550799bfe07479d5d80b4e0265c95e886205b20c10f0d6"
   },
   "candidate:.github/workflows/dependency-audit.yml/cargo-advisories": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "1f255b1e9b70816f2853cf37b4c99d434d10933ca998a98bf8900b981630c740"
+    "reviewedDigest": "1ac882441a56243433f698ec529697f24267485f13caefaf857f5e9d15c4ea7f"
   },
   "candidate:.github/workflows/dependency-malware-nightly.yml/dependency-malware-scan": {
     "kind": "ordinary",

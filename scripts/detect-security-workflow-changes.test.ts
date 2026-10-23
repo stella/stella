@@ -205,6 +205,30 @@ test("CodeQL selects code, workflow configuration and dependency inputs", () => 
   expect(detect("codeql", ["README.md", "source.ts"])).toBe("true");
 });
 
+const migrationTriggerPaths = [
+  "docker/postgres/**",
+  "scripts/configure-test-postgres*.sh",
+  "apps/api/drizzle/**",
+  "apps/api/src/db/**",
+  "apps/api/src/lib/db/**",
+  "apps/api/drizzle.config.ts",
+  "scripts/*migrat*",
+  "scripts/fixtures/migration*/**",
+  "scripts/rehearse-better-auth-constraint-retry.sh",
+  ".github/workflows/db-migrations.yml",
+  "scripts/detect-security-workflow-changes.sh",
+];
+
+test("migration trigger paths stay aligned with the detector", () => {
+  expect(migrations.on.pull_request.paths).toEqual(migrationTriggerPaths);
+  for (const pattern of migrationTriggerPaths) {
+    const sample = pattern
+      .replaceAll("**", "nested/file.sql")
+      .replaceAll("*", "sample");
+    expect(detect("migrations", [sample]), pattern).toBe("true");
+  }
+});
+
 test("migration coverage includes schema, runtime and check inputs and excludes unrelated code", () => {
   const config = readFileSync(
     new URL("../apps/api/drizzle.config.ts", import.meta.url),
@@ -232,7 +256,6 @@ test("migration coverage includes schema, runtime and check inputs and excludes 
     "apps/api/src/lib/db/client.ts",
     ".github/workflows/db-migrations.yml",
     "scripts/detect-security-workflow-changes.sh",
-    "scripts/detect-security-workflow-changes.test.ts",
     "scripts/rehearse-better-auth-constraint-retry.sh",
     "scripts/fixtures/migration-example/input.sql",
     ...readdirSync(import.meta.dirname)
@@ -357,7 +380,7 @@ test("both workflows gate every expensive job and run on detector failure", () =
       expect(job.if).toContain("needs.scope.outputs.required != 'false'");
     }
   }
-  expect(migrations.on.pull_request.paths).toBeUndefined();
+  expect(migrations.on.pull_request.paths).toEqual(migrationTriggerPaths);
   const triggers = v.parse(
     v.looseObject({
       schedule: v.array(v.object({ cron: v.string() })),

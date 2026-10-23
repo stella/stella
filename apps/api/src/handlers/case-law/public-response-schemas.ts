@@ -404,6 +404,7 @@ const countryCoverage = {
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
         pendingTextCount: t.Number(),
+        storedDecisions: numberOrNull,
         knownGaps: t.Union([
           t.Object(
             { type: t.Literal("unknown") },

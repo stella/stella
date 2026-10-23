@@ -34,6 +34,13 @@ export const AUTOFIX_BOT = "autofix-ci[bot]";
 export const AUTOFIX_COMMIT_SUBJECT = "chore: autofix files";
 
 const PRUNE_SOURCE = /\.(?:[cm]?[jt]sx?|sql)$/u;
+// Oxfmt's supported text formats, plus source files handled by oxlint. Paths
+// outside this set can still select a generator or baseline pruner, but are not
+// themselves passed to a fixer.
+const FIXABLE_SOURCE =
+  /\.(?:[cm]?[jt]sx?|jsonc?|ya?ml|mdx?|html?|vue|svelte|astro|css|scss|less|graphql|gql)$/u;
+
+export const isAutofixablePath = (file: string) => FIXABLE_SOURCE.test(file);
 const PRUNABLE_PATHS = new Set<string>(
   PRUNABLE_BASELINES.map(({ path }) => path),
 );
@@ -102,16 +109,20 @@ export const planAutofix = ({
   }
   const refix = push !== null && fixerInputChanged(push);
   const pushed = push === null || refix ? null : new Set(push);
-  const scoped =
+  const candidates =
     pushed === null
       ? [...pullRequestFiles]
       : pullRequestFiles.filter((file) => pushed.has(file));
+  const scoped = candidates.filter(isAutofixablePath);
   return {
     generators: orderGenerators(generators),
     scoped,
     refix,
-    prune: pruneInputChanged(scoped),
-    needed: generators.length > 0 || scoped.length > 0,
+    prune: pruneInputChanged(candidates),
+    needed:
+      generators.length > 0 ||
+      scoped.length > 0 ||
+      pruneInputChanged(candidates),
   };
 };
 

@@ -661,15 +661,15 @@
   },
   {
     "file": "apps/api/src/db/online-migrations.ts",
-    "fingerprint": "9901076667157cc994cc888f3f144ab1cd5b6affadb27f78afaad1dcecf644eb",
+    "fingerprint": "71f257696dfea511892314a551b1062a430e69327915e45ca2df2310250b2ba1",
     "count": 1,
-    "reason": "pg_advisory_unlock( in apps/api/src/db/online-migrations.ts: Existing session coordination remains with its connection owner."
+    "reason": "pg_try_advisory_lock( in apps/api/src/db/online-migrations.ts: Existing session coordination remains with its connection owner."
   },
   {
     "file": "apps/api/src/db/online-migrations.ts",
-    "fingerprint": "ff127071eb5e8c0ddc9806412080078a422178f9d0591fbecc8f2080429949f4",
+    "fingerprint": "9901076667157cc994cc888f3f144ab1cd5b6affadb27f78afaad1dcecf644eb",
     "count": 1,
-    "reason": "pg_advisory_lock( in apps/api/src/db/online-migrations.ts: Existing session coordination remains with its connection owner."
+    "reason": "pg_advisory_unlock( in apps/api/src/db/online-migrations.ts: Existing session coordination remains with its connection owner."
   },
   {
     "file": "apps/api/src/db/root.ts",
