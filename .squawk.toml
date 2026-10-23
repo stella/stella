@@ -2,7 +2,7 @@
 # Only migration files changed in the PR are linted.
 
 # Keep in sync with the Postgres major version used in production and in
-# .github/workflows/db-migrations.yml.
+# .github/workflows/ci.yml.
 pg_version = "18.0"
 
 # The drizzle migrator wraps every migration in a transaction.

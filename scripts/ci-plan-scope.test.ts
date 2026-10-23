@@ -444,6 +444,23 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
   ).toEqual(["true"]);
 });
 
+test("migration checks follow migration inputs and skip unrelated changes", () => {
+  for (const file of [
+    "apps/api/drizzle/0001_example.sql",
+    "apps/api/src/db/schema.ts",
+    "scripts/check-migrations.sh",
+    "docker/postgres/init.sql",
+    ".github/workflows/ci.yml",
+  ]) {
+    expect(runSelector([file], ["database_migrations_required"]), file).toEqual(
+      ["true"],
+    );
+  }
+  expect(
+    runSelector(["apps/web/src/example.ts"], ["database_migrations_required"]),
+  ).toEqual(["false"]);
+});
+
 test("the lockfile release-age guard follows every tracked lockfile", () => {
   for (const file of [
     "bun.lock",

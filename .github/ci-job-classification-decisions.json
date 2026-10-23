@@ -344,21 +344,6 @@
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "19bda7abb813755032bbb479ebe9676b0f7126601147a76542bbde878f88a4b2"
   },
-  "candidate:.github/workflows/db-migrations.yml/scope": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "f0cd2c219f6c68a915d8535c973c733b162edccef4c7f67d228ba2bdb76e1235"
-  },
-  "candidate:.github/workflows/db-migrations.yml/check": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "f07339989fe96ce4ad09c32c43dc665c09f41155e66728ae656815a6a6fef04e"
-  },
-  "candidate:.github/workflows/db-migrations.yml/apply-fresh": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "1ceba6f2043237316f2eddd132ee26334b82df466596ca9fd534f069d92850c4"
-  },
   "candidate:.github/workflows/dependency-audit.yml/audit": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
@@ -938,6 +923,16 @@
     "kind": "support",
     "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate.",
     "reviewedDigest": "76a70d6588524c64dc9199a9e60087b247c95b11020d6bda9a9b78afc486b147"
+  },
+  "candidate:.github/workflows/ci.yml/database-migrations-check": {
+    "kind": "ordinary",
+    "qualifier": "Checks migration safety rules and coverage; no publication or deployment.",
+    "reviewedDigest": "61096099ae96f9500d278316640e66ac0fbe9b3af43f0c634e18033dd2151227"
+  },
+  "candidate:.github/workflows/ci.yml/database-migrations-apply-fresh": {
+    "kind": "ordinary",
+    "qualifier": "Applies migrations to disposable databases and verifies schema, history and API startup; no publication or deployment.",
+    "reviewedDigest": "4193e0806fe202c26849c2607af6b31d21f8d7c5027867bc5ae5b74b0fa7ee80"
   },
   "candidate:.github/workflows/queue-admission.yml/admission": {
     "kind": "ordinary",

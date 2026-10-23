@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
@@ -66,6 +66,8 @@ import {
 import { unlistedTests } from "./run-unlisted-script-tests";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
+
+setDefaultTimeout(30_000);
 
 // Ordinary events never run the main PR-depth caller and reuse nothing unless
 // a case says so; cases that exercise either set the value explicitly.
@@ -283,6 +285,74 @@ const jobIf = (job: unknown) =>
   v.parse(v.object({ if: v.optional(v.string()) }), job).if ?? "";
 
 const ciJobs = workflowJobs(workflow);
+
+test("migration check jobs disable production load gates", () => {
+  const migrationStepNames = new Set([
+    "Test migration safety rules and historical findings",
+    "Apply all migrations to fresh Postgres",
+  ]);
+  const migrationJobs = Object.entries(ciJobs).filter(([, job]) => {
+    const { steps } = v.parse(
+      v.looseObject({
+        steps: v.optional(
+          v.array(v.looseObject({ name: v.optional(v.string()) })),
+        ),
+      }),
+      job,
+    );
+    return steps?.some(({ name }) => name && migrationStepNames.has(name));
+  });
+
+  expect(migrationJobs.map(([id]) => id).toSorted()).toEqual([
+    "database-migrations-apply-fresh",
+    "database-migrations-check",
+  ]);
+  for (const [id, job] of migrationJobs) {
+    const { env } = v.parse(
+      v.looseObject({ env: v.record(v.string(), v.string()) }),
+      job,
+    );
+    expect(env["DB_LOAD_GATE_EBS_SIGNAL"], id).toBe("disabled");
+    expect(env["DB_LOAD_GATE_BUSY_WINDOWS"], id).toBe("[]");
+  }
+});
+
+test("required checks report on pull requests and merge groups", () => {
+  const required = [
+    ["ci-result", workflow, "ci-result"],
+    [
+      "dependency-review",
+      readFileSync(
+        new URL("../.github/workflows/dependency-review.yml", import.meta.url),
+        "utf-8",
+      ),
+      "dependency-review",
+    ],
+    [
+      "cla",
+      readFileSync(
+        new URL("../.github/workflows/cla.yml", import.meta.url),
+        "utf-8",
+      ),
+      "verify-signatures",
+    ],
+  ] as const;
+  for (const [check, source, job] of required) {
+    const parsed = v.parse(
+      v.looseObject({
+        on: v.record(v.string(), v.unknown()),
+        jobs: v.record(v.string(), v.unknown()),
+      }),
+      Bun.YAML.parse(source),
+    );
+    expect(parsed.jobs, check).toHaveProperty(job);
+    expect(parsed.on, check).toHaveProperty("merge_group");
+    expect(parsed.on, check).toHaveProperty(
+      check === "cla" ? "pull_request_target" : "pull_request",
+    );
+  }
+  expect(required.at(2)?.[1]).toContain('name = "cla"');
+});
 
 // The planner and tests share the dependency-closure owner.
 const PR_HEAVY_JOBS = prHeavyJobs({ jobs: ciJobs });
@@ -1115,7 +1185,7 @@ test("the result gate evaluates every job in the workflow", () => {
   )) {
     expect(exitCode, label).toBe(1);
   }
-});
+}, 30_000);
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
   const declaredAdditionalScopes = {
@@ -1165,7 +1235,7 @@ test("a full-depth run fails every planned job that did not succeed", () => {
   )) {
     expect(exitCode, label).toBe(1);
   }
-});
+}, 30_000);
 
 test("a full-depth run passes jobs whose scope was not planned only when skipped", () => {
   const gates: ExpectedResultGate[] = [];
