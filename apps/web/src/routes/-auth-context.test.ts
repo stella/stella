@@ -2,16 +2,11 @@ import { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
-import { declareRouteShellProviderFixture } from "@/__fixtures__/route-shell/route-shell-provider-fixture";
-
-await declareRouteShellProviderFixture({
-  mode: "public-knowledge",
-  suite: "professional-use",
-});
-
-const { loadAuthContext, loadAuthContextForRootRedirect } =
-  await import("@/routes/-auth-context");
-const { getAnalytics } = await import("@/lib/analytics/provider");
+import { getAnalytics } from "@/lib/analytics/provider";
+import {
+  loadAuthContext,
+  loadAuthContextForRootRedirect,
+} from "@/routes/-auth-context";
 
 describe("auth context query outcomes", () => {
   test("propagates the original query rejection after capturing it once", async () => {
