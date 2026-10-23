@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
@@ -51,6 +53,8 @@ export const isSearchTypeInScope = (
       return type !== "case-law" && type !== "contact";
     case "case-law":
       return type === "case-law";
+    default:
+      return panic(`Unhandled search scope: ${String(scope)}`);
   }
 };
 

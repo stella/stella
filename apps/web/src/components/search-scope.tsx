@@ -9,15 +9,16 @@ import { cn } from "@stll/ui/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 
-// oxlint-disable-next-line require-contract-domains/require-contract-domains -- Search scopes are client UI choices; they never cross the API boundary.
-export const SEARCH_SCOPES = [
-  "all",
-  "matters",
-  "case-law",
-  "registries",
-] as const;
+const SEARCH_SCOPE = {
+  all: "all",
+  matters: "matters",
+  caseLaw: "case-law",
+  registries: "registries",
+} as const;
 
-export type SearchScope = (typeof SEARCH_SCOPES)[number];
+export const SEARCH_SCOPES = Object.values(SEARCH_SCOPE);
+
+export type SearchScope = (typeof SEARCH_SCOPE)[keyof typeof SEARCH_SCOPE];
 
 const SCOPE_LABELS = {
   all: "common.all",
