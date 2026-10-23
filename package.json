@@ -42,6 +42,7 @@
     "security:audit:report": "bun scripts/dependency-audit.ts",
     "security:audit:write-baseline": "bun scripts/dependency-audit.ts --write-baseline",
     "env:generate": "bun --no-env-file scripts/env-tool.ts generate",
+    "format": "bun fmt",
     "env:check": "bun --no-env-file scripts/env-tool.ts check",
     "env:audit": "bun --no-env-file scripts/env-tool.ts audit",
     "env:doctor": "bun --no-env-file scripts/env-tool.ts doctor",
