@@ -1,5 +1,12 @@
+import type { FileRouteTypes } from "@/routeTree.gen";
+
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { expect, test } from "../helpers/test";
+
+const RETURN_PATH = "/settings/account/profile" satisfies FileRouteTypes["to"];
+const RETURN_SEARCH = new URLSearchParams({
+  redirectTo: RETURN_PATH,
+}).toString();
 
 test("email reauthentication keeps the current session while showing the OTP challenge", async ({
   page,
@@ -25,7 +32,7 @@ test("email reauthentication keeps the current session while showing the OTP cha
   await page.route("**/dev-public/last-otp?**", async (route) => {
     await route.fulfill({ json: null });
   });
-  await page.goto("/auth/reauth?redirectTo=%2Faccount", {
+  await page.goto(`/auth/reauth?${RETURN_SEARCH}`, {
     waitUntil: "domcontentloaded",
   });
   await page.getByPlaceholder("you@example.com").fill("reader@example.test");
@@ -42,17 +49,18 @@ test("email reauthentication keeps the current session while showing the OTP cha
   await page
     .getByRole("button", { name: "Use a different email", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/auth\/reauth\?redirectTo=%2Faccount/u);
+  await expect(page).toHaveURL(
+    new URL(`/auth/reauth?${RETURN_SEARCH}`, page.url()).href,
+  );
 });
 
 test("an ordinary OTP link redirects an already signed-in account", async ({
   page,
 }) => {
-  await page.goto(
-    "/auth/otp?email=reader%40example.test&redirectTo=%2Faccount",
-    { waitUntil: "domcontentloaded" },
-  );
-  await expect(page).toHaveURL(/\/account(?:\?|$)/u);
+  await page.goto(`/auth/otp?email=reader%40example.test&${RETURN_SEARCH}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page).toHaveURL(new URL(RETURN_PATH, page.url()).href);
   await expect(
     page.getByRole("button", { name: "Verify", exact: true }),
   ).toHaveCount(0);
