@@ -4,6 +4,8 @@
 # commit itself whose queue history since the previous release tag is fully
 # validated (check-release-receipt-coverage.sh), or trusted main/heavy and
 # main/pr-depth success; sparse or skipped heavy runs provide no green evidence.
+# A main/heavy success may be chained: it ran the jobs affected since a fully
+# proven main ancestor, and release-proof-chain.sh --verify must accept it.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,6 +70,19 @@ validate_workflow_status() {
     (.event == "workflow_dispatch" or .head_sha == $sha) and
     .status == "completed" and .conclusion == "success"
   ' <<< "$run" >/dev/null || refuse "$code: run provenance or conclusion does not match"
+  # A chained main/heavy ran only the jobs affected since a fully proven main
+  # ancestor and carries the rest from it (release-proof-chain.sh). Its own
+  # run wrote the anchor; the chain is accepted only in exactly that form and
+  # only after the whole chain verifies. No other context may chain.
+  local description chain_pattern
+  description=$(jq -r '.description // ""' <<< "$status")
+  if [[ "$description" == *chain=* ]]; then
+    [[ "$context" == main/heavy ]] || refuse "$code: $context on $proof claims a proof chain; only main/heavy may chain"
+    chain_pattern='^Main heavy suites: success; chain=([0-9a-f]{40})(; main=[0-9a-f]{40})?$'
+    [[ "$description" =~ $chain_pattern ]] || refuse "$code: malformed proof chain on $proof"
+    bash "$script_dir/release-proof-chain.sh" --verify "$repo" "$proof" "${BASH_REMATCH[1]}" \
+      "$(jq -r '.head_sha' <<< "$run")" >&2 || refuse "$code: the proof chain on $proof does not hold"
+  fi
 }
 if [[ "$proof" != "$sha" ]]; then
   validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "Staging release proof " "RELEASE_STAGING_NOT_GREEN"

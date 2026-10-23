@@ -134,6 +134,10 @@ test("restoring VERSION-only planning loses the non-release compiler trigger", (
 });
 
 test("replacing the caller event binding with workflow_call loses the periodic trigger", () => {
-  expect(plannerEnv["EVENT_NAME"]).toMatch(/^\$\{\{ github\.event_name \}\}$/u);
+  // Only a chained heavy run (release-proof-chain.sh) plans as a merge group;
+  // every other run keeps the caller's event.
+  expect(plannerEnv["EVENT_NAME"]).toMatch(
+    /^\$\{\{ steps\.chain\.outputs\.plan_event \|\| github\.event_name \}\}$/u,
+  );
   expect(plan({ event: "workflow_call", heavyOnly: true })).toBe("false");
 });

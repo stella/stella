@@ -187,6 +187,7 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
   expect(Object.keys(mainTriggers.workflow_dispatch.inputs)).toEqual([
     "release_candidate",
     "sha",
+    "proof_chain",
   ]);
   expect(mainTriggers.workflow_dispatch.inputs["sha"]).toMatchObject({
     required: true,
