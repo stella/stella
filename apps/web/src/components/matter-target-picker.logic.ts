@@ -23,8 +23,7 @@ export type MatterTarget =
       name: string;
       parentId: string | null;
       selection:
-        | { type: "existing"; parentId: string | null }
-        | { type: "pending" };
+        { type: "existing"; parentId: string | null } | { type: "pending" };
     };
 
 export type PendingMatterTarget = Extract<MatterTarget, { type: "pending" }>;

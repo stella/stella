@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

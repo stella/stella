@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import {
-  readFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";

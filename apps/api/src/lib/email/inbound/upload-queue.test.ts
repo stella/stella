@@ -6,8 +6,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  UploadedMailUnavailableError,
   type fileUploadedMail,
+  UploadedMailUnavailableError,
 } from "@/api/lib/email/inbound/upload";
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import {

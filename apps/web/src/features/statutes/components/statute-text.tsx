@@ -231,8 +231,7 @@ type StatuteBlockProps = {
   landing?: boolean | undefined;
   /** What a provision heading offers beside its designation. */
   provisionAccessory?:
-    | ((provision: ProvisionHeadingLine) => ReactNode)
-    | undefined;
+    ((provision: ProvisionHeadingLine) => ReactNode) | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
 };
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";

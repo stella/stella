@@ -8,11 +8,11 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
-  publishedCaseLawDecisions,
   caseLawProvisionCitations,
+  caseLawSources,
   caseLawStatuteCitationCounts,
   caseLawStatuteCitationCountState,
-  caseLawSources,
+  publishedCaseLawDecisions,
   STATUTE_CITATION_COUNT_STATE_KEY,
   STATUTE_CITATION_COUNT_STATUS,
   STATUTE_CITATION_TARGET_TYPE,

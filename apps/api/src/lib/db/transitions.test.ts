@@ -2,13 +2,13 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getColumns, sql } from "drizzle-orm";
 import {
+  index,
   integer,
+  PgDialect,
   pgTable,
   primaryKey,
-  index,
-  uniqueIndex,
   text,
-  PgDialect,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
@@ -21,15 +21,15 @@ import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
-  defineLifecycle,
-  defineTransitions,
   defineKeyedTransitions,
+  defineLifecycle,
+  defineScopedTransitions,
+  defineTransitions,
+  permitsTransition,
+  transition,
   transitionBatch,
   transitionLifecycle,
   transitionLifecycleBatch,
-  permitsTransition,
-  transition,
-  defineScopedTransitions,
   transitionScopedBatch,
   transitionScopedCount,
   transitionUpsertBatch,
