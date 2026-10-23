@@ -209,6 +209,7 @@ export const OTPPanel = ({
 
       setResetConfirmation(null);
       if (isTwoFactorRedirect(signInData)) {
+        await invalidateSession.mutateAsync();
         await navigate({
           to: "/auth/two-factor",
           search: { redirectTo, linkProvider },

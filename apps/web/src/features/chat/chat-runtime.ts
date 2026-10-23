@@ -49,6 +49,7 @@ import {
   isBrowserExtensionBridgeMounted,
 } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
+import { toPersistedChatMessages } from "@/features/chat/chat-persisted-messages";
 import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
 import { createChatSendTiming } from "@/features/chat/chat-send-timing";
@@ -1344,27 +1345,6 @@ export const createChatRuntime = ({
 
   return runtime;
 };
-
-const toPersistedChatMessages = (
-  messages: readonly UIMessage<ChatClientTools>[],
-): PersistedChatMessage[] =>
-  messages.map((message) => {
-    if (
-      message.role !== "assistant" ||
-      !message.parts.some(
-        (part) => part.type === "text" && part.content.trim().length === 0,
-      )
-    ) {
-      return message;
-    }
-    // RUN_ERROR can leave whitespace parts that server finalization drops.
-    return {
-      ...message,
-      parts: message.parts.filter(
-        (part) => part.type !== "text" || part.content.trim().length > 0,
-      ),
-    };
-  });
 
 const isChatUiMessage = (
   message: ModelMessage | UIMessage,

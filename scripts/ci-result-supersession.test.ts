@@ -394,7 +394,7 @@ test("a metadata run mirrors a code run's evaluated success", () => {
   expect(run.exitCode, run.log).toBe(0);
   expect(run.record).toMatchObject({
     basis: "pass_through",
-    pass_through_reason: "metadata-mirror",
+    pass_through_reason: "metadata",
     reused_from_run_id: 90,
   });
 });
@@ -480,4 +480,26 @@ test("no record, a stale attempt, another head or a cancelled required job is no
     expect(run.exitCode, JSON.stringify(runs) + run.log).toBe(1);
     expect(run.record?.verdict).toBe("failure");
   }
+});
+
+// The pass-through reasons merge-bar accepts in a required-jobs record
+// (stella-ops merge-bar-v2/src/summary.rs, `PassThroughReason`); it refuses
+// any other value, so every reason the step writes must be one of these.
+const MERGE_BAR_PASS_THROUGH_REASONS = [
+  "draft",
+  "enqueued",
+  "metadata",
+  "reused",
+  "superseded",
+];
+
+test("every pass-through reason the step writes is one merge-bar reads", () => {
+  const written = [
+    ...new Set(
+      [...script.matchAll(/\bpass_through_reason=([a-z-]*)/gu)]
+        .map((match) => match[1] ?? "")
+        .filter((reason) => reason !== ""),
+    ),
+  ].toSorted();
+  expect(written).toEqual(MERGE_BAR_PASS_THROUGH_REASONS);
 });
