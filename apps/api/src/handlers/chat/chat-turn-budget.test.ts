@@ -29,6 +29,7 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 
 const SEARCH_TOOL_NAME = "web_search";
@@ -43,9 +44,11 @@ const ANSWER_MESSAGE_ID = toSafeId<"chatMessage">(
 const searchForeverAdapter = ({
   callIdPrefix = "call",
   promptTokens,
+  textBeforeCall,
 }: {
   callIdPrefix?: string;
   promptTokens: number;
+  textBeforeCall?: number;
 }): { adapter: AnyTextAdapter; modelCalls: () => number } => {
   let calls = 0;
   const adapter: AnyTextAdapter = {
@@ -71,6 +74,28 @@ const searchForeverAdapter = ({
         model,
         timestamp,
       } satisfies AdapterYieldChunk;
+      if (calls === textBeforeCall) {
+        yield {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: `provider-message-${String(calls)}`,
+          role: "assistant",
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: `provider-message-${String(calls)}`,
+          delta: "Some lists are long",
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
+        yield {
+          type: EventType.TEXT_MESSAGE_END,
+          messageId: `provider-message-${String(calls)}`,
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
+      }
       yield {
         // The executor the provider seam stamps on every server tool call.
         metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
@@ -137,15 +162,18 @@ const runTurnRequest = async ({
   initialMessages = [],
   promptTokens,
   callIdPrefix,
+  textBeforeCall,
 }: {
   budget: ChatTurnBudget;
   initialMessages?: ChatMessage[];
   promptTokens: number;
   callIdPrefix?: string;
+  textBeforeCall?: number;
 }) => {
   const { adapter, modelCalls } = searchForeverAdapter({
     promptTokens,
     ...(callIdPrefix === undefined ? {} : { callIdPrefix }),
+    ...(textBeforeCall === undefined ? {} : { textBeforeCall }),
   });
   const { executed, tool } = grantedSearchTool();
   const owningMessage = initialMessages.findLast(
@@ -186,13 +214,14 @@ const runTurnRequest = async ({
     }),
     turnBudget,
   });
+  const chunks: PublicStreamChunk[] = [];
   for await (const chunk of output) {
-    void chunk;
+    chunks.push(chunk);
   }
   if (finish.event === null) {
     return expect.unreachable("The turn must settle");
   }
-  return { executed, finish: finish.event, modelCalls: modelCalls() };
+  return { chunks, executed, finish: finish.event, modelCalls: modelCalls() };
 };
 
 const toolCallIdsOf = (parts: readonly ChatPart[]): string[] =>
@@ -239,6 +268,43 @@ describe("an assistant turn's budget", () => {
     expect(finish.responseMessage.metadata.turnSpend).toEqual({
       promptTokens: 30,
     });
+  });
+
+  test("a capped turn keeps text and every completed tool call", async () => {
+    const { chunks, finish } = await runTurnRequest({
+      budget: { maxToolCalls: 2, maxPromptTokens: 1_000_000 },
+      promptTokens: 10,
+      textBeforeCall: 2,
+    });
+
+    expect(finish.outcome).toEqual({
+      type: "paused",
+      reason: "tool-calls",
+      toolCalls: 2,
+    });
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: EventType.TEXT_MESSAGE_END,
+        metadata: { turnOutcome: finish.outcome },
+      }),
+    );
+    expect(
+      finish.responseMessage.parts.map((part) => {
+        if (part.type === "tool-call") {
+          return [part.type, part.id, part.state, part.output];
+        }
+        if (part.type === "tool-result") {
+          return [part.type, part.toolCallId, part.state];
+        }
+        return part.type === "text" ? [part.type, part.content] : [part.type];
+      }),
+    ).toEqual([
+      ["tool-call", "call-1", "complete", { results: ["Court fees act"] }],
+      ["tool-result", "call-1", "complete"],
+      ["text", "Some lists are long"],
+      ["tool-call", "call-2", "complete", { results: ["Court fees act"] }],
+      ["tool-result", "call-2", "complete"],
+    ]);
   });
 
   test("a turn whose model calls read too many prompt tokens stops at the token cap", async () => {

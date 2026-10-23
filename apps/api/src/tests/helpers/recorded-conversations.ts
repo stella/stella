@@ -22,6 +22,7 @@ import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -165,6 +166,20 @@ export const registerRecordedConversationSuite = (
     steps: RecordedStep[];
     threadId: string;
   };
+
+  const EXPECTED_FAILED_OUTCOME_SCENARIOS = new Set([
+    "error-before-first-chunk",
+    "retry",
+  ]);
+
+  const assistantMessagesOf = (page: RecordedPage) =>
+    asTestRaw<
+      {
+        metadata?: { turnOutcome?: ChatTurnOutcome };
+        parts?: unknown[];
+        role?: string;
+      }[]
+    >(page.messages).filter(({ role }) => role === "assistant");
 
   // --- Scenarios ---------------------------------------------------------------
 
@@ -605,6 +620,23 @@ return { id: document.entityId, name: document.name };`;
           asks([plainCall("call-1")]),
           asks([plainCall("call-2")], "Some lists are long"),
         ]);
+        const pausedPage = recorder.steps.at(-1)?.exchanges.at(-1)?.page;
+        if (pausedPage === undefined) {
+          expect.unreachable("The paused step must record its page");
+        }
+        const pausedMessage = assistantMessagesOf(pausedPage).at(-1);
+        expect(pausedMessage?.metadata?.turnOutcome).toEqual({
+          type: "paused",
+          reason: "tool-calls",
+          toolCalls: 2,
+        });
+        expect(
+          asTestRaw<{ output?: unknown; type?: string }[]>(
+            pausedMessage?.parts ?? [],
+          ).filter(
+            ({ output, type }) => type === "tool-call" && output !== undefined,
+          ),
+        ).toHaveLength(2);
         recorder.harness.script(recorder.threadId, [
           answers("Listed every template"),
         ]);
@@ -617,6 +649,13 @@ return { id: document.entityId, name: document.name };`;
             await recorder.client.sendUserMessage(messageId, text);
           },
         );
+        const completedPage = recorder.steps.at(-1)?.exchanges.at(-1)?.page;
+        if (completedPage === undefined) {
+          expect.unreachable("The Continue step must record its page");
+        }
+        expect(
+          assistantMessagesOf(completedPage).at(-1)?.metadata?.turnOutcome,
+        ).toEqual({ type: "completed" });
       },
       "error-before-first-chunk": async (recorder) => {
         await send(recorder, "Draft the NDA", [
@@ -809,6 +848,18 @@ return { id: document.entityId, name: document.name };`;
         : [],
     );
     expect(unposted).toEqual([]);
+    const failedOutcomes = recording.steps.flatMap(({ exchanges }, index) =>
+      exchanges.flatMap(({ page }) =>
+        assistantMessagesOf(page).flatMap(({ metadata }) =>
+          metadata?.turnOutcome?.type === "failed"
+            ? [`step ${String(index + 1)}`]
+            : [],
+        ),
+      ),
+    );
+    if (!EXPECTED_FAILED_OUTCOME_SCENARIOS.has(scenario)) {
+      expect(failedOutcomes).toEqual([]);
+    }
     // A scenario step that failed is the finding, not a stale file.
     expect(failure).toBeUndefined();
     if (process.env[WRITE_ENV] === "1") {

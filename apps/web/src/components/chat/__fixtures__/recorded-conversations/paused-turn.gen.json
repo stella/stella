@@ -417,7 +417,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225625000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225626000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225627000,\"metadata\":{\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225628000,\"metadata\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"server\"}}\n\nid: 5\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{}\",\"timestamp\":1767225629000}\n\nid: 6\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225630000,\"metadata\":{\"tanstack\":{\"input\":{}}}}\n\nid: 7\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225631000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-1\",\"content\":\"{\\\"templates\\\":[{\\\"id\\\":\\\"00000000-0000-7000-8000-000000000004\\\",\\\"name\\\":\\\"Tmpl A\\\",\\\"fieldCount\\\":0,\\\"tags\\\":null,\\\"whenToUse\\\":null,\\\"whenNotToUse\\\":null}]}\",\"role\":\"tool\"}\n\nid: 8\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225632000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:06.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:07.000Z\"}}}\n\nid: 9\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Some lists are long\",\"timestamp\":1767225633000}\n\nid: 10\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225634000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 11\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-2\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225635000,\"metadata\":{\"stellaStepId\":\"call-2\",\"stellaToolExecutor\":\"server\"}}\n\nid: 12\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-2\",\"delta\":\"{}\",\"timestamp\":1767225636000}\n\nid: 13\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-2\",\"timestamp\":1767225637000,\"metadata\":{\"tanstack\":{\"input\":{}}}}\n\nid: 14\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225638000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-2\",\"content\":\"{\\\"templates\\\":[{\\\"id\\\":\\\"00000000-0000-7000-8000-000000000004\\\",\\\"name\\\":\\\"Tmpl A\\\",\\\"fieldCount\\\":0,\\\"tags\\\":null,\\\"whenToUse\\\":null,\\\"whenNotToUse\\\":null}]}\",\"role\":\"tool\"}\n\nid: 15\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225639000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"tool_calls\"}}}\n\n",
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225623000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225624000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225625000,\"metadata\":{\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-1\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225626000,\"metadata\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"server\"}}\n\nid: 5\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-1\",\"delta\":\"{}\",\"timestamp\":1767225627000}\n\nid: 6\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-1\",\"timestamp\":1767225628000,\"metadata\":{\"tanstack\":{\"input\":{}}}}\n\nid: 7\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225629000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-1\",\"content\":\"{\\\"templates\\\":[{\\\"id\\\":\\\"00000000-0000-7000-8000-000000000004\\\",\\\"name\\\":\\\"Tmpl A\\\",\\\"fieldCount\\\":0,\\\"tags\\\":null,\\\"whenToUse\\\":null,\\\"whenNotToUse\\\":null}]}\",\"role\":\"tool\"}\n\nid: 8\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225630000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:06.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:07.000Z\"}}}\n\nid: 9\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"delta\":\"Some lists are long\",\"timestamp\":1767225631000}\n\nid: 10\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225632000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 11\ndata: {\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"call-2\",\"toolCallName\":\"list_templates\",\"parentMessageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225633000,\"metadata\":{\"stellaStepId\":\"call-2\",\"stellaToolExecutor\":\"server\"}}\n\nid: 12\ndata: {\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"call-2\",\"delta\":\"{}\",\"timestamp\":1767225634000}\n\nid: 13\ndata: {\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"call-2\",\"timestamp\":1767225635000,\"metadata\":{\"tanstack\":{\"input\":{}}}}\n\nid: 14\ndata: {\"type\":\"TOOL_CALL_RESULT\",\"timestamp\":1767225636000,\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"toolCallId\":\"call-2\",\"content\":\"{\\\"templates\\\":[{\\\"id\\\":\\\"00000000-0000-7000-8000-000000000004\\\",\\\"name\\\":\\\"Tmpl A\\\",\\\"fieldCount\\\":0,\\\"tags\\\":null,\\\"whenToUse\\\":null,\\\"whenNotToUse\\\":null}]}\",\"role\":\"tool\"}\n\nid: 15\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"turnOutcome\":{\"type\":\"paused\",\"reason\":\"tool-calls\",\"toolCalls\":2}}}\n\nid: 16\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225637000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"tool_calls\"}}}\n\nid: 17\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225638000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 18\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-1\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225639000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"tool_calls\"}}}\n\n",
             "status": 200,
             "turnId": "00000000-0000-7000-8000-000000000005"
           },
@@ -440,11 +440,32 @@
               {
                 "createdAt": "2026-01-01T00:00:09.000Z",
                 "edited": false,
-                "id": "00000000-0000-7000-8000-000000000006",
+                "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
+                  "usage": {
+                    "totalTokens": 2,
+                    "promptTokens": 1,
+                    "completionTokens": 1
+                  },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
+                  },
+                  "turnSpend": {
+                    "promptTokens": 2
+                  },
+                  "refContext": {
+                    "refs": [],
+                    "version": 2,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
                   "turnOutcome": {
-                    "type": "failed",
-                    "error": "unknown"
+                    "type": "paused",
+                    "reason": "tool-calls",
+                    "toolCalls": 2
                   },
                   "turnTiming": {
                     "status": "finished",
@@ -453,7 +474,72 @@
                 },
                 "role": "assistant",
                 "revision": 0,
-                "parts": []
+                "parts": [
+                  {
+                    "arguments": "{}",
+                    "id": "call-1",
+                    "input": {},
+                    "metadata": {
+                      "stellaStepId": "call-1",
+                      "stellaToolExecutor": "server"
+                    },
+                    "name": "list_templates",
+                    "output": {
+                      "templates": [
+                        {
+                          "id": "00000000-0000-7000-8000-000000000004",
+                          "name": "Tmpl A",
+                          "tags": null,
+                          "whenToUse": null,
+                          "fieldCount": 0,
+                          "whenNotToUse": null
+                        }
+                      ]
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"templates\":[{\"id\":\"00000000-0000-7000-8000-000000000004\",\"name\":\"Tmpl A\",\"tags\":null,\"whenToUse\":null,\"fieldCount\":0,\"whenNotToUse\":null}]}",
+                    "state": "complete",
+                    "toolCallId": "call-1",
+                    "type": "tool-result"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Some lists are long"
+                  },
+                  {
+                    "arguments": "{}",
+                    "id": "call-2",
+                    "input": {},
+                    "metadata": {
+                      "stellaStepId": "call-2",
+                      "stellaToolExecutor": "server"
+                    },
+                    "name": "list_templates",
+                    "output": {
+                      "templates": [
+                        {
+                          "id": "00000000-0000-7000-8000-000000000004",
+                          "name": "Tmpl A",
+                          "tags": null,
+                          "whenToUse": null,
+                          "fieldCount": 0,
+                          "whenNotToUse": null
+                        }
+                      ]
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"templates\":[{\"id\":\"00000000-0000-7000-8000-000000000004\",\"name\":\"Tmpl A\",\"tags\":null,\"whenToUse\":null,\"fieldCount\":0,\"whenNotToUse\":null}]}",
+                    "state": "complete",
+                    "toolCallId": "call-2",
+                    "type": "tool-result"
+                  }
+                ]
               }
             ],
             "olderCursor": null,
@@ -464,7 +550,7 @@
     },
     {
       "action": {
-        "messageId": "00000000-0000-7000-8000-000000000007",
+        "messageId": "00000000-0000-7000-8000-000000000006",
         "text": "Continue",
         "type": "continue"
       },
@@ -489,15 +575,12 @@
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
                   "turnTiming": {
-                    "status": "running",
-                    "elapsedMs": 0,
-                    "startedAt": "2026-01-01T00:00:12.000Z",
-                    "durationMs": 0,
-                    "observedAt": "2026-01-01T00:00:13.000Z"
+                    "status": "finished",
+                    "durationMs": 0
                   },
                   "tanstack": {
                     "model": "gpt-5.4-mini",
-                    "createdAt": "2026-01-01T00:00:14.000Z",
+                    "createdAt": "2026-01-01T00:00:12.000Z",
                     "toolCallMetadata": {
                       "call-1": {
                         "stellaStepId": "call-1",
@@ -508,6 +591,11 @@
                         "stellaToolExecutor": "server"
                       }
                     }
+                  },
+                  "turnOutcome": {
+                    "type": "paused",
+                    "reason": "tool-calls",
+                    "toolCalls": 2
                   }
                 },
                 "role": "assistant",
@@ -554,10 +642,10 @@
                 }
               },
               {
-                "id": "00000000-0000-7000-8000-000000000007",
+                "id": "00000000-0000-7000-8000-000000000006",
                 "metadata": {
                   "tanstack": {
-                    "createdAt": "2026-01-01T00:00:15.000Z"
+                    "createdAt": "2026-01-01T00:00:13.000Z"
                   }
                 },
                 "role": "user",
@@ -917,7 +1005,7 @@
             "context": [],
             "forwardedProps": {
               "message": {
-                "id": "00000000-0000-7000-8000-000000000007",
+                "id": "00000000-0000-7000-8000-000000000006",
                 "role": "user",
                 "parts": [
                   {
@@ -925,7 +1013,7 @@
                     "content": "Continue"
                   }
                 ],
-                "createdAt": "2026-01-01T00:00:16.000Z"
+                "createdAt": "2026-01-01T00:00:14.000Z"
               },
               "sendMode": "rawOverride",
               "runId": "run-recorded-2",
@@ -933,7 +1021,7 @@
             },
             "data": {
               "message": {
-                "id": "00000000-0000-7000-8000-000000000007",
+                "id": "00000000-0000-7000-8000-000000000006",
                 "role": "user",
                 "parts": [
                   {
@@ -941,7 +1029,7 @@
                     "content": "Continue"
                   }
                 ],
-                "createdAt": "2026-01-01T00:00:17.000Z"
+                "createdAt": "2026-01-01T00:00:15.000Z"
               },
               "sendMode": "rawOverride",
               "runId": "run-recorded-2",
@@ -950,15 +1038,15 @@
           },
           "ended": "complete",
           "response": {
-            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225640000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225641000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"role\":\"assistant\",\"timestamp\":1767225642000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:18.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:19.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"delta\":\"Listed every template\",\"timestamp\":1767225643000}\n\nid: 5\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"timestamp\":1767225644000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 6\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000008\",\"timestamp\":1767225645000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 7\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225646000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225640000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225641000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000007\",\"role\":\"assistant\",\"timestamp\":1767225642000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:16.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:17.000Z\"}}}\n\nid: 4\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000007\",\"delta\":\"Listed every template\",\"timestamp\":1767225643000}\n\nid: 5\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000007\",\"timestamp\":1767225644000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 6\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000007\",\"timestamp\":1767225645000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 7\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225646000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200,
-            "turnId": "00000000-0000-7000-8000-000000000009"
+            "turnId": "00000000-0000-7000-8000-000000000008"
           },
           "page": {
             "activeTurnId": null,
             "messages": [
               {
-                "createdAt": "2026-01-01T00:00:20.000Z",
+                "createdAt": "2026-01-01T00:00:18.000Z",
                 "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
@@ -971,13 +1059,34 @@
                 ]
               },
               {
-                "createdAt": "2026-01-01T00:00:21.000Z",
+                "createdAt": "2026-01-01T00:00:19.000Z",
                 "edited": false,
-                "id": "00000000-0000-7000-8000-000000000006",
+                "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
+                  "usage": {
+                    "totalTokens": 2,
+                    "promptTokens": 1,
+                    "completionTokens": 1
+                  },
+                  "turnModel": {
+                    "model": "gpt-5.4-mini",
+                    "provider": "openai"
+                  },
+                  "turnSpend": {
+                    "promptTokens": 2
+                  },
+                  "refContext": {
+                    "refs": [],
+                    "version": 2,
+                    "entities": [],
+                    "workspaceScope": [],
+                    "unresolvedInputs": []
+                  },
+                  "refEncoding": "persisted-resource-refs-v2",
                   "turnOutcome": {
-                    "type": "failed",
-                    "error": "unknown"
+                    "type": "paused",
+                    "reason": "tool-calls",
+                    "toolCalls": 2
                   },
                   "turnTiming": {
                     "status": "finished",
@@ -986,12 +1095,77 @@
                 },
                 "role": "assistant",
                 "revision": 0,
-                "parts": []
+                "parts": [
+                  {
+                    "arguments": "{}",
+                    "id": "call-1",
+                    "input": {},
+                    "metadata": {
+                      "stellaStepId": "call-1",
+                      "stellaToolExecutor": "server"
+                    },
+                    "name": "list_templates",
+                    "output": {
+                      "templates": [
+                        {
+                          "id": "00000000-0000-7000-8000-000000000004",
+                          "name": "Tmpl A",
+                          "tags": null,
+                          "whenToUse": null,
+                          "fieldCount": 0,
+                          "whenNotToUse": null
+                        }
+                      ]
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"templates\":[{\"id\":\"00000000-0000-7000-8000-000000000004\",\"name\":\"Tmpl A\",\"tags\":null,\"whenToUse\":null,\"fieldCount\":0,\"whenNotToUse\":null}]}",
+                    "state": "complete",
+                    "toolCallId": "call-1",
+                    "type": "tool-result"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Some lists are long"
+                  },
+                  {
+                    "arguments": "{}",
+                    "id": "call-2",
+                    "input": {},
+                    "metadata": {
+                      "stellaStepId": "call-2",
+                      "stellaToolExecutor": "server"
+                    },
+                    "name": "list_templates",
+                    "output": {
+                      "templates": [
+                        {
+                          "id": "00000000-0000-7000-8000-000000000004",
+                          "name": "Tmpl A",
+                          "tags": null,
+                          "whenToUse": null,
+                          "fieldCount": 0,
+                          "whenNotToUse": null
+                        }
+                      ]
+                    },
+                    "state": "complete",
+                    "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"templates\":[{\"id\":\"00000000-0000-7000-8000-000000000004\",\"name\":\"Tmpl A\",\"tags\":null,\"whenToUse\":null,\"fieldCount\":0,\"whenNotToUse\":null}]}",
+                    "state": "complete",
+                    "toolCallId": "call-2",
+                    "type": "tool-result"
+                  }
+                ]
               },
               {
-                "createdAt": "2026-01-01T00:00:22.000Z",
+                "createdAt": "2026-01-01T00:00:20.000Z",
                 "edited": false,
-                "id": "00000000-0000-7000-8000-000000000007",
+                "id": "00000000-0000-7000-8000-000000000006",
                 "role": "user",
                 "revision": 0,
                 "parts": [
@@ -1002,9 +1176,9 @@
                 ]
               },
               {
-                "createdAt": "2026-01-01T00:00:23.000Z",
+                "createdAt": "2026-01-01T00:00:21.000Z",
                 "edited": false,
-                "id": "00000000-0000-7000-8000-000000000008",
+                "id": "00000000-0000-7000-8000-000000000007",
                 "metadata": {
                   "usage": {
                     "totalTokens": 2,
@@ -1045,7 +1219,7 @@
               }
             ],
             "olderCursor": null,
-            "lastActivityAt": "2026-01-01T00:00:24.000Z"
+            "lastActivityAt": "2026-01-01T00:00:22.000Z"
           }
         }
       ]

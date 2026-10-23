@@ -246,6 +246,24 @@ describe("chat approval persistence", () => {
       message: createDocumentFinishedMessage,
     });
   });
+
+  test("stores a paused assistant message", () => {
+    const finishPlan = planAssistantFinishPersistence({
+      existingIds: new Set([createDocumentFinishedMessage.id]),
+      finishOutcome: {
+        type: "paused",
+        reason: "tool-calls",
+        toolCalls: 2,
+      },
+      message: createDocumentFinishedMessage,
+    });
+
+    expect(finishPlan).toEqual({
+      type: "update",
+      messageId: createDocumentFinishedMessage.id,
+      message: createDocumentFinishedMessage,
+    });
+  });
 });
 
 describe("chat finish persistence on client disconnect", () => {

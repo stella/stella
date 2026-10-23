@@ -1028,13 +1028,20 @@ export const streamChat = async ({
       terminalEvent !== undefined &&
       CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
     ) {
-      // Interruption is stored as turn data, not a provider error. Close the
-      // durable protocol too: EOF alone makes attached readers reconnect.
+      // A terminal outcome that differs from the provider finish belongs on
+      // the live message too; otherwise only a reload sees it.
       yield {
         type: EventType.TEXT_MESSAGE_END,
         messageId: terminalEvent.responseMessage.id,
         metadata: { turnOutcome: terminalEvent.outcome },
       } as const satisfies PublicStreamChunk;
+    }
+    if (
+      terminalEvent !== undefined &&
+      CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+    ) {
+      // Interruption is stored as turn data, not a provider error. Close the
+      // durable protocol too: EOF alone makes attached readers reconnect.
       finalChunks.splice(0, finalChunks.length, {
         type: EventType.RUN_FINISHED,
         runId,
@@ -3416,6 +3423,13 @@ export const processServerChatStream = async function* ({
       flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
+    if (outcome.type === "paused") {
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: responseMessageId,
+        metadata: { turnOutcome: outcome },
+      } as const satisfies PublicStreamChunk;
+    }
     yield* finalRunFinishedChunks;
   } catch (error) {
     if (admissionLost()) {
