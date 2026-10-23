@@ -82,7 +82,7 @@
   "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
     "kind": "ordinary",
     "qualifier": "Regenerates and pushes scoped pull-request autofix commits; no release publication, tag creation, or deployment.",
-    "reviewedDigest": "fe0a8e4f13e588683afbeb9446e4331307fa650ffc4abdc832a21491ebfa2770"
+    "reviewedDigest": "1a82968e1bb90e04f2331d3f2f5c0adb4c1f9e4bf1c7bc0d0cf003e79fb4a734"
   },
   "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
     "kind": "ordinary",
@@ -172,7 +172,7 @@
   "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
     "kind": "support",
     "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
-    "reviewedDigest": "2c7cec78e5abf19358d50949acb79007c0e6fee8473ebca6584907cca08bc0fe"
+    "reviewedDigest": "a1ff1a6c74b4383c65bc72db41c48986a7b6ce0d31f24a2dc0c9f937c2836376"
   },
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "130a8c9655bb9b2b7954c7838c145f5f93379c1a21a46c35a1485b86d8c4b433"
+    "reviewedDigest": "020131f93360fa945cd397da7be78ea30dc2587136c9632682e0f30d6b131413"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "ed561295982e9a86eaf553424f4508684225dd435832e2401c92599db2acbab6"
+    "reviewedDigest": "883cc1ebd9c01de4a5f3f1b832b92189c8586887ff3a3a2761732b3db99b3eec"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -497,7 +497,7 @@
   "candidate:.github/workflows/manual-checks.yml/check": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "9a95b677793a26ff74808fa544a5423eaf61e2785f2d9ac5b3413de2a4129999"
+    "reviewedDigest": "d410b583008d3a212853b6a525b2f660ce9e49817f06e9ada2e12a513cebcd19"
   },
   "candidate:.github/workflows/manual-checks.yml/install-cache-windows": {
     "kind": "ordinary",
