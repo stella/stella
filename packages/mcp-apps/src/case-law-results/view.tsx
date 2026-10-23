@@ -440,23 +440,7 @@ const SearchControls = ({
       }
       return initial.ok ? initial.value : [];
     })();
-    const aliases = page.searches.flatMap(({ warnings }) =>
-      warnings.flatMap((warning) =>
-        warning.code === "filter_read" && warning.filter === "court"
-          ? warning.courtAliases
-          : [],
-      ),
-    );
-    return [
-      ...new Set(
-        selected.flatMap((name) => {
-          const resolved = aliases
-            .filter(({ input: value }) => value === name)
-            .map(({ resolved: value }) => value);
-          return resolved.length === 0 ? [name] : resolved;
-        }),
-      ),
-    ];
+    return [...new Set(selected)];
   });
   const facets = page.facets;
   const dateLabels = {

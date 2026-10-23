@@ -218,3 +218,36 @@ for (const { locale, label, direction } of [
     },
   );
 }
+
+test.each([
+  { court: "Nejvyšší soud; Ústavní soud; Nejvyšší soud" },
+  { courts: ["Nejvyšší soud", "Ústavní soud", "Nejvyšší soud"] },
+  {
+    court: "Krajský soud v Brně",
+    courts: ["Nejvyšší soud", "Ústavní soud", "Nejvyšší soud"],
+  },
+])(
+  "court filters initialize unique selections from declared input: %j",
+  (input) => {
+    const host = fakeBridge({
+      ...baseSnapshot,
+      context: { locale: "en" },
+      input: { country: "CZE", ...input },
+      result: {
+        status: "ready",
+        view: {
+          type: "search",
+          results: [],
+          facets: null,
+          nextCursor: null,
+          searches: [],
+        },
+      },
+    });
+    const ui = render(<CaseLawApp bridge={host.bridge} />);
+    const court = ui.getByRole("button", { name: /^Court/u });
+    expect(
+      [...court.querySelectorAll("bdi")].map((label) => label.textContent),
+    ).toEqual(["Nejvyšší soud", "Ústavní soud"]);
+  },
+);
