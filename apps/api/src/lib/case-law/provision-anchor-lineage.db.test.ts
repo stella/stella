@@ -84,7 +84,7 @@ test(
   "the stored lineage and the subtree read agree with the TypeScript owner",
   async () => {
     await assertProperty(
-      "provision-anchor-lineage-sql-matches-owner",
+      "the stored lineage and the subtree read agree with the TypeScript owner",
       fc.asyncProperty(
         fc.constantFrom(...JURISDICTIONS),
         anchorArbitrary,
