@@ -21,7 +21,6 @@ import type { AppFrameScope } from "./-app-frame-scope";
 export type AppFrame =
   | "none"
   | "member"
-  | "admin"
   | "public"
   | "checking"
   | "neutral"
@@ -67,8 +66,6 @@ export const selectAppFrame = ({
       return "none";
     case APP_FRAME_SCOPE.member:
       return hasRouteUser ? "member" : "checking";
-    case APP_FRAME_SCOPE.admin:
-      return hasRouteUser ? "admin" : "checking";
     case APP_FRAME_SCOPE.knowledge:
       if (!publicKnowledge) {
         return hasRouteUser ? "member" : "checking";
@@ -112,7 +109,6 @@ export const frameVisitor = (
 ): string | null => {
   switch (frame) {
     case "member":
-    case "admin":
       return member === undefined
         ? null
         : `member:${member.userId}:${member.organizationId}`;
