@@ -801,6 +801,57 @@ describe("evidence collection", () => {
     }
   });
 
+  test("splits a day's workflow run listing that exceeds the result cap", async () => {
+    const listed: string[] = [];
+    const gh: Gh = async (args) => {
+      const url = args.at(-1) ?? "";
+      if (url.includes("/workflows/ci.yml/runs?created=2026-10-10")) {
+        listed.push(url);
+        const isWholeDay = url.includes(
+          "created=2026-10-10T00:00:00Z..2026-10-10T23:59:59Z",
+        );
+        const run = {
+          id: listed.length,
+          head_sha: "abc",
+          head_branch: "feature",
+          conclusion: "success",
+          run_started_at: "2026-10-10T08:00:00Z",
+        };
+        return Result.ok(
+          JSON.stringify(
+            isWholeDay
+              ? [{ total_count: 1001, workflow_runs: [run] }]
+              : [{ total_count: 1, workflow_runs: [run] }],
+          ),
+        );
+      }
+      if (url.includes("/runs?")) {
+        return Result.ok(
+          JSON.stringify([{ total_count: 0, workflow_runs: [] }]),
+        );
+      }
+      return Result.ok(artifacts([]));
+    };
+    const collected = await collectEvidence({
+      gh,
+      repository: "stella/stella",
+      now: NOW,
+      workdir: tmpdir(),
+    });
+    expect(collected.isOk()).toBe(true);
+    expect(listed).toEqual([
+      expect.stringContaining(
+        "created=2026-10-10T00:00:00Z..2026-10-10T23:59:59Z",
+      ),
+      expect.stringContaining(
+        "created=2026-10-10T00:00:00Z..2026-10-10T11:59:59Z",
+      ),
+      expect.stringContaining(
+        "created=2026-10-10T12:00:00Z..2026-10-10T23:59:59Z",
+      ),
+    ]);
+  });
+
   test("refuses a truncated artifact listing", async () => {
     const gh: Gh = async (args) => {
       const url = args.at(-1) ?? "";
