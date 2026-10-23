@@ -21,8 +21,6 @@
     "apps/api/src/handlers/mcp-connectors/icons.ts::discoverMcpIconUrl::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/mcp-connectors/icons.ts::discoverMcpIconUrl::result-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/mcp-connectors/icons.ts::discoverMcpIconUrl::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/sharepoint/graph-client.ts::fetchAccountLabel::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/sharepoint/graph-client.ts::fetchAccountLabel::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/analytics/tanstack-ai.ts::meterUsage::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileBufferObjectCleanupIntents::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileStaleBufferIntentBatch::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",

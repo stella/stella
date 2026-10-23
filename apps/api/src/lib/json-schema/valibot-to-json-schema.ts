@@ -7,6 +7,7 @@ import type { GenericSchema } from "valibot";
 
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+import { MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/microsoft365";
 import { DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/decision-identifier";
 import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast";
 
@@ -53,12 +54,14 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
   ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
+  ...MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
 ]);
 
 const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
   [
     ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
     ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+    ...MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
   ].map(({ requirement }) => requirement),
 );
 

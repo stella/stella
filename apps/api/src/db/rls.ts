@@ -1077,56 +1077,74 @@ export const mcpConnectorAuthorizationReviewPolicies = () => [
   }),
 ];
 
-// SharePoint (Microsoft Graph) delegated connections are per user+org, so
+// Microsoft 365 (Microsoft Graph) delegated connections are per user+org, so
 // their rows are visible only to the owning user within the active org —
 // the same fail-closed shape as mcp_user_connections.
-const sharepointConnectionCheck = sql`(
+const microsoft365ConnectionCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
 
-export const sharepointConnectionPolicies = () => [
+const microsoft365ConnectionPoliciesOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_connections'::regclass)`;
+
+export const microsoft365ConnectionPolicies = () => [
+  p.pgPolicy("sharepoint_connections_owner", {
+    for: "all",
+    to: "public",
+    using: microsoft365ConnectionPoliciesOwner,
+    withCheck: microsoft365ConnectionPoliciesOwner,
+  }),
   p.pgPolicy("sharepoint_connection_select", {
     for: "select",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
   p.pgPolicy("sharepoint_connection_insert", {
     for: "insert",
     to: stella,
-    withCheck: sharepointConnectionCheck,
+    withCheck: microsoft365ConnectionCheck,
   }),
   p.pgPolicy("sharepoint_connection_update", {
     for: "update",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
   p.pgPolicy("sharepoint_connection_delete", {
     for: "delete",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
 ];
 
-export const sharepointOAuthStatePolicies = () => [
+const microsoft365OAuthStatePoliciesOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.sharepoint_oauth_state'::regclass)`;
+
+export const microsoft365OAuthStatePolicies = () => [
+  p.pgPolicy("sharepoint_oauth_state_owner", {
+    for: "all",
+    to: "public",
+    using: microsoft365OAuthStatePoliciesOwner,
+    withCheck: microsoft365OAuthStatePoliciesOwner,
+  }),
   p.pgPolicy("sharepoint_oauth_state_select", {
     for: "select",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
   p.pgPolicy("sharepoint_oauth_state_insert", {
     for: "insert",
     to: stella,
-    withCheck: sharepointConnectionCheck,
+    withCheck: microsoft365ConnectionCheck,
   }),
   p.pgPolicy("sharepoint_oauth_state_update", {
+    as: "restrictive",
     for: "update",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: sql`false`,
+    withCheck: sql`false`,
   }),
   p.pgPolicy("sharepoint_oauth_state_delete", {
     for: "delete",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
 ];
 

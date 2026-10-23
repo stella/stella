@@ -33,7 +33,8 @@ type Status<TTable extends StatusTable> = GetColumnData<TTable["status"]> &
   string;
 type FenceKey<TTable extends StatusTable> = Extract<
   keyof TTable["_"]["columns"],
-  "leaseToken" | "attempt" | "claimedAt" | "generation"
+  // A delegated connection fences on the credential snapshot it read.
+  "leaseToken" | "attempt" | "claimedAt" | "generation" | "accessTokenEncrypted"
 >;
 
 export type TransitionSpec = {

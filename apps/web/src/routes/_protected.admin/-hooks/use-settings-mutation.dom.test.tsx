@@ -40,7 +40,7 @@ const testing = await import("@testing-library/react");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { SettingsOrganizationChangedError, useSettingsMutation } =
-  await import("./use-settings-mutation");
+  await import("@/lib/account/settings-mutation");
 
 afterEach(() => {
   testing.cleanup();

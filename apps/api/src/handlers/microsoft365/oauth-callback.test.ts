@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { createSharepointOAuthCallback } from "@/api/handlers/sharepoint/oauth-callback";
+import { createMicrosoft365OAuthCallback } from "@/api/handlers/microsoft365/oauth-callback";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -21,12 +21,12 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The deployment flag is read at env import time; the gate itself is not
 // under test here, so replace it wholesale (a full module mock, no partial).
-const sharepointOAuthCallback = createSharepointOAuthCallback({
-  assertSharepointConnectionEnabled: async () =>
+const microsoft365OAuthCallback = createMicrosoft365OAuthCallback({
+  assertMicrosoft365ConnectionEnabled: async () =>
     await Promise.resolve(Result.ok(undefined)),
 });
 
-type CallbackCtx = Parameters<typeof sharepointOAuthCallback.handler>[0];
+type CallbackCtx = Parameters<typeof microsoft365OAuthCallback.handler>[0];
 
 const orgA = toSafeId<"organization">("org_a");
 const userA = toSafeId<"user">("user_a");
@@ -38,7 +38,7 @@ const reasonOf = (result: unknown): string | null => {
   expect(result.status).toBe(302);
   const location = result.headers.get("Location");
   expect(location).not.toBeNull();
-  return new URL(location ?? "").searchParams.get("reason");
+  return new URL(location ?? "").searchParams.get("microsoft365Reason");
 };
 
 // The state-row lookup goes through safeDb; queue results in call order.
@@ -52,7 +52,7 @@ const queuedSafeDb = (results: unknown[]): CallbackCtx["safeDb"] =>
   });
 
 const scopedRequest = (): Request => {
-  const request = new Request("https://api.test/sharepoint/oauth/callback");
+  const request = new Request("https://api.test/microsoft365/oauth/callback");
   initRequestContext(request);
   return request;
 };
@@ -72,7 +72,7 @@ const failingLookupContext = (
     recordAuditEvent: async () => {},
   });
 
-describe("sharepointOAuthCallback", () => {
+describe("microsoft365OAuthCallback", () => {
   let analytics: RecordingAnalytics;
   let logs: RecordingLogger;
 
@@ -93,7 +93,7 @@ describe("sharepointOAuthCallback", () => {
   // callback must still redirect (never a raw JSON error body) so the popup
   // can close itself instead of showing an API error page.
   test("redirects a failed DB lookup to invalid-secret and reports it", async () => {
-    const result = await sharepointOAuthCallback.handler(
+    const result = await microsoft365OAuthCallback.handler(
       failingLookupContext(
         new HandlerError({ status: 500, message: "db down" }),
       ),
@@ -103,12 +103,15 @@ describe("sharepointOAuthCallback", () => {
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
-      { "error.class": "HandlerError", operation: "sharepoint_oauth_callback" },
+      {
+        "error.class": "HandlerError",
+        operation: "microsoft365_oauth_callback",
+      },
     ]);
   });
 
   test("does not report a client-side handler error", async () => {
-    const result = await sharepointOAuthCallback.handler(
+    const result = await microsoft365OAuthCallback.handler(
       failingLookupContext(
         new HandlerError({ status: 409, message: "Reconnect required" }),
       ),
@@ -120,7 +123,7 @@ describe("sharepointOAuthCallback", () => {
 
   test("logs the failure with the request id", async () => {
     const request = scopedRequest();
-    await sharepointOAuthCallback.handler(
+    await microsoft365OAuthCallback.handler(
       failingLookupContext(
         new HandlerError({ status: 500, message: "db down" }),
         request,
@@ -130,7 +133,7 @@ describe("sharepointOAuthCallback", () => {
     expect(failureRecords().map((record) => record.attributes)).toMatchObject([
       {
         "request.id": getRequestId(request),
-        operation: "sharepoint_oauth_callback",
+        operation: "microsoft365_oauth_callback",
       },
     ]);
   });
@@ -139,7 +142,7 @@ describe("sharepointOAuthCallback", () => {
     const reset = Object.assign(new Error("read ECONNRESET"), {
       code: "ECONNRESET",
     });
-    const result = await sharepointOAuthCallback.handler(
+    const result = await microsoft365OAuthCallback.handler(
       failingLookupContext(
         new DatabaseError({ message: "connection reset", cause: reset }),
       ),

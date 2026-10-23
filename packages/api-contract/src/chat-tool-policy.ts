@@ -32,6 +32,8 @@ export type NeedsApprovalPolicyKind = {
 }[ChatToolPolicyKind];
 
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
+  calendar_list_events: CHAT_TOOL_POLICY_KIND.scopeExpansion,
+  calendar_free_busy: CHAT_TOOL_POLICY_KIND.scopeExpansion,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
   request_secret: CHAT_TOOL_POLICY_KIND.internal,
   use_connector_secret: CHAT_TOOL_POLICY_KIND.external,

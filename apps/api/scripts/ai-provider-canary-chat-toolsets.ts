@@ -17,6 +17,7 @@ import {
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { createCalendarTools } from "@/api/handlers/chat/tools/calendar-tools";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
@@ -173,6 +174,12 @@ const buildChatToolsForScenario = ({
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
     browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
+    calendarTools: createCalendarTools({
+      organizationId,
+      recordAuditEvent: inertAuditRecorder,
+      safeDb: inertSafeDb,
+      userId,
+    }),
     docxSuggestionSurface: surface,
     editApplyMode,
     hasActiveDocxEditClient: true,

@@ -292,7 +292,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/sharepoint/list-drive-root.ts",
+    "file": "apps/api/src/handlers/microsoft365/list-drive-root.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {

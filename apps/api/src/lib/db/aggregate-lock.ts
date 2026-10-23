@@ -246,7 +246,7 @@ type AggregateIdentities = {
   };
   orgFeatureAdmission: {
     organizationId: SafeId<"organization">;
-    featureId: "flows" | "signals";
+    featureId: "flows" | "signals" | "microsoft365";
   };
   schedulerClaim: { id: string };
   definitionCap: { definitionId: SafeId<"flowDefinition"> };

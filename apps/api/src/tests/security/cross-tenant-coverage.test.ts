@@ -134,7 +134,7 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Like mcp-connectors: the only reads are per-user+org connection state
   // (org+user RLS) and external Microsoft Graph data. Neither is a
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
-  sharepoint: WAIVER_REASON.noTenantReadSurface,
+  microsoft365: WAIVER_REASON.noTenantReadSurface,
   smoke: WAIVER_REASON.noTenantReadSurface,
   // Key-authenticated session creation writes only the fixed dedicated
   // principal and organization; it accepts no tenant identity and exposes no

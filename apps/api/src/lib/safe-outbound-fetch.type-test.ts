@@ -48,3 +48,24 @@ export const requireOutboundPermit = async () =>
       return { missingPermit, undefinedPermit, ordinaryPermit };
     }),
   );
+
+// A header deadline leaves the body to the caller's signal, so omitting one
+// would make the body read unbounded.
+export const requireBodyBound = async (permit: ThirdPartyOutboundPermit) => {
+  const target = { maxBytes: 1024, permit, url: "https://example.test" };
+  // @ts-expect-error A header deadline needs a signal that bounds the body.
+  const unboundedBody = await outbound.safeOutboundFetchBytes({
+    ...target,
+    timeout: { type: "headers", ms: 1000 },
+  });
+  const signalBound = await outbound.safeOutboundFetchBytes({
+    ...target,
+    signal: AbortSignal.timeout(1000),
+    timeout: { type: "headers", ms: 1000 },
+  });
+  const idleBound = await outbound.safeOutboundFetchBytes({
+    ...target,
+    timeout: { type: "idle", ms: 1000 },
+  });
+  return { unboundedBody, signalBound, idleBound };
+};

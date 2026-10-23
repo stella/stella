@@ -61,6 +61,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
   [
+    "apps/api/src/handlers/microsoft365/routes.ts",
+    "Microsoft 365 connection routes are deployment-owned, refuse when the Microsoft OAuth configuration is unset, and enforce per-organization capability policy",
+  ],
+  [
     "apps/api/src/handlers/desktop-time-entries/routes.ts",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],

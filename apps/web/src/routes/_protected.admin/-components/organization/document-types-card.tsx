@@ -28,6 +28,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSingleFlight } from "@/hooks/use-single-flight";
+import { useSettingsMutation } from "@/lib/account/settings-mutation";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import {
@@ -39,7 +40,6 @@ import { documentTypesOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
 

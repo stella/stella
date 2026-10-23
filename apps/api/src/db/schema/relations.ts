@@ -110,6 +110,10 @@ import {
   mcpUserConnections,
 } from "./mcp";
 import {
+  microsoft365Connections,
+  microsoft365OAuthState,
+} from "./microsoft365";
+import {
   documentTypes,
   playbookDefinitionVersions,
   playbookDefinitions,
@@ -188,6 +192,8 @@ export const relations = defineRelations(
     folioCollabContributions,
     folioCollabPublications,
     pendingUploads,
+    microsoft365Connections,
+    microsoft365OAuthState,
     fields,
     justifications,
     templates,

@@ -89,7 +89,7 @@ export const rateRealtimeUpdates = workspaceResourceSetUpdates([
   RESOURCE_TYPE.RATE_ENTRY,
 ]);
 
-export const sharepointRealtimeUpdates = organizationResourceSetUpdates(
+export const microsoft365RealtimeUpdates = organizationResourceSetUpdates(
   RESOURCE_TYPE.ORGANIZATION,
 );
 

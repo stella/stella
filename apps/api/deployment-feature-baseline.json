@@ -248,10 +248,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "route-file:apps/api/src/handlers/sharepoint/routes.ts",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "route-file:apps/api/src/handlers/signals/routes.ts",
     "reason": "pending gate classification"
   },

@@ -1398,6 +1398,12 @@ export const caseLawDecisionAliasMovedIdentities = p.pgTable(
         foreignColumns: [caseLawDecisionAliases.retiredDecisionId],
       })
       .onDelete("cascade"),
+    p.pgPolicy("case_law_decision_alias_moved_identities_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_alias_moved_identities'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_decision_alias_moved_identities'::regclass)`,
+    }),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );

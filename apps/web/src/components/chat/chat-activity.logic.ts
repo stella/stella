@@ -12,6 +12,8 @@ export type ChatToolActivityCategory =
   | "user-input";
 
 const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
+  calendar_list_events: "research",
+  calendar_free_busy: "research",
   show_visual: "artifact",
   add_comment: "mutation",
   "ask-user": "user-input",

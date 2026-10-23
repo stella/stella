@@ -1,11 +1,13 @@
+import type { BoundGrantedScope } from "@/api/lib/auth/microsoft365/capabilities";
+
 import {
   bytea,
   organization,
   p,
   pUuid,
   safeOrganizationId,
-  sharepointConnectionPolicies,
-  sharepointOAuthStatePolicies,
+  microsoft365ConnectionPolicies,
+  microsoft365OAuthStatePolicies,
   user,
   timestamptz,
 } from "./common";
@@ -18,21 +20,22 @@ import {
  *     consent or the refresh token expired). The row is kept so the UI can
  *     surface a reconnect prompt; it is never silently usable.
  */
-export const SHAREPOINT_CONNECTION_STATUSES = [
+export const MICROSOFT365_CONNECTION_STATUSES = [
   "connected",
   "reconnect_required",
 ] as const;
-export type SharepointConnectionStatus =
-  (typeof SHAREPOINT_CONNECTION_STATUSES)[number];
+export type Microsoft365ConnectionStatus =
+  (typeof MICROSOFT365_CONNECTION_STATUSES)[number];
 
 // Per user+org delegated Graph connection. Tokens are encrypted at rest with
 // the same per-org AES-256-GCM envelope the MCP connection tokens use. There
 // is no service account: every stored token is the user's own delegated
 // grant, so Microsoft enforces the ACLs on every downstream read.
-export const sharepointConnections = p.pgTable(
+// Physical names are frozen storage identifiers across API renames.
+export const microsoft365Connections = p.pgTable(
   "sharepoint_connections",
   {
-    id: pUuid<"sharepointConnection">().primaryKey(),
+    id: pUuid<"microsoft365Connection">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -45,15 +48,15 @@ export const sharepointConnections = p.pgTable(
     refreshTokenEncrypted: bytea("refresh_token_encrypted"),
     refreshTokenIv: bytea("refresh_token_iv"),
     tokenType: p.varchar("token_type", { length: 40 }),
-    /** Space-delimited scopes Microsoft actually granted. */
-    scope: p.text("scope"),
+    /** Space-delimited granted scopes within the authorized connection ceiling. */
+    scope: p.text("scope").$type<BoundGrantedScope>(),
     /** Display-only Microsoft account identifier (userPrincipalName). */
     accountLabel: p.text("account_label"),
     expiresAt: timestamptz("expires_at"),
     status: p
-      .text("status", { enum: SHAREPOINT_CONNECTION_STATUSES })
+      .text("status", { enum: MICROSOFT365_CONNECTION_STATUSES })
       .notNull()
-      .$type<SharepointConnectionStatus>(),
+      .$type<Microsoft365ConnectionStatus>(),
     lastUsedAt: timestamptz("last_used_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
@@ -68,17 +71,17 @@ export const sharepointConnections = p.pgTable(
     p
       .index("sharepoint_connections_org_user_status_idx")
       .on(table.organizationId, table.userId, table.status),
-    ...sharepointConnectionPolicies(),
+    ...microsoft365ConnectionPolicies(),
   ],
 );
 
 // Short-lived per-request OAuth state consumed by the callback. PKCE verifier
 // and the exact redirect URI are pinned here so the callback re-derives them
 // from server state, never from the request.
-export const sharepointOAuthState = p.pgTable(
+export const microsoft365OAuthState = p.pgTable(
   "sharepoint_oauth_state",
   {
-    state: p.varchar({ length: 128 }).primaryKey(),
+    stateToken: p.varchar("state", { length: 128 }).primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -88,6 +91,8 @@ export const sharepointOAuthState = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     codeVerifier: p.text("code_verifier").notNull(),
     redirectUri: p.text("redirect_uri").notNull(),
+    /** Server-bound scopes for this consent attempt; older attempts expire. */
+    requestedScope: p.text("requested_scope"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -95,6 +100,6 @@ export const sharepointOAuthState = p.pgTable(
     p
       .index("sharepoint_oauth_state_org_user_idx")
       .on(table.organizationId, table.userId),
-    ...sharepointOAuthStatePolicies(),
+    ...microsoft365OAuthStatePolicies(),
   ],
 );

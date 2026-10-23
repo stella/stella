@@ -15,14 +15,14 @@ import listMcpConnections from "@/api/handlers/mcp-connectors/list-connections";
 import listMcpConnectors from "@/api/handlers/mcp-connectors/list-connectors";
 import mcpOAuthCallback from "@/api/handlers/mcp-connectors/oauth-callback";
 import updateMcpConnection from "@/api/handlers/mcp-connectors/update-connection";
+import connectMicrosoft365 from "@/api/handlers/microsoft365/connect";
+import disconnectMicrosoft365 from "@/api/handlers/microsoft365/disconnect";
+import listMicrosoft365DriveRoot from "@/api/handlers/microsoft365/list-drive-root";
+import microsoft365OAuthCallback from "@/api/handlers/microsoft365/oauth-callback";
+import microsoft365ConnectionStatus from "@/api/handlers/microsoft365/status";
 import createSavedSearch from "@/api/handlers/saved-searches/create";
 import deleteSavedSearch from "@/api/handlers/saved-searches/delete";
 import updateSavedSearch from "@/api/handlers/saved-searches/update";
-import connectSharepoint from "@/api/handlers/sharepoint/connect";
-import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
-import listSharepointDriveRoot from "@/api/handlers/sharepoint/list-drive-root";
-import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
-import sharepointConnectionStatus from "@/api/handlers/sharepoint/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -57,9 +57,9 @@ const MUTATIONS = {
   "saved-searches/create.ts": createSavedSearch,
   "saved-searches/delete.ts": deleteSavedSearch,
   "saved-searches/update.ts": updateSavedSearch,
-  "sharepoint/connect.ts": connectSharepoint,
-  "sharepoint/disconnect.ts": disconnectSharepoint,
-  "sharepoint/oauth-callback.ts": sharepointOAuthCallback,
+  "microsoft365/connect.ts": connectMicrosoft365,
+  "microsoft365/disconnect.ts": disconnectMicrosoft365,
+  "microsoft365/oauth-callback.ts": microsoft365OAuthCallback,
 } as const;
 
 /** The sibling reads: on the baseline grant, and affirmed as reads. */
@@ -67,8 +67,8 @@ const READS = {
   "legal-reader/annotations/list.ts": listReaderAnnotations,
   "mcp-connectors/list-connections.ts": listMcpConnections,
   "mcp-connectors/list-connectors.ts": listMcpConnectors,
-  "sharepoint/list-drive-root.ts": listSharepointDriveRoot,
-  "sharepoint/status.ts": sharepointConnectionStatus,
+  "microsoft365/list-drive-root.ts": listMicrosoft365DriveRoot,
+  "microsoft365/status.ts": microsoft365ConnectionStatus,
 } as const;
 
 const refusingDb: SafeDb = async <T>() =>
@@ -133,9 +133,9 @@ describe("own-work permissions", () => {
       "saved-searches/create.ts": { savedSearch: ["create"] },
       "saved-searches/delete.ts": { savedSearch: ["delete"] },
       "saved-searches/update.ts": { savedSearch: ["update"] },
-      "sharepoint/connect.ts": { integration: ["create"] },
-      "sharepoint/disconnect.ts": { integration: ["delete"] },
-      "sharepoint/oauth-callback.ts": { integration: ["create"] },
+      "microsoft365/connect.ts": { integration: ["create"] },
+      "microsoft365/disconnect.ts": { integration: ["delete"] },
+      "microsoft365/oauth-callback.ts": { integration: ["create"] },
     });
   });
 

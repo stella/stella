@@ -61,7 +61,10 @@ import {
   optionalOrganizationSettingsOptions,
 } from "@/queries/organization-settings";
 import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
-import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
+import {
+  connectedAppsOptions,
+  microsoft365Options,
+} from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
 
@@ -558,17 +561,21 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
-  "sharepoint/list-drive-root.ts": {
+  "microsoft365/list-drive-root.ts": {
     kind: "no-web-caller",
-    calls: ["api.sharepoint.drive.root.get"],
+    calls: ["api.microsoft365.drive.root.get"],
   },
-  "sharepoint/oauth-callback.ts": {
+  "microsoft365/oauth-callback.ts": {
     kind: "not-per-user",
     reason: OAUTH_REDIRECT,
   },
-  "sharepoint/status.ts": {
-    kind: "no-web-caller",
-    calls: ["api.sharepoint.connection.get"],
+  "microsoft365/status.ts": {
+    kind: "keyed",
+    calls: ["api.microsoft365.connection.get"],
+    files: ["routes/_protected.settings/-queries/connections.ts"],
+    keys: () => [
+      microsoft365Options({ organizationId: ORG, userId: USER }).queryKey,
+    ],
   },
   "signals/count.ts": {
     kind: "keyed",

@@ -19,6 +19,7 @@ import {
 
 import { Switch } from "@/components/switch";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSettingsMutation } from "@/lib/account/settings-mutation";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -39,7 +40,6 @@ import {
   type TimePolicy,
   type TimePolicySettings,
 } from "@/routes/_protected.admin/-components/organization/time-policy.logic";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 export const TimePolicyCard = () => {
   const t = useTranslations();

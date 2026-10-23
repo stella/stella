@@ -1,0 +1,7 @@
+# Purging organization-wide Microsoft 365 delegated credentials
+
+Generated from `scripts/ownership/microsoft365-disable-purge.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                   | Owner                     | Enforcement                                                                           | Summary                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `microsoft365-disable-purge` — Purging organization-wide Microsoft 365 delegated credentials | `apps/api/src/db/root.ts` | import `disableAndPurgeMicrosoft365ForOrg` from `@/api/db/root` (plus 1 allowed file) | The connection owner exposes one organization-scoped revocation operation; callers receive no database handle and the owner transaction purges every delegated credential with its policy update and audit records. |

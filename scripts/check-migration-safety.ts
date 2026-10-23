@@ -29,6 +29,7 @@ import { createSha256 } from "@stll/sha256/node";
 
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
+import { FORCE_RLS_OWNER_ALLOWLIST } from "./migration-force-rls-owners";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
 import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
@@ -410,6 +411,31 @@ const isCreateTableAsQuery = (statement: string): boolean => {
   return firstParenthesis === -1 || asQuery.index < firstParenthesis;
 };
 
+// Only the canonical unrestricted owner predicate qualifies automatically.
+// Intentional historical operation limits live in one reviewed allowlist.
+const ownerPolicyTable = (statement: Statement) => {
+  if (statement.deferred || !/^\s*CREATE\s+POLICY\b/iu.test(statement.text)) {
+    return null;
+  }
+  const normalized = statement.raw
+    .replaceAll('"', "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const header =
+    /^CREATE POLICY \w+ ON (?:public\.)?(?<table>\w+) (?:AS PERMISSIVE )?FOR ALL TO public USING /iu.exec(
+      normalized,
+    );
+  const table = header?.groups?.["table"]?.toLowerCase();
+  if (!header || !table) {
+    return null;
+  }
+  const predicate = `(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${table}'::regclass))`;
+  return normalized.slice(header[0].length).replace(/;$/u, "").toLowerCase() ===
+    `${predicate} WITH CHECK ${predicate}`.toLowerCase()
+    ? table
+    : null;
+};
+
 const GUARDED_RULES = [
   {
     id: "drop-object",
@@ -723,6 +749,7 @@ const STATEMENT_INVARIANT_RULES = [
 const STATEMENT_INVARIANT_RULE_IDS = new Set<string>([
   ...STATEMENT_INVARIANT_RULES.map((rule) => rule.id),
   HIGH_VOLUME_INDEX_BUILD_RULE_ID,
+  "force-rls-no-owner",
 ]);
 
 // Statements allowed before the timeouts are set: only other SET commands. The
@@ -772,7 +799,8 @@ type DefinedRuleId =
   | (typeof GUARDED_RULES)[number]["id"]
   | (typeof STATEMENT_INVARIANT_RULES)[number]["id"]
   | (typeof FILE_INVARIANT_RULES)[number]["id"]
-  | typeof HIGH_VOLUME_INDEX_BUILD_RULE_ID;
+  | typeof HIGH_VOLUME_INDEX_BUILD_RULE_ID
+  | "force-rls-no-owner";
 true satisfies [Exclude<MigrationSafetyRuleId, DefinedRuleId>] extends [never]
   ? true
   : never;
@@ -2336,9 +2364,125 @@ export const checkMigrationSources = (
   }));
 };
 
+/** Final policy state, including baselined migrations and later policy drops. */
+export const checkForcedRlsOwners = (
+  sources: readonly MigrationIndexSource[],
+): Finding[] => {
+  const forced = new Map<string, { file: string; line: number }>();
+  const unresolved: Finding[] = [];
+  const policies = new Map<string, Set<string>>();
+  for (const { file, source } of sources.toSorted((a, b) => {
+    if (a.file === b.file) {
+      return 0;
+    }
+    return a.file < b.file ? -1 : 1;
+  })) {
+    for (const statement of parseStatements(source)) {
+      if (statement.deferred) {
+        continue;
+      }
+      const normalized = statement.raw
+        .replaceAll('"', "")
+        .replace(/\s+/gu, " ")
+        .trim();
+      const force =
+        /^ALTER TABLE (?:IF EXISTS )?(?:ONLY )?(?:public\.)?(?<table>\w+) (?<undo>NO )?FORCE ROW LEVEL SECURITY/iu.exec(
+          normalized,
+        );
+      if (
+        !force &&
+        /\bFORCE\s+ROW\s+LEVEL\s+SECURITY\b/iu.test(statement.text)
+      ) {
+        unresolved.push({
+          file,
+          line: statement.line,
+          ruleId: "force-rls-no-owner",
+          description: "Cannot resolve the FORCE RLS table to its owner policy",
+        });
+      }
+      const table = force?.groups?.["table"]?.toLowerCase();
+      if (table) {
+        if (force?.groups?.["undo"]) {
+          forced.delete(table);
+        } else {
+          forced.set(table, { file, line: statement.line });
+        }
+      }
+      const rename =
+        /^ALTER TABLE (?:IF EXISTS )?(?:ONLY )?(?:public\.)?(?<table>\w+) RENAME TO (?<next>\w+)/iu.exec(
+          normalized,
+        )?.groups;
+      if (rename?.["table"] && rename["next"]) {
+        const old = rename["table"].toLowerCase();
+        const next = rename["next"].toLowerCase();
+        const location = forced.get(old);
+        if (location) {
+          forced.set(next, location);
+          forced.delete(old);
+        }
+        const ownerPolicies = policies.get(old);
+        if (ownerPolicies) {
+          policies.set(next, ownerPolicies);
+          policies.delete(old);
+        }
+      }
+      const dropTable =
+        /^DROP TABLE (?:IF EXISTS )?(?:public\.)?(?<table>\w+)/iu
+          .exec(normalized)
+          ?.groups?.["table"]?.toLowerCase();
+      if (dropTable) {
+        forced.delete(dropTable);
+        policies.delete(dropTable);
+      }
+      const policy =
+        /^(?:CREATE|DROP|ALTER) POLICY (?:IF EXISTS )?(?<name>\w+) ON (?:public\.)?(?<table>\w+)/iu.exec(
+          normalized,
+        );
+      if (!policy?.groups?.["table"] || !policy.groups["name"]) {
+        continue;
+      }
+      const policyTable = policy.groups["table"].toLowerCase();
+      const ownerPolicies = policies.get(policyTable) ?? new Set<string>();
+      ownerPolicies.delete(policy.groups["name"].toLowerCase());
+      if (ownerPolicyTable(statement) === policyTable) {
+        ownerPolicies.add(policy.groups["name"].toLowerCase());
+      }
+      policies.set(policyTable, ownerPolicies);
+    }
+  }
+  return unresolved.concat(
+    [...forced]
+      .filter(
+        ([table]) =>
+          !policies.get(table)?.size &&
+          !Object.hasOwn(FORCE_RLS_OWNER_ALLOWLIST, table),
+      )
+      .map(([table, location]) => ({
+        ...location,
+        ruleId: "force-rls-no-owner",
+        description: `FORCE RLS table ${table} has no canonical owner policy or reviewed allowlist entry`,
+      })),
+  );
+};
+
 const main = () => {
   const files = normalizeInputFiles(Bun.argv.slice(2)).map(toRepoPath);
-  let violations = 0;
+  // Standalone fixture paths form their own migration history; repository
+  // invocations always inspect the complete committed history, baseline included.
+  const corpusFiles =
+    Bun.argv.length > 2 &&
+    Bun.argv
+      .slice(2)
+      .every(
+        (file) => !toRepoPath(file).startsWith(`${DEFAULT_MIGRATIONS_DIR}/`),
+      )
+      ? files
+      : collectMigrationFiles(DEFAULT_MIGRATIONS_DIR);
+  const ownerFindings = checkForcedRlsOwners(
+    corpusFiles.map((file) => ({ file, source: readFileSync(file, "utf-8") })),
+  );
+  let violations = ownerFindings.length;
+  reportFindings(ownerFindings);
   const checks = checkMigrationSources(
     files.map((file) => ({ file, source: readFileSync(file, "utf-8") })),
   );
