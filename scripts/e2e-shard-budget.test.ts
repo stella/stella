@@ -298,7 +298,11 @@ test("changing the measured shard split requires fresh wall-time evidence", () =
     fingerprint(run),
     "Remeasure the current split before updating its fingerprint",
   ).toBe(configuredBudgets.e2eProductionShards.planSha256);
-  expect(fingerprint(run.replaceAll("/4", "/5"))).not.toBe(
+  // The shard total comes from the matrix planner's step output: changing it
+  // must change the fingerprint.
+  const shardTotal = `/\${{ steps.e2e-shards.outputs.count }}`;
+  expect(run).toContain(shardTotal);
+  expect(fingerprint(run.replaceAll(shardTotal, "/5"))).not.toBe(
     configuredBudgets.e2eProductionShards.planSha256,
   );
   expect(run).toContain(
