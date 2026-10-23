@@ -1,4 +1,5 @@
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import type { ModelMessage, UIMessage } from "@tanstack/ai";
 import { ChatClient } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
@@ -24,7 +25,23 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
+
+const assistantFromSdk = (candidate: UIMessage | ModelMessage | undefined) => {
+  if (candidate === undefined) {
+    panic("Missing SDK assistant message");
+  }
+  if (!("parts" in candidate) || candidate.role !== "assistant") {
+    panic("Expected an SDK assistant message");
+  }
+  return {
+    id: toSafeId<"chatMessage">(candidate.id),
+    role: candidate.role,
+    parts: candidate.parts,
+    metadata: candidate.metadata,
+  } satisfies Parameters<typeof validateMessage>[0]["message"];
+};
 
 const noDbReads: SafeDb = async () =>
   panic("Approval validation must not read the database");
@@ -79,10 +96,8 @@ for (const definition of [searchTool, noDefaultsTool]) {
         connection: {
           async *connect(messages, _data, _signal, runContext) {
             if (runContext?.resume !== undefined) {
-              const incoming =
-                messages.at(-1) ?? panic("Missing assistant continuation");
               submitted.resolve({
-                message: toPersistableChatMessage(incoming),
+                message: assistantFromSdk(messages.at(-1)),
                 persistedMessage: stored,
                 resume: runContext.resume,
                 safeDb: noDbReads,
@@ -105,29 +120,39 @@ for (const definition of [searchTool, noDefaultsTool]) {
         onError: submitted.reject,
       });
       await client.sendMessage("Search earlier chats");
-      const generated = toPersistableChatMessage(
-        client.getMessages().at(-1) ?? panic("Missing generated approval"),
-      );
+      const generated = assistantFromSdk(client.getMessages().at(-1));
       const canonicalParts = validateToolCallParts({
-        message: generated,
+        message: {
+          id: generated.id,
+          role: generated.role,
+          parts: generated.parts,
+        },
         tools,
       })
         .unwrap()
-        .map((part) =>
-          part.type === "tool-call"
-            ? {
-                ...part,
-                metadata: {
-                  ...part.metadata,
-                  [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
-                },
-              }
-            : part,
-        );
+        .map((part) => {
+          if (part.type !== "tool-call") {
+            return part;
+          }
+          if (part.metadata !== undefined && !isRecord(part.metadata)) {
+            panic("Expected object metadata on the validated tool call");
+          }
+          return {
+            ...part,
+            metadata: {
+              ...part.metadata,
+              [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
+            },
+          };
+        });
       stored = {
         role: "assistant",
         content: chatMessageContentFromMessage(
-          toPersistableChatMessage({ ...generated, parts: canonicalParts }),
+          toPersistableChatMessage({
+            id: generated.id,
+            role: generated.role,
+            parts: canonicalParts,
+          }),
         ),
       };
       const interrupt = client.getInterrupts().at(0);
