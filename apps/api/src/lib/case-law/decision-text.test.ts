@@ -317,6 +317,28 @@ describe("decision text fields", () => {
     }
   });
 
+  test("a source that publishes no decision date stores a typed marker", () => {
+    const textFields = absentDecisionTextFields(
+      TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    );
+    const marker = (status: string) =>
+      storeDecisionTextFields({
+        metadata: { decisionDateAvailability: { status } },
+        textFields,
+      })[DECISION_TEXT_ABSENCE_METADATA_KEY];
+
+    expect(marker("not-published-by-source")).toContainEqual({
+      field: "decisionDate",
+      reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    });
+    expect(marker("published")).not.toContainEqual(
+      expect.objectContaining({ field: "decisionDate" }),
+    );
+    expect(() => marker("unknown")).toThrow(
+      "Decision date availability must carry a source status",
+    );
+  });
+
   test("preserves stored text when a new parse fails", () => {
     expect(
       preserveStoredTextAfterParseFailure({

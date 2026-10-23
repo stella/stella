@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -41,7 +42,10 @@ export const authorizeFolioCollabCredentials = async (
     return Result.err(folioCollabRoomNotFoundError());
   }
 
-  const authorized = await authorizeFolioCollabRoom(credentials.value);
+  const authorized = await authorizeFolioCollabRoom({
+    ...credentials.value,
+    readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+  });
   if (authorized.status === "missing") {
     return Result.err(folioCollabRoomNotFoundError());
   }

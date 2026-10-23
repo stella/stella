@@ -55,7 +55,9 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/stdnum-linux-x64-gnu",
   "@stll/stdnum-wasm",
   "@stll/stdnum-win32-x64-msvc",
+  "@stll/test-kit",
   "@stll/text-search",
+  "@stll/time",
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Back to app",
-    "billingAndUsage": "Billing and usage",
     "billingProfiles": "Billing profiles",
     "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.",
     "deleteOrganization": "Delete organization",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Leave organization",
     "leaveRefusedOnlyOwner": "You are the only owner. Make another member an owner before you leave.",
     "modelsAndProviders": "Models and providers",
-    "noPlan": "No active plan",
     "organizationDeleted": "The organization has been deleted.",
     "organizationId": "Organization ID",
     "organizationLeft": "You have left the organization.",
-    "overviewDescription": "Manage your organization, people and tools.",
-    "people": "People",
     "planAndUsage": "Plan and usage",
     "title": "Organization admin",
     "toolsDescription": "Enable or disable native tools for everyone in this organization."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Your assistant will ask for this address",
-    "copiedToast": "Instructions copied. Paste them into a chat with your assistant.",
     "copy": "Copy instructions for it",
     "description": "Ask Claude or ChatGPT about your matters and documents. Choose your assistant for a short guide; it takes about a minute.",
     "instructions": "Connect me to stella, my legal workspace. Follow the “Instructions for AI agents” at {guideUrl} and use this server address: {mcpUrl}",
     "openGuide": "Open the guide for {assistant}",
+    "pasteHint": "Paste them into a chat with your assistant.",
     "selfSetupHint": "Using Claude Code or Codex?",
     "title": "Use stella in your AI assistant"
   },
@@ -380,6 +375,12 @@
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
+      "documentView": {
+        "label": "Document view",
+        "original": "Original",
+        "reading": "Reading view"
+      },
+      "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {
@@ -849,7 +850,6 @@
         "unavailable": "AI analysis is not available for this decision."
       },
       "generate": "Generate AI headnotes",
-      "holdingAnchor": "Go to paragraph",
       "invitation": "With a free account, AI drafts working notes on this decision.",
       "topics": "Topics",
       "treatment": "Later treatment"
@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Completeness",
-      "countedOn": "Counted {date}",
       "courtsHeading": "By court",
       "courtsUnavailable": "The per-court breakdown is unavailable right now.",
       "decisionYears": "Decision years",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
-      "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}",
-      "gapStatusUnknown": "Gap status unknown",
       "generatedAt": "Figures from {date}",
       "globeLabel": "Countries whose case law the corpus holds, on a globe",
       "healthCurrent": "Up to date",
@@ -1009,6 +1006,9 @@
       "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}"
     },
     "newestDecisions": "Newest decisions",
+    "noResults": {
+      "hint": "Try other words, improve the query with AI, or ask the question in chat."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Human"
@@ -1082,6 +1082,10 @@
         "short": "Short"
       }
     },
+    "rewritten": {
+      "line": "No exact matches for <bdi>{original}</bdi>; showing results for <bdi>{query}</bdi>",
+      "searchOriginal": "Search my original words"
+    },
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.",
     "searchLabel": "Search case law",
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012",
@@ -1098,6 +1102,8 @@
         "hint": "Drop or widen a filter and search again.",
         "message": "Nothing matched under the filters you narrowed with."
       },
+      "partialMatch": "Partial match",
+      "partialMatches": "Partial matches for: <bdi>{query}</bdi>",
       "resultsFor": "Results for: <bdi>{query}</bdi>",
       "searchEveryWord": "Search every word"
     },
@@ -1135,6 +1141,7 @@
       "judges": "Judges",
       "legalArea": "Legal area",
       "legalSentence": "Legal sentence",
+      "paragraphReference": "Paragraph {number}",
       "popularName": "Popular name",
       "portraitCredit": "Portrait source: {source}",
       "provisionMentions": "{count, number}×",
@@ -1381,6 +1388,7 @@
     "credentialSendDescription": "Send only if you intend to share this value in the conversation.",
     "credentialSendTitle": "This message may contain a credential",
     "deleteThread": "Delete conversation",
+    "diagramUnavailable": "This diagram could not be rendered. Its source is shown below.",
     "editMode": {
       "autoDirect": "Auto · rewrite",
       "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
@@ -1601,6 +1609,9 @@
         "private": "Your skills",
         "team": "Team skills"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Also consulted ({count, number})"
     },
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",
@@ -2662,10 +2673,12 @@
     "api": {
       "badRequest": "The request could not be completed.",
       "caseLawCountryUnavailable": "Case law for this country is not available. Choose another country.",
+      "caseLawIdentityOnly": "Only exact decision lookup and reading are available for this country.",
       "caseLawSearchUnavailable": "Case-law search is not available for this country. You can still read its public decisions.",
       "conflict": "The request conflicts with the current state.",
       "forbidden": "You do not have permission to do this.",
       "legislationCountryUnavailable": "Legislation for this country is not available. Choose another country.",
+      "legislationIdentityOnly": "Only exact legislation lookup and reading are available for this country.",
       "legislationSearchUnavailable": "Legislation search is not available for this country. You can still read its public legislation.",
       "notFound": "We could not find what you requested.",
       "payloadTooLarge": "The request is too large.",
@@ -2688,6 +2701,11 @@
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.",
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.",
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.",
+      "aiDeadlineExceeded": "The AI did not answer in time. Try again in a moment.",
+      "aiOutputInvalid": "The AI answer had an unexpected format. Try again.",
+      "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
+      "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",
+      "aiUnknown": "The AI request failed. Try again.",
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
@@ -4173,7 +4191,9 @@
     "prompt": "What are you looking for?",
     "recent": "Recent",
     "recentCasesFilter": "Cases",
+    "recentLoadFailed": "Recent activity could not be loaded.",
     "recentSearchFilter": "Searches",
+    "recentUpdateFailed": "Recent activity could not be updated.",
     "recentlyInForce": "Recently in force",
     "searchLabel": "Search the legal database",
     "searchPlaceholder": "Case number, act number, ECLI or keywords",
@@ -4234,6 +4254,10 @@
     "archivedEmpty": "No archived memory.",
     "archivedToast": "Memory archived",
     "createdToast": "Memory saved",
+    "deleteConfirmation": "Type {confirmation} to confirm",
+    "deleteDescription": "This permanently removes this memory. This action cannot be undone.",
+    "deleteTitle": "Delete memory?",
+    "deletedToast": "Memory deleted",
     "empty": "No memory yet.",
     "kinds": {
       "decision": "Decision",
@@ -5162,6 +5186,8 @@
     "outline": "Contents",
     "outlineJumpLabel": "Jump to a provision",
     "outlineJumpPlaceholder": "§ 10 or a heading",
+    "pendingChanges": "Upcoming amendments",
+    "pendingChangesIncomplete": "The publisher data may not include every upcoming amendment.",
     "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.",
     "provisionAskPlaceholder": "Ask about this provision",
     "provisionAskQuestionPrompt": "About {subject}: {question}",

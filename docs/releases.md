@@ -130,8 +130,10 @@ or change deployed feature flags.
    `latest`, or equals it while the generated contract surface differs from
    the published tarball.
 
-5. Merge the commit to `main` and note its SHA. `main` stays open: later
-   merges do not affect this release.
+5. Merge the commit to `main` and note its SHA. This version commit is the
+   only commit that can ship under that version. The push dispatches
+   `release-tag.yml` with its exact SHA; missing gates fail the tag run.
+   `main` stays open: later merges do not affect this release.
 6. Deploy that exact commit to staging:
 
    ```bash
@@ -139,8 +141,8 @@ or change deployed feature flags.
    gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
    ```
 
-   Both gates first refuse a candidate whose VERSION is already tagged or differs
-   from the pending VERSION on main. Ordinary pinned dispatches leave
+   Both gates first refuse a candidate whose VERSION is already tagged or whose
+   SHA differs from the commit that set the pending VERSION on main. Ordinary pinned dispatches leave
    `release_candidate` false and skip this check. The release-candidate heavy run dispatches
    `main-pr-depth.yml` for the same SHA. The staging run also refuses a
    SHA that `main` does not contain. When its smokes pass,
@@ -180,12 +182,15 @@ or change deployed feature flags.
    `staging/verified` is `success` on it and it carries the merge-group
    receipt or `success` on both `main/heavy` and `main/pr-depth`; the refusal
    names each gate that is missing or not green. It checks them again right
-   before pushing the tag. Leaving `sha` blank selects the
-   newest commit on `main` that passes these gates. The workflow also runs the CLI
-   coupling check; if it fails (a CLI changeset merged after the release
-   commit), apply it with `bun run changeset:version` plus
-   `bun run changeset --empty` and release from the commit that merges it.
-   The tag then triggers `release.yml`.
+   before pushing the tag. Leaving `sha` blank selects the version commit;
+   an explicit SHA must name that same commit. Tree-identical release PR
+   evidence may satisfy the existing proof checks, but later main commits
+   cannot replace the version commit. The workflow also runs the CLI coupling
+   check against that commit. The other independent gates continue when one
+   fails, and one final verdict lists each gate that failed or did not run. If
+   dependency installation fails, the dependency-audit gate remains unrun.
+   `-F dry_run=true` evaluates all gates and reports them without pushing the
+   tag. The tag then triggers `release.yml`.
 
 8. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,
@@ -195,10 +200,28 @@ or change deployed feature flags.
    leaves the tag, the immutable images, and the draft; rerunning the
    workflow for the same tag reuses them. RCs continue to target staging and
    are published as prereleases once the staging promotion finishes.
-9. After a stable release succeeds, `publish-npm.yml` checks out the same
-   release commit, packs the CLI, installs that exact tarball under plain Node,
-   and runs its unauthenticated compatibility canary against production. Only
-   then can the hardened npm publishing job publish `@stll/cli`.
+9. Once production serves a stable release, `release.yml` dispatches
+   `release-health.yml`. It waits until 60 minutes after publication, then
+   compares the release's failure fingerprints (handler, error class and
+   code, counted by the API as `release_failure_window` analytics events)
+   with the previous stable release's. Any `unclassified` failure, or a
+   fingerprint the previous release never produced that occurs at least
+   three times, makes the release unhealthy; a query that cannot answer
+   makes it inconclusive. The run records the verdict as
+   `release-health.json` on the GitHub release and fails unless the verdict
+   is healthy, which alerts through `scheduled-run-alerts.yml`. The query
+   reads the `POSTHOG_RELEASE_HEALTH_API_KEY` secret (a PostHog personal API
+   key limited to query read) and the `POSTHOG_PROJECT_ID` variable.
+
+   The next production promotion refuses while the previous stable release
+   is unhealthy, inconclusive, or still inside its window without a
+   verdict. After investigating, re-dispatch `release.yml` for the new tag
+   with `acknowledge_unhealthy_release` set to that previous release.
+
+10. After a stable release succeeds, `publish-npm.yml` checks out the same
+    release commit, packs the CLI, installs that exact tarball under plain Node,
+    and runs its unauthenticated compatibility canary against production. Only
+    then can the hardened npm publishing job publish `@stll/cli`.
 
 Changing `packages/cli/package.json` on `main` does not publish the CLI by
 itself. This ordering is deliberate: the API must advertise support for the

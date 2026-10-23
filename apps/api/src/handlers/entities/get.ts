@@ -6,6 +6,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
+  resolveDesignatedExtractionFileField,
   resolveCurrentExtractionFileField,
   resolveCurrentFileSourceField,
   selectCurrentExtractedContent,
@@ -37,9 +38,9 @@ export const readEntityByIdHandler = async function* ({
   // read is atomic, and currentVersionId is an invariant-live version (delete
   // promotes it off any withdrawn row), so this can only ever return live
   // content.
-  const entity = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entities.findFirst({
+  const read = yield* Result.await(
+    safeDb(async (tx) => {
+      const entity = await tx.query.entities.findFirst({
         where: {
           id: { eq: entityId },
           workspaceId: {
@@ -84,9 +85,25 @@ export const readEntityByIdHandler = async function* ({
             limit: 1,
           },
         },
-      }),
-    ),
+      });
+      const pendingExtractionRun =
+        entity?.currentVersion && entity.extractedContent === null
+          ? await tx.query.documentProcessingRuns.findFirst({
+              where: {
+                entityId: { eq: entityId },
+                entityVersionId: { eq: entity.currentVersion.id },
+                kind: { eq: "native-extraction" },
+                status: { in: ["queued", "running", "failed"] },
+                workspaceId: { eq: workspaceId },
+              },
+              columns: { fieldId: true },
+              orderBy: { createdAt: "desc", id: "desc" },
+            })
+          : null;
+      return { entity, pendingExtractionRun };
+    }),
   );
+  const { entity, pendingExtractionRun } = read;
 
   if (!entity) {
     return Result.err(
@@ -110,11 +127,19 @@ export const readEntityByIdHandler = async function* ({
     currentVersionId: entity.currentVersion.id,
     fields: entity.currentVersion.fields,
   });
-  const extractionFileField = resolveCurrentExtractionFileField({
-    currentVersionId: entity.currentVersion.id,
-    extracted: currentExtracted,
-    fields: entity.currentVersion.fields,
-  });
+  const extractionFileField =
+    entity.extractedContent === null
+      ? resolveDesignatedExtractionFileField({
+          currentVersionId: entity.currentVersion.id,
+          extracted: null,
+          fields: entity.currentVersion.fields,
+          pendingSourceFieldId: pendingExtractionRun?.fieldId,
+        })
+      : resolveCurrentExtractionFileField({
+          currentVersionId: entity.currentVersion.id,
+          extracted: currentExtracted,
+          fields: entity.currentVersion.fields,
+        });
   const processingFileField = resolveCurrentFileSourceField({
     currentVersionId: entity.currentVersion.id,
     extracted: entity.extractedContent,

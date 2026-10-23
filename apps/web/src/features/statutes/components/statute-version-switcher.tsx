@@ -56,7 +56,8 @@ export const StatuteVersionSwitcher = ({
     <Select onValueChange={handleValueChange} value={currentVersionId}>
       <SelectTrigger
         aria-label={t("common.version")}
-        className="w-full sm:w-72"
+        className="w-auto max-w-full min-w-0"
+        size="sm"
       >
         <SelectValue placeholder={t("common.version")} />
       </SelectTrigger>

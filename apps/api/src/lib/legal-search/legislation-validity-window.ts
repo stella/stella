@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
+  isEligibleLegislationExpression,
+  type LegislationExpressionEligibility,
   LEGISLATION_APPLICABLE_EXPRESSION_KINDS,
   LEGISLATION_APPLICABLE_WINDOW_DISPOSITION,
 } from "@stll/api-contract/legislation-expression";
@@ -250,3 +252,14 @@ export const isInconsistentWindowGapAt = (
   )
 )`;
 };
+
+/** An explicit publisher effect can label a wording only at its eligible opening. */
+export const effectOpensVersion = (
+  effectiveDate: string | null,
+  version: LegislationExpressionEligibility & {
+    versionValidFrom: string | null;
+  },
+): boolean =>
+  effectiveDate !== null &&
+  isEligibleLegislationExpression(version) &&
+  effectiveDate === version.versionValidFrom;

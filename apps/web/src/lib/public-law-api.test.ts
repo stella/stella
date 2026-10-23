@@ -17,7 +17,10 @@ import {
   PublicLawUnavailableError,
   unwrapPublicLawEden,
 } from "@/lib/public-law-api";
-import { createAppQueryClient } from "@/lib/react-query";
+import {
+  createAppQueryClient,
+  CriticalQueryTimeoutError,
+} from "@/lib/react-query";
 
 const thrownBy = (status: number, value: unknown): unknown => {
   try {
@@ -86,7 +89,7 @@ describe("isSearchUnavailableError", () => {
   test("country admission is localized and never treated as a retryable engine outage or a miss", () => {
     const refusal = {
       status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-      value: publicCountryUnavailable("POL", {
+      value: publicCountryUnavailable("HUN", {
         domain: "caseLaw",
         surface: "search",
       }),
@@ -113,6 +116,8 @@ describe("isSearchUnavailableError", () => {
       other: "legislation",
       unavailable:
         "Case law for this country is not available. Choose another country.",
+      identity:
+        "Only exact decision lookup and reading are available for this country.",
       search:
         "Case-law search is not available for this country. You can still read its public decisions.",
     },
@@ -121,12 +126,14 @@ describe("isSearchUnavailableError", () => {
       other: "caseLaw",
       unavailable:
         "Legislation for this country is not available. Choose another country.",
+      identity:
+        "Only exact legislation lookup and reading are available for this country.",
       search:
         "Legislation search is not available for this country. You can still read its public legislation.",
     },
   ] as const)(
     "$domain refusal preserves the other admitted domain",
-    ({ domain, other, unavailable, search }) => {
+    ({ domain, identity, other, unavailable, search }) => {
       for (const reason of publicCountryUnavailableSchema.entries.reason
         .options) {
         const capabilities = {
@@ -157,6 +164,10 @@ describe("isSearchUnavailableError", () => {
           throw new TypeError("Expected APIError");
         }
         expect(error.details).toMatchObject({ domain, reason, country: "EU" });
+        if (reason === "identity_public") {
+          expect(error.message).toBe(identity);
+          continue;
+        }
         expect(error.message).toBe(
           reason === "pages_public" ? search : unavailable,
         );
@@ -243,6 +254,18 @@ describe("isSearchUnavailableError", () => {
     expect(
       isSearchUnavailableError(thrownBy(404, { error: "Not Found" })),
     ).toBe(false);
+  });
+
+  test("a read the page stopped waiting for is a search outage", () => {
+    expect(
+      isSearchUnavailableError(
+        new CriticalQueryTimeoutError({
+          message: "Critical query timed out after 10000ms",
+          queryKey: ["case-law-decisions", "page"],
+          timeoutMs: 10_000,
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("anything that is not an API failure is not a search outage", () => {

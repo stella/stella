@@ -14,7 +14,7 @@ import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import type { AIErrorKind } from "@stll/api-contract";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
@@ -146,6 +146,11 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import {
+  AI_FAILURE_ERROR_KEYS,
+  aiErrorKindFromMessage,
+} from "@/lib/errors/ai-failure";
+import type { AIFailureTranslationKey } from "@/lib/errors/ai-failure";
 import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -948,9 +953,9 @@ const UserAttachments = ({
         const filename = getAttachmentFilename(part);
         const mimeType = getAttachmentMimeType(part);
         const key = `${filename ?? "attachment"}-${index}`;
-        const contentUrl = getUserFileContentUrl(url) ?? url;
+        const contentUrl = getUserFileContentUrl(url);
         const fallbackLabel = t("chat.attachment");
-        if (IMAGE_MEDIA_TYPES.includes(mimeType)) {
+        if (IMAGE_MEDIA_TYPES.includes(mimeType) && contentUrl) {
           // The backend sets `placeholder` (a blur data URL) only when a
           // thumbnail was generated, so its presence doubles as "serve the
           // smaller thumbnail instead of the full original."
@@ -989,7 +994,7 @@ const UserAttachments = ({
           "text-muted-foreground text-xs",
         );
 
-        if (contentUrl.startsWith(DATA_URL_PREFIX)) {
+        if (contentUrl?.startsWith(DATA_URL_PREFIX)) {
           return (
             <button
               className={attachmentClassName}
@@ -1009,16 +1014,24 @@ const UserAttachments = ({
           );
         }
 
+        if (contentUrl) {
+          return (
+            <a
+              className={attachmentClassName}
+              href={sanitizeHref(contentUrl)}
+              key={key}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {attachmentContent}
+            </a>
+          );
+        }
+
         return (
-          <a
-            className={attachmentClassName}
-            href={sanitizeHref(contentUrl)}
-            key={key}
-            rel="noreferrer"
-            target="_blank"
-          >
+          <span className={attachmentClassName} key={key}>
             {attachmentContent}
-          </a>
+          </span>
         );
       })}
     </div>
@@ -1067,30 +1080,8 @@ const ThinkingIndicator = ({
   );
 };
 
-type MappedChatErrorKind = Exclude<AIErrorKind, "unknown">;
-
-// The backend's chat stream returns an AIErrorKind as the error message.
-// Unknown and non-AI errors deliberately fall through to generic copy.
-const CHAT_ERROR_TRANSLATION_KEYS = {
-  provider_billing: "chat.sendErrorProviderBilling",
-  empty_completion: "chat.sendErrorEmptyCompletion",
-  loop_detected: "chat.sendErrorLoopDetected",
-  model_unavailable: "chat.sendErrorModelUnavailable",
-  provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
-  provider_stream_incomplete: "chat.sendErrorStreamIncomplete",
-  // A chat turn keeps a `length` answer and carries no schema or deadline of
-  // its own, so these reach it only through a structured side call; each
-  // reads as its nearest chat outcome.
-  output_incomplete: "chat.sendErrorStreamIncomplete",
-  output_invalid: "chat.sendError",
-  output_moderated: "chat.sendError",
-  deadline_exceeded: "chat.sendErrorProviderUnavailable",
-  provider_unavailable: "chat.sendErrorProviderUnavailable",
-  quota_exhausted: "chat.sendErrorQuotaExhausted",
-} as const satisfies Record<MappedChatErrorKind, TranslationKey>;
-
 type ChatErrorTranslationKey =
-  | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
+  | AIFailureTranslationKey
   | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
@@ -1102,11 +1093,6 @@ const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
   not_started: "chat.sendErrorNotStarted",
 } as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
-const isMappedChatErrorKind = (
-  message: string,
-): message is keyof typeof CHAT_ERROR_TRANSLATION_KEYS =>
-  message in CHAT_ERROR_TRANSLATION_KEYS;
-
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   const requestError = findChatRequestError(error);
   if (requestError !== undefined) {
@@ -1115,8 +1101,10 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";
   }
-  if (isMappedChatErrorKind(error.message)) {
-    return CHAT_ERROR_TRANSLATION_KEYS[error.message];
+  // An unknown kind keeps the chat's own copy, which points to support.
+  const kind = aiErrorKindFromMessage(error.message);
+  if (kind !== undefined && kind !== "unknown") {
+    return AI_FAILURE_ERROR_KEYS[AI_FAILURE_CODES[kind]];
   }
   return "chat.sendError";
 };
@@ -1902,6 +1890,7 @@ const AssistantMessageParts = ({
   // already did so.
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
+  const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1926,7 +1915,7 @@ const AssistantMessageParts = ({
         <AssistantThinkingPart
           components={streamdownComponents}
           displayState={thinkingDisplayState}
-          isStreaming={isTurnActive && index === renderEntries.length - 1}
+          isStreaming={index === streamingEntryIndex}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1948,6 +1937,7 @@ const AssistantMessageParts = ({
               "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
           )}
           components={streamdownComponents}
+          isStreaming={index === streamingEntryIndex}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
           partIndex={index}
@@ -2356,6 +2346,7 @@ const AssistantThinkingPart = ({
       </summary>
       <AssistantThinkingBody
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2424,10 +2415,12 @@ const AssistantThinkingHeader = ({
 
 const AssistantThinkingBody = ({
   components,
+  isStreaming,
   restorationPairs,
   text,
 }: {
   components: ChatThreadMessagesProps["streamdownComponents"];
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => (
@@ -2444,6 +2437,7 @@ const AssistantThinkingBody = ({
           "[&_code]:text-2xs",
         )}
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2454,6 +2448,7 @@ const AssistantThinkingBody = ({
 const AssistantTextPart = ({
   className,
   components,
+  isStreaming,
   restorationPairs,
   partIndex,
   sourceOffsets = false,
@@ -2461,6 +2456,8 @@ const AssistantTextPart = ({
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
+  /** The model is still writing this turn: the last block may be incomplete. */
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   partIndex?: number;
   sourceOffsets?: boolean;
@@ -2483,6 +2480,7 @@ const AssistantTextPart = ({
       <MessageResponse
         components={components}
         data-text-part-index={partIndex}
+        isAnimating={isStreaming}
         sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
@@ -2495,6 +2493,7 @@ const AssistantTextPart = ({
     <MessageResponse
       components={components}
       data-text-part-index={partIndex}
+      isAnimating={isStreaming}
       sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
