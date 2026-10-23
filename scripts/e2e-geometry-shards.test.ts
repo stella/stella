@@ -216,7 +216,11 @@ esac
         [
           "bash",
           "-c",
-          productionShardRun().replaceAll(`\${{ matrix.shard }}`, "1"),
+          productionShardRun()
+            .replaceAll(`\${{ matrix.shard }}`, "1")
+            .replaceAll(`\${{ steps.e2e-shards.outputs.count }}`, () =>
+              String(E2E_SHARD_COUNT),
+            ),
         ],
         {
           cwd: workspace,
