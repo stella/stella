@@ -196,7 +196,9 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
       .select()
       .from(userProfessionalUseAcceptances)
       .where(eq(userProfessionalUseAcceptances.userId, created.id));
-    expect(firstAcceptances).toHaveLength(1);
+    expect(firstAcceptances.map((row) => row.source)).toEqual([
+      "operator_provisioning",
+    ]);
 
     await runCommand("set-password", password);
     const accounts = await context.internalAdapter.findAccounts(created.id);

@@ -78,7 +78,10 @@ export type ReviewAccountStore = {
     userId: string;
     email: string;
   }) => Promise<number>;
-  /** Records professional-use acceptance through the owning operation. */
+  /**
+   * Records professional-use acceptance through the owning operation, with
+   * the operator command's provenance rather than the account's.
+   */
   acceptProfessionalUse: (userId: string) => Promise<void>;
 };
 

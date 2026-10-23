@@ -10,6 +10,10 @@ import {
 } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
 
+// The matters route sets its title only once the protected guard has let it
+// load, so a missing confirmation is asserted on the loaded page.
+const MATTERS_TITLE = "Matters | stella";
+
 const createSignedInAccount = async (
   signIn: typeof signInWithEmailOtp = signInWithEmailOtp,
 ) => {
@@ -47,6 +51,7 @@ test("an account awaiting confirmation sees the statement and enters the product
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
     await page.getByRole("button", { name: "Accept" }).click();
     await expect(page).toHaveURL(/\/workspaces\/?$/u);
+    await expect(page).toHaveTitle(MATTERS_TITLE);
     await expect(
       page.getByText("Confirm professional use", { exact: true }),
     ).not.toBeVisible();
@@ -70,6 +75,7 @@ test("an account with a recorded acceptance enters the product without the card"
     await page.context().addCookies((await api.storageState()).cookies);
     await page.goto("/workspaces", { waitUntil: "commit" });
     await expect(page).toHaveURL(/\/workspaces\/?$/u);
+    await expect(page).toHaveTitle(MATTERS_TITLE);
     await expect(
       page.getByText("Confirm professional use", { exact: true }),
     ).not.toBeVisible();

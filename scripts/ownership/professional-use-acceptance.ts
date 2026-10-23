@@ -10,7 +10,7 @@ export default {
   enforcement: {
     kind: "import",
     specifiers: ["@/api/lib/auth/professional-use"],
-    names: ["acceptAccountProfessionalUse"],
+    names: ["acceptAccountProfessionalUse", "provisionAccountProfessionalUse"],
     allowed: [
       {
         path: "apps/api/src/handlers/me/accept-professional-use.ts",
