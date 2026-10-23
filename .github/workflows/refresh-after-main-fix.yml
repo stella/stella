@@ -149,7 +149,7 @@ jobs:
       # commit. The expected head makes GitHub refuse a branch that moved
       # since. A refusal (422: moved or conflicting) is never retried.
       - name: Update pull request branches
-        if: steps.select.outputs.any == 'true'
+        if: steps.gate.outputs.proceed == 'true' && steps.select.outputs.any == 'true'
         timeout-minutes: 5
         working-directory: source
         env:
@@ -180,7 +180,7 @@ jobs:
               refreshed+=("#$number@$head")
             elif grep -q 'HTTP 422' "$errors"; then
               echo "::notice::Skipped #$number: its head moved or it conflicts with main."
-            elif grep -q 'without `workflows` permission' "$errors"; then
+            elif grep -q 'without .workflows. permission' "$errors"; then
               # Bringing main's workflow changes into a branch needs a permission this job does not hold.
               echo "::notice::Skipped #$number: updating it would change workflow files; its owner merges main."
             else

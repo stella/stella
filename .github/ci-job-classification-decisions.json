@@ -947,6 +947,6 @@
   "candidate:.github/workflows/refresh-after-main-fix.yml/refresh": {
     "kind": "support",
     "qualifier": "Updates the branches of open pull requests whose only CI failures main has since fixed, with the provenance app token; no merge, no queue action, no release or deployment.",
-    "reviewedDigest": "77d239f8e6ef0467584c59c0821b3144707a7c2588a3dfde13f4ab29bb1a9e88"
+    "reviewedDigest": "23ac5c45d4785cad591670c27f5c44c3e9a0cd6e9a11ced8f3d8a15a9f5dee4f"
   }
 }
