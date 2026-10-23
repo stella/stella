@@ -2,6 +2,7 @@
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
 // parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.
 // parser-output-unchanged: Paragraph input is a new optional entry point used only by cz-us; the HTML path and its results are unchanged for every other caller.
+// parser-output-unchanged: Text helpers are exported under descriptive names for the verdict golden and profiling script; their bodies and validation results are unchanged.
 /**
  * AST sanity checker.
  *
