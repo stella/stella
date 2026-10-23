@@ -954,7 +954,8 @@
       "searchable": "Dostupné na vyhľadanie",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
-      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
+      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii.",
+      "unreadListingPeriods": "Nenačítané obdobia zoznamu"
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "decisionTypes": {
