@@ -6888,7 +6888,7 @@ jobs:
               ' <<< "$NEEDS") || return 1
             [[ -n "$names" ]] || return 0
             while IFS= read -r job_name; do
-              echo "::error::$job_name: the runner was lost before any step failed; CI re-runs the failed jobs once automatically. If it fails again, re-run the failed jobs."
+              echo "::error::$job_name: the runner was lost before any step failed. A first-attempt pull request run whose only failure is a lost runner re-runs its failed jobs once automatically; otherwise re-run the failed jobs."
             done <<< "$names"
           }
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then

@@ -39,7 +39,11 @@ export const retryDecision = (
   if (realFailure) {
     return {
       retry: false,
-      reason: `${realFailure.name} contains a failed step`,
+      reason: (realFailure.steps ?? []).some(
+        (step) => step.conclusion === "failure",
+      )
+        ? `${realFailure.name} contains a failed step`
+        : `${realFailure.name} failed without evidence of a lost runner`,
     };
   }
   return {
