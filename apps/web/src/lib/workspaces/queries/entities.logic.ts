@@ -106,8 +106,8 @@ const ENTITY_COLLECTION_KIND = {
   FILES: "files",
 } as const;
 
-const entityCollectionKinds = new Set<string>(
-  Object.values(ENTITY_COLLECTION_KIND),
+const entityCollectionKinds: readonly string[] = Object.values(
+  ENTITY_COLLECTION_KIND,
 );
 
 /** Entity ids occupy the third key segment; collection segments are named here. */
@@ -117,7 +117,7 @@ export const isEntityCollectionQueryKey = (
   const kind = queryKey.at(2);
   return (
     (typeof kind === "object" && kind !== null) ||
-    (typeof kind === "string" && entityCollectionKinds.has(kind))
+    (typeof kind === "string" && entityCollectionKinds.includes(kind))
   );
 };
 

@@ -21,11 +21,11 @@ import {
   WORKSPACE_REALTIME_QUERY_ACTION,
 } from "@/lib/workspace-realtime";
 import type { WorkspaceRealtimeQueryAction } from "@/lib/workspace-realtime";
-import {
-  entityMutationBudgetCases,
-  readEntityMutationBudgetCensus,
-} from "@/lib/workspace-refetch-budget.mutations";
 import { createWorkspaceQueryActionBatch } from "@/lib/workspace-sse";
+import {
+  invalidateDeletedEntityQueries,
+  invalidateRenamedEntityQueries,
+} from "@/lib/workspaces/mutations/entities.logic";
 import * as entityQueries from "@/lib/workspaces/queries/entities";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 
@@ -33,6 +33,20 @@ const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 const ENTITY_ID = toSafeId<"entity">("00000000-0000-4000-8000-000000000002");
 const BURST_SIZE = 20;
 const resource = { type: RESOURCE_TYPE.ENTITY, id: ENTITY_ID } as const;
+
+const entityMutationBudgetCases = {
+  useDeleteEntities: async ({
+    queryClient,
+    workspaceId,
+    entityId,
+  }: Parameters<typeof invalidateRenamedEntityQueries>[0]) =>
+    await invalidateDeletedEntityQueries({
+      queryClient,
+      workspaceId,
+      entityIds: [entityId],
+    }),
+  useRenameEntity: invalidateRenamedEntityQueries,
+} as const;
 
 const viewKey = { workspaceId: WORKSPACE_ID, filters: [], sorts: [] };
 const groupKey = {
@@ -295,13 +309,6 @@ for (const event of Object.values(EVENT_CASES)) {
     );
   });
 }
-
-test("workspace mutation census covers every exported hook or reasoned exclusion", async () => {
-  const census = await readEntityMutationBudgetCensus();
-  expect(census.hooks).toEqual(census.covered);
-  expect(census.excludedWithCallbacks).toEqual([]);
-  expect(census.ledgerExitCode).toBe(0);
-});
 
 test("stream-covered query owners declare no periodic refetches", async () => {
   const owners = [

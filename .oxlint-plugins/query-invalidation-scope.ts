@@ -129,7 +129,7 @@ export default eslintCompatPlugin({
             "Infinite queries must set maxPages to a positive finite integer literal so refetch work stays bounded.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             const callee = unwrapExpression(node.callee);

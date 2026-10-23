@@ -1506,8 +1506,7 @@
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
-        "$TURBO_ROOT$/oxlint.config.ts",
-        "$TURBO_ROOT$/scripts/ledger-membership.ts"
+        "$TURBO_ROOT$/oxlint.config.ts"
       ]
     },
     // The native suite compiles files it embeds from outside the crate, so its
