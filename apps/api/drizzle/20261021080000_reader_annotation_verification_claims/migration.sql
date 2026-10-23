@@ -191,20 +191,20 @@ CREATE POLICY "review_reset_owner_delete" ON "legal_reader_annotations" FOR DELE
 );--> statement-breakpoint
 
 -- The claim-cleanup trigger runs as the owner and removes every author's
--- comments on the claims a statement deleted; nothing else reads as owner.
+-- comments on the claims a statement deleted, only during trigger execution.
 -- stella-migration-safety: reviewed drop-object - Drops only the policy the
 -- next statement re-creates, so a retried migration re-enters the same state.
 DROP POLICY IF EXISTS "claim_cleanup_owner_select" ON "legal_reader_annotations";--> statement-breakpoint
 
 CREATE POLICY "claim_cleanup_owner_select" ON "legal_reader_annotations" FOR SELECT TO PUBLIC USING (
-  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass) AND verification_claim_id IS NOT NULL
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass) AND pg_catalog.pg_trigger_depth() > 0 AND verification_claim_id IS NOT NULL
 );--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-object - Drops only the policy the
 -- next statement re-creates, so a retried migration re-enters the same state.
 DROP POLICY IF EXISTS "claim_cleanup_owner_delete" ON "legal_reader_annotations";--> statement-breakpoint
 
 CREATE POLICY "claim_cleanup_owner_delete" ON "legal_reader_annotations" FOR DELETE TO PUBLIC USING (
-  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass) AND verification_claim_id IS NOT NULL
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass) AND pg_catalog.pg_trigger_depth() > 0 AND verification_claim_id IS NOT NULL
 );--> statement-breakpoint
 
 -- Reader notes now hold matter content, so the owner is held to the policies

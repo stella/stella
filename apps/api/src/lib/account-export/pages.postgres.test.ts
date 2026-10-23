@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -361,29 +361,22 @@ describe.skipIf(!enabled)("account export personal data", () => {
           return await tx
             .select({ id: legalReaderAnnotations.id })
             .from(legalReaderAnnotations)
-            .where(
-              and(
-                eq(legalReaderAnnotations.organizationId, organizationId),
-                isNull(legalReaderAnnotations.verificationClaimId),
-              ),
-            );
+            .where(eq(legalReaderAnnotations.organizationId, organizationId));
         });
-        expect(ownerScopedAnnotations.map(({ id }) => id).toSorted()).toEqual([
-          ownPrivateNote.id,
-        ]);
-        expect(ownerScopedAnnotations.map((row) => row.id)).not.toContain(
-          otherPrivateNote.id,
+        expect(ownerScopedAnnotations.map(({ id }) => id).toSorted()).toEqual(
+          [...ownComments.map(({ id }) => id), ownPrivateNote.id].toSorted(),
         );
+        for (const { id } of [...otherComments, otherPrivateNote]) {
+          expect(ownerScopedAnnotations.map((row) => row.id)).not.toContain(id);
+        }
 
-        const ownerAnnotationsWithoutSettings = await db
-          .select({ id: legalReaderAnnotations.id })
-          .from(legalReaderAnnotations)
-          .where(
-            and(
-              eq(legalReaderAnnotations.organizationId, organizationId),
-              isNull(legalReaderAnnotations.verificationClaimId),
-            ),
-          );
+        const ownerAnnotationsWithoutSettings = await db.transaction(
+          async (tx) =>
+            await tx
+              .select({ id: legalReaderAnnotations.id })
+              .from(legalReaderAnnotations)
+              .where(eq(legalReaderAnnotations.organizationId, organizationId)),
+        );
         expect(ownerAnnotationsWithoutSettings).toEqual([]);
 
         const exported = await Array.fromAsync(

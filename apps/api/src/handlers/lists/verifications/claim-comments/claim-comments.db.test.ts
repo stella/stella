@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { readAccountExportAnnotationPage } from "@/api/lib/account-export/owner-read";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -243,12 +244,25 @@ const auditEvents = async (db: GatedTestDb, tenant: Tenant) =>
     )
     .limit(20);
 
+// Export owner reads still reveal stored rows after the referenced claim is gone.
 const storedComments = async (db: GatedTestDb, tenant: Tenant) =>
-  await db
-    .select()
-    .from(legalReaderAnnotations)
-    .where(eq(legalReaderAnnotations.organizationId, tenant.organizationId))
-    .limit(20);
+  (
+    await Promise.all(
+      [tenant.author, tenant.colleague].map(
+        async (userId) =>
+          await readAccountExportAnnotationPage({
+            database: db,
+            organizationId: tenant.organizationId,
+            userId,
+            extraWhere: eq(
+              legalReaderAnnotations.verificationClaimId,
+              tenant.claimId,
+            ),
+            limit: 20,
+          }),
+      ),
+    )
+  ).flat();
 
 const withTenants = async (
   exercise: (scope: { db: GatedTestDb; tenant: Tenant }) => Promise<void>,

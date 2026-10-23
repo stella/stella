@@ -229,14 +229,14 @@ export const legalReaderAnnotations = p.pgTable(
     }),
     ...reviewResetOwnerPolicies(LEGAL_READER_ANNOTATIONS),
     // The claim-cleanup trigger runs as the owner and removes every author's
-    // comments on the claims a statement deleted.
+    // comments on the claims a statement deleted, only during trigger execution.
     p.pgPolicy("claim_cleanup_owner_select", {
       for: "select",
-      using: sql`${tableOwnerCheck} AND verification_claim_id IS NOT NULL`,
+      using: sql`${tableOwnerCheck} AND pg_catalog.pg_trigger_depth() > 0 AND verification_claim_id IS NOT NULL`,
     }),
     p.pgPolicy("claim_cleanup_owner_delete", {
       for: "delete",
-      using: sql`${tableOwnerCheck} AND verification_claim_id IS NOT NULL`,
+      using: sql`${tableOwnerCheck} AND pg_catalog.pg_trigger_depth() > 0 AND verification_claim_id IS NOT NULL`,
     }),
   ],
 );

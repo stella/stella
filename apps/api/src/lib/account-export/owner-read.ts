@@ -18,8 +18,8 @@ type ReadAccountExportAnnotationPageOptions = {
   limit: number;
 };
 
-/** Claim rows also have cleanup owner access, so every read binds the
- * organization and author independently of the caller's extra filters. */
+/** Every export read binds the organization and author independently of
+ * the caller's extra filters, alongside the export owner policy. */
 export const readAccountExportAnnotationPage = async ({
   database,
   organizationId,
