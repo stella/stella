@@ -184,3 +184,33 @@ test("the selection bar keeps its place once the drag ends", async ({
   expect(shown).not.toBeNull();
   expect(settled).toEqual(shown);
 });
+
+test("the copy menu's preview stays inside the menu", async ({ page }) => {
+  await openReader(page);
+  const first = await paragraphBox(page, 2);
+  await page.mouse.move(first.x + 4, first.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(first.x + 260, first.y + 40, { steps: 10 });
+  await page.mouse.up();
+  await selectionBar(page).getByRole("button", { name: "Copy" }).click();
+  const layout = page.locator('[data-slot="menu-preview-layout"]');
+  const options = layout.getByRole("button");
+  await expect(options.first()).toBeVisible();
+  const menu = await layout.locator("xpath=..").boundingBox();
+  if (menu === null) {
+    throw new Error("The copy menu has no box");
+  }
+  for (const option of await options.all()) {
+    await option.hover();
+    // The toolbar is narrower than options plus pane, so a box here also
+    // proves the menu widened instead of dropping the pane.
+    const pane = await layout
+      .locator('[data-slot="preview-pane"]')
+      .boundingBox();
+    if (pane === null) {
+      throw new Error("The copy preview has no box");
+    }
+    expect(pane.x).toBeGreaterThanOrEqual(menu.x);
+    expect(pane.x + pane.width).toBeLessThanOrEqual(menu.x + menu.width);
+  }
+});
