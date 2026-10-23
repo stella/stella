@@ -16,11 +16,9 @@ import {
   ONLINE_MIGRATION_INDEXES,
   ONLINE_WORK_NAMES,
 } from "../../../db/online-migrations";
-import {
-  ONLINE_WORK_LIFECYCLE,
-  PENDING,
-} from "../../../db/online-work-lifecycle";
+import { PENDING } from "../../../db/online-work-lifecycle";
 import { withGatedTestClients } from "../../../tests/gated-test-database";
+import { allFinalizedOnlineWork } from "../../../tests/helpers/online-work-lifecycle";
 import {
   createDrizzleOnlineWorkStateStore,
   createOnlineWorkRunner,
@@ -93,7 +91,10 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
           await main.sql.unsafe(
             `DROP INDEX CONCURRENTLY IF EXISTS public."${index.name}"`,
           );
-          const lifecycle = { ...ONLINE_WORK_LIFECYCLE, [index.name]: PENDING };
+          const lifecycle = {
+            ...allFinalizedOnlineWork(),
+            [index.name]: PENDING,
+          };
           const runner = createOnlineWorkRunner({
             names: ONLINE_WORK_NAMES,
             lifecycle,
@@ -165,7 +166,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
       const main = openClient({ max: 2 });
       const holder = await openClient().sql.reserve();
       const claimer = await openClient().sql.reserve();
-      const lifecycle = { ...ONLINE_WORK_LIFECYCLE, [index.name]: PENDING };
+      const lifecycle = { ...allFinalizedOnlineWork(), [index.name]: PENDING };
       const claimOn = async (session: ReservedSQL) =>
         await claimOnlineWorkUnit(
           { reserve: async () => adapter(session) },

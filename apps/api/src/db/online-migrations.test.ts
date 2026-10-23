@@ -8,6 +8,7 @@ import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-sta
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
+import { allFinalizedOnlineWork } from "../tests/helpers/online-work-lifecycle";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
@@ -32,11 +33,7 @@ import {
   runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
 } from "./online-migrations";
-import {
-  FINALIZED,
-  ONLINE_WORK_LIFECYCLE,
-  PENDING,
-} from "./online-work-lifecycle";
+import { FINALIZED, PENDING } from "./online-work-lifecycle";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -98,7 +95,7 @@ const runOnlineMigrations = async (
     ...options,
     // Repairs a test injects are finalized work, as every registered one is.
     lifecycle: {
-      ...ONLINE_WORK_LIFECYCLE,
+      ...allFinalizedOnlineWork(),
       ...Object.fromEntries(
         (options.repairs ?? []).map(({ name }) => [name, FINALIZED]),
       ),
@@ -186,7 +183,7 @@ describe("online migrations", () => {
       onlineLockHeld: true,
     });
     await assertOnlineMigrationsApplied(harness.pool, {
-      lifecycle: { ...ONLINE_WORK_LIFECYCLE, [pending.name]: PENDING },
+      lifecycle: { ...allFinalizedOnlineWork(), [pending.name]: PENDING },
     });
     expect(
       harness.statements.some((statement) => statement.includes("pg_catalog")),
@@ -234,7 +231,7 @@ describe("online migrations", () => {
         ...claimOptions,
         name: index.name,
         lifecycle: {
-          ...ONLINE_WORK_LIFECYCLE,
+          ...allFinalizedOnlineWork(),
           [index.name]: PENDING,
           [other.name]: PENDING,
         },
@@ -263,7 +260,7 @@ describe("online migrations", () => {
         await claimOnlineWorkUnit(harness.pool, {
           ...claimOptions,
           name: index.name,
-          lifecycle: { ...ONLINE_WORK_LIFECYCLE, [index.name]: PENDING },
+          lifecycle: { ...allFinalizedOnlineWork(), [index.name]: PENDING },
         }),
       ).toEqual({ type: "lock_held" });
       expect(harness.statements).not.toContain(index.createSql);
@@ -281,7 +278,7 @@ describe("online migrations", () => {
       const claim = await claimOnlineWorkUnit(harness.pool, {
         ...claimOptions,
         name: index.name,
-        lifecycle: { ...ONLINE_WORK_LIFECYCLE, [index.name]: PENDING },
+        lifecycle: { ...allFinalizedOnlineWork(), [index.name]: PENDING },
       });
       if (claim.type !== "claimed") {
         throw new TypeError("Expected a claim");
@@ -305,7 +302,7 @@ describe("online migrations", () => {
         claimOnlineWorkUnit(harness.pool, {
           ...claimOptions,
           name: index.name,
-          lifecycle: { ...ONLINE_WORK_LIFECYCLE, [index.name]: FINALIZED },
+          lifecycle: { ...allFinalizedOnlineWork(), [index.name]: FINALIZED },
         }),
       );
 
@@ -386,7 +383,7 @@ describe("online migrations", () => {
 
     await assertOnlineMigrationsApplied(harness.pool, {
       lifecycle: {
-        ...ONLINE_WORK_LIFECYCLE,
+        ...allFinalizedOnlineWork(),
         [index.name]: { state: "pending" },
       },
     });
@@ -404,7 +401,7 @@ describe("online migrations", () => {
     const rejection = await rejectionOf(
       assertOnlineMigrationsApplied(harness.pool, {
         lifecycle: {
-          ...ONLINE_WORK_LIFECYCLE,
+          ...allFinalizedOnlineWork(),
           [index.name]: { state: "finalized" },
         },
       }),
@@ -425,7 +422,7 @@ describe("online migrations", () => {
 
     await runOnlineMigrations(harness.pool, {
       lifecycle: {
-        ...ONLINE_WORK_LIFECYCLE,
+        ...allFinalizedOnlineWork(),
         [index.name]: { state: "pending" },
       },
     });

@@ -8,11 +8,8 @@ import {
   type OnlineWorkName,
   type OnlineWorkUnitClaim,
 } from "../../../db/online-migrations";
-import {
-  FINALIZED,
-  ONLINE_WORK_LIFECYCLE,
-  PENDING,
-} from "../../../db/online-work-lifecycle";
+import { PENDING } from "../../../db/online-work-lifecycle";
+import { allFinalizedOnlineWork } from "../../../tests/helpers/online-work-lifecycle";
 import {
   createOnlineWorkRunner,
   type OnlineWorkStateSnapshot,
@@ -30,7 +27,7 @@ const SECOND = nameAt(1);
 const START = new Date("2026-10-23T10:00:00.000Z");
 
 const lifecycleWithPending = (pending: readonly OnlineWorkName[]) => ({
-  ...ONLINE_WORK_LIFECYCLE,
+  ...allFinalizedOnlineWork(),
   ...Object.fromEntries(pending.map((name) => [name, PENDING])),
 });
 
@@ -261,7 +258,6 @@ describe("online work runner", () => {
     const harness = createHarness({ pending: [SECOND] });
 
     expect(await harness.tick()).toEqual({ type: "started", name: SECOND });
-    expect(ONLINE_WORK_LIFECYCLE[FIRST]).toEqual(FINALIZED);
     expect(harness.claims).toEqual([SECOND]);
   });
 });

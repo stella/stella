@@ -13,6 +13,7 @@ import { Temporal } from "@stll/time";
 import { readOnlineIndexConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import { withGatedTestClients } from "../tests/gated-test-database";
+import { allFinalizedOnlineWork } from "../tests/helpers/online-work-lifecycle";
 import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-delete-receipt-repair";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
@@ -24,7 +25,7 @@ import {
   runOnlineMigrations,
   type OnlineRepairOptions,
 } from "./online-migrations";
-import { FINALIZED, ONLINE_WORK_LIFECYCLE } from "./online-work-lifecycle";
+import { FINALIZED } from "./online-work-lifecycle";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
   caseLawCitations,
@@ -296,7 +297,7 @@ describe.skipIf(!enabled)(
               {
                 scope: FINALIZED_SCOPE,
                 lifecycle: {
-                  ...ONLINE_WORK_LIFECYCLE,
+                  ...allFinalizedOnlineWork(),
                   "later-repair": FINALIZED,
                 },
                 indexGate: {
