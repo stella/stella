@@ -3530,6 +3530,12 @@
       "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
+      "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",
+      "unsupportedField": "Šajā dokumentā ir lauks {fieldType}, ko nevar konvertēt.",
+      "unsupportedReference": "Šajā dokumentā {element} {attribute} atsaucas uz ārēju resursu, tāpēc to nevar konvertēt."
+    },
     "external": {
       "confirmDescription": "Jūs tūlīt apmeklēsiet ārēju tīmekļa vietni.",
       "confirmTitle": "Atvērt ārēju saiti?",
