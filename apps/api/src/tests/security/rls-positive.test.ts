@@ -899,7 +899,7 @@ describe("organization INSERT — correct scope", () => {
           organizationId: ids.orgA,
           name: "RLS Positive",
           fileName: "pos.docx",
-          s3Key: "test/pos.docx",
+          s3Key: `${ids.orgA}/test/pos.docx`,
           sizeBytes: 512,
           createdBy: ids.userA1,
         })
@@ -917,7 +917,7 @@ describe("organization INSERT — correct scope", () => {
           organizationId: ids.orgA,
           templateId: ids.templateA,
           version: 99,
-          s3Key: "test/pos-v99.docx",
+          s3Key: `${ids.orgA}/test/pos-v99.docx`,
           createdBy: ids.userA1,
         })
         .returning({ id: templateVersions.id });
@@ -1408,7 +1408,7 @@ describe("organization DELETE — correct scope", () => {
         organizationId: ids.orgA,
         name: "To Delete",
         fileName: "del.docx",
-        s3Key: "test/del.docx",
+        s3Key: `${ids.orgA}/test/del.docx`,
         sizeBytes: 512,
         createdBy: ids.userA1,
       });
@@ -1428,7 +1428,7 @@ describe("organization DELETE — correct scope", () => {
         organizationId: ids.orgA,
         templateId: ids.templateA,
         version: 98,
-        s3Key: "test/del-v98.docx",
+        s3Key: `${ids.orgA}/test/del-v98.docx`,
         createdBy: ids.userA1,
       });
       const rows = await tx
