@@ -108,7 +108,7 @@ export const aiAvailabilityOptions = ({
     },
   );
 
-type OrganizationAIAvailability = InferDataFromTag<
+export type OrganizationAIAvailability = InferDataFromTag<
   unknown,
   ReturnType<typeof aiAvailabilityOptions>["queryKey"]
 >;
@@ -143,6 +143,10 @@ export const updateCachedAIAvailability = ({
   return {
     ...current,
     available: nextInstanceProvisioned || orgConfigured,
+    unavailableReason:
+      nextInstanceProvisioned || orgConfigured
+        ? null
+        : "provider_not_configured",
     instanceProvisioned: nextInstanceProvisioned,
     orgConfigured,
   };
