@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
 import {
-  getKanbanGroups,
   getKanbanGroupingPropertyId,
+  getKanbanGroups,
   isKanbanGroupingRenderable,
   resolveKanbanGroupOptions,
   selectKanbanRows,

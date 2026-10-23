@@ -134,6 +134,7 @@ const WRITE_TOOL_AGENT_ACCESS = {
   save_filled_template: OPEN,
   create_template: OPEN,
   configure_template_fields: OPEN,
+  mint_web_handoff: OPEN,
   [MCP_CAPABILITY_EXECUTORS.write]: PER_CAPABILITY,
   submit_feedback: {
     kind: AGENT_ACCESS_KIND.callerConfirms,

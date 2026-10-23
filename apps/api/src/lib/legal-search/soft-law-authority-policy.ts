@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 
 import {
-  type SoftLawAuthority,
-  type SoftLawMetadata,
-  type SOFT_LAW_KINDS,
-  SoftLawItemError,
   isTextlessExtraction,
+  type SOFT_LAW_KINDS,
+  type SoftLawAuthority,
   type SoftLawDocumentInput,
+  SoftLawItemError,
+  type SoftLawMetadata,
 } from "./soft-law-types";
 
 type KindDisposition =

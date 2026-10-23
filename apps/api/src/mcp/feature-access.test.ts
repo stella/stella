@@ -43,8 +43,8 @@ import {
   agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
-  listMcpTools,
   handleMcpToolCall,
+  listMcpTools,
 } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {

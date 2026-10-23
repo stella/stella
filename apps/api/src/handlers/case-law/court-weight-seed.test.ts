@@ -10,9 +10,9 @@ import {
   courtWeightEntriesFromSeed,
   courtWeightJurisdictionSeedSql,
   courtWeightMapFromSeed,
+  type CourtWeightSeedRow,
   courtWeightSeedSql,
   seededCourtWeightEntries,
-  type CourtWeightSeedRow,
 } from "@/api/handlers/case-law/court-weight-seed";
 import { SK_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 import {

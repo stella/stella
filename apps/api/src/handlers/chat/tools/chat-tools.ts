@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import {
-  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BrowserClientCapability,
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ChatSourceScope,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
@@ -14,9 +14,9 @@ import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
+  type ChatEditApplyMode,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
-  type ChatEditApplyMode,
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -122,8 +122,8 @@ import type {
 } from "@/api/lib/entities/authorize-document-write";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
-  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
   AI_MEMORY_FEATURE_ID,
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
   FEATURE_REGISTRY,
   type FeatureRegistry,
 } from "@/api/lib/feature-access/registry";

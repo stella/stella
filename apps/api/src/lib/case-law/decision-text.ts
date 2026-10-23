@@ -3,27 +3,27 @@
 import { panic } from "better-result";
 
 import {
-  DECISION_HEADNOTE_KEYWORDS,
   DECISION_DATE_AVAILABILITY_STATUSES,
-  type DecisionDateAvailability,
-  SK_US_ECLI_AVAILABILITY_STATUSES,
-  SK_COURTS_SOURCE_URL_STATUSES,
-  type SkUsEcliAvailability,
-  type SkCourtsSourceUrlStatus,
+  DECISION_HEADNOTE_KEYWORDS,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
-  TEXT_ABSENCE_REASON,
-  parseDecisionTextAbsence,
-  TEXT_FIELD_TYPE,
+  type DecisionDateAvailability,
   type DecisionHeadnotePreview,
   type DecisionTextAbsenceEntry,
   type DecisionTextAbsenceParseResult,
   type DecisionTextFieldKey,
+  parseDecisionTextAbsence,
   type ReadDecisionTextFields,
+  SK_COURTS_SOURCE_URL_STATUSES,
+  SK_US_ECLI_AVAILABILITY_STATUSES,
+  type SkCourtsSourceUrlStatus,
+  type SkUsEcliAvailability,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   type TextAbsenceReason,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
@@ -37,9 +37,9 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import {
   approveMetadataUrls,
-  rehydrateMetadataUrls,
   META_URL_DIAGNOSTICS,
   type MetadataUrlSchema,
+  rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 

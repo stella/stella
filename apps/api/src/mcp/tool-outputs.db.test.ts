@@ -148,6 +148,9 @@ const TOOL_COVERAGE = {
   add_matter_member: excluded(PERSON_GATED),
   remove_matter_member: excluded(PERSON_GATED),
   update_organization_settings: excluded(PERSON_GATED),
+  mint_web_handoff: excluded(
+    "requires an OAuth consent context; covered by the handoff service tests",
+  ),
   prepare_feedback: RUN,
   submit_feedback: excluded("delivers the report to an external tracker"),
   list_capabilities: RUN,

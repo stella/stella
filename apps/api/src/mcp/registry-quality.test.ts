@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@stll/api-contract";
+import {
+  CHAT_TOOL_GRANT_POLICY_KIND,
+  getChatToolGrantPolicy,
+} from "@stll/api-contract/chat-tool-grants";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
   MCP_TOOL_NAME_MAX_LENGTH,
@@ -43,6 +47,7 @@ import type {
   McpToolDefinition,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
@@ -151,6 +156,22 @@ describe("MCP tool-surface baseline", () => {
 
   test("every audience has exactly one baseline row", () => {
     expect(baselineAudiences(baseline)).toEqual([...MCP_MODES].toSorted());
+  });
+
+  test("model measurements exclude every app-only definition", async () => {
+    const measured = await measureMcpSurfaces("model");
+    for (const { mode, definitions } of SURFACES) {
+      const names = Object.entries(measured.tools)
+        .filter(([, audiences]) => audiences[mode] !== undefined)
+        .map(([name]) => name)
+        .toSorted();
+      expect(names).toEqual(
+        definitions
+          .filter((definition) => isMcpToolVisibleTo(definition, "model"))
+          .map(({ name }) => name)
+          .toSorted(),
+      );
+    }
   });
 
   test("every audience matches its committed baseline within tolerance", async () => {
@@ -376,7 +397,9 @@ describe("MCP registry access coherence", () => {
     for (const { definitions } of SURFACES) {
       const delegated = definitions.filter(
         (tool) =>
-          tool.access === "write" && tool.permissions.type === "delegated",
+          tool.access === "write" &&
+          tool.permissions.type === "delegated" &&
+          isMcpToolVisibleTo(tool, "model"),
       );
       for (const tool of delegated) {
         expect(tool.name).toBe(MCP_CAPABILITY_EXECUTORS.write);
@@ -427,11 +450,14 @@ describe("MCP registry access coherence", () => {
     }
   });
 
-  test('anonymized-exclusion reason "write" and access: "write" imply each other', () => {
+  test("write and credential-authority tools are excluded from anonymized access", () => {
     for (const tool of defaultTools) {
       const isWriteExcluded =
         tool.anonymized.exposure === "excluded" &&
         tool.anonymized.reason === "write";
+      const isCredentialAuthorityExcluded =
+        tool.anonymized.exposure === "excluded" &&
+        tool.anonymized.reason === "credential_authority";
       if (isWriteExcluded) {
         expect(
           tool.access,
@@ -440,8 +466,8 @@ describe("MCP registry access coherence", () => {
       }
       if (tool.access === "write") {
         expect(
-          isWriteExcluded,
-          `Tool ${tool.name} is access: "write" but is not anonymized-excluded with reason "write"`,
+          isWriteExcluded || isCredentialAuthorityExcluded,
+          `Tool ${tool.name} is access: "write" but is not excluded from anonymized access`,
         ).toBe(true);
       }
     }
@@ -486,6 +512,31 @@ describe("projected chat write approvals", () => {
     for (const [name, policy] of accountControlPolicies) {
       expect(policy, name).toBe("approve-once");
     }
+  });
+
+  test("no confirmation-gated or account-control tool is covered by a stored grant", () => {
+    const isConfirmationGated = (tool: (typeof defaultTools)[number]) =>
+      describeAgentAccess({
+        target: { type: "tool", name: tool.name, access: tool.access },
+        context: { toolConfirmation: TOOL_CONFIRMATION.caller },
+      }).access.kind === AGENT_ACCESS_KIND.callerConfirms;
+    const freshApprovalTools = defaultTools.filter(
+      (tool) =>
+        isConfirmationGated(tool) ||
+        (tool.access === "write" &&
+          tool.accountAccess === ACCOUNT_ACCESS.accountControl),
+    );
+    expect(freshApprovalTools.some(isConfirmationGated)).toBe(true);
+    const grantable = freshApprovalTools
+      .filter(
+        (tool) =>
+          getChatToolGrantPolicy(tool.name) !==
+            CHAT_TOOL_GRANT_POLICY_KIND.approveOnce &&
+          getChatToolGrantPolicy(tool.name) !==
+            CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
+      )
+      .map((tool) => tool.name);
+    expect(grantable).toEqual([]);
   });
 });
 
@@ -977,7 +1028,7 @@ describe("destructive write-tool behavior", () => {
         grants = authority.alternatives;
         break;
       case "delegated":
-        return true;
+        return tool.nonDestructiveReason === undefined;
       default:
         authority satisfies never;
         return panic(`Unhandled tool authority: ${String(authority)}`);
