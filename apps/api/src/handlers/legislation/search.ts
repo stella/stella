@@ -5,13 +5,13 @@ import { status } from "elysia";
 import type { Static } from "elysia";
 
 import {
-  PUBLIC_LEGISLATION_COUNTRIES,
   isPublicLegislationCountry,
+  PUBLIC_LEGISLATION_COUNTRIES,
 } from "@stll/api-contract/legislation-publication";
 import {
   SEARCH_PAGINATION_COMPLETE,
-  type SearchPaginationOutcome,
   SEARCH_TOTAL_NOT_COUNTED,
+  type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -22,9 +22,9 @@ import { envBase } from "@/api/env-base";
 import { projectLegislationSearchHit } from "@/api/handlers/legislation/search-response";
 import {
   PUBLIC_JURISDICTIONS_DESCRIPTION,
+  type SearchLegislationBody,
   searchLegislationBodySchema,
   searchLegislationResponseSchema,
-  type SearchLegislationBody,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -39,9 +39,9 @@ import {
   noCourtTierSql,
 } from "@/api/lib/legal-search/authority-sql";
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import type {
@@ -49,12 +49,16 @@ import type {
   ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
-import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
+  type CorpusCandidateRankingInput,
   readCorpusIndexSearchPage,
   SCORED_SCAN_TRANSPORT,
+  type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
+import {
+  type CorpusAppliedProjection,
+  corpusAppliedProjection,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -91,19 +95,19 @@ import {
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import {
-  redistributableLegislationSource,
-  publishedLegislationDocumentFor,
   publishedLegislationCountryFor,
+  publishedLegislationDocumentFor,
+  redistributableLegislationSource,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
   inForceToday,
+  type LegislationVersionRef,
   legislationVersionRef,
   legislationVersionRefAt,
   notWithdrawn,
   openedBy,
-  type LegislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
@@ -128,7 +132,6 @@ import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
-import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   legislationPublicReadDb,
@@ -136,6 +139,11 @@ import {
   type LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { emitRequestStage } from "@/api/lib/observability/request-metrics";
+import type {
+  RequestStage,
+  RequestStageOutcome,
+} from "@/api/lib/observability/request-metrics";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -153,6 +161,12 @@ type LegislationHit = Static<
 
 type RawRow = Record<string, unknown>;
 
+type CorpusLegislationReadDependencies = {
+  readPage: typeof readCorpusIndexSearchPage;
+  readCandidateRows: typeof readLegislationCandidateRows;
+  readNamedWorks: typeof readNamedLegislationWorks;
+};
+
 type SearchLegislationDependencies = {
   provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
   loadSearchConfigs: () => Promise<readonly FtsSearchConfig[]>;
@@ -161,7 +175,22 @@ type SearchLegislationDependencies = {
     isAdmitted: typeof isPublicLegislationCountry;
   };
   readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
+  now?: () => number;
+  emitStage?: typeof emitRequestStage;
+  stageTool?: string;
+  corpusSearch?: typeof corpusIndexSearch;
+  corpusReads?: CorpusLegislationReadDependencies;
+  projectHit?: typeof projectLegislationSearchHit;
 };
+
+type ObserveLegislationStage = <T>(
+  stage: Extract<RequestStage, "candidate_hydration" | "work_collapse_ranking">,
+  operation: () => Promise<T> | T,
+  counts: (value: T | undefined) => {
+    candidateCount?: number;
+    resultCount?: number;
+  },
+) => Promise<T>;
 
 const defaultSearchLegislationDependencies: SearchLegislationDependencies = {
   loadSearchConfigs: loadPublicFtsSearchConfigs,
@@ -224,6 +253,11 @@ const buildCorpusIndexQuery = (
   return clauses.join(" AND ");
 };
 
+const extractCorpusDocumentId = (hit: Record<string, unknown>) => {
+  const id = hit["document_id"];
+  return typeof id === "string" && isUuid(id) ? id : null;
+};
+
 const extractCorpusSnippet = (
   snippet: Record<string, unknown> | undefined,
 ): string | null => {
@@ -235,9 +269,8 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
-type RehydrateLegislationCandidatesOptions = {
+type RehydrateLegislationCandidatesOptions = CorpusCandidateRankingInput & {
   body: SearchLegislationBody;
-  candidates: readonly ScoredCandidate[];
   /** The generation the hits were read from; it decides row currency. */
   generation: string;
   legislationDb: LegislationReadDb;
@@ -246,6 +279,7 @@ type RehydrateLegislationCandidatesOptions = {
    * page, so it is not shown again.
    */
   cursorId?: string | undefined;
+  observeStage?: ObserveLegislationStage | undefined;
   /**
    * The Works the query names, read once per request by the caller; read
    * here when absent.
@@ -258,6 +292,7 @@ type RehydrateLegislationCandidatesOptions = {
   excludedWorkTokens?: readonly string[] | undefined;
   ranking?: "authority" | "lexical" | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
+  readCandidateRows?: typeof readLegislationCandidateRows | undefined;
 };
 
 /** Undated search keeps historical wording discoverable; an explicit date
@@ -536,6 +571,7 @@ export const readLegislationCandidateRows = async (
 export const rehydrateLegislationCandidates = async ({
   body,
   candidates,
+  selectAppliedCandidates,
   generation,
   legislationDb,
   cursorId,
@@ -543,6 +579,8 @@ export const rehydrateLegislationCandidates = async ({
   excludedWorkTokens,
   ranking = "authority",
   hitDispositions = createCorpusHitDispositionCounter(),
+  readCandidateRows = readLegislationCandidateRows,
+  observeStage = async (_stage, operation) => await operation(),
 }: RehydrateLegislationCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
     toSafeId<"legislationDocument">(candidate.id),
@@ -551,122 +589,150 @@ export const rehydrateLegislationCandidates = async ({
   // (metadata changed, async re-index/delete pending) must not satisfy filters
   // it no longer matches.
   const requestFilters = legislationRequestFilters(body);
-  const read = await legislationDb(async (tx) => {
-    const candidateRead =
-      ids.length === 0
-        ? { rows: [], dispositions: [] }
-        : await readLegislationCandidateRows(tx, {
-            ids,
-            generation,
-            body,
-          });
-    recordCorpusRehydrationDispositions(
-      candidateRead.dispositions,
-      hitDispositions,
-    );
-    const rows = candidateRead.rows;
-    const named =
-      namedWorks ??
-      (await readNamedLegislationWorks(tx, {
-        query: body.query,
-        country: body.jurisdiction,
-      }));
-    const [cursorWork] =
-      cursorId === undefined || !isUuid(cursorId)
-        ? []
-        : await tx
-            .select({
-              sourceId: legislationDocuments.sourceId,
-              eli: legislationDocuments.eli,
-              language: legislationDocuments.language,
+  const read = await observeStage(
+    "candidate_hydration",
+    async () =>
+      await legislationDb(async (tx) => {
+        const candidateRead =
+          ids.length === 0
+            ? { rows: [], dispositions: [] }
+            : await readCandidateRows(tx, {
+                ids,
+                generation,
+                body,
+              });
+        recordCorpusRehydrationDispositions(
+          candidateRead.dispositions,
+          hitDispositions,
+        );
+        const rows = candidateRead.rows;
+        const named =
+          namedWorks ??
+          (await readNamedLegislationWorks(tx, {
+            query: body.query,
+            country: body.jurisdiction,
+          }));
+        const [cursorWork] =
+          cursorId === undefined || !isUuid(cursorId)
+            ? []
+            : await tx
+                .select({
+                  sourceId: legislationDocuments.sourceId,
+                  eli: legislationDocuments.eli,
+                  language: legislationDocuments.language,
+                })
+                .from(legislationDocuments)
+                .where(
+                  eq(
+                    legislationDocuments.id,
+                    toSafeId<"legislationDocument">(cursorId),
+                  ),
+                );
+        const representatives = await readLegislationWorkRepresentatives(
+          tx,
+          [...rows, ...named],
+          requestFilters,
+        );
+        return { rows, named, cursorWork, representatives };
+      }),
+    () => ({ candidateCount: candidates.length }),
+  );
+
+  return await observeStage(
+    "work_collapse_ranking",
+    () => {
+      const byId = new Map<string, LegislationSearchRow>(
+        read.rows.map((row) => [String(row.id), row]),
+      );
+      const authorityById = new Map(
+        read.rows.map((row) => [String(row.id), row.citationAuthority]),
+      );
+      const appliedById = new Map<string, CorpusAppliedProjection>();
+      const manifest = requireCorpusIndexManifest("legislation", generation);
+      for (const { id, appliedRevision } of read.rows) {
+        if (appliedRevision !== null) {
+          appliedById.set(
+            String(id),
+            corpusAppliedProjection(manifest, appliedRevision),
+          );
+        }
+      }
+      const revisionById = new Map(
+        [...appliedById].map(([id, { revision }]) => [id, revision]),
+      );
+      const appliedCandidates =
+        selectAppliedCandidates === undefined
+          ? candidates
+          : selectAppliedCandidates(appliedById);
+      const rankedCandidates =
+        ranking === "authority"
+          ? blendStableCitationAuthority({
+              candidates: appliedCandidates,
+              authorityById,
             })
-            .from(legislationDocuments)
-            .where(
-              eq(
-                legislationDocuments.id,
-                toSafeId<"legislationDocument">(cursorId),
-              ),
-            );
-    const representatives = await readLegislationWorkRepresentatives(
-      tx,
-      [...rows, ...named],
-      requestFilters,
-    );
-    return { rows, named, cursorWork, representatives };
-  });
+          : appliedCandidates.map(({ id, score }) => ({
+              id,
+              score,
+              lexicalScore: score,
+              citationAuthority: 0,
+            }));
+      const ranked = rankedCandidates.flatMap((hit) => {
+        const row = byId.get(hit.id);
+        return row === undefined
+          ? []
+          : [{ ...hit, work: legislationWorkRefKey(row) }];
+      });
+      const representatives = new Map<string, LegislationWorkRepresentative>();
+      for (const { isCurrent, ...row } of read.representatives) {
+        byId.set(String(row.id), row);
+        representatives.set(legislationWorkRefKey(row), {
+          id: String(row.id),
+          isCurrent,
+        });
+      }
 
-  const byId = new Map<string, LegislationSearchRow>(
-    read.rows.map((row) => [String(row.id), row]),
+      const collapsed = collapseLegislationHitsByWork({
+        ranked,
+        representatives,
+        // Named Works that apply today are placed first; a name only repealed or
+        // not-yet-effective acts carry still places those.
+        namedWorks: pinnedLegislationWorks(
+          read.named.map((work) => legislationWorkRefKey(work)),
+          representatives,
+        ),
+        namedScoreFloor: NAMED_WORK_SCORE_FLOOR,
+        excludedWork:
+          read.cursorWork === undefined
+            ? null
+            : legislationWorkRefKey(read.cursorWork),
+        excludedWorkTokens: new Set(excludedWorkTokens),
+      });
+
+      const recurringTokens = new Set([
+        ...read.rows
+          .filter((row) => row.canRecur)
+          .map((row) => corpusSearchGroupToken(legislationWorkRefKey(row))),
+        // Named Works are inserted independently of physical matches on every page.
+        ...read.named.map((work) =>
+          corpusSearchGroupToken(legislationWorkRefKey(work)),
+        ),
+        ...(read.cursorWork === undefined
+          ? []
+          : [corpusSearchGroupToken(legislationWorkRefKey(read.cursorWork))]),
+      ]);
+
+      return {
+        context: { byId },
+        revisionById,
+        ranked: collapsed.ranked,
+        groups: collapsed.workTokens.filter((token) =>
+          recurringTokens.has(token),
+        ),
+      };
+    },
+    (value) =>
+      value === undefined ? {} : { resultCount: value.ranked.length },
   );
-  const authorityById = new Map(
-    read.rows.map((row) => [String(row.id), row.citationAuthority]),
-  );
-  const revisionById = new Map<string, CorpusProjectionRevision>();
-  for (const { id, appliedRevision } of read.rows) {
-    if (appliedRevision !== null) {
-      revisionById.set(String(id), appliedRevision);
-    }
-  }
-  const rankedCandidates =
-    ranking === "authority"
-      ? blendStableCitationAuthority({ candidates, authorityById })
-      : candidates.map(({ id, score }) => ({
-          id,
-          score,
-          lexicalScore: score,
-          citationAuthority: 0,
-        }));
-  const ranked = rankedCandidates.flatMap((hit) => {
-    const row = byId.get(hit.id);
-    return row === undefined
-      ? []
-      : [{ ...hit, work: legislationWorkRefKey(row) }];
-  });
-  const representatives = new Map<string, LegislationWorkRepresentative>();
-  for (const { isCurrent, ...row } of read.representatives) {
-    byId.set(String(row.id), row);
-    representatives.set(legislationWorkRefKey(row), {
-      id: String(row.id),
-      isCurrent,
-    });
-  }
-
-  const collapsed = collapseLegislationHitsByWork({
-    ranked,
-    representatives,
-    // Named Works that apply today are placed first; a name only repealed or
-    // not-yet-effective acts carry still places those.
-    namedWorks: pinnedLegislationWorks(
-      read.named.map((work) => legislationWorkRefKey(work)),
-      representatives,
-    ),
-    namedScoreFloor: NAMED_WORK_SCORE_FLOOR,
-    excludedWork:
-      read.cursorWork === undefined
-        ? null
-        : legislationWorkRefKey(read.cursorWork),
-    excludedWorkTokens: new Set(excludedWorkTokens),
-  });
-
-  const recurringTokens = new Set([
-    ...read.rows
-      .filter((row) => row.canRecur)
-      .map((row) => corpusSearchGroupToken(legislationWorkRefKey(row))),
-    // Named Works are inserted independently of physical matches on every page.
-    ...read.named.map((work) =>
-      corpusSearchGroupToken(legislationWorkRefKey(work)),
-    ),
-    ...(read.cursorWork === undefined
-      ? []
-      : [corpusSearchGroupToken(legislationWorkRefKey(read.cursorWork))]),
-  ]);
-
-  return {
-    context: { byId },
-    revisionById,
-    ranked: collapsed.ranked,
-    groups: collapsed.workTokens.filter((token) => recurringTokens.has(token)),
-  };
 };
 
 /** A named Work placed first on the Postgres path, with its keyset key. */
@@ -1096,6 +1162,112 @@ type CorpusLegislationSearchOptions = {
   observer: RegistryRequestObservation;
   serving: ServingCorpusIndexGeneration;
   hitDispositions: CorpusHitDispositionCounter;
+  observeStage: ObserveLegislationStage;
+  now: () => number;
+  recordIndexScan: (
+    scan: IndexScanTiming,
+    outcome: RequestStageOutcome,
+  ) => void;
+  reads: CorpusLegislationReadDependencies;
+};
+
+type CorpusLegislationSearchResult = {
+  hits: LegislationHit[];
+  nextCursor: string | null;
+  paginationOutcome: SearchPaginationOutcome;
+};
+
+type IndexScanTiming = {
+  durationMs: number;
+  candidateCount: number;
+  rounds: number;
+};
+
+// Index time is everything the page read spends outside the ranking callback,
+// so it pauses while candidates hydrate and rank, and the open interval is
+// closed when the read settles, including a read that fails mid-round.
+const createIndexRecorder = ({
+  now,
+  emit,
+}: {
+  now: () => number;
+  emit: (scan: IndexScanTiming, outcome: RequestStageOutcome) => void;
+}) => {
+  const scan: IndexScanTiming = { durationMs: 0, candidateCount: 0, rounds: 0 };
+  let rejectionAttribution:
+    | { type: "page_read" }
+    | { type: "ranking_callback" } = {
+    type: "page_read",
+  };
+  let openedAt: number | undefined = now();
+  const closeInterval = () => {
+    if (openedAt !== undefined) {
+      scan.durationMs += now() - openedAt;
+      openedAt = undefined;
+    }
+  };
+  return {
+    pause: (candidateCount: number) => {
+      closeInterval();
+      scan.candidateCount += candidateCount;
+      scan.rounds += 1;
+      return () => {
+        openedAt = now();
+      };
+    },
+    recordRankingCallbackRejection: () => {
+      rejectionAttribution = { type: "ranking_callback" };
+    },
+    settle: (outcome: RequestStageOutcome) => {
+      closeInterval();
+      emit(
+        scan,
+        outcome === "failed" && rejectionAttribution.type === "ranking_callback"
+          ? "completed"
+          : outcome,
+      );
+    },
+  };
+};
+
+// The outcome is read from the same promise without re-throwing, so the
+// caller's await still receives the original rejection unchanged.
+const settleIndexRead = async <T>(
+  pending: Promise<T>,
+  recorder: ReturnType<typeof createIndexRecorder>,
+) => {
+  const settlement = pending.then(
+    (value) => {
+      recorder.settle("completed");
+      return value;
+    },
+    (_error: unknown) => {
+      recorder.settle("failed");
+      return undefined;
+    },
+  );
+  await settlement;
+  return await pending;
+};
+
+const attributeRankingCallbackRejection = async <T>(
+  pending: Promise<T>,
+  recorder: ReturnType<typeof createIndexRecorder>,
+) => {
+  await pending.then(
+    () => undefined,
+    (_error: unknown) => {
+      recorder.recordRankingCallbackRejection();
+      return undefined;
+    },
+  );
+  return await pending;
+};
+
+type ReadCorpusPhaseOptions = {
+  active: CorpusSearchPhase;
+  pageLimit: number;
+  cursor: SearchCursor | null;
 };
 
 const corpusIndexSearch = async ({
@@ -1105,11 +1277,11 @@ const corpusIndexSearch = async ({
   observer,
   serving,
   hitDispositions,
-}: CorpusLegislationSearchOptions): Promise<{
-  hits: LegislationHit[];
-  nextCursor: string | null;
-  paginationOutcome: SearchPaginationOutcome;
-}> => {
+  observeStage,
+  now,
+  recordIndexScan,
+  reads,
+}: CorpusLegislationSearchOptions): Promise<CorpusLegislationSearchResult> => {
   const limit = normalizeTenantPageLimit(
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
@@ -1128,18 +1300,17 @@ const corpusIndexSearch = async ({
       ? []
       : await legislationDb(
           async (tx) =>
-            await readNamedLegislationWorks(tx, {
+            await reads.readNamedWorks(tx, {
               query: body.query,
               country: body.jurisdiction,
             }),
         );
 
-  type ReadPhaseOptions = {
-    active: CorpusSearchPhase;
-    pageLimit: number;
-    cursor: SearchCursor | null;
-  };
-  const readPhase = async ({ active, pageLimit, cursor }: ReadPhaseOptions) => {
+  const readPhase = async ({
+    active,
+    pageLimit,
+    cursor,
+  }: ReadCorpusPhaseOptions) => {
     const query = buildCorpusIndexQuery(body, active.type);
     if (query === null) {
       return null;
@@ -1152,7 +1323,8 @@ const corpusIndexSearch = async ({
         excludedWorkTokens.add(token);
       }
     }
-    return await readCorpusIndexSearchPage({
+    const indexTiming = createIndexRecorder({ now, emit: recordIndexScan });
+    const pending = reads.readPage({
       hitDispositions,
       observer,
       cluster,
@@ -1160,8 +1332,7 @@ const corpusIndexSearch = async ({
       query,
       limit: pageLimit,
       order: RELEVANCE_ORDER,
-      // A legislation hit is a whole statute version; the native endpoint
-      // would return its full stored text for each of up to 300 hits a round.
+      // Avoid returning full stored text for up to 300 whole-statute hits a round.
       scanTransport: SCORED_SCAN_TRANSPORT,
       parsedCursor: cursor,
       ...(active.type === "relaxed"
@@ -1174,26 +1345,35 @@ const corpusIndexSearch = async ({
         "legislation",
         generation,
       ).projection.projectionRevisionField,
-      extractId: (hit) => {
-        const id = hit["document_id"];
-        return typeof id === "string" && isUuid(id) ? id : null;
-      },
+      extractId: extractCorpusDocumentId,
       extractSnippet: extractCorpusSnippet,
       unseenScoreUpperBound:
         active.type === "strict" ? stableBlendUpperBound : (score) => score,
-      rankCandidates: async (candidates) =>
-        await rehydrateLegislationCandidates({
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
+        const resumeIndexTiming = indexTiming.pause(candidates.length);
+        const pendingRanking = rehydrateLegislationCandidates({
           hitDispositions,
           body,
           candidates,
+          selectAppliedCandidates,
           generation,
           legislationDb,
           cursorId: cursor?.id,
           namedWorks: active.type === "strict" ? namedWorks : [],
           excludedWorkTokens: [...excludedWorkTokens],
           ranking: active.type === "strict" ? "authority" : "lexical",
-        }),
+          observeStage,
+          readCandidateRows: reads.readCandidateRows,
+        });
+        const ranked = await attributeRankingCallbackRejection(
+          pendingRanking,
+          indexTiming,
+        );
+        resumeIndexTiming();
+        return ranked;
+      },
     });
+    return await settleIndexRead(pending, indexTiming);
   };
 
   type PhasePage = NonNullable<Awaited<ReturnType<typeof readPhase>>>;
@@ -1240,7 +1420,6 @@ const corpusIndexSearch = async ({
     };
   }
   const hits = hitsOf(page, phase);
-  // A continuation means strict results remain. Only an exhausted first page can append coverage hits.
   if (
     phase.type === "relaxed" ||
     parsedCursor !== null ||
@@ -1270,7 +1449,6 @@ const corpusIndexSearch = async ({
     generation,
     strictWorkTokens,
   };
-  // This synthetic boundary admits every relaxed score while carrying the strict Works to exclude.
   const boundary: SearchCursor = {
     score: Number.MAX_VALUE,
     id: "00000000-0000-0000-0000-000000000000",
@@ -1295,6 +1473,27 @@ const corpusIndexSearch = async ({
     paginationOutcome: extra.paginationOutcome,
   };
 };
+
+const runCorpusIndexSearch = async (
+  options: CorpusLegislationSearchOptions,
+  dependencies: SearchLegislationDependencies,
+) => await (dependencies.corpusSearch ?? corpusIndexSearch)(options);
+
+const defaultCorpusLegislationReads: CorpusLegislationReadDependencies = {
+  readPage: readCorpusIndexSearchPage,
+  readCandidateRows: readLegislationCandidateRows,
+  readNamedWorks: readNamedLegislationWorks,
+};
+
+const corpusLegislationReadsOf = (
+  dependencies: SearchLegislationDependencies,
+): CorpusLegislationReadDependencies =>
+  dependencies.corpusReads ?? defaultCorpusLegislationReads;
+
+const projectSearchHits = (
+  hits: LegislationHit[],
+  dependencies: SearchLegislationDependencies,
+) => hits.map(dependencies.projectHit ?? projectLegislationSearchHit);
 
 /**
  * The serving legislation generation, or null under the pg-fts provider. No
@@ -1323,12 +1522,166 @@ const readLegislationServingGeneration = async (
   );
 };
 
+type AggregatedSearchStage = Extract<
+  RequestStage,
+  "index_scan" | "candidate_hydration" | "work_collapse_ranking"
+>;
+
+type AggregatedSearchStageCounts = {
+  rounds: number;
+  candidateCount: number;
+  resultCount: number;
+};
+
+type EmitAggregatedSearchStage = (record: {
+  stage: AggregatedSearchStage;
+  durationMs: number;
+  counts: AggregatedSearchStageCounts;
+  outcome: RequestStageOutcome;
+}) => void;
+
+const createSearchStageAccumulator = (
+  now: () => number,
+  emit: EmitAggregatedSearchStage,
+) => {
+  const stages = new Map<
+    AggregatedSearchStage,
+    AggregatedSearchStageCounts & {
+      durationMs: number;
+      outcome: RequestStageOutcome;
+    }
+  >();
+  const failedStages = new Set<RequestStage>();
+  const valueFor = (stage: AggregatedSearchStage) =>
+    stages.get(stage) ?? {
+      durationMs: 0,
+      rounds: 0,
+      candidateCount: 0,
+      resultCount: 0,
+      outcome: "completed",
+    };
+  const observeStage: ObserveLegislationStage = async (
+    stage,
+    operation,
+    counts,
+  ) => {
+    const startedAt = now();
+    const pending = Promise.resolve().then(operation);
+    await pending.then(
+      (value) => {
+        const count = counts(value);
+        const accumulated = valueFor(stage);
+        accumulated.durationMs += now() - startedAt;
+        accumulated.rounds += 1;
+        accumulated.candidateCount += count.candidateCount ?? 0;
+        accumulated.resultCount += count.resultCount ?? 0;
+        stages.set(stage, accumulated);
+        return undefined;
+      },
+      (_error: unknown) => {
+        failedStages.add(stage);
+        const count = counts(undefined);
+        const accumulated = valueFor(stage);
+        accumulated.durationMs += now() - startedAt;
+        accumulated.rounds += 1;
+        accumulated.candidateCount += count.candidateCount ?? 0;
+        accumulated.resultCount += count.resultCount ?? 0;
+        accumulated.outcome = "failed";
+        stages.set(stage, accumulated);
+        return undefined;
+      },
+    );
+    const value = await pending;
+    return value;
+  };
+  const recordIndexScan = (
+    scan: IndexScanTiming,
+    outcome: RequestStageOutcome,
+  ) => {
+    const stage = "index_scan";
+    const accumulated = valueFor(stage);
+    accumulated.durationMs += scan.durationMs;
+    accumulated.rounds += scan.rounds;
+    accumulated.candidateCount += scan.candidateCount;
+    if (outcome === "failed") {
+      accumulated.outcome = outcome;
+    }
+    stages.set(stage, accumulated);
+  };
+  const settle = () => {
+    for (const stage of [
+      "index_scan",
+      "candidate_hydration",
+      "work_collapse_ranking",
+    ] as const) {
+      const accumulated = stages.get(stage);
+      if (accumulated !== undefined) {
+        emit({
+          stage,
+          durationMs: accumulated.durationMs,
+          counts: accumulated,
+          outcome: accumulated.outcome,
+        });
+      }
+      if (failedStages.has(stage)) {
+        break;
+      }
+    }
+    stages.clear();
+  };
+  return { observeStage, recordIndexScan, settle };
+};
+
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
   legislationDb: LegislationReadDb,
   observer: RegistryRequestObservation,
   dependencies = defaultSearchLegislationDependencies,
 ) => {
+  const now = dependencies.now ?? (() => performance.now());
+  const emitStage = dependencies.emitStage ?? emitRequestStage;
+  const route = "/v1/law/statutes/search";
+  const beginStage = (stage: RequestStage) => ({ stage, startedAt: now() });
+  const finishStage = (
+    timing: { stage: RequestStage; startedAt: number },
+    counts: {
+      rounds?: number;
+      candidateCount?: number;
+      resultCount?: number;
+    } = {},
+    durationMs = now() - timing.startedAt,
+    outcome: RequestStageOutcome = "completed",
+  ) => {
+    emitStage({
+      route,
+      ...(dependencies.stageTool === undefined
+        ? {}
+        : { tool: dependencies.stageTool }),
+      stage: timing.stage,
+      durationMs,
+      ...counts,
+      outcome,
+    });
+  };
+  const stageAccumulator = createSearchStageAccumulator(
+    now,
+    ({ stage, durationMs, counts: accumulated, outcome }) =>
+      finishStage(
+        { stage, startedAt: 0 },
+        {
+          rounds: accumulated.rounds,
+          ...(accumulated.candidateCount === 0
+            ? {}
+            : { candidateCount: accumulated.candidateCount }),
+          ...(accumulated.resultCount === 0
+            ? {}
+            : { resultCount: accumulated.resultCount }),
+        },
+        durationMs,
+        outcome,
+      ),
+  );
+  const { observeStage, recordIndexScan } = stageAccumulator;
   const unavailable =
     body.jurisdiction === undefined
       ? null
@@ -1438,24 +1791,35 @@ export const searchLegislationHandler = async (
       nextCursor,
       paginationOutcome,
     } = serving !== null
-      ? await corpusIndexSearch({
-          body,
-          parsedCursor,
-          legislationDb,
-          observer,
-          serving,
-          hitDispositions,
-        })
+      ? await runCorpusIndexSearch(
+          {
+            body,
+            parsedCursor,
+            legislationDb,
+            observer,
+            serving,
+            hitDispositions,
+            observeStage,
+            now,
+            recordIndexScan,
+            reads: corpusLegislationReadsOf(dependencies),
+          },
+          dependencies,
+        )
       : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
+    stageAccumulator.settle();
+    const serializationTiming = beginStage("response_serialization");
     const response: Static<typeof searchLegislationSuccessResponseSchema> = {
-      items: items.map(projectLegislationSearchHit),
+      items: projectSearchHits(items, dependencies),
       nextCursor,
       paginationOutcome,
       total: SEARCH_TOTAL_NOT_COUNTED,
     };
+    finishStage(serializationTiming, { resultCount: response.items.length });
     return response;
   } finally {
+    stageAccumulator.settle();
     reportCorpusHitDispositions({
       family: "legislation",
       counts: hitDispositions.snapshot(),

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
@@ -9,6 +10,7 @@ import {
 import {
   CASE_LAW_SEARCH_REFINE_SYSTEM,
   caseLawRefineOutputSchema,
+  isIncompleteCaseLawRefineGeneration,
   normalizeCaseLawRefinedQuery,
 } from "@/api/handlers/case-law/decisions/search-refine-query";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -145,6 +147,7 @@ const refineCaseLawSearch = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             task: "search-expand",
@@ -163,10 +166,8 @@ const refineCaseLawSearch = createSafeRootHandler(
             prompt,
             outputSchema: caseLawRefineOutputSchema,
             maxOutputTokens: 120,
-            abortSignal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(CASE_LAW_REFINE_TIMEOUT_MS),
-            ]),
+            abortSignal: request.signal,
+            deadlineMs: CASE_LAW_REFINE_TIMEOUT_MS,
           }),
         catch: (error: unknown) => {
           analytics.captureError(error);
@@ -174,6 +175,12 @@ const refineCaseLawSearch = createSafeRootHandler(
         },
       });
       if (generated.isErr()) {
+        if (
+          attempt < CASE_LAW_REFINE_MAX_ATTEMPTS &&
+          isIncompleteCaseLawRefineGeneration(generated.error)
+        ) {
+          continue;
+        }
         return Result.err(
           aiHandlerError(generated.error, {
             status: 502,
@@ -193,7 +200,11 @@ const refineCaseLawSearch = createSafeRootHandler(
     }
 
     return Result.err(
-      new HandlerError({ status: 502, message: REFINE_FAILED_MESSAGE }),
+      new HandlerError({
+        code: AI_FAILURE_CODES.output_invalid,
+        status: 502,
+        message: REFINE_FAILED_MESSAGE,
+      }),
     );
   },
 );

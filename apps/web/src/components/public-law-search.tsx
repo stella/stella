@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 import type { ChatCorpus, ChatCorpusScope } from "@stll/api-contract";
 import { isPublicCountry } from "@stll/api-contract/public-country-capability";
 import { Button } from "@stll/ui/button";
-import { MessageSquareTextIcon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon, MessageSquareTextIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 
@@ -109,7 +109,7 @@ export const PublicLawSearch = ({
   );
 };
 
-type PublicLawSearchRefine = {
+export type PublicLawSearchRefine = {
   isPending: boolean;
   /** Rewrite the entry; called only once the reader may spend AI on it. */
   onRefine: () => void;
@@ -120,11 +120,16 @@ type PublicLawSearchRefine = {
  * visitor is asked for an account when they press it, because the rewrite
  * reaches an AI endpoint.
  */
-const PublicLawRefine = ({
+export const PublicLawRefine = ({
   disabled,
   isPending,
+  labelled = false,
   onRefine,
-}: PublicLawSearchRefine & { disabled: boolean }) => {
+}: PublicLawSearchRefine & {
+  disabled: boolean;
+  /** Spell the action out beside the wand, where it is not beside a box. */
+  labelled?: boolean;
+}) => {
   const t = useTranslations();
   const ensureAccount = useRequireAccount();
   const user = useMaybeAuthenticatedUser();
@@ -136,7 +141,7 @@ const PublicLawRefine = ({
     >
       {(capabilityProps) => (
         <Button
-          aria-label={t("search.aiRefine")}
+          aria-label={labelled ? undefined : t("search.aiRefine")}
           disabled={disabled || isPending}
           onClick={() => {
             if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
@@ -144,10 +149,10 @@ const PublicLawRefine = ({
             }
             onRefine();
           }}
-          size="icon-sm"
+          size={labelled ? "sm" : "icon-sm"}
           title={t("search.aiRefine")}
           type="button"
-          variant="muted"
+          variant={labelled ? "outline" : "muted"}
           {...capabilityProps}
         >
           {isPending ? (
@@ -155,6 +160,7 @@ const PublicLawRefine = ({
           ) : (
             <AiActionIcon aria-hidden="true" className="size-4" />
           )}
+          {labelled && t("search.aiRefine")}
         </Button>
       )}
     </CapabilityAction>

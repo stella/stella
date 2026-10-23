@@ -80,6 +80,8 @@ export const createGraphController = (bridge: GraphBridge) => {
       arguments: {
         decision_id: decisionId,
         direction: model.direction,
+        ...(model.doctrine === undefined ? {} : { doctrine: model.doctrine }),
+        ...(model.polarity === undefined ? {} : { polarity: model.polarity }),
         ...(page === undefined ? {} : { cursor: page.nextCursor }),
       },
     });

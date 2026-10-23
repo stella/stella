@@ -10,10 +10,10 @@ import type { Transaction } from "@/api/db/root";
 import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   decisionCitationPageQuery,
-  decisionCitationSummaryQuery,
   decisionCitationStatsStateQuery,
-  exactDecisionCitationSummaryQuery,
+  decisionCitationSummaryQuery,
   EXACT_CITATION_SUMMARY_MAX_ROWS,
+  exactDecisionCitationSummaryQuery,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import { caseLawArrivalsSnapshotQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
@@ -392,6 +392,24 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["case-law.citation-page-incoming"],
+  },
+  {
+    id: "case-law.citation-page-incoming-doctrine",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        doctrineAvailable: true,
+        cursorId: undefined,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        direction: "incoming",
+        doctrine: "limits",
+        limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-incoming-doctrine"],
   },
   {
     id: "case-law.citation-page-outgoing",

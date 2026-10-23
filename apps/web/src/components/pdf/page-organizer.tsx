@@ -24,9 +24,9 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
-  CopyIcon,
   CropIcon,
   DownloadIcon,
+  DuplicateIcon,
   GripVerticalIcon,
   PlusIcon,
   Redo2Icon,
@@ -66,7 +66,7 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { filesKeys, fileOptions } from "@/lib/files/queries";
+import { fileOptions, filesKeys } from "@/lib/files/queries";
 import {
   ENTITY_VERSION_UPLOAD_RESULT,
   uploadEntityVersion,
@@ -95,11 +95,11 @@ import {
   createPageOrganizerState,
   getPageMoveDestination,
   isPageOrganizerDirty,
-  reducePageOrganizer,
   type OrganizerPage,
   type PageDropEdge,
   type PageOrganizerState,
   type PageRotation,
+  reducePageOrganizer,
 } from "./page-organizer.logic";
 
 const ORIGINAL_SOURCE_ID = "original";
@@ -1040,7 +1040,7 @@ const LoadedPDFPageOrganizer = ({
             tooltip={tPageEditor("duplicate")}
             variant="ghost"
           >
-            <CopyIcon />
+            <DuplicateIcon />
           </Button>
           <Button
             aria-label={tPageEditor("delete")}

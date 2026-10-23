@@ -19,6 +19,27 @@ const visualLoaders = {
       return { default: McpReconnectPlayground };
     },
   },
+  "task-metadata": {
+    load: async () => {
+      const { TaskMetadataPlayground } =
+        await import("./-components/task-metadata-playground");
+      return { default: TaskMetadataPlayground };
+    },
+  },
+  "column-composer": {
+    load: async () => {
+      const { ColumnComposerPlayground } =
+        await import("./-components/column-composer-playground");
+      return { default: ColumnComposerPlayground };
+    },
+  },
+  "handoff-confirmation": {
+    load: async () => {
+      const { HandoffConfirmationPlayground } =
+        await import("./-components/handoff-confirmation-playground");
+      return { default: HandoffConfirmationPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =
@@ -38,6 +59,13 @@ const visualLoaders = {
       const { OAuthConsentPlayground } =
         await import("./-components/oauth-consent-playground");
       return { default: OAuthConsentPlayground };
+    },
+  },
+  "upload-rejections": {
+    load: async () => {
+      const { UploadRejectionsPlayground } =
+        await import("./-components/upload-rejections-playground");
+      return { default: UploadRejectionsPlayground };
     },
   },
   "page-crop": {
@@ -68,6 +96,20 @@ const visualLoaders = {
       return { default: ChatCitationsPlayground };
     },
   },
+  "chat-statute-citations": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_STATUTE_CITATIONS_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-statute-citations-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_STATUTE_CITATIONS_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-link-icons": {
     load: async () => {
       const { ChatLinkIconsPlayground } =
@@ -80,6 +122,13 @@ const visualLoaders = {
       const { ReaderAnswersPlayground } =
         await import("./-components/reader-answers-playground");
       return { default: ReaderAnswersPlayground };
+    },
+  },
+  "reader-selection": {
+    load: async () => {
+      const { ReaderSelectionPlayground } =
+        await import("./-components/reader-selection-playground");
+      return { default: ReaderSelectionPlayground };
     },
   },
   "chat-history-decision": {

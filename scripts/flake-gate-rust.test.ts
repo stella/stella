@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   chmodSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -429,6 +429,7 @@ test("a real Cargo module excludes failing substring siblings and unrelated bina
       passed: true,
       status: 0,
       ranTests: true,
+      failedTests: [],
     });
   });
 }, 90_000);
@@ -499,6 +500,7 @@ test("successful listing followed by zero exact executions fails rather than bec
       passed: false,
       status: 0,
       ranTests: false,
+      failedTests: [],
     });
   });
 });
@@ -518,6 +520,7 @@ test("listing and exact execution consume one shared deadline", async () => {
       passed: false,
       status: 124,
       ranTests: false,
+      failedTests: [],
     });
     expect(await Bun.file(path.join(root, "listed")).exists()).toBe(true);
     expect(await Bun.file(path.join(root, "executed")).exists()).toBe(true);
@@ -532,6 +535,7 @@ test("a hanging Cargo listing is terminated by the trial deadline", async () => 
       passed: false,
       status: 124,
       ranTests: false,
+      failedTests: [],
     });
   });
 });

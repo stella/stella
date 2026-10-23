@@ -1,20 +1,20 @@
 import {
   renderLazyCatalogEntry,
-  toolDefinition,
   type SchemaInput,
   type ServerTool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
+  type CodeModeTool,
   createCodeMode,
+  type CreateCodeModeResult,
   generateTypeStubs,
   toolsToBindings,
-  type CodeModeTool,
-  type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
-import type { ChatCorpusScope } from "@stll/api-contract";
+import type { ChatSourceScope } from "@stll/api-contract";
 import { listSkillMetadata } from "@stll/skills";
 import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
@@ -330,15 +330,15 @@ type BuildChatCodeModeProps = Omit<
   toolDefectMemo: ChatToolDefectMemo;
   /** Read when a script runs, after the turn's tool set is complete. */
   scriptCallTools: () => ChatScriptCallTools;
-  /** The turn's corpus chips; every script read is held to them. */
-  corpusScopes?: readonly ChatCorpusScope[] | undefined;
+  /** The turn's source chips; every script read is held to them. */
+  sourceScopes?: readonly ChatSourceScope[] | undefined;
 };
 
 export const buildChatCodeMode = (
   props: BuildChatCodeModeProps,
 ): CreateCodeModeResult => {
   const {
-    corpusScopes = [],
+    sourceScopes = [],
     documentedReads,
     refRegistry,
     scriptCallTools,
@@ -364,7 +364,7 @@ export const buildChatCodeMode = (
             refRegistry,
             scopeArgs: async (args) =>
               await scopeCorpusRead({
-                scopes: corpusScopes,
+                scopes: sourceScopes,
                 toolName,
                 args,
                 resolveCountries: corpusResourceCountries,

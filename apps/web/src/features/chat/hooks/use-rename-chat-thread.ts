@@ -35,12 +35,12 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
     activeOrganizationId,
     userId,
   }).queryKey;
-  // Only the typed query key is used here; `enabled: false` marks that this
-  // options object never runs the query itself.
+  // Only the typed query key is used here; with no thread read this options
+  // object never runs the query itself.
   const titleKey = chatThreadTitleOptions({
     activeOrganizationId,
-    enabled: false,
     key: { threadId, workspaceId },
+    persistedThread: undefined,
   }).queryKey;
 
   return useMutation({

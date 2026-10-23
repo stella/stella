@@ -5,8 +5,8 @@ import { InfoIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverPanel,
-  PopoverTrigger,
   PopoverTitle,
+  PopoverTrigger,
 } from "@stll/ui/popover";
 
 import { classifyOAuthDestination } from "@/components/oauth-consent/oauth-destination.logic";

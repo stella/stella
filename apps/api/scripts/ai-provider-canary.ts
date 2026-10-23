@@ -7,15 +7,15 @@ import * as v from "valibot";
 import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  resolveDefaultModel,
   isBYOKModelRoleSupported,
-  MODEL_TASKS,
-  MODEL_TASK_OVERRIDE_GROUP,
-  MODEL_OVERRIDE_GROUPS,
   MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
+  resolveDefaultModel,
   supportsStreamingToolUse,
 } from "@stll/ai-catalog";
-import type { ModelTask, ModelOverrideGroup } from "@stll/ai-catalog";
+import type { ModelOverrideGroup, ModelTask } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { AIErrorKind } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
@@ -42,14 +42,14 @@ import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
-  CANARY_TIERS,
   CANARY_PROVIDERS,
-  modelTaskMaxOutputTokens,
-  structuredOutputBudgetEdgeMaxOutputTokens,
-  structuredOutputModelTaskMaxOutputTokens,
+  CANARY_TIERS,
   IMPOSSIBLE_STRING_MAX_LENGTH,
   isCanaryProvider,
+  modelTaskMaxOutputTokens,
   NULL_WIDENING_CANARY_PROVIDERS,
+  structuredOutputBudgetEdgeMaxOutputTokens,
+  structuredOutputModelTaskMaxOutputTokens,
   TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
@@ -1013,6 +1013,7 @@ const capabilityProbes = [
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
       await generateTanStackObjectForTask({
+        userId: null,
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
@@ -1055,6 +1056,7 @@ const capabilityProbes = [
           `union parameters (${edge.budget.basis} budget, compiler=${edge.compiler})`,
       );
       await generateTanStackObjectForTask({
+        userId: null,
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
@@ -1120,6 +1122,7 @@ const capabilityProbes = [
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
       const output = await generateTanStackTextForTask({
+        userId: null,
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: CANARY_CACHING,
@@ -1194,6 +1197,7 @@ const runModelTaskProbe = async ({
           },
         };
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1207,6 +1211,7 @@ const runModelTaskProbe = async ({
   }
 
   const output = await generateTanStackTextForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1239,6 +1244,7 @@ const runStructuredOutputModelTaskProbe = async ({
     return panic("Unsupported task must not run a structured output canary");
   }
   await generateTanStackObjectForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1269,6 +1275,7 @@ const runWeeklyModelTaskProbe = async ({
   signal,
 }: RunWeeklyModelTaskProbeOptions): Promise<void> => {
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1282,6 +1289,7 @@ const runWeeklyModelTaskProbe = async ({
   }
 
   const output = await generateTanStackTextForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1309,6 +1317,7 @@ const runWeeklyStructuredOutputModelTaskProbe = async ({
   signal,
 }: RunWeeklyModelTaskProbeOptions): Promise<void> => {
   await generateTanStackObjectForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
@@ -1472,6 +1481,7 @@ const runToolProbe = async ({
   tool,
 }: RunToolProbeOptions): Promise<string> => {
   const model = await resolveTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1918,6 +1928,7 @@ const runCatalogModelProbe = async ({
     rotatedModelId: modelId,
   });
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1931,6 +1942,7 @@ const runCatalogModelProbe = async ({
   }
 
   const output = await generateTanStackTextForTask({
+    userId: null,
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,

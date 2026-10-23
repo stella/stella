@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { evaluate, type Context } from "./github-expression";
+import { type Context, evaluate } from "./github-expression";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const configured = v.parse(
@@ -22,6 +22,7 @@ const configured = v.parse(
               if: v.optional(v.string()),
               uses: v.optional(v.string()),
               run: v.optional(v.string()),
+              with: v.optional(v.record(v.string(), v.unknown())),
             }),
           ),
         ),
@@ -44,15 +45,20 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
     expect(typeof result, `Unresolved condition: ${condition}`).toBe("boolean");
     return result === true;
   };
-  let setups = 0;
+  // The planner installs Bun once from the trusted tooling copy before the
+  // checkout and once from the checkout's own package.json; each version
+  // source is set up at most once and every consumer runs after a setup.
+  const setups = new Map<string, number>();
   let consumers = 0;
   if (!enabled(candidate.if)) {
-    return { setups, consumers };
+    return { setups: 0, consumers };
   }
   for (const step of candidate.steps) {
     const runs = enabled(step.if);
     if (runs && step.uses?.startsWith("oven-sh/setup-bun@")) {
-      setups++;
+      const source = String(step.with?.["bun-version-file"]);
+      setups.set(source, (setups.get(source) ?? 0) + 1);
+      expect(setups.get(source), `Bun setup count for ${source}`).toBe(1);
     }
     if (
       runs &&
@@ -61,16 +67,20 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
         step.uses === "./.github/actions/ci-install")
     ) {
       consumers++;
-      expect(setups, `Bun setup count before ${step.name}`).toBe(1);
+      expect(
+        setups.size,
+        `Bun setup count before ${step.name}`,
+      ).toBeGreaterThan(0);
     }
     if (step.id) {
       values[`steps.${step.id}.outcome`] = runs ? "success" : "skipped";
     }
   }
-  expect(setups, "Bun setup count at job completion").toBe(
-    consumers > 0 ? 1 : 0,
-  );
-  return { setups, consumers };
+  expect(
+    consumers > 0 || setups.size === 0,
+    "Bun setup count at job completion",
+  ).toBe(true);
+  return { setups: setups.size, consumers };
 };
 
 // Reusable workflows retain their caller's event: main heavy calls can originate
@@ -194,7 +204,9 @@ test("ci-plan sets up Bun exactly once before every Bun consumer across event, d
 test("Bun setup contract rejects duplicate setup and missing setup fixtures", () => {
   const setup = (step: (typeof plan.steps)[number]) =>
     step.uses?.startsWith("oven-sh/setup-bun@");
-  expect(plan.steps.filter(setup)).toHaveLength(1);
+  expect(
+    plan.steps.filter(setup).map((step) => step.with?.["bun-version-file"]),
+  ).toEqual([".workflow-tooling/package.json", "package.json"]);
   const duplicate = {
     ...plan,
     steps: plan.steps.flatMap((step) => (setup(step) ? [step, step] : [step])),

@@ -14,6 +14,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
+  caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
@@ -38,14 +39,18 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
   corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
+  corpusIndexJurisdictionServing: "corpus_index_jurisdiction_serving",
   corpusIndexProjectionIntents: "corpus_index_projection_intents",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
+  legislationAmendments: "legislation_amendments",
+  legislationAmendmentSnapshots: "legislation_amendment_snapshots",
   legislationFacetCounts: "legislation_facet_counts",
   legislationFacetRefreshes: "legislation_facet_refreshes",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
+  legislationWorkIdentifiers: "legislation_work_identifiers",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
@@ -310,6 +315,14 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tier_label: "required",
     weight: "required",
   },
+  // Publisher-reported slice totals aggregated into the public coverage page.
+  case_law_coverage_slices: {
+    source_id: "required",
+    slice: "required",
+    reported: "required",
+    collected: "required",
+    checked_at: "required",
+  },
   // Accept the future reader grant before a later release grants and reads it.
   case_law_decision_aliases: {
     retired_decision_id: "permitted",
@@ -368,6 +381,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     jurisdiction: "required",
     work_identifier: "required",
     work_number: "required",
+    eu_work_number: "required",
+    eu_work_year: "required",
     work_year: "required",
     work_collection: "required",
     work_eli: "required",
@@ -495,6 +510,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     effective_digest: "required",
     provisioning_status: "required",
   },
+  // Which generation answers a jurisdiction the serving generation no longer
+  // holds: the row the acceptance of every indexed hit follows.
+  corpus_index_jurisdiction_serving: {
+    family: "required",
+    jurisdiction: "required",
+    generation: "required",
+  },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The revision joins its physical passage count; work schedules and failure
   // details stay on the owning service side.
@@ -564,9 +586,38 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     lastmod: "required",
     total: "required",
   },
+  // Expand phase: readers tolerate the grants while reads still fall back
+  // when the relations have not reached a deployment yet.
+  legislation_amendment_snapshots: {
+    source_id: "permitted",
+    target_eli: "permitted",
+    language: "permitted",
+    observed_at: "permitted",
+    coverage: "permitted",
+  },
+  legislation_amendments: {
+    source_id: "permitted",
+    target_eli: "permitted",
+    language: "permitted",
+    publisher_id: "permitted",
+    amending_eli: "permitted",
+    amending_title: "permitted",
+    amending_anchor: "permitted",
+    affected_anchor: "permitted",
+    change_kind: "permitted",
+    effective_type: "permitted",
+    effective_date: "permitted",
+    effective_text: "permitted",
+    publisher_instruction: "permitted",
+  },
   legislation_sources: {
     id: "required",
     descriptor: "required",
+  },
+  legislation_work_identifiers: {
+    source_id: "required",
+    identifier: "required",
+    eli: "required",
   },
   // The name lookup a legislation search places named acts first by: the
   // match keys and what they point at, not the names' text.

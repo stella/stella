@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
-  STATUTE_ALIASES,
   resolveStatuteAlias,
+  STATUTE_ALIASES,
   type StatuteAliasTarget,
 } from "./statute-aliases";
 import {

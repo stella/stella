@@ -28,7 +28,9 @@ import {
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
@@ -44,7 +46,6 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 /** One way of building a decision of a source, named for the baseline key. */
@@ -69,6 +70,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.CZ_NSS]: one(czNssFixture),
   [ADAPTER_KEYS.CZ_US]: one(czUsFixture),
   [ADAPTER_KEYS.CZ_REGIONAL]: one(czRegionalFixture),
+  [ADAPTER_KEYS.CZ_UOHS]: one(czUohsFixture),
   [ADAPTER_KEYS.SK_COURTS]: one(skCourtsFixture),
   [ADAPTER_KEYS.SK_US]: one(skUsFixture),
   [ADAPTER_KEYS.PL_COURTS]: [

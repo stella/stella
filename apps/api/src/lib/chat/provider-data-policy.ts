@@ -2,10 +2,11 @@ import type {
   OpenRouterConfig,
   OpenRouterTextModelOptions,
 } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { BYOK_MODEL_OPTIONS, getModelRate } from "@stll/ai-catalog";
 import type { AIProvider } from "@stll/ai-catalog";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 
@@ -94,7 +95,8 @@ export const PROVIDER_DATA_POLICY = {
   customer: Record<ManagedProvider, ProviderDataPolicy>;
 };
 
-export const MANAGED_PROVIDER_UNAVAILABLE_CODE = "managed-provider-unavailable";
+export const MANAGED_PROVIDER_UNAVAILABLE_CODE =
+  AI_FAILURE_CODES.managed_provider_unavailable;
 
 export const managedProviderUnavailable = (
   provider: string,

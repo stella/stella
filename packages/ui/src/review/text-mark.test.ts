@@ -121,4 +121,37 @@ describe("the search-hit mark", () => {
       );
     }
   });
+
+  test("a line mark's highlight rule draws its line and washes as its classes do", () => {
+    for (const variant of LINE_VARIANTS) {
+      for (const state of ["rest", "matched", "active"] as const) {
+        const classes = textMarkClass({ variant, tone: "success", state });
+        const [light, dark] = textMarkHighlightRule({
+          name: "claim",
+          variant,
+          tone: "success",
+          state,
+        }).split("\n");
+
+        expect(light).toContain("text-decoration-color: var(--success)");
+        expect(light).toContain(
+          `text-decoration-line: ${variant === "strike" ? "line-through" : "underline"}`,
+        );
+        if (variant === "dotted" || variant === "wavy") {
+          expect(light).toContain(`text-decoration-style: ${variant}`);
+        }
+        if (!classes.includes("bg-(--text-mark)/")) {
+          expect(light).toContain("background-color: transparent");
+          expect(dark).toContain("background-color: transparent");
+          continue;
+        }
+        const lightWash = washPercent(classes, "");
+        const darkWash = classes.includes("dark:bg-(--text-mark)/")
+          ? washPercent(classes, "dark:")
+          : lightWash;
+        expect(light).toContain(`var(--success) ${lightWash}%`);
+        expect(dark).toContain(`var(--success) ${darkWash}%`);
+      }
+    }
+  });
 });

@@ -6,7 +6,8 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
+import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import {
   buildValidationHtml,
   validateAndLog,

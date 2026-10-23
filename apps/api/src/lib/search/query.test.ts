@@ -71,6 +71,22 @@ describe("search query text", () => {
     expect(toPrefixTsQueryText("černý")).toBe("cerny:*");
   });
 
+  test("accented and unaccented Czech and Slovak queries reach identical lexemes", () => {
+    const pairs = [
+      ["řízení o náhradě škody", "rizeni o nahrade skody"],
+      [
+        "zrušenie bezpodielového spoluvlastníctva",
+        "zrusenie bezpodieloveho spoluvlastnictva",
+      ],
+    ] as const;
+
+    for (const [accented, unaccented] of pairs) {
+      expect(toPrefixTsQueryText(accented)).toBe(
+        toPrefixTsQueryText(unaccented),
+      );
+    }
+  });
+
   test("folds stroke letters the way the indexed lexemes were folded", () => {
     // `to_tsvector('public.stella_unaccent', 'łaska laska')` stores the single
     // lexeme 'laska'. Asking for `łaska:*` matches nothing the index holds, so
@@ -162,6 +178,12 @@ describe("search query text", () => {
   test("normalizes diacritics inside advanced query terms", () => {
     expect(toAdvancedTsQueryText("černý AND žaloba")).toBe(
       "(cerny:*) & (zaloba:*)",
+    );
+  });
+
+  test("quoted Czech and Slovak phrases preserve adjacency after accent folding", () => {
+    expect(toAdvancedTsQueryText('"řízení o náhradě" OR "náhrada škody"')).toBe(
+      toAdvancedTsQueryText('"rizeni o nahrade" OR "nahrada skody"'),
     );
   });
 

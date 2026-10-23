@@ -9,10 +9,10 @@ import {
   DOCUMENT_FETCH_EVENT,
   DOCUMENT_FETCH_OUTCOME,
   documentFetchErrorOutcome,
-  documentFetchResponseOutcome,
   type DocumentFetchObservation,
-  type DocumentStageObserver,
+  documentFetchResponseOutcome,
   type DocumentStageObservation,
+  type DocumentStageObserver,
   type DocumentTelemetryObserverFailure,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {

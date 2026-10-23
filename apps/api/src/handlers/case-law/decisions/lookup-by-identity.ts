@@ -29,9 +29,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
+  type DecisionDocketSelector,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
-  type DecisionDocketSelector,
 } from "@stll/api-contract/decision-docket-reference";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
 import {
@@ -42,8 +42,8 @@ import {
 
 import {
   caseLawDecisionIdentifiers,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import {
   bareCitationKey,
@@ -61,7 +61,9 @@ import {
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -189,6 +191,7 @@ export type DecisionIdentityRow = {
 type LookupDecisionsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
+  countries?: readonly string[];
   locator: DecisionIdentityLocator;
 };
 
@@ -476,6 +479,7 @@ export const readDecisionIdentityHits = async (
 export const lookupDecisionsByIdentity = async ({
   caseLawDb,
   country,
+  countries = CASE_LAW_SURFACE_COUNTRIES.pages,
   locator,
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
@@ -532,12 +536,27 @@ export const lookupDecisionsByIdentity = async ({
     const alternates = await readPublicDecisionLanguageAlternatesInTx(
       tx,
       decisions.map((decision) => decision.languageGroupKey),
+      countries,
     );
 
     const registry = await readCourtRegistry(
       async () => await loadPublicCourtWeightsWithin(tx),
     );
-    return decisions.map(
+    const groupById = new Map(
+      decisions.map(({ id, languageGroupKey }) => [
+        String(id),
+        languageGroupKey,
+      ]),
+    );
+    // Translations share one decision identity; distinct language groups still
+    // require the caller to choose between decisions.
+    const { representatives } = collapseByLanguageGroup(decisions, (id) => {
+      const group = groupById.get(id);
+      return group === undefined
+        ? panic("Lost an identity's language group")
+        : group;
+    });
+    return representatives.map(
       ({ languageGroupKey, courtId, ...decision }): DecisionIdentityRow =>
         Object.assign(decision, {
           courtAbbreviation: courtPresentation(registry, {

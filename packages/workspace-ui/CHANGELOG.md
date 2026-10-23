@@ -1,5 +1,27 @@
 # @stll/workspace-ui
 
+## 0.12.6
+
+### Patch Changes
+
+- Updated dependencies [[`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8), [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b)]:
+  - @stll/ui@0.49.0
+
+## 0.12.5
+
+### Patch Changes
+
+- Updated dependencies [[`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622)]:
+  - @stll/ui@0.48.0
+
+## 0.12.4
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+- Updated dependencies [[`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d)]:
+  - @stll/ui@0.47.1
+
 ## 0.12.3
 
 ### Patch Changes
@@ -258,8 +280,8 @@
 
 ### Minor Changes
 
-- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency. `toMinorUnits({
-  amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
+- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency.
+  `toMinorUnits({ amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
   currency's own exponent (100 for USD, 1 for JPY, 1000 for KWD), and
   `formatMoneyCents` takes an optional `fractionDigits` for a rounded summary.
 
@@ -269,8 +291,8 @@
   an amount it cannot store; `tryToMinorUnits` returns null instead, for callers
   holding text nobody has vouched for yet.
 
-  BREAKING: `cents()` now rejects an integer outside the safe range, where `x + 1
-  === x` and a running total silently stops moving. `@stll/workspace-ui` no
+  BREAKING: `cents()` now rejects an integer outside the safe range, where
+  `x + 1 === x` and a running total silently stops moving. `@stll/workspace-ui` no
   longer re-exports `currencyMinorUnitDigits`, `formatMoneyCents`, or
   `FormatMoneyCentsParams`; import them from `@stll/money`.
 

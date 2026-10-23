@@ -9,13 +9,12 @@
       "noOtherSessions": "لا توجد جلسات نشطة أخرى",
       "revokeOtherSessions": "تسجيل الخروج من الأجهزة الأخرى",
       "revokeOtherSessionsConfirm": "سيؤدي هذا إلى إنهاء جميع الجلسات باستثناء جلستك الحالية.",
+      "signedInFrom": "تم تسجيل الدخول عبر {clientName}",
       "unknownDevice": "جهاز غير معروف"
     }
   },
   "admin": {
     "ai": "الذكاء الاصطناعي",
-    "backToApp": "العودة إلى التطبيق",
-    "billingAndUsage": "الفوترة والاستخدام",
     "billingProfiles": "ملفات الفوترة",
     "deleteDescription": "حذف هذه المؤسسة وبياناتها نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
     "deleteOrganization": "حذف المؤسسة",
@@ -27,12 +26,9 @@
     "leaveOrganization": "مغادرة المؤسسة",
     "leaveRefusedOnlyOwner": "أنت المالك الوحيد. اجعل عضوًا آخر مالكًا قبل المغادرة.",
     "modelsAndProviders": "النماذج ومقدمو الخدمات",
-    "noPlan": "لا توجد خطة نشطة",
     "organizationDeleted": "تم حذف المؤسسة.",
     "organizationId": "معرّف المؤسسة",
     "organizationLeft": "لقد غادرت المؤسسة.",
-    "overviewDescription": "إدارة مؤسستك والأشخاص والأدوات.",
-    "people": "الأشخاص",
     "planAndUsage": "الخطة والاستخدام",
     "title": "إدارة المؤسسة",
     "toolsDescription": "تفعيل الأدوات المدمجة أو تعطيلها لجميع الأشخاص في هذه المؤسسة."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "سيطلب مساعدك هذا العنوان",
-    "copiedToast": "تم نسخ التعليمات. الصقها في دردشة مع مساعدك.",
     "copy": "انسخ له التعليمات",
     "description": "اسأل Claude أو ChatGPT عن ملفاتك القانونية ومستنداتك. اختر مساعدك لفتح دليل قصير؛ يستغرق الأمر نحو دقيقة.",
     "instructions": "اربطني بـ stella، مساحة عملي القانونية. اتّبع تعليمات وكلاء الذكاء الاصطناعي في {guideUrl} واستخدم عنوان الخادم هذا: {mcpUrl}",
     "openGuide": "افتح دليل {assistant}",
+    "pasteHint": "الصقها في دردشة مع مساعدك.",
     "selfSetupHint": "هل تستخدم Claude Code أو Codex؟",
     "title": "استخدم stella في مساعد الذكاء الاصطناعي"
   },
@@ -142,6 +138,8 @@
       "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
       "title": "تعذّر تسجيل دخولك"
     },
+    "handoffAccount": "هل تريد المتابعة باسم <account>{email}</account> في <organization>{organizationName}</organization>؟",
+    "handoffTitle": "المتابعة إلى stella",
     "headline": "وضوح لكل قضية.",
     "invitation": {
       "declined": "تم رفض الدعوة",
@@ -162,6 +160,7 @@
     },
     "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
+    "reauthenticationRequired": "سجّل الدخول مرة أخرى للمتابعة بهذا الإجراء.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",
@@ -380,6 +379,12 @@
       "attentionComplete": "<strong>تم التعامل مع كل ادعاء يحتاج إلى قرار.</strong> {count, plural, zero {لا توجد نتائج روتينية تتطلب مراجعة فردية.} one {النتيجة الروتينية الواحدة لا تتطلب مراجعة فردية.} two {النتيجتان الروتينيتان لا تتطلبان مراجعة فردية.} few {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} many {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} other {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.}}",
       "attentionOpen": "<strong>{count, plural, zero {لا توجد ادعاءات تحتاج إلى} one {ادعاء واحد يحتاج إلى} two {ادعاءان يحتاجان إلى} few {# ادعاءات تحتاج إلى} many {# ادعاءً يحتاج إلى} other {# ادعاء يحتاج إلى}} قرارك</strong>؛ تعارضات وتفسيرات محل نزاع. {routineCount, plural, zero {لا توجد ادعاءات روتينية أخرى تحتاج إلى اعتماد فردي.} one {الادعاء الآخر روتيني ولا يحتاج إلى اعتماد فردي.} two {الادعاءان الآخران روتينيان ولا يحتاجان إلى اعتماد فردي.} few {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} many {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} other {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.}}",
       "claimAnnouncement": " ({state}{contested, select, true {، محل نزاع} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} other {}})",
+      "documentView": {
+        "label": "عرض المستند",
+        "original": "الأصل",
+        "reading": "عرض القراءة"
+      },
+      "notLocated": "{count, plural, zero {لم يُعثر على # ادعاء في الأصل} one {لم يُعثر على ادعاء واحد في الأصل} two {لم يُعثر على ادعاءين في الأصل} few {لم يُعثر على # ادعاءات في الأصل} many {لم يُعثر على # ادعاءً في الأصل} other {لم يُعثر على # ادعاء في الأصل}}",
       "selectClaim": "اختر ادعاءً لفحص السجل الذي يستند إليه.",
       "showQueue": "عرض قائمة الانتظار",
       "stats": {
@@ -849,7 +854,6 @@
         "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
-      "holdingAnchor": "الانتقال إلى الفقرة",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
@@ -926,13 +930,10 @@
     },
     "coverage": {
       "completeness": "الاكتمال",
-      "countedOn": "أُحصي بتاريخ {date}",
       "courtsHeading": "حسب المحكمة",
       "courtsUnavailable": "التقسيم حسب المحكمة غير متاح حاليًا.",
       "decisionYears": "سنوات الأحكام",
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
-      "exceedsReportedTotal": "يحتوي على أكثر من آخر إجمالي أعلنته الجهة الناشرة في {date}",
-      "gapStatusUnknown": "حالة الفجوات غير معروفة",
       "generatedAt": "أرقام بتاريخ {date}",
       "globeLabel": "الدول التي يحتوي المخزن على سوابقها القضائية، على كرة أرضية",
       "healthCurrent": "محدّثة",
@@ -953,7 +954,8 @@
       "searchable": "قابلة للبحث",
       "title": "تغطية الاجتهاد القضائي",
       "totalFrom": "الإجمالي بتاريخ {date}",
-      "unavailable": "أرقام التغطية غير متاحة حاليًا."
+      "unavailable": "أرقام التغطية غير متاحة حاليًا.",
+      "unreadListingPeriods": "فترات القائمة غير المقروءة"
     },
     "decisionNotFound": "لم يُعثر على القرار",
     "decisionTypes": {
@@ -1009,6 +1011,9 @@
       "saved": "{count, plural, zero {لم يُحفظ أي حكم} one {تم حفظ حكم واحد} two {تم حفظ حكمين} few {تم حفظ # أحكام} many {تم حفظ # حكمًا} other {تم حفظ # حكم}} في {matter}"
     },
     "newestDecisions": "أحدث الأحكام",
+    "noResults": {
+      "hint": "جرّب كلمات أخرى، أو حسّن الاستعلام بالذكاء الاصطناعي، أو اطرح السؤال في الدردشة."
+    },
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
       "human": "بشرية"
@@ -1082,6 +1087,10 @@
         "short": "قصير"
       }
     },
+    "rewritten": {
+      "line": "لا توجد نتائج مطابقة تمامًا لـ <bdi>{original}</bdi>؛ تُعرض نتائج <bdi>{query}</bdi>",
+      "searchOriginal": "البحث بكلماتي الأصلية"
+    },
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
@@ -1098,6 +1107,8 @@
         "hint": "أزل أحد عوامل التصفية أو وسّعه ثم ابحث مرة أخرى.",
         "message": "لا شيء يطابق عوامل التصفية المحددة."
       },
+      "partialMatch": "تطابق جزئي",
+      "partialMatches": "نتائج تطابق جزئي للبحث: <bdi>{query}</bdi>",
       "resultsFor": "نتائج البحث عن: <bdi>{query}</bdi>",
       "searchEveryWord": "البحث عن كل الكلمات"
     },
@@ -1135,6 +1146,7 @@
       "judges": "القضاة",
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
+      "paragraphReference": "الفقرة {number}",
       "popularName": "الاسم الشائع",
       "portraitCredit": "مصدر الصور: {source}",
       "provisionMentions": "{count, number}×",
@@ -1381,6 +1393,7 @@
     "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
     "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
+    "diagramUnavailable": "تعذّر عرض هذا المخطط. تظهر شيفرته المصدرية أدناه.",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",
       "autoDirectDescription": "تُطبَّق تعديلات الذكاء الاصطناعي فورًا بإعادة كتابة المستند مباشرةً (من دون تعقّب التغييرات).",
@@ -1607,6 +1620,9 @@
         "private": "مهاراتك",
         "team": "مهارات الفريق"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
     },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
@@ -2668,10 +2684,12 @@
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
       "caseLawCountryUnavailable": "الأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "caseLawIdentityOnly": "لا يتوفر لهذا البلد سوى البحث عن الأحكام القضائية بمعرّفها الدقيق وقراءتها.",
       "caseLawSearchUnavailable": "البحث في الأحكام القضائية لهذا البلد غير متاح. لا يزال بإمكانك قراءة أحكامه القضائية العامة.",
       "conflict": "يتعارض الطلب مع الحالة الحالية.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "legislationCountryUnavailable": "التشريعات لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "legislationIdentityOnly": "لا يتوفر لهذا البلد سوى البحث عن التشريعات بمعرّفها الدقيق وقراءتها.",
       "legislationSearchUnavailable": "البحث في التشريعات لهذا البلد غير متاح. لا يزال بإمكانك قراءة تشريعاته العامة.",
       "notFound": "تعذر العثور على ما طلبته.",
       "payloadTooLarge": "الطلب كبير جدًا.",
@@ -2694,6 +2712,11 @@
       "aiConfigModelInvalid": "إعداد نموذج الذكاء الاصطناعي غير صالح. تحقق من النماذج المحددة.",
       "aiConfigProviderInvalid": "إعداد مزود الذكاء الاصطناعي غير صالح. تحقق من إعدادات المزود.",
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",
+      "aiDeadlineExceeded": "لم يُجب الذكاء الاصطناعي في الوقت المحدّد. يُرجى المحاولة مرة أخرى بعد لحظات.",
+      "aiOutputInvalid": "كانت إجابة الذكاء الاصطناعي بتنسيق غير متوقع. حاول مرة أخرى.",
+      "aiOutputModerated": "قام مزود الذكاء الاصطناعي بحجب المخرجات. أعد صياغة الطلب أو اختر نموذجًا آخر.",
+      "aiProviderTaskUnsupported": "لا يستطيع مزود الذكاء الاصطناعي المُعدّ تنفيذ هذه المهمة. اختر مزودًا يمكنه ذلك.",
+      "aiUnknown": "فشل طلب الذكاء الاصطناعي. حاول مرة أخرى.",
       "clauseDirectivesInvalid": "يحتوي بند مرتبط على توجيهات غير صالحة. صحّح البند قبل تعبئة القالب.",
       "clauseDirectivesInvalidDetails": "يحتوي البند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. افتح محرر البنود، وصحح الفقرات المحددة، ثم املأ القالب مرة أخرى.",
       "clauseDirectivesOverrideInvalidDetails": "يحتوي النص البديل للبند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. صحّح النص البديل لهذا التعبئة قبل المحاولة مرة أخرى.",
@@ -4179,7 +4202,9 @@
     "prompt": "عمّ تبحث؟",
     "recent": "الأخيرة",
     "recentCasesFilter": "الأحكام",
+    "recentLoadFailed": "تعذّر تحميل النشاط الحديث.",
     "recentSearchFilter": "عمليات البحث",
+    "recentUpdateFailed": "تعذّر تحديث النشاط الحديث.",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",
@@ -4240,6 +4265,10 @@
     "archivedEmpty": "لا توجد ذاكرة مؤرشفة.",
     "archivedToast": "تمت أرشفة الذاكرة",
     "createdToast": "تم الحفظ في الذاكرة",
+    "deleteConfirmation": "اكتب {confirmation} للتأكيد",
+    "deleteDescription": "سيؤدي هذا إلى حذف هذه الذاكرة نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteTitle": "حذف الذاكرة؟",
+    "deletedToast": "تم حذف الذاكرة",
     "empty": "لا توجد ذاكرة بعد.",
     "kinds": {
       "decision": "قرار",
@@ -4919,7 +4948,7 @@
       "description": "استخدم stella من مساعد الذكاء الاصطناعي واطّلع على ما يمكنه الوصول إلى حسابك.",
       "developerDescription": "عناوين الخادم وأداة سطر الأوامر للإعدادات التقنية.",
       "developerTitle": "وصول المطوّرين",
-      "disconnectConfirmDescription": "سيؤدي هذا إلى إلغاء وصول {clientName} إلى حسابك، بالإضافة إلى أي رموز أصدرها. يمكنك إعادة الاتصال في أي وقت.",
+      "disconnectConfirmDescription": "سيؤدي هذا إلى إلغاء وصول {clientName} إلى حسابك، بالإضافة إلى أي رموز أصدرها. يمكنك إعادة الاتصال في أي وقت. سيتم أيضًا تسجيل الخروج من جلسات المتصفح التي أُنشئت عبر هذا الاتصال.",
       "disconnectConfirmTitle": "هل تريد قطع الاتصال بـ {clientName}؟",
       "disconnectSuccess": "تم قطع الاتصال بـ {clientName}",
       "integrationsDescription": "خدمات خارجية يمكن للذكاء الاصطناعي استخدامها نيابةً عنك، مثل مستودع مستنداتك.",
@@ -5168,6 +5197,8 @@
     "outline": "المحتويات",
     "outlineJumpLabel": "الانتقال إلى حكم",
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
+    "pendingChanges": "التعديلات المرتقبة",
+    "pendingChangesIncomplete": "قد لا تتضمن بيانات الجهة الناشرة جميع التعديلات المرتقبة.",
     "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
     "provisionAskPlaceholder": "اسأل عن هذه المادة",
     "provisionAskQuestionPrompt": "بخصوص {subject}: {question}",
@@ -5970,6 +6001,7 @@
       "downloadFailed": "فشل التنزيل",
       "downloadPdf": "تنزيل بصيغة PDF",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
+      "emptyFile": "الملف فارغ.",
       "includeReferenceNumber": "تضمين الرقم المرجعي",
       "itemLimitReached": "بلغ هذا الملف القانوني حد العناصر.",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",

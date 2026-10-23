@@ -1,7 +1,7 @@
 import {
   Client,
-  StreamableHTTPClientTransport,
   type FetchLike,
+  StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import {
   CLIENT_CAPABILITIES_META_KEY,
@@ -10,9 +10,9 @@ import {
 } from "@modelcontextprotocol/server";
 import type {
   CallToolResult,
-  Tool as McpTool,
   ReadResourceResult,
   Resource,
+  Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
@@ -47,6 +47,7 @@ import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MAX_REQUEST_BODY_BYTES,
   MCP_STATELESS_ALLOW_HEADER,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
@@ -1232,7 +1233,12 @@ describe("handleMcpHttpRequest", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(captured).toEqual([
+    expect(
+      captured.map(({ distinctId, ...capture }) => ({
+        ...capture,
+        distinctId: distinctId.toString(),
+      })),
+    ).toEqual([
       {
         distinctId: "user_1",
         event: "mcp_session_initialized",
@@ -1411,7 +1417,9 @@ describe("handleMcpHttpRequest", () => {
     expect(response.headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
-    expect(response.headers.get("x-stella-cli-latest")).toBeNull();
+    expect(response.headers.get("x-stella-cli-latest")).toBe(
+      STELLA_CLI_LATEST_VERSION,
+    );
     expect(response.headers.get("x-stella-scope-omitted-tools")).toBe(
       "save_filled_template",
     );

@@ -1,5 +1,26 @@
 # @stll/agent-input
 
+## 0.1.8
+
+### Patch Changes
+
+- [#6011](https://github.com/stella/stella/pull/6011) [`6f9f7d4`](https://github.com/stella/stella/commit/6f9f7d46bd87eda5bf37efc402e7611f21044633) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the fuzzy-search dependency to 1.4.0.
+
+## 0.1.7
+
+### Patch Changes
+
+- [#6093](https://github.com/stella/stella/pull/6093) [`0e4c5d2`](https://github.com/stella/stella/commit/0e4c5d2457e5f027e1e986d8c5c96c7ae474c9f5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Closed enum near-miss suggestions count Unicode scalar values, including astral characters.
+
+- [#6284](https://github.com/stella/stella/pull/6284) [`438816f`](https://github.com/stella/stella/commit/438816fdbd3c3e0b1ac8d8211a45feb2ad6109b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Depends on the published @stll/time release.
+
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [[`df74ff6`](https://github.com/stella/stella/commit/df74ff6f4cd3947f948a5d2b227ecb852ae4f24a), [`3e92069`](https://github.com/stella/stella/commit/3e92069e5fb6a491f432adc849aef76e993805e7)]:
+  - @stll/text-normalize@0.3.0
+
 ## 0.1.5
 
 ### Patch Changes
