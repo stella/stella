@@ -124,8 +124,17 @@ const WALK_SCAN =
 
 type FilterAccess =
   | {
-      /** The index range itself narrows to the filter. */
-      type: "index-range";
+      /** The walk's own index range narrows to the filter, read in order. */
+      type: "walk-range";
+      query: BrowseQuery;
+      indexCond: RegExp;
+    }
+  | {
+      /**
+       * An index condition narrows to the filter: the walk itself, or, for a
+       * selective value, a bitmap of only the matching rows sorted for the page.
+       */
+      type: "index-probe";
       query: BrowseQuery;
       indexCond: RegExp;
     }
@@ -143,23 +152,23 @@ type FilterAccess =
  */
 const FILTER_ACCESS = {
   country: {
-    type: "index-range",
+    type: "walk-range",
     query: { country: "CZE" },
     indexCond: /\(country\)::text = 'CZE'::text/u,
   },
   court: {
-    type: "index-range",
+    type: "index-probe",
     query: { country: "CZE", court: SMALL_COURT },
     indexCond: /\(court\)::text = 'Krajský soud v Brně'::text/u,
   },
   dateFrom: {
-    type: "index-range",
+    type: "walk-range",
     query: { country: "CZE", dateFrom: "2020-03-01" },
     indexCond:
       /COALESCE\(decision_date, '-infinity'::date\) >= '2020-03-01'::date/u,
   },
   dateTo: {
-    type: "index-range",
+    type: "walk-range",
     query: { country: "CZE", dateTo: "2020-01-20" },
     indexCond:
       /COALESCE\(decision_date, '-infinity'::date\) <= '2020-01-20'::date/u,
@@ -170,9 +179,9 @@ const FILTER_ACCESS = {
     reason: "a canonical kind folded from the stated type; no index holds it",
   },
   language: {
-    type: "walk-filter",
+    type: "index-probe",
     query: { country: "CZE", language: "en" },
-    reason: "no browse index is led by language",
+    indexCond: /\(language\)::text = 'en'::text/u,
   },
   sourceId: {
     type: "walk-filter",
@@ -202,20 +211,40 @@ const explainWalk = async (query: BrowseQuery) =>
     return [natural, forced];
   });
 
+/** A walk index read in order, with nothing above it re-sorting its rows. */
+const orderedWalk = (plan: string) => {
+  const walk = WALK_SCAN.exec(plan);
+  expect(walk, plan).not.toBeNull();
+  // The page limit stops the walk only when nothing above it re-sorts or
+  // re-reads the rows it returns.
+  expect(plan.slice(0, walk?.index)).not.toMatch(
+    /\b(Sort|Bitmap Heap Scan)\b/u,
+  );
+  return walk;
+};
+
 test.each(Object.entries(FILTER_ACCESS))(
-  "the browse walk serves its %s filter from a range of a walk index",
+  "the browse walk reads its %s filter through the access path it declares",
   async (_filter, access) => {
     for (const plan of await explainWalk(access.query)) {
-      const walk = WALK_SCAN.exec(plan);
-      expect(walk, plan).not.toBeNull();
-      // Nothing above the walk re-sorts or re-reads the rows it returns, so
-      // the page limit stops the walk.
-      expect(plan.slice(0, walk?.index)).not.toMatch(
-        /\b(Sort|Bitmap Heap Scan)\b/u,
-      );
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
-      if (access.type === "index-range") {
-        expect(walk?.[2]).toMatch(access.indexCond);
+      switch (access.type) {
+        case "walk-range":
+          expect(orderedWalk(plan)?.[2]).toMatch(access.indexCond);
+          break;
+        case "index-probe":
+          expect(
+            [...plan.matchAll(/Index Cond: ([^\n]+)/gu)].some(([, cond]) =>
+              access.indexCond.test(cond ?? ""),
+            ),
+            plan,
+          ).toBe(true);
+          break;
+        case "walk-filter":
+          orderedWalk(plan);
+          break;
+        default:
+          access satisfies never;
       }
     }
   },
