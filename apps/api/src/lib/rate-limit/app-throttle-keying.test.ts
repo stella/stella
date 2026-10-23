@@ -7,6 +7,7 @@ import {
 } from "@/api/handlers/mcp/transport-rate-limit";
 import { consumeSkillSourceRateLimit } from "@/api/handlers/skills/source-rate-limit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AUTH_TOKEN_ADDRESS_BUDGET } from "@/api/lib/rate-limit/auth-request-budget";
 import {
   API_RATE_LIMITS,
   MCP_RATE_LIMITS,
@@ -52,6 +53,15 @@ const createCounterContext = () => {
 };
 
 describe("application throttle keying", () => {
+  test("OAuth token admission shares only an equal address bucket", () => {
+    expect(AUTH_TOKEN_ADDRESS_BUDGET.key("192.0.2.10")).toBe(
+      AUTH_TOKEN_ADDRESS_BUDGET.key("192.0.2.10"),
+    );
+    expect(AUTH_TOKEN_ADDRESS_BUDGET.key("192.0.2.10")).not.toBe(
+      AUTH_TOKEN_ADDRESS_BUDGET.key("192.0.2.11"),
+    );
+  });
+
   test("MCP authentication failures share an address bucket and reject after the configured limit", async () => {
     const context = new InMemoryRateLimitContext();
     const limiter = createMcpAuthenticationFailureLimiter(
