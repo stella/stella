@@ -4734,6 +4734,7 @@
   },
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
+    "caseLawEmptyState": "ابدأ الكتابة للبحث في الأحكام القضائية.",
     "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "continueInChat": "المتابعة في الدردشة",
@@ -4791,6 +4792,7 @@
     "savedSearchesEmpty": "احفظ بحثاً لإعادة استخدامه.",
     "scopeFilter": "نطاق البحث",
     "scopePlaceholderAll": "البحث في جميع <scope>المصادر</scope>…",
+    "scopePlaceholderCaseLaw": "البحث في <scope>الاجتهاد القضائي</scope>…",
     "scopePlaceholderMatters": "البحث في جميع <scope>الملفات القانونية</scope>…",
     "scopePlaceholderRegistries": "البحث في <scope>السجلات</scope>…",
     "scopeRegistries": "السجلات",

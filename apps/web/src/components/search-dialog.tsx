@@ -95,8 +95,10 @@ import {
   getEntityLocation,
   getRecentFileLocation,
   getRecentFileRoute,
+  isSearchTypeInScope,
   resolveEagerSearchTypes,
   resolveEntityDocumentRoute,
+  resolveSearchScope,
   toAskAIMessageHtml,
 } from "@/components/search-dialog.logic";
 import type { EntityLocation } from "@/components/search-dialog.logic";
@@ -338,6 +340,8 @@ const getSearchScopeVisibility = ({
     expanded: registryExpanded,
   });
   const registryVisible = scope === "registries" && open && mode === "browse";
+  // Recents and actions belong to matters; external scopes skip them.
+  const matterScope = scope === "all" || scope === "matters";
   return {
     activeSearch:
       hasSearchCriteria &&
@@ -349,10 +353,11 @@ const getSearchScopeVisibility = ({
     companyQuery: registryVisible || registryGroupActive ? companyQuery : null,
     registryVisible,
     companySearchVisible: registryVisible || registryGroupActive,
-    recents: !hasVisibleSearch && scope !== "registries",
+    recents: !hasVisibleSearch && matterScope,
+    caseLawPrompt: !hasVisibleSearch && scope === "case-law",
     showPrompt: query.length === 0 && mode === "browse",
     placeholder: mode === "pick" ? undefined : "",
-    actions: mode === "browse" && scope !== "registries",
+    actions: mode === "browse" && matterScope,
     lazyGroups: isLazySearchGroupActive({
       open,
       mode,
@@ -616,7 +621,11 @@ export const SearchDialog = ({
     };
   }, [open]);
   const [query, setQuery] = useState("");
-  const [searchScope, setSearchScope] = useState<SearchScope>("all");
+  const [selectedSearchScope, setSearchScope] = useState<SearchScope>("all");
+  const searchScope = resolveSearchScope(
+    selectedSearchScope,
+    publicLawPreviewEnabled,
+  );
   const [scopeFilterOpen, setScopeFilterOpen] = useState(false);
   const [registryExpanded, setRegistryExpanded] = useState(false);
   const [caseLawExpanded, setCaseLawExpanded] = useState(false);
@@ -688,8 +697,7 @@ export const SearchDialog = ({
   const availableSearchTypes = GLOBAL_SEARCH_RESULT_TYPES.filter(
     (type) =>
       isAvailableSearchKind(type, publicLawPreviewEnabled) &&
-      (searchScope !== "matters" ||
-        (type !== "case-law" && type !== "contact")),
+      isSearchTypeInScope(type, searchScope),
   );
   const selectedSearchTypes = filters.types.filter(isSearchKindOption);
   const hasUnavailableSelectedType = hasUnavailableSearchType({
@@ -1865,6 +1873,7 @@ export const SearchDialog = ({
                   open={scopeFilterOpen}
                   onOpenChange={setScopeFilterOpen}
                   visible={mode.type === "browse"}
+                  caseLawEnabled={publicLawPreviewEnabled}
                   onChange={(scope) => {
                     setSearchScope(scope);
                     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
@@ -1876,7 +1885,9 @@ export const SearchDialog = ({
                 />
                 <SavedSearches
                   filters={filters}
-                  showTrigger={searchScope !== "registries"}
+                  showTrigger={
+                    searchScope === "all" || searchScope === "matters"
+                  }
                   isOpen={open}
                   onApply={applySavedSearch}
                   overlayLayer="search-child"
@@ -1972,6 +1983,13 @@ export const SearchDialog = ({
                           />
                         </ScrollArea>
                       </div>
+                      {scopeVisibility.caseLawPrompt && (
+                        <div className="flex flex-1 items-center justify-center px-4 py-8">
+                          <p className="text-muted-foreground text-sm">
+                            {t("search.caseLawEmptyState")}
+                          </p>
+                        </div>
+                      )}
                       {scopeVisibility.actions &&
                         filteredActions.length > 0 && (
                           <MenuSection title={t("common.actions")}>

@@ -9,17 +9,27 @@ import { cn } from "@stll/ui/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 
-export type SearchScope = "all" | "matters" | "registries";
+// oxlint-disable-next-line require-contract-domains/require-contract-domains -- Search scopes are client UI choices; they never cross the API boundary.
+export const SEARCH_SCOPES = [
+  "all",
+  "matters",
+  "case-law",
+  "registries",
+] as const;
+
+export type SearchScope = (typeof SEARCH_SCOPES)[number];
 
 const SCOPE_LABELS = {
   all: "common.all",
   matters: "common.matters",
+  "case-law": "common.caseLaw",
   registries: "search.scopeRegistries",
 } as const satisfies Record<SearchScope, TranslationKey>;
 
 const SCOPE_PLACEHOLDERS = {
   all: "search.scopePlaceholderAll",
   matters: "search.scopePlaceholderMatters",
+  "case-law": "search.scopePlaceholderCaseLaw",
   registries: "search.scopePlaceholderRegistries",
 } as const satisfies Record<SearchScope, TranslationKey>;
 
@@ -29,6 +39,7 @@ type SearchScopeFilterProps = {
   onOpenChange: (open: boolean) => void;
   onChange: (scope: SearchScope) => void;
   visible: boolean;
+  caseLawEnabled: boolean;
 };
 
 export const SearchScopeFilter = ({
@@ -37,6 +48,7 @@ export const SearchScopeFilter = ({
   onOpenChange,
   onChange,
   visible,
+  caseLawEnabled,
 }: SearchScopeFilterProps) => {
   const t = useTranslations();
   if (!visible) {
@@ -63,20 +75,15 @@ export const SearchScopeFilter = ({
         className="w-56"
         padding="xs"
       >
-        {Object.entries(SCOPE_LABELS).map(([value, label]) => (
+        {SEARCH_SCOPES.filter(
+          (value) => value !== "case-law" || caseLawEnabled,
+        ).map((value) => (
           <Button
             key={value}
             variant="ghost"
             className="min-h-11 w-full justify-start gap-2"
             aria-pressed={scope === value}
             onClick={() => {
-              if (
-                value !== "all" &&
-                value !== "matters" &&
-                value !== "registries"
-              ) {
-                return;
-              }
               onChange(value);
               onOpenChange(false);
             }}
@@ -85,7 +92,7 @@ export const SearchScopeFilter = ({
               aria-hidden="true"
               className={cn("size-4", scope !== value && "invisible")}
             />
-            {t(label)}
+            {t(SCOPE_LABELS[value])}
           </Button>
         ))}
       </PopoverPopup>

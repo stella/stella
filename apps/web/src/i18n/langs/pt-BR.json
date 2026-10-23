@@ -4734,6 +4734,7 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
+    "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
     "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
     "continueInChat": "Continuar no chat",
@@ -4791,6 +4792,7 @@
     "savedSearchesEmpty": "Salve uma pesquisa para usá-la novamente.",
     "scopeFilter": "Escopo da pesquisa",
     "scopePlaceholderAll": "Pesquisar em todas as <scope>fontes</scope>…",
+    "scopePlaceholderCaseLaw": "Pesquisar na <scope>jurisprudência</scope>…",
     "scopePlaceholderMatters": "Pesquisar em todos os <scope>casos</scope>…",
     "scopePlaceholderRegistries": "Pesquisar em <scope>registros</scope>…",
     "scopeRegistries": "Registros",

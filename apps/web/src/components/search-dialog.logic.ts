@@ -38,6 +38,28 @@ type EagerSearchTypesOptions = {
   types: GlobalSearchResultType[];
 };
 
+/** Case law is an external source: only All and Case law scopes reach it. */
+export const isSearchTypeInScope = (
+  type: GlobalSearchResultType,
+  scope: SearchScope,
+): boolean => {
+  switch (scope) {
+    case "all":
+    case "registries":
+      return true;
+    case "matters":
+      return type !== "case-law" && type !== "contact";
+    case "case-law":
+      return type === "case-law";
+  }
+};
+
+/** Turning public law off while its scope is picked falls back to All. */
+export const resolveSearchScope = (
+  scope: SearchScope,
+  caseLawEnabled: boolean,
+): SearchScope => (scope === "case-law" && !caseLawEnabled ? "all" : scope);
+
 export const resolveEagerSearchTypes = ({
   mode,
   scope,
