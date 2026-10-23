@@ -1,6 +1,7 @@
 import { describe, expect, jest, test } from "bun:test";
 
-import { UploadQueue } from "@/lib/upload-queue";
+import { APIError } from "@/lib/errors/api";
+import { uploadFailureDisposition, UploadQueue } from "@/lib/upload-queue";
 
 /**
  * Tests for the concurrent upload state machine. The state map these
@@ -32,16 +33,15 @@ const makeFile = (name: string) =>
   new File(["x"], name, { type: "text/plain" });
 const makeFiles = (...names: string[]) => names.map(makeFile);
 
-const httpError = (status: number): Error & { status: number } =>
-  Object.assign(new Error(`HTTP ${status}`), { status });
+const httpError = (status: number) =>
+  new APIError({ status, message: `HTTP ${String(status)}` });
 
 const rateLimitError = (retryAfterS?: number) => {
   const headers = new Headers();
   if (retryAfterS !== undefined) {
     headers.set("Retry-After", String(retryAfterS));
   }
-  return Object.assign(new Error("HTTP 429"), {
-    status: 429,
+  return Object.assign(new APIError({ status: 429, message: "HTTP 429" }), {
     response: new Response(null, { status: 429, headers }),
   });
 };
@@ -471,34 +471,55 @@ describe("rate limiting (429)", () => {
 });
 
 describe("retryFailed", () => {
-  test("re-runs only the failed files as a fresh batch", async () => {
+  test("re-runs only retryable failures as a fresh batch", async () => {
     const uploader = new ScriptedUploader();
     const { queue, doneEvents } = harness(uploader, 5);
 
-    queue.enqueue(makeFiles("keep", "drop"));
+    queue.enqueue(makeFiles("keep", "permanent", "retryable"));
     await flush();
     uploader.resolveFile("keep");
-    uploader.rejectFile("drop", httpError(400));
+    uploader.rejectFile("permanent", httpError(400));
+    uploader.rejectFile("retryable", httpError(408));
     await flush();
     expect(doneEvents).toHaveLength(1);
-    expect(queue.getFailedFiles().map((f) => f.file.name)).toEqual(["drop"]);
+    expect(
+      queue
+        .getFailedFiles()
+        .map(({ file, disposition }) => [file.name, disposition]),
+    ).toEqual([
+      ["permanent", "permanent"],
+      ["retryable", "retryable"],
+    ]);
 
     queue.retryFailed();
     await flush();
-    // Only the previously failed file is re-uploaded; the completed one is not.
+    // Neither the completed nor permanently rejected file is re-uploaded.
     expect(uploader.callCount("keep")).toBe(1);
-    expect(uploader.callCount("drop")).toBe(2);
+    expect(uploader.callCount("permanent")).toBe(1);
+    expect(uploader.callCount("retryable")).toBe(2);
     // retryFailed starts a fresh batch scoped to the retried files: total and
     // completed are reset, so the new done reflects only this retry batch.
     expect(queue.getProgress().total).toBe(1);
 
-    uploader.resolveFile("drop");
+    uploader.resolveFile("retryable");
     await flush();
 
     expect(queue.getState()).toBe("done");
     expect(doneEvents).toHaveLength(2);
     expect(doneEvents[1]!.completed).toHaveLength(1);
     expect(doneEvents[1]!.failed).toHaveLength(0);
+  });
+
+  test("classifies structured HTTP, network, and timeout failures", () => {
+    expect(uploadFailureDisposition(httpError(400))).toBe("permanent");
+    expect(uploadFailureDisposition(httpError(429))).toBe("retryable");
+    expect(uploadFailureDisposition(httpError(503))).toBe("retryable");
+    expect(uploadFailureDisposition(new TypeError("network unavailable"))).toBe(
+      "retryable",
+    );
+    expect(
+      uploadFailureDisposition(new DOMException("timed out", "TimeoutError")),
+    ).toBe("retryable");
   });
 
   test("is ignored while a batch is still running", async () => {
@@ -697,7 +718,7 @@ describe("a stale retry does not leak across runs", () => {
       expect(uploader.active).toBe(2);
 
       // Permanent failure: lands in `failed`, eligible for retryFailed().
-      uploader.rejectFile("badfile", httpError(400));
+      uploader.rejectFile("badfile", httpError(408));
       await flush();
 
       // Retryable failure: frees its inflight slot and starts sleeping
@@ -798,7 +819,7 @@ describe("a stale retry does not leak across runs", () => {
       expect(uploader.active).toBe(2);
 
       // Permanent failure: lands in `failed`, eligible for retryFailed().
-      uploader.rejectFile("badfile", httpError(400));
+      uploader.rejectFile("badfile", httpError(408));
       await flush();
 
       // Retryable failure: frees its inflight slot and starts sleeping
@@ -877,7 +898,7 @@ describe("a stale in-flight settlement does not leak across runs", () => {
     expect(uploader.active).toBe(2);
 
     // Permanent failure: lands in `failed`, eligible for retryFailed().
-    uploader.rejectFile("badfile", httpError(400));
+    uploader.rejectFile("badfile", httpError(408));
     await flush();
 
     queue.cancel();
@@ -932,7 +953,7 @@ describe("a stale in-flight settlement does not leak across runs", () => {
     await flush();
     expect(uploader.active).toBe(2);
 
-    uploader.rejectFile("badfile", httpError(400));
+    uploader.rejectFile("badfile", httpError(408));
     await flush();
 
     queue.cancel();

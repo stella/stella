@@ -10,6 +10,12 @@ no_auto_install: true
 pre-commit:
   parallel: false
   commands:
+    # Runs first (priority) and installs only the root workspace when this
+    # checkout has no dependencies yet, so a fresh worktree can commit without
+    # a full install.
+    deps:
+      priority: 1
+      run: bash scripts/ensure-hook-deps.sh
     secrets:
       run: bun run secrets:check:staged
     lint:
@@ -26,7 +32,8 @@ pre-commit:
       run: bun fmt --staged
     i18n:
       glob: "apps/web/src/i18n/langs/*.{json,ts}"
-      run: bun run i18n:sync
+      # The sync runs packages/scripts tools and an apps/web script.
+      run: bash scripts/ensure-hook-deps.sh packages/scripts apps/web && bun run i18n:sync
       stage_fixed: true
     ai-skills:
       glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/skills}/**"

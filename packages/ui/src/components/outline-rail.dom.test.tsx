@@ -187,6 +187,47 @@ test("leaving the rail from inside the panel closes the popover", async () => {
   }
 });
 
+test("the tick strip opens the panel only when the pointer rests on it", async () => {
+  const rendered = await renderOutline();
+  const outside = document.createElement("div");
+  document.body.append(outside);
+  jest.useFakeTimers();
+  try {
+    const strip = rendered.container.querySelector<HTMLElement>(
+      "[data-outline-ticks]",
+    );
+    const tick = strip?.querySelector<HTMLButtonElement>("button");
+    const leave = () =>
+      strip?.dispatchEvent(
+        new MouseEvent("mouseout", { bubbles: true, relatedTarget: outside }),
+      );
+
+    // Crossing the strip on the way elsewhere opens nothing, then or later.
+    await hover(strip);
+    await act(async () => {
+      jest.advanceTimersByTime(60);
+      leave();
+      jest.advanceTimersByTime(500);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
+
+    // Resting on it does.
+    await hover(strip);
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(tick?.getAttribute("aria-expanded")).toBe("true");
+  } finally {
+    jest.useRealTimers();
+    outside.remove();
+    await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
 test("focus inside a hover-opened panel holds it open after the pointer leaves", async () => {
   const rendered = await renderOutline();
   const outside = document.createElement("div");

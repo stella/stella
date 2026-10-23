@@ -345,12 +345,11 @@ export default defineConfig(({ mode, command }) => {
           generatedRouteTree: routeOptions.generatedRouteTree,
           routeFileIgnorePattern: routeOptions.routeFileIgnorePattern,
           codeSplittingOptions: {
-            defaultBehavior: [
-              ["component"],
-              ["errorComponent"],
-              ["notFoundComponent"],
-              ["pendingComponent"],
-            ],
+            // Recovery UI must stay in the entry graph. When a deployment
+            // removes an old route chunk, a split error or pending component
+            // would fail to load from that same old graph and leave the route
+            // blank instead of presenting recovery.
+            defaultBehavior: [["component"]],
           },
         },
       }),

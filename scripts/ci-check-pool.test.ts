@@ -94,6 +94,48 @@ test("failed checks emit one annotation with their first actionable cause", () =
   );
 });
 
+test("a check that passes its own tests reports its first finding, never a passing test", () => {
+  const result = { name: "CI network step retries and timeouts", detail: "x" };
+  expect(
+    failedCheckAnnotation(
+      result,
+      [
+        "bun test v1.4.3 (c6da4a4d3)",
+        "",
+        "::group::scripts/check-ci-network-steps.test.ts:",
+        "(pass) shell detection > curl with its own retry-all-errors budget counts as retried [0.09ms]",
+        "(pass) allowlist > every entry needs a reason [1.10ms]",
+        "::endgroup::",
+        "",
+        " 43 pass",
+        " 0 fail",
+        " 46 expect() calls",
+        "Ran 43 tests across 1 file. [119.00ms]",
+        ".github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+        ".github/workflows/release.yml: prepare-web-image: docker pull needs a step timeout-minutes",
+      ].join("\n"),
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A CI network step retries and timeouts::.github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+  );
+  // A finding is named by its path, even one with a line and no extension.
+  expect(
+    failedCheckAnnotation(
+      { name: "Ratchet guard", detail: "x" },
+      "bun test v1.4.3 (c6da4a4d3)\n(pass) ratchet > counts [1ms]\napps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE\nerror: script exited with code 1",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Ratchet guard::apps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE",
+  );
+  // A word that merely contains "error" is not an error line.
+  expect(
+    failedCheckAnnotation(
+      { name: "Policy", detail: "exit code 1" },
+      "(pass) retry-all-errors budget [1ms]\nchecking mirrors\nnothing matched",
+    ),
+  ).toBe("::error title=FAILED check%3A Policy::exit code 1");
+});
+
 test("failed check annotations escape and truncate their messages", () => {
   const cause = `error: 100%\rnext${"x".repeat(600)}`;
   const annotation = failedCheckAnnotation(

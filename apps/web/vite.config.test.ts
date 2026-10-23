@@ -48,6 +48,21 @@ const FOLIO_CATALOG_IMPORT =
   /"(@stll\/folio-react\/messages\/(?!locales")[^"]+)"/gu;
 
 describe("vite config", () => {
+  test("keeps route recovery components in the entry graph", () => {
+    const source = readFileSync(
+      path.resolve(import.meta.dirname, "vite.config.ts"),
+      "utf-8",
+    );
+    const defaultBehavior = /defaultBehavior:\s*(\[[^;]+\]),/u.exec(
+      source,
+    )?.[1];
+
+    expect(defaultBehavior).toBe('[["component"]]');
+    expect(defaultBehavior).not.toContain("errorComponent");
+    expect(defaultBehavior).not.toContain("notFoundComponent");
+    expect(defaultBehavior).not.toContain("pendingComponent");
+  });
+
   test("keeps opaque effect wrappers out of React compilation", () => {
     const isExcluded = (filePath: string) =>
       REACT_PLUGIN_EXCLUDE.some((pattern) => pattern.test(filePath));

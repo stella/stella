@@ -4,6 +4,7 @@ import { parseApiErrorValue } from "@stll/api-contract";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
 import { APIError, toAPIError } from "@/lib/errors/api";
+import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 const PUBLIC_LAW_DISABLED_STATUS = 404;
 const PUBLIC_LAW_DISABLED_MARKER = "Not Found";
@@ -25,15 +26,19 @@ export const SEARCH_UNAVAILABLE_STATUS = 503;
 const CORPUS_BUSY_STATUS = 429;
 
 /**
- * Whether a failed public-law read is the search backend being unreachable
- * or busy rather than a real answer. Read from the typed error's status,
- * never from its message, so the surface that degrades cannot drift from
- * what the API grades as retryable.
+ * Whether a failed public-law read is the search backend being unreachable,
+ * busy or too slow to answer rather than a real answer. Read from the typed
+ * error's status, never from its message, so the surface that degrades cannot
+ * drift from what the API grades as retryable. A read the page stopped
+ * waiting for is the same missing answer: the API grades its own wait as 503
+ * only after the page has given up, so the timeout must not reach the error
+ * boundary as a crash of the whole page.
  */
 export const isSearchUnavailableError = (error: unknown): boolean =>
-  APIError.is(error) &&
-  (error.status === SEARCH_UNAVAILABLE_STATUS ||
-    error.status === CORPUS_BUSY_STATUS);
+  CriticalQueryTimeoutError.is(error) ||
+  (APIError.is(error) &&
+    (error.status === SEARCH_UNAVAILABLE_STATUS ||
+      error.status === CORPUS_BUSY_STATUS));
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.
