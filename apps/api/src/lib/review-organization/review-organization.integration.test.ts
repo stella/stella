@@ -80,6 +80,7 @@ import type {
   SchedulerDb,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -98,6 +99,8 @@ const documentDependencies: CreateEntityFromBufferDependencies = {
   enqueueImageThumbnailOrMarkFailed: async () => {},
   enqueuePdfDerivativeOrMarkFailed: async () => {},
   processExtraction: async () => {},
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: async () => null,
 };
 
