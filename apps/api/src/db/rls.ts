@@ -1873,3 +1873,13 @@ export const invoiceLineVisibilityPolicy = (table: {
     using: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
     withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
   });
+
+// FORCE RLS applies to the table owner, which runs the SECURITY DEFINER
+// invoice access, guard, and reserved-charge functions. They must see every
+// line to decide whole-invoice visibility; owner writes remain denied.
+export const invoiceLineOwnerReadPolicy = () =>
+  p.pgPolicy("invoice_lines_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+  });

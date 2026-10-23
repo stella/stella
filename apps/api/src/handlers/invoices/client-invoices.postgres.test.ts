@@ -67,37 +67,63 @@ if (!databaseUrl || !runPostgres) {
       }
     });
 
+    const scoped = (
+      { orgId }: { orgId: SafeId<"organization"> },
+      userId: SafeId<"user">,
+    ) =>
+      createMembershipScopedDb(markRlsDatabase(db), {
+        organizationId: orgId,
+        userId,
+        serverValidatedWorkspaceIds: [],
+      });
+
     type LineOptions = {
       organizationId: SafeId<"organization">;
       workspaceId: SafeId<"workspace">;
       invoiceId: SafeId<"invoice">;
       position?: number;
     };
-    const insertLine = async ({
+    const lineValues = ({
       organizationId,
       workspaceId,
       invoiceId,
       position = 0,
-    }: LineOptions) => {
-      const id = createSafeId<"invoiceLine">();
-      await db.insert(invoiceLines).values({
-        id,
-        organizationId,
-        workspaceId,
-        invoiceId,
-        position,
-        description: "Legal services",
-        quantity: "1.0000",
-        unit: "h",
-        unitPrice: cents(100),
-        vatRateBps: 2100,
-        vatTreatment: "domestic_vat",
-        netAmount: cents(100),
-        vatAmount: cents(21),
-        grossAmount: cents(121),
-        source: "manual",
+    }: LineOptions) => ({
+      id: createSafeId<"invoiceLine">(),
+      organizationId,
+      workspaceId,
+      invoiceId,
+      position,
+      description: "Legal services",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(100),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat" as const,
+      netAmount: cents(100),
+      vatAmount: cents(21),
+      grossAmount: cents(121),
+      source: "manual" as const,
+    });
+    // invoice_lines forces row security on its owner, so valid lines are
+    // written by the organization owner through the application role.
+    const insertLine = async ({
+      ownerId,
+      ...options
+    }: LineOptions & { ownerId: SafeId<"user"> }) => {
+      const values = lineValues(options);
+      await scoped(
+        { orgId: options.organizationId },
+        ownerId,
+      )(async (tx) => {
+        await tx.insert(invoiceLines).values(values);
       });
-      return id;
+      return values.id;
+    };
+    // The client guard runs before row security checks, so it rejects even a
+    // root write before the policy is consulted.
+    const insertRootLine = async (options: LineOptions) => {
+      await db.insert(invoiceLines).values(lineValues(options));
     };
 
     const seedScenario = async () => {
@@ -186,12 +212,14 @@ if (!databaseUrl || !runPostgres) {
         organizationId: orgId,
         workspaceId: firstMatterId,
         invoiceId,
+        ownerId: actors.owner,
       });
       const secondLineId = await insertLine({
         organizationId: orgId,
         workspaceId: secondMatterId,
         invoiceId,
         position: 1,
+        ownerId: actors.owner,
       });
       return {
         orgId,
@@ -206,14 +234,6 @@ if (!databaseUrl || !runPostgres) {
         actors,
       };
     };
-    type Scenario = Awaited<ReturnType<typeof seedScenario>>;
-    const scoped = ({ orgId }: Scenario, userId: SafeId<"user">) =>
-      createMembershipScopedDb(markRlsDatabase(db), {
-        organizationId: orgId,
-        userId,
-        serverValidatedWorkspaceIds: [],
-      });
-
     test("an invoice and every line require access to every included matter, with owner and admin overrides", async () => {
       const scenario = await seedScenario();
       const {
@@ -309,9 +329,19 @@ if (!databaseUrl || !runPostgres) {
 
     test("a client invoice with no lines left is visible and writable only to owners and admins", async () => {
       const scenario = await seedScenario();
-      await db
-        .delete(invoiceLines)
-        .where(eq(invoiceLines.invoiceId, scenario.invoiceId));
+      const deleted = await scoped(
+        scenario,
+        scenario.actors.owner,
+      )(
+        async (tx) =>
+          await tx
+            .delete(invoiceLines)
+            .where(eq(invoiceLines.invoiceId, scenario.invoiceId))
+            .returning({ id: invoiceLines.id }),
+      );
+      expect(deleted.map(({ id }) => id).toSorted()).toEqual(
+        [scenario.firstLineId, scenario.secondLineId].toSorted(),
+      );
       for (const [kind, actor] of Object.entries(scenario.actors)) {
         const result = await scoped(
           scenario,
@@ -392,7 +422,7 @@ if (!databaseUrl || !runPostgres) {
           invoiceId: scenario.invoiceId,
         },
       ]) {
-        await expectSqlState(insertLine(options), "23514");
+        await expectSqlState(insertRootLine(options), "23514");
       }
       expect(
         await scoped(
@@ -435,10 +465,16 @@ if (!databaseUrl || !runPostgres) {
         "23514",
       );
       await expectSqlState(
-        db
-          .update(invoiceLines)
-          .set({ workspaceId: scenario.otherClientMatterId })
-          .where(eq(invoiceLines.id, scenario.firstLineId)),
+        scoped(
+          scenario,
+          scenario.actors.owner,
+        )(
+          async (tx) =>
+            await tx
+              .update(invoiceLines)
+              .set({ workspaceId: scenario.otherClientMatterId })
+              .where(eq(invoiceLines.id, scenario.firstLineId)),
+        ),
         "23514",
       );
     });
@@ -487,9 +523,10 @@ if (!databaseUrl || !runPostgres) {
         organizationId: scenario.orgId,
         workspaceId: scenario.firstMatterId,
         invoiceId,
+        ownerId: scenario.actors.owner,
       });
       await expectSqlState(
-        insertLine({
+        insertRootLine({
           organizationId: scenario.orgId,
           workspaceId: scenario.secondMatterId,
           invoiceId,
@@ -532,17 +569,25 @@ if (!databaseUrl || !runPostgres) {
           invoiceId: scenario.invoiceId,
           invoiceAttachment: "charged",
         });
-        await db
-          .update(invoiceLines)
-          .set({
-            source: "time_entry",
-            timeEntryId,
-            netAmount,
-            vatAmount: cents(0),
-            grossAmount: netAmount,
-            vatRateBps: 0,
-          })
-          .where(eq(invoiceLines.id, lineId));
+        const updated = await scoped(
+          scenario,
+          scenario.actors.owner,
+        )(
+          async (tx) =>
+            await tx
+              .update(invoiceLines)
+              .set({
+                source: "time_entry",
+                timeEntryId,
+                netAmount,
+                vatAmount: cents(0),
+                grossAmount: netAmount,
+                vatRateBps: 0,
+              })
+              .where(eq(invoiceLines.id, lineId))
+              .returning({ id: invoiceLines.id }),
+        );
+        expect(updated).toEqual([{ id: lineId }]);
       }
       const scope = scoped(scenario, scenario.actors.partial);
       const result = await scope(async (tx) => ({

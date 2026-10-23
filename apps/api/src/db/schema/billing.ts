@@ -23,6 +23,7 @@ import {
   timeEntryPolicies,
   invoicePolicies,
   invoiceLineVisibilityPolicy,
+  invoiceLineOwnerReadPolicy,
 } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1167,6 +1168,7 @@ export const invoiceLines = p.pgTable(
   },
   (table) => [
     invoiceLineVisibilityPolicy(table),
+    invoiceLineOwnerReadPolicy(),
     ...reviewResetOwnerPolicies("invoice_lines"),
     p.check(
       "invoice_lines_recorded_snapshot_check",
