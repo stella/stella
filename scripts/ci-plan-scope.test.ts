@@ -19,10 +19,10 @@ import { drawPropertySamples } from "@stll/property-testing";
 
 import { markdownReaders } from "./ci-package-scope";
 import {
-  computeChangedFileScope,
-  DEFAULT_DETECTORS,
   type ChangedFileScopeDetectors,
   type ChangedFileScopeInput,
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { sourceImportClosure } from "./detect-route-smoke-changes";
@@ -489,7 +489,6 @@ test("desktop Windows dry run follows release inputs and skips unrelated changes
   for (const file of [
     "scripts/ci-windows-dry-run-result.ts",
     "scripts/wasm-toolchain.sh",
-    "scripts/run-oxfmt.ts",
   ]) {
     expect(runSelector([file], [output]), file).toEqual(["true"]);
   }

@@ -219,7 +219,6 @@ export const DOC_SOURCES = {
       "oxlint",
       "@oxlint/plugins",
       "oxc-transform-react",
-      "oxfmt",
       "oxlint-tsgolint",
     ],
     markdownPages: {

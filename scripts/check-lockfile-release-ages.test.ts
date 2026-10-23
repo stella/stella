@@ -4,8 +4,8 @@ import {
   checkLockfileReleaseAges,
   createRegistryLookup,
   governingBunfigPath,
-  readLockfilePins,
   type LockfileInput,
+  readLockfilePins,
 } from "./check-lockfile-release-ages";
 
 const NOW = new Date("2026-09-28T12:00:00.000Z");

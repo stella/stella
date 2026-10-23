@@ -6,8 +6,8 @@ import {
   EU_MEMBER_STATES,
   isToggleableNativeToolBackendSlug,
   loadCatalogue,
-  recommendedSlugsForJurisdictions,
   type LoadedCatalogueEntry,
+  recommendedSlugsForJurisdictions,
 } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";

@@ -15,11 +15,11 @@ import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
 import {
+  type ChangedFileScopeDetectors,
   computeChangedFileScope,
   DEFAULT_DETECTORS,
   MODEL_CATALOG_DRIFT_INPUTS,
   STACK_REDACTION_BROWSER_INPUTS,
-  type ChangedFileScopeDetectors,
 } from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";

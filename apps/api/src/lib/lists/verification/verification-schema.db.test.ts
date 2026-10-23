@@ -312,10 +312,12 @@ test("persisted run failures accept every declared code and preserve the status 
     );
   expect(missingReason).toBe("rejected");
   const unknownReason = await testDb
-    .execute(sql`
+    .execute(
+      sql`
     UPDATE ${legalListVerificationRuns} SET status = 'failed', error_code = 'unknown_failure'
     WHERE id = ${runId}
-  `)
+  `,
+    )
     .then(
       () => "stored",
       () => "rejected",

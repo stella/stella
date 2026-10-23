@@ -24,6 +24,7 @@ export const memberTimeTargetsRoute = new Elysia({
   .guard({ validateAuth: true })
   .put("/:userId/daily-target", updateDailyTarget.handler, {
     permissions: updateDailyTarget.config.permissions,
+    accountAccess: updateDailyTarget.config.accountAccess,
     params: updateDailyTarget.config.params,
     body: updateDailyTarget.config.body,
   });

@@ -8,10 +8,7 @@ export type HealthSignalKind = VerdictKind | "not_configured";
 export type WorkKind = "index_build" | "backfill_batch";
 export type Signal = {
   indicator:
-    | "ebs_balance"
-    | "long_transaction"
-    | "autovacuum_on_target"
-    | "busy_window";
+    "ebs_balance" | "long_transaction" | "autovacuum_on_target" | "busy_window";
   kind: HealthSignalKind;
   value: number | null;
   threshold: number | null;
@@ -97,15 +94,13 @@ export const validateConfig = (config: HealthConfig) => {
   if (positiveFields.some((value) => !Number.isFinite(value) || value <= 0)) {
     panic("Health durations must be finite and positive");
   }
-  if (
-    !(
-      Number.isFinite(config.startFloor) &&
-      Number.isFinite(config.hardFloor) &&
-      config.hardFloor >= 0 &&
-      config.startFloor <= 100 &&
-      config.hardFloor <= config.startFloor
-    )
-  ) {
+  if (!(
+    Number.isFinite(config.startFloor) &&
+    Number.isFinite(config.hardFloor) &&
+    config.hardFloor >= 0 &&
+    config.startFloor <= 100 &&
+    config.hardFloor <= config.startFloor
+  )) {
     panic("Health floors must be ordered percentages");
   }
   if (
@@ -116,32 +111,26 @@ export const validateConfig = (config: HealthConfig) => {
   ) {
     panic("Resume floor must lie between hard and start floors");
   }
-  if (
-    !(
-      Number.isSafeInteger(config.minSize) &&
-      Number.isSafeInteger(config.maxSize) &&
-      config.minSize > 0 &&
-      config.maxSize >= config.minSize
-    )
-  ) {
+  if (!(
+    Number.isSafeInteger(config.minSize) &&
+    Number.isSafeInteger(config.maxSize) &&
+    config.minSize > 0 &&
+    config.maxSize >= config.minSize
+  )) {
     panic("Batch size bounds must be positive and ordered");
   }
-  if (
-    !(
-      Number.isFinite(config.minSleepMs) &&
-      Number.isFinite(config.maxSleepMs) &&
-      config.minSleepMs >= 0 &&
-      config.maxSleepMs >= config.minSleepMs
-    )
-  ) {
+  if (!(
+    Number.isFinite(config.minSleepMs) &&
+    Number.isFinite(config.maxSleepMs) &&
+    config.minSleepMs >= 0 &&
+    config.maxSleepMs >= config.minSleepMs
+  )) {
     panic("Batch sleep bounds must be finite and ordered");
   }
-  if (
-    !(
-      Number.isSafeInteger(config.stableBatchesBeforeGrow) &&
-      config.stableBatchesBeforeGrow >= 1
-    )
-  ) {
+  if (!(
+    Number.isSafeInteger(config.stableBatchesBeforeGrow) &&
+    config.stableBatchesBeforeGrow >= 1
+  )) {
     panic("Stable batch count must be a positive integer");
   }
   if (config.holdBackoffCapMs < config.holdBackoffMs) {
@@ -320,13 +309,11 @@ export const nextBatch = ({
   outcome = "success",
 }: NextBatchOptions) => {
   validateConfig(config);
-  if (
-    !(
-      Number.isSafeInteger(state.size) &&
-      state.size >= config.minSize &&
-      state.size <= config.maxSize
-    )
-  ) {
+  if (!(
+    Number.isSafeInteger(state.size) &&
+    state.size >= config.minSize &&
+    state.size <= config.maxSize
+  )) {
     panic("Batch size must be an integer within configured bounds");
   }
   const now = clock();
