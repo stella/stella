@@ -16,6 +16,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   isInnermostAnchoredBlock,
+  isReaderChromeParent,
   selectionAnchorsFrom,
 } from "./selection-anchor";
 
@@ -158,7 +159,13 @@ const render = (chrome: boolean) => {
 
 /** Select from the `from`th character of an element's text to its end. */
 const select = (element: HTMLElement, from: number) => {
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const selectingChrome = isReaderChromeParent(element);
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      !selectingChrome && isReaderChromeParent(node.parentElement)
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
   const range = document.createRange();
   let remaining = from;
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
@@ -209,7 +216,16 @@ test("a selection past a cited case number keeps the decision's offsets", () => 
   if (!paragraph) {
     throw new TypeError("Missing cited paragraph");
   }
-  expect(accepted(root, paragraph, citing.indexOf("a věc"))).toBe(true);
+  const from = citing.indexOf("a věc");
+  expect(selectionAnchorsFrom(select(paragraph, from), root)).toEqual([
+    {
+      blockAnchorId: "p-7",
+      endOffset: citing.length,
+      quote: citing.slice(from),
+      startOffset: from,
+    },
+  ]);
+  expect(accepted(root, paragraph, from)).toBe(true);
 });
 
 test("a citation chip drawn as words would move the offsets off the decision", () => {

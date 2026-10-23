@@ -793,6 +793,7 @@ export const InlineContent = ({
 export const HighlightedText = ({
   activeMatchIndex,
   className,
+  "data-reader-chrome": readerChrome,
   pieceId,
   ranges,
   segmentStart = 0,
@@ -800,13 +801,14 @@ export const HighlightedText = ({
 }: {
   activeMatchIndex: number;
   className?: string | undefined;
+  "data-reader-chrome"?: "" | undefined;
   pieceId: string;
   ranges: ReaderMarkRange[];
   /** Offset of this slice within the complete search piece. */
   segmentStart?: number | undefined;
   text: string;
 }) => (
-  <span className={className}>
+  <span className={className} data-reader-chrome={readerChrome}>
     {renderHighlightedSlice({
       activeMatchIndex,
       elisions: shiftedElisions(text, segmentStart),
