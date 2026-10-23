@@ -22,7 +22,7 @@ const workflow = v.parse(
     jobs: v.record(
       v.string(),
       v.looseObject({
-        needs: v.optional(v.array(v.string())),
+        needs: v.optional(v.union([v.string(), v.array(v.string())])),
         steps: v.optional(
           v.array(
             v.looseObject({
@@ -43,9 +43,10 @@ const result = workflow.jobs["ci-result"];
 const outcome = result?.steps?.find(
   ({ name }) => name === "Evaluate CI outcome",
 );
-if (!outcome?.run || !outcome.env || !result?.needs) {
+if (!outcome?.run || !outcome.env || !Array.isArray(result?.needs)) {
   panic("Missing ci-result/Evaluate CI outcome");
 }
+const needs = result.needs;
 const script = outcome.run;
 const staticEnv = Object.fromEntries(
   Object.entries(outcome.env).filter(([, value]) => !value.includes("${{")),
@@ -124,6 +125,7 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
     env: {
       PATH: process.env["PATH"] ?? "",
       HOME: directory,
+      GITHUB_WORKFLOW: "CI Checks",
       TMPDIR: directory,
       ...staticEnv,
       EVENT: "pull_request",
@@ -171,7 +173,7 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
 // Every required job cancelled, every other job skipped.
 const cancelledNeeds = JSON.stringify(
   Object.fromEntries([
-    ...result.needs.map((job) => [
+    ...needs.map((job) => [
       job,
       { result: fastRequired.includes(job) ? "cancelled" : "skipped" },
     ]),
@@ -268,18 +270,28 @@ test("an actor cancel is never supersession, even with a newer code run", () => 
   expect(run.exitCode, run.log).toBe(1);
 });
 
+// Still waiting on a concurrency group: a metadata run can wait on its own.
+const waitingRun = { status: "pending", jobs: [] };
+
+test("a newer run that lists no job yet proves no supersession", () => {
+  const run = runOutcome(
+    { NEEDS: cancelledNeeds },
+    supersessionFixtures({ annotation: "", newer: [waitingRun] }),
+  );
+  expect(run.exitCode, run.log).toBe(1);
+  expect(run.record?.verdict).toBe("failure");
+});
+
 test("a run superseded by a newer code run passes through without an evaluated verdict", () => {
-  for (const newer of [
-    codeRun,
-    // Still waiting on this run's concurrency group: no job listed yet.
-    { status: "pending", jobs: [] },
+  for (const proof of [
+    // cancel-in-progress named this run's code concurrency group.
+    { annotation: CONCURRENCY, newer: [metadataRun, waitingRun] },
+    // Queued jobs carry no annotation; the newer run planned as a code run.
+    { annotation: "", newer: [metadataRun, codeRun] },
   ]) {
     const run = runOutcome(
       { NEEDS: cancelledNeeds },
-      supersessionFixtures({
-        annotation: CONCURRENCY,
-        newer: [metadataRun, newer],
-      }),
+      supersessionFixtures(proof),
     );
     expect(run.exitCode, run.log).toBe(0);
     expect(run.record).toMatchObject({
@@ -291,6 +303,23 @@ test("a run superseded by a newer code run passes through without an evaluated v
 });
 
 type CodeRun = { id: number; record?: unknown; attempt?: number };
+const codeRunJobs = (id: number, attempt: number): Fixtures => ({
+  [`repos/${REPO}/actions/runs/${id}/jobs?per_page=100`]: [
+    {
+      jobs: [
+        { name: "ci-plan", id: id * 10 },
+        // The conclusion a pass-through run reports: never evidence.
+        {
+          name: "ci-result",
+          id: id * 10 + 1,
+          status: "completed",
+          conclusion: "success",
+          run_attempt: attempt,
+        },
+      ],
+    },
+  ],
+});
 const mirrorFixtures = (runs: CodeRun[], extra: Fixtures = {}): Fixtures => {
   const fixtures: Fixtures = {
     [`repos/${REPO}/actions/workflows/ci.yml/runs?event=pull_request&head_sha=${HEAD}&per_page=100`]:
@@ -308,21 +337,7 @@ const mirrorFixtures = (runs: CodeRun[], extra: Fixtures = {}): Fixtures => {
     ...extra,
   };
   for (const { id, record, attempt = 1 } of runs) {
-    fixtures[`repos/${REPO}/actions/runs/${id}/jobs?per_page=100`] = [
-      {
-        jobs: [
-          { name: "ci-plan", id: id * 10 },
-          // The conclusion a pass-through run reports: never evidence.
-          {
-            name: "ci-result",
-            id: id * 10 + 1,
-            status: "completed",
-            conclusion: "success",
-            run_attempt: attempt,
-          },
-        ],
-      },
-    ];
+    Object.assign(fixtures, codeRunJobs(id, attempt));
     if (record !== undefined) {
       fixtures[`record:${id}`] = record;
     }
@@ -352,7 +367,20 @@ const superseded = (id: number) =>
     required: fastRequired.map((job) => ({ job, conclusion: "cancelled" })),
   });
 const mirror = (fixtures: Fixtures) =>
-  runOutcome({ METADATA_ONLY: "true", PR_ACTION: "labeled" }, fixtures);
+  runOutcome(
+    {
+      METADATA_ONLY: "true",
+      PR_ACTION: "labeled",
+      // A mirror skips every suite.
+      NEEDS: JSON.stringify(
+        Object.fromEntries([
+          ...needs.map((job) => [job, { result: "skipped" }]),
+          ["ci-plan", { result: "success" }],
+        ]),
+      ),
+    },
+    fixtures,
+  );
 
 test("a metadata run mirrors a code run's evaluated success", () => {
   const run = mirror(mirrorFixtures([{ id: 90, record: record(90) }]));
@@ -381,25 +409,32 @@ test("an older code run that evaluated the head still counts", () => {
   expect(run.record?.reused_from_run_id).toBe(90);
 });
 
-test("a reused record is followed to the run that evaluated the head", () => {
-  const run = mirror(
-    mirrorFixtures(
-      [
-        {
-          id: 91,
-          record: record(91, {
-            basis: "pass_through",
-            pass_through_reason: "reused",
-            reused_from_run_id: 80,
-            required: [],
-          }),
-        },
-      ],
-      { "record:80": record(80) },
-    ),
+const reusing = (sourceAttempt: number) =>
+  mirrorFixtures(
+    [
+      {
+        id: 91,
+        record: record(91, {
+          basis: "pass_through",
+          pass_through_reason: "reused",
+          reused_from_run_id: 80,
+          required: [],
+        }),
+      },
+    ],
+    { "record:80": record(80), ...codeRunJobs(80, sourceAttempt) },
   );
+
+test("a reused record is followed to the run that evaluated the head", () => {
+  const run = mirror(reusing(1));
   expect(run.exitCode, run.log).toBe(0);
   expect(run.record?.reused_from_run_id).toBe(80);
+});
+
+test("a reused run re-run since its record was written is no evidence", () => {
+  const run = mirror(reusing(2));
+  expect(run.exitCode, run.log).toBe(1);
+  expect(run.log).toContain("not from its latest attempt (2)");
 });
 
 test("no record, a stale attempt, another head or a cancelled required job is no evidence", () => {

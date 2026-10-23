@@ -6680,12 +6680,23 @@ jobs:
                 attempt=$(jq -er '.run_attempt | select(type == "number")' <<< "$result") || return 1
                 evidence_run="$candidate"
                 for _ in 1 2 3; do
+                  # A run a reuse names is held to the same bar: its latest
+                  # attempt completed and wrote the record.
+                  if [[ "$evidence_run" != "$candidate" ]]; then
+                    jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$evidence_run/jobs?per_page=100") || return 1
+                    result=$(jq -cr '[.[].jobs[] | select(.name == "ci-result")] | sort_by(.id) | last' <<< "$jobs") || return 1
+                    if [[ "$result" == null ]] || ! jq -e '.status == "completed"' <<< "$result" > /dev/null; then
+                      echo "::error::Metadata mirror: run $evidence_run, which run $candidate reused, has no completed ci-result. Re-run CI run $candidate to evaluate head $HEAD_SHA."
+                      return 1
+                    fi
+                    attempt=$(jq -er '.run_attempt | select(type == "number")' <<< "$result") || return 1
+                  fi
                   record=$(code_run_record "$evidence_run") || {
                     echo "::error::Metadata mirror: run $evidence_run has no readable required-jobs record. Re-run CI run $candidate to evaluate head $HEAD_SHA."
                     return 1
                   }
-                  if [[ "$evidence_run" == "$candidate" ]] && ! jq -e --argjson attempt "$attempt" '.run_attempt == $attempt' <<< "$record" > /dev/null; then
-                    echo "::error::Metadata mirror: the record of code run $candidate is not from its latest attempt ($attempt)."
+                  if ! jq -e --argjson attempt "$attempt" '.run_attempt == $attempt' <<< "$record" > /dev/null; then
+                    echo "::error::Metadata mirror: the record of run $evidence_run is not from its latest attempt ($attempt). Re-run CI run $candidate to evaluate head $HEAD_SHA."
                     return 1
                   fi
                   evidence=$(record_evidence <<< "$record") || return 1
@@ -6764,6 +6775,14 @@ jobs:
           # Read failure and timeout evidence before any early aggregation exit.
           cancelled_jobs=""
           cancelled_by=""
+          superseded_in_group=false
+          # The concurrency group a newer code run of this pull request or
+          # branch waits on; metadata runs wait on their own group.
+          case "$EVENT" in
+            pull_request) code_group="${GITHUB_WORKFLOW:-}-pr-${PR_NUMBER:-}" ;;
+            workflow_dispatch) code_group="${GITHUB_WORKFLOW:-}-ci-dispatch-${GITHUB_REF:-}" ;;
+            *) code_group="" ;;
+          esac
           if jq -e 'any(.[]; .result == "cancelled" or .result == "failure" or .result == "timed_out")' <<< "$NEEDS" > /dev/null; then
             cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
               echo "::error::Cancelled CI job failed-step lookup was unavailable."
@@ -6799,6 +6818,9 @@ jobs:
               if [[ -n "$cancel_actor" ]]; then
                 cancelled_by="@$cancel_actor ($job_name)"
               fi
+              if [[ -n "$code_group" ]] && jq -e --arg group "$code_group" 'flatten | any(.[]; (.message // "") == "Canceling since a higher priority waiting request for \($group) exists")' <<< "$annotations" > /dev/null; then
+                superseded_in_group=true
+              fi
             done < <(jq -r '
               .[].jobs[] | select(.conclusion == "cancelled" or .conclusion == "failure" or .conclusion == "timed_out")
               | [.name, .conclusion, (.check_run_url // "missing")] | @tsv
@@ -6831,15 +6853,20 @@ jobs:
               exit 1
             fi
           fi
-          # Queued jobs may have no concurrency annotation. A newer code run
-          # in the same workflow/group proves supersession, unless any
-          # cancelled job timed out or was cancelled by an actor. Every API
-          # lookup fails closed.
+          # A job cancelled by cancel-in-progress names this run's code
+          # concurrency group. Queued jobs may have no annotation: then a
+          # newer code run proves supersession. Either way no cancelled job
+          # may have timed out or been cancelled by an actor. Every API lookup
+          # fails closed.
           cancelled_dependencies_were_superseded() {
-            local current workflow created runs newer candidate run_status jobs superseder=""
+            local current workflow created runs newer candidate jobs superseder=""
             if [[ -n "$cancelled_by" ]]; then
               echo "::error::CI jobs were cancelled by $cancelled_by, not by a newer run; this run evaluated nothing. Re-run this run to evaluate the head."
               return 1
+            fi
+            if [[ "$superseded_in_group" == true ]]; then
+              jq -e 'any(.[].jobs[]; .conclusion == "cancelled")' <<< "$cancelled_jobs" > /dev/null
+              return
             fi
             current=$(bash "$GH_RETRY_SCRIPT" api "repos/$REPO/actions/runs/$GITHUB_RUN_ID") || return 1
             workflow=$(jq -er '.workflow_id | select(type == "number")' <<< "$current") || return 1
@@ -6853,18 +6880,15 @@ jobs:
                 and (if $event == "workflow_dispatch" then .head_branch == $current.head_branch
                   elif $event == "pull_request" then any(.pull_requests[]; (.number | tostring) == $pr)
                   else false end))
-              | "\(.id) \(.status)"
+              | .id
               ' <<< "$runs") || return 1
             # A metadata run has its own concurrency group and never cancels
-            # a code run, so only a code run supersedes: one with a ci-plan
-            # job, or one still waiting on this run's group, which lists no
-            # job yet.
-            while read -r candidate run_status; do
+            # a code run, so only a run with a ci-plan job supersedes; a run
+            # that lists no job yet proves nothing.
+            while read -r candidate; do
               [[ -n "$candidate" ]] || continue
               jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$candidate/jobs?per_page=100") || return 1
-              if jq -e 'any(.[].jobs[]; .name == "ci-plan")' <<< "$jobs" > /dev/null ||
-                { [[ "$run_status" != in_progress && "$run_status" != completed ]] &&
-                  jq -e '[.[].jobs[]] | length == 0' <<< "$jobs" > /dev/null; }; then
+              if jq -e 'any(.[].jobs[]; .name == "ci-plan")' <<< "$jobs" > /dev/null; then
                 superseder="$candidate"
                 break
               fi
