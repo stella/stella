@@ -321,7 +321,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         await held.run();
       } finally {
         await slot.close();
-        session.release();
+        await session.release();
       }
       expect(held.failures).toEqual([]);
       expect((await checkpoint()).batch.holdUntil).not.toBeNull();

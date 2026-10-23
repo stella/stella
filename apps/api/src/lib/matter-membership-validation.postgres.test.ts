@@ -103,11 +103,11 @@ describePostgres("matter membership validation (postgres)", () => {
         const remainingMemberships = await session<
           { id: string }[]
         >`SELECT id FROM workspace_members`;
-        expect(remainingMemberships).toEqual([{ id: retainedId }]);
+        expect([...remainingMemberships]).toEqual([{ id: retainedId }]);
         const timestamps = await session<
           { recorded: boolean }[]
         >`SELECT bool_and(created_at IS NOT NULL) AS recorded FROM audit_logs`;
-        expect(timestamps).toEqual([{ recorded: true }]);
+        expect([...timestamps]).toEqual([{ recorded: true }]);
 
         await session.unsafe(migration).simple();
         await session`COMMIT`;

@@ -358,11 +358,11 @@ describe.skipIf(!enabled)(
           );
           await first.close();
           expect((await checkpoint()).cursor).toBe("4");
-          expect(
-            await client.unsafe<{ id: number; applications: number }[]>(
+          expect([
+            ...(await client.unsafe<{ id: number; applications: number }[]>(
               `SELECT id, applications FROM ${schema}.rows WHERE id > 4 ORDER BY id`,
-            ),
-          ).toEqual([5, 6, 7, 8].map((id) => ({ id, applications: 0 })));
+            )),
+          ]).toEqual([5, 6, 7, 8].map((id) => ({ id, applications: 0 })));
           const restarted = await openRuntime();
           expect((await restarted.runtime.step(batch)).value).toEqual([
             5, 6, 7, 8,
@@ -370,11 +370,11 @@ describe.skipIf(!enabled)(
           expect((await checkpoint()).cursor).toBe("8");
           expect((await restarted.runtime.step(batch)).done).toBe(true);
           expect((await checkpoint()).cursor).toBeNull();
-          expect(
-            await client.unsafe<{ id: number; applications: number }[]>(
+          expect([
+            ...(await client.unsafe<{ id: number; applications: number }[]>(
               `SELECT id, applications FROM ${schema}.rows ORDER BY id`,
-            ),
-          ).toEqual(
+            )),
+          ]).toEqual(
             Array.from({ length: 8 }, (_, index) => ({
               id: index + 1,
               applications: 1,
@@ -486,11 +486,11 @@ describe.skipIf(!enabled)(
           });
           expect((await checkpoint()).cursor).toBeNull();
           expect((await checkpoint()).batch.heldSince).toBeNull();
-          expect(
-            await client.unsafe<{ id: number; applications: number }[]>(
+          expect([
+            ...(await client.unsafe<{ id: number; applications: number }[]>(
               `SELECT id, applications FROM ${schema}.rows ORDER BY id`,
-            ),
-          ).toEqual(
+            )),
+          ]).toEqual(
             Array.from({ length: 8 }, (_, index) => ({
               id: index + 1,
               applications: 1,

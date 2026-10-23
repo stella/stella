@@ -40,7 +40,7 @@ const CONNECTION_LOCK_TIMEOUT_MS = 30_000;
 /** The part of a reserved Bun SQL connection the backfill uses. */
 type ReservedConnection = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
-  release: () => void;
+  release: () => Promise<void>;
   close: () => Promise<void>;
 };
 

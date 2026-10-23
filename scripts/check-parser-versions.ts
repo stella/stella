@@ -417,16 +417,16 @@ class StaticTree {
     for (const name of this.versionDeclarations.get(file) ?? []) {
       const declaration = `\\b(?:const|let|var)\\s+${name}(?:\\s*:[^=;]+)?\\s*=\\s*`;
       source = source.replace(
-        new RegExp(`(${declaration})\\d+\\b`, "u"),
-        "$1<VERSION>",
+        new RegExp(`(?<=${declaration})\\d+\\b`, "u"),
+        "0",
       );
       source = source.replace(
         new RegExp(`(${declaration}\\{)([^}]*)(\\})`, "u"),
         (_, start: string, properties: string, end: string) =>
-          `${start}${properties.replace(/(:\s*)\d+\b/gu, "$1<VERSION>")}${end}`,
+          `${start}${properties.replace(/(?<=:\s*)\d+\b/gu, "0")}${end}`,
       );
     }
-    return source;
+    return printedCode(file, source);
   }
 
   owners(): SourceOwnersResult {
@@ -568,6 +568,19 @@ const withoutOutputUnchangedMarkers = (source: string): string =>
     .split("\n")
     .filter((line) => !OUTPUT_UNCHANGED.test(line))
     .join("\n");
+
+// Layout, comments and types never change what a parser emits, so a
+// formatting-only edit must not demand a version bump. Compare the code the
+// transpiler prints instead of the text; source it cannot parse compares
+// verbatim, which still demands the bump.
+const printedCode = (file: string, source: string): string => {
+  const printer = file.endsWith("x") ? jsxTranspiler : transpiler;
+  try {
+    return printer.transformSync(source);
+  } catch {
+    return source;
+  }
+};
 
 const LOCATION_DEPENDENT = /\bimport\.meta\b|\b__dirname\b|\b__filename\b/u;
 const SOURCE_MODULE = /\.[cm]?[jt]sx?$/u;

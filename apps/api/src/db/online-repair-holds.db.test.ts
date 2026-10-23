@@ -383,7 +383,7 @@ describe.skipIf(!enabled)(
               "SELECT i.indisvalid AS valid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1",
               [staged.name],
             );
-            expect(stageState).toEqual(
+            expect([...stageState]).toEqual(
               reason === "cancel" ? [{ valid: false }] : [],
             );
             expect(readings).toBe(reason === "cancel" ? 3 : 1);

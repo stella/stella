@@ -46,7 +46,7 @@ const positiveMilliseconds = (value: number, name: string): number => {
 
 type ReservableSession = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
-  release: () => void;
+  release: () => Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -151,7 +151,7 @@ export const withDedicatedReservedSession = async <
     signal.removeEventListener("abort", onAbort);
   }
   if (cancelling === undefined) {
-    reserved.release();
+    await reserved.release();
   } else {
     await cancelling;
     await terminateReserved(reserved);

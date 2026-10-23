@@ -1215,7 +1215,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   true,
                 );
                 expect(sleeps).toEqual([10, 10]);
-                expect(await ledgerRows(observer)).toEqual([]);
+                expect([...(await ledgerRows(observer))]).toEqual([]);
                 const [probe] = await observer.unsafe<{ exists: boolean }[]>(
                   "SELECT to_regclass('migration_probe') IS NOT NULL AS exists",
                 );
