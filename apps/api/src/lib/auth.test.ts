@@ -1,4 +1,4 @@
-import type { HookEndpointContext } from "better-auth";
+import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { Result } from "better-result";
 import {
   afterAll,
@@ -1150,6 +1150,38 @@ describe("OAuth resource provisioning", () => {
 
     expect(oauthProviderIndex).toBeGreaterThanOrEqual(0);
     expect(fragmentBridgeIndex).toBeGreaterThan(oauthProviderIndex);
+  });
+});
+
+describe("session token responses", () => {
+  test("every auth endpoint answer passes the session token redaction", () => {
+    const plugins = getAuth().options.plugins;
+    const pluginIds = plugins.map((plugin) => plugin.id);
+    // Read through the public plugin contract: the census checks what any
+    // endpoint matcher receives, not this plugin's literal type.
+    const redaction: BetterAuthPlugin | undefined = plugins.find(
+      (plugin) => plugin.id === "stella-session-token-redaction",
+    );
+    const after = redaction?.hooks?.after ?? [];
+    expect(after).toHaveLength(1);
+    // The matcher accepts every endpoint, so no auth response escapes it.
+    expect(
+      after.every(({ matcher }) =>
+        [
+          "/list-sessions",
+          "/get-session",
+          "/organization/list",
+          "/oauth2/token",
+          "/oauth2/userinfo",
+          "/mcp-handoff/sessions",
+          "/x",
+        ].every((path) => matcher(fakeCtx(path))),
+      ),
+    ).toBe(true);
+    // Only the refusal log, which records the final answer, runs after it.
+    expect(
+      pluginIds.slice(pluginIds.indexOf("stella-session-token-redaction") + 1),
+    ).toEqual(["stella-auth-refusal-log"]);
   });
 });
 
