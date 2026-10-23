@@ -73,7 +73,7 @@ const AUTH_RESULT = {
 const SCAN_RESULT = {
   PASS: "pass",
   FAIL: "fail",
-  GRAY: "unavailable",
+  GRAY: "inconclusive",
   PROCESSING_FAILED: "unavailable",
 } as const satisfies Record<SesStatus, AttachmentScanVerdict>;
 

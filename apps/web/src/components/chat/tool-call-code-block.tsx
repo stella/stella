@@ -1,19 +1,12 @@
 import type { CSSProperties } from "react";
 
-import { Result, panic } from "better-result";
+import { panic } from "better-result";
 import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
-import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
-import { Button } from "@stll/ui/button";
-import { CopyIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { getAnalytics } from "@/lib/analytics/provider";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { CopyActionButton } from "@/components/copy-action-button";
 
 const TOOL_CODE_THEME = {
   plain: {
@@ -84,20 +77,9 @@ export const ToolCallCodeBlock = ({
   lineNumbers?: boolean;
   tone: ToolCallCodeTone;
 }) => {
-  const t = useTranslations();
   const shouldShowLineNumbers = lineNumbers ?? false;
   const tokens = useTokenize({ code, language, prism: Prism });
   const keyedLines = addStableKeys(tokens);
-
-  const handleCopy = async () => {
-    const copied = await copyToClipboard(code);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
 
   return (
     <section aria-label={label} className="group/code relative" dir="ltr">
@@ -105,17 +87,7 @@ export const ToolCallCodeBlock = ({
         className="absolute end-1 top-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100 motion-reduce:transition-none pointer-coarse:opacity-100"
         data-chat-copy-exclude
       >
-        <Button
-          aria-label={t("common.copy")}
-          onClick={() => {
-            detached(handleCopy(), "tool-call-code-block.copy");
-          }}
-          size="icon-xs"
-          type="button"
-          variant="muted"
-        >
-          <CopyIcon className="size-3.5" />
-        </Button>
+        <CopyActionButton iconOnly size="icon-xs" text={code} variant="muted" />
       </div>
       <pre
         className={cn(
