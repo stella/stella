@@ -462,7 +462,41 @@ jobs:
               // A draft runs no CI, so ready_for_review starts the first code
               // run, and prove-fix changes suite scope: both own ci-result.
               && context.payload.label?.name !== "prove-fix";
-            if (metadataAction) core.setOutput("metadata_only", "true");
+            // A metadata run mirrors the code run of its head. When no earlier
+            // code run of this head exists (a token push starts no workflow,
+            // or the event was lost), it runs the head's suites itself. A run
+            // still in flight is a code run: metadata runs of one head share a
+            // concurrency group. A failed lookup runs the suites too.
+            let mirrorsCodeRun = false;
+            if (metadataAction) {
+              const pull = context.payload.pull_request;
+              try {
+                const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                  ...context.repo, workflow_id: "ci.yml", event: "pull_request",
+                  head_sha: pull.head.sha, per_page: 100, request: { timeout: 10000 },
+                });
+                for (const run of runs) {
+                  if (run.id >= context.runId || run.head_sha !== pull.head.sha
+                      || !run.pull_requests?.some((linked) => linked.number === pull.number)
+                      || run.conclusion === "cancelled") continue;
+                  if (run.status !== "completed") {
+                    mirrorsCodeRun = true;
+                    break;
+                  }
+                  const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                    ...context.repo, run_id: run.id, per_page: 100, request: { timeout: 10000 },
+                  });
+                  if (jobs.some((job) => job.name === "ci-plan")) {
+                    mirrorsCodeRun = true;
+                    break;
+                  }
+                }
+              } catch {
+                core.info("Earlier runs of this head are unavailable.");
+              }
+              if (!mirrorsCodeRun) core.info(`No earlier code run of ${pull.head.sha}; running its suites.`);
+            }
+            if (mirrorsCodeRun) core.setOutput("metadata_only", "true");
             const queue = mergeGroup && process.env.QUEUE_DEPTH === "thin";
             if (queue) core.setOutput("normal_completion", "required");
             let pr = context.payload.pull_request;
@@ -497,7 +531,7 @@ jobs:
             // Metadata that cannot change suite scope consumes completed
             // evidence when available, but never starts a duplicate suite.
             // Ready events and prove-fix transitions still need their suites.
-            if (metadataAction && !proofScopeChanged) {
+            if (mirrorsCodeRun && !proofScopeChanged) {
               core.setOutput("run_required", "false");
             }
             const scope = require("node:crypto").createHash("sha256")
@@ -6588,8 +6622,8 @@ jobs:
           }
           trap 'record_required_jobs "$?" || echo "::error::The required-jobs record could not be written."' EXIT
           mirror_metadata_code_run() {
-            local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate jobs plan_name result status conclusion running code_found
-            while ((waited <= max_wait_seconds)); do
+            local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate run_status jobs plan_name result status conclusion running
+            while true; do
               runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100") || {
                 echo "::error::Metadata mirror could not list CI code runs."
                 return 1
@@ -6598,14 +6632,15 @@ jobs:
                 [.[].workflow_runs[]
                   | select(.id != $current and .head_sha == $head)
                   | select(any(.pull_requests[]?; .number == $pr))]
-                | sort_by(.run_number, .id) | reverse | .[].id
+                | sort_by(.run_number, .id) | reverse | .[]
+                | select(.status | type == "string")
+                | "\(.id) \(.status)"
                 ' <<< "$runs") || {
                 echo "::error::Metadata mirror received invalid CI run data."
                 return 1
               }
               running=false
-              code_found=false
-              while IFS= read -r candidate; do
+              while read -r candidate run_status; do
                 [[ -n "$candidate" ]] || continue
                 jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$candidate/jobs?per_page=100") || {
                   echo "::error::Metadata mirror could not inspect code run $candidate."
@@ -6617,19 +6652,28 @@ jobs:
                 if [[ "$plan_name" == ci-metadata-plan ]] || jq -e 'any(.[].jobs[]; .name == "ci-metadata-result")' <<< "$jobs" >/dev/null; then
                   continue
                 fi
-                [[ "$plan_name" == ci-plan ]] || continue
-                code_found=true
-                result=$(jq -cer '[.[].jobs[] | select(.name == "ci-result")] | sort_by(.id) | last // null' <<< "$jobs") || {
-                  echo "::error::Code run $candidate has no ci-result job."
+                # GitHub lists a job only once it is queued: a queued run has
+                # no ci-plan yet and a running one no ci-result yet. Either may
+                # be the code run, so the mirror waits for it to report.
+                if [[ "$plan_name" != ci-plan ]]; then
+                  if [[ "$run_status" != completed ]]; then
+                    running=true
+                    break
+                  fi
+                  continue
+                fi
+                result=$(jq -cr '[.[].jobs[] | select(.name == "ci-result")] | sort_by(.id) | last' <<< "$jobs") || return 1
+                if [[ "$result" == null ]]; then
+                  if [[ "$run_status" != completed ]]; then
+                    running=true
+                    break
+                  fi
+                  echo "::error::Code run $candidate completed without a ci-result job."
                   return 1
-                }
+                fi
                 status=$(jq -er '.status | select(type == "string")' <<< "$result") || return 1
                 conclusion=$(jq -er '.conclusion // "" | select(type == "string")' <<< "$result") || return 1
                 if [[ "$status" != completed ]]; then
-                  if ((waited == max_wait_seconds)); then
-                    echo "::error::Metadata mirror: code run still running after 90 min."
-                    return 1
-                  fi
                   running=true
                   break
                 fi
@@ -6642,14 +6686,18 @@ jobs:
                 echo "::error::Metadata mirror: code run $candidate completed with ${conclusion:-no conclusion}."
                 return 1
               done <<< "$candidates"
-              if [[ "$code_found" == false ]]; then
+              if [[ "$running" == false ]]; then
+                # ci-plan runs a head's suites itself when it has no earlier
+                # code run, so a mirror starts only after one was created.
                 echo "::error::Metadata mirror: no code run exists for pull request $PR_NUMBER at head $HEAD_SHA."
                 return 1
               fi
-              if [[ "$running" == true ]]; then
-                sleep "$poll_seconds"
-                waited=$((waited + poll_seconds))
+              if ((waited >= max_wait_seconds)); then
+                echo "::error::Metadata mirror: code run still running after 90 min."
+                return 1
               fi
+              sleep "$poll_seconds"
+              waited=$((waited + poll_seconds))
             done
           }
           if [[ "$EVENT" == pull_request && "$METADATA_ONLY" == true ]]; then

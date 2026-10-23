@@ -1,9 +1,11 @@
 import { sleep } from "@stll/concurrency/sleep";
 
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { transformUnknownError } from "@/lib/errors/client";
 
 const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_REQUEST_TIMEOUT = 408;
 const HTTP_SERVER_ERROR_MIN = 500;
 const DEFAULT_RETRY_AFTER_S = 60;
 const MAX_RETRIES = 3;
@@ -19,9 +21,12 @@ type UploadState =
 
 type UploadFn<T> = (file: File, signal: AbortSignal) => Promise<T>;
 
-type FailedUpload = {
+export type UploadFailureDisposition = "permanent" | "retryable";
+
+export type FailedUpload = {
   file: File;
   error: Error;
+  disposition: UploadFailureDisposition;
 };
 
 /**
@@ -224,7 +229,9 @@ export class UploadQueue<T> {
     }
     this.runId++;
     this.fileRunIds.clear();
-    this.pending = this.failed.map(({ file }) => ({ file, attempt: 0 }));
+    this.pending = this.failed
+      .filter(({ disposition }) => disposition === "retryable")
+      .map(({ file }) => ({ file, attempt: 0 }));
     this.total = this.pending.length;
     this.failed = [];
     this.completed = [];
@@ -372,6 +379,7 @@ export class UploadQueue<T> {
       this.failed.push({
         file,
         error: transformUnknownError(error),
+        disposition: uploadFailureDisposition(error),
       });
       this.emitProgress();
       this.pump();
@@ -426,6 +434,33 @@ const getErrorStatus = (error: unknown): number => {
     return error.status;
   }
   return 0;
+};
+
+/**
+ * Classify a terminal upload failure from structured error data. HTTP client
+ * rejections are permanent, while failures that may clear without changing
+ * the file can be attempted again by the user after automatic retries end.
+ */
+export const uploadFailureDisposition = (
+  error: unknown,
+): UploadFailureDisposition => {
+  if (APIError.is(error)) {
+    return error.status === HTTP_REQUEST_TIMEOUT ||
+      error.status === HTTP_TOO_MANY_REQUESTS ||
+      error.status >= HTTP_SERVER_ERROR_MIN
+      ? "retryable"
+      : "permanent";
+  }
+  if (
+    error instanceof DOMException &&
+    (error.name === "TimeoutError" || error.name === "NetworkError")
+  ) {
+    return "retryable";
+  }
+  if (error instanceof TypeError) {
+    return "retryable";
+  }
+  return "permanent";
 };
 
 /**
