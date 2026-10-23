@@ -958,7 +958,8 @@
       "searchable": "Pesquisáveis",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
-      "unavailable": "Os dados de cobertura estão indisponíveis no momento."
+      "unavailable": "Os dados de cobertura estão indisponíveis no momento.",
+      "unreadListingPeriods": "Períodos da listagem não lidos"
     },
     "decisionNotFound": "Decisão não encontrada",
     "decisionTypes": {

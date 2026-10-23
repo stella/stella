@@ -958,7 +958,8 @@
       "searchable": "Meklējami",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
+      "unreadListingPeriods": "Nenolasītie saraksta periodi"
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "decisionTypes": {

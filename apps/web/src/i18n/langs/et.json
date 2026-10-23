@@ -958,7 +958,8 @@
       "searchable": "Otsitavad",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
-      "unavailable": "Kaetuse andmed ei ole praegu saadaval."
+      "unavailable": "Kaetuse andmed ei ole praegu saadaval.",
+      "unreadListingPeriods": "Nimekirja lugemata perioodid"
     },
     "decisionNotFound": "Otsust ei leitud",
     "decisionTypes": {
