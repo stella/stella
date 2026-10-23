@@ -13,9 +13,11 @@ export const auditLogsRoute = new Elysia({ prefix: "/audit-logs" })
     // this is intentionally scoped by auditLog.read rather
     // than workspace membership.
     permissions: readAuditLogs.config.permissions,
+    accountAccess: readAuditLogs.config.accountAccess,
     query: readAuditLogs.config.query,
   })
   .get("/export", exportAuditLogs.handler, {
     permissions: exportAuditLogs.config.permissions,
+    accountAccess: exportAuditLogs.config.accountAccess,
     query: exportAuditLogs.config.query,
   });

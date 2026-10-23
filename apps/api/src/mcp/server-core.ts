@@ -48,7 +48,7 @@ import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import {
   isMcpSession,
-  type authenticateMcpRequest,
+  type McpAuthenticationFailure,
   type McpSession,
 } from "@/api/mcp/auth";
 import {
@@ -121,6 +121,10 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import {
+  MCP_WEB_HANDOFF_TOOL,
+  withWebHandoffLinks,
+} from "@/api/mcp/web-handoff-links";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
@@ -190,7 +194,11 @@ type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
   chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
-  authenticateMcpRequest: typeof authenticateMcpRequest;
+  decorateToolResult?: typeof withWebHandoffLinks;
+  authenticateMcpRequest: (
+    token: string,
+    options: { mode: McpMode },
+  ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
     toolName: string,
@@ -800,6 +808,7 @@ export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
   chargeReadBytes = chargeMcpReadBytes,
   actionSizePolicy = getActionSizePolicy,
+  decorateToolResult = withWebHandoffLinks,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
@@ -940,8 +949,12 @@ export const createMcpHttpRequestHandler = ({
             toolName,
           }),
       );
+      const decoratedResult =
+        toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
+          ? result
+          : await decorateToolResult(result, context);
       return await boundMcpToolResult({
-        result,
+        result: decoratedResult,
         requestId: mcpReq.id,
         definition,
         readClass,
