@@ -279,7 +279,6 @@ describe("the coverage page states what it counts", () => {
                         missing: 0,
                         shortSlices: 0,
                         unlistedSlices: 3,
-                        latestWalkError: "listing walk failed",
                       },
                     ],
                   },

@@ -1475,7 +1475,6 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
                           missing: v.number(),
                           shortSlices: v.number(),
                           unlistedSlices: v.number(),
-                          latestWalkError: v.string(),
                         }),
                       ),
                     ]),

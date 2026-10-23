@@ -19,11 +19,8 @@ type CaseLawCoverageYear =
       missing: number;
       shortSlices: number;
       unlistedSlices: number;
-      latestWalkError: string;
     };
 
-/** The longest walk error the public coverage response carries; longer ledger text is cut. */
-export const COVERAGE_WALK_ERROR_MAX_LENGTH = 2048;
 export type CaseLawKnownGaps =
   | {
       type: "reconciled";
@@ -100,7 +97,6 @@ type CoverageYearAggregate = {
   missing: number;
   shortSlices: number;
   unlistedSlices: number;
-  latestWalkError: string | null;
 };
 
 export const summarizeCaseLawCoverageYears = (
@@ -115,14 +111,16 @@ export const summarizeCaseLawCoverageYears = (
     missing += row.missing;
     shortSlices += row.shortSlices;
     unlistedSlices += row.unlistedSlices;
-    if (row.unlistedSlices > 0 && row.latestWalkError !== null) {
+    // A slice with no reported count is one whose listing walk failed (the
+    // ledger's counted-or-failed check). Why it failed is operator state:
+    // the walk error text never leaves the ledger.
+    if (row.unlistedSlices > 0) {
       years.push({
         year: row.year,
         type: "unlisted",
         missing: row.missing,
         shortSlices: row.shortSlices,
         unlistedSlices: row.unlistedSlices,
-        latestWalkError: row.latestWalkError,
       });
       continue;
     }
@@ -194,9 +192,6 @@ export const readCaseLawCoverageYearsQuery = async (
         missing: sql<number>`coalesce(sum(greatest(${caseLawCoverageSlices.reported} - ${caseLawCoverageSlices.collected}, 0)), 0)::integer`,
         shortSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.collected} < ${caseLawCoverageSlices.reported})::integer`,
         unlistedSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.reported} IS NULL)::integer`,
-        latestWalkError: sql<
-          string | null
-        >`(array_agg(left(${caseLawCoverageSlices.walkError}, ${COVERAGE_WALK_ERROR_MAX_LENGTH}) ORDER BY ${caseLawCoverageSlices.checkedAt} DESC) FILTER (WHERE ${caseLawCoverageSlices.walkError} IS NOT NULL))[1]`,
       })
       .from(caseLawCoverageSlices)
       .where(inArray(caseLawCoverageSlices.sourceId, reconciledSourceIds))
@@ -230,7 +225,6 @@ export const readCaseLawCoverageYearsQuery = async (
       missing: row.missing,
       shortSlices: row.shortSlices,
       unlistedSlices: row.unlistedSlices,
-      latestWalkError: row.latestWalkError,
     };
     const aggregates = bySource.get(row.sourceId);
     if (aggregates === undefined) {

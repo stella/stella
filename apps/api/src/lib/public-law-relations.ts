@@ -321,7 +321,6 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     reported: "required",
     collected: "required",
     checked_at: "required",
-    walk_error: "required",
   },
   // Accept the future reader grant before a later release grants and reads it.
   case_law_decision_aliases: {

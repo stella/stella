@@ -9,6 +9,7 @@ import fc from "fast-check";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   caseLawDecisions,
@@ -26,7 +27,6 @@ import {
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
 import {
-  COVERAGE_WALK_ERROR_MAX_LENGTH,
   readCaseLawCoverageYearsQuery,
   summarizeCaseLawCoverageYears,
 } from "@/api/handlers/case-law/decisions/coverage-years";
@@ -435,7 +435,6 @@ test(
             missing: 0,
             shortSlices: 0,
             unlistedSlices: 2,
-            latestWalkError: "rate_limited",
           },
         ],
       });
@@ -461,31 +460,60 @@ test(
 );
 
 test(
-  "a walk error longer than the public bound is cut to it",
+  "a walk error never reaches the public coverage response",
   async () => {
     const db = drizzle({ client });
+    const secret = "k3y-6348-walk";
     await db.insert(caseLawCoverageSlices).values({
       sourceId: czSourceId,
       slice: "2022-03-04",
-      walkError: "x".repeat(COVERAGE_WALK_ERROR_MAX_LENGTH + 1),
+      walkError: `AdapterFetchError: GET https://listing.example/rozhodnuti?key=${secret}&strana=2 refused`,
       checkedAt: new Date("2026-01-05T00:00:00.000Z"),
     });
 
     try {
-      const years = await readAsReader(
-        async (tx) =>
-          await readCaseLawCoverageYearsQuery(tx, [
-            { id: czSourceId, adapterKey: ADAPTER_KEYS.CZ_NS },
-          ]),
-      );
-      const gaps = years.get(String(czSourceId));
-      const year =
-        gaps?.type === "reconciled"
-          ? gaps.years.find((entry) => entry.year === 2022)
-          : undefined;
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      // The failed walk still counts as an unread listing period.
       expect(
-        year?.type === "unlisted" ? year.latestWalkError.length : null,
-      ).toBe(COVERAGE_WALK_ERROR_MAX_LENGTH);
+        czech?.knownGaps.type === "reconciled"
+          ? czech.knownGaps.years.find(({ year }) => year === 2022)
+          : undefined,
+      ).toEqual({
+        year: 2022,
+        type: "unlisted",
+        missing: 0,
+        shortSlices: 0,
+        unlistedSlices: 1,
+      });
+      const body = JSON.stringify(coverage.value);
+      for (const leaked of [
+        secret,
+        "key=",
+        "listing.example",
+        "AdapterFetchError",
+      ]) {
+        expect(body).not.toContain(leaked);
+      }
+      // The public role holds no grant on the column at all.
+      // Drizzle wraps the driver error, so the refusal is on the cause.
+      expect(
+        await rejectionOf(
+          readAsReader(
+            async (tx) =>
+              await tx.execute(
+                sql`SELECT walk_error FROM case_law_coverage_slices LIMIT 1`,
+              ),
+          ),
+        ),
+      ).toMatchObject({
+        cause: { message: expect.stringContaining("permission denied") },
+      });
     } finally {
       await db
         .delete(caseLawCoverageSlices)
@@ -505,9 +533,6 @@ test("per-year missing counts sum to the source missing count", () => {
           missing: fc.nat({ max: 10_000 }),
           shortSlices: fc.nat({ max: 366 }),
           unlistedSlices: fc.nat({ max: 366 }),
-          latestWalkError: fc.option(fc.string({ minLength: 1 }), {
-            nil: null,
-          }),
         }),
       ),
       (rows) => {
