@@ -42,11 +42,13 @@ import type {
   ProvisionViewPayload,
 } from "./reader-types";
 
-const HeaderSeparator = () => (
-  <span aria-hidden="true" className="text-muted-foreground shrink-0 text-xs">
-    ·
-  </span>
-);
+/**
+ * The `·` before a header part belongs to the part, so a part that gives way
+ * entirely takes its separator with it instead of leaving a stray dot.
+ * Generated content with empty alternative text: seen, never announced.
+ */
+const SEPARATED_PART =
+  "before:text-muted-foreground before:mx-1.5 before:content-['·'_/_'']";
 
 type ProvisionCardHeaderProps = {
   /** What the card is about, e.g. `§ 226 odst. 1`; never shortened. */
@@ -55,16 +57,17 @@ type ProvisionCardHeaderProps = {
 };
 
 /**
- * The one header every cited-provision card draws, inline under a paragraph
- * and in the citation's hover card: one row naming the provision, the act
- * by number and title, the date the quoted wording took effect, and a
- * button that opens the provision.
+ * The one header every cited-provision card draws, inline under a paragraph,
+ * in the margin and in the citation's hover card: one row naming the
+ * provision, the act by number and title, the date the quoted wording took
+ * effect, and a button that opens the provision.
  *
  * The row never wraps, and the open button sits outside the part that gives
- * way, so it is always there to press. When the rest runs out of room it
- * gives way in a fixed order: the act's title first (it takes only the room
- * left once the label and the date fit), then the provision label (its full
- * text stays in the tooltip), and the date last, cut off at the edge.
+ * way, so it is always there to press. The provision label is what the card
+ * is about, so it gives way last: the act's title goes first (it takes only
+ * the room left once the label and the date fit), then the date, and the
+ * label is cut only when it alone is wider than the row (its full text stays
+ * in the tooltip).
  */
 export const ProvisionCardHeader = ({
   label,
@@ -81,33 +84,34 @@ export const ProvisionCardHeader = ({
       data-slot="provision-card-header"
     >
       <span
-        className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap"
+        className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         data-slot="provision-card-summary"
       >
         <BidiText
           as="span"
-          className="min-w-0 truncate text-sm font-medium"
+          className="max-w-full shrink-0 truncate text-sm font-medium"
           data-slot="provision-card-label"
           title={label}
         >
           {label}
         </BidiText>
         {actText !== "" && (
-          <>
-            <HeaderSeparator />
-            <BidiText
-              as="span"
-              className="text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs"
-              data-slot="provision-card-act"
-              title={actText}
-            >
-              {actText}
-            </BidiText>
-          </>
+          <span
+            className={cn(
+              "text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs",
+              SEPARATED_PART,
+            )}
+            data-slot="provision-card-act"
+            title={actText}
+          >
+            <BidiText>{actText}</BidiText>
+          </span>
         )}
-        <HeaderSeparator />
         <span
-          className="text-muted-foreground shrink-0 text-xs"
+          className={cn(
+            "text-muted-foreground min-w-0 truncate text-xs",
+            SEPARATED_PART,
+          )}
           data-slot="provision-card-date"
         >
           {date === null
@@ -203,24 +207,42 @@ const ProvisionTextUnavailable = ({
   );
 };
 
+type ProvisionCardPlacement = "gutter" | "inline";
+
+/** The type size of the analysis notes in the margin. */
+const GUTTER_NOTE_TYPE =
+  "text-[calc(0.75rem*var(--reader-text-scale))] leading-snug";
+
+/**
+ * How the wording reads where the card sits: under a paragraph or in a hover
+ * card it is quoted text, in the margin it is one more note and reads like
+ * the analysis notes beside it.
+ */
+const WORDING_TYPE = {
+  gutter: cn(
+    "reader-chrome text-foreground-placeholder gap-1.5",
+    GUTTER_NOTE_TYPE,
+  ),
+  inline: "reader-body text-foreground gap-2 text-sm leading-relaxed",
+} as const satisfies Record<ProvisionCardPlacement, string>;
+
 type ProvisionWordingProps = {
   blocks: ProvisionPreviewData["blocks"];
   /** Blocks a citation of a part names, marked beside the rest. */
   cited: ReadonlySet<string>;
   language: string | null;
+  placement: ProvisionCardPlacement;
 };
 
-/**
- * Wording in the reader's own flow. It is never a scroller of its own: the
- * reader keeps one scroll, and a long provision makes the card taller.
- */
+/** Wording of the cited provision, typeset for where the card sits. */
 const ProvisionWording = ({
   blocks,
   cited,
   language,
+  placement,
 }: ProvisionWordingProps) => (
   <span
-    className="reader-body text-foreground flex flex-col gap-2 text-sm leading-relaxed text-pretty"
+    className={cn("flex flex-col text-pretty", WORDING_TYPE[placement])}
     data-slot="provision-card-wording"
     lang={language ?? undefined}
   >
@@ -238,7 +260,13 @@ const ProvisionWording = ({
   </span>
 );
 
-const PassageBody = ({ passage }: { passage: ProvisionCardPassage }) => {
+const PassageBody = ({
+  passage,
+  placement = "inline",
+}: {
+  passage: ProvisionCardPassage;
+  placement?: ProvisionCardPlacement;
+}) => {
   const messages = useReaderMessages();
   switch (passage.type) {
     case "pending":
@@ -252,6 +280,7 @@ const PassageBody = ({ passage }: { passage: ProvisionCardPassage }) => {
             blocks={passage.blocks}
             cited={passage.cited}
             language={passage.language}
+            placement={placement}
           />
           {passage.unavailable.map((provisionLabel) => (
             <span
@@ -295,24 +324,26 @@ export type { FullProvisionRead } from "./provision-card.logic";
 const FullProvisionWording = ({
   outcome,
   passage,
+  placement,
   wordings,
 }: {
   outcome: FullProvisionOutcome;
   passage: ProvisionCardPassage;
+  placement: ProvisionCardPlacement;
   wordings: readonly CitedWording[];
 }) => {
   switch (outcome.type) {
     case "pending":
       return (
         <>
-          <PassageBody passage={passage} />
+          <PassageBody passage={passage} placement={placement} />
           <ProvisionWordingSkeleton />
         </>
       );
     case "unavailable":
       return (
         <>
-          <PassageBody passage={passage} />
+          <PassageBody passage={passage} placement={placement} />
           <ProvisionTextUnavailable scope="full" />
         </>
       );
@@ -320,6 +351,7 @@ const FullProvisionWording = ({
       return (
         <PassageBody
           passage={provisionCardPassage(wordings, outcome.wording)}
+          placement={placement}
         />
       );
     default:
@@ -335,11 +367,59 @@ type CitedProvisionExpansionProps = {
   /** Whether the reader requested the whole provision rather than the cited parts. */
   showsFull: boolean;
   wordings: readonly CitedWording[];
-  placement?: "gutter" | "inline";
+  placement?: ProvisionCardPlacement;
 };
 
 /**
- * One cited provision under the paragraph that cites it: one header row,
+ * Lines of wording a folded margin card shows: enough to recognise the
+ * provision, few enough that a paragraph citing many provisions keeps its
+ * cards beside it.
+ */
+const GUTTER_GLIMPSE_LINES = "max-h-[2lh]";
+
+/**
+ * How much wording a card shows. Under a paragraph the card grows with the
+ * reader's single scroll. The margin is shared by every note on the page and
+ * each is pushed down by the ones above it, so a margin card never grows
+ * past a fixed height: folded it shows a glimpse, open it scrolls inside.
+ */
+const WordingFrame = ({
+  children,
+  expanded,
+  placement,
+}: {
+  children: ReactNode;
+  expanded: boolean;
+  placement: ProvisionCardPlacement;
+}): ReactNode => {
+  if (placement === "inline") {
+    return children;
+  }
+  return expanded ? (
+    <ScrollArea
+      axis="vertical"
+      className="max-h-64"
+      data-slot="provision-card-scroll"
+      scrollFade
+    >
+      {children}
+    </ScrollArea>
+  ) : (
+    <span
+      className={cn(
+        "block overflow-hidden",
+        GUTTER_NOTE_TYPE,
+        GUTTER_GLIMPSE_LINES,
+      )}
+      data-slot="provision-card-glimpse"
+    >
+      {children}
+    </span>
+  );
+};
+
+/**
+ * One cited provision beside the paragraph that cites it: one header row,
  * where the provision sits when that fits on a line, then each cited part
  * in full and, on request, the rest of the provision around them. Every
  * citation of the provision in the paragraph shares the card. Rendered by
@@ -402,23 +482,28 @@ export const CitedProvisionExpansion = ({
           !expanded && placement === "inline" && "hidden",
         )}
       >
-        <ProvisionTrailLine
-          language={firstWording?.language}
-          trail={provisionTrail({ label, passage, wording: firstWording })}
-        />
-        <span className={cn(!expanded && "line-clamp-3")}>
+        <span className={cn("contents", !expanded && "hidden")}>
+          <ProvisionTrailLine
+            language={firstWording?.language}
+            trail={provisionTrail({ label, passage, wording: firstWording })}
+          />
+        </span>
+        <WordingFrame expanded={expanded} placement={placement}>
           {foldable && showsFull ? (
             <FullProvisionWording
               outcome={outcome}
               passage={passage}
+              placement={placement}
               wordings={wordings}
             />
           ) : (
-            <PassageBody passage={passage} />
+            <PassageBody passage={passage} placement={placement} />
           )}
-        </span>
+        </WordingFrame>
         {foldable && (
-          <span className="reader-chrome self-start">
+          <span
+            className={cn("reader-chrome self-start", !expanded && "hidden")}
+          >
             <Button
               aria-expanded={displaysFullText}
               disabled={showsFull && outcome.type === "pending"}
