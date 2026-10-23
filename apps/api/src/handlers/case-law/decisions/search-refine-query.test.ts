@@ -3,8 +3,16 @@ import { describe, expect, test } from "bun:test";
 import {
   CASE_LAW_REFINE_MAX_TERMS,
   caseLawRefineOutputSchema,
+  isIncompleteCaseLawRefineGeneration,
   normalizeCaseLawRefinedQuery,
 } from "@/api/handlers/case-law/decisions/search-refine-query";
+import {
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
+  ModelOutputModeratedError,
+  ModelRunError,
+  ModelRunUnfinishedError,
+} from "@/api/lib/errors/provider-call-error";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import {
   corpusFreeTextClause,
@@ -89,4 +97,23 @@ describe("normalizeCaseLawRefinedQuery", () => {
 
 test("the output schema converts to JSON Schema for structured output", () => {
   expect(() => toJsonSchema(caseLawRefineOutputSchema)).not.toThrow();
+});
+
+describe("incomplete case-law refinement generations", () => {
+  const model = { provider: "openai", keySource: "instance" } as const;
+
+  test.each([
+    new ModelOutputIncompleteError({ model }),
+    new ModelOutputInvalidError({ model }),
+    new ModelRunUnfinishedError({ model }),
+  ])("retries an incomplete answer once: %#", (error) => {
+    expect(isIncompleteCaseLawRefineGeneration(error)).toBe(true);
+  });
+
+  test.each([
+    new ModelOutputModeratedError({ model }),
+    new ModelRunError({ model }),
+  ])("does not retry a moderated or refused answer: %#", (error) => {
+    expect(isIncompleteCaseLawRefineGeneration(error)).toBe(false);
+  });
 });

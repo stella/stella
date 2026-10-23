@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { classifyAIError } from "@/api/lib/ai-error";
 import {
   formatCorpusQueryTokens,
   partitionCorpusFunctionWords,
@@ -78,4 +79,15 @@ export const normalizeCaseLawRefinedQuery = (
     );
   }
   return Result.ok(formatCorpusQueryTokens(required));
+};
+
+export const isIncompleteCaseLawRefineGeneration = (
+  error: unknown,
+): boolean => {
+  const kind = classifyAIError(error);
+  return (
+    kind === "output_incomplete" ||
+    kind === "output_invalid" ||
+    kind === "provider_stream_incomplete"
+  );
 };
