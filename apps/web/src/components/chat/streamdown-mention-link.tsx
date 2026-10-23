@@ -287,8 +287,13 @@ export const StreamdownMentionLink = ({
     );
   }
 
+  // Keep the id: footnote back-links point at the reference anchor.
   return (
-    <ProxyChatLink href={href} iconSource={{ kind: "model-text" }}>
+    <ProxyChatLink
+      href={href}
+      iconSource={{ kind: "model-text" }}
+      id={props.id}
+    >
       {children}
     </ProxyChatLink>
   );

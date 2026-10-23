@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { RegistrableIconSite } from "@/api/handlers/chat/link-icons/origin";
+import type { LinkIconTarget } from "@/api/handlers/chat/link-icons/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
@@ -177,7 +177,7 @@ export const createLinkIconCache = ({
       userId,
       ip,
     }: {
-      hostname: RegistrableIconSite;
+      hostname: LinkIconTarget;
       userId: SafeId<"user">;
       ip: string;
     }): Promise<ReadResult> => {
@@ -224,7 +224,7 @@ export const createLinkIconCache = ({
       token,
       outcome,
     }: {
-      hostname: RegistrableIconSite;
+      hostname: LinkIconTarget;
       token: string;
       outcome: CacheableLinkIconOutcome;
     }): Promise<boolean> => {
