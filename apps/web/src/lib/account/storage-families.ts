@@ -184,6 +184,13 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "scoped",
     retention: "cleared",
   },
+  // Dismissed connection breaks belong to the signed-in user's integrations.
+  {
+    area: "local",
+    prefix: "stella:mcp-reconnect-dismissed:",
+    owner: "scoped",
+    retention: "cleared",
+  },
   // Tools the user approved for every chat: a standing grant.
   {
     area: "local",
