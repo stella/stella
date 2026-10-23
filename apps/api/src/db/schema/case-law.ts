@@ -1272,6 +1272,15 @@ export const caseLawDecisionIdentifierBackfills = p.pgTable(
       .notNull()
       .default(0),
     completedAt: timestamptz("completed_at"),
+    repairedByCourt: jsonb("repaired_by_court")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    lastCompletedRepairedByCourt: jsonb("last_completed_repaired_by_court")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    lastCompletedAt: timestamptz("last_completed_at"),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
       .notNull()

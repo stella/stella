@@ -11,6 +11,7 @@ export const SCHEDULER_BACKFILL_CONFIG = {
 };
 
 export const SCHEDULER_BACKFILL_IDS = {
+  decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
   expressionIds: "legislation.backfillExpressionIds.fiveMinute",
 } as const;

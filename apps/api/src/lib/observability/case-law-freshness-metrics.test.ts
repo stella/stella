@@ -18,6 +18,8 @@ const report = {
   oldestUnpublishedAgeSource: "desired_at",
   sourceAges: [{ source: "cz-ns", ageSeconds: 19 }],
   convergence: "pending",
+  decisionIdentifierRepairs: { "Test court": 2 },
+  decisionIdentifierPassAgeSeconds: 120,
 } as const;
 
 test("emits one owned EMF record per metric with only its bounded dimension", () => {
@@ -27,7 +29,7 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
   });
   emitCaseLawFreshnessReport(report);
 
-  expect(records).toHaveLength(4);
+  expect(records).toHaveLength(6);
   expect(
     records.map((record) =>
       Object.keys(record).filter((key) => key !== "_aws"),
@@ -36,6 +38,8 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
     ["CaseLawProjectionBacklogItems"],
     ["CaseLawOldestUnpublishedAgeSeconds"],
     ["CaseLawSourceSyncAgeSeconds", "source"],
+    ["CaseLawDecisionIdentifierRepairs", "court"],
+    ["CaseLawDecisionIdentifierPassAgeSeconds"],
     ["CaseLawProjectionConvergence", "status"],
   ]);
   expect(records.map((record) => record["_aws"])).toEqual([
@@ -68,6 +72,29 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
     expect.objectContaining({
       CloudWatchMetrics: [
         expect.objectContaining({
+          Dimensions: [["court"]],
+          Metrics: [
+            { Name: "CaseLawDecisionIdentifierRepairs", Unit: "Count" },
+          ],
+        }),
+      ],
+    }),
+    expect.objectContaining({
+      CloudWatchMetrics: [
+        expect.objectContaining({
+          Dimensions: [[]],
+          Metrics: [
+            {
+              Name: "CaseLawDecisionIdentifierPassAgeSeconds",
+              Unit: "Seconds",
+            },
+          ],
+        }),
+      ],
+    }),
+    expect.objectContaining({
+      CloudWatchMetrics: [
+        expect.objectContaining({
           Dimensions: [["status"]],
           Metrics: [{ Name: "CaseLawProjectionConvergence", Unit: "Count" }],
         }),
@@ -93,5 +120,5 @@ test("the scheduler task reads and emits one report per run", async () => {
     }),
   );
   expect(transactions).toBe(1);
-  expect(lines).toHaveLength(4);
+  expect(lines).toHaveLength(6);
 });

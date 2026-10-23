@@ -444,6 +444,8 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
   sourceSyncAgeSeconds: "CaseLawSourceSyncAgeSeconds",
   projectionConvergence: "CaseLawProjectionConvergence",
+  decisionIdentifierRepairs: "CaseLawDecisionIdentifierRepairs",
+  decisionIdentifierPassAgeSeconds: "CaseLawDecisionIdentifierPassAgeSeconds",
 } as const satisfies Record<string, string>;
 
 const buildCaseLawMetricRecord = ({
@@ -498,6 +500,27 @@ export const buildCaseLawSourceSyncAgeMetric = (
   }),
   source,
 });
+
+export const buildCaseLawDecisionIdentifierRepairMetric = (
+  court: string,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["court"],
+    name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierRepairs,
+    unit: "Count",
+    value,
+  }),
+  court,
+});
+
+export const buildCaseLawDecisionIdentifierPassAgeMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierPassAgeSeconds,
+    unit: "Seconds",
+    value,
+  });
 
 export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
   ...buildCaseLawMetricRecord({
