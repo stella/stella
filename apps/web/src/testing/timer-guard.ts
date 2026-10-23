@@ -75,17 +75,17 @@ const record = (handle: RuntimeTimer, kind: StartedTimer["kind"]) => {
   }
 };
 
-const guardedSetTimeout = ((...args: Parameters<typeof setTimeout>) => {
+const guardedSetTimeout = (...args: Parameters<typeof setTimeout>) => {
   const handle = realSetTimeout(...args);
   record(handle, "timeout");
   return handle;
-}) as typeof setTimeout;
+};
 
-const guardedSetInterval = ((...args: Parameters<typeof setInterval>) => {
+const guardedSetInterval = (...args: Parameters<typeof setInterval>) => {
   const handle = realSetInterval(...args);
   record(handle, "interval");
   return handle;
-}) as typeof setInterval;
+};
 
 /** Records first-party timers from now on against the running test. */
 export const markTimerTestStarted = () => {
