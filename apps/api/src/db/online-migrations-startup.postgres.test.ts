@@ -53,7 +53,7 @@ describe.skipIf(!enabled)("startup validation during a migrate run", () => {
         expect(held).toEqual([{ held: 0 }]);
       } finally {
         await migrator.unsafe(`SELECT pg_advisory_unlock(${ONLINE_LOCK_KEY})`);
-        booting.release();
+        await booting.release();
       }
     });
   });

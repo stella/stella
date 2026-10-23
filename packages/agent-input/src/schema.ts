@@ -782,8 +782,7 @@ const childSchemasOf = (
 
 /** One property's reading: a value, or a placeholder read as not sent. */
 type PropertyReading =
-  | { status: "value"; value: unknown }
-  | { status: "absent" };
+  { status: "value"; value: unknown } | { status: "absent" };
 
 const walkObject = ({
   schema,

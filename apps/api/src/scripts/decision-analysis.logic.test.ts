@@ -17,6 +17,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_REJECTION,
   courtFilter,
+  type DecisionAnalysisRow,
   describeUpdateOutcome,
   flagValue,
   hasFlag,
@@ -28,7 +29,6 @@ import {
   readAnalysisDatabaseUrl,
   resolveRowAnalysisInput,
   summariseOutcomes,
-  type DecisionAnalysisRow,
 } from "./decision-analysis.logic";
 
 const DECISION_ID = toSafeId<"caseLawDecision">(

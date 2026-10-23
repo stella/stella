@@ -4,8 +4,8 @@ import { Temporal } from "@stll/time";
 
 import contract from "../fixtures/activity-contract.json" with { type: "json" };
 import {
-  documentName,
   appTotals,
+  documentName,
   roundedTenthsOfHour,
   shiftDate,
   timedSegments,
@@ -14,10 +14,10 @@ import {
 import {
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_DETAILS_ACCESS,
-  MAX_ACTIVITY_METADATA_BYTES,
   ACTIVITY_RECORDING_STATUSES,
   ACTIVITY_RETENTIONS,
   isActivityDaySnapshot,
+  MAX_ACTIVITY_METADATA_BYTES,
 } from "../src/activity/activity-types";
 
 const MINUTE = 60_000;

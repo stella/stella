@@ -20,8 +20,8 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  rewalkBuildingTargetBatchTx,
   type BuildingTargetRewalkPage,
+  rewalkBuildingTargetBatchTx,
 } from "@/api/lib/legal-search/case-law-building-target-rewalk";
 import {
   CORPUS_INDEX_MANIFESTS,
