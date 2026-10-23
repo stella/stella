@@ -6448,6 +6448,7 @@ jobs:
       # `ci-required-summary` artifact holds the same record.
       required_summary: ${{ steps.outcome.outputs.required_summary }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 55
     permissions:
       contents: read
       actions: write
@@ -6671,7 +6672,7 @@ jobs:
           # on this run's concurrency group, and a newer code run reports its
           # own ci-result, so waiting on either would only wait out the deadline.
           mirror_metadata_code_run() {
-            local poll_seconds=30 max_wait_seconds=5400 waited=0 runs candidates candidate run_status jobs plan_name result status attempt record evidence evidence_run running passed_through=""
+            local poll_seconds=30 max_wait_seconds=2700 waited=0 runs candidates candidate run_status jobs plan_name result status attempt record evidence evidence_run running passed_through=""
             while true; do
               runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100") || {
                 echo "::error::Metadata mirror could not list CI code runs."
@@ -6783,7 +6784,7 @@ jobs:
                 return 1
               fi
               if ((waited >= max_wait_seconds)); then
-                echo "::error::Metadata mirror: code run still running after 90 min."
+                echo "::error::Metadata mirror: timed out after 45 min waiting for a code run of head $HEAD_SHA to report. Re-run that code run, or push."
                 return 1
               fi
               sleep "$poll_seconds"
