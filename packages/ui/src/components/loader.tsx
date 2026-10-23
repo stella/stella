@@ -15,6 +15,7 @@ const Loader = ({
   label,
   variant = "status",
   size = "md",
+  animation = "spin",
   className,
   ...props
 }: LoaderProps) => (
@@ -31,7 +32,12 @@ const Loader = ({
     aria-label={label}
     role={variant === "status" ? "status" : undefined}
   >
-    <LoaderCircleIcon className="text-muted-foreground size-full animate-spin motion-reduce:animate-none" />
+    <LoaderCircleIcon
+      className={cn(
+        "text-muted-foreground size-full",
+        animation === "spin" && "animate-spin motion-reduce:animate-none",
+      )}
+    />
   </span>
 );
 
@@ -85,6 +91,7 @@ type LoaderProps = Omit<
   "children" | "role" | "aria-label" | "aria-hidden" | "aria-busy"
 > & {
   size?: LoaderSize;
+  animation?: "none" | "spin";
 } & (
     | {
         variant?: "status";

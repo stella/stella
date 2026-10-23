@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  isValidElement,
-  type ButtonHTMLAttributes,
-  type ReactNode,
-} from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
@@ -105,11 +101,9 @@ type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
+  icon?: ReactNode;
   tooltip?: ReactNode;
 } & useRender.ComponentProps<"button">;
-
-const isReactNodeArray = (value: ReactNode): value is ReactNode[] =>
-  Array.isArray(value);
 
 function Button({
   className,
@@ -117,6 +111,7 @@ function Button({
   size,
   render,
   loading,
+  icon,
   children,
   disabled,
   tooltip,
@@ -125,11 +120,6 @@ function Button({
   const typeValue: ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
     ? undefined
     : "button";
-  const loadingChildren =
-    isReactNodeArray(children) && isValidElement(children.at(0))
-      ? children.slice(1)
-      : children;
-
   // Same value `renderTooltipTrigger` mounts below, so the disposition and the
   // popup cannot disagree about whether this button has a tooltip.
   const tooltipContent = tooltip ?? props["aria-label"] ?? props.title;
@@ -142,18 +132,21 @@ function Button({
     disposition === BUTTON_DISPOSITION.accessibleDisabled;
 
   const defaultProps = {
-    children: loading ? (
+    children: (
       <>
-        <Loader
-          className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
-          data-slot="button-loader"
-          size="sm"
-          variant="decorative"
-        />
-        {loadingChildren}
+        {loading ? (
+          <Loader
+            animation="none"
+            className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
+            data-slot="button-loader"
+            size="sm"
+            variant="decorative"
+          />
+        ) : (
+          icon
+        )}
+        {children}
       </>
-    ) : (
-      children
     ),
     className: cn(
       disposition === BUTTON_DISPOSITION.enabled &&

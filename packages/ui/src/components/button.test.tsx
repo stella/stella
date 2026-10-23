@@ -78,23 +78,23 @@ describe("Button loading icon", () => {
   // the only icon a reader sees, not a second spinner beside the first.
   test("the loader stands in for the caller's icon while loading", () => {
     const markup = renderToStaticMarkup(
-      <Button loading>
-        <RetryIcon /> Try again
+      <Button icon={<RetryIcon />} loading>
+        <span>Try again</span>
       </Button>,
     );
 
     expect(markup).toContain('data-slot="button-loader"');
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('aria-hidden="true"');
+    expect(markup).not.toContain("animate-spin");
     expect(markup.match(/<svg/gu)).toHaveLength(1);
     expect(markup).not.toContain('data-testid="retry-icon"');
+    expect(markup).toContain("<span>Try again</span>");
   });
 
   test("the caller's icon shows once the button is idle", () => {
     const markup = renderToStaticMarkup(
-      <Button>
-        <RetryIcon /> Try again
-      </Button>,
+      <Button icon={<RetryIcon />}>Try again</Button>,
     );
 
     expect(markup).toContain('data-testid="retry-icon"');
