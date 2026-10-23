@@ -52,8 +52,7 @@ const contextMatterWorkspaces = alias(
  * not be read this time, so the row knows it has a decision it cannot draw.
  */
 type ChatThreadDecision =
-  | { type: "present"; badge: PublicDecisionBadge }
-  | { type: "unavailable" };
+  { type: "present"; badge: PublicDecisionBadge } | { type: "unavailable" };
 
 type ChatThreadListItem = {
   context: ChatThreadContext;

@@ -5,10 +5,10 @@ import {
   formatSummaryTable,
   hasBlockingFindings,
   isMeasureSummary,
+  type MeasureSample,
   pageTotals,
   parseDriveArgs,
   summarizeSamples,
-  type MeasureSample,
 } from "../agent/drive-report";
 
 const sample = (overrides: Partial<MeasureSample> = {}): MeasureSample => ({

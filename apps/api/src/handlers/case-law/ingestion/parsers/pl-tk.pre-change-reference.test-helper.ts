@@ -36,10 +36,10 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
-  toMetadataUrl,
   type MetadataUrlDefect,
   type SafeHref,
   sanitizeUrl,
+  toMetadataUrl,
 } from "@/api/lib/sanitize-url";
 
 const PL_TK_ORIGIN = "https://ipo.trybunal.gov.pl";

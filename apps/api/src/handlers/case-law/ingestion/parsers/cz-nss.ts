@@ -36,7 +36,7 @@ import {
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
-import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
+import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -45,8 +45,8 @@ import {
   inlinesToPlainText,
   isExcludedHtmlTag,
   ownTableRows,
-  visibleHtmlText,
   stripFurniturePrefix,
+  visibleHtmlText,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
