@@ -125,6 +125,7 @@ const settleMicrotasks = async () => {
 const CONFIG = {
   intervalMs: 500,
   key: "case-law:publisher-gate:cellar-eu",
+  publisherCode: "cellar-eu",
   publisher: "EU Cellar",
   cooldown: "shared",
 } as const;
@@ -151,6 +152,7 @@ describe("default publisher gate fixture isolation", () => {
       const slot = createPublisherRequestSlot({
         intervalMs: 500,
         key,
+        publisherCode: "cellar-eu",
         publisher: key,
       });
       const startedAt = Temporal.Now.instant().epochMilliseconds;

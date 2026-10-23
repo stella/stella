@@ -29,6 +29,11 @@ const backfillTransactionTimeoutMs =
 const TRANSACTION_TIMEOUT_GRACE_MS = 30_000;
 const rootQueryTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbRootQueryTimeoutMs;
 const statementTimeoutCapMs = LEGAL_ATLAS_RUNNER_ENV.dbStatementTimeoutMs;
+type IngestionDbKind = "backfill" | "ingestion";
+const INGESTION_DB_TIMEOUT_LABEL = {
+  backfill: "backfill-db-transaction",
+  ingestion: "ingestion-db-transaction",
+} as const satisfies Record<IngestionDbKind, string>;
 
 /**
  * Build a `stella_ingestion`-scoped transaction runner with a per-transaction
@@ -39,7 +44,10 @@ const statementTimeoutCapMs = LEGAL_ATLAS_RUNNER_ENV.dbStatementTimeoutMs;
  * which otherwise leaves the transaction idle and the awaiting caller
  * suspended forever.
  */
-const createBoundedIngestionDb = (timeoutMs: number): ScopedDb => {
+const createBoundedIngestionDb = (
+  kind: IngestionDbKind,
+  timeoutMs: number,
+): ScopedDb => {
   // The lane wait shares the transaction budget: a batch that cannot enter
   // the corpus schema lane within it fails here, at the same moment the
   // wall-clock guard below gives up, instead of entering late and running
@@ -65,15 +73,17 @@ const createBoundedIngestionDb = (timeoutMs: number): ScopedDb => {
       });
 
     return await withTimeout(operation, {
-      label: "legal-atlas-db-transaction",
+      label: INGESTION_DB_TIMEOUT_LABEL[kind],
       timeoutMs: timeoutMs === 0 ? 0 : timeoutMs + TRANSACTION_TIMEOUT_GRACE_MS,
     });
   };
 };
 
 /** Transaction runner for adapter ingest cycles (long pipeline writes). */
-export const ingestionDb: ScopedDb =
-  createBoundedIngestionDb(transactionTimeoutMs);
+export const ingestionDb: ScopedDb = createBoundedIngestionDb(
+  "ingestion",
+  transactionTimeoutMs,
+);
 
 /**
  * Transaction runner for the index-maintenance backfill loops. Same bounded
@@ -85,6 +95,7 @@ export const ingestionDb: ScopedDb =
  * holding its loop for the full ingest ceiling.
  */
 export const backfillDb: ScopedDb = createBoundedIngestionDb(
+  "backfill",
   backfillTransactionTimeoutMs,
 );
 

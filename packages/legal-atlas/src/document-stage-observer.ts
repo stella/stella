@@ -19,6 +19,12 @@ class DocumentTelemetryObserverError extends TaggedError(
   reason: DocumentTelemetryObserverFailure["reason"];
 }> {}
 
+type DocumentObserverTimeoutOperation = "deliver" | "report-failure";
+const DOCUMENT_OBSERVER_TIMEOUT_LABEL = {
+  deliver: "document-stage-observer-delivery",
+  "report-failure": "document-stage-observer-failure-report",
+} as const satisfies Record<DocumentObserverTimeoutOperation, string>;
+
 type DocumentStageObserverOptions = {
   observation: DocumentStageObservation;
   observe: DocumentStageObserver;
@@ -67,7 +73,7 @@ export const observeDocumentStageSafely = async ({
       : await Result.tryPromise({
           try: async () =>
             await withTimeout(async () => await observe(observation), {
-              label: "document-stage-observer-delivery",
+              label: DOCUMENT_OBSERVER_TIMEOUT_LABEL.deliver,
               timeoutMs: budgetMs,
             }),
           catch: (cause) =>
@@ -92,7 +98,7 @@ export const observeDocumentStageSafely = async ({
       await withTimeout(
         async (signal) => await reportFailure(failure, signal),
         {
-          label: "document-stage-observer-failure-report",
+          label: DOCUMENT_OBSERVER_TIMEOUT_LABEL["report-failure"],
           timeoutMs: Math.max(1, remainingMs),
         },
       );

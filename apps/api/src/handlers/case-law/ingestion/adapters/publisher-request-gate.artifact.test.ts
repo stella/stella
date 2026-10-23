@@ -19,7 +19,7 @@ test("the bundled publisher gate reserves without eager Redis initialization", (
       entrypoint,
       `import { createPublisherRequestSlot } from ${JSON.stringify(publisherRequestGate)};
 let commands = 0;
-const reserve = createPublisherRequestSlot({ intervalMs: 1, key: "artifact", publisher: "test" }, {
+const reserve = createPublisherRequestSlot({ intervalMs: 1, key: "artifact", publisherCode: "cellar-eu", publisher: "test" }, {
   redis: () => ({ send: async () => { commands += 1; return 0; } }),
   sleep: async () => {},
 });
