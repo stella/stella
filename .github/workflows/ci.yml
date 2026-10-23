@@ -1230,6 +1230,15 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
+              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              const lost = jobs.filter((job) => job.conclusion === "failure"
+                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
+              if (!failures.length && lost.length) {
+                core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
+                return;
+              }
               failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
@@ -3204,6 +3213,15 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
+              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              const lost = jobs.filter((job) => job.conclusion === "failure"
+                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
+              if (!failures.length && lost.length) {
+                core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
+                return;
+              }
               failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling the pull request run after a code quality failure; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
@@ -5261,6 +5279,15 @@ jobs:
               const failures = jobs.flatMap((job) => (job.steps || [])
                 .filter((step) => step.conclusion === "failure")
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
+              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
+              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              const lost = jobs.filter((job) => job.conclusion === "failure"
+                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
+              if (!failures.length && lost.length) {
+                core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
+                return;
+              }
               failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
@@ -6789,11 +6816,17 @@ jobs:
             workflow_dispatch) code_group="${GITHUB_WORKFLOW:-}-ci-dispatch-${GITHUB_REF:-}" ;;
             *) code_group="" ;;
           esac
+          runner_lost_jobs='[]'
           if jq -e 'any(.[]; .result == "cancelled" or .result == "failure" or .result == "timed_out")' <<< "$NEEDS" > /dev/null; then
             cancelled_jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100") || {
               echo "::error::Cancelled CI job failed-step lookup was unavailable."
               exit 1
             }
+            runner_lost_jobs=$(jq -c '[.[].jobs[]
+              | select(.conclusion == "failure"
+                  and (any((.steps // [])[]; .conclusion == "failure") | not)
+                  and (((.steps // []) | length) == 0 or any((.steps // [])[]; .conclusion == "cancelled")))
+              | .name] | unique' <<< "$cancelled_jobs") || exit 1
             # Job deadlines can appear as cancelled or failure in needs.
             # Inspect runner annotations before a generic cancellation masks them.
             while IFS=$'\t' read -r job_name conclusion url; do
@@ -6847,6 +6880,17 @@ jobs:
               exit 1
             fi
           fi
+          report_required_runner_losses() {
+            local names
+            names=$(jq -r --argjson required "$required_jobs" --argjson lost "$runner_lost_jobs" '
+              . as $needs | $required[] | . as $job
+              | select(($lost | index($job)) and $needs[$job].result == "failure")
+              ' <<< "$NEEDS") || return 1
+            [[ -n "$names" ]] || return 0
+            while IFS= read -r job_name; do
+              echo "::error::$job_name: the runner was lost before any step failed; CI re-runs the failed jobs once automatically. If it fails again, re-run the failed jobs."
+            done <<< "$names"
+          }
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.
             # Keep only the derived heavy set; thin jobs intentionally skipped,
@@ -6994,6 +7038,7 @@ jobs:
                 [keys[] | select(. != "ci-plan") | . as $job
                   | select(($queue != "thin" or ($thin | index($job))) and ($scopes | has($job))
                     and ($scopes[$job] == null or $plan[$scopes[$job]] == "true"))]' <<< "$NEEDS") || exit 1
+              report_required_runner_losses || exit 1
               violations=$(jq -r --argjson required "$required_jobs" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
                   | if ($required | index($job)) then
@@ -7025,6 +7070,7 @@ jobs:
               required_jobs=$(jq -c --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '
                 [keys[] | . as $job | select($required | index($job))
                   | select($scopes[$job] == null or $plan[$scopes[$job]] == "true")]' <<< "$NEEDS") || exit 1
+              report_required_runner_losses || exit 1
               if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
