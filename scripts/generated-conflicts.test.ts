@@ -72,6 +72,10 @@ describe("classification", () => {
       { name: "a nested lockfile", path: "apps/desktop/src-tauri/Cargo.lock" },
       { name: "a baseline", path: "apps/api/mcp-surface-baseline.json" },
       { name: "a changeset", path: ".changeset/new.md" },
+      {
+        name: "a job classification decision",
+        path: ".github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fci.yml%2Fcheck.json",
+      },
       { name: "hand-written regions", path: "DESIGN.md" },
       {
         name: "a generator autofix may not run",

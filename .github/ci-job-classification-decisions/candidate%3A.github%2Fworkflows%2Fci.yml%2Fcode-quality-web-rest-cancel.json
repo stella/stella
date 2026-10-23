@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Cancels same-repository pull-request runs after web or remaining code-quality failure; no publication or deployment.",
+  "reviewedDigest": "d1dd586f30eb9679b0ebd635a79dfea3f3ccb5a1067ef89efc1ee32e37866c71"
+}
