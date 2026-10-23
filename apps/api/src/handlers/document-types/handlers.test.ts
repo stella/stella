@@ -12,6 +12,7 @@ import { documentTypes, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import createDocumentType from "@/api/handlers/document-types/create";
 import deleteDocumentType from "@/api/handlers/document-types/delete";
+import listDocumentTypes from "@/api/handlers/document-types/list";
 import reorderDocumentTypes from "@/api/handlers/document-types/reorder";
 import updateDocumentType from "@/api/handlers/document-types/update";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -171,6 +172,33 @@ afterAll(async () => {
 });
 
 describe("document-types write handlers", () => {
+  test("list: returns only the acting organization's types in display order", async () => {
+    const orgA = createOrgContext(ids.orgA, ids.userA1);
+    const orgB = createOrgContext(ids.orgB, ids.userB1);
+    const first = await createType(orgA, "A: příloha / 2026? #1");
+    const second = await createType(orgA, "Z: žaloba & újma");
+    const foreign = await createType(orgB, "Foreign type");
+
+    await runHandler(reorderDocumentTypes, orgA, {
+      body: { orderedIds: [second.id, first.id] },
+    });
+    const result = await runHandler(listDocumentTypes, orgA, {});
+
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining({ id: second.id, sortOrder: 0 }),
+        expect.objectContaining({ id: first.id, sortOrder: 1 }),
+      ],
+    });
+    expect(result).not.toEqual(
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: foreign.id }),
+        ]),
+      }),
+    );
+  });
+
   test("create: same label twice yields distinct keys and increasing sortOrder", async () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
 
