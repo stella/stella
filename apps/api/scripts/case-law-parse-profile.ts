@@ -3,6 +3,8 @@ import * as cheerio from "cheerio";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
+import type { ValidateAstFixture } from "@/api/tests/helpers/validate-ast-inputs";
+
 await mock.module("@/api/lib/observability/logger", () => ({
   logger: {
     child: () => ({
@@ -18,12 +20,20 @@ await mock.module("@/api/lib/observability/logger", () => ({
   },
 }));
 
-const [{ buildValidateAstFixtures }, validator, { markupResidueIn }] =
-  await Promise.all([
-    import("@/api/tests/helpers/validate-ast-inputs"),
-    import("@/api/lib/legal-search/parsers/validate-ast"),
-    import("@/api/lib/legal-search/parsers/markup-residue"),
-  ]);
+// Imported after the logger mock so the measured modules never log.
+const { buildValidateAstFixtures } =
+  await import("@/api/tests/helpers/validate-ast-inputs");
+const {
+  collapseValidationWhitespace,
+  extractValidationWords,
+  normalizeValidationText,
+  separateValidationSkipMarkers,
+  validateAst,
+  validationInlineText,
+  validationTextHoldsOnlyDecoration,
+} = await import("@/api/lib/legal-search/parsers/validate-ast");
+const { markupResidueIn } =
+  await import("@/api/lib/legal-search/parsers/markup-residue");
 const iterations = process.argv.includes("--quick") ? 5 : 30;
 const fixtures = await buildValidateAstFixtures();
 
@@ -78,34 +88,32 @@ const profileValidation = (
   } satisfies Record<StepName, number>;
   let sourceText = "";
   result["source normalization"] = time(() => {
-    sourceText = validator.normalizeValidationText(
-      cheerio.load(source)("body").text(),
-    );
+    sourceText = normalizeValidationText(cheerio.load(source)("body").text());
   });
   result["source skip markers"] = time(() => {
-    validator.separateValidationSkipMarkers(sourceText);
+    separateValidationSkipMarkers(sourceText);
   });
   let sourceWords = new Set<string>();
   result["source words"] = time(() => {
-    sourceWords = validator.extractValidationWords(sourceText);
+    sourceWords = extractValidationWords(sourceText);
   });
   let astText = "";
   result["AST normalization"] = time(() => {
-    astText = validator.normalizeValidationText(
+    astText = normalizeValidationText(
       blocks
         .flatMap((block) => (block.plainText ? [block.plainText] : []))
         .join(" "),
     );
   });
   result["AST skip markers"] = time(() => {
-    validator.separateValidationSkipMarkers(astText);
+    separateValidationSkipMarkers(astText);
   });
   let astWords = new Set<string>();
   result["AST words"] = time(() => {
-    astWords = validator.extractValidationWords(astText);
+    astWords = extractValidationWords(astText);
   });
   result["decoration check"] = time(() => {
-    validator.validationTextHoldsOnlyDecoration(sourceText);
+    validationTextHoldsOnlyDecoration(sourceText);
   });
   result["retention comparison"] = time(
     () => (astText.length / sourceText.length) * 100,
@@ -139,19 +147,15 @@ const profileValidation = (
   result["whitespace collapse + inline comparison"] = time(() => {
     for (const block of blocks) {
       if (block.type === "heading" || block.type === "paragraph") {
-        validator.collapseValidationWhitespace(
-          validator.validationInlineText(block.inlines),
-        );
-        validator.collapseValidationWhitespace(block.plainText);
+        collapseValidationWhitespace(validationInlineText(block.inlines));
+        collapseValidationWhitespace(block.plainText);
       }
     }
   });
   return result;
 };
 
-const measure = (
-  fixture: Awaited<ReturnType<typeof buildValidateAstFixtures>>[number],
-): Sample => {
+const measure = (fixture: ValidateAstFixture): Sample => {
   Bun.gc(true);
   const baseline = process.memoryUsage().heapUsed;
   let peak = baseline;
@@ -164,7 +168,7 @@ const measure = (
   const parse = performance.now() - parseStart;
   peak = Math.max(peak, process.memoryUsage().heapUsed);
   const validationStart = performance.now();
-  validator.validateAst(fixture.validationMarkup ?? fixture.markup, ast.blocks);
+  validateAst(fixture.validationMarkup ?? fixture.markup, ast.blocks);
   const validation = performance.now() - validationStart;
   peak = Math.max(peak, process.memoryUsage().heapUsed);
   return { load, parse, validation, heap: Math.max(0, peak - baseline) };
