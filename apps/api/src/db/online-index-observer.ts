@@ -53,7 +53,7 @@ export const openBoundedDatabaseObserver = async ({
     query: async (query, params = []) =>
       await reserved.unsafe(query, [...params]),
     release: async () => {
-      reserved.release();
+      await reserved.release();
       await client.close();
     },
   };
@@ -102,7 +102,7 @@ export const openOnlineRepairConnection = async (
       await reserved.unsafe<unknown[]>(query, [...params]),
     release: async () => {
       if (session === "open") {
-        reserved.release();
+        await reserved.release();
       }
       await client.close();
     },

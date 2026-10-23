@@ -778,8 +778,8 @@ if (!databaseUrl || !enabled) {
                 if (!cleanupState.killed) {
                   await firstSlot.close();
                 }
-                first.release();
-                rival.release();
+                await first.release();
+                await rival.release();
               }
             },
             { closeMode: "force" },

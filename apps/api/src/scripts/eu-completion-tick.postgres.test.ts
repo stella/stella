@@ -1031,7 +1031,7 @@ if (!databaseUrl || !enabled) {
             });
           } finally {
             await slot.close();
-            session.release();
+            await session.release();
           }
         });
       });

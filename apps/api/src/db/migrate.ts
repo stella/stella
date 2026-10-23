@@ -46,7 +46,7 @@ await runScriptWithErrorOutput(async () => {
       console.info("[migrate] migrations applied");
     }
   } finally {
-    connection.release();
+    await connection.release();
     await client.end();
   }
 });

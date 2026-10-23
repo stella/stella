@@ -642,7 +642,7 @@ if (!databaseUrl || !runPostgresTests) {
             WHERE conname LIKE 'provision_citations_%' AND NOT convalidated`;
           expect(pending?.count).toBe(0);
         } finally {
-          reserved.release();
+          await reserved.release();
         }
       });
     }, 120_000);

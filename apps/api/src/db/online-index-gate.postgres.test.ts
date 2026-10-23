@@ -179,10 +179,10 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         await blocker`ROLLBACK`;
         await owner`SELECT pg_cancel_backend(${pid})`;
         await owner.unsafe(`DROP TABLE public.${table} CASCADE`);
-        owner.release();
-        builder.release();
-        observer.release();
-        blocker.release();
+        await owner.release();
+        await builder.release();
+        await observer.release();
+        await blocker.release();
       }
     },
     { closeMode: "force" },

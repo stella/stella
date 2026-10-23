@@ -220,7 +220,7 @@ const withPreCutoverDatabase = async (
               });
               expect(result.status).toBe("applied");
             } finally {
-              connection.release();
+              await connection.release();
             }
             await verify(scratchUrl);
           },

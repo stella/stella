@@ -93,8 +93,8 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           );
         } finally {
           await gate.close();
-          builder.release();
-          observer.release();
+          await builder.release();
+          await observer.release();
         }
       },
       { closeMode: "force" },

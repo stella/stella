@@ -310,10 +310,10 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
             });
           } finally {
             await blocker`ROLLBACK`;
-            owner.release();
-            builder.release();
-            observer.release();
-            blocker.release();
+            await owner.release();
+            await builder.release();
+            await observer.release();
+            await blocker.release();
           }
         },
         { closeMode: "force" },

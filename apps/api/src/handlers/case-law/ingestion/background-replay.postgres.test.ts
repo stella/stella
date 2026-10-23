@@ -377,8 +377,8 @@ if (!databaseUrl || !enabled) {
         } finally {
           await slots[0].close();
           await slots[1].close();
-          first.release();
-          second.release();
+          await first.release();
+          await second.release();
         }
       });
 
@@ -528,7 +528,7 @@ if (!databaseUrl || !enabled) {
                   })
                   .where(eq(caseLawDecisions.id, id));
               } finally {
-                held.release();
+                await held.release();
                 await running;
               }
               expect(await running).toMatchObject({
@@ -905,13 +905,13 @@ if (!databaseUrl || !enabled) {
               await lease?.release();
             } finally {
               controller.abort();
-              held.release();
+              await held.release();
               await running;
             }
           },
         });
       } finally {
-        held.release();
+        await held.release();
         fake.stop();
       }
     });

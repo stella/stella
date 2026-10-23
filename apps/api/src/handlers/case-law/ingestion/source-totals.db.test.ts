@@ -999,7 +999,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         expect(calls).toBe(0);
       } finally {
         await locker.unsafe("COMMIT");
-        locker.release();
+        await locker.release();
       }
       expect((await Promise.all([first, second])).toSorted()).toEqual([
         "fresh",
@@ -1814,7 +1814,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       } finally {
         released.resolve(undefined);
         await locker.unsafe("COMMIT");
-        locker.release();
+        await locker.release();
       }
       const outcomes = await Promise.all(pending);
       expect(outcomes.filter((value) => value === "refreshed")).toHaveLength(1);

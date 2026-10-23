@@ -47,7 +47,7 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
           ebs: { type: "disabled" },
         });
       } finally {
-        connection.release();
+        await connection.release();
       }
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const application = `sanctions_application_${suffix}`;

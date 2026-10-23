@@ -166,7 +166,7 @@ describe.skipIf(!enabled)(
           expect(remainingCycleMs(deadline)).toBeGreaterThan(130_000);
         } finally {
           await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-          holder.release();
+          await holder.release();
         }
       });
     }, 60_000);
@@ -451,7 +451,7 @@ describe.skipIf(!enabled)(
             monotonic.mockRestore();
             releaseAdmission.resolve(undefined);
             await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-            holder.release();
+            await holder.release();
           }
         });
       }, 60_000);

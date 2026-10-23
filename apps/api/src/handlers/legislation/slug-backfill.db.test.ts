@@ -236,7 +236,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           await runtime.close();
           await other.close();
           await index.close();
-          indexConnection.release();
+          await indexConnection.release();
           await client.unsafe(`DROP SCHEMA ${schema} CASCADE`);
         }
       });

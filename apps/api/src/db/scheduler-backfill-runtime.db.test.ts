@@ -144,7 +144,7 @@ const withFixture = async (
             }
           } finally {
             state = "closed";
-            session.release();
+            await session.release();
           }
         };
         closers.push(close);
@@ -313,7 +313,7 @@ describe.skipIf(!enabled)(
             expect((await checkpoint()).batch.heldSince).toBeNull();
           } finally {
             await operator.close();
-            operatorSession.release();
+            await operatorSession.release();
           }
         },
       );

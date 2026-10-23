@@ -117,7 +117,7 @@ describePostgres("matter membership validation (postgres)", () => {
         await session
           .unsafe(`RESET search_path; DROP SCHEMA IF EXISTS ${schema} CASCADE`)
           .simple();
-        session.release();
+        await session.release();
       }
     });
   }, 30_000);

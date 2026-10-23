@@ -389,9 +389,9 @@ describe.skipIf(!enabled)(
             expect(readings).toBe(reason === "cancel" ? 3 : 1);
           } finally {
             await blocker.unsafe("ROLLBACK");
-            blocker.release();
-            observer.release();
-            builder.release();
+            await blocker.release();
+            await observer.release();
+            await builder.release();
           }
         });
       });
