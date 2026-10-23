@@ -126,7 +126,9 @@ describe("notifyUserError", () => {
     reportErrorOnce(failure, report);
     reportErrorOnce(failure, report);
 
-    expect(userVisibleReports(capture)).toHaveLength(1);
+    expect(
+      capture.mock.calls.filter(([reported]) => reported === failure),
+    ).toHaveLength(1);
   });
 
   test("reports a visible error once with explicit route metadata", () => {

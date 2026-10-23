@@ -55,14 +55,17 @@ const track = (
   handle: unknown,
   kind: PendingTimer["kind"],
   clear: () => void,
-) => {
+): PendingTimer | null => {
   if (!testRunning) {
-    return;
+    return null;
   }
   const stack = firstPartyStack();
-  if (stack !== null) {
-    pending.set(handle, { kind, stack, clear });
+  if (stack === null) {
+    return null;
   }
+  const timer = { kind, stack, clear };
+  pending.set(handle, timer);
+  return timer;
 };
 
 const forget = (handle: unknown) => {
@@ -83,16 +86,41 @@ const guardedSetTimeout = ((
   delay?: number,
   ...args: unknown[]
 ) => {
+  // A timeout stays tracked until it is cleared or its callback returns
+  // without re-arming it: refresh() re-arms the native timer directly, so the
+  // handle's refresh registers it again.
+  let firing = false;
+  let rearmed = false;
   const handle = realSetTimeout(
     (...callbackArgs: unknown[]) => {
-      forget(handle);
-      callback(...callbackArgs);
+      firing = true;
+      rearmed = false;
+      try {
+        return callback(...callbackArgs);
+      } finally {
+        firing = false;
+        if (!rearmed) {
+          forget(handle);
+        }
+      }
     },
     delay,
     ...args,
   );
-  track(handle, "timeout", () => {
+  const timer = track(handle, "timeout", () => {
     realClearTimeout(handle);
+  });
+  const refresh = handle.refresh.bind(handle);
+  Object.defineProperty(handle, "refresh", {
+    value: () => {
+      refresh();
+      if (firing) {
+        rearmed = true;
+      } else if (timer !== null && testRunning) {
+        pending.set(handle, timer);
+      }
+      return handle;
+    },
   });
   return handle;
 }) as typeof setTimeout;

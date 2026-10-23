@@ -41,6 +41,22 @@ test("an interval left running is stopped and reported", async () => {
   expect(ticks).toBe(stopped);
 });
 
+test("a timeout its own callback refreshes stays pending and is reported", async () => {
+  let runs = 0;
+  const firstRun = Promise.withResolvers<undefined>();
+  const handle = setTimeout(() => {
+    runs += 1;
+    handle.refresh();
+    firstRun.resolve(undefined);
+  }, 1);
+  await firstRun.promise;
+  const leaks = leaksAtTestEnd();
+  expect(leaks).toHaveLength(1);
+  expect(leaks.at(0)).toContain("timeout still pending");
+  await Bun.sleep(20);
+  expect(runs).toBe(1);
+});
+
 test("timers that fire or are cleared before the test ends are not leaks", async () => {
   const fired = Promise.withResolvers<undefined>();
   setTimeout(() => {
