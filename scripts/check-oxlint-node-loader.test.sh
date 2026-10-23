@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Exercise the production plugin graph with Node, which requires explicit extensions.
+bash scripts/check-oxlint-node-loader.sh
+
 set +e
 probe_output=$(bash scripts/check-oxlint-node-loader.sh \
   scripts/__fixtures__/oxlint-node-loader-error.config.ts \
