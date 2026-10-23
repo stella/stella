@@ -117,7 +117,7 @@
   "candidate:.github/workflows/ci.yml/ci-plan": {
     "kind": "support",
     "qualifier": "Plans trust, scopes and prerequisites for merge-required checks.",
-    "reviewedDigest": "2009b953b535ccc5bc231fa8d0f78d07179f1015c87659ee91e3996b13ca9adf"
+    "reviewedDigest": "e8a20747909ed7af894997159f7979c7f49559e4f52dc301a6a470faf3e52acb"
   },
   "candidate:.github/workflows/ci.yml/generated-sources": {
     "kind": "support",
@@ -312,7 +312,7 @@
   "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
     "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-    "reviewedDigest": "4f008679e8a6c668b954a62e2816dd9accb659c4d0391afd5f7e8a4ae3081c70"
+    "reviewedDigest": "805a9128ef2e3d5232a3f8c69fc58ccb8b67889a007bfc39cd236773d0e4d091"
   },
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
@@ -457,7 +457,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "130a8c9655bb9b2b7954c7838c145f5f93379c1a21a46c35a1485b86d8c4b433"
+    "reviewedDigest": "1ea1c0908d2ed19b70cd0aab46b19709e4b3c443dd7734eb8f907e54e9b76ed5"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "ed561295982e9a86eaf553424f4508684225dd435832e2401c92599db2acbab6"
+    "reviewedDigest": "b7b07196d0a97f5e2fde883d8a482adbd7a04a43007625050a94f59d230481e3"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -927,12 +927,12 @@
   "candidate:.github/workflows/ci.yml/database-migrations-check": {
     "kind": "ordinary",
     "qualifier": "Checks migration safety rules and coverage; no publication or deployment.",
-    "reviewedDigest": "61096099ae96f9500d278316640e66ac0fbe9b3af43f0c634e18033dd2151227"
+    "reviewedDigest": "15cd3aa16f9b22b1757b4d4af1be1da794c36088f9cc5cfc5b0be113d4251cb2"
   },
   "candidate:.github/workflows/ci.yml/database-migrations-apply-fresh": {
     "kind": "ordinary",
     "qualifier": "Applies migrations to disposable databases and verifies schema, history and API startup; no publication or deployment.",
-    "reviewedDigest": "4193e0806fe202c26849c2607af6b31d21f8d7c5027867bc5ae5b74b0fa7ee80"
+    "reviewedDigest": "494aedc96f5aa29bbf8fdb7aa3d41386525237b2b9fee8d20433c83c4356d360"
   },
   "candidate:.github/workflows/queue-admission.yml/admission": {
     "kind": "ordinary",
