@@ -21,8 +21,8 @@ import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   ArchiveIcon,
-  CopyIcon,
   DownloadIcon,
+  DuplicateIcon,
   EllipsisVerticalIcon,
   EyeIcon,
   FileDownIcon,
@@ -1213,7 +1213,7 @@ const RowDuplicatePrimaryAction = ({
       tooltip={label}
       variant="ghost"
     >
-      {pending ? <Loader label={label} size="sm" /> : <CopyIcon />}
+      {pending ? <Loader label={label} size="sm" /> : <DuplicateIcon />}
     </Button>
   );
 };
@@ -1718,7 +1718,7 @@ const RowFileOperationsMenu = ({
         disabled={duplicatePending}
         onClick={() => detached(onDuplicate(), "row-actions.duplicate")}
       >
-        <CopyIcon />
+        <DuplicateIcon />
         {duplicatePending ? t("common.duplicating") : t("common.duplicate")}
       </MenuItem>
       <MenuItem onClick={onCopyToMatter}>
