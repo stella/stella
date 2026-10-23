@@ -17,6 +17,7 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import { assertOnlineRepairRehearsalCoverage } from "./online-migration-rehearsal-guard";
 import {
   assertOnlineMigrationsApplied,
   ONLINE_CONSTRAINT_VALIDATIONS,
@@ -131,6 +132,7 @@ describe("online migrations", () => {
     const repairNames = new Set(
       ONLINE_MIGRATION_REPAIRS.map(({ name }) => name),
     );
+
     expect(PROVISION_STATE_BACKFILL_STEPS.length).toBeGreaterThan(0);
     expect(
       PROVISION_STATE_BACKFILL_STEPS.filter(({ name }) =>
@@ -140,6 +142,38 @@ describe("online migrations", () => {
     expect(
       [...repairNames].filter((name) => name.includes("provision")),
     ).toEqual([]);
+  });
+
+  test("the rehearsal guard rejects empty repair preconditions and unexplained exceptions", () => {
+    const repair = ONLINE_MIGRATION_REPAIRS.at(0);
+    if (!repair) {
+      throw new TypeError("Expected a registered repair");
+    }
+    expect(() =>
+      assertOnlineRepairRehearsalCoverage({
+        allowlist: {},
+        records: [{ name: repair.name, precondition: "empty" }],
+        repairs: [repair],
+      }),
+    ).toThrow(/did not execute against non-empty input/u);
+    expect(() =>
+      assertOnlineRepairRehearsalCoverage({
+        allowlist: { [repair.name]: "" },
+        records: [],
+        repairs: [repair],
+      }),
+    ).toThrow(/needs a reason/u);
+  });
+
+  test("the rehearsal guard accepts the real registry when every repair ran", () => {
+    assertOnlineRepairRehearsalCoverage({
+      allowlist: {},
+      records: ONLINE_MIGRATION_REPAIRS.map(({ name }) => ({
+        name,
+        precondition: "non-empty" as const,
+      })),
+      repairs: ONLINE_MIGRATION_REPAIRS,
+    });
   });
 
   test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(

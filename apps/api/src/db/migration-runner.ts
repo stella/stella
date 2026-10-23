@@ -476,6 +476,9 @@ type RunMigrationsOptions = {
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
+  repairAttemptObserver?: NonNullable<
+    Parameters<typeof runOnlineMigrations>[1]
+  >["repairAttemptObserver"];
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: the pauses between lock-wait attempts and how to wait them. */
   lockWaitRetry?: LockWaitRetry;
@@ -491,6 +494,7 @@ export const runMigrations = async ({
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  repairAttemptObserver,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
@@ -649,6 +653,9 @@ export const runMigrations = async ({
         indexGate: { ebs, hold: onlineIndexHold },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing,
+        ...(repairAttemptObserver === undefined
+          ? {}
+          : { repairAttemptObserver }),
       },
     );
     clock.phase = "done";
