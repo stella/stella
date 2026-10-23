@@ -14,7 +14,7 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 /** The read needs only these two capabilities, so every Postgres driver's
  * transaction (production and test databases alike) satisfies it. */
 export type AccountExportReadTransaction = Pick<Transaction, "select"> & {
-  execute: (query: SQLWrapper) => PromiseLike<unknown>;
+  execute: (query: SQLWrapper | string) => PromiseLike<unknown>;
 };
 
 type ReadAccountExportAnnotationPageOptions = {
