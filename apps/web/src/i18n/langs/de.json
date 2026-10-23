@@ -4894,12 +4894,12 @@
       "profileDescription": "Verwalten Sie Ihre persönlichen Einstellungen",
       "sendOtpCode": "Bestätigungscode senden",
       "signInMethods": {
-        "confirmDescription": "Gib einen neuen Code ein, den wir an deine E-Mail-Adresse gesendet haben, um diese Anmeldemethode zu trennen.",
+        "confirmDescription": "Geben Sie einen neuen Code ein, den wir an Ihre E-Mail-Adresse gesendet haben, um diese Anmeldemethode zu trennen.",
         "confirmTitle": "{provider} trennen?",
-        "description": "Verbinde Konten, die dieselbe bestätigte E-Mail-Adresse verwenden.",
+        "description": "Verbinden Sie Konten, die dieselbe bestätigte E-Mail-Adresse verwenden.",
         "emailCode": "E-Mail-Code",
-        "emailCodeDescription": "Du kannst dich jederzeit mit einem Code anmelden, den wir an deine E-Mail-Adresse senden.",
-        "lastMethod": "Lass mindestens eine Anmeldemethode verbunden.",
+        "emailCodeDescription": "Sie können sich jederzeit mit einem Code anmelden, den wir an Ihre E-Mail-Adresse senden.",
+        "lastMethod": "Lassen Sie mindestens eine Anmeldemethode verbunden.",
         "title": "Anmeldemethoden",
         "unavailable": "Der E-Mail-Versand muss eingerichtet sein, damit Anmeldemethoden getrennt werden können."
       },
