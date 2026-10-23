@@ -116,6 +116,12 @@ export const backfillEntrypoints = {
       initialSize,
     });
   },
+  "cz-us-judge-relink": (_options: ParserOptions) =>
+    withRuntime({
+      name: "cz-us-judge-relink",
+      tableName: "case_law_decision_judges",
+      initialSize: 500,
+    }),
   "statute-citation-counts": (_options: ParserOptions) =>
     withRuntime({
       name: "statute-citation-counts",
