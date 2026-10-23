@@ -10,6 +10,7 @@ import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-d
 import { decisionYear, formatYear } from "@/features/case-law/citation-format";
 import {
   citationSummaryIsCapped,
+  hasIncomingCitations,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
@@ -84,10 +85,10 @@ export const CitationHeader = ({
   if (!hydrated || summary === undefined) {
     return null;
   }
-  const total = totalCitations(summary.incoming);
-  if (total === 0 && !citationSummaryIsCapped(summary, "incoming")) {
+  if (!hasIncomingCitations(summary)) {
     return null;
   }
+  const total = totalCitations(summary.incoming);
 
   const currentYear = Temporal.Instant.fromEpochMilliseconds(
     now.getTime(),

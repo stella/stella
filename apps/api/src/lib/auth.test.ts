@@ -578,6 +578,7 @@ describe("isSessionCreatingAuthPath", () => {
     // The hosted flow is passwordless email OTP; social providers all land on
     // the shared callback; the credential path serves the self-host bootstrap
     // admin, and first verification signs the new account in.
+    expect(isSessionCreatingAuthPath("/mcp-handoff/redeem")).toBe(true);
     expect(isSessionCreatingAuthPath("/sign-in/email-otp")).toBe(true);
     expect(isSessionCreatingAuthPath("/callback/google")).toBe(true);
     expect(isSessionCreatingAuthPath("/callback/microsoft")).toBe(true);
