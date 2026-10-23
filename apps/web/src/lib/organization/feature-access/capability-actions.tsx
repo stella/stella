@@ -134,7 +134,7 @@ export const CapabilityActionChrome = ({
   children,
 }: {
   action: ActionDescriptor;
-  children: ReactNode;
+  children: ReactElement;
 }) =>
   createElement(
     renderCapabilityActionChromeContent,
@@ -145,16 +145,18 @@ export const CapabilityActionChrome = ({
     children,
   );
 
-async function renderCapabilityActionChromeContent({
+function renderCapabilityActionChromeContent({
   action,
   capabilities,
   children,
 }: {
   action: ActionDescriptor;
   capabilities: ActionCapabilities;
-  children?: ReactNode;
-}) {
-  return isCapabilityActionVisible(action, capabilities) ? children : null;
+  children?: ReactElement;
+}): ReactElement | null {
+  return isCapabilityActionVisible(action, capabilities)
+    ? (children ?? null)
+    : null;
 }
 
 type CapabilityActionChildProps = {
