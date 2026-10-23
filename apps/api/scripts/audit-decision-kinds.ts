@@ -42,7 +42,11 @@ const fixtureSchema = v.object({
 const rows: DecisionKindAuditRow[] = [];
 const input = Bun.argv.at(2);
 if (input !== undefined) {
-  rows.push(...v.parse(v.array(rowSchema), await Bun.file(input).json()));
+  rows.push(
+    ...v
+      .parse(v.array(rowSchema), await Bun.file(input).json())
+      .map((row) => ({ ...row, ecli: row.ecli ?? null })),
+  );
 } else {
   const directory = `${import.meta.dir}/__fixtures__/case-law`;
   for (const name of (await readdir(directory)).toSorted()) {
@@ -62,7 +66,7 @@ if (input !== undefined) {
         id: row.id ?? `${name}:${row.case_number}`,
         source: name.replace(".json.gz", ""),
         court: row.court,
-        ecli: row.ecli,
+        ecli: row.ecli ?? null,
         stated: row.decision_type ?? null,
         headings: (row.document_ast?.blocks ?? [])
           .filter(({ role }) => role === "decision-title")
