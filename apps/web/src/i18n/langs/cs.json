@@ -15,8 +15,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Zpět do aplikace",
-    "billingAndUsage": "Fakturace a využití",
     "billingProfiles": "Fakturační profily",
     "deleteDescription": "Trvale smažete tuto organizaci a její data. Tuto akci nelze vrátit zpět.",
     "deleteOrganization": "Smazat organizaci",
@@ -28,12 +26,9 @@
     "leaveOrganization": "Opustit organizaci",
     "leaveRefusedOnlyOwner": "Jste jediný vlastník. Než organizaci opustíte, udělejte vlastníkem jiného člena.",
     "modelsAndProviders": "Modely a poskytovatelé",
-    "noPlan": "Žádný aktivní tarif",
     "organizationDeleted": "Organizace byla smazána.",
     "organizationId": "ID organizace",
     "organizationLeft": "Opustili jste organizaci.",
-    "overviewDescription": "Spravujte organizaci, lidi a nástroje.",
-    "people": "Lidé",
     "planAndUsage": "Tarif a využití",
     "title": "Správa organizace",
     "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."

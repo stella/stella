@@ -154,6 +154,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_citations_doctrine_cited_idx",
     tableName: "case_law_citations",
   },
+  // Bounded cross-publisher ruling lookup before a decision insert.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_republished_ruling_idx" ON public."case_law_decisions" ("country", "court", "docket_family_key", "id") WHERE "docket_family_key" IS NOT NULL`,
+    definitionBody:
+      "ON public.case_law_decisions USING btree (country, court, docket_family_key, id) WHERE (docket_family_key IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_decisions_republished_ruling_idx",
+    tableName: "case_law_decisions",
+  },
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "session_originConsentId_idx" ON public."session" USING btree ("origin_consent_id")',

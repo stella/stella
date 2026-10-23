@@ -15,8 +15,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Atpakaļ uz lietotni",
-    "billingAndUsage": "Norēķini un lietojums",
     "billingProfiles": "Norēķinu profili",
     "deleteDescription": "Neatgriezeniski dzēsiet šo organizāciju un tās datus. Šo darbību nevar atsaukt.",
     "deleteOrganization": "Dzēst organizāciju",
@@ -28,12 +26,9 @@
     "leaveOrganization": "Pamest organizāciju",
     "leaveRefusedOnlyOwner": "Jūs esat vienīgais īpašnieks. Pirms aiziešanas padariet par īpašnieku citu dalībnieku.",
     "modelsAndProviders": "Modeļi un pakalpojumu sniedzēji",
-    "noPlan": "Nav aktīva plāna",
     "organizationDeleted": "Organizācija ir dzēsta.",
     "organizationId": "Organizācijas ID",
     "organizationLeft": "Jūs pametāt organizāciju.",
-    "overviewDescription": "Pārvaldiet organizāciju, cilvēkus un rīkus.",
-    "people": "Cilvēki",
     "planAndUsage": "Plāns un lietojums",
     "title": "Organizācijas administrēšana",
     "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."

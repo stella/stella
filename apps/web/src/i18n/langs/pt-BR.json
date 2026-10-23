@@ -15,8 +15,6 @@
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Voltar ao aplicativo",
-    "billingAndUsage": "Faturamento e uso",
     "billingProfiles": "Perfis de faturamento",
     "deleteDescription": "Exclua permanentemente esta organização e seus dados. Esta ação não pode ser desfeita.",
     "deleteOrganization": "Excluir organização",
@@ -28,12 +26,9 @@
     "leaveOrganization": "Sair da organização",
     "leaveRefusedOnlyOwner": "Você é o único proprietário. Torne outro membro proprietário antes de sair.",
     "modelsAndProviders": "Modelos e provedores",
-    "noPlan": "Nenhum plano ativo",
     "organizationDeleted": "A organização foi excluída.",
     "organizationId": "ID da organização",
     "organizationLeft": "Você saiu da organização.",
-    "overviewDescription": "Gerencie sua organização, as pessoas e as ferramentas.",
-    "people": "Pessoas",
     "planAndUsage": "Plano e uso",
     "title": "Administração da organização",
     "toolsDescription": "Ative ou desative as ferramentas integradas para todas as pessoas desta organização."
