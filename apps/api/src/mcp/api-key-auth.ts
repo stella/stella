@@ -114,23 +114,21 @@ const readMachineApiKey = async (
     ],
   });
   if (
-    key !== null &&
-    key.expiresAt !== null &&
-    key.expiresAt.getTime() < clock.instant().epochMilliseconds
+    key === null ||
+    (key.expiresAt !== null &&
+      key.expiresAt.getTime() < clock.instant().epochMilliseconds)
   ) {
-    throw rejectCredential();
+    return null;
   }
-  return key === null
-    ? null
-    : {
-        ...key,
-        permissions:
-          key.permissions === null ? null : safeJSONParse(key.permissions),
-        metadata:
-          typeof key.metadata === "string"
-            ? safeJSONParse(key.metadata)
-            : key.metadata,
-      };
+  return {
+    ...key,
+    permissions:
+      key.permissions === null ? null : safeJSONParse(key.permissions),
+    metadata:
+      typeof key.metadata === "string"
+        ? safeJSONParse(key.metadata)
+        : key.metadata,
+  };
 };
 
 type PresentedMachineApiKeyOptions = MachineApiKeyDependencies &
