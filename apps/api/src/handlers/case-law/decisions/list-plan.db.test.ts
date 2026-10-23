@@ -83,7 +83,16 @@ test(
     expect(plans.natural).toMatch(indexedDecisionScan);
     expect(plans.forced).toMatch(indexedDecisionScan);
     for (const plan of [plans.natural, plans.forced]) {
-      expect(plan).toContain("Nested Loop Left Join");
+      // The representative check is a subplan filter on the walk itself. As a
+      // join (anti or lateral) the planner misjudges how many rows survive it
+      // and sorts the whole country instead of stopping after one page.
+      expect(plan).toMatch(
+        /Index Scan Backward using case_law_decisions_country_date_published_idx on case_law_decisions\n\s+Index Cond: [^\n]+\n\s+Filter: \(NOT EXISTS\(SubPlan \d+\)\)/u,
+      );
+      expect(plan).not.toMatch(/Anti Join|Left Join/u);
+      expect(plan.slice(0, plan.indexOf("Index Scan Backward"))).not.toMatch(
+        /\b(Sort|Bitmap Heap Scan)\b/u,
+      );
       expect(plan).toContain("case_law_decisions_lang_group_idx");
       expect(plan).toMatch(/Index Cond: .*language_group_key/u);
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
