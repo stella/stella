@@ -14,6 +14,8 @@
 //   active, download + install + relaunch. The installer handles
 //   the binary swap; `crate::relaunch` owns the hand-over to the
 //   new binary.
+// - When an administrator set `DisableUpdates`, nothing checks: the
+//   organization deploys new versions itself.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -35,15 +37,21 @@ const BACKGROUND_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 // `Installed` means the exit of this process has been requested and
 // the relaunch is under way; callers must not schedule further work.
+// `Disabled` means managed policy turned in-app updates off.
 #[derive(Debug)]
 pub enum CheckOutcome {
   Deferred { version: String },
   UpToDate,
   Installed { version: String },
   Failed(String),
+  Disabled,
 }
 
 pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManager>>) {
+  if crate::managed_policy::current().updates_disabled {
+    tracing::info!("in-app updates are turned off by managed policy");
+    return;
+  }
   if let Some(path) = last_check_path() {
     match std::fs::read_to_string(path) {
       Ok(value) => match value.trim().parse() {
@@ -86,6 +94,7 @@ pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManag
         CheckOutcome::Failed(err) => {
           tracing::warn!(error = %err, "background updater check failed");
         }
+        CheckOutcome::Disabled => return,
       }
 
       tokio::time::sleep(WAKE_CHECK_TICK).await;
@@ -142,11 +151,16 @@ pub async fn check_on_handoff(
       tracing::warn!(%error, "handoff updater check failed");
       false
     }
-    CheckOutcome::Deferred { .. } | CheckOutcome::UpToDate => false,
+    CheckOutcome::Deferred { .. } | CheckOutcome::UpToDate | CheckOutcome::Disabled => {
+      false
+    }
   }
 }
 
 pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckOutcome {
+  if crate::managed_policy::current().updates_disabled {
+    return CheckOutcome::Disabled;
+  }
   // Startup, handoffs and tray actions cannot run installers concurrently.
   let _check = CHECK_LOCK.lock().await;
   record_check(unix_seconds(SystemTime::now()));
