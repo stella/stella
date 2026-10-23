@@ -176,7 +176,7 @@ describe("compareCodeUnit", () => {
     expect(compareCodeUnit("\u{1F600}", "\uE000")).toBe(-1);
   });
 
-  test("defines a total order", () => {
+  test("code-unit comparison defines a total order", () => {
     assertProperty(
       "code-unit comparison defines a total order",
       fc.property(
