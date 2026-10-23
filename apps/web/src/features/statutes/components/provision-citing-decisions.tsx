@@ -1,5 +1,4 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { PROVISION_CITING_FILTER_LIMITS } from "@stll/api-contract/provision-citing-decisions";
@@ -14,8 +13,6 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import { CitingDecisionItem } from "@/features/statutes/components/citing-decision-item";
 import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
@@ -71,12 +68,6 @@ export const ProvisionCitingDecisions = ({
     }
   }
   const decisions = [...byDecision.values()];
-  const presentations = decisionCitationPresentationsById(
-    decisions.map((decision) => ({
-      decisionId: decision.decisionId,
-      courtShortCode: decisionCitationCourtLabel(decision),
-    })),
-  );
   const snapshot = data?.pages.at(0)?.snapshot;
   return (
     <div className="flex flex-col gap-2">
@@ -178,16 +169,12 @@ export const ProvisionCitingDecisions = ({
         <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
       )}
       {!isPending && !isError && decisions.length > 0 && (
-        <ul className="m-0 flex list-none flex-col p-0">
+        <ul className="divide-border/60 m-0 flex list-none flex-col divide-y p-0">
           {decisions.map((decision) => (
             <li key={decision.decisionId}>
               <CitingDecisionItem
                 currentVersionValidFrom={currentVersionValidFrom}
                 decision={decision}
-                presentation={
-                  presentations.get(decision.decisionId) ??
-                  panic("Citing decision missing collected identity")
-                }
               />
             </li>
           ))}

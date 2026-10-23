@@ -7,7 +7,6 @@ import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
-import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { decisionYear, formatYear } from "@/features/case-law/citation-format";
 import {
   citationSummaryIsCapped,
@@ -122,10 +121,6 @@ export const CitationHeader = ({
       className={cn(
         "reader-chrome flex text-xs print:hidden",
         compact ? "justify-center" : "mb-3",
-        // The zoom bar floats over this first row at the opposite corner; the
-        // row keeps that corner free at every reader width and on every scroll
-        // position, since the bar does not move with the text.
-        !compact && VIEWER_OVERLAY_BAR_CLEARANCE,
       )}
     >
       <Popover>
