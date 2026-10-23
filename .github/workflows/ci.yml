@@ -4586,6 +4586,13 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      # Every Playwright invocation below consumes this output. Keeping the
+      # denominator beside the matrix planner makes a shard-count change
+      # atomic instead of leaving an invocation on the previous total.
+      - name: Read production E2E shard count
+        id: e2e-shards
+        run: echo "count=$(bun scripts/e2e-spec-shards-core.ts count)" >> "$GITHUB_OUTPUT"
+
       - name: Resolve e2e shard budget
         id: e2e-budget
         timeout-minutes: 1
@@ -4671,7 +4678,7 @@ jobs:
           SECONDS=0
           case "$E2E_MODE" in
             full)
-              args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/4)
+              args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/${{ steps.e2e-shards.outputs.count }})
               ;;
             selected)
               specs_output=$(jq -r '.[]' <<< "$E2E_SPECS")
@@ -4702,7 +4709,7 @@ jobs:
             E2E_OUTPUT_DIR=test-results/geometry \
               PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/.cache/playwright-timings/run-geometry-shard.json" \
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
-              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/4 || status=$?
+              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/${{ steps.e2e-shards.outputs.count }} || status=$?
           fi
           bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
           exit "$status"
@@ -4734,7 +4741,7 @@ jobs:
         run: >-
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
-          --shard=${{ matrix.shard }}/2
+          --shard=${{ matrix.shard }}/${{ steps.e2e-shards.outputs.count }}
           --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report

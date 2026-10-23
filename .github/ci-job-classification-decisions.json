@@ -237,7 +237,7 @@
   "candidate:.github/workflows/ci.yml/e2e-production-shard": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "1a0c28688cf681344b3ba0e3e1231a3b619717385449cd7d9e0a8d7875992004"
+    "reviewedDigest": "5a91471b67229850d35fb883598c99367c2531c8111dab5f6ea2ea3cb2657f15"
   },
   "candidate:.github/workflows/ci.yml/stack-redaction-browsers": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "e4ac2e95746621b783e970bcfc0a1400cd3371711bea375b4a0a39d75ea92d05"
+    "reviewedDigest": "b66769a0851176a6ece8f114ff7e4cfc808e2d77ce2e95c59bf8032823315245"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "7c275947af1a648287ddad34f7011a797a9a8f2feb7a6219a87859b89583a877"
+    "reviewedDigest": "4f01a4101336537c4a24b24d62bc6ad309a6b6a18adbcf8dac6703ca5836d841"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",

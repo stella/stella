@@ -49,6 +49,7 @@ import {
 import { prHeavyJobs } from "./ci-pr-jobs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { GENERATORS } from "./generated-files";
 import {
   type Context,
@@ -3708,7 +3709,11 @@ const runPlaywrightSelection = ({
     [
       "bash",
       "-c",
-      `bash() { printf '%s\\n' "$@"; }\n${run.replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))}`,
+      `bash() { printf '%s\\n' "$@"; }\n${run
+        .replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))
+        .replaceAll(`\${{ steps.e2e-shards.outputs.count }}`, () =>
+          String(E2E_SHARD_COUNT),
+        )}`,
     ],
     {
       env: {
@@ -3750,6 +3755,25 @@ test.each([1, 2, 3, 4])(
     ]);
   },
 );
+
+test("every production Playwright shard total comes from the matrix shard source", () => {
+  const steps = jobSteps(ciJobs["e2e-production-shard"]);
+  const countStep = steps.find(
+    ({ name }) => name === "Read production E2E shard count",
+  );
+  expect(countStep?.run).toBe(
+    'echo "count=$(bun scripts/e2e-spec-shards-core.ts count)" >> "$GITHUB_OUTPUT"',
+  );
+  const shardArgument = `--shard=\${{ matrix.shard }}/\${{ steps.e2e-shards.outputs.count }}`;
+  const invocationLines = steps.flatMap(({ run }) =>
+    (run ?? "").split("\n").filter((line) => line.includes("--shard=")),
+  );
+  expect(invocationLines).toHaveLength(3);
+  expect(invocationLines.every((line) => line.includes(shardArgument))).toBe(
+    true,
+  );
+  expect(E2E_SHARD_COUNT).toBe(4);
+});
 
 const queueOnlyJobs = Object.fromEntries(
   Object.entries(eventPolicies.jobs)
