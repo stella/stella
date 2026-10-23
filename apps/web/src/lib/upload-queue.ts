@@ -1,7 +1,6 @@
 import { sleep } from "@stll/concurrency/sleep";
 
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { transformUnknownError } from "@/lib/errors/client";
 
 const HTTP_TOO_MANY_REQUESTS = 429;
@@ -326,9 +325,7 @@ export class UploadQueue<T> {
         return;
       }
 
-      // Retry on server errors and network failures
-      // (status 0 = no HTTP response, e.g. DNS/connection)
-      const isRetryable = status >= HTTP_SERVER_ERROR_MIN || status === 0;
+      const isRetryable = uploadFailureDisposition(error) === "retryable";
       if (isRetryable && attempt < MAX_RETRIES) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 4000;
         this.retrying++;
@@ -375,7 +372,6 @@ export class UploadQueue<T> {
         return;
       }
 
-      // 4xx (not 429) or exhausted retries: permanent failure
       this.failed.push({
         file,
         error: transformUnknownError(error),
@@ -433,21 +429,30 @@ const getErrorStatus = (error: unknown): number => {
   ) {
     return error.status;
   }
+  if (
+    error !== null &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response instanceof Response
+  ) {
+    return error.response.status;
+  }
   return 0;
 };
 
 /**
- * Classify a terminal upload failure from structured error data. HTTP client
+ * Classify upload failures for both automatic and manual retry. HTTP client
  * rejections are permanent, while failures that may clear without changing
  * the file can be attempted again by the user after automatic retries end.
  */
 export const uploadFailureDisposition = (
   error: unknown,
 ): UploadFailureDisposition => {
-  if (APIError.is(error)) {
-    return error.status === HTTP_REQUEST_TIMEOUT ||
-      error.status === HTTP_TOO_MANY_REQUESTS ||
-      error.status >= HTTP_SERVER_ERROR_MIN
+  const status = getErrorStatus(error);
+  if (status !== 0) {
+    return status === HTTP_REQUEST_TIMEOUT ||
+      status === HTTP_TOO_MANY_REQUESTS ||
+      status >= HTTP_SERVER_ERROR_MIN
       ? "retryable"
       : "permanent";
   }

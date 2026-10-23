@@ -53,98 +53,120 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   .guard({ validateAuth: true })
   .get("/", listSkills.handler, {
     permissions: listSkills.config.permissions,
+    accountAccess: listSkills.config.accountAccess,
     query: listSkills.config.query,
   })
   .get("/commands", listSkillCommands.handler, {
     permissions: listSkillCommands.config.permissions,
+    accountAccess: listSkillCommands.config.accountAccess,
   })
   .get("/:skillId", getSkill.handler, {
     params: getSkill.config.params,
     permissions: getSkill.config.permissions,
+    accountAccess: getSkill.config.accountAccess,
   })
   .post("/", createSkill.handler, {
     body: createSkill.config.body,
     permissions: createSkill.config.permissions,
+    accountAccess: createSkill.config.accountAccess,
   })
   .post("/from-blueprint", fromBlueprint.handler, {
     body: fromBlueprint.config.body,
     permissions: fromBlueprint.config.permissions,
+    accountAccess: fromBlueprint.config.accountAccess,
   })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,
     permissions: uploadSkill.config.permissions,
+    accountAccess: uploadSkill.config.accountAccess,
   })
   .post("/import-url", importSkillFromUrl.handler, {
     body: importSkillFromUrl.config.body,
     permissions: importSkillFromUrl.config.permissions,
+    accountAccess: importSkillFromUrl.config.accountAccess,
   })
   .post("/discover-url", discoverSkillUrl.handler, {
     body: discoverSkillUrl.config.body,
     permissions: discoverSkillUrl.config.permissions,
+    accountAccess: discoverSkillUrl.config.accountAccess,
   })
   .post("/import-urls", importSkillsFromUrls.handler, {
     body: importSkillsFromUrls.config.body,
     permissions: importSkillsFromUrls.config.permissions,
+    accountAccess: importSkillsFromUrls.config.accountAccess,
   })
   .post("/generate-draft", generateSkillDraft.handler, {
     body: generateSkillDraft.config.body,
     permissions: generateSkillDraft.config.permissions,
+    accountAccess: generateSkillDraft.config.accountAccess,
   })
   .patch("/:skillId", updateSkill.handler, {
     body: updateSkill.config.body,
     params: updateSkill.config.params,
     permissions: updateSkill.config.permissions,
+    accountAccess: updateSkill.config.accountAccess,
   })
   .patch("/:skillId/resources", updateSkillResource.handler, {
     body: updateSkillResource.config.body,
     params: updateSkillResource.config.params,
     permissions: updateSkillResource.config.permissions,
+    accountAccess: updateSkillResource.config.accountAccess,
   })
   .post("/:skillId/resources", createSkillResource.handler, {
     body: createSkillResource.config.body,
     params: createSkillResource.config.params,
     permissions: createSkillResource.config.permissions,
+    accountAccess: createSkillResource.config.accountAccess,
   })
   .delete("/:skillId/resources", deleteSkillResource.handler, {
     body: deleteSkillResource.config.body,
     params: deleteSkillResource.config.params,
     permissions: deleteSkillResource.config.permissions,
+    accountAccess: deleteSkillResource.config.accountAccess,
   })
   .post("/:skillId/resources/rename", renameSkillResource.handler, {
     body: renameSkillResource.config.body,
     params: renameSkillResource.config.params,
     permissions: renameSkillResource.config.permissions,
+    accountAccess: renameSkillResource.config.accountAccess,
   })
   .post("/:skillId/resources/upload", uploadSkillResource.handler, {
     body: uploadSkillResource.config.body,
     params: uploadSkillResource.config.params,
     permissions: uploadSkillResource.config.permissions,
+    accountAccess: uploadSkillResource.config.accountAccess,
   })
   .post("/:skillId/resources/rewrite", rewriteSkillResource.handler, {
     body: rewriteSkillResource.config.body,
     params: rewriteSkillResource.config.params,
     permissions: rewriteSkillResource.config.permissions,
+    accountAccess: rewriteSkillResource.config.accountAccess,
   })
   .get("/:skillId/revisions", listSkillRevisions.handler, {
     params: listSkillRevisions.config.params,
     permissions: listSkillRevisions.config.permissions,
+    accountAccess: listSkillRevisions.config.accountAccess,
   })
   .get("/:skillId/revisions/:revisionId", getSkillRevision.handler, {
     params: getSkillRevision.config.params,
     permissions: getSkillRevision.config.permissions,
+    accountAccess: getSkillRevision.config.accountAccess,
   })
   .get("/:skillId/proposals", listSkillProposals.handler, {
     params: listSkillProposals.config.params,
     permissions: listSkillProposals.config.permissions,
+    accountAccess: listSkillProposals.config.accountAccess,
   })
   .get("/:skillId/proposals/:proposalId", getSkillProposal.handler, {
     params: getSkillProposal.config.params,
     permissions: getSkillProposal.config.permissions,
+    accountAccess: getSkillProposal.config.accountAccess,
   })
   .post("/:skillId/proposals", createSkillProposal.handler, {
     body: createSkillProposal.config.body,
     params: createSkillProposal.config.params,
     permissions: createSkillProposal.config.permissions,
+    accountAccess: createSkillProposal.config.accountAccess,
   })
   .post(
     "/:skillId/proposals/from-comments",
@@ -153,41 +175,50 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
       body: createSkillProposalFromComments.config.body,
       params: createSkillProposalFromComments.config.params,
       permissions: createSkillProposalFromComments.config.permissions,
+      accountAccess: createSkillProposalFromComments.config.accountAccess,
     },
   )
   .patch("/:skillId/proposals/:proposalId", updateSkillProposal.handler, {
     body: updateSkillProposal.config.body,
     params: updateSkillProposal.config.params,
     permissions: updateSkillProposal.config.permissions,
+    accountAccess: updateSkillProposal.config.accountAccess,
   })
   .post("/:skillId/proposals/:proposalId/review", reviewSkillProposal.handler, {
     body: reviewSkillProposal.config.body,
     params: reviewSkillProposal.config.params,
     permissions: reviewSkillProposal.config.permissions,
+    accountAccess: reviewSkillProposal.config.accountAccess,
   })
   .delete("/:skillId/proposals/:proposalId", deleteSkillProposal.handler, {
     params: deleteSkillProposal.config.params,
     permissions: deleteSkillProposal.config.permissions,
+    accountAccess: deleteSkillProposal.config.accountAccess,
   })
   .get("/:skillId/comments", listSkillComments.handler, {
     params: listSkillComments.config.params,
     permissions: listSkillComments.config.permissions,
+    accountAccess: listSkillComments.config.accountAccess,
   })
   .post("/:skillId/comments", createSkillComment.handler, {
     body: createSkillComment.config.body,
     params: createSkillComment.config.params,
     permissions: createSkillComment.config.permissions,
+    accountAccess: createSkillComment.config.accountAccess,
   })
   .patch("/:skillId/comments/:commentId", updateSkillComment.handler, {
     body: updateSkillComment.config.body,
     params: updateSkillComment.config.params,
     permissions: updateSkillComment.config.permissions,
+    accountAccess: updateSkillComment.config.accountAccess,
   })
   .delete("/:skillId/comments/:commentId", deleteSkillComment.handler, {
     params: deleteSkillComment.config.params,
     permissions: deleteSkillComment.config.permissions,
+    accountAccess: deleteSkillComment.config.accountAccess,
   })
   .delete("/:skillId", deleteSkill.handler, {
     params: deleteSkill.config.params,
     permissions: deleteSkill.config.permissions,
+    accountAccess: deleteSkill.config.accountAccess,
   });
