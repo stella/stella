@@ -15,11 +15,38 @@ import {
   createRequestHandler,
   RouterServer,
 } from "@tanstack/react-router/ssr/server";
+import { plugin } from "bun";
 import { expect, test } from "bun:test";
 
 import { renderSsrResponse } from "../ssr-renderer";
+import { unregisterDomEnvironment } from "../test-dom-environment";
 import { withContentSecurityPolicy } from "./content-security-policy.server";
 import { getRequestSsrOptions } from "./ssr-options";
+
+// Match the worker URL transform used by the application build.
+plugin({
+  name: "vite-worker-url",
+  setup(build) {
+    build.onLoad({ filter: /\?worker&url$/u }, () => ({
+      contents: 'export default "/worker.js";',
+      loader: "js",
+    }));
+  },
+});
+Object.assign(import.meta.env, {
+  SSR: true,
+  DEV: false,
+  VITE_DOCUMENTS_BUCKET: "documents",
+  VITE_DOCUMENTS_ENDPOINT: "https://objects.stella.test",
+  VITE_PUBLIC_TOOLS_ENABLED: "true",
+  VITE_PUBLIC_KNOWLEDGE_ENABLED: "false",
+});
+// Unsplit client-only leaf modules read browser globals during import.
+// Remove them before creating the router so the real render runs as SSR.
+const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+GlobalRegistrator.register();
+const { getRouter } = await import("../router");
+await unregisterDomEnvironment();
 
 const PENDING_TEXT = "Pending";
 const SCRIPT_ONCE_SOURCE = "window.onceScript = true";
@@ -30,6 +57,30 @@ const environment = {
   documentsBucket: "documents",
   documentsEndpoint: "https://objects.stella.test",
   sandboxUrl: "https://stella.test/sandbox",
+};
+
+const assertInlineScriptNonces = async (response: Response, html: string) => {
+  const nonce = /'nonce-([^']+)'/u
+    .exec(response.headers.get("Content-Security-Policy") ?? "")
+    ?.at(1);
+  expect(nonce).toBeTruthy();
+  const inlineNonces: (string | null)[] = [];
+  await new HTMLRewriter()
+    .on("script", {
+      element: (element) => {
+        if (!element.hasAttribute("src")) {
+          inlineNonces.push(element.getAttribute("nonce"));
+        }
+      },
+    })
+    .transform(new Response(html))
+    .text();
+  expect(inlineNonces.length).toBeGreaterThan(0);
+  expect(
+    inlineNonces,
+    "all inline SSR script nonces match the CSP header",
+  ).toEqual(inlineNonces.map(() => nonce));
+  return inlineNonces;
 };
 
 for (const pathname of ["/public", "/authenticated"]) {
@@ -149,25 +200,47 @@ for (const pathname of ["/public", "/authenticated"]) {
     expect(html).toContain("$RC(");
     expect(html).toContain("$_TSR.router=");
     expect(errors).toEqual([]);
-    const nonce = /'nonce-([^']+)'/u
-      .exec(response.headers.get("Content-Security-Policy") ?? "")
-      ?.at(1);
-    expect(nonce).toBeTruthy();
-    const inlineNonces: (string | null)[] = [];
-    await new HTMLRewriter()
-      .on("script", {
-        element: (element) => {
-          if (!element.hasAttribute("src")) {
-            inlineNonces.push(element.getAttribute("nonce"));
-          }
-        },
-      })
-      .transform(new Response(html))
-      .text();
-    expect(inlineNonces.length).toBeGreaterThan(2);
-    expect(
-      inlineNonces,
-      "all inline SSR script nonces match the CSP header",
-    ).toEqual(inlineNonces.map(() => nonce));
+    expect(await assertInlineScriptNonces(response, html)).toHaveLength(7);
+  });
+}
+
+for (const pathname of ["/tools", "/chat/new"]) {
+  test(`production ${pathname}: every inline SSR script carries the response nonce`, async () => {
+    const request = new Request(`https://stella.test${pathname}`, {
+      headers: {
+        accept: "text/html",
+        cookie: pathname === "/chat/new" ? "session=fixture" : "",
+      },
+    });
+    const errors: unknown[] = [];
+    const response = await withContentSecurityPolicy({
+      environment,
+      fetchResponse: async () =>
+        await createRequestHandler({ request, createRouter: getRouter })(
+          async ({ router, responseHeaders }) => {
+            expect(router.state.location.pathname).toBe(pathname);
+            const rendered = await renderSsrResponse({
+              request,
+              rendererSignal: request.signal,
+              router,
+              responseHeaders,
+              children: <RouterServer router={router} />,
+              reportError: (error) => {
+                errors.push(error);
+              },
+            });
+            if (rendered.isErr()) {
+              throw rendered.error;
+            }
+            return rendered.value;
+          },
+        ),
+    });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(errors).toEqual([]);
+    expect(html).toContain("/prepaint-init.js");
+    expect(html).toContain("$_TSR.router=");
+    await assertInlineScriptNonces(response, html);
   });
 }
