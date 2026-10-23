@@ -302,7 +302,19 @@ test("a string root export resolves to its entry, never the src/index guess", ()
     expect(
       selectGeometrySpecs(["packages/fixture/src/browser.ts"], root),
     ).toEqual([spec]);
-    // An exports form the selector cannot read fails closed.
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an exports form the selector cannot read fails closed", () => {
+  // A fresh fixture: selection caches manifests per repository root.
+  const { root, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/fixture.ts",
+      'import "@stll/fixture-package";\n',
+    );
     write(
       "packages/fixture/package.json",
       JSON.stringify({
@@ -310,6 +322,7 @@ test("a string root export resolves to its entry, never the src/index guess", ()
         exports: ["./src/browser.ts"],
       }),
     );
+    write("packages/fixture/src/browser.ts", "export const target = 1;");
     expect(
       selectGeometrySpecs(["apps/web/src/unrelated.ts"], root),
     ).not.toEqual([]);
@@ -377,8 +390,21 @@ test("bare and unquoted CSS imports resolve against the stylesheet", () => {
     expect(selectGeometrySpecs(["apps/web/src/unrelated.ts"], root)).toEqual(
       [],
     );
-    // A bare stylesheet that is gone and is no package fails closed.
-    rmSync(path.join(root, "apps/web/src/routes/dev/tokens.css"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a bare stylesheet import that is gone and no dependency fails closed", () => {
+  // A fresh fixture: selection caches closures per repository root.
+  const { root, write } = createSelectionFixture();
+  try {
+    write("apps/web/src/routes/dev/fixture.ts", 'import "./a.css";\n');
+    write("apps/web/src/routes/dev/a.css", '@import "tokens.css";\n');
+    write(
+      "apps/web/package.json",
+      JSON.stringify({ name: "web", devDependencies: { tailwindcss: "1" } }),
+    );
     expect(
       selectGeometrySpecs(["apps/web/src/unrelated.ts"], root),
     ).not.toEqual([]);
