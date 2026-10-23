@@ -534,6 +534,7 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legislation_work_identifiers" TO stella_ingestion`,
   `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       "legislation_amendment_snapshots", "legislation_amendments"
