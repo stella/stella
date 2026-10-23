@@ -157,8 +157,8 @@ const run = (root: string, ...args: string[]) => {
   };
 };
 
-const decisionsIn = (root: string): Record<string, Decision> =>
-  readDecisions({ type: "working-tree", root }) as Record<string, Decision>;
+const decisionsIn = (root: string) =>
+  readDecisions({ type: "working-tree", root });
 
 const BEFORE = "jobs: {check: {env: {MODE: one}, steps: []}}";
 const AFTER = "jobs: {check: {env: {MODE: two}, steps: []}}";
