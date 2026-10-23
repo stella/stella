@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -14,17 +14,17 @@ import * as v from "valibot";
 
 import {
   BUN_FLAGS,
+  checkDockerSource,
   checkRepositoryDockerSources,
   commandEntries,
-  checkDockerSource,
   copySource,
   dockerInstructions,
   dockerPruneScopes,
   inDockerContext,
   installToolingCopies,
   sourceClosureProblems,
-  updateInstallToolingCopies,
   type SourceTree,
+  updateInstallToolingCopies,
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
 import { lexShell, parseBunFlags, programWords } from "./install-free-ci";

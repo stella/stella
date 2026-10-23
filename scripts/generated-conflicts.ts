@@ -39,9 +39,9 @@ import path from "node:path";
 
 import { isAutofixProtectedPath } from "./autofix-protected-paths";
 import {
-  GENERATORS,
-  type Generator,
   allowedOutputs,
+  type Generator,
+  GENERATORS,
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,

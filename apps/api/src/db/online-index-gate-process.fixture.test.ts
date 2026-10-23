@@ -32,7 +32,9 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           execute: async (statement, parameters = []) => {
             await connection.unsafe(statement, [...parameters]);
           },
-          release: () => connection.release(),
+          release: async () => {
+            await connection.release();
+          },
           terminate: async () => {
             await terminateReserved(connection);
           },
@@ -93,8 +95,8 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           );
         } finally {
           await gate.close();
-          builder.release();
-          observer.release();
+          await builder.release();
+          await observer.release();
         }
       },
       { closeMode: "force" },

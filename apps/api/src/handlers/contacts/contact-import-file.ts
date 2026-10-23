@@ -10,7 +10,6 @@ import {
   CONTACT_IMPORT_MAX_COLUMNS,
   CONTACT_IMPORT_MAX_ROWS,
   CONTACT_IMPORT_VOCABULARIES,
-  parseContactImportMapping,
   type ContactImportField,
   type ContactImportIssueCode,
   type ContactImportLabeledField,
@@ -18,6 +17,7 @@ import {
   type ContactImportTargetField,
   type ContactImportTaxIdScheme,
   type ContactType,
+  parseContactImportMapping,
 } from "@stll/api-contract";
 import { isCountryCode } from "@stll/country-codes";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -214,8 +214,7 @@ const FIELD_ALIASES = {
  * fallback for a header nothing recognizes, never something an alias declares.
  */
 export type ContactImportSuggestedTarget =
-  | ContactImportField
-  | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
+  ContactImportField | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
 
 /**
  * Where each label of a `Label: value` vocabulary lands. The five identity

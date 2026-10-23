@@ -16,6 +16,8 @@ import {
   czNssFixture,
   czRegionalFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
+  euEcjFixture,
   plCourtsFixture,
   plKioFixture,
   plKisFixture,
@@ -24,9 +26,7 @@ import {
   plTkFixture,
   plUodoFixture,
   plUokikFixture,
-  euEcjFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 type SupportedDriver = {

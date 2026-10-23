@@ -6,12 +6,7 @@ import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 /** JSON values are the only values that can survive the chat JSONB boundary. */
 export type PersistedJsonValue =
-  | boolean
-  | null
-  | number
-  | PersistedJsonObject
-  | PersistedJsonValue[]
-  | string;
+  boolean | null | number | PersistedJsonObject | PersistedJsonValue[] | string;
 
 export type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
@@ -66,8 +61,7 @@ export type ParsedToolOutput = {
 };
 
 export type PersistedToolInput =
-  | ParsedToolInput
-  | { rawArguments: string; status: "raw" };
+  ParsedToolInput | { rawArguments: string; status: "raw" };
 
 export type PersistedToolCallPart = {
   approval?: {

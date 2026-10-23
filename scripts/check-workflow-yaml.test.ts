@@ -6,10 +6,10 @@ import path from "node:path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  actionlintWorkflowSource,
   checkWorkflowYaml,
   parseWorkflowYaml,
   validateActionMetadata,
-  actionlintWorkflowSource,
   validateLocalActionReferences,
   validateNoRubyProcessSpawns,
   validateNoRubyShell,
