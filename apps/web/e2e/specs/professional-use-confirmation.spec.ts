@@ -4,15 +4,20 @@ import { randomUUID } from "node:crypto";
 import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
-import { signInWithEmailOtp } from "../helpers/sign-in";
+import {
+  signInWithEmailOtp,
+  signInWithEmailOtpWithoutProfessionalUse,
+} from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
 
-const createSignedInAccount = async () => {
+const createSignedInAccount = async (
+  signIn: typeof signInWithEmailOtp = signInWithEmailOtp,
+) => {
   const api = await playwrightRequest.newContext({
     extraHTTPHeaders: { origin: "http://localhost:3000" },
   });
   const suffix = randomUUID().slice(0, 8);
-  await signInWithEmailOtp(api, `professional-use-${suffix}@stella.dev`);
+  await signIn(api, `professional-use-${suffix}@stella.dev`);
   const organization = await api.post(
     `${E2E_API_ORIGIN}/api/auth/organization/create`,
     { data: { name: `Professional Use ${suffix}`, slug: `pro-use-${suffix}` } },
@@ -24,20 +29,13 @@ const createSignedInAccount = async () => {
 test("an account awaiting confirmation sees the statement and enters the product after accepting", async ({
   page,
 }) => {
-  const api = await createSignedInAccount();
+  const api = await createSignedInAccount(
+    signInWithEmailOtpWithoutProfessionalUse,
+  );
   try {
     await page.context().addCookies((await api.storageState()).cookies);
-    let accepted = false;
-    await page.route("**/v1/me/professional-use", async (route) => {
-      if (route.request().method() === "POST") {
-        accepted = true;
-      }
-      await route.fulfill({
-        json: { status: accepted ? "accepted" : "required" },
-      });
-    });
 
-    await page.goto("/workspaces");
+    await page.goto("/workspaces", { waitUntil: "commit" });
     await expect(
       page.getByText("Confirm professional use", { exact: true }),
     ).toBeVisible();
@@ -70,7 +68,7 @@ test("an account with a recorded acceptance enters the product without the card"
     );
     expect(accepted.ok(), await accepted.text()).toBe(true);
     await page.context().addCookies((await api.storageState()).cookies);
-    await page.goto("/workspaces");
+    await page.goto("/workspaces", { waitUntil: "commit" });
     await expect(page).toHaveURL(/\/workspaces\/?$/u);
     await expect(
       page.getByText("Confirm professional use", { exact: true }),
