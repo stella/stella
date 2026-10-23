@@ -577,8 +577,8 @@ export const countReplayability = async ({
       // sql-perf-allow: bounded by one explicit operator replay preflight
       await tx
         .select({
-          storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
-          needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
+          storedLocally: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)::int`,
+          needsRefetch: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)::int`,
         })
         .from(caseLawDecisions)
         .where(
@@ -591,8 +591,8 @@ export const countReplayability = async ({
   );
 
   return {
-    storedLocally: Number(counts?.storedLocally ?? 0),
-    needsRefetch: Number(counts?.needsRefetch ?? 0),
+    storedLocally: counts?.storedLocally ?? 0,
+    needsRefetch: counts?.needsRefetch ?? 0,
   };
 };
 
