@@ -12,6 +12,7 @@ import {
   check,
   checkRelease,
   collectGatedAdvisories,
+  pruneBaseline,
   readBaseline,
   runDependencyAuditCli,
   type Advisory,
@@ -486,6 +487,55 @@ describe("audit acceptance expiry", () => {
       }
     },
   );
+
+  test("pruning removes only the acceptance whose advisory is no longer reported", async () => {
+    const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+    const baselinePath = path.join(temporary, "baseline.json");
+    const reported = {
+      id: "GHSA-aaaa-bbbb-cccc",
+      owner: "security",
+      severity: "high",
+      package: "kept",
+      title: "Still reported",
+      reason: "No patched release is reachable yet.",
+      expiresOn: "2099-01-01",
+    };
+    const stale = {
+      id: "GHSA-dddd-eeee-ffff",
+      owner: "security",
+      severity: "critical",
+      package: "gone",
+      title: "No longer reported",
+      reason: "Dropped by the dependency bump.",
+      untilPatched: true,
+    };
+    const baseline = {
+      note: "Reviewed acceptances.",
+      auditLevel: "high",
+      accepted: [reported, stale],
+    };
+    await Bun.write(baselinePath, JSON.stringify(baseline));
+    const stillReported: Advisory = {
+      id: reported.id,
+      severity: reported.severity,
+      package: reported.package,
+      title: reported.title,
+      vulnerableVersions: "<=1.4.0",
+    };
+    try {
+      await pruneBaseline([stillReported], baselinePath);
+      expect(await Bun.file(baselinePath).json()).toEqual({
+        ...baseline,
+        accepted: [reported],
+      });
+      // Nothing stale left: a second prune leaves the file as it is.
+      const pruned = await Bun.file(baselinePath).text();
+      await pruneBaseline([stillReported], baselinePath);
+      expect(await Bun.file(baselinePath).text()).toBe(pruned);
+    } finally {
+      rmSync(temporary, { force: true, recursive: true });
+    }
+  });
 
   test("a baseline entry with a real owner and reason is accepted", async () => {
     const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));

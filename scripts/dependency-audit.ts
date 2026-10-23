@@ -361,24 +361,33 @@ const report = (advisories: Advisory[]): void => {
   }
 };
 
-const saveBaseline = async (baseline: Baseline): Promise<void> => {
-  await Bun.write(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
+const saveBaseline = async (
+  baseline: Baseline,
+  baselinePath: string = BASELINE_PATH,
+): Promise<void> => {
+  await Bun.write(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
 };
 
 // Drops only the acceptances whose advisory is no longer reported; it never
 // adds an entry, so it cannot accept a new advisory.
-const pruneBaseline = async (advisories: Advisory[]): Promise<void> => {
-  const baseline = await readBaseline();
+export const pruneBaseline = async (
+  advisories: Advisory[],
+  baselinePath: string = BASELINE_PATH,
+): Promise<void> => {
+  const baseline = await readBaseline(baselinePath);
   const { resolved } = diffAgainstBaseline(advisories, baseline);
   if (resolved.length === 0) {
     console.info("No stale acceptances to remove.");
     return;
   }
   const resolvedIds = new Set(resolved.map(({ id }) => id));
-  await saveBaseline({
-    ...baseline,
-    accepted: baseline.accepted.filter(({ id }) => !resolvedIds.has(id)),
-  });
+  await saveBaseline(
+    {
+      ...baseline,
+      accepted: baseline.accepted.filter(({ id }) => !resolvedIds.has(id)),
+    },
+    baselinePath,
+  );
   console.info(
     `Removed ${resolved.length} stale acceptance(s): ${[...resolvedIds].join(", ")}.`,
   );
