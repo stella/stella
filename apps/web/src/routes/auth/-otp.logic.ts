@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { SIGN_IN_MODE } from "@/components/auth/sign-in-mode";
 import type { SignInMode } from "@/components/auth/sign-in-mode";
-import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
+import { redirectToSchema } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
 
 export const otpSearchSchema = v.strictObject({
@@ -28,5 +28,5 @@ export const otpSessionNavigation = ({
   if (session === "absent" || mode === SIGN_IN_MODE.reauthenticate) {
     return undefined;
   }
-  return afterSignInNavigation(redirectTo);
+  return { href: redirectTo, replace: true };
 };

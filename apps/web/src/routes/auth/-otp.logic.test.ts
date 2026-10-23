@@ -17,8 +17,7 @@ for (const mode of Object.values(SIGN_IN_MODE)) {
       const navigation = otpSessionNavigation({ ...search, session });
       if (mode === SIGN_IN_MODE.signIn && session === "present") {
         expect(navigation).toEqual({
-          to: "/auth/organization",
-          search: { redirectTo: "/account" },
+          href: "/account",
           replace: true,
         });
         return;
@@ -34,9 +33,8 @@ test("OTP links without a mode retain ordinary sign-in behavior", () => {
     redirectTo: "/account",
   });
   expect(search.mode).toBe(SIGN_IN_MODE.signIn);
-  expect(otpSessionNavigation({ ...search, session: "present" })).toMatchObject(
-    {
-      to: "/auth/organization",
-    },
-  );
+  expect(otpSessionNavigation({ ...search, session: "present" })).toEqual({
+    href: "/account",
+    replace: true,
+  });
 });
