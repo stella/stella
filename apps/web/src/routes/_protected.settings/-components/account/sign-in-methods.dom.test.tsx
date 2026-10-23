@@ -108,25 +108,33 @@ const linkedMicrosoftAccount = {
 const watchRequests = (remainingAccounts: LinkedAccountsData = []) => {
   const requests: { path: string; body: Record<string, unknown> }[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(
-    async (input: string | URL | Request, init?: RequestInit) => {
-      const request = input instanceof Request ? input : undefined;
-      const path = new URL(
-        request?.url ?? String(input),
-        window.location.origin,
-      ).pathname;
-      let rawBody = "";
-      if (typeof init?.body === "string") {
-        rawBody = init.body;
-      } else if (request) {
-        rawBody = await request.clone().text();
-      }
-      const body = rawBody ? JSON.parse(rawBody) : {};
-      requests.push({ path, body });
-      if (path.endsWith("/list-accounts")) {
-        return Response.json(remainingAccounts);
-      }
-      return Response.json({ status: true, url: null, redirect: false });
-    },
+    Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const request = input instanceof Request ? input : undefined;
+        let requestUrl: string;
+        if (input instanceof Request) {
+          requestUrl = input.url;
+        } else if (input instanceof URL) {
+          requestUrl = input.href;
+        } else {
+          requestUrl = input;
+        }
+        const path = new URL(requestUrl, window.location.origin).pathname;
+        let rawBody = "";
+        if (typeof init?.body === "string") {
+          rawBody = init.body;
+        } else if (request) {
+          rawBody = await request.clone().text();
+        }
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        requests.push({ path, body });
+        if (path.endsWith("/list-accounts")) {
+          return Response.json(remainingAccounts);
+        }
+        return Response.json({ status: true, url: null, redirect: false });
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   return { fetch, requests };
 };
@@ -177,7 +185,7 @@ test("requires a fresh email code before unlinking a connected account", async (
     mount([linkedGoogleAccount, linkedMicrosoftAccount]);
     const googleItem = screen
       .getAllByRole("listitem")
-      .find((item) => item.textContent?.includes("Google"));
+      .find((item) => item.textContent.includes("Google"));
     expect(googleItem).toBeDefined();
     if (!googleItem) {
       throw new Error("Google linked account row was not rendered");
