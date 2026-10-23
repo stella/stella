@@ -246,7 +246,7 @@ describe("the AI mark at each place the reader marks generated text", () => {
     } satisfies DecisionAnalysis;
     render(
       <Providers>
-        <AnalysisLayers analysis={analysis} />
+        <AnalysisLayers analysis={analysis} citedLater={false} />
       </Providers>,
     );
 
