@@ -1010,16 +1010,20 @@ const expectScope = ({
     });
   const migrated = { ...scope };
   // A check-pool matrix changes scheduling, not the inherited job scope.
-  // Accept only the exact exhaustive two-way partition used by the runner;
-  // arbitrary strategy changes remain visible to this comparison.
-  if (
-    job === "ci-checks-rest" &&
-    isDeepStrictEqual(migrated["strategy"], {
-      "fail-fast": false,
-      matrix: { partition: [1, 2] },
-    })
-  ) {
-    delete migrated["strategy"];
+  // Accept only the exact exhaustive two-way partition used by the runner,
+  // on either side: a merge base may already carry it. Arbitrary strategy
+  // changes remain visible to this comparison.
+  const checkPoolStrategy = {
+    "fail-fast": false,
+    matrix: { partition: [1, 2] },
+  };
+  if (job === "ci-checks-rest") {
+    if (isDeepStrictEqual(migrated["strategy"], checkPoolStrategy)) {
+      delete migrated["strategy"];
+    }
+    if (isDeepStrictEqual(originalScope["strategy"], checkPoolStrategy)) {
+      delete originalScope["strategy"];
+    }
   }
   // The retired changeset hold was the check legs' only pull-request reader.
   if (
