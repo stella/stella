@@ -72,8 +72,16 @@ const buildApp = () =>
     .onRequest(({ request }) => {
       initRequestContext(request);
     })
-    .onError((context) => answerRequestError(context))
-    .onAfterHandle(async (context) => await completeRequest(context))
+    .onError((context) =>
+      answerRequestError({ ...context, route: context.route ?? context.path }),
+    )
+    .onAfterHandle(
+      async (context) =>
+        await completeRequest({
+          ...context,
+          route: context.route ?? context.path,
+        }),
+    )
     .group("/v1", (app) => app.use(publicLegislationRoute))
     .get(
       "/v1/contacts/search",

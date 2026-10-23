@@ -120,8 +120,16 @@ const buildApp = () =>
     .onRequest(({ request }) => {
       initRequestContext(request);
     })
-    .onError((context) => answerRequestError(context))
-    .onAfterHandle(async (context) => await completeRequest(context))
+    .onError((context) =>
+      answerRequestError({ ...context, route: context.route ?? context.path }),
+    )
+    .onAfterHandle(
+      async (context) =>
+        await completeRequest({
+          ...context,
+          route: context.route ?? context.path,
+        }),
+    )
     .get("/v1/contacts/", rlsDenied.handler)
     .get("/v1/notifications/", upstreamDown.handler)
     .get("/v1/signals/", databaseFailover.handler)
@@ -378,12 +386,23 @@ describe("the request lifecycle", () => {
     };
     const app = new Elysia()
       .wrap(
-        (handleRequest) => (request: Request) =>
-          runWithRequestScope(() => handleRequest(request)),
+        (handleRequest) => async (request: Request) =>
+          await runWithRequestScope(async () => await handleRequest(request)),
       )
       .onRequest(({ request }) => initRequestContext(request))
-      .onError((context) => answerRequestError(context))
-      .onAfterHandle(async (context) => await completeRequest(context))
+      .onError((context) =>
+        answerRequestError({
+          ...context,
+          route: context.route ?? context.path,
+        }),
+      )
+      .onAfterHandle(
+        async (context) =>
+          await completeRequest({
+            ...context,
+            route: context.route ?? context.path,
+          }),
+      )
       .mount(auth.handler);
 
     const response = await app.handle(
@@ -448,12 +467,23 @@ describe("the request lifecycle", () => {
       });
       const app = new Elysia()
         .wrap(
-          (handleRequest) => (request: Request) =>
-            runWithRequestScope(() => handleRequest(request)),
+          (handleRequest) => async (request: Request) =>
+            await runWithRequestScope(async () => await handleRequest(request)),
         )
         .onRequest(({ request }) => initRequestContext(request))
-        .onError((context) => answerRequestError(context))
-        .onAfterHandle(async (context) => await completeRequest(context))
+        .onError((context) =>
+          answerRequestError({
+            ...context,
+            route: context.route ?? context.path,
+          }),
+        )
+        .onAfterHandle(
+          async (context) =>
+            await completeRequest({
+              ...context,
+              route: context.route ?? context.path,
+            }),
+        )
         .mount(auth.handler);
       const response = await app.handle(
         new Request(
@@ -515,7 +545,13 @@ describe("the request lifecycle", () => {
       });
       const app = new Elysia()
         .onRequest(({ request: received }) => initRequestContext(received))
-        .onAfterHandle(async (context) => await completeRequest(context))
+        .onAfterHandle(
+          async (context) =>
+            await completeRequest({
+              ...context,
+              route: context.route ?? context.path,
+            }),
+        )
         .all("/v1/mcp/connections", () => ({ value: "é".repeat(300) }));
       const response = await withFinalResponseCompletion(request, async () =>
         runTenantHttpAction(request, {
@@ -659,8 +695,19 @@ describe("the request lifecycle", () => {
       .onRequest(({ request }) => {
         initRequestContext(request);
       })
-      .onError((context) => answerRequestError(context))
-      .onAfterHandle(async (context) => await completeRequest(context))
+      .onError((context) =>
+        answerRequestError({
+          ...context,
+          route: context.route ?? context.path,
+        }),
+      )
+      .onAfterHandle(
+        async (context) =>
+          await completeRequest({
+            ...context,
+            route: context.route ?? context.path,
+          }),
+      )
       .group("/v1", (versioned) =>
         versioned.use(
           new Elysia({ prefix: "/case" })

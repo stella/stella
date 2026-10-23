@@ -471,7 +471,7 @@ const api = new Elysia()
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     }),
   )
-  .onError(({ error, request, route, set }) => {
+  .onError(({ error, request, route, path, set }) => {
     const errorCode =
       typeof error === "object" && error !== null && "code" in error
         ? error.code
@@ -484,12 +484,17 @@ const api = new Elysia()
           ? errorCode
           : "UNKNOWN",
       request,
-      route,
+      route: route ?? path,
     });
   })
   .onAfterHandle(
-    async ({ request, responseValue, route, set }) =>
-      await completeRequest({ request, responseValue, route, set }),
+    async ({ request, responseValue, route, path, set }) =>
+      await completeRequest({
+        request,
+        responseValue,
+        route: route ?? path,
+        set,
+      }),
   )
   // Global, and ahead of every route, so each route below inherits the hook.
   // The explicit return type keeps `api` out of its own inferred type.

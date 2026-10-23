@@ -1,5 +1,11 @@
 import { panic } from "better-result";
-import { Elysia, type Context } from "elysia";
+import {
+  Elysia,
+  NotFound,
+  ParseError,
+  ValidationError,
+  type Context,
+} from "elysia";
 
 import { Temporal } from "@stll/time";
 
@@ -380,14 +386,6 @@ export const rateLimit = ({
   plugin.onBeforeHandle("plugin", beforeHandle);
 
   plugin.onError("plugin", async ({ error, request, server, set }) => {
-    const errorCode =
-      typeof error === "object" && error !== null
-        ? Reflect.get(error, "code")
-        : undefined;
-    const code =
-      typeof errorCode === "string" || typeof errorCode === "number"
-        ? errorCode
-        : "UNKNOWN";
     const state = requestState.get(request);
     if (state !== undefined) {
       switch (state.type) {
@@ -415,9 +413,9 @@ export const rateLimit = ({
     const currentStatus =
       typeof set.status === "number" ? set.status : undefined;
     const failedBeforeRateLimit =
-      code === "NOT_FOUND" ||
-      code === "PARSE" ||
-      (code === "VALIDATION" && !isResponseValidationError(error)) ||
+      error instanceof NotFound ||
+      error instanceof ParseError ||
+      (error instanceof ValidationError && !isResponseValidationError(error)) ||
       currentStatus === 404 ||
       rateLimitErrorStatus(error) === 404;
 
@@ -434,7 +432,9 @@ export const rateLimit = ({
 
   plugin.mapResponse("plugin", async (lifecycle) => {
     const { request, responseValue, server, set } = lifecycle;
-    const handledError = Object.hasOwn(lifecycle, "code");
+    // Elysia 2 carries the thrown error on context.error through mapping,
+    // including when an earlier error hook already supplied the response.
+    const handledError = Object.hasOwn(lifecycle, "error");
     const statusCode = resolveResponseStatus({
       response: responseValue,
       set,

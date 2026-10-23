@@ -1,4 +1,4 @@
-import Elysia from "elysia";
+import Elysia, { t } from "elysia";
 
 import { env } from "@/api/env";
 import {
@@ -42,12 +42,12 @@ const redirectToFrontend = ({
 };
 
 export const authUiRoute = new Elysia()
-  .get(OAUTH_UI_LOGIN_PATH, ({ request }) =>
+  .get(OAUTH_UI_LOGIN_PATH, { response: t.String() }, ({ request }) =>
     redirectToFrontend({ path: "/auth", request }),
   )
-  .get(OAUTH_UI_ORGANIZATION_PATH, ({ request }) =>
+  .get(OAUTH_UI_ORGANIZATION_PATH, { response: t.String() }, ({ request }) =>
     redirectToFrontend({ path: "/auth/organization", request }),
   )
-  .get(OAUTH_UI_CONSENT_PATH, ({ request }) =>
+  .get(OAUTH_UI_CONSENT_PATH, { response: t.String() }, ({ request }) =>
     redirectToFrontend({ path: "/consent", request }),
   );

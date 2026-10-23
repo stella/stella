@@ -84,7 +84,7 @@ const buildRequestLogDetails = ({
   durationMs: number;
   errorType?: string;
   request: Request;
-  route?: string | undefined;
+  route: string;
   statusCode: number;
   reqCtx?: ReturnType<typeof getRequestContext>;
   elysiaCode?: string;
@@ -127,7 +127,7 @@ type RequestErrorContext = {
   set: ResponseSet;
   code?: number | string;
   request: Request;
-  route?: string | undefined;
+  route: string;
 };
 
 /** The server's `onError` hook: the framework-level failure record and answer. */
@@ -235,7 +235,7 @@ export const answerRequestError = ({
 type RequestCompletionContext = {
   request: Request;
   responseValue: unknown;
-  route?: string | undefined;
+  route: string;
   set: ResponseSet;
 };
 
@@ -254,7 +254,7 @@ export const withFinalResponseCompletion = async (
   const response = await finalResponseCompletion.run(state, run);
   await completeRequest({
     request,
-    route: state.context?.route,
+    route: state.context?.route ?? "unmatched",
     set: state.context?.set ?? { headers: {} },
     responseValue: response,
   });
