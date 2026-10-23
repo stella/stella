@@ -5,13 +5,14 @@ import {
   SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID,
   SETTING_ACCOUNT_EXPORT_USER_ID,
 } from "@/api/db/rls";
-import type { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { legalReaderAnnotations } from "@/api/db/schema";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
 type ReadAccountExportAnnotationPageOptions = {
-  database: Pick<typeof rootDb, "transaction">;
+  database: AnyDrizzle<Transaction>;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   extraWhere: SQL | undefined;
@@ -29,8 +30,8 @@ export const readAccountExportAnnotationPage = async ({
 }: ReadAccountExportAnnotationPageOptions) =>
   await withAggregateTransaction(database, async (tx) => {
     await tx.execute(sql`SELECT
-      set_config('${sql.raw(SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID)}', ${organizationId}, true),
-      set_config('${sql.raw(SETTING_ACCOUNT_EXPORT_USER_ID)}', ${userId}, true)`);
+      set_config(${SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID}, ${organizationId}, true),
+      set_config(${SETTING_ACCOUNT_EXPORT_USER_ID}, ${userId}, true)`);
     return await tx
       .select()
       .from(legalReaderAnnotations)
