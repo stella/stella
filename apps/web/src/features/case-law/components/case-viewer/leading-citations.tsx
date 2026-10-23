@@ -126,9 +126,7 @@ const CappedDirectionSection = ({
     <section className="flex flex-col gap-3">
       <h3 className="text-foreground-strong-muted flex items-baseline gap-1.5 text-xs font-medium">
         {t(DIRECTION_TITLE[direction])}
-        <span className="text-muted-foreground font-normal tabular-nums">
-          {format.number(count)}+
-        </span>
+        <span>{format.number(count)}+</span>
       </h3>
       <p className="text-muted-foreground text-xs">
         {t("caseLaw.citation.partialSummary")}
@@ -176,9 +174,7 @@ const DirectionSection = ({
       <div className="flex flex-col gap-1.5">
         <h3 className="text-foreground-strong-muted flex items-baseline gap-1.5 text-xs font-medium">
           {t(DIRECTION_TITLE[direction])}
-          <span className="text-muted-foreground font-normal tabular-nums">
-            {format.number(total)}
-          </span>
+          <span>{format.number(total)}</span>
         </h3>
         <CitationTreatmentBar counts={counts} total={total} />
       </div>

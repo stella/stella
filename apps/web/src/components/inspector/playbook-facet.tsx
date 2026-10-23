@@ -4882,9 +4882,7 @@ const ChatSuggestionsSection = ({
           className={cn(REVIEW_SECTION_LABEL_CLASS, "flex items-center gap-2")}
         >
           <span>{t("inspector.review.fromChat")}</span>
-          <span className="text-foreground-ghost tabular-nums">
-            {format.number(visible.length)}
-          </span>
+          <span>{format.number(visible.length)}</span>
         </h3>
         {controls}
       </div>

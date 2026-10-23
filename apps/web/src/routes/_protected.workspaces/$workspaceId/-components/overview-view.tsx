@@ -1029,7 +1029,7 @@ const OverviewSectionHeader = ({
   <div className="mb-3 flex h-7 items-center justify-between gap-3">
     <h2 className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-sm font-medium [&_svg]:size-3.5 [&_svg]:shrink-0">
       {icon}
-      <span className="truncate">{title}</span>
+      <span>{title}</span>
     </h2>
     <Button
       className="relative h-7 shrink-0 after:absolute after:-inset-2 md:after:hidden"

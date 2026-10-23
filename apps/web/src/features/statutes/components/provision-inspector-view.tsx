@@ -398,9 +398,7 @@ const ProvisionSection = ({
     <section className="flex flex-col gap-2">
       <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         {title}
-        {count === null ? null : (
-          <span className="ms-2 tabular-nums">{format.number(count)}</span>
-        )}
+        {count === null ? null : <> {format.number(count)}</>}
         {explanation === undefined ? null : (
           <Tooltip>
             <TooltipTrigger
