@@ -16,7 +16,6 @@ import { createOnlineIndexHold } from "../../../db/online-index-gate";
 import { openOnlineIndexObserver } from "../../../db/online-index-observer";
 import type {
   OnlineMigrationConnection,
-  OnlineMigrationOutcome,
   OnlineMigrationPool,
 } from "../../../db/online-migration-connection";
 import {
@@ -63,6 +62,8 @@ export type OnlineWorkStateStore = {
     error: string;
   }) => Promise<void>;
 };
+
+type ClaimedUnit = Extract<OnlineWorkUnitClaim, { type: "claimed" }>;
 
 type OnlineWorkRunnerDependencies = {
   /** Registered units in walk order; pending ones are built in this order. */
@@ -121,29 +122,27 @@ export const createOnlineWorkRunner = ({
 
   const finishUnit = async (
     name: OnlineWorkName,
-    run: () => Promise<OnlineMigrationOutcome>,
+    run: ClaimedUnit["run"],
   ): Promise<void> => {
     try {
-      const outcome = await Result.tryPromise({
-        try: run,
-        catch: (cause: unknown) => cause,
+      await run(async (outcome) => {
+        if (Result.isError(outcome)) {
+          await store.markFailed({ name, error: redactedError(outcome.error) });
+          throw outcome.error;
+        }
+        switch (outcome.value.type) {
+          case "complete":
+            await store.markFinalized(name);
+            return;
+          case "deferred":
+            // The gate held the unit; it stays building and the next tick
+            // claims it again.
+            return;
+          default:
+            outcome.value satisfies never;
+            return panic("Unknown online work outcome");
+        }
       });
-      if (Result.isError(outcome)) {
-        await store.markFailed({ name, error: redactedError(outcome.error) });
-        throw outcome.error;
-      }
-      switch (outcome.value.type) {
-        case "complete":
-          await store.markFinalized(name);
-          return;
-        case "deferred":
-          // The gate held the unit; it stays building and the next tick
-          // claims it again.
-          return;
-        default:
-          outcome.value satisfies never;
-          return panic("Unknown online work outcome");
-      }
     } finally {
       build = IDLE_BUILD;
     }
@@ -177,17 +176,33 @@ export const createOnlineWorkRunner = ({
         claimed satisfies never;
         return panic("Unknown online work claim");
     }
-    const attempts =
-      (states.find((state) => state.name === name)?.attempts ?? 0) + 1;
+    // The snapshot above chose the unit before the lock was held; another
+    // process may have finished it since. Only the state read under the
+    // claim decides whether it still needs work, and counts the attempt.
     const marked = await Result.tryPromise({
       try: async () => {
-        await store.markBuilding({ name, attempts, at: now });
+        const current = (await store.readStates()).find(
+          (state) => state.name === name,
+        );
+        if (current?.state === "finalized") {
+          return "finished-elsewhere" as const;
+        }
+        await store.markBuilding({
+          name,
+          attempts: (current?.attempts ?? 0) + 1,
+          at: now,
+        });
+        return "building" as const;
       },
       catch: (cause: unknown) => cause,
     });
     if (Result.isError(marked)) {
       await claimed.release();
       throw marked.error;
+    }
+    if (marked.value === "finished-elsewhere") {
+      await claimed.release();
+      return IDLE;
     }
     build = { type: "building", name };
     detach(finishUnit(name, claimed.run));

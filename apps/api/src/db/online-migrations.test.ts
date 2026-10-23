@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
@@ -240,7 +241,14 @@ describe("online migrations", () => {
         throw new TypeError("Expected a claim");
       }
 
-      expect(await claim.run()).toEqual({ type: "complete" });
+      const recorded: { result: unknown; released: boolean }[] = [];
+      await claim.run(async (result) => {
+        recorded.push({ result, released: harness.released() });
+      });
+      // The result reaches the caller while the session still holds the lock.
+      expect(recorded).toEqual([
+        { result: Result.ok({ type: "complete" }), released: false },
+      ]);
       expect(harness.statements).toContain(index.createSql);
       expect(harness.statements).not.toContain(other.createSql);
       expect(

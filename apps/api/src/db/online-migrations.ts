@@ -932,12 +932,22 @@ const processOnlineMigrations = async ({
   }
 };
 
+/** What a claimed walk ended with: its outcome, or what it threw. */
+export type OnlineWorkRunResult = Result<OnlineMigrationOutcome, unknown>;
+
 export type OnlineWorkUnitClaim =
   | { type: "lock_held" }
   | {
       type: "claimed";
-      /** Walks the unit, then releases the lock and the session. */
-      run: () => Promise<OnlineMigrationOutcome>;
+      /**
+       * Walks the unit and hands its result to `record` while the lock is
+       * still held, then releases the lock and the session. Recording under
+       * the lock keeps another process from claiming the unit between the
+       * walk's end and its checkpoint.
+       */
+      run: (
+        record: (result: OnlineWorkRunResult) => Promise<void>,
+      ) => Promise<void>;
       /** Gives the claim up without walking. */
       release: () => Promise<void>;
     };
@@ -1005,16 +1015,22 @@ export const claimOnlineWorkUnit = async (
   return {
     type: "claimed",
     release,
-    run: async () => {
+    run: async (record) => {
       try {
-        await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
-        await connection.execute("SET statement_timeout = '0'");
-        return await walkOnlineMigrations({
-          connection,
-          mode: { operation: "repair", indexGate, reserveObserver, timing },
-          scope: { type: "unit", name },
-          options,
+        const result = await Result.tryPromise({
+          try: async () => {
+            await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
+            await connection.execute("SET statement_timeout = '0'");
+            return await walkOnlineMigrations({
+              connection,
+              mode: { operation: "repair", indexGate, reserveObserver, timing },
+              scope: { type: "unit", name },
+              options,
+            });
+          },
+          catch: (cause: unknown) => cause,
         });
+        await record(result);
       } finally {
         await release();
       }

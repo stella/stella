@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -78,6 +79,8 @@ const createHarness = ({
   const { rows, store } = createMemoryStore();
   const claims: OnlineWorkName[] = [];
   const releases: OnlineWorkName[] = [];
+  /** The unit's checkpoint at each release: a finished walk records first. */
+  const statesAtRelease: (StoredRow["state"] | undefined)[] = [];
   const walks = new Map<
     OnlineWorkName,
     PromiseWithResolvers<OnlineMigrationOutcome>
@@ -99,14 +102,20 @@ const createHarness = ({
         if (!released) {
           released = true;
           releases.push(name);
+          statesAtRelease.push(rows.get(name)?.state);
         }
       };
       return {
         type: "claimed",
         release,
-        run: async () => {
+        run: async (record) => {
           try {
-            return await walk.promise;
+            await record(
+              await Result.tryPromise({
+                try: async () => await walk.promise,
+                catch: (cause: unknown) => cause,
+              }),
+            );
           } finally {
             await release();
           }
@@ -130,6 +139,7 @@ const createHarness = ({
     rows,
     claims,
     releases,
+    statesAtRelease,
     tick: async () => await runner(START),
     walkOf,
     settle,
@@ -173,7 +183,80 @@ describe("online work runner", () => {
 
     expect(harness.rows.get(FIRST)).toMatchObject({ state: "finalized" });
     expect(harness.releases).toEqual([FIRST]);
+    // The checkpoint is written while the claim still holds the lock.
+    expect(harness.statesAtRelease).toEqual(["finalized"]);
     expect(await harness.tick()).toEqual({ type: "started", name: SECOND });
+  });
+
+  test("a runner whose snapshot went stale while another finished the unit leaves it finished", async () => {
+    const { rows, store } = createMemoryStore();
+    const lifecycle = lifecycleWithPending([FIRST]);
+    let holder: "a" | "b" | null = null;
+    const walked: string[] = [];
+    const gaveUp: string[] = [];
+    const claimAs =
+      (runnerId: "a" | "b") => async (): Promise<OnlineWorkUnitClaim> => {
+        if (holder !== null) {
+          return { type: "lock_held" };
+        }
+        holder = runnerId;
+        const release = async () => {
+          holder = null;
+        };
+        return {
+          type: "claimed",
+          release: async () => {
+            gaveUp.push(runnerId);
+            await release();
+          },
+          run: async (record) => {
+            walked.push(runnerId);
+            try {
+              await record(Result.ok({ type: "complete" }));
+            } finally {
+              await release();
+            }
+          },
+        };
+      };
+    // Runner b chose its unit from this snapshot, taken before a finished it.
+    const stale = await store.readStates();
+    let staleReads = 1;
+    const work: Promise<void>[] = [];
+    const a = createOnlineWorkRunner({
+      names: ONLINE_WORK_NAMES,
+      lifecycle,
+      store,
+      claim: claimAs("a"),
+      detach: (finished) => {
+        work.push(finished);
+      },
+    });
+    const b = createOnlineWorkRunner({
+      names: ONLINE_WORK_NAMES,
+      lifecycle,
+      store: {
+        ...store,
+        readStates: async () => {
+          if (staleReads > 0) {
+            staleReads -= 1;
+            return stale;
+          }
+          return await store.readStates();
+        },
+      },
+      claim: claimAs("b"),
+      detach: () => panic("Runner b must not walk a finished unit"),
+    });
+
+    expect(await a(START)).toEqual({ type: "started", name: FIRST });
+    await Promise.all(work);
+
+    expect(await b(START)).toEqual({ type: "idle" });
+    expect(walked).toEqual(["a"]);
+    expect(gaveUp).toEqual(["b"]);
+    expect(holder).toBeNull();
+    expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 1 });
   });
 
   test("a failed unit records a bounded error without the database URL, reports it, and is retried", async () => {
@@ -233,7 +316,8 @@ describe("online work runner", () => {
       },
       claim: async ({ name }) => ({
         type: "claimed",
-        run: async () => ({ type: "complete" }),
+        run: async () =>
+          panic("A claim that was never recorded is never walked"),
         release: async () => {
           releases.push(name);
         },
