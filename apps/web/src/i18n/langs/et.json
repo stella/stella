@@ -3530,6 +3530,12 @@
       "unsupportedVisualContent": "See fail sisaldab pilte või vektorgraafikat, mida ei saa tundliku teksti suhtes kontrollida. Eksport pole saadaval.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
+      "unsupportedEncoding": "See dokument kasutab toetamata kodeeringut {encoding}, mistõttu ei saa seda teisendada.",
+      "unsupportedField": "See dokument sisaldab välja {fieldType}, mida ei saa teisendada.",
+      "unsupportedReference": "See dokument viitab välisele ressursile asukohas {element} {attribute}, mistõttu ei saa seda teisendada."
+    },
     "external": {
       "confirmDescription": "Oled avamas välist veebisaiti.",
       "confirmTitle": "Ava väline link?",
