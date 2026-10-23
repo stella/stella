@@ -19,6 +19,7 @@ import type { BackfilledDocument } from "@/api/lib/legal-search/sk-document-back
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -244,7 +245,7 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async (fence) =>
           await fence.scopedDb(async (tx) => {
             const attempt = await Result.tryPromise({
@@ -279,7 +280,7 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async (fence) =>
           await fence.scopedDb(async (tx) => {
             await tx
@@ -308,7 +309,7 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async (fence) => {
           await fence.beforeRemoteEffect(async () => {
             const merge = await acquireCaseLawSourceIngestionLease({
@@ -429,7 +430,7 @@ if (!databaseUrl || !enabled) {
           await withDeferredDocumentSourceOwnership({
             decisionId,
             scopedDb,
-            timeoutMs: 50,
+            timeoutMs: 50, // timeout under test
             operation: async () => {
               started = true;
             },
@@ -525,13 +526,13 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId: first.decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async () => {
           expect(
             await withDeferredDocumentSourceOwnership({
               decisionId: sameSource.id,
               scopedDb,
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               operation: async () => "document",
             }),
           ).toEqual({ status: "completed", value: "document" });
@@ -539,7 +540,7 @@ if (!databaseUrl || !enabled) {
             await withDeferredDocumentSourceOwnership({
               decisionId: otherSource.decisionId,
               scopedDb,
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               operation: async () => "document",
             }),
           ).toEqual({ status: "completed", value: "document" });
@@ -645,7 +646,7 @@ if (!databaseUrl || !enabled) {
           decisionId,
           scopedDb,
           signal: controller.signal,
-          timeoutMs: failure === "deadline" ? 50 : 1000,
+          timeoutMs: failure === "deadline" ? 50 : 1000, // timeout under test
           operation: async (fence) => {
             started.resolve();
             if (failure === "throw") {

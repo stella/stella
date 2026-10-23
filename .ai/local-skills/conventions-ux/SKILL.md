@@ -74,7 +74,7 @@ Small, almost invisible touches. Linear is a good reference.
   Legal cliché is decoration every product in the category already
   uses; name the concept instead — a court is `Landmark`, a decision
   `FileText` (`Library` for a collection of them), and the case-law
-  section is `CaseLawIcon`. `no-legal-cliche-glyph` enforces it.
+  section is `CaseLawIcon`. `no-banned-glyph` enforces it.
 
 ## Review chrome
 
@@ -415,6 +415,8 @@ composition (edges, spacing, holes), typography, colour, detail
 after three rounds and say plainly what still falls short.
 
 ## Anti-Patterns
+
+Keep narrative prose below 80 characters per line through the Prose component; code, tables, editors and other task-shaped surfaces are exempt.
 
 Explicit list of patterns that AI agents tend to generate and
 that do not belong in a professional legal workspace. Each began as a

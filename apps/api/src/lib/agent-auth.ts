@@ -36,10 +36,12 @@ import {
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
 import { reserveRegistration } from "@/api/lib/auth/registration-budget";
+import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 
@@ -569,6 +571,7 @@ export const mintInternalSessionCookieHeader = async ({
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
 }): Promise<string> => {
+  requireSessionCredentialIssuer("agentDelegation", { userId, organizationId });
   const now = new Date();
   const token = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`.replaceAll(
     "-",
@@ -587,11 +590,10 @@ export const mintInternalSessionCookieHeader = async ({
     userAgent: "stella-agent-auth/id-jag",
   });
 
-  const signature = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
-    .update(token)
-    .digest("base64");
-
-  return `${getSessionCookieName()}=${token}.${signature}`;
+  return `${getSessionCookieName()}=${createSignedSessionCookieValue(
+    token,
+    env.BETTER_AUTH_SECRET,
+  )}`;
 };
 
 /**

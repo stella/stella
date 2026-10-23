@@ -14,8 +14,6 @@
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Tagasi rakendusse",
-    "billingAndUsage": "Arveldus ja kasutus",
     "billingProfiles": "Arveldusprofiilid",
     "deleteDescription": "Kustutage see organisatsioon ja selle andmed jäädavalt. Seda toimingut ei saa tagasi võtta.",
     "deleteOrganization": "Kustuta organisatsioon",
@@ -27,12 +25,9 @@
     "leaveOrganization": "Lahku organisatsioonist",
     "leaveRefusedOnlyOwner": "Olete ainus omanik. Enne lahkumist määrake omanikuks mõni teine liige.",
     "modelsAndProviders": "Mudelid ja pakkujad",
-    "noPlan": "Aktiivne pakett puudub",
     "organizationDeleted": "Organisatsioon on kustutatud.",
     "organizationId": "Organisatsiooni ID",
     "organizationLeft": "Olete organisatsioonist lahkunud.",
-    "overviewDescription": "Hallake oma organisatsiooni, inimesi ja tööriistu.",
-    "people": "Inimesed",
     "planAndUsage": "Pakett ja kasutus",
     "title": "Organisatsiooni haldus",
     "toolsDescription": "Lubage või keelake sisseehitatud tööriistad kõigile selles organisatsioonis."
@@ -54,11 +49,11 @@
   },
   "agentSetup": {
     "addressLabel": "Assistent küsib seda aadressi",
-    "copiedToast": "Juhised kopeeritud. Kleebi need vestlusesse oma assistendiga.",
     "copy": "Kopeeri talle juhised",
     "description": "Küsi Claude’ilt või ChatGPT-lt oma toimikute ja dokumentide kohta. Vali oma assistent, et avada lühike juhend; see võtab umbes minuti.",
     "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga. Järgi aadressil {guideUrl} jaotist „Instructions for AI agents“ ja kasuta seda serveri aadressi: {mcpUrl}",
     "openGuide": "Ava juhend: {assistant}",
+    "pasteHint": "Kleebi need vestlusesse oma assistendiga.",
     "selfSetupHint": "Kasutad Claude Code’i või Codexit?",
     "title": "Kasuta stellat oma AI-assistendis"
   },
@@ -380,6 +375,12 @@
       "attentionComplete": "<strong>Kõik inimese otsust nõudvad väited on käsitletud.</strong> {count, plural, one {# tavapärast otsustust ei pea eraldi üle vaatama.} other {# tavapärast otsustust ei pea eraldi üle vaatama.}}",
       "attentionOpen": "<strong>{count, plural, one {# väide vajab} other {# väidet vajavad}} teie otsust</strong>: vastuolud ja vaidlustatud tõlgendused. {routineCount, plural, one {Ülejäänud # väide on tavapärane ega vaja eraldi kinnitamist.} other {Ülejäänud # väidet on tavapärased ega vaja eraldi kinnitamist.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vaidlustatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} other {}})",
+      "documentView": {
+        "label": "Dokumendivaade",
+        "original": "Originaal",
+        "reading": "Lugemisvaade"
+      },
+      "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {
@@ -849,7 +850,6 @@
         "unavailable": "Selle lahendi AI-analüüs pole saadaval."
       },
       "generate": "Koosta AI lühikokkuvõtted",
-      "holdingAnchor": "Mine lõigu juurde",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
       "topics": "Teemad",
       "treatment": "Hilisem käsitlus"
@@ -1105,6 +1105,8 @@
         "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
         "message": "Miski ei vasta valitud filtritele."
       },
+      "partialMatch": "Osaline vaste",
+      "partialMatches": "Osalised vasted päringule: <bdi>{query}</bdi>",
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
@@ -1142,6 +1144,7 @@
       "judges": "Kohtunikud",
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
+      "paragraphReference": "Lõik {number}",
       "popularName": "Rahvanimi",
       "portraitCredit": "Portreede allikas: {source}",
       "provisionMentions": "{count, number}×",
@@ -1388,6 +1391,7 @@
     "credentialSendDescription": "Saada see ainult siis, kui soovid seda väärtust vestluses jagada.",
     "credentialSendTitle": "See sõnum võib sisaldada mandaati",
     "deleteThread": "Kustuta vestlus",
+    "diagramUnavailable": "Seda diagrammi ei õnnestunud kuvada. Selle lähtekood on allpool.",
     "editMode": {
       "autoDirect": "Automaatne · kirjuta ümber",
       "autoDirectDescription": "Tehisintellekti muudatused rakendatakse kohe ja dokument kirjutatakse otse ümber (muudatusi ei jälgita).",
@@ -1608,6 +1612,9 @@
         "private": "Sinu AI oskused",
         "team": "Tiimi AI oskused"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Samuti vaadatud ({count, number})"
     },
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
@@ -2719,6 +2726,7 @@
       "aiConfigModelInvalid": "AI-mudeli seadistus ei kehti. Kontrollige valitud mudeleid.",
       "aiConfigProviderInvalid": "AI-teenusepakkuja seadistus ei kehti. Kontrollige teenusepakkuja seadeid.",
       "aiConfigProviderValidationFailed": "AI-teenusepakkuja lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",
+      "aiDeadlineExceeded": "AI ei vastanud õigeaegselt. Proovi hetke pärast uuesti.",
       "aiOutputInvalid": "Tehisintellekti vastus oli ootamatus vormingus. Proovige uuesti.",
       "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
       "aiProviderTaskUnsupported": "Seadistatud tehisintellekti teenusepakkuja ei saa seda ülesannet täita. Valige teenusepakkuja, kes saab.",
@@ -4208,7 +4216,9 @@
     "prompt": "Mida otsite?",
     "recent": "Hiljutised",
     "recentCasesFilter": "Kohtulahendid",
+    "recentLoadFailed": "Hiljutisi tegevusi ei saanud laadida.",
     "recentSearchFilter": "Otsingud",
+    "recentUpdateFailed": "Hiljutisi tegevusi ei saanud uuendada.",
     "recentlyInForce": "Hiljuti jõustunud",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",

@@ -1,18 +1,22 @@
 import { useCallback, useRef, useState } from "react";
 
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
 import { READER_ANSWER_QUOTE_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
+import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
 import {
   decisionCaseName,
   visibleDecisionBlocks,
 } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
-import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  type DocumentAst,
+  parseDocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
@@ -29,7 +33,11 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
+import {
+  VIEWER_OVERLAY_BAR_BAND_PX,
+  VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+} from "@/components/inspector/viewer-overlay-bar";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
@@ -37,7 +45,9 @@ import type { SelectionAnchor } from "@/components/legal-reader/annotations/sele
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
+import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import Tooltip from "@/components/tooltip";
+import { hasIncomingCitations } from "@/features/case-law/citation-treatment";
 import {
   AiHeadnotes,
   hasAiHeadnotes,
@@ -53,6 +63,7 @@ import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis
 import type {
   AnalysisMarginItem,
   AnswerMarginItem,
+  ProvisionMarginItem,
 } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
@@ -72,12 +83,14 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -87,6 +100,7 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 import {
@@ -167,6 +181,12 @@ export type DecisionWorkspaceProps =
   | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
+/** A decision without a parsed body has no blocks to range over. */
+const NO_BLOCKS: DocumentAst["blocks"] = [];
+
+const decisionBlocks = (ast: DocumentAst | null): DocumentAst["blocks"] =>
+  ast?.blocks ?? NO_BLOCKS;
+
 const MARKS_FOR_NOTES_FILTER = {
   ai: "none",
   all: "all",
@@ -180,10 +200,12 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const user = useMaybeAuthenticatedUser();
   return (
-    <DecisionWorkspaceContent
-      {...props}
-      key={`${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${props.decisionId}`}
-    />
+    <WebReaderProvider>
+      <DecisionWorkspaceContent
+        {...props}
+        key={`${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${props.decisionId}`}
+      />
+    </WebReaderProvider>
   );
 };
 
@@ -250,8 +272,18 @@ const ReaderStatusNotices = ({
 
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
+  // The citation strip's own summary, already cached for this decision: a
+  // later-treatment note is drawn only once it shows a later citing decision.
+  // The strip reports a failed read; here it only keeps the note hidden.
+  const citationSummary = useQueryView(
+    useQuery(decisionCitationSummaryOptions(decisionId)),
+  );
+  const citedLater =
+    citationSummary.type === "items" &&
+    hasIncomingCitations(citationSummary.items);
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
+  const astBlocks = decisionBlocks(ast);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
     ast,
@@ -555,7 +587,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     sessionId: landingSessionId,
   });
 
-  const jumpToAnchor = (anchorId: string) => {
+  const jumpToAnchor = (anchorId: string, endAnchorId = anchorId) => {
     setLandingAnchorId(undefined);
     const container = mainRef.current;
     const el = container?.querySelector<HTMLElement>(
@@ -571,9 +603,28 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         container.scrollTop,
       behavior: "instant",
     });
-    delete el.dataset["highlight"];
+    const blocks = astBlocks;
+    const range = paragraphRangeIndices(blocks, {
+      startAnchorId: anchorId,
+      endAnchorId,
+    });
+    const highlighted =
+      range === null ? [] : blocks.slice(range.startIndex, range.endIndex + 1);
+    const highlightedElements = highlighted
+      .map((block) =>
+        container.querySelector<HTMLElement>(`#${CSS.escape(block.anchorId)}`),
+      )
+      .filter((blockElement) => blockElement !== null);
+    if (highlightedElements.length === 0) {
+      highlightedElements.push(el);
+    }
+    for (const blockElement of highlightedElements) {
+      delete blockElement.dataset["highlight"];
+    }
     forceReflow(el);
-    el.dataset["highlight"] = "";
+    for (const blockElement of highlightedElements) {
+      blockElement.dataset["highlight"] = "";
+    }
   };
 
   // The model's headnote and abstract open the decision, under the court's
@@ -584,7 +635,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     completeAnalysis !== null &&
     showAiNotes &&
     hasAiHeadnotes(completeAnalysis) ? (
-      <AiHeadnotes analysis={completeAnalysis} onAnchorClick={jumpToAnchor} />
+      <AiHeadnotes
+        analysis={completeAnalysis}
+        blocks={astBlocks}
+        onAnchorClick={jumpToAnchor}
+      />
     ) : null;
 
   const sectionMap = (() => {
@@ -677,6 +732,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const visibleMarginItems = [
     ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
+    ...(provisions.expandProvisions && answerPlacement === "gutter"
+      ? prepareDecisionProvisionCards({
+          blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
+          provisionAnchors,
+        }).map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
+          citations,
+          id: `provision:${id}`,
+          kind: "provision",
+          startAnchorId,
+        }))
+      : []),
     ...exampleMarginItems,
     ...annotations.notes,
   ];
@@ -698,13 +764,6 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ChromeHeaderActions>
-        <ZoomControls
-          atMax={textScale.atMax}
-          atMin={textScale.atMin}
-          level={textScale.level}
-          onReset={textScale.reset}
-          onZoom={textScale.zoom}
-        />
         <ReaderProvisionModeToggle mode={provisions} size="page" />
       </ChromeHeaderActions>
       <GuestAnnotationPrompt count={annotations.guestCount} />
@@ -740,6 +799,16 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             );
           })}
         </div>
+        {/* The text column is the grid's inline-end column at every width, so
+            the bar's corner of this box is the text's corner, as in the
+            inspector's reader. */}
+        <FloatingZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
+        />
 
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
@@ -762,7 +831,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 the published block-end inset as the composer grows. */}
             {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
               <OutlineRail
+                ariaLabel={t("statutes.outline")}
                 items={analysisOutline.items}
+                // The zoom bar floats beside the rail's top; the rail starts
+                // below it so reaching for the bar never opens the outline.
+                topOffset={VIEWER_OVERLAY_BAR_BAND_PX}
                 onJump={(id, container) => {
                   const anchorId = analysisOutline.anchorById.get(id);
                   if (anchorId === undefined) {
@@ -846,7 +919,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   }
                 >
                   {completeAnalysis !== null && showAiNotes && (
-                    <AnalysisLayers analysis={completeAnalysis} />
+                    <AnalysisLayers
+                      analysis={completeAnalysis}
+                      citedLater={citedLater}
+                    />
                   )}
                   {hasAnalysis &&
                     showAiNotes &&
@@ -926,7 +1002,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 </aside>
 
                 <main
-                  className="reader-paper min-w-0 py-8"
+                  className={cn(
+                    "reader-paper min-w-0 pb-8",
+                    VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+                  )}
                   data-slot="reader-document-column"
                 >
                   {/* Below lg the analysis column, and the offer in it, is
@@ -953,7 +1032,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     citationAnchors={citationAnchors}
                     decision={decision}
                     decisionId={decisionId}
-                    expandProvisions={provisions.expandProvisions}
+                    expandProvisions={
+                      provisions.expandProvisions &&
+                      answerPlacement === "inline"
+                    }
                     landingAnchorId={landingAnchorId}
                     onAnnotationActivate={activateMark}
                     notesByAnchorId={

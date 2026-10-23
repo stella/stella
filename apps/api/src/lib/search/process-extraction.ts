@@ -718,6 +718,7 @@ const nativeExtractionRunValues = (request: NativeExtractionRunRequest) =>
 // while reducing a whole-matter copy from one request query per document to a
 // small, bounded number of statements.
 const NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE = 250;
+const extractionOwnerDb = rootDb;
 
 /** Insert immutable-source requests in bounded batches on one transaction. */
 export const requestNativeExtractionRuns = async ({
@@ -725,7 +726,7 @@ export const requestNativeExtractionRuns = async ({
   tx,
 }: {
   requests: readonly NativeExtractionRunRequest[];
-  tx: Transaction;
+  tx: Pick<Transaction, "insert">;
 }): Promise<SafeId<"documentProcessingRun">[]> => {
   const insertedRunIds: SafeId<"documentProcessingRun">[] = [];
   const itemBatches = chunkItems(
@@ -748,6 +749,12 @@ export const requestNativeExtractionRuns = async ({
   await insertFrom();
   return insertedRunIds;
 };
+
+/** Insert an operator repair page without exposing the owner transaction. */
+export const requestNativeExtractionRunsAsOwner = async (
+  requests: readonly NativeExtractionRunRequest[],
+): Promise<SafeId<"documentProcessingRun">[]> =>
+  await requestNativeExtractionRuns({ requests, tx: extractionOwnerDb });
 
 /**
  * Commit the durable extraction request with the mutation that creates its
@@ -808,7 +815,7 @@ export const processExtraction = async (
     filePropertyId?: SafeId<"property"> | undefined;
   },
   {
-    database = rootDb,
+    database = extractionOwnerDb,
     enqueueRun = enqueueDocumentProcessingRun,
     indexEntity = async (id) => await getSearchMaintenance().indexEntity(id),
   }: ProcessExtractionDependencies = {},

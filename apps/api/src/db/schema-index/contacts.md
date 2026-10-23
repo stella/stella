@@ -181,48 +181,49 @@ scheduler_jobs.schedule         jsonb        not null          contacts.ts:759
 scheduler_jobs.payload          jsonb        null              contacts.ts:760
 scheduler_jobs.enabled          boolean      default,not null  contacts.ts:761
 scheduler_jobs.paused_by        text         null              contacts.ts:762
-scheduler_jobs.paused_until     timestamptz  null              contacts.ts:763
-scheduler_jobs.pause_reason     text         null              contacts.ts:764
-scheduler_jobs.next_run_at      timestamptz  not null          contacts.ts:765
-scheduler_jobs.last_run_at      timestamptz  null              contacts.ts:766
-scheduler_jobs.last_success_at  timestamptz  null              contacts.ts:767
-scheduler_jobs.last_failure_at  timestamptz  null              contacts.ts:768
-scheduler_jobs.last_error       text         null              contacts.ts:769
-scheduler_jobs.locked_at        timestamptz  null              contacts.ts:770
-scheduler_jobs.locked_until     timestamptz  null              contacts.ts:771
-scheduler_jobs.locked_by        varchar      null              contacts.ts:772
-scheduler_jobs.created_at       timestamptz  default,not null  contacts.ts:773
-scheduler_jobs.updated_at       timestamptz  default,not null  contacts.ts:774
+scheduler_jobs.paused_since     timestamptz  null              contacts.ts:763
+scheduler_jobs.paused_until     timestamptz  null              contacts.ts:764
+scheduler_jobs.pause_reason     text         null              contacts.ts:765
+scheduler_jobs.next_run_at      timestamptz  not null          contacts.ts:766
+scheduler_jobs.last_run_at      timestamptz  null              contacts.ts:767
+scheduler_jobs.last_success_at  timestamptz  null              contacts.ts:768
+scheduler_jobs.last_failure_at  timestamptz  null              contacts.ts:769
+scheduler_jobs.last_error       text         null              contacts.ts:770
+scheduler_jobs.locked_at        timestamptz  null              contacts.ts:771
+scheduler_jobs.locked_until     timestamptz  null              contacts.ts:772
+scheduler_jobs.locked_by        varchar      null              contacts.ts:773
+scheduler_jobs.created_at       timestamptz  default,not null  contacts.ts:774
+scheduler_jobs.updated_at       timestamptz  default,not null  contacts.ts:775
 ```
 
-## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:798 · rls
+## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:812 · rls
 
 ```text
-scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:801
-scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:802
-scheduler_job_runs.task         varchar      not null          contacts.ts:806
-scheduler_job_runs.runner_id    varchar      not null          contacts.ts:807
-scheduler_job_runs.status       text         default,not null  contacts.ts:808
-scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:812
-scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:813
-scheduler_job_runs.duration_ms  integer      null              contacts.ts:814
-scheduler_job_runs.error        text         null              contacts.ts:815
+scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:815
+scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:816
+scheduler_job_runs.task         varchar      not null          contacts.ts:820
+scheduler_job_runs.runner_id    varchar      not null          contacts.ts:821
+scheduler_job_runs.status       text         default,not null  contacts.ts:822
+scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:826
+scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:827
+scheduler_job_runs.duration_ms  integer      null              contacts.ts:828
+scheduler_job_runs.error        text         null              contacts.ts:829
 ```
 
-## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:835
+## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:849
 
 -- InfoSoud Tracking --
 
 ```text
-infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:838
-infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:839
-infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:842
-infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:843
-infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:844
-infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:845
-infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:848
-infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:849
-infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:850
-infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:851
-infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:852
+infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:852
+infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:853
+infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:856
+infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:857
+infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:858
+infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:859
+infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:862
+infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:863
+infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:864
+infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:865
+infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:866
 ```

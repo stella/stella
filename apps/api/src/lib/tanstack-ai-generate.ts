@@ -652,30 +652,40 @@ export type TanStackTextRun = {
 type AdmittedChatRunOptions = StreamChatChunksOptions & {
   model: ResolvedTanStackTextModel;
   admission: ModelDispatchScope["admission"];
+  userId: ModelDispatchScope["userId"];
 };
 
 const admittedChatRunOptions = ({
   admission,
+  userId,
   abortController,
   ...options
 }: AdmittedChatRunOptions): StreamChatChunksOptions & {
   model: ResolvedTanStackTextModel;
 } => {
-  const controller = admittedAbortController(admission, abortController);
+  const controller = admittedAbortController({
+    admission,
+    userId,
+    abortController,
+  });
   return controller === undefined
     ? options
     : { ...options, abortController: controller };
 };
 
-const admittedAbortController = (
-  admission: ModelDispatchScope["admission"],
-  abortController: AbortController | undefined,
-): AbortController | undefined => {
+const admittedAbortController = ({
+  admission,
+  userId,
+  abortController,
+}: Pick<AdmittedChatRunOptions, "admission" | "userId" | "abortController">):
+  | AbortController
+  | undefined => {
   switch (admission.type) {
     case "organization": {
       // Checks the proof still admits work, then joins its signal.
       const signal = admittedDispatchSignal({
         organizationId: admission.organizationId,
+        userId,
         admission,
         abortSignal: abortController?.signal,
       });
@@ -684,6 +694,7 @@ const admittedAbortController = (
         : abortControllerFromSignal(signal);
     }
     case "no-organization":
+      assertModelDispatchScope({ organizationId: null, userId, admission });
       return abortController;
     default:
       admission satisfies never;

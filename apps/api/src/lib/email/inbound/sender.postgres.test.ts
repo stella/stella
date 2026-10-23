@@ -56,8 +56,8 @@ if (!databaseUrl || !runPostgresTests) {
           adminId,
         );
         const allowedSenderId = createSafeId<"correspondenceAllowedSender">();
-        const firstToken = generateInboundAddressToken();
-        const secondToken = generateInboundAddressToken();
+        const firstToken = generateInboundAddressToken({ userId: null });
+        const secondToken = generateInboundAddressToken({ userId: null });
         const sender = "office@example.test";
         const approverEmail = `approver-${Bun.randomUUIDv7()}@example.test`;
         const receivedAt = "2026-09-26T12:00:00.000Z";

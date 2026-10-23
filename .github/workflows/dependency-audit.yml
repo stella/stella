@@ -6,6 +6,17 @@ defaults:
 
 on:
   pull_request:
+    paths:
+      - bun.lock
+      - "**/package.json"
+      - Cargo.lock
+      - "**/Cargo.lock"
+      - Cargo.toml
+      - "**/Cargo.toml"
+      - .github/workflows/dependency-audit.yml
+      - scripts/dependency-audit.ts
+      - scripts/check-trusted-dependencies.ts
+      - scripts/retry.sh
   push:
     branches: [main]
   schedule:
@@ -44,7 +55,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json'; then
+          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json' Cargo.lock ':(glob)**/Cargo.lock' Cargo.toml ':(glob)**/Cargo.toml' .github/workflows/dependency-audit.yml scripts/dependency-audit.ts scripts/check-trusted-dependencies.ts scripts/retry.sh; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -52,7 +63,7 @@ jobs:
 
       - name: Setup Bun
         if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -163,7 +174,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           bun-version-file: "package.json"
           save: ${{ github.ref == 'refs/heads/main' }}

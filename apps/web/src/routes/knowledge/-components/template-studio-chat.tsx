@@ -688,6 +688,7 @@ const TemplateStudioChatInner = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "template-studio",
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
