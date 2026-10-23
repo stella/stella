@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Úplnosť",
-      "countedOn": "Spočítané k {date}",
       "courtsHeading": "Podľa súdu",
       "courtsUnavailable": "Rozpis podľa súdov nie je momentálne k dispozícii.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
-      "exceedsReportedTotal": "Obsahuje viac, než vydavateľ naposledy uviedol k {date}",
-      "gapStatusUnknown": "Stav medzier nie je známy",
       "generatedAt": "Údaje k {date}",
       "globeLabel": "Štáty, ktorých judikatúru korpus obsahuje, na glóbuse",
       "healthCurrent": "Aktuálne",
