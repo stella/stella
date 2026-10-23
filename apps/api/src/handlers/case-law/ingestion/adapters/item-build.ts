@@ -7,8 +7,8 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  PARSER_VERSIONS,
   type AdapterKey,
+  PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { failureSink } from "@/api/lib/observability/failure";

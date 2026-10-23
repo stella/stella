@@ -13,10 +13,10 @@ import type { DocumentOcrPage } from "@/api/lib/document-processing-contract";
 import {
   assembleDocumentOcrResult,
   DocumentOcrError,
+  type DocumentOcrResult,
   OCR_TIMEOUT_MS,
   parseOcrPage,
   validateOcrResult,
-  type DocumentOcrResult,
 } from "@/api/lib/document-processing-ocr-result";
 import type { FileKey } from "@/api/lib/file-key";
 import { LIMITS } from "@/api/lib/limits";

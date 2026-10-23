@@ -40,8 +40,7 @@ type RunGatedTestsOptions = {
       }) => Promise<number>)
     | undefined;
   shardTestFiles?:
-    | ((testFiles: readonly string[]) => readonly string[])
-    | undefined;
+    ((testFiles: readonly string[]) => readonly string[]) | undefined;
   validateTestPlan?:
     | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
     | undefined;

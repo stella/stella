@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { applyUpdate, Doc, encodeStateAsUpdate } from "yjs";
 
 import {
-  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
 import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";

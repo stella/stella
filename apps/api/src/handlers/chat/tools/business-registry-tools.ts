@@ -13,8 +13,8 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   executeRegistryLookup,
-  type RegistryHandler,
   LOOKUP_DETAIL_DESCRIPTION,
+  type RegistryHandler,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
 import type { ChatToolError } from "@/api/lib/errors/tagged-errors";

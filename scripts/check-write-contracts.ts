@@ -550,8 +550,7 @@ class WriteSourceResolver {
     seen = new Set<string>(),
     scope,
   }: FactoryBindingOptions):
-    | { module: string; imported: string }
-    | undefined => {
+    { module: string; imported: string } | undefined => {
     const node = unwrap(expression);
     if (!ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node)) {
       return undefined;

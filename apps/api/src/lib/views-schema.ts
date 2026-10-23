@@ -4,8 +4,8 @@ import * as v from "valibot";
 
 import {
   VIEW_FILTERS_MAX,
-  type ViewLayoutType as ContractViewLayoutType,
   VIEW_SORTS_MAX,
+  type ViewLayoutType as ContractViewLayoutType,
 } from "@stll/api-contract";
 import { CALCULATION_KINDS } from "@stll/calculations";
 import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";

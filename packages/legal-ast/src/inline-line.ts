@@ -9,7 +9,7 @@
  * text is always `plainTextOf(inlines)`, before and after a cut.
  */
 
-import { plainTextOf, type Inline } from "./document-ast.js";
+import { type Inline, plainTextOf } from "./document-ast.js";
 import { hasInlineChildren } from "./inline.js";
 
 /**

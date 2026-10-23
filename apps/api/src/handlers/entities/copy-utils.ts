@@ -18,9 +18,9 @@ import type { EntityStamp } from "@/api/lib/document-counter";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import {
   createSiblingNamePlan,
-  resolveSiblingNameForInsert,
   type NamedEntityInsert,
   type ResolvedSiblingNames,
+  resolveSiblingNameForInsert,
 } from "@/api/lib/entities/sibling-name-insert";
 import {
   lockWorkspacesForEntityCap,
@@ -659,8 +659,7 @@ type CopyEntitiesProps = {
         sourceSnapshot: EntitySnapshot[];
       };
   fieldMapping:
-    | { type: "omit" }
-    | { type: "single"; sourceFieldId: SafeId<"field"> };
+    { type: "omit" } | { type: "single"; sourceFieldId: SafeId<"field"> };
   dependencies?: CopyEntitiesDependencies | undefined;
 };
 

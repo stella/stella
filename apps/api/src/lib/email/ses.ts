@@ -1,4 +1,4 @@
-import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 
 import type { EmailTransport } from "@/api/lib/email/transport";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
