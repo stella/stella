@@ -164,7 +164,7 @@ checks:
     # time-bounded, explained quarantine.
     run: bun run check:docs-sources
 
-  - name: Instruction references
+  - name: Instruction policy
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -186,7 +186,7 @@ checks:
       bun scripts/check-instruction-references.ts --self-test
       bun run check:instruction-references
       bun test scripts/check-instruction-enforcement.test.ts
-      bun scripts/check-instruction-enforcement.ts --check
+      bun --preload ./scripts/offline-network-preload.ts scripts/check-instruction-enforcement.ts --check
 
   - name: Knip production dependency checks
     env:

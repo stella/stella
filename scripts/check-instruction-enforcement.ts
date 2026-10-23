@@ -37,13 +37,15 @@ import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import {
-  isRecord,
-  repoRoot,
-  stringArray,
-  trackedRepoFiles,
-} from "./oxlint-config-scopes.ts";
 import { flattenWorkflowSteps } from "./workflow-steps.ts";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const stringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
 
 export const LEDGER_PATH = "scripts/instruction-enforcement-ledger.json";
 const MANIFEST_PATH = ".ai/manifest.json";
@@ -51,6 +53,15 @@ const LOCAL_SKILLS_GLOB = ".ai/local-skills/*/SKILL.md";
 const SHARED_MODULES_DIRECTORY = ".ai/shared/modules";
 const RATCHET_SOURCE = "scripts/ratchet.ts";
 const RATCHET_PREFIX = "ratchet:";
+
+// Computed source enumeration consumes these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  ".ai/local/*.md",
+  ".ai/local-skills/*/SKILL.md",
+  ".ai/shared/modules/*.md",
+];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun scripts/check-instruction-enforcement.ts --check";
 
 // --- Parsing ----------------------------------------------------------------
 
@@ -72,8 +83,19 @@ export type RuleItem = {
 
 const TAG_TOKEN = /\[(?:(lint|check|test):([^\]]*)|review)\]/gu;
 const ITEM_START = /^(?:[-*]|\d+\.)\s+\S/u;
-const HEADING = /^#{1,6}\s+(.+?)\s*#*\s*$/u;
 const FENCE = /^\s*(?:```|~~~)/u;
+
+const headingText = (line: string): string | undefined => {
+  const markerEnd = line.search(/[^#]/u);
+  if (markerEnd < 1 || markerEnd > 6 || line[markerEnd] !== " ") {
+    return undefined;
+  }
+  let heading = line.slice(markerEnd + 1).trim();
+  while (heading.endsWith("#")) {
+    heading = heading.slice(0, -1).trimEnd();
+  }
+  return heading;
+};
 
 /** Top-level list items, each with the heading it sits under. */
 export const parseRuleItems = (source: string): RuleItem[] => {
@@ -115,10 +137,10 @@ export const parseRuleItems = (source: string): RuleItem[] => {
     if (inFence) {
       continue;
     }
-    const headingMatch = HEADING.exec(line);
-    if (headingMatch !== null) {
+    const parsedHeading = headingText(line);
+    if (parsedHeading !== undefined) {
       close();
-      heading = headingMatch[1] ?? "";
+      heading = parsedHeading;
       continue;
     }
     if (ITEM_START.test(line)) {
@@ -670,30 +692,23 @@ const ratchetMetricIds = (): Set<string> => {
   if (start === -1) {
     return panic(`${RATCHET_SOURCE} has no RATCHET_METRICS registry`);
   }
-  return new Set(
-    [...source.slice(start).matchAll(/^\s+id: "([^"]+)",$/gmu)].map(
-      (match) => match[1] ?? "",
-    ),
-  );
+  const ids = source
+    .slice(start)
+    .split("\n")
+    .flatMap((line) => {
+      const trimmed = line.trim();
+      return line.length > trimmed.length &&
+        trimmed.startsWith('id: "') &&
+        trimmed.endsWith('",')
+        ? [trimmed.slice(5, -2)]
+        : [];
+    });
+  return new Set(ids);
 };
 
 const runCheck = (): number => {
-  const tracked = trackedRepoFiles();
-  const trackedSet = new Set(tracked);
-  const directories = new Set<string>();
-  for (const file of tracked) {
-    for (
-      let slash = file.indexOf("/");
-      slash !== -1;
-      slash = file.indexOf("/", slash + 1)
-    ) {
-      directories.add(file.slice(0, slash));
-    }
-  }
-  const exists = (repoPath: string): boolean => {
-    const normalized = repoPath.replace(/\/$/u, "");
-    return trackedSet.has(normalized) || directories.has(normalized);
-  };
+  const exists = (repoPath: string): boolean =>
+    existsSync(path.join(repoRoot, repoPath));
 
   const localSkills = [
     ...new Bun.Glob(LOCAL_SKILLS_GLOB).scanSync({ cwd: repoRoot }),
@@ -704,7 +719,12 @@ const runCheck = (): number => {
   const ledger = parseLedger(readRepoFile(LEDGER_PATH));
 
   const rootPackage = readJson("package.json");
-  const triggers = triggeredWorkflows(tracked);
+  const workflowFiles = [
+    ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
+      cwd: repoRoot,
+    }),
+  ];
+  const triggers = triggeredWorkflows(workflowFiles);
   const workflowsOn = (names: readonly string[]): string[] =>
     [...triggers]
       .filter(([, on]) => on.some((name) => names.includes(name)))
@@ -716,18 +736,18 @@ const runCheck = (): number => {
     pullRequestWorkflows: new Set(workflows),
     scheduledWorkflows: new Set(workflowsOn(["schedule"])),
     readScript: (repoPath) =>
-      trackedSet.has(repoPath) ? readRepoFile(repoPath) : undefined,
+      exists(repoPath) ? readRepoFile(repoPath) : undefined,
     rootScripts: stringRecord(
       isRecord(rootPackage) ? rootPackage["scripts"] : undefined,
     ),
-    workspaceScripts: tracked
-      .filter((file) => /^(?:apps|packages)\/[^/]+\/package\.json$/u.test(file))
-      .map((file) => {
-        const manifest = readJson(file);
-        return stringRecord(
-          isRecord(manifest) ? manifest["scripts"] : undefined,
-        );
+    workspaceScripts: [
+      ...new Bun.Glob("{apps,packages}/*/package.json").scanSync({
+        cwd: repoRoot,
       }),
+    ].map((file) => {
+      const manifest = readJson(file);
+      return stringRecord(isRecord(manifest) ? manifest["scripts"] : undefined);
+    }),
     ratchetIds: ratchetMetricIds(),
     exists,
   };
@@ -744,8 +764,7 @@ const runCheck = (): number => {
           ciInputs,
           reach,
           testPath,
-          !trackedSet.has(testPath) &&
-            directories.has(testPath.replace(/\/$/u, "")),
+          exists(testPath) && !path.posix.basename(testPath).includes("."),
         ),
     },
   );
