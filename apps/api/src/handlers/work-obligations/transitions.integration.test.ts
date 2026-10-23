@@ -268,6 +268,35 @@ describe("work obligation transitions", () => {
     expect(task?.status).toBe("done");
   });
 
+  test("completed work reopens for its owner and returns the task to progress", async () => {
+    const entityId = await seedOpenWork(WORK_OBLIGATION_STATUS.ACTIVE);
+
+    expect(await transition(entityId, ids.userA1, "complete")).toEqual({
+      success: true,
+    });
+    expect(await transition(entityId, ids.userA1, "reopen")).toEqual({
+      success: true,
+    });
+
+    const obligation = await testDb.query.workObligations.findFirst({
+      where: { entityId: { eq: entityId } },
+      columns: { status: true },
+    });
+    const task = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { status: true },
+    });
+    const events = await testDb.query.workObligationEvents.findMany({
+      where: {
+        obligationEntityId: { eq: entityId },
+        type: { eq: "reopened" },
+      },
+    });
+    expect(obligation?.status).toBe(WORK_OBLIGATION_STATUS.ACTIVE);
+    expect(task?.status).toBe("in_progress");
+    expect(events).toHaveLength(1);
+  });
+
   test.each([undefined, "   ", "  No longer needed  "])(
     "cancellation keeps optional reason %s in the lifecycle event",
     async (reason) => {

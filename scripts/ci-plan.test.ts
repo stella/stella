@@ -659,6 +659,9 @@ type EvaluateResultOptions = {
     | "missing"
     | "other-head"
     | "running-green"
+    | "queued-green"
+    | "planned-green"
+    | "completed-without-result"
     | "running";
 };
 
@@ -668,8 +671,22 @@ const PULL_REQUEST = { repo: "stella/stella", number: "7" } as const;
 
 type MetadataCodeRun = NonNullable<EvaluateResultOptions["metadataCodeRun"]>;
 
+// GitHub lists a job only once it is queued: a queued run shows no jobs, a
+// running one its ci-plan before its ci-result.
+type CodeRunStage = "queued" | "planned" | "in_progress" | "completed";
+
+const firstCodeRunStage: Partial<Record<MetadataCodeRun, CodeRunStage>> = {
+  "running-green": "in_progress",
+  "queued-green": "queued",
+  "planned-green": "planned",
+};
+
 const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
   const head = state === "other-head" ? "b".repeat(40) : "a".repeat(40);
+  const runStatus =
+    state === "running" || (state !== undefined && state in firstCodeRunStage)
+      ? "in_progress"
+      : "completed";
   const runs =
     state === "missing"
       ? []
@@ -678,28 +695,44 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
             id: 200,
             run_number: 99,
             head_sha: head,
+            status: runStatus,
             pull_requests: [{ number: Number(PULL_REQUEST.number) }],
           },
         ];
   const conclusion = state === "red" ? "failure" : "success";
-  const jobs = (status: "completed" | "in_progress") => [
-    {
-      jobs: [
-        { id: 1, name: "ci-plan", status: "completed", conclusion: "success" },
-        {
-          id: 2,
-          name: "ci-result",
-          status,
-          conclusion: status === "completed" ? conclusion : null,
-        },
-      ],
-    },
-  ];
+  const plan = {
+    id: 1,
+    name: "ci-plan",
+    status: "completed",
+    conclusion: "success",
+  };
+  const listed: Record<CodeRunStage, unknown[]> = {
+    queued: [],
+    planned: [plan],
+    in_progress: [
+      plan,
+      { id: 2, name: "ci-result", status: "in_progress", conclusion: null },
+    ],
+    completed: [
+      plan,
+      { id: 2, name: "ci-result", status: "completed", conclusion },
+    ],
+  };
+  const jobs = (stage: CodeRunStage) => [{ jobs: listed[stage] }];
+  const finalStages: Partial<Record<MetadataCodeRun, CodeRunStage>> = {
+    running: "in_progress",
+    "completed-without-result": "planned",
+  };
+  const finalStage =
+    (state === undefined ? undefined : finalStages[state]) ?? "completed";
   return {
     enabled: state === undefined ? "false" : "true",
     runRequired: state === undefined ? "true" : "false",
-    finalJobs: jobs(state === "running" ? "in_progress" : "completed"),
-    jobs,
+    firstJobs: jobs(
+      (state === undefined ? undefined : firstCodeRunStage[state]) ??
+        finalStage,
+    ),
+    finalJobs: jobs(finalStage),
     runs,
     state: state ?? "",
   };
@@ -736,10 +769,10 @@ case "$endpoint" in
     echo "$FAKE_CODE_RUNS"
     ;;
   "repos/${PULL_REQUEST.repo}/actions/runs/200/jobs?per_page=100")
-    state="${nodePath.join(fakeGhDirectory, "metadata-counter")}"
-    if [[ "$FAKE_CODE_STATE" == running-green && ! -e "$state" ]]; then
+    state="${nodePath.join(fakeGhDirectory, "metadata-counter")}-$FAKE_CODE_STATE"
+    if [[ ! -e "$state" ]]; then
       : > "$state"
-      echo "$FAKE_CODE_JOBS_RUNNING"
+      echo "$FAKE_CODE_JOBS_FIRST"
     else
       echo "$FAKE_CODE_JOBS"
     fi
@@ -950,7 +983,7 @@ const resultGateCase = ({
       FAKE_CODE_STATE: codeRun.state,
       FAKE_CODE_RUNS: JSON.stringify([{ workflow_runs: codeRun.runs }]),
       FAKE_CODE_JOBS: JSON.stringify(codeRun.finalJobs),
-      FAKE_CODE_JOBS_RUNNING: JSON.stringify(codeRun.jobs("in_progress")),
+      FAKE_CODE_JOBS_FIRST: JSON.stringify(codeRun.firstJobs),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
       NEEDS: JSON.stringify(needs),
@@ -2747,12 +2780,138 @@ test("metadata runs report the required result while scope-changing labels still
     completedDepth,
   ).with.script;
   expect(script).toContain('context.payload.label?.name === "prove-fix"');
-  expect(script).toContain("if (metadataAction && !proofScopeChanged)");
+  expect(script).toContain("if (mirrorsCodeRun && !proofScopeChanged)");
   // ready_for_review starts the first code run of a draft and prove-fix
   // changes scope: neither is metadata, so both report ci-result.
   expect(script).not.toMatch(/"enqueued", "ready_for_review"\]\.includes/u);
   expect(script).toContain('context.payload.label?.name !== "prove-fix"');
   expect(script).toContain('core.setOutput("run_required", "false")');
+});
+
+test("a metadata run without an earlier code run of its head runs the suites", async () => {
+  const completedDepth = flattenWorkflowSteps(
+    v.parse(v.object({ steps: v.array(v.unknown()) }), ciJobs["ci-plan"]).steps,
+  ).find((step) => step["name"] === "Check completed suite depth");
+  const script = new Script(
+    `(async () => {${
+      v.parse(
+        v.object({ with: v.object({ script: v.string() }) }),
+        completedDepth,
+      ).with.script
+    }\n})()`,
+  );
+  const head = "a".repeat(40);
+  const run = (id: number, overrides: Record<string, unknown> = {}) => ({
+    id,
+    head_sha: head,
+    status: "completed",
+    conclusion: "success",
+    pull_requests: [{ number: 7 }],
+    ...overrides,
+  });
+  const plan = (name: string) => [{ name }, { name: "ci-result" }];
+  const cases = [
+    { name: "no earlier run", runs: [], jobs: {}, mirrors: false },
+    {
+      name: "earlier code run",
+      runs: [run(10)],
+      jobs: { 10: plan("ci-plan") },
+      mirrors: true,
+    },
+    {
+      name: "code run in flight",
+      runs: [run(10, { status: "queued", conclusion: null })],
+      jobs: {},
+      mirrors: true,
+    },
+    {
+      name: "only metadata runs",
+      runs: [run(10)],
+      jobs: { 10: plan("ci-metadata-plan") },
+      mirrors: false,
+    },
+    {
+      name: "cancelled code run",
+      runs: [run(10, { conclusion: "cancelled" })],
+      jobs: { 10: plan("ci-plan") },
+      mirrors: false,
+    },
+    {
+      name: "later code run",
+      runs: [run(600)],
+      jobs: { 600: plan("ci-plan") },
+      mirrors: false,
+    },
+    {
+      name: "other pull request",
+      runs: [run(10, { pull_requests: [{ number: 8 }] })],
+      jobs: { 10: plan("ci-plan") },
+      mirrors: false,
+    },
+    { name: "lookup failure", runs: undefined, jobs: {}, mirrors: false },
+  ] as const;
+  for (const { name, runs, jobs, mirrors } of cases) {
+    const outputs: Record<string, string> = {};
+    const listWorkflowRuns = () => {};
+    const listJobsForWorkflowRun = () => {};
+    await script.runInNewContext({
+      require: (module: string) =>
+        module === "node:crypto"
+          ? import.meta.require("node:crypto")
+          : panic(module),
+      process: { env: { SUITE_DEPTH: "fast" } },
+      Buffer,
+      core: {
+        info: () => {},
+        setOutput: (key: string, value: string) => {
+          outputs[key] = value;
+        },
+      },
+      context: {
+        eventName: "pull_request",
+        runId: 500,
+        repo: { owner: "stella", repo: "stella" },
+        payload: {
+          action: "labeled",
+          label: { name: "ready" },
+          pull_request: {
+            number: 7,
+            title: "fix: something",
+            body: "",
+            labels: [],
+            head: { sha: head, repo: { id: 1 } },
+            base: { sha: "b".repeat(40) },
+          },
+        },
+      },
+      github: {
+        paginate: async (
+          method: unknown,
+          request: { run_id?: number },
+        ): Promise<unknown[]> => {
+          if (method === listWorkflowRuns) {
+            if (runs === undefined) {
+              throw new Error("unavailable");
+            }
+            return [...runs];
+          }
+          if (method === listJobsForWorkflowRun) {
+            return [...(Reflect.get(jobs, request.run_id ?? 0) ?? [])];
+          }
+          return panic("unexpected paginate");
+        },
+        rest: {
+          actions: {
+            listWorkflowRuns,
+            listJobsForWorkflowRun,
+            listArtifactsForRepo: async () => ({ data: { artifacts: [] } }),
+          },
+        },
+      },
+    });
+    expect(outputs["metadata_only"], name).toBe(mirrors ? "true" : undefined);
+    expect(outputs["run_required"], name).toBe(mirrors ? "false" : "true");
+  }
 });
 
 test("metadata ci-result mirrors only a code run on the same pull request head", () => {
@@ -2761,6 +2920,11 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
     { state: "red", exitCode: 1, message: "completed with failure" },
     { state: "missing", exitCode: 1, message: "no code run exists" },
     { state: "other-head", exitCode: 1, message: "no code run exists" },
+    {
+      state: "completed-without-result",
+      exitCode: 1,
+      message: "completed without a ci-result job",
+    },
   ] as const;
   for (const { state, exitCode, message } of immediateCases) {
     const outcome = onlyOutcome(
@@ -2774,19 +2938,27 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
     expect(`${outcome.stdout}\n${outcome.stderr}`, state).toContain(message);
   }
 
-  const runningThenGreen = onlyOutcome(
-    evaluateResults(["running-green"], () => ({
-      event: EVENT.pullRequest,
-      results: {},
-      metadataCodeRun: "running-green",
-      outcomeScript: resultStep.run.replace(
-        "local poll_seconds=30 max_wait_seconds=5400",
-        "local poll_seconds=0 max_wait_seconds=5400",
-      ),
-    })),
-  );
-  expect(runningThenGreen.exitCode).toBe(0);
-  expect(runningThenGreen.stdout).toContain("succeeded for head");
+  // A code run that has not yet reported, at any stage GitHub lists it,
+  // makes the mirror wait for its ci-result instead of failing.
+  for (const state of [
+    "running-green",
+    "queued-green",
+    "planned-green",
+  ] as const) {
+    const waitedThenGreen = onlyOutcome(
+      evaluateResults([state], () => ({
+        event: EVENT.pullRequest,
+        results: {},
+        metadataCodeRun: state,
+        outcomeScript: resultStep.run.replace(
+          "local poll_seconds=30 max_wait_seconds=5400",
+          "local poll_seconds=0 max_wait_seconds=5400",
+        ),
+      })),
+    );
+    expect(waitedThenGreen.exitCode, state).toBe(0);
+    expect(waitedThenGreen.stdout, state).toContain("succeeded for head");
+  }
 
   const timedOut = onlyOutcome(
     evaluateResults(["running"], () => ({
