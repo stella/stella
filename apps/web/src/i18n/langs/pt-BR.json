@@ -926,13 +926,10 @@
     },
     "coverage": {
       "completeness": "Completude",
-      "countedOn": "Contado em {date}",
       "courtsHeading": "Por tribunal",
       "courtsUnavailable": "A distribuição por tribunal está indisponível no momento.",
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
-      "exceedsReportedTotal": "Contém mais do que o último total informado pelo órgão em {date}",
-      "gapStatusUnknown": "Situação das lacunas desconhecida",
       "generatedAt": "Números de {date}",
       "globeLabel": "Países cuja jurisprudência o corpus contém, em um globo",
       "healthCurrent": "Atualizado",
