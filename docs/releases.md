@@ -186,7 +186,11 @@ or change deployed feature flags.
    an explicit SHA must name that same commit. Tree-identical release PR
    evidence may satisfy the existing proof checks, but later main commits
    cannot replace the version commit. The workflow also runs the CLI coupling
-   check against that commit. The tag then triggers `release.yml`.
+   check against that commit. The other independent gates continue when one
+   fails, and one final verdict lists each gate that failed or did not run. If
+   dependency installation fails, the dependency-audit gate remains unrun.
+   `-F dry_run=true` evaluates all gates and reports them without pushing the
+   tag. The tag then triggers `release.yml`.
 
 8. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,

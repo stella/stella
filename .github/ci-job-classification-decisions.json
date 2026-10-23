@@ -312,7 +312,7 @@
   "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
     "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-    "reviewedDigest": "4f008679e8a6c668b954a62e2816dd9accb659c4d0391afd5f7e8a4ae3081c70"
+    "reviewedDigest": "b93039b77736d0eb5381d308d5b3b2f83abc331841e351b95a126f2d104a6119"
   },
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "130a8c9655bb9b2b7954c7838c145f5f93379c1a21a46c35a1485b86d8c4b433"
+    "reviewedDigest": "81d0a13968bf4eb47be1abcaa8f10ac437f0e1221d92d281ffdbdc99f8ec1177"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "ed561295982e9a86eaf553424f4508684225dd435832e2401c92599db2acbab6"
+    "reviewedDigest": "70d2ede4d3c8fc555c77297036967b0b1090e85dd14f722ff85eb43d137665e7"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -782,12 +782,12 @@
   "candidate:.github/workflows/release-tag.yml/tag": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "201ece5ff4efeab052a704d34a8215d0110962e197d0f1fb4b6d0e026962f43c"
+    "reviewedDigest": "50a36c640814bb9e69faf8c8324b87e6a5ddf17d9b4d9ca3ccee9d70df0df0e9"
   },
   "candidate:.github/workflows/release-tag.yml/marketing-freshness": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "de5b7d1f2f51aa00f2d88d9cfec34fd382249aa26062394166a352bcbef443dd"
+    "reviewedDigest": "e6a4ff7061a9cbba233b2bc7d4a0cef33d6c58d51c6aac3656131451bd0c4d31"
   },
   "candidate:.github/workflows/release.yml/resolve": {
     "kind": "support",
