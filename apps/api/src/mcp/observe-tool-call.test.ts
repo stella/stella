@@ -39,7 +39,7 @@ const customerContext = (overrides: Record<string, unknown> = {}) =>
   asTestRaw<McpRequestContext>({
     organizationId: "org_customer",
     userId: "user_customer",
-    credentialType: "oauth_client",
+    sessionCredentialType: "oauth_client",
     ...overrides,
   });
 

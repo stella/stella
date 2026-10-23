@@ -67,7 +67,7 @@ const captureMcpToolCalled = ({
     tool: classifyMcpMetricToolName(toolName, mode),
     mode,
     duration_ms: Math.max(0, Math.round(durationMs)),
-    credential_type: context.credentialType ?? "unspecified",
+    credential_type: context.sessionCredentialType ?? "unspecified",
     transport: currentMcpMetricTransport(),
   } as const;
   const properties: McpToolCalledProperties = (() => {

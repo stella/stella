@@ -1128,16 +1128,46 @@ const isCanonicalBuiltInToolCall = (
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isCanonicalChatUIMessage = (
+const isCanonicalChatUIPart = (part: PersistedChatPart): boolean =>
+  part.type !== "tool-call" ||
+  isExternalMcpToolName(part.name) ||
+  isOpaquePersistedChatToolCallPart(part) ||
+  isCanonicalBuiltInToolCall(part);
+
+/** Whether every part of `message` is canonical, checked afresh. */
+export const isCanonicalChatUIMessage = (
   message: PersistedChatMessage,
-): message is ChatUIMessage =>
-  message.parts.every(
-    (part) =>
-      part.type !== "tool-call" ||
-      isExternalMcpToolName(part.name) ||
-      isOpaquePersistedChatToolCallPart(part) ||
-      isCanonicalBuiltInToolCall(part),
-  );
+): message is ChatUIMessage => message.parts.every(isCanonicalChatUIPart);
+
+/** Messages and parts already checked. The client replaces an object rather
+ *  than changing it, so a streamed chunk checks only the parts it replaced,
+ *  and a message rebuilt around the same parts reads none of them. */
+const canonicalChatUIMessages = new WeakSet<PersistedChatMessage>();
+const canonicalChatUIParts = new WeakSet<PersistedChatPart>();
+
+const isKnownCanonicalChatUIPart = (part: PersistedChatPart): boolean => {
+  if (canonicalChatUIParts.has(part)) {
+    return true;
+  }
+  if (!isCanonicalChatUIPart(part)) {
+    return false;
+  }
+  canonicalChatUIParts.add(part);
+  return true;
+};
+
+const isKnownCanonicalChatUIMessage = (
+  message: PersistedChatMessage,
+): message is ChatUIMessage => {
+  if (canonicalChatUIMessages.has(message)) {
+    return true;
+  }
+  if (!message.parts.every(isKnownCanonicalChatUIPart)) {
+    return false;
+  }
+  canonicalChatUIMessages.add(message);
+  return true;
+};
 
 /**
  * Project known tool names and protocol-shaped payloads into the UI.
@@ -1151,7 +1181,7 @@ export const projectCanonicalChatUIMessages = (
 ): ChatUIMessage[] => {
   const projected: ChatUIMessage[] = [];
   for (const message of messages) {
-    if (!isCanonicalChatUIMessage(message)) {
+    if (!isKnownCanonicalChatUIMessage(message)) {
       return panic("Chat runtime produced a non-canonical tool call");
     }
     projected.push(message);

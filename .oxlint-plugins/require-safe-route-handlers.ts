@@ -36,6 +36,8 @@ type CallExpressionNode = AstNode & {
   callee: unknown;
 };
 
+type ObjectExpressionNode = AstNode & { properties: unknown[] };
+
 const isMemberExpression = (node: unknown): node is MemberExpressionNode =>
   isAstNode(node) &&
   node.type === "MemberExpression" &&
@@ -48,6 +50,11 @@ const isCallExpression = (node: unknown): node is CallExpressionNode =>
   Array.isArray(node.arguments) &&
   "callee" in node;
 
+const isObjectExpression = (node: unknown): node is ObjectExpressionNode =>
+  isAstNode(node) &&
+  node.type === "ObjectExpression" &&
+  Array.isArray(node.properties);
+
 const isSafeHandlerMember = (node: unknown): node is MemberExpressionNode =>
   isMemberExpression(node) &&
   !node.computed &&
@@ -57,6 +64,53 @@ const isDirectHandlerConfig = (node: unknown): node is MemberExpressionNode =>
   isMemberExpression(node) &&
   !node.computed &&
   getPropertyName(node.property) === "config";
+
+const endpointConfigProperty = (node: unknown, property: string) => {
+  if (
+    !isMemberExpression(node) ||
+    node.computed ||
+    getPropertyName(node.property) !== property ||
+    !isMemberExpression(node.object) ||
+    node.object.computed ||
+    getPropertyName(node.object.property) !== "config" ||
+    !isAstNode(node.object.object) ||
+    node.object.object.type !== "Identifier" ||
+    typeof node.object.object.name !== "string"
+  ) {
+    return null;
+  }
+  return node.object.object.name;
+};
+
+const hasAccountAccessProjection = (options: unknown) => {
+  if (!isObjectExpression(options)) {
+    // No options object means no forwarded permissions for this rule to pair.
+    return true;
+  }
+
+  const properties = options.properties.filter(
+    (property): property is AstNode =>
+      isAstNode(property) && property.type === "Property",
+  );
+  const forwardedPermissions = properties.flatMap((property) =>
+    getPropertyName(property.key) === "permissions"
+      ? [endpointConfigProperty(property.value, "permissions")]
+      : [],
+  );
+  if (forwardedPermissions.length === 0) {
+    return true;
+  }
+
+  const forwardedAccountAccess = properties.flatMap((property) =>
+    getPropertyName(property.key) === "accountAccess"
+      ? [endpointConfigProperty(property.value, "accountAccess")]
+      : [],
+  );
+  return forwardedPermissions.every(
+    (endpointName) =>
+      endpointName === null || forwardedAccountAccess.includes(endpointName),
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: "require-safe-route-handlers" },
@@ -70,6 +124,10 @@ export default eslintCompatPlugin({
             "normalizes route options in place, which can delete safe-handler " +
             "metadata such as permissions. Pass a fresh object selecting the " +
             "route fields instead.",
+          missingAccountAccess:
+            "When forwarding `endpoint.config.permissions` to a route, also " +
+            "forward `endpoint.config.accountAccess` from the same endpoint " +
+            "so the registered access guard retains the complete policy.",
         },
       },
       createOnce(context) {
@@ -89,12 +147,19 @@ export default eslintCompatPlugin({
             }
 
             const routeOptions = node.arguments[2];
+            const reportNode = isAstNode(routeOptions) ? routeOptions : node;
             if (!isDirectHandlerConfig(routeOptions)) {
+              if (!hasAccountAccessProjection(routeOptions)) {
+                context.report({
+                  node: reportNode,
+                  messageId: "missingAccountAccess",
+                });
+              }
               return;
             }
 
             context.report({
-              node: routeOptions,
+              node: reportNode,
               messageId: "noDirectHandlerConfig",
             });
           },
