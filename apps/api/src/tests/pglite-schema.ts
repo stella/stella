@@ -57,6 +57,11 @@ const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
   "20261019070000_monitoring_session",
   "migration.sql",
 );
+const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261020000100_stored_keys_organization_scope",
+  "migration.sql",
+);
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260911150000_statute_citation_counts",
@@ -355,6 +360,24 @@ export const installPgliteSyntheticMembershipTrigger = async (
   });
   if (statements.length !== 3) {
     panic("Expected the dedicated principal membership function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the organization-owned user-file key guard omitted by schema push. */
+export const installPgliteUserFileOrganizationKeyGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readFileSync(
+    STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH,
+    "utf-8",
+  ).match(
+    /CREATE FUNCTION public\.user_files_enforce_organization_key\(\)[\s\S]*?\n\$\$;|CREATE TRIGGER user_files_organization_key_guard[\s\S]*?;/gu,
+  );
+  if (statements?.length !== 2) {
+    panic("Expected the user-file organization key function and trigger");
   }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));

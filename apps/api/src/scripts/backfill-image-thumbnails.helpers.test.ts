@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript6";
 
 describe("chat thumbnail backfill query", () => {
-  test("keeps the chat thread join inside the usage tracking branch", () => {
+  test("always joins the chat thread for organization ownership", () => {
     const helperPath = path.resolve(
       import.meta.dir,
       "../../scripts/backfill-image-thumbnails.helpers.ts",
@@ -26,16 +26,7 @@ describe("chat thumbnail backfill query", () => {
     );
     const initializer =
       declaration?.declarationList.declarations.at(0)?.initializer;
-    const branch =
-      initializer &&
-      ts.isArrowFunction(initializer) &&
-      ts.isBlock(initializer.body)
-        ? initializer.body.statements.find(ts.isIfStatement)
-        : undefined;
-    expect(branch).toBeDefined();
-    if (!branch) {
-      return;
-    }
+    expect(initializer && ts.isArrowFunction(initializer)).toBe(true);
     const callsInnerJoin = (node: ts.Node) => {
       let found = false;
       const visit = (child: ts.Node) => {
@@ -51,14 +42,9 @@ describe("chat thumbnail backfill query", () => {
       visit(node);
       return found;
     };
-    expect(callsInnerJoin(branch.thenStatement)).toBe(false);
-    expect(
-      initializer &&
-        ts.isArrowFunction(initializer) &&
-        ts.isBlock(initializer.body) &&
-        initializer.body.statements
-          .slice(initializer.body.statements.indexOf(branch) + 1)
-          .some(callsInnerJoin),
-    ).toBe(true);
+    expect(initializer && callsInnerJoin(initializer)).toBe(true);
+    expect(fs.readFileSync(helperPath, "utf-8")).toContain(
+      "organizationId: chatThreads.organizationId",
+    );
   });
 });
