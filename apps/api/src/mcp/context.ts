@@ -54,10 +54,12 @@ import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveCredentialMemberAuthorization,
+} from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -82,9 +84,7 @@ import {
   readUnavailable,
   type ReadOutcome,
 } from "@/api/lib/errors/read-outcome";
-import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -289,7 +289,7 @@ export type McpRequestContext = {
    * the same as a present empty list, which means the org can reach no
    * registry and the tool is dropped.
    */
-  resolveEnabledRegistrySlugs?:
+  loadEnabledRegistrySlugs?:
     | (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>)
     | undefined;
   memberRole: MemberRole;
@@ -400,50 +400,40 @@ const REGISTRY_NARROWING_SINK = failureSink({
   expected: [],
 });
 
-type LoadEnabledRegistrySlugsOptions = {
-  organizationId: SafeId<"organization">;
-  safeDb: SafeDb;
-  scopedDb: ScopedDb;
-};
-
 /**
- * The registries the org can reach, for narrowing discovery. A read fault in
- * either source is captured and reported as unavailable, never as an empty
- * set, which would drop the tool.
+ * The registries one organization can reach, from its settings and its stored
+ * credentials, read in one scoped transaction.
  */
-const loadEnabledRegistrySlugs = async ({
+const readEnabledRegistrySlugs = async ({
   organizationId,
   safeDb,
-  scopedDb,
-}: LoadEnabledRegistrySlugsOptions): Promise<
-  ReadOutcome<readonly BusinessRegistrySlug[]>
-> => {
-  const [settings, dispatch] = await Promise.all([
-    safeDb((tx) =>
-      tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: { practiceJurisdictions: true, nativeToolOverrides: true },
-      }),
-    ),
-    Result.tryPromise(
-      async () =>
-        await getOrganizationRegistryDispatch({ organizationId, scopedDb }),
-    ),
-  ]);
-  if (Result.isError(settings)) {
-    observeFailure(settings.error, { sink: REGISTRY_NARROWING_SINK });
-    return readUnavailable({ kind: "thrown", error: settings.error });
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}): Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> => {
+  const read = await safeDb(async (tx) => {
+    const settings = await tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+    });
+    const dispatch = await getOrganizationRegistryDispatch({
+      organizationId,
+      // Same transaction: the credential read joins the settings read.
+      scopedDb: async (run) => await run(tx),
+    });
+    return { dispatch, settings };
+  });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: REGISTRY_NARROWING_SINK });
+    return readUnavailable({ kind: "thrown", error: read.error });
   }
-  if (Result.isError(dispatch)) {
-    observeFailure(dispatch.error, { sink: REGISTRY_NARROWING_SINK });
-    return readUnavailable({ kind: "thrown", error: dispatch.error });
-  }
+  const { dispatch, settings } = read.value;
   return readPresent(
     availableRegistryHandlersForOrg({
       disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
-        settings.value ?? undefined,
+        settings ?? undefined,
       ),
-      dispatch: dispatch.value,
+      dispatch,
     }).map((handler) => handler.slug),
   );
 };
@@ -583,21 +573,26 @@ export const resolveMcpSessionContext = async (
     };
   };
   const requestDatabaseScope = createOperationDatabaseScope();
-  const featureAccessSnapshot =
-    Object.keys(FEATURE_REGISTRY).length === 0
-      ? createFeatureAccessSnapshot({
-          organizationId,
-          userId,
-          decisions: new Map(),
-        })
-      : await requestDatabaseScope.scopedDb(
-          async (tx) =>
-            await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
-        );
+  // The membership read above already carries every feature-access fact, so
+  // the snapshot is derived from it rather than read again.
+  const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
+    organizationId,
+    userId,
+    authorization,
+  });
 
+  // Read once, on first use within this request: settings and decrypted
+  // registry credentials in one scoped transaction.
   let enabledRegistrySlugs:
     | Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>
     | undefined;
+  const loadEnabledRegistrySlugs = async () => {
+    enabledRegistrySlugs ??= readEnabledRegistrySlugs({
+      organizationId,
+      safeDb: requestDatabaseScope.safeDb,
+    });
+    return await enabledRegistrySlugs;
+  };
 
   return {
     ...(auditExecution ? { auditExecution } : {}),
@@ -618,12 +613,7 @@ export const resolveMcpSessionContext = async (
     ...(session.credential?.type === "agent_run"
       ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
-    resolveEnabledRegistrySlugs: async () =>
-      await (enabledRegistrySlugs ??= loadEnabledRegistrySlugs({
-        organizationId,
-        safeDb: requestDatabaseScope.safeDb,
-        scopedDb: requestDatabaseScope.scopedDb,
-      })),
+    loadEnabledRegistrySlugs,
     grantedScopes: session.scopes,
     memberRole,
     organizationId,

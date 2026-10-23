@@ -20,7 +20,7 @@ import { handleMcpToolCall } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
-// Only the reachable registries and `memberRole` drive static visibility here.
+// Only the registry loader and `memberRole` drive static visibility here.
 // `scopes: ["stella:read"]` grants the read-scoped lookup tool while
 // withholding stella:external_mcps / stella:skills, so the dynamic gateway
 // loaders never run and no DB is touched.
@@ -32,7 +32,7 @@ const contextWith = (
     ...(enabledRegistrySlugs === undefined
       ? {}
       : {
-          resolveEnabledRegistrySlugs: async () =>
+          loadEnabledRegistrySlugs: async () =>
             await Promise.resolve(readPresent(enabledRegistrySlugs)),
         }),
     grantedScopes: [],
@@ -303,6 +303,34 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
     const registryEnum = registryEnumOf(definitions);
     expect(registryEnum).toContain("ares");
     expect(registryEnum).toContain("vies");
+  });
+
+  test("loads the reachable registries only for a projection that offers the registry tool", async () => {
+    let loads = 0;
+    const context = asTestRaw<McpRequestContext>({
+      ...contextWith(undefined),
+      loadEnabledRegistrySlugs: async () => {
+        loads += 1;
+        return await Promise.resolve(readPresent(["orsr"]));
+      },
+    });
+
+    // No scope grants the registry tool, and the anonymized projection never
+    // narrows: neither reads the organization's registries.
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: [],
+    });
+    await listGatewayMcpToolDefinitions({ context, mode: "anonymized" });
+    expect(loads).toBe(0);
+
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    expect(loads).toBe(1);
   });
 
   test("never narrows the tenant-neutral anonymized projection", async () => {

@@ -76,10 +76,10 @@ export const resolveOfferedRegistrySlugs = async (
   context: McpRequestContext,
   mode: McpMode,
 ): Promise<readonly BusinessRegistrySlug[] | undefined> => {
-  if (mode !== "default" || context.resolveEnabledRegistrySlugs === undefined) {
+  if (mode !== "default" || context.loadEnabledRegistrySlugs === undefined) {
     return undefined;
   }
-  const outcome = await context.resolveEnabledRegistrySlugs();
+  const outcome = await context.loadEnabledRegistrySlugs();
   switch (outcome.type) {
     case "present":
       return outcome.value;
@@ -134,21 +134,20 @@ const narrowRegistryDefinition = (
 
 /**
  * Narrow the `lookup_business_registry` tool's `registry` enum to the
- * registries this org can actually reach (`resolveOfferedRegistrySlugs`),
- * and drop the tool entirely when none are. Mirrors the in-app chat tool, so
- * the external MCP surface can no longer advertise a registry whose call
- * cannot execute — the same defect the chat tool already avoids. Applied only
- * to the default surface; the anonymized projection stays tenant-neutral and
- * is never narrowed.
+ * registries this org can actually reach, and drop the tool entirely when
+ * none are. Mirrors the in-app chat tool, so the external MCP surface can no longer
+ * advertise a registry whose call cannot execute — the same defect the chat
+ * tool already avoids. Applied only to the default surface; the
+ * anonymized projection stays tenant-neutral and is never narrowed.
  *
- * `enabledSlugs === undefined` means the set was not resolved (a
- * synthetic/test context, or a settings-read fault): leave the full enum
- * advertised and let the call-time gate stay the backstop.
+ * `enabledSlugs === undefined` means the set was not resolved (no loader on a
+ * synthetic/test context, or a settings or credential read fault): leave the
+ * full enum advertised and let the call-time gate stay the backstop.
  */
 const narrowBusinessRegistryTool = (
   enabledSlugs: readonly BusinessRegistrySlug[] | undefined,
-  definitions: McpToolDefinition[],
-): McpToolDefinition[] => {
+  definitions: readonly McpToolDefinition[],
+): readonly McpToolDefinition[] => {
   if (enabledSlugs === undefined) {
     return definitions;
   }
@@ -184,19 +183,22 @@ const narrowBusinessRegistryTool = (
  * retains baked compound commands across scoped registry refreshes, keeping
  * its local all-scopes preflight reachable when the primary grant is absent.
  */
+type OfferedStaticMcpToolOptions = {
+  context: McpRequestContext;
+  mode: McpMode;
+  scopes?: readonly string[] | undefined;
+  audience?: "model" | "app";
+};
+
 export const listOfferedStaticMcpToolDefinitions = ({
   context,
   mode,
   scopes,
   audience,
   enabledRegistrySlugs,
-}: {
-  context: McpRequestContext;
-  mode: McpMode;
-  scopes?: readonly string[] | undefined;
-  audience?: "model" | "app";
-  /** From `resolveOfferedRegistrySlugs`; `undefined` leaves the enum whole. */
-  enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined;
+}: OfferedStaticMcpToolOptions & {
+  /** The reachable registries; absent leaves the registry tool un-narrowed. */
+  enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
 }): readonly McpToolDefinition[] => {
   const staticDefinitions = listStaticMcpToolDefinitions(mode)
     .map((definition) => projectMcpFeatureInput(context, definition))
@@ -217,6 +219,30 @@ export const listOfferedStaticMcpToolDefinitions = ({
   return mode === "default"
     ? narrowBusinessRegistryTool(enabledRegistrySlugs, staticDefinitions)
     : staticDefinitions;
+};
+
+/**
+ * {@link listOfferedStaticMcpToolDefinitions} for a live session: the
+ * organization's reachable registries are loaded (settings read and credential
+ * decryption) only when the registry tool is among the offered definitions,
+ * so a projection that does not offer it never pays for them.
+ */
+export const loadOfferedStaticMcpToolDefinitions = async (
+  options: OfferedStaticMcpToolOptions,
+): Promise<readonly McpToolDefinition[]> => {
+  const offered = listOfferedStaticMcpToolDefinitions(options);
+  if (
+    options.mode !== "default" ||
+    !offered.some(
+      (definition) => definition.name === LOOKUP_BUSINESS_REGISTRY_TOOL_NAME,
+    )
+  ) {
+    return offered;
+  }
+  return narrowBusinessRegistryTool(
+    await resolveOfferedRegistrySlugs(options.context, options.mode),
+    offered,
+  );
 };
 
 /** `undefined` grants every scope (a caller that does not filter by scope). */

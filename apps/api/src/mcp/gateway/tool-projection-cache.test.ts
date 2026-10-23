@@ -298,7 +298,7 @@ describe("registry narrowing is resolved only for discovery", () => {
       async () => await Promise.resolve(readPresent(["ares" as const])),
     );
     const context = asTestRaw<McpRequestContext>({
-      resolveEnabledRegistrySlugs: resolve,
+      loadEnabledRegistrySlugs: resolve,
     });
 
     for (const mode of [
@@ -318,7 +318,7 @@ describe("registry narrowing is resolved only for discovery", () => {
 
   test("an unavailable read leaves the full enum advertised", async () => {
     const context = asTestRaw<McpRequestContext>({
-      resolveEnabledRegistrySlugs: async () =>
+      loadEnabledRegistrySlugs: async () =>
         await Promise.resolve(
           readUnavailable({ kind: "thrown", error: new Error("read failed") }),
         ),
@@ -339,7 +339,7 @@ describe("registry narrowing is resolved only for discovery", () => {
         enrolment: "none",
         grantedScopes: ["stella:read"],
       }),
-      resolveEnabledRegistrySlugs: resolve,
+      loadEnabledRegistrySlugs: resolve,
     };
 
     // Refused at the argument boundary, so no register is contacted.
@@ -372,7 +372,7 @@ describe("registry narrowing is resolved only for discovery", () => {
         enrolment: "none",
         grantedScopes: ["stella:read"],
       }),
-      resolveEnabledRegistrySlugs: async () =>
+      loadEnabledRegistrySlugs: async () =>
         await Promise.resolve(readPresent(["ares" as const])),
     };
     const listDefinitions = async () =>
