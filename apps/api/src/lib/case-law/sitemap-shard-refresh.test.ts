@@ -587,7 +587,7 @@ test(
     expect(first).toMatchObject({ type: "counting", counted: 1 });
     const [staged] = await stagedCountries();
     if (staged === undefined) {
-      return panic("Expected one staged country.");
+      panic("Expected one staged country.");
     }
     await db
       .update(caseLawSitemapShardCounts)
@@ -625,7 +625,7 @@ test(
     }
     const [first] = await stagedCountries();
     if (first === undefined) {
-      return panic("Expected a staged country.");
+      panic("Expected a staged country.");
     }
     let transactions = 0;
     // The first staged count expires after the run reads which counts are

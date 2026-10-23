@@ -46,6 +46,6 @@ export const refreshCaseLawSitemapShardsTask: SchedulerTask = async ({
       return;
     default:
       outcome satisfies never;
-      return panic("Unknown sitemap refresh outcome");
+      panic("Unknown sitemap refresh outcome");
   }
 };
