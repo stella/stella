@@ -449,6 +449,17 @@ const FAILURE_CAUSE_LIMIT = 500;
 const isResultMarker = (line: string) =>
   /^\((?:pass|fail|skip|todo)\) /u.test(line.trimStart());
 
+// Bun's own banner, per-file headers, totals and group commands.
+const TEST_RUNNER_LINE =
+  /^(?:bun test v|\d+ (?:pass|fail|skip|todo|snapshots?|expect\(\) calls)\b|Ran \d+ tests? |(?:::|##\[)(?:end)?group\b|\S+\.test\.[cm]?[jt]sx?:$)/u;
+const isTestRunnerLine = (line: string) =>
+  isResultMarker(line) || TEST_RUNNER_LINE.test(line.trim());
+// A line that starts with an error, possibly behind a workflow error command.
+const ERROR_LINE = /^(?:##\[error\]|::error[^:]*::)?\s*error\b/iu;
+// `path[:line[:column]]: finding`, the shape repository checks report in.
+const FINDING_LINE =
+  /^(?:[\w.@-]+\/)+[\w.@$()[\]-]+(?::\d+){0,2}: \S|^[\w.@-]+\.[a-z\d]+(?::\d+){0,2}: \S/iu;
+
 // Bun prints a test's diagnostics before its `(fail)` line, so the test's own
 // error lies between the previous result marker and its marker; output after
 // the marker belongs to the next test, even a passing one that logs errors.
@@ -499,8 +510,15 @@ export const failedCheckCause = (
         : `${failure}${FAILED_CHECK_SEPARATOR}${testError}`
     ).slice(0, FAILURE_CAUSE_LIMIT);
   }
+  // A check that runs its own tests and then reports findings prints the
+  // passing tests first; their names are never the finding.
+  const findings = lines
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !isTestRunnerLine(line));
   return (
-    lines.find((line) => /error/iu.test(line))?.trim() ?? result.detail
+    findings.find((line) => ERROR_LINE.test(line) || FINDING_LINE.test(line)) ??
+    findings.find((line) => /\berror\b/iu.test(line)) ??
+    result.detail
   ).slice(0, FAILURE_CAUSE_LIMIT);
 };
 
