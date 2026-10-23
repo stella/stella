@@ -12,7 +12,11 @@ test("a database failure reaches the caller as the classified error", async () =
     message: "Database query failed",
     code: "22008",
   });
-  const safeDb: SafeDb = async () => Result.err(failure);
+  let safeDbCallCount = 0;
+  const safeDb: SafeDb = async () => {
+    safeDbCallCount += 1;
+    return Result.err(failure);
+  };
 
   const result = await readOverviewHandler({
     safeDb,
@@ -20,4 +24,5 @@ test("a database failure reaches the caller as the classified error", async () =
   });
 
   expect(result.isErr() && result.error).toBe(failure);
+  expect(safeDbCallCount).toBe(1);
 });

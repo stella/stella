@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -19,9 +19,9 @@ export const readOverviewHandler = async ({
   workspaceId,
   agendaFrom,
 }: ReadOverviewHandlerProps) => {
-  const [summary, agenda] = await Promise.all([
-    safeDb(async (tx) => {
-      const [totals, recent] = await Promise.all([
+  const overview = await safeDb(async (tx) => {
+    const [[totals, recent], upcomingAgenda] = await Promise.all([
+      Promise.all([
         tx
           .select({
             entityCount: sql<number>`count(*)::int`,
@@ -104,23 +104,26 @@ export const readOverviewHandler = async ({
           orderBy: { updatedAt: "desc" },
           limit: LIMITS.overviewRecentEntities,
         }),
-      ]);
-      return {
-        entityCount: totals.entityCount,
-        documentCount: totals.documentCount,
-        taskCount: totals.taskCount,
-        recentEntities: recent,
-      };
-    }),
-    safeDb(
-      async (tx) => await readOverviewAgenda({ tx, workspaceId, agendaFrom }),
-    ),
-  ]);
-  return Result.all([summary, agenda]).map(
-    ([
-      { entityCount, documentCount, taskCount, recentEntities },
+      ]),
+      readOverviewAgenda({ tx, workspaceId, agendaFrom }),
+    ]);
+
+    return {
+      entityCount: totals.entityCount,
+      documentCount: totals.documentCount,
+      taskCount: totals.taskCount,
+      recentEntities: recent,
       upcomingAgenda,
-    ]) => {
+    };
+  });
+  return overview.map(
+    ({
+      entityCount,
+      documentCount,
+      taskCount,
+      recentEntities,
+      upcomingAgenda,
+    }) => {
       const recent = recentEntities.map((e) => {
         const cv = e.currentVersion ?? panic("Entity has no currentVersion");
         // Prefer the file field so document rows render the right mime
