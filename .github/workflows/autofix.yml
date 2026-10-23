@@ -516,6 +516,12 @@ jobs:
           # .npmrc references NPM_TOKEN; pull request installs get none.
           NPM_TOKEN: ""
 
+      - name: Restore Tailwind design-system cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/oxlint-tailwindcss
+          key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
+
       - name: Prepare environment
         env:
           STELLA_LOCAL_AUTOFIX: "true"
@@ -589,6 +595,11 @@ jobs:
             # Type-aware fixes need the complete generated type graph. set -e
             # aborts on preparation errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
+            # Only the lint fixer reads the design systems; formatting-only
+            # changes skip the warm-up. The warm-up and oxlint share the
+            # directory restored above.
+            export OXLINT_TAILWINDCSS_CACHE_DIR="$RUNNER_TEMP/oxlint-tailwindcss"
+            bun run lint:tailwind:warm
             backup="$RUNNER_TEMP/autofix-lint-backup"
             for path in "${lint_paths[@]}"; do
               mkdir -p "$backup/$(dirname "$path")"

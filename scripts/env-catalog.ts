@@ -1679,6 +1679,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODE_QUALITY_PROCESS_GROUP",
   // Lowers the code-check Turbo task count; the pre-push check sets it to 1.
   "CODE_CHECK_CONCURRENCY",
+  // Where CI keeps the compiled Tailwind design systems oxlint reads.
+  "OXLINT_TAILWINDCSS_CACHE_DIR",
   // Replaces the detected code-check memory size (tests pin the plan with it).
   "CODE_CHECK_MEMORY_BYTES",
   // CI installer budget selected from restored package-cache contents.
