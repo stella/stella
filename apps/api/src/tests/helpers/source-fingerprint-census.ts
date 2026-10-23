@@ -30,6 +30,7 @@ import {
   czRegionalFixture,
   czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
@@ -45,7 +46,6 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 /** One way of building a decision of a source, named for the baseline key. */

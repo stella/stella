@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { normalizeUnicode, ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
+import { ARABIC_DIGIT_FOLDS, normalizeUnicode } from "@stll/text-normalize";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 export const MAX_VAT_RATE_BPS = 2_147_483_647;
@@ -14,9 +14,7 @@ const foldPercentText = (raw: string): string =>
   ).join("");
 
 export const parseVatRatePercent = (raw: string): number | null => {
-  const parts = foldPercentText(raw)
-    .trim()
-    .split(/[.,٫]/u);
+  const parts = foldPercentText(raw).trim().split(/[.,٫]/u);
   const wholeText = parts.at(0);
   const fractionText = parts.at(1);
   if (

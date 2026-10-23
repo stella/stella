@@ -19,10 +19,10 @@ import { isPathInside } from "@stll/portable-path";
 import {
   QUARANTINE_REGISTRY_ENV,
   QUARANTINE_REPORT_DIR_ENV,
-  quarantineRecordSchema,
-  serializeRegistry,
   type QuarantineEntry,
   type QuarantineRecord,
+  quarantineRecordSchema,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const PRELOAD = path.join(import.meta.dir, "flaky-test-quarantine-preload.ts");

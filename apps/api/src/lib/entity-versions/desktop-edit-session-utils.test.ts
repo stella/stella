@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
-  DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  DESKTOP_EDIT_FILE_TYPES,
 } from "@/api/lib/desktop-edit-file-types";
 
 import { asDesktopEditableFileContent } from "./desktop-edit-session-utils";

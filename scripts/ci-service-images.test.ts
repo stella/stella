@@ -15,11 +15,11 @@ import {
   collectImageReferences,
   compareCiMirrorReferences,
   compareMirrorImages,
-  mirrorImageReference,
-  resolveImageReference,
-  dockerfileImages,
   compareProductMirrorReferences,
   composeImageOverrides,
+  dockerfileImages,
+  mirrorImageReference,
+  resolveImageReference,
 } from "./ci-service-images";
 import mirrorImages from "./ci-service-images.json" with { type: "json" };
 

@@ -7,10 +7,10 @@ import {
   findDroppedExactSelectors,
   findDroppedPlurals,
   findForbiddenTerms,
-  hasInvalidCapitalizedStella,
   findIcuError,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  hasInvalidCapitalizedStella,
   isSuppressed,
 } from "./i18n-lint";
 import type { LintBaseline } from "./i18n-lint";

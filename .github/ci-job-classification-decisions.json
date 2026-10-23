@@ -142,17 +142,17 @@
   "candidate:.github/workflows/ci.yml/ci-checks-policy": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "80765fb4520f645761d6ca39ef857eded2f6bede10c4cb43af233dc05073898a"
+    "reviewedDigest": "cb082ef2914b2556bdb62e57a33632dffdaad4708b50ea43c84d1d78c48086fe"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "93de74dffbda60544ab54dc5e84eb799adcecc9682deebfb367e6d5a52697ee8"
+    "reviewedDigest": "3c2192d2e7a0a0c905c7379c08fb78aef5f060ddd1113113953c53db3f3c14d1"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
     "qualifier": "Runs scoped package tests and reports quarantined outcomes for the merge verdict.",
-    "reviewedDigest": "2f293bcedcb27633c127d697ba09588b1069c9279b3b062e027ab7fe4c49dece"
+    "reviewedDigest": "1219f2b55a5224c73982b0a0a9b22cb7195f4dcc0db44129ff1cd873a77b717b"
   },
   "candidate:.github/workflows/ci.yml/api-test-durations": {
     "kind": "support",
@@ -312,7 +312,7 @@
   "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
     "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-    "reviewedDigest": "b36b428ce65c538e48ca8e115095c811b43e18330e7a0020978775a41ff6d7e1"
+    "reviewedDigest": "cc0baf7da36a1975af33a49eafd28de46e8fc669c7355fe9aef9cb1082397d38"
   },
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "4ae4e8716b85fd0776b678b4974de8daa9ef658f45b5d301d152b85a9588ab57"
+    "reviewedDigest": "295acb3c0c3732f86ba552fcb5d4308a0ecff837b67d3497ddbe51224a212613"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "63b24be021359abaa0196d8343b42704a5281d09f46193e286eadf452d794c45"
+    "reviewedDigest": "4af9c40f93e234ae858aa4f8e789da8db00b601e5a5190b52d17e3617d896222"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -942,7 +942,7 @@
   "candidate:.github/workflows/queue-admission.yml/admission": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "d7314118f0938bde6fef2c4bbcdad6f3638726507a776fe89b86537b858188f9"
+    "reviewedDigest": "999d21c5aef8e789223323c34169383b2ef07867ba392705191149494b5baaff"
   },
   "candidate:.github/workflows/ci-runner-loss-retry.yml/retry": {
     "kind": "ordinary",

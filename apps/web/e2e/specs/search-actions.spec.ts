@@ -3,9 +3,9 @@ import type { Page } from "@playwright/test";
 import { apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const openSearch = async (page: Page, route = "/workspaces") => {
