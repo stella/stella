@@ -33,6 +33,7 @@ import {
   cellMetadata,
   desktopEditSessions,
   documentProcessingRuns,
+  type DocumentProcessingStatus,
   entities,
   entityVersions,
   extractedContent,
@@ -40,7 +41,6 @@ import {
   searchDocuments,
   taskAssignees,
   workspaces,
-  type DocumentProcessingStatus,
 } from "@/api/db/schema";
 import type {
   CellMetadata,
