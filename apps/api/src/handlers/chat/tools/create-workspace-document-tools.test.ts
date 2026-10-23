@@ -22,6 +22,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
@@ -42,6 +43,8 @@ const createEntityDependencies = {
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   processExtraction: processExtractionMock,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: mock(async () => null),
 } satisfies CreateEntityFromBufferDependencies;
 

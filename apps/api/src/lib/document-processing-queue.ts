@@ -2238,10 +2238,11 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
           isNull(documentProcessingRuns.nextDeliveryAt),
           lte(documentProcessingRuns.nextDeliveryAt, now),
         ),
+        selection.scheduledRetriesOnly
+          ? isNotNull(documentProcessingRuns.nextAttemptAt)
+          : undefined,
         or(
-          selection.scheduledRetriesOnly
-            ? isNotNull(documentProcessingRuns.nextAttemptAt)
-            : isNull(documentProcessingRuns.nextAttemptAt),
+          isNull(documentProcessingRuns.nextAttemptAt),
           lte(documentProcessingRuns.nextAttemptAt, now),
         ),
       ),

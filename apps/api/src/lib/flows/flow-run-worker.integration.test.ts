@@ -78,6 +78,7 @@ import type { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-co
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -167,6 +168,8 @@ const createEntityDependencies = {
   enqueueImageThumbnailOrMarkFailed: async () => undefined,
   enqueuePdfDerivativeOrMarkFailed: async () => undefined,
   processExtraction: async () => undefined,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: async () => null,
 } satisfies CreateEntityFromBufferDependencies;
 

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { asc, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -131,6 +131,29 @@ test("reconciliation dispatches only scheduled retries", async () => {
   expect(recording.enqueued.toSorted()).toEqual(
     [runIds.nativeRetry, runIds.ocrRetry].toSorted(),
   );
+});
+
+test("reconciliation leaves future retries queued until their due time", async () => {
+  const nextAttemptAt = new Date(Date.now() + 60_000);
+  await db
+    .update(documentProcessingRuns)
+    .set({ nextAttemptAt, nextDeliveryAt: null })
+    .where(eq(documentProcessingRuns.id, runIds.nativeRetry));
+  const recording = recordedIds();
+  const delivery = createDocumentProcessingReconciliationPhases(
+    reconciliationDependencies(recording.enqueue),
+  ).find(({ name }) => name === "delivery");
+  if (!delivery) {
+    throw new TypeError("Expected the reconciliation delivery phase");
+  }
+
+  await delivery.run();
+
+  expect(recording.enqueued).toEqual([runIds.ocrRetry]);
+  const future = (await readDeliveryTimes()).find(
+    ({ id }) => id === runIds.nativeRetry,
+  );
+  expect(future?.at).toBeNull();
 });
 
 test("the OCR scheduler dispatches only OCR runs", async () => {
