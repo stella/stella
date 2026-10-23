@@ -26,12 +26,12 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
-  SEARCH_PAGE_REACH,
-  SEARCH_PAGINATION_COMPLETE,
-  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
   FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -88,6 +88,7 @@ import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -139,8 +140,8 @@ import {
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
-  CASE_LAW_COVERAGE_FIXTURE,
   CASE_LAW_COVERAGE_EXPECTED,
+  CASE_LAW_COVERAGE_FIXTURE,
 } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -1847,7 +1848,7 @@ describe("OpenAI-compatible MCP tools", () => {
       const tool = await registryTool({
         ...createContext(),
         loadEnabledRegistrySlugs: async () =>
-          await Promise.resolve(Result.ok(["orsr", "vies"] as const)),
+          await Promise.resolve(readPresent(["orsr", "vies"])),
       });
 
       expect(tool?.inputSchema.properties?.["registry"]).toEqual({
@@ -1861,7 +1862,7 @@ describe("OpenAI-compatible MCP tools", () => {
       const tool = await registryTool({
         ...createContext(),
         loadEnabledRegistrySlugs: async () =>
-          await Promise.resolve(Result.ok([] as const)),
+          await Promise.resolve(readPresent([])),
       });
 
       expect(tool).toBeUndefined();
@@ -1871,8 +1872,13 @@ describe("OpenAI-compatible MCP tools", () => {
       const tool = await registryTool(createContext());
 
       // A context that never resolved its reachable registries (test/synthetic
-      // or a bootstrap read fault) keeps the full advertisement.
-      expect(tool?.inputSchema.properties?.["registry"]).toMatchObject({
+      // or a bootstrap read fault) keeps the full advertisement. The served
+      // schema is shared with later sessions, and Bun's `toMatchObject` swaps
+      // a matched property for its asymmetric matcher (frozen or not), so the
+      // assertion reads a copy.
+      expect(
+        structuredClone(tool?.inputSchema.properties?.["registry"]),
+      ).toMatchObject({
         enum: expect.arrayContaining(["ares", "vies"]),
       });
     });
@@ -1891,7 +1897,7 @@ describe("OpenAI-compatible MCP tools", () => {
         context: {
           ...baseContext,
           loadEnabledRegistrySlugs: async () =>
-            await Promise.resolve(Result.ok(["ares"] as const)),
+            await Promise.resolve(readPresent(["ares"])),
           testDependencies: {
             ...baseContext.testDependencies,
             executeRegistryLookup: executeRegistryLookupMock,

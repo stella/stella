@@ -15,7 +15,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/playwright-tools",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/playwright-tools",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "report": "PLAYWRIGHT_HTML_OUTPUT_DIR=../../apps/web/playwright-report playwright merge-reports --reporter html ../../apps/web/all-blob-reports"
   },
   "devDependencies": {

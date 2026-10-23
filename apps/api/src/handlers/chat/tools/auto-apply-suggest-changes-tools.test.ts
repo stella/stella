@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SelectedFields } from "drizzle-orm/pg-core";
 
@@ -19,6 +18,7 @@ import {
   searchProjectionRepairQueue,
   workspaces,
 } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
 import {
   createAutoApplySuggestChangesTools as createAutoApplySuggestChangesToolsWithDependencies,
@@ -308,7 +308,9 @@ const buildTx = ({
         ];
         return {
           from: () => {
-            const query = drizzle.mock().select(selectedFields).from(table);
+            const query = createMockDatabase()
+              .select(selectedFields)
+              .from(table);
             const fixtureQuery = createSelectQueryMock(rows).from().where();
             return {
               toSQL: () => query.toSQL(),

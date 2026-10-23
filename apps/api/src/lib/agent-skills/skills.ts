@@ -17,9 +17,9 @@ import type { SkillInvocation, SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  type AgentSkillOrigin,
   agentSkillResources,
   agentSkills,
-  type AgentSkillOrigin,
 } from "@/api/db/schema";
 import { canManageSkill } from "@/api/lib/agent-skills/access";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";

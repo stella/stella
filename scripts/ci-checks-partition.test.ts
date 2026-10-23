@@ -12,11 +12,13 @@ import { assertProperty } from "@stll/property-testing";
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
+  CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolRegistryPath,
+  checkPoolStepRun,
+  type ReadCheckPool,
   readCheckPool,
   readWorkingTreeCheckPool,
-  type ReadCheckPool,
 } from "./ci-check-pool-registry";
 import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
@@ -50,6 +52,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // Matrix metadata selects a disjoint slice of the same pool;
+                // it does not change the check represented by this step.
+                "CI_CHECK_POOL_PARTITION",
               ].includes(key),
           ),
         );
@@ -370,8 +375,42 @@ const jobs = v.parse(
     readFileSync(new URL(`../${workflowPath}`, import.meta.url), "utf-8"),
   ),
 ).jobs;
-const baseWorkflow: unknown = Bun.YAML.parse(
-  git(["show", `${mergeBase}:${workflowPath}`]),
+// Pool steps once ran `bun scripts/ci-check-pool.ts run <job>` with `needs`
+// in the environment; a merge base from before the file hand-over reads in
+// today's form, so its pooled checks still expand and compare. Matches only
+// the old form, so it is inert once the merge base carries the new one.
+const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+const withCurrentPoolSteps = (workflow: unknown): unknown => {
+  const parsed = v.parse(
+    v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
+    workflow,
+  );
+  for (const job of CHECK_POOL_JOBS) {
+    const body = parsed.jobs[job];
+    if (!v.is(v.looseObject({ steps: v.array(v.unknown()) }), body)) {
+      continue;
+    }
+    body.steps = body.steps.map((step) => {
+      if (
+        !v.is(
+          v.looseObject({
+            run: v.string(),
+            env: v.record(v.string(), v.unknown()),
+          }),
+          step,
+        ) ||
+        LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job
+      ) {
+        return step;
+      }
+      const { CI_CHECK_POOL_NEEDS: _needs, ...env } = step.env;
+      return { ...step, env, run: checkPoolStepRun(job) };
+    });
+  }
+  return parsed;
+};
+const baseWorkflow: unknown = withCurrentPoolSteps(
+  Bun.YAML.parse(git(["show", `${mergeBase}:${workflowPath}`])),
 );
 const baseJobs = v.parse(workflowSchema, baseWorkflow).jobs;
 const removedChecks = v.parse(
@@ -450,7 +489,6 @@ const CONTINUATION_PREFIXES = {
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
-  Format: "affected",
   "Changeset present for published package changes": "policy",
 };
 const preInstallGuards = new Map([
@@ -971,6 +1009,18 @@ const expectScope = ({
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     });
   const migrated = { ...scope };
+  // A check-pool matrix changes scheduling, not the inherited job scope.
+  // Accept only the exact exhaustive two-way partition used by the runner;
+  // arbitrary strategy changes remain visible to this comparison.
+  if (
+    job === "ci-checks-rest" &&
+    isDeepStrictEqual(migrated["strategy"], {
+      "fail-fast": false,
+      matrix: { partition: [1, 2] },
+    })
+  ) {
+    delete migrated["strategy"];
+  }
   // The retired changeset hold was the check legs' only pull-request reader.
   if (
     job !== undefined &&
@@ -1100,6 +1150,20 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  // Format checks the tracked tree with `bun fmt --check`; it no longer
+  // filters by affected packages, so it no longer waits on that step.
+  if (step.name === "Format" && fields.run?.includes("turbo run format")) {
+    const { AFFECTED_FLAG: _flag, ...env } = v.parse(
+      v.record(v.string(), v.unknown()),
+      step["env"] ?? {},
+    );
+    return {
+      ...step,
+      env,
+      if: fields.if?.replace(" && steps.affected.outcome == 'success'", ""),
+      run: "bun fmt --check",
+    };
+  }
   // The classification check derives its manifest instead of reading a
   // committed one, and exposes its sensitive-change output by step id.
   if (

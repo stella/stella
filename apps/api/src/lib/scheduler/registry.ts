@@ -137,12 +137,12 @@ import {
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import {
-  MEMORY_CURATOR_TASK,
   curateAiMemories,
+  MEMORY_CURATOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-curator";
 import {
-  MEMORY_EXTRACTOR_TASK,
   extractMemoriesFromCompactions,
+  MEMORY_EXTRACTOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
   RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
@@ -177,6 +177,10 @@ import {
   refreshSanctionsSourcesTask,
 } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import {
+  AUDIT_SCHEDULER_PAUSES_TASK,
+  auditSchedulerPauses,
+} from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -205,8 +209,8 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
-  WORK_ATTENTION_SCOUT_TASK,
   runWorkAttentionScoutTask,
+  WORK_ATTENTION_SCOUT_TASK,
 } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import {
   BACKFILL_WORK_OBLIGATIONS_TASK,
@@ -222,6 +226,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,

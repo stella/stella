@@ -11,9 +11,9 @@ import type { searchLegislationSuccessResponseSchema } from "@/api/handlers/legi
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  truncateTextBytes,
-  truncateHeadlineBytes,
   nullableText,
+  truncateHeadlineBytes,
+  truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 // The response projection owns display truncation; corpus storage retains the
@@ -23,8 +23,7 @@ type LegislationSearchHit = Static<
 >["items"][number];
 type TextField = {
   [Key in keyof LegislationSearchHit]: LegislationSearchHit[Key] extends
-    | string
-    | null
+    string | null
     ? Key
     : never;
 }[keyof LegislationSearchHit];

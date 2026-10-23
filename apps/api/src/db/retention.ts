@@ -1,6 +1,5 @@
 export type TableRetention =
-  | { ttlColumn: string; sweeper: string }
-  | { boundedBy: string };
+  { ttlColumn: string; sweeper: string } | { boundedBy: string };
 
 export const TABLE_RETENTION = {
   desktop_time_entry_batches: {
@@ -57,6 +56,10 @@ export const TABLE_RETENTION = {
   oauth_client: { ttlColumn: "created_at", sweeper: "auth.sweepRegistrations" },
   oauth_client_resource: {
     boundedBy: "Cascade-deleted with its client or resource.",
+  },
+  mcp_web_handoff: {
+    ttlColumn: "expires_at",
+    sweeper: "auth.sweepRegistrations",
   },
   oauth_client_assertion: {
     ttlColumn: "expires_at",

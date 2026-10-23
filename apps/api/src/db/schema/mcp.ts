@@ -23,8 +23,8 @@ import {
   pUuid,
   safeOrganizationId,
   safeUuid,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 export const mcpConnectors = p.pgTable(

@@ -13,6 +13,7 @@ import {
   isDecisionAnalysis,
   isSignificanceCurrent,
   parsePersistedDecisionAnalysis,
+  significanceStatementOf,
 } from "./analysis";
 import type {
   AnalysisHeading,
@@ -281,6 +282,36 @@ describe("version 3 layers", () => {
         promptVersion: significance.promptVersion,
       }),
     ).toBe(false);
+  });
+
+  test("stores none for an uncited decision and shows readers nothing for it", () => {
+    const none = {
+      kind: "none",
+      graphFingerprint: significance.graphFingerprint,
+      generatedAt: significance.generatedAt,
+    } satisfies AnalysisSignificance;
+    const withNone = { ...v3, significance: none };
+
+    expect(parsePersistedDecisionAnalysis(withNone)).toEqual(withNone);
+    expect(
+      parsePersistedDecisionAnalysis({
+        ...v3,
+        significance: { ...none, text: "Filler." },
+      }),
+    ).toBeNull();
+    expect(significanceStatementOf(none)).toBeNull();
+    expect(significanceStatementOf(significance)).toEqual(significance);
+    expect(significanceStatementOf(null)).toBeNull();
+    // Read from the graph, not written by a prompt: a reworded prompt
+    // leaves it standing, a moved graph does not.
+    const current = (graphFingerprint: string) =>
+      isSignificanceCurrent({
+        analysis: withNone,
+        graphFingerprint,
+        promptVersion: significance.promptVersion + 1,
+      });
+    expect(current(significance.graphFingerprint)).toBe(true);
+    expect(current("h".repeat(64))).toBe(false);
   });
 
   test("the sentinel is written at the current version", () => {

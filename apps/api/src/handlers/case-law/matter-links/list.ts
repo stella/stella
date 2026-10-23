@@ -5,9 +5,9 @@ import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  publishedCaseLawDecisions,
   caseLawMatterLinks,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";

@@ -13,8 +13,8 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
   createDocumentProcessingLeaseRenewal,
-  createDocumentProcessingWorkerConnection,
   createDocumentProcessingReconciliationPhases,
+  createDocumentProcessingWorkerConnection,
   createRepairPassMemo,
   createWorkerReconciliationPhases,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
