@@ -13,11 +13,13 @@ import {
 import {
   chatToolExecutor,
   isServerChatToolCall,
+  isUnsupportedChatPart,
 } from "@stll/api-contract/chat";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
+import { isOwnKey, ownEntry } from "@stll/api-contract/own-key";
 
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import {
@@ -54,14 +56,284 @@ import {
 } from "@/api/lib/chat/persisted-message-content";
 import type {
   PersistedJsonValue,
+  PersistedToolCallPart,
   PersistedToolInput,
   PersistedToolResultContent,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
-import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
+import { carriedChatPart } from "@/api/lib/chat/stored-chat-part-codec";
+import type { STORED_CHAT_PART_TYPES } from "@/api/lib/chat/stored-chat-part-codec";
 import { LIMITS } from "@/api/lib/limits";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
+
+// What this release knows of each stored part, at every depth. `true` marks a
+// field whose value is kept whole (free JSON, or a provider's own record). Any
+// other field is one a newer release added: this release never reads it,
+// never shows it to the model, and writes it back as stored.
+type KnownFields = { readonly [field: string]: true | KnownFields };
+
+const SOURCE_FIELDS = { mimeType: true, type: true, value: true } as const;
+const MEDIA_FIELDS = {
+  id: true,
+  metadata: true,
+  source: SOURCE_FIELDS,
+  type: true,
+} as const;
+
+const KNOWN_STORED_FIELDS = {
+  activity: {
+    activityType: true,
+    content: true,
+    subagentRunId: true,
+    type: true,
+  },
+  audio: MEDIA_FIELDS,
+  document: MEDIA_FIELDS,
+  image: MEDIA_FIELDS,
+  "structured-output": {
+    data: true,
+    errorMessage: true,
+    partial: true,
+    raw: true,
+    reasoning: true,
+    status: true,
+    type: true,
+  },
+  text: { content: true, metadata: true, providerMetadata: true, type: true },
+  thinking: {
+    content: true,
+    provenance: { format: true, model: true, provider: true },
+    providerMetadata: true,
+    redacted: true,
+    signature: true,
+    stepId: true,
+    type: true,
+  },
+  "tool-call": {
+    approval: { approved: true, id: true, needsApproval: true },
+    id: true,
+    input: { rawArguments: true, status: true, value: true },
+    metadata: true,
+    name: true,
+    output: { value: true },
+    providerMetadata: { call: true, result: true },
+    state: true,
+    type: true,
+  } satisfies Record<keyof PersistedToolCallPart, true | KnownFields>,
+  "tool-result": {
+    content: { type: true, value: true },
+    error: true,
+    outcome: true,
+    state: true,
+    toolCallId: true,
+    type: true,
+  } satisfies Record<keyof PersistedToolResultPart, true | KnownFields>,
+  "ui-resource": {
+    meta: true,
+    resource: { blob: true, mimeType: true, text: true, uri: true },
+    serverId: true,
+    toolCallId: true,
+    toolName: true,
+    type: true,
+  } satisfies Record<
+    keyof Extract<ChatPart, { type: "ui-resource" }>,
+    true | KnownFields
+  >,
+  video: MEDIA_FIELDS,
+} as const satisfies Record<keyof typeof STORED_CHAT_PART_TYPES, KnownFields>;
+
+const knownFieldsOfType = (type: string): KnownFields =>
+  ownEntry(KNOWN_STORED_FIELDS, type) ?? {};
+
+const isFieldRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** `value` with only the fields `known` names, at every depth. */
+const knownFieldsOf = (value: unknown, known: KnownFields): unknown => {
+  if (!isFieldRecord(value)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([field, inner]) => {
+      const rule = ownEntry(known, field);
+      if (rule === undefined) {
+        return [];
+      }
+      return [[field, rule === true ? inner : knownFieldsOf(inner, rule)]];
+    }),
+  );
+};
+
+/** `encoded` with every field `stored` holds that this release does not
+ *  know, at every depth, as stored. */
+const withLaterReleaseFields = <TPart extends object>(
+  encoded: TPart,
+  stored: unknown,
+  known: KnownFields,
+): TPart => {
+  if (!isFieldRecord(stored)) {
+    return encoded;
+  }
+  const later = Object.fromEntries(
+    Object.entries(stored).filter(
+      ([field]) => !isOwnKey(known, field) && !Object.hasOwn(encoded, field),
+    ),
+  );
+  const nested = Object.fromEntries(
+    Object.entries(encoded).flatMap(([field, inner]) => {
+      const rule = ownEntry(known, field);
+      return rule === undefined || rule === true || !isFieldRecord(inner)
+        ? []
+        : [[field, withLaterReleaseFields(inner, stored[field], rule)]];
+    }),
+  );
+  return { ...later, ...encoded, ...nested };
+};
+
+/** What a decoded part keeps of the stored message it came from. */
+type StoredOrigin = {
+  /** The part as stored: every field, a newer release's included. */
+  stored: unknown;
+  /** The stored part, written back as it is while the part is unedited.
+   *  Absent for a call stored before calls recorded their executor, which
+   *  every save upgrades. */
+  writable: PersistedV3Part | undefined;
+  /** The part as loaded: a part still equal to it is unedited. */
+  loaded: ChatPart;
+  /** Every part decoded from the same stored message, by lineage. */
+  message: ReadonlyMap<string, StoredOrigin>;
+};
+
+// Keyed by the decoded part itself, so an origin never outlives the part and
+// never reaches another message's save.
+const STORED_ORIGINS = new WeakMap<ChatPart, StoredOrigin>();
+
+/**
+ * Which stored part each part continues: a call or a result by its call id,
+ * any other part by its place among the message's parts of its type. A part
+ * an edit replaced continues the stored part it replaced.
+ */
+const lineageOf = (parts: readonly ChatPart[]): string[] => {
+  const seen = new Map<string, number>();
+  return parts.map((part) => {
+    if (part.type === "tool-call") {
+      return `tool-call:${part.id}`;
+    }
+    if (part.type === "tool-result") {
+      return `tool-result:${part.toolCallId}`;
+    }
+    const ordinal = seen.get(part.type) ?? 0;
+    seen.set(part.type, ordinal + 1);
+    return `${part.type}:${String(ordinal)}`;
+  });
+};
+
+const writableStoredPart = (part: StoredPart): PersistedV3Part | undefined => {
+  // Written back only while it still proves as a stored part of this
+  // release's; otherwise every save re-encodes it.
+  if (part.type !== "tool-call") {
+    return isPersistedV3Part(part) ? part : undefined;
+  }
+  const metadata = Result.try(() =>
+    provePersistedToolCallMetadata(part.metadata),
+  );
+  if (!Result.isOk(metadata)) {
+    return undefined;
+  }
+  const writable = { ...part, metadata: metadata.value };
+  return isPersistedV3Part(writable) ? writable : undefined;
+};
+
+const rememberStoredOrigins = (
+  stored: readonly StoredPart[],
+  parts: readonly ChatPart[],
+): void => {
+  const lineage = lineageOf(parts);
+  const message = new Map<string, StoredOrigin>();
+  for (const [index, part] of parts.entries()) {
+    const raw = stored.at(index);
+    const key = lineage.at(index);
+    if (raw === undefined || key === undefined || isUnsupportedChatPart(part)) {
+      continue;
+    }
+    const origin: StoredOrigin = {
+      stored: raw,
+      writable: writableStoredPart(raw),
+      loaded: structuredClone(part),
+      message,
+    };
+    message.set(key, origin);
+    STORED_ORIGINS.set(part, origin);
+    for (const inner of objectsWithin(part)) {
+      if (!STORED_ORIGIN_BY_OBJECT.has(inner)) {
+        STORED_ORIGIN_BY_OBJECT.set(inner, origin);
+      }
+    }
+  }
+};
+
+// Every object a decoded part holds below its top level. An edit that keeps
+// one of them (a spread that changes a state, an approval) continues the part.
+const STORED_ORIGIN_BY_OBJECT = new WeakMap<object, StoredOrigin>();
+
+const objectsWithin = (value: object): object[] =>
+  Object.values(value).flatMap((inner: unknown) =>
+    typeof inner === "object" && inner !== null
+      ? [inner, ...objectsWithin(inner)]
+      : [],
+  );
+
+/** The one stored part of the same type `part` keeps an object of. */
+const continuedByObject = (part: ChatPart): StoredOrigin | undefined => {
+  const found = new Set<StoredOrigin>();
+  for (const inner of objectsWithin(part)) {
+    const origin = STORED_ORIGIN_BY_OBJECT.get(inner);
+    if (origin?.loaded.type === part.type) {
+      found.add(origin);
+    }
+  }
+  return found.size === 1 ? [...found].at(0) : undefined;
+};
+
+/** The stored origin of each part about to be saved: its own, or, for a part
+ *  an edit replaced, the one stored part of the same message it continues. */
+const storedOriginsOf = (
+  parts: readonly ChatPart[],
+): (StoredOrigin | undefined)[] => {
+  const lineage = lineageOf(parts);
+  const messages = new Set<ReadonlyMap<string, StoredOrigin>>();
+  const claimed = new Set<StoredOrigin>();
+  const known = parts.map(
+    (part) => STORED_ORIGINS.get(part) ?? continuedByObject(part),
+  );
+  for (const origin of known) {
+    if (origin !== undefined) {
+      messages.add(origin.message);
+      claimed.add(origin);
+    }
+  }
+  return parts.map((part, index) => {
+    const own = known.at(index);
+    if (own !== undefined) {
+      return own;
+    }
+    const key = lineage.at(index);
+    const continued =
+      key === undefined
+        ? []
+        : [...messages].flatMap((message) => {
+            const origin = message.get(key);
+            return origin === undefined || claimed.has(origin) ? [] : [origin];
+          });
+    const origin = continued.length === 1 ? continued.at(0) : undefined;
+    if (origin !== undefined) {
+      claimed.add(origin);
+    }
+    return origin;
+  });
+};
 
 export type ChatAttachmentInput = {
   filename?: string | undefined;
@@ -205,14 +477,10 @@ type StoredChatMessageContentV3 = Omit<
 };
 export const normalizePersistedChatMessageContent = (
   content: StoredChatMessageContentV3,
-): NormalizedChatMessageParts => {
-  const normalized = normalizePersistedV3ChatMessageContent(content);
-  return {
-    ...normalized,
-    parts: normalized.parts.map(normalizeStoredChatToolExecutor),
-  };
-};
+): NormalizedChatMessageParts =>
+  normalizePersistedV3ChatMessageContent(content);
 type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
+type StoredPart = StoredChatMessageContentV3["data"][number];
 
 const normalizePersistedV3ChatMessageContent = (
   content: StoredChatMessageContentV3,
@@ -226,21 +494,48 @@ const normalizePersistedV3ChatMessageContent = (
   ) {
     panic("Stored v3 chat content has invalid metadata");
   }
+  const data: readonly StoredPart[] = content.data;
   const outputByToolCallId = new Map<string, unknown>();
-  for (const part of content.data) {
-    if (!isRecord(part)) {
-      panic("Stored v3 chat content has an invalid part");
-    }
-    if (part.type === "tool-call" && part.output !== undefined) {
-      outputByToolCallId.set(part.id, decodePersistedToolOutput(part.output));
+  for (const part of data) {
+    if (
+      isRecord(part) &&
+      part.type === "tool-call" &&
+      part.output !== undefined
+    ) {
+      const output = Result.try(() => decodePersistedToolOutput(part.output));
+      if (Result.isOk(output)) {
+        outputByToolCallId.set(part.id, output.value);
+      }
     }
   }
 
-  const parts: ChatPart[] = [];
-  for (const part of content.data) {
-    parts.push(persistedV3PartToChatPart({ outputByToolCallId, part }));
-  }
+  const parts = data.map((part) =>
+    readStoredChatPart({ outputByToolCallId, part }),
+  );
+  rememberStoredOrigins(data, parts);
   return { metadata: content.metadata ?? {}, parts };
+};
+
+/**
+ * Decoding is total: a stored part this release cannot decode strictly, for
+ * any reason (a type, an enum value or a nested shape a newer release
+ * introduced), is carried whole and written back as stored.
+ */
+const readStoredChatPart = ({
+  outputByToolCallId,
+  part,
+}: {
+  outputByToolCallId: ReadonlyMap<string, unknown>;
+  part: StoredPart;
+}): ChatPart => {
+  const decoded = Result.try(() =>
+    isRecord(part)
+      ? normalizeStoredChatToolExecutor(
+          persistedV3PartToChatPart({ outputByToolCallId, part }),
+        )
+      : panic("Stored v3 chat content has an invalid part"),
+  );
+  return Result.isOk(decoded) ? decoded.value : carriedChatPart(part);
 };
 
 const persistedV3PartToChatPart = ({
@@ -257,8 +552,11 @@ const persistedV3PartToChatPart = ({
     if (part.metadata !== undefined && !isPersistedJsonValue(part.metadata)) {
       panic("Stored v3 tool call has invalid metadata");
     }
+    const known = KNOWN_STORED_FIELDS["tool-call"];
     const candidate: unknown = {
-      ...(part.approval === undefined ? {} : { approval: part.approval }),
+      ...(part.approval === undefined
+        ? {}
+        : { approval: knownFieldsOf(part.approval, known.approval) }),
       arguments:
         persistedInput.status === "raw"
           ? persistedInput.rawArguments
@@ -271,7 +569,12 @@ const persistedV3PartToChatPart = ({
       ...(part.output === undefined ? {} : { output }),
       ...(part.providerMetadata === undefined
         ? {}
-        : { providerMetadata: part.providerMetadata }),
+        : {
+            providerMetadata: knownFieldsOf(
+              part.providerMetadata,
+              known.providerMetadata,
+            ),
+          }),
       state: part.state,
       type: "tool-call",
     };
@@ -300,10 +603,11 @@ const persistedV3PartToChatPart = ({
     return candidate;
   }
 
-  if (!isChatPart(part)) {
+  const known: unknown = knownFieldsOf(part, knownFieldsOfType(part.type));
+  if (!isChatPart(known)) {
     panic("Stored v3 non-tool part is not a valid chat part");
   }
-  return part;
+  return known;
 };
 
 const persistedV3ToolResultContent = ({
@@ -993,8 +1297,10 @@ const CHAT_PART_VALIDATORS = {
       isPersistedJsonObject(part["providerMetadata"])),
   thinking: (part) =>
     typeof part["content"] === "string" &&
+    // Verified on replay, not on load: a provenance this release cannot
+    // verify is kept as stored and never replayed.
     (part["provenance"] === undefined ||
-      isReasoningProvenance(part["provenance"])) &&
+      isPersistedJsonObject(part["provenance"])) &&
     (part["providerMetadata"] === undefined ||
       isPersistedJsonObject(part["providerMetadata"])),
   "tool-call": (part) =>
@@ -1076,7 +1382,14 @@ export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
   let richPartCount = 0;
 
   for (const part of parts) {
-    if (!isServerOwnedChatPart(part) || isProviderVisibleChatPart(part)) {
+    // A stored part passed the budget of the release that stored it;
+    // dropping it here would lose it the next time this release saves.
+    if (
+      !isServerOwnedChatPart(part) ||
+      isProviderVisibleChatPart(part) ||
+      isUnsupportedChatPart(part) ||
+      STORED_ORIGINS.has(part)
+    ) {
       acceptedParts.push(part);
       continue;
     }
@@ -1148,6 +1461,11 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
 };
 
 const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
+  // A stored part was made canonical when it was first written; rebuilding it
+  // would drop what a newer release stored with it.
+  if (STORED_ORIGINS.has(part)) {
+    return part;
+  }
   switch (part.type) {
     case "audio":
       return {
@@ -1232,6 +1550,11 @@ export const classifyChatPartForPersistence = (
   if (!isChatPartPersistenceType(type)) {
     panic(`Cannot classify unknown chat part type: ${type}`);
   }
+  // Only the stored reader carries a part; one arriving on a stream would be
+  // written back as a stored part it never was.
+  if (isUnsupportedChatPart(part)) {
+    return { type: "drop", partType: type };
+  }
   if (chatPartPersistenceFor(type) === "drop") {
     return { type: "drop", partType: type };
   }
@@ -1303,8 +1626,13 @@ export const toPersistedChatMessageContentV3 = (
       outputsByToolCallId.set(part.id, part.output);
     }
   }
-  const data = normalized.map((part) =>
-    chatPartToPersistedV3Part({ outputsByToolCallId, part }),
+  const origins = storedOriginsOf(normalized);
+  const data = normalized.map((part, index) =>
+    chatPartToPersistedV3Part({
+      origin: origins.at(index),
+      outputsByToolCallId,
+      part,
+    }),
   );
   if (
     content.metadata !== undefined &&
@@ -1322,7 +1650,38 @@ export const toPersistedChatMessageContentV3 = (
   );
 };
 
+/**
+ * A part as stored. A part loaded from a stored message and not edited since
+ * is written back exactly as it was stored; an edited one is encoded from what
+ * this release knows, with every field a newer release stored merged back.
+ */
 const chatPartToPersistedV3Part = ({
+  origin,
+  outputsByToolCallId,
+  part,
+}: {
+  origin: StoredOrigin | undefined;
+  outputsByToolCallId: ReadonlyMap<string, unknown>;
+  part: ChatPart;
+}): PersistedV3Part => {
+  if (
+    origin?.writable !== undefined &&
+    STORED_ORIGINS.get(part) === origin &&
+    deepEquals(part, origin.loaded)
+  ) {
+    return origin.writable;
+  }
+  const encoded = encodeChatPart({ outputsByToolCallId, part });
+  return origin === undefined
+    ? encoded
+    : withLaterReleaseFields(
+        encoded,
+        origin.stored,
+        knownFieldsOfType(encoded.type),
+      );
+};
+
+const encodeChatPart = ({
   outputsByToolCallId,
   part,
 }: {

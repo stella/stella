@@ -110,7 +110,7 @@ const getStringInputValue = ({
   if (input === undefined || input === null || typeof input !== "object") {
     return undefined;
   }
-  if (!(key in input)) {
+  if (!Object.hasOwn(input, key)) {
     return undefined;
   }
   const descriptor = Object.getOwnPropertyDescriptor(input, key);

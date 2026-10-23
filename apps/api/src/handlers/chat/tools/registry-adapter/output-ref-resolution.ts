@@ -176,7 +176,10 @@ const transformAtPath = ({
   const segment =
     path.segments.at(index) ??
     panic("Registry output ref path ended unexpectedly");
-  if (!(segment.key in value) || !(segment.key in rawValue)) {
+  if (
+    !Object.hasOwn(value, segment.key) ||
+    !Object.hasOwn(rawValue, segment.key)
+  ) {
     return value;
   }
 

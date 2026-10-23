@@ -1229,6 +1229,7 @@
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
     "activity": {
+      "newerVersion": "Šis turinys rodomas naujesnėje versijoje.",
       "review": "Peržiūros atnaujinimas"
     },
     "aiPrompt": "DI pranešimo laukas",
