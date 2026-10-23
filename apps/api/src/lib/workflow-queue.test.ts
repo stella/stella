@@ -7,6 +7,7 @@ import { isTransientRedisConnectionError } from "@/api/lib/redis-client";
 import {
   createWorkflowReconcileRunner,
   handleWorkflowReconcileFailure,
+  settlePendingCellRecoveryStart,
 } from "@/api/lib/workflow-queue";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import {
@@ -157,5 +158,43 @@ describe("workflow reconcile failures", () => {
     await settle();
     expect(scans).toBe(3);
     expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("skips an overlapping tick until the active scan settles", async () => {
+    let scans = 0;
+    let finishScan: (() => void) | undefined;
+    const scan = new Promise<void>((resolve) => {
+      finishScan = resolve;
+    });
+    const runReconcile = createWorkflowReconcileRunner(async () => {
+      scans += 1;
+      await scan;
+    });
+
+    runReconcile();
+    runReconcile();
+    await settle();
+    expect(scans).toBe(1);
+
+    finishScan?.();
+    await settle();
+    runReconcile();
+    await settle();
+    expect(scans).toBe(2);
+  });
+
+  test("leaves sibling cells pending when one recovery owns the workspace", async () => {
+    const states = ["pending", "pending"];
+    const error = (index: number) => async (): Promise<void> => {
+      states[index] = "error";
+    };
+
+    await settlePendingCellRecoveryStart({ status: "started" }, error(0));
+    await settlePendingCellRecoveryStart(
+      { status: "already-running" },
+      error(1),
+    );
+
+    expect(states).toEqual(["pending", "pending"]);
   });
 });

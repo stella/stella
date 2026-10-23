@@ -838,6 +838,17 @@ type OrphanReconciliationWorker = {
   extractionRuns: ExtractionRunStore;
 };
 
+/** Settle only recovery starts that cannot make progress on a later tick. */
+export const settlePendingCellRecoveryStart = async (
+  result: StartWorkflowResult,
+  error: () => Promise<void>,
+): Promise<void> => {
+  if (result.status === "started" || result.status === "already-running") {
+    return;
+  }
+  await error();
+};
+
 /**
  * Reconcile pending cells independently. Queue backlog and unrelated live jobs
  * are deliberately irrelevant: ownership and deadline on each cell are the
@@ -888,9 +899,9 @@ export const reconcileOrphanedWorkflows = async (
         extractionRunStore: extractionRuns,
         recoveryAttempt: attempt,
       });
-      if (result.status !== "started") {
+      await settlePendingCellRecoveryStart(result, async () => {
         await errorPendingCell(database, cell);
-      }
+      });
     },
   });
 };
@@ -1096,14 +1107,25 @@ export const handleWorkflowReconcileFailure = (error: unknown): void => {
 /**
  * Drive the reconcile cadence.
  *
- * Every tick runs the same bounded keyset scan. Recovery therefore does not
- * depend on which process booted first or on a one-time unbounded sweep.
+ * Every accepted tick runs the same bounded keyset scan. A tick arriving while
+ * that scan is active is skipped, so an overlong scan cannot overlap itself.
  */
-export const createWorkflowReconcileRunner =
-  (reconcile: (options: Record<string, never>) => Promise<void>) =>
-  (): void => {
-    reconcile({}).catch(handleWorkflowReconcileFailure);
+export const createWorkflowReconcileRunner = (
+  reconcile: (options: Record<string, never>) => Promise<void>,
+) => {
+  let running = false;
+  return (): void => {
+    if (running) {
+      return;
+    }
+    running = true;
+    reconcile({})
+      .catch(handleWorkflowReconcileFailure)
+      .finally(() => {
+        running = false;
+      });
   };
+};
 
 /**
  * Initialize every workflow worker. Call once at API startup. The run

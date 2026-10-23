@@ -53,14 +53,15 @@ export const selectPendingCellPage = async (
       deadlineAt: fields.deadlineAt,
       attempt: sql<0 | 1 | null>`${fields.attempt}`,
       organizationId: workspaces.organizationId,
-      requestedBy: sql<
-        string | null
-      >`COALESCE(${extractionRuns.requestedBy}, (SELECT latest.requested_by FROM extraction_runs latest WHERE latest.workspace_id = ${fields.workspaceId} AND latest.requested_by IS NOT NULL ORDER BY latest.created_at DESC, latest.id DESC LIMIT 1))`,
+      requestedBy: extractionRuns.requestedBy,
     })
     .from(fields)
     .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
     .innerJoin(workspaces, eq(workspaces.id, fields.workspaceId))
-    .leftJoin(extractionRuns, eq(extractionRuns.id, fields.ownerRunId))
+    .leftJoin(
+      extractionRuns,
+      sql`${extractionRuns.id}::text = ${fields.ownerRunId}`,
+    )
     .where(
       and(
         sql`${fields.content}->>'type' = 'pending'`,
