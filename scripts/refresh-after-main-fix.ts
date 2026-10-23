@@ -326,8 +326,7 @@ export const selectRefreshes = ({
     const run = pull.latestRun;
     if (
       pullRequestStateBlocker(pull) !== undefined ||
-      run === null ||
-      run.event !== "pull_request" ||
+      run?.event !== "pull_request" ||
       run.conclusion !== "failure" ||
       run.headSha !== pull.headSha ||
       (timeOf(run.createdAt) ?? Infinity) > current ||
