@@ -197,7 +197,10 @@ type McpServerDependencies = {
   decorateToolResult?: typeof withWebHandoffLinks;
   authenticateMcpRequest: (
     token: string,
-    options: { mode: McpMode },
+    options: {
+      mode: McpMode;
+      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+    },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
