@@ -140,6 +140,49 @@ describe("refreshing a decision's significance", () => {
     ]);
   });
 
+  test("replaces a legacy statement when the organization has no classify model", async () => {
+    const filler = {
+      ...analysis,
+      significance: {
+        text: "Toto rozhodnutí nebylo dosud citováno.",
+        language: "cs",
+        graphFingerprint: uncitedFingerprint,
+        generatedAt: "2026-10-12T09:00:00.000Z",
+        model: "test-model",
+        promptVersion: SIGNIFICANCE_PROMPT_VERSION,
+      },
+    } satisfies DecisionAnalysisV3;
+    const saved: DecisionAnalysisV3[] = [];
+
+    await refreshSignificance({
+      admitModelAction: async () =>
+        panic("An uncited decision must not admit a model"),
+      analysis: filler,
+      contentHash: null,
+      decisionId,
+      derivedAi: true,
+      organizationId: toSafeId<"organization">("org_without_ai"),
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      promptCachingEnabled: false,
+      readGraphFacts: async () => uncited,
+      store: asTestRaw<AnalysisStore>({
+        save: async ({
+          analysis: written,
+        }: {
+          analysis: DecisionAnalysisV3;
+        }) => {
+          saved.push(written);
+          return true;
+        },
+      }),
+    });
+
+    expect(saved.map(({ significance }) => significance?.kind)).toEqual([
+      "none",
+    ]);
+  });
+
   test("a stored none over the same graph stands and is not written again", async () => {
     const none = {
       ...analysis,

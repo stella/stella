@@ -115,21 +115,6 @@ export const refreshSignificance = async ({
   if (current === null) {
     return;
   }
-  // Checked before the graph is read: an org with no fast model available
-  // must not pay for the query either.
-  if (
-    Result.isError(
-      requireTanStackAIAvailableForTask({
-        dataClass: "public_corpus",
-        configStatus: orgAIConfigStatus,
-        orgConfig: orgAIConfig,
-        task: "classify",
-      }),
-    )
-  ) {
-    return;
-  }
-
   const facts = await readGraphFacts(decisionId);
   if (facts === null) {
     return;
@@ -169,6 +154,20 @@ export const refreshSignificance = async ({
         ctx: { decisionId },
       });
     }
+    return;
+  }
+  // Only the positive-citation path needs an available classify model. The
+  // empty graph above is corpus-wide state and can be stored for every reader.
+  if (
+    Result.isError(
+      requireTanStackAIAvailableForTask({
+        dataClass: "public_corpus",
+        configStatus: orgAIConfigStatus,
+        orgConfig: orgAIConfig,
+        task: "classify",
+      }),
+    )
+  ) {
     return;
   }
   if (
