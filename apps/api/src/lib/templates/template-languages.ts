@@ -20,7 +20,8 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 export const MAX_TEMPLATE_LANGUAGES = 4;
 
 type NormalizeTemplateLanguagesResult =
-  { ok: true; languages: LanguageCode[] } | { ok: false; message: string };
+  | { ok: true; languages: LanguageCode[] }
+  | { ok: false; message: string };
 
 /**
  * Trims, canonicalizes (`"EN-gb"` -> `"en"`, `"pt-BR"` -> `"pt"`), filters to

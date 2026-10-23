@@ -72,7 +72,11 @@ type InstallNativeBoundaryOptions = {
   batchValidation?: "accept" | "reject-first" | "hold-first";
   batchReceipt?: "save" | "fail-first" | "keep-pending";
   historyDeletion?:
-    "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
+    | "available"
+    | "keyMissing"
+    | "unreadable"
+    | "mixed"
+    | "incompatible";
 };
 
 const installNativeBoundary = async ({

@@ -110,7 +110,8 @@ export type DataInvariant<
 };
 
 export type DataInvariantOutcome =
-  DataInvariantVerdict<string> | { status: "errored" };
+  | DataInvariantVerdict<string>
+  | { status: "errored" };
 
 type DataInvariantReport = {
   id: DataInvariantId;

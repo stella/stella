@@ -85,7 +85,8 @@ type CompleteBackfillCheckpoint = BackfillCheckpointBase & {
 };
 
 type BackfillCheckpoint =
-  RunningBackfillCheckpoint | CompleteBackfillCheckpoint;
+  | RunningBackfillCheckpoint
+  | CompleteBackfillCheckpoint;
 
 export type DecisionIdentifierBackfillGaps = {
   decisionIdentifierMismatches: number;

@@ -169,7 +169,8 @@ const SOURCE_NESTED_FIELDS = [
 ] as const;
 
 type SourceField =
-  (typeof SOURCE_COLUMNS)[number] | (typeof SOURCE_NESTED_FIELDS)[number];
+  | (typeof SOURCE_COLUMNS)[number]
+  | (typeof SOURCE_NESTED_FIELDS)[number];
 
 // ── Normalization ────────────────────────────────────────
 

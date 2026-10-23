@@ -54,7 +54,8 @@ export type ClipboardShortcutSnapshot = {
 };
 
 export type ShortcutCheck =
-  { status: "valid" } | { rejection: ShortcutRejection; status: "rejected" };
+  | { status: "valid" }
+  | { rejection: ShortcutRejection; status: "rejected" };
 
 export type ShortcutUpdate =
   | { snapshot: ClipboardShortcutSnapshot; status: "saved" }

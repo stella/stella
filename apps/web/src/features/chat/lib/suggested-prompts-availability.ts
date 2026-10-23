@@ -30,7 +30,10 @@ type ResolveSuggestedPromptsAvailabilityOptions = {
 };
 
 export type SuggestedPromptsTurnOwner =
-  "approval" | "ask-user" | "secret" | "composer";
+  | "approval"
+  | "ask-user"
+  | "secret"
+  | "composer";
 
 type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
 const ASK_USER_STATE_OWNS_TURN = {

@@ -21,7 +21,8 @@ type EntityPaginationProps = {
  * Fills gaps with ellipsis markers (represented as null).
  */
 type PageEntry =
-  { type: "page"; page: number } | { type: "ellipsis"; key: string };
+  | { type: "page"; page: number }
+  | { type: "ellipsis"; key: string };
 
 const getPageNumbers = (current: number, total: number): PageEntry[] => {
   if (total <= 7) {

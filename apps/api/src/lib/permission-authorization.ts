@@ -13,7 +13,8 @@ import type { MemberRole } from "@/api/lib/member-roles";
  * required, so a context built without it cannot read as full role authority.
  */
 export type CredentialAuthority =
-  { type: "session" } | { type: "attenuated"; permissions: PermissionInput };
+  | { type: "session" }
+  | { type: "attenuated"; permissions: PermissionInput };
 
 export const SESSION_CREDENTIAL = {
   type: "session",

@@ -143,11 +143,9 @@ export const installStoreProgress = async (
       }
     } catch (error) {
       // Extraction can rename/remove a path while it is sampled.
-      if (!(
-        error instanceof Error &&
-        "code" in error &&
-        error.code === "ENOENT"
-      )) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      ) {
         throw error;
       }
     }

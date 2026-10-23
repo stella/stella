@@ -10,7 +10,8 @@ const CONTENT_TYPES_NAMESPACE =
   "http://schemas.openxmlformats.org/package/2006/content-types";
 
 export type ValidateDesktopEditFileBufferResult =
-  { valid: true } | { valid: false; error: string };
+  | { valid: true }
+  | { valid: false; error: string };
 
 export const validateDesktopEditFileBuffer = async ({
   buffer,

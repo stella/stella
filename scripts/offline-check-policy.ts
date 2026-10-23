@@ -31,7 +31,8 @@ export type OfflineImportAllowance = {
 // null for Bun's native subcommands (`bun fmt`), which run no repository code
 // and open no connection.
 export type OfflineCheckCommand = { command: string } & (
-  { protected: true; entry: string | null } | { protected: false }
+  | { protected: true; entry: string | null }
+  | { protected: false }
 );
 const root = path.resolve(import.meta.dir, "..");
 const preload = path.join(root, "scripts/offline-network-preload.ts");

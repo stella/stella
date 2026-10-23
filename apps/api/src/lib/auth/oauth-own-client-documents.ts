@@ -13,7 +13,8 @@ import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
  * without an https issuer has none; the CLI registers a client there.
  */
 export const getCliClientMetadataDocument = ():
-  CliClientMetadataDocument | undefined => {
+  | CliClientMetadataDocument
+  | undefined => {
   const clientId = cliClientMetadataUrl(getAuthIssuerUrl());
   return clientId ? buildCliClientMetadataDocument(clientId) : undefined;
 };

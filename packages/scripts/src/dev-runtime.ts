@@ -131,11 +131,9 @@ export const readOrCreateDevContentEncryptionKey = (
     }
     if (published.isErr()) {
       const cause = published.error.cause;
-      if (!(
-        cause instanceof Error &&
-        "code" in cause &&
-        cause.code === "EEXIST"
-      )) {
+      if (
+        !(cause instanceof Error && "code" in cause && cause.code === "EEXIST")
+      ) {
         return published;
       }
     }

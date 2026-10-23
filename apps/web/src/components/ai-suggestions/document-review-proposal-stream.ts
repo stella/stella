@@ -255,7 +255,8 @@ export type StreamReviewProposalArgs = {
  * so it reaches the caller here rather than as an `error` frame.
  */
 export type StreamReviewProposalResult =
-  { ok: true } | { ok: false; error: ToAPIErrorProps | null };
+  | { ok: true }
+  | { ok: false; error: ToAPIErrorProps | null };
 
 const proposalStreamUrl = (workspaceId: string): `/${string}` =>
   `/workspaces/${workspaceId}/document-reviews/positions/stream`;

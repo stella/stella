@@ -205,7 +205,8 @@ export const sitemapLastmod = ({
   localeTagByPath,
 }: SitemapLastmodOptions): SitemapLastmod => {
   let history:
-    { dateBySource: ReadonlyMap<string, string> | undefined } | undefined;
+    | { dateBySource: ReadonlyMap<string, string> | undefined }
+    | undefined;
   return {
     integration: {
       name: "sitemap-lastmod",

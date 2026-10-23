@@ -10,7 +10,11 @@ import { cn } from "../lib/utils";
  * has to relearn a palette when moving between panels.
  */
 export type ReviewStatusTone =
-  "neutral" | "success" | "warning" | "destructive" | "highlight";
+  | "neutral"
+  | "success"
+  | "warning"
+  | "destructive"
+  | "highlight";
 
 export type ReviewStatusVariant = "solid" | "outline" | "strong";
 export type ReviewStatusSize = "xs" | "sm";

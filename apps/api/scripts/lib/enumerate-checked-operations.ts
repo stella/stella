@@ -39,7 +39,8 @@ const resolveCheckerExport = ({
   sources,
   visited = new Set<string>(),
 }: ResolveCheckerExportOptions):
-  ConditionalOperation["checker"] | undefined => {
+  | ConditionalOperation["checker"]
+  | undefined => {
   const checker = checkerName(exportedName);
   if (moduleId === CHECKER_MODULE) {
     return checker;

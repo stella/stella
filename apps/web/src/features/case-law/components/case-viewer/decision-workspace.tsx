@@ -177,7 +177,8 @@ type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
 };
 
 export type DecisionWorkspaceProps =
-  EnabledDecisionWorkspaceProps | GatedDecisionWorkspaceProps;
+  | EnabledDecisionWorkspaceProps
+  | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
 /** A decision without a parsed body has no blocks to range over. */

@@ -88,7 +88,8 @@ const stringifyDifferently = (value: unknown): string =>
   );
 
 type ToolCallOutcome =
-  { outcome: typeof ACCEPTED; persisted: unknown } | { outcome: string };
+  | { outcome: typeof ACCEPTED; persisted: unknown }
+  | { outcome: string };
 
 /** Validate one server-authored call: the provider text plus the adapter's input. */
 const toolCallOutcome = ({

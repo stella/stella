@@ -57,7 +57,8 @@ export const corpusObjectState = ({
 };
 
 export type ColumnTrimDecision =
-  { type: "trim" } | { type: "skip"; reason: string };
+  | { type: "trim" }
+  | { type: "skip"; reason: string };
 
 type ColumnTrimInput = {
   text: CorpusObjectState;
@@ -149,7 +150,8 @@ export const planColumnTrim = ({
 };
 
 export type ColumnTrimGate =
-  { type: "allowed" } | { type: "refused"; reason: string };
+  | { type: "allowed" }
+  | { type: "refused"; reason: string };
 
 type ColumnTrimGateInput = {
   mode: CorpusStorageMode;

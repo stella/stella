@@ -30,7 +30,8 @@ type TransitionState = {
   lastMember: string | undefined;
   pending: Promise<void>;
 } & (
-  { phase: "settled" } | { phase: "awaiting-frame"; policy: TransitionPolicy }
+  | { phase: "settled" }
+  | { phase: "awaiting-frame"; policy: TransitionPolicy }
 );
 const transitions = new WeakMap<QueryClient, TransitionState>();
 const authFlowPages = new WeakMap<QueryClient, () => boolean>();

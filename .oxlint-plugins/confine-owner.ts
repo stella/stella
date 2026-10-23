@@ -567,7 +567,9 @@ const stableValue = (
 };
 
 type PropertyLookup =
-  { kind: "absent" } | { kind: "unknown" } | { kind: "value"; node: AstNode };
+  | { kind: "absent" }
+  | { kind: "unknown" }
+  | { kind: "value"; node: AstNode };
 
 // Absent and unknown stay distinct through nested spreads: an unresolved
 // spread may override what came before it, an absent property cannot.

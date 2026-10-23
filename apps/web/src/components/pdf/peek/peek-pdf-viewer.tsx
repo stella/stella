@@ -125,7 +125,8 @@ type PeekPdfViewerProps = {
   searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
-    ((summary: SearchMatchSummary) => void) | undefined;
+    | ((summary: SearchMatchSummary) => void)
+    | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
   onPeekNavigate?: (() => void) | undefined;
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
@@ -455,7 +456,8 @@ const PeekDocxViewer = ({
   plugins: readonly Plugin[] | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   onSearchMatchSummaryChange?:
-    ((summary: SearchMatchSummary) => void) | undefined;
+    | ((summary: SearchMatchSummary) => void)
+    | undefined;
   printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
   searchText: SearchTextQuery | undefined;

@@ -189,7 +189,8 @@ export const resolveView = (data: ResolveResults) => {
   }
 };
 export type CaseLawView =
-  ReturnType<typeof searchView> | ReturnType<typeof resolveView>;
+  | ReturnType<typeof searchView>
+  | ReturnType<typeof resolveView>;
 
 export type CourtSelection =
   | { type: "all" }

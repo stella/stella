@@ -22,7 +22,8 @@ import type { TranslationKey } from "@/i18n/types";
 import type { SelectPropertyOption } from "@/lib/types";
 
 export type ColumnDialogMode =
-  { type: "add" } | { type: "edit"; column: QuestionColumn };
+  | { type: "add" }
+  | { type: "edit"; column: QuestionColumn };
 
 const COLUMN_DIALOG_COPY = {
   add: {

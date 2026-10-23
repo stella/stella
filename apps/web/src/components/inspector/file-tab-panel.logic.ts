@@ -47,7 +47,11 @@ export const shouldRunFileAnonymizationPipeline = ({
   !isNativeDocxDisplay;
 
 export type FileTabNativePreviewKind =
-  "email" | "markdown" | "office" | "pdf" | "text";
+  | "email"
+  | "markdown"
+  | "office"
+  | "pdf"
+  | "text";
 
 export const getFileTabNativePreviewKind = ({
   fileName,

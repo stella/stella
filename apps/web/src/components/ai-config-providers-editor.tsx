@@ -35,7 +35,11 @@ const API_KEY_PLACEHOLDER = {
 } as const satisfies Record<ProviderValue, string>;
 
 export type ProviderRowStatus =
-  "idle" | "checking" | "valid" | "invalid" | "saved";
+  | "idle"
+  | "checking"
+  | "valid"
+  | "invalid"
+  | "saved";
 
 type AIConfigProvidersEditorProps = {
   compact?: boolean;

@@ -267,7 +267,8 @@ export const countChatTurnSettlement = (
  * stored outcome is counted, so the count matches the durable row.
  */
 export type ChatTurnStoredSettlement =
-  { type: "stored"; outcome: ChatTurnOutcome } | { type: "not-owned" };
+  | { type: "stored"; outcome: ChatTurnOutcome }
+  | { type: "not-owned" };
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {

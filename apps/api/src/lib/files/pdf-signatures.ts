@@ -90,7 +90,8 @@ export const findPdfRewriteBlocker = ({
 };
 
 export type SavePdfRewriteResult =
-  { status: "saved"; bytes: Uint8Array } | { status: PdfRewriteBlocker };
+  | { status: "saved"; bytes: Uint8Array }
+  | { status: PdfRewriteBlocker };
 
 /**
  * Fully rewrites `pdf`, or answers why it must stay as `source` is. Callers

@@ -51,7 +51,11 @@ export const BUDGET_NAMES = [
 
 export type BudgetName = (typeof BUDGET_NAMES)[number];
 export type BudgetKeyKind =
-  "user" | "client" | "account" | "bearer" | "address";
+  | "user"
+  | "client"
+  | "account"
+  | "bearer"
+  | "address";
 export type BudgetObservation = { name: BudgetName; keyKind: BudgetKeyKind };
 
 /** Only the bounded budget vocabulary crosses the telemetry boundary. */

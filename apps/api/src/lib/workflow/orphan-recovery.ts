@@ -47,7 +47,8 @@ type RunningLockReservationInput = {
 };
 
 type RunningLockReservation =
-  { status: "reserve"; expectedRunningValue: string } | { status: "skip" };
+  | { status: "reserve"; expectedRunningValue: string }
+  | { status: "skip" };
 
 export type PendingCellOwner = {
   ownerRunId: string | null;

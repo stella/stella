@@ -44,7 +44,8 @@ type KanbanSubgroupBoardProps = {
   matrix: KanbanBoardMatrix<WorkspaceEntity>;
   canCreateTaskInLane: (laneValue: string | null) => boolean;
   onChangeColumnColor?:
-    ((columnValue: string, color: OptionColor) => void) | undefined;
+    | ((columnValue: string, color: OptionColor) => void)
+    | undefined;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
   onDropCard: (
     entityId: string,
@@ -55,7 +56,8 @@ type KanbanSubgroupBoardProps = {
   onHideColumn: (columnValue: string) => void;
   onLoadMore: () => void;
   onRenameColumn?:
-    ((columnValue: string, newValue: string) => void) | undefined;
+    | ((columnValue: string, newValue: string) => void)
+    | undefined;
   onRenameEntity: (entityId: string, newName: string) => void;
   onReorderColumn: (
     sourceValue: string,
@@ -286,7 +288,8 @@ type WorkspaceKanbanColumnHeadingProps = {
   column: KanbanGroup;
   count: number;
   onChangeColor?:
-    ((columnValue: string, color: OptionColor) => void) | undefined;
+    | ((columnValue: string, color: OptionColor) => void)
+    | undefined;
   onHide: (columnValue: string) => void;
   onRename?: ((columnValue: string, newValue: string) => void) | undefined;
   onReorder: (

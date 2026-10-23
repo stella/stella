@@ -46,7 +46,8 @@ const SCAN_STATE_RECORD_FAILED_SINK = failureSink({
 export type ScannedObject = { scanState: "scanned"; key: FileKey };
 
 export type StoredObject =
-  ScannedObject | { scanState: "unscanned"; key: string };
+  | ScannedObject
+  | { scanState: "unscanned"; key: string };
 
 type StoredObjectRow = { key: string; scanState: StoredFileScanState };
 

@@ -49,7 +49,8 @@ type CreateDocumentMatterSuccess = Extract<
 >;
 
 export type CreateDocumentDestination =
-  { type: "matter"; matterId: string } | { type: "download" };
+  | { type: "matter"; matterId: string }
+  | { type: "download" };
 
 export type NeedsMatterMatter = {
   id: string;

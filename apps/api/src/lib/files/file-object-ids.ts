@@ -40,7 +40,8 @@ export type WritableFileFieldContent = Omit<
 };
 
 export type WritableFieldContent =
-  Exclude<FieldContent, { type: "file" }> | WritableFileFieldContent;
+  | Exclude<FieldContent, { type: "file" }>
+  | WritableFileFieldContent;
 
 export const allocateFileObject = (): MintedFileId =>
   brandMintedFileId(Bun.randomUUIDv7());

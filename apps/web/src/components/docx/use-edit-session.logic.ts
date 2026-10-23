@@ -34,7 +34,10 @@ export type EditSessionState =
     };
 
 export type EditSessionErrorReason =
-  "authRequired" | "permissionDenied" | "downloadFailed" | "unknown";
+  | "authRequired"
+  | "permissionDenied"
+  | "downloadFailed"
+  | "unknown";
 
 type EditSessionErrorSource = "open" | "download" | "finalize";
 

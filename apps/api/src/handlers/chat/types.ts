@@ -106,7 +106,8 @@ export type ChatAttachmentMetadata = {
 };
 
 export type ChatAttachmentPart =
-  ImagePart<ChatAttachmentMetadata> | DocumentPart<ChatAttachmentMetadata>;
+  | ImagePart<ChatAttachmentMetadata>
+  | DocumentPart<ChatAttachmentMetadata>;
 
 type SdkChatPart = MessagePart<ChatClientTools>;
 export type ChatTanStackPart =

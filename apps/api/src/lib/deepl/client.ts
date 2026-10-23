@@ -61,7 +61,11 @@ export const maskDeepLKey = (key: string): string => {
 
 /** Mirrors DeepL's `Formality` API parameter. */
 type DeepLFormality =
-  "default" | "more" | "less" | "prefer_more" | "prefer_less";
+  | "default"
+  | "more"
+  | "less"
+  | "prefer_more"
+  | "prefer_less";
 
 type TranslateDocumentInput = {
   apiKey: string;

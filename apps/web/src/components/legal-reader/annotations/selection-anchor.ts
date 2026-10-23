@@ -19,7 +19,9 @@ export type SelectionAnchor = {
 };
 
 export type ReaderSelectionContainmentAction =
-  "ignore" | "remember" | "restore";
+  | "ignore"
+  | "remember"
+  | "restore";
 
 type ReaderAnnotationActivationState = {
   selection: "collapsed" | "range";

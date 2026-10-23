@@ -80,7 +80,8 @@ type BilingualRowApplication = {
 };
 
 export type DocumentTranslationUnitApplication =
-  DocxSegmentApplication | BilingualRowApplication;
+  | DocxSegmentApplication
+  | BilingualRowApplication;
 
 export const DOCUMENT_TRANSLATION_LIMITS = {
   unitsMax: 3000,

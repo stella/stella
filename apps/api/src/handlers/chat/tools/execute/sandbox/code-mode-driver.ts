@@ -54,7 +54,8 @@ export type CreateStellaIsolateDriverProps = {
    * Without it a script gets the bare ReferenceError.
    */
   nameGuide?:
-    ((bindingNames: readonly string[]) => SandboxNameGuide) | undefined;
+    | ((bindingNames: readonly string[]) => SandboxNameGuide)
+    | undefined;
 };
 
 const buildRegistryFromBindings = (

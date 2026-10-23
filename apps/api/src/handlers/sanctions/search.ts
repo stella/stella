@@ -135,7 +135,8 @@ const screeningBusy = () =>
   });
 
 type PublicSanctionsSearchResult =
-  PublicSanctionsScreening | ReturnType<typeof screeningBusy>;
+  | PublicSanctionsScreening
+  | ReturnType<typeof screeningBusy>;
 
 const toPublicScreening = (
   screening: SanctionsScreening,

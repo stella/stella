@@ -536,7 +536,8 @@ if (!databaseUrl || !runPostgresTests) {
       let controlGatePid: number | undefined;
       let editedContactId: typeof contacts.$inferSelect.id | undefined;
       let drainFirstEditedContactId:
-        typeof contacts.$inferSelect.id | undefined;
+        | typeof contacts.$inferSelect.id
+        | undefined;
       let optedOutContactId: typeof contacts.$inferSelect.id | undefined;
       try {
         await controlDb.insert(organization).values({

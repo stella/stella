@@ -5,7 +5,9 @@ import type { PublicCrawlOptions } from "@/public-crawl-policy";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type CacheClass =
-  "private-no-store" | "public-anonymous" | "public-indexable";
+  | "private-no-store"
+  | "public-anonymous"
+  | "public-indexable";
 
 export const SSR_CACHE_CLASS_HEADER = "x-stella-cache-class";
 

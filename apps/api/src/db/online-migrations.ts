@@ -831,7 +831,8 @@ export const runOnlineMigrations = async (
   );
 
 type OnlineValidationOutcome =
-  { type: "validated" } | { type: "migrator_active" };
+  | { type: "validated" }
+  | { type: "migrator_active" };
 
 const VALIDATED = {
   type: "validated",

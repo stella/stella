@@ -296,7 +296,8 @@ const filtersForMode = (
     : filters;
 
 type SearchFiltersUpdate =
-  SearchFilters | ((filters: SearchFilters) => SearchFilters);
+  | SearchFilters
+  | ((filters: SearchFilters) => SearchFilters);
 
 type SearchResultsStatus =
   | { type: "hidden" }

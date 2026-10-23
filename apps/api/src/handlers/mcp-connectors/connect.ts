@@ -263,7 +263,8 @@ type LoadedConnector = {
   orgApprovedEndpointOrigins: string[] | null;
   oauthConfirmedEndpointOrigins: string[] | null;
   authorizationReviewStatus:
-    typeof mcpConnectorAuthorizationReviews.$inferSelect.status | null;
+    | typeof mcpConnectorAuthorizationReviews.$inferSelect.status
+    | null;
   url: string;
 };
 

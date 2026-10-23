@@ -14,7 +14,8 @@ type DelegationPolicyToolName = {
   [
     TName in NativeChatToolName
   ]: (typeof BUILT_IN_CHAT_TOOL_POLICY_KINDS)[TName] extends
-    "internal" | "mutation"
+    | "internal"
+    | "mutation"
     ? TName
     : never;
 }[NativeChatToolName];

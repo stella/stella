@@ -9,7 +9,8 @@ type UseDocxCompatibilityOptions = {
   editTargetKey: string;
   isPreviewPlaceholderData: boolean;
   onCompatibilityChange:
-    ((compatibility: DocxCompatibility) => void) | undefined;
+    | ((compatibility: DocxCompatibility) => void)
+    | undefined;
 };
 
 /** Folio's verdict on whether it can safely rewrite the loaded document. */

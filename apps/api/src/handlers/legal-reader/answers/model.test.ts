@@ -20,7 +20,12 @@ import { runReaderAnswerModel } from "./model";
 import type { ReaderAnswerModelInput } from "./model";
 
 type FixtureMode =
-  "tools" | "error" | "length" | "missing-terminal" | "empty" | "success";
+  | "tools"
+  | "error"
+  | "length"
+  | "missing-terminal"
+  | "empty"
+  | "success";
 type AdapterFixtureOptions = {
   mode: FixtureMode;
   turns: number[];

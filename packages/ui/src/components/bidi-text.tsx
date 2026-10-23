@@ -71,6 +71,9 @@ type ParagraphTextProps = Omit<React.ComponentPropsWithoutRef<"p">, "dir"> & {
 };
 
 type BidiTextProps =
-  BdiElementProps | SpanTextProps | DivTextProps | ParagraphTextProps;
+  | BdiElementProps
+  | SpanTextProps
+  | DivTextProps
+  | ParagraphTextProps;
 
 export type { BidiDirection, BidiTextProps };

@@ -172,7 +172,8 @@ export class EntityCheckCancelledError extends EntityCheckCancelledErrorBase<{
 }> {}
 
 export type EntityCheckSourceError =
-  EntityCheckUnavailableError | EntityCheckCancelledError;
+  | EntityCheckUnavailableError
+  | EntityCheckCancelledError;
 
 export const unavailable = ({
   reason,

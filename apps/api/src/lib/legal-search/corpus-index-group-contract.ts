@@ -143,7 +143,9 @@ export type ProvisionKeysGroupContract = GroupContractCommon & {
 };
 
 export type CorpusIndexGroupContract =
-  BaseGroupContract | CourtPartitionGroupContract | ProvisionKeysGroupContract;
+  | BaseGroupContract
+  | CourtPartitionGroupContract
+  | ProvisionKeysGroupContract;
 
 /** A group contract other than the manifest's own. */
 export type EnrolledGroupContract = Exclude<

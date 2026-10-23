@@ -13,7 +13,9 @@ import { ClientOperationError } from "@/lib/errors/client";
 export type OfficeViewerFormat = "pptx" | "xlsx";
 
 export type OfficeViewerStatus =
-  { type: "loading" } | { type: "ready" } | { type: "failed"; error: Error };
+  | { type: "loading" }
+  | { type: "ready" }
+  | { type: "failed"; error: Error };
 
 type OfficeViewerResourceLimits = {
   maxArchiveEntries?: number;

@@ -44,7 +44,9 @@ const RELATIONSHIPS_INSPECTION_FAILED: Match = {
 };
 
 type RelationshipEntryRead =
-  { type: "ok"; xml: string } | { type: "too-large" } | { type: "unreadable" };
+  | { type: "ok"; xml: string }
+  | { type: "too-large" }
+  | { type: "unreadable" };
 
 const isWordOpenXmlUpload = (context: ScanContext | undefined): boolean => {
   if (context === undefined) {

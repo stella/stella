@@ -178,7 +178,8 @@ type UseChatSessionOptions = {
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
-    (() => DocxEditRepresentation | undefined) | undefined;
+    | (() => DocxEditRepresentation | undefined)
+    | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;

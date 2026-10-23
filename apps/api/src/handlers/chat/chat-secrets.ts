@@ -28,7 +28,8 @@ type ChatSecretScope = {
 };
 
 export type ChatSecretReceipt =
-  { status: "provided"; secretRef: string } | { status: "declined" };
+  | { status: "provided"; secretRef: string }
+  | { status: "declined" };
 
 const receiptFromRow = ({
   id,

@@ -27,7 +27,9 @@ const SEARCH_SUMMARY_CITATION_MARKER = /\[(?<number>[1-9]\d*)\]/gu;
 const SEARCH_SUMMARY_SOURCE_NUMBER = /^\[(?<number>[1-9]\d*)\]/u;
 
 type InternalReferenceMode =
-  "references" | "unverified-citations" | "verified-citations";
+  | "references"
+  | "unverified-citations"
+  | "verified-citations";
 
 const isCitationHyperlink = (
   { href }: Hyperlink,
@@ -427,7 +429,8 @@ type StyleDocumentCitationsOptions = {
   /** Parsed from a persisted search-summary Sources block. This remains
    * untrusted unless `internalReferenceMode` is `verified-citations`. */
   trustedSearchSummaryCitationSources?:
-    readonly { number: number; source: string }[] | undefined;
+    | readonly { number: number; source: string }[]
+    | undefined;
   unverifiedCitationLabel: string;
 };
 

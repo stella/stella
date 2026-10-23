@@ -193,7 +193,12 @@ const resolveReviewTarget = async (
 };
 
 type ReviewResetKind =
-  "matters" | "contacts" | "clauses" | "templates" | "playbooks" | "sweep";
+  | "matters"
+  | "contacts"
+  | "clauses"
+  | "templates"
+  | "playbooks"
+  | "sweep";
 
 /** One row the reset could not delete, and why. */
 type ReviewResetFailure = {

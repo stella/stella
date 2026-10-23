@@ -238,7 +238,10 @@ export type DocxEditBlockReason = "pendingCompatibility" | "unsafe";
  * does not take edits at all.
  */
 export type DocxEditModeBlockReason =
-  DocxEditBlockReason | "collaboration" | "collaborationReadOnly" | "opening";
+  | DocxEditBlockReason
+  | "collaboration"
+  | "collaborationReadOnly"
+  | "opening";
 
 /**
  * The answer to "put this document into edit mode". A caller holding the
@@ -246,7 +249,8 @@ export type DocxEditModeBlockReason =
  * is something to tell the user before their input is thrown away.
  */
 export type DocxEditModeResult =
-  { type: "editing" } | { type: "blocked"; reason: DocxEditModeBlockReason };
+  | { type: "editing" }
+  | { type: "blocked"; reason: DocxEditModeBlockReason };
 
 export const getDocxEditBlockReason = ({
   canSafelyEdit,

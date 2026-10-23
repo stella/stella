@@ -161,7 +161,8 @@ type VerifyAttachmentOptions = {
 };
 
 export type AttachmentVerdict =
-  { type: "ok"; entry: ManifestEntry } | { type: "refused"; reason: string };
+  | { type: "ok"; entry: ManifestEntry }
+  | { type: "refused"; reason: string };
 
 export const verifyAttachment = ({
   evidenceDir,

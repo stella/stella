@@ -183,7 +183,9 @@ export type NullUnionStrategy = "json-schema" | "openapi";
 type EnumValueStrategy = "json-schema" | "string-only";
 export type ValueConstraintStrategy = "preserve" | "omit";
 export type ProviderJsonSchemaPurpose =
-  "structured-output" | "mock-structured-output" | "tool";
+  | "structured-output"
+  | "mock-structured-output"
+  | "tool";
 
 export type ProviderSafeJsonSchemaProjectionOptions = {
   enumValueStrategy?: EnumValueStrategy;

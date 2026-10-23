@@ -20,7 +20,8 @@ export { DEFAULT_SEARCH_SORT, SEARCH_SORTS, type SearchSort };
  * read, and the legislation corpus does not map the case-law one.
  */
 export type CorpusSearchOrder =
-  { type: "relevance" } | { type: "newest"; timestampField: string };
+  | { type: "relevance" }
+  | { type: "newest"; timestampField: string };
 
 export const RELEVANCE_ORDER = {
   type: "relevance",

@@ -1763,7 +1763,8 @@ const anonymizeToolResultTextContent = ({
 };
 
 type ParsedToolResultContent =
-  { type: "json"; value: unknown } | { type: "text"; value: string };
+  | { type: "json"; value: unknown }
+  | { type: "text"; value: string };
 
 const parseToolResultContent = (content: string): ParsedToolResultContent =>
   Result.try((): ParsedToolResultContent => ({

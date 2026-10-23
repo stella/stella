@@ -241,7 +241,11 @@ const InvoiceDetail = ({
   };
 
   type TransitionAction =
-    "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
+    | "finalize"
+    | "send"
+    | "mark_paid"
+    | "void"
+    | "revert_to_draft";
 
   const transitionMutation = useMutation({
     mutationFn: async (action: TransitionAction) => {

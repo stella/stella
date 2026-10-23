@@ -450,7 +450,11 @@ export const searchDecisionsHandler = async ({
 };
 
 type CaseLawSearchFacet =
-  "court" | "year" | "decisionType" | "source" | "language";
+  | "court"
+  | "year"
+  | "decisionType"
+  | "source"
+  | "language";
 
 export const CASE_LAW_SEARCH_FACETS = [
   "court",

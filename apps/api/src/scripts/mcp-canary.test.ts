@@ -65,7 +65,10 @@ type ReviewFailure = {
 };
 
 type ReviewCallbackMutation =
-  "missing-state" | "wrong-state" | "wrong-origin" | "wrong-path";
+  | "missing-state"
+  | "wrong-state"
+  | "wrong-origin"
+  | "wrong-path";
 type ReviewAttack = "maliciousDiscovery" | "maliciousConsent";
 
 const REVIEW_ATTACKS: readonly ReviewAttack[] = [

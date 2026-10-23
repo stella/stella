@@ -208,7 +208,8 @@ describe("tool call ids from a provider", () => {
     type TopLevel = `${Extract<StreamChunk, { toolCallId: string }>["type"]}`;
     type Covered = {
       [K in keyof typeof CALL_ID_CARRIER]: (typeof CALL_ID_CARRIER)[K] extends
-        "names" | "starts"
+        | "names"
+        | "starts"
         ? K
         : never;
     }[keyof typeof CALL_ID_CARRIER];

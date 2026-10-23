@@ -14,7 +14,9 @@ const foldPercentText = (raw: string): string =>
   ).join("");
 
 export const parseVatRatePercent = (raw: string): number | null => {
-  const parts = foldPercentText(raw).trim().split(/[.,٫]/u);
+  const parts = foldPercentText(raw)
+    .trim()
+    .split(/[.,٫]/u);
   const wholeText = parts.at(0);
   const fractionText = parts.at(1);
   if (

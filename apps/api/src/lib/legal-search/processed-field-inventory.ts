@@ -122,7 +122,8 @@ export type SkippedProcessedField = {
  * below, which is where a blank `how` or justification fails to compile.
  */
 export type ProcessedFieldDisposition =
-  ProvidedProcessedField | SkippedProcessedField;
+  | ProvidedProcessedField
+  | SkippedProcessedField;
 
 /** Recorded publisher bytes the conformance suite parses for the claim. */
 const recordedEvidence = (

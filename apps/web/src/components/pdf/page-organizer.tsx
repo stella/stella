@@ -117,7 +117,9 @@ type AddedSource = {
 };
 
 type EditorOperation =
-  { type: "idle" } | { type: "transforming" } | { type: "uploading" };
+  | { type: "idle" }
+  | { type: "transforming" }
+  | { type: "uploading" };
 
 type PDFPageOrganizerProps = {
   canSaveVersion: boolean;

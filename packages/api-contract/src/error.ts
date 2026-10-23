@@ -138,7 +138,11 @@ export type ApiErrorObjectValue = {
 } & Record<string, unknown>;
 
 export type ApiErrorValue =
-  ApiErrorObjectValue | ApiValidationErrorValue | string | null | undefined;
+  | ApiErrorObjectValue
+  | ApiValidationErrorValue
+  | string
+  | null
+  | undefined;
 
 export type ApiErrorInput = {
   status: number;

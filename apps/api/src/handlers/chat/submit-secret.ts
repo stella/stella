@@ -257,7 +257,8 @@ const readEnabledConnector = async ({
 };
 
 type SubmitOutcome =
-  { kind: "conflict" } | { kind: "receipt"; receipt: RequestSecretOutput };
+  | { kind: "conflict" }
+  | { kind: "receipt"; receipt: RequestSecretOutput };
 
 const submitOutcomeResult = (outcome: SubmitOutcome) =>
   outcome.kind === "conflict"

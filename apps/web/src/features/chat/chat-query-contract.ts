@@ -122,7 +122,8 @@ export type ChatThreadOptionsContext = {
   getContextMatterIds?: (() => string[]) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getDocxEditRepresentation?:
-    (() => DocxEditRepresentation | undefined) | undefined;
+    | (() => DocxEditRepresentation | undefined)
+    | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   /**

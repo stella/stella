@@ -225,7 +225,8 @@ export const getRecentFileRoute = ({
 });
 
 type DialogCloseActionState =
-  { status: "idle" } | { status: "pending"; run: () => void };
+  | { status: "idle" }
+  | { status: "pending"; run: () => void };
 
 export const createDialogCloseActionQueue = () => {
   let state: DialogCloseActionState = { status: "idle" };

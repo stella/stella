@@ -263,7 +263,8 @@ export type SchedulerDailySchedule = {
 };
 
 export type SchedulerSchedule =
-  SchedulerDailySchedule | SchedulerIntervalSchedule;
+  | SchedulerDailySchedule
+  | SchedulerIntervalSchedule;
 
 export type SchedulerPayload = Record<string, unknown>;
 

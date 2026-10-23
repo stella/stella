@@ -158,7 +158,8 @@ export type FolioCollabSnapshotTarget = Pick<
 >;
 
 type FolioCollabSnapshotStoreAuthority =
-  { type: "collab-service" } | { type: "participant"; userId: SafeId<"user"> };
+  | { type: "collab-service" }
+  | { type: "participant"; userId: SafeId<"user"> };
 
 type FolioCollabTokenIssueDb = {
   execute: (query: SQL) => Promise<unknown>;

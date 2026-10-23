@@ -20,7 +20,8 @@ export const splitFileName = (
 };
 
 export type FileRenameSubmission =
-  { type: "commit"; name: string } | { type: "discard" };
+  | { type: "commit"; name: string }
+  | { type: "discard" };
 
 type FileRenameSubmissionInput = {
   /** The raw draft the editor holds when Enter or a blur commits it. */

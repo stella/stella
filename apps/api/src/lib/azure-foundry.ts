@@ -5,7 +5,8 @@ import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 export const AZURE_FOUNDRY_DEFAULT_API_VERSION = "v1";
 
 export type AzureFoundryBaseURLResult =
-  { ok: true; baseURL: string } | { ok: false; error: string };
+  | { ok: true; baseURL: string }
+  | { ok: false; error: string };
 
 /**
  * Normalize an Azure AI Foundry / Azure OpenAI endpoint into the
@@ -46,7 +47,8 @@ export const normalizeAzureFoundryBaseURL = (
 };
 
 type EndpointPathResult =
-  { ok: true; pathname: string } | { ok: false; error: string };
+  | { ok: true; pathname: string }
+  | { ok: false; error: string };
 
 type NormalizeEndpointPathOptions = {
   hostname: string;
