@@ -401,10 +401,12 @@ export const useReaderAnnotations = (
         target: targetKey,
       });
       const created = next.items.at(-1)?.rowIds ?? [];
-      return commit(next, "create").map(() => created);
+      return await Promise.resolve(commit(next, "create").map(() => created));
     },
     remove: async (id: string) =>
-      commit(deleteGuestAnnotation(currentGuestStore(), id), "delete"),
+      await Promise.resolve(
+        commit(deleteGuestAnnotation(currentGuestStore(), id), "delete"),
+      ),
     rows: () =>
       guestAnnotationRows({
         authorName: t("legalReader.annotations.guestAuthor"),
@@ -412,7 +414,9 @@ export const useReaderAnnotations = (
         target: targetKey,
       }),
     update: async (input: UpdateAnnotationInput) =>
-      commit(updateGuestAnnotation(currentGuestStore(), input), "update"),
+      await Promise.resolve(
+        commit(updateGuestAnnotation(currentGuestStore(), input), "update"),
+      ),
   };
 
   // A failed write has already rolled the cache back and told the reader why

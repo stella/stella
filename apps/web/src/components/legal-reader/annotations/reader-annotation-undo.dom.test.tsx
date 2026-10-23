@@ -1,4 +1,3 @@
-/* oxlint-disable no-untranslated-jsx-literal/no-untranslated-jsx-literal -- Reader text fixture, never user-facing copy. */
 import { useRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -199,6 +198,9 @@ test("Mod+Z after highlighting a passage removes that highlight", async () => {
   const created = calls.at(0) ?? "";
   expect(created).toStartWith("create:highlight:");
   const rowId = created.split(":").at(-1);
+  if (rowId === undefined) {
+    throw new TypeError("Recorded create call is missing its row ID");
+  }
 
   await act(async () => {
     undoChord(document.body);

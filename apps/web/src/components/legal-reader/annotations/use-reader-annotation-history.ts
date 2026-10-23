@@ -101,7 +101,7 @@ export const useReaderAnnotationHistory = ({
   };
 
   /** A step the reader takes: written, then remembered once it holds. */
-  const recorded = (
+  const recorded = async (
     write: () => Promise<Result<ReaderAnnotationInverse | null, Error>>,
   ): Promise<void> => {
     const startedIn = scope;
@@ -118,28 +118,28 @@ export const useReaderAnnotationHistory = ({
       );
     })();
     inFlight.current.add(operation);
-    return operation.finally(() => {
+    await operation.finally(() => {
       inFlight.current.delete(operation);
     });
   };
 
-  const create = (input: CreateAnnotationInput) =>
-    recorded(async () =>
+  const create = async (input: CreateAnnotationInput) =>
+    await recorded(async () =>
       (await writes.create(input)).map((ids) => inverseOfCreate(input, ids)),
     );
-  const update = (input: UpdateAnnotationInput) => {
+  const update = async (input: UpdateAnnotationInput) => {
     // Read before the write: the store paints the change at once.
     const inverse = inverseOfUpdate(writes.rows(), input);
-    return recorded(async () =>
-      (await writes.update(input)).map(() => inverse),
-    );
+    await recorded(async () => (await writes.update(input)).map(() => inverse));
   };
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
     const inverse = inverseOfRemove(writes.rows(), id);
-    return recorded(async () => (await writes.remove(id)).map(() => inverse));
+    await recorded(async () => (await writes.remove(id)).map(() => inverse));
   };
 
-  const step = (direction: ReaderAnnotationHistoryDirection): Promise<void> => {
+  const step = async (
+    direction: ReaderAnnotationHistoryDirection,
+  ): Promise<void> => {
     const run = async () => {
       await Promise.allSettled([...inFlight.current]);
       const { scope: current, writes: store } = latest();
@@ -195,14 +195,14 @@ export const useReaderAnnotationHistory = ({
     };
     const next = queue.current.then(run, run);
     queue.current = next;
-    return next;
+    await next;
   };
 
   return {
     create,
-    redo: () => step("redo"),
+    redo: async () => await step("redo"),
     remove,
-    undo: () => step("undo"),
+    undo: async () => await step("undo"),
     update,
   };
 };
