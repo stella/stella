@@ -1455,6 +1455,8 @@
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@tanstack/react-virtual": "^3.14.13",
+        "@testing-library/dom": "10.4.2",
+        "@testing-library/react": "16.3.3",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "bun-types": "catalog:",
