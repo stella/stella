@@ -123,7 +123,7 @@ const insertUpload = async ({
     s3Key: createUserFileKey({
       fileId,
       mimeType: PDF_MIME_TYPE,
-      userId: ids.userA1,
+      organizationId: ids.orgA,
     }),
     sha256Hex: "b".repeat(64),
     sizeBytes: 12,

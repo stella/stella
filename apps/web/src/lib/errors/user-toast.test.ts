@@ -5,8 +5,13 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { MatterStewardHandoverContent } from "@/components/matter-steward-handover-content";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { toAPIError } from "@/lib/errors/api";
-import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
+import {
+  detachedUserAction,
+  notifyUserError,
+  resetUserErrorReportDedupeForTests,
+} from "@/lib/errors/user-toast";
 
 const FAILURE = "That did not work";
 
@@ -16,6 +21,7 @@ const settle = async () => {
 };
 
 afterEach(() => {
+  resetUserErrorReportDedupeForTests();
   mock.restore();
 });
 
@@ -34,8 +40,9 @@ describe("detachedUserAction", () => {
     await settle();
 
     expect(capture).toHaveBeenCalledWith(failure, {
-      type: "detached",
-      operation: "test.press",
+      feature: "web",
+      routeTemplate: "unknown",
+      type: "user-visible",
     });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls.at(0)?.[0]).toMatchObject({ type: "error" });
@@ -55,6 +62,101 @@ describe("detachedUserAction", () => {
 
     expect(capture).not.toHaveBeenCalled();
     expect(add).not.toHaveBeenCalled();
+  });
+});
+
+describe("notifyUserError", () => {
+  test("reports two different notices without errors", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, "First notice");
+    notifyUserError(undefined, "Second notice");
+
+    expect(capture).toHaveBeenCalledTimes(2);
+  });
+
+  test("reports the same notice without an error once", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, FAILURE);
+    notifyUserError(undefined, FAILURE);
+
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  test("reports the same notice once per occurrence", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, FAILURE, { occurrence: "first" });
+    notifyUserError(undefined, FAILURE, { occurrence: "first" });
+    notifyUserError(undefined, FAILURE, { occurrence: "second" });
+
+    expect(capture).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not report a boundary error again at the root", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const failure = new Error("render failed");
+    const report = (error: unknown) => capture(error);
+
+    reportErrorOnce(failure, report);
+    reportErrorOnce(failure, report);
+
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  test("reports a visible error once with explicit route metadata", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const failure = new Error("private detail");
+
+    notifyUserError(failure, FAILURE, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+    });
+    notifyUserError(failure, FAILURE, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+    });
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith(failure, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+      type: "user-visible",
+    });
+  });
+
+  test("reports an admission refusal while keeping its own notice", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("refusal-toast");
+    const refusal = toAPIError({
+      status: 403,
+      value: { code: "action_not_enabled", message: "private detail" },
+    });
+
+    expect(notifyUserError(refusal, FAILURE)).toBe(false);
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls.at(0)?.at(0)).toMatchObject({
+      id: "action_not_enabled",
+      type: "info",
+    });
   });
 });
 

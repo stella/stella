@@ -694,7 +694,8 @@ describe("merge-base preparation integration", () => {
       const gh = path.join(directory, "bin/gh");
       writeFileSync(
         gh,
-        '#!/usr/bin/env bash\nprintf \'%s\\n\' \'{"total_count":0,"artifacts":[],"workflow_runs":[]}\'\n',
+        // A paginated (--slurp) request receives its pages as one array.
+        '#!/usr/bin/env bash\nresponse=\'{"total_count":0,"artifacts":[],"workflow_runs":[]}\'\n[[ " $* " != *" --slurp "* ]] || response="[$response]"\nprintf \'%s\\n\' "$response"\n',
       );
       chmodSync(gh, 0o755);
       const summary = path.join(directory, "summary");
@@ -841,10 +842,11 @@ describe("merge-base preparation integration", () => {
 set -euo pipefail
 if [[ "$TEST_ARTIFACTS" == fail ]]; then exit 42; fi
 case "$*" in
+  *status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
   *actions/artifacts/3/zip*) cat "$TEST_ZIP_NEW" ;;
   *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
   *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
-  *actions/workflows/*) printf '%s\\n' "$TEST_RUNS" ;;
+  *actions/workflows/*) printf '[%s]\\n' "$TEST_RUNS" ;;
   *actions/runs/*) printf '%s\\n' "$TEST_RUN" ;;
   *) exit 1 ;;
 esac
@@ -941,7 +943,9 @@ esac
           ],
         }),
         TEST_RUNS: JSON.stringify({
-          workflow_runs: [{ event: "push", head_sha: firstBase }],
+          workflow_runs: [
+            { event: "push", head_sha: firstBase, conclusion: "success" },
+          ],
         }),
         TEST_RUN: JSON.stringify({
           path: ".github/workflows/network-baseline-deliver.yml",
@@ -1054,6 +1058,7 @@ esac
             workflow_runs: sources.map((head_sha) => ({
               event: "push",
               head_sha,
+              conclusion: "success",
             })),
           }),
         };
@@ -1164,9 +1169,10 @@ esac
         `#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
+  *status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
   *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
   *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
-  *actions/workflows/*) printf '%s\\n' "$TEST_RUNS" ;;
+  *actions/workflows/*) printf '[%s]\\n' "$TEST_RUNS" ;;
   *actions/runs/*) printf '%s\\n' "$TEST_RUN" ;;
   *) exit 1 ;;
 esac
@@ -1210,7 +1216,9 @@ esac
               ],
             }),
             TEST_RUNS: JSON.stringify({
-              workflow_runs: [{ event: "push", head_sha: source }],
+              workflow_runs: [
+                { event: "push", head_sha: source, conclusion: "success" },
+              ],
             }),
             TEST_RUN: JSON.stringify({
               path: ".github/workflows/network-baseline-deliver.yml",

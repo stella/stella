@@ -111,8 +111,9 @@ import {
   eraseCorrespondenceActorDisplays,
 } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
-import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
+import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -1255,25 +1256,32 @@ export const deleteUserFiles = async ({
       id: userFiles.id,
       s3Key: userFiles.s3Key,
       thumbnailFileId: userFiles.thumbnailFileId,
+      organizationId: chatThreads.organizationId,
       userId: userFiles.userId,
     })
     .from(userFiles)
+    .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
     .where(eq(userFiles.userId, currentUserId));
 
   if (files.length > 0) {
     s3KeysToDelete.push(
-      ...files.flatMap((file) =>
-        file.thumbnailFileId
-          ? [
-              file.s3Key,
-              createUserFileKey({
-                fileId: file.thumbnailFileId,
-                mimeType: "image/webp",
-                userId: brandPersistedUserId(file.userId),
-              }),
-            ]
-          : [file.s3Key],
-      ),
+      ...files
+        .flatMap((file) =>
+          file.thumbnailFileId
+            ? [
+                file.s3Key,
+                createUserFileThumbnailKey({
+                  sourceKey: file.s3Key,
+                  thumbnailFileId: file.thumbnailFileId,
+                  organizationId: brandPersistedOrganizationId(
+                    file.organizationId,
+                  ),
+                  uploaderUserId: brandPersistedUserId(file.userId),
+                }),
+              ]
+            : [file.s3Key],
+        )
+        .filter((key) => key !== null),
     );
   }
 

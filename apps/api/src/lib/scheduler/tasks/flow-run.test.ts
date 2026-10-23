@@ -130,6 +130,7 @@ describe("scheduled flow due day", () => {
       payload: { definitionId },
       enabled: true,
       pausedBy: null,
+      pausedSince: null,
       pausedUntil: null,
       pauseReason: null,
       nextRunAt,
