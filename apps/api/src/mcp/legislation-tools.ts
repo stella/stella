@@ -13,9 +13,11 @@ import {
   publicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
+import { statuteActNumber } from "@stll/api-contract/statute-act-number";
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { anchorProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
@@ -885,6 +887,32 @@ const provisionRequestKey = (item: ProvisionRequest): string =>
 type ProvisionItemBuildResult =
   { type: "item"; item: ProvisionItemResult } | { type: "invalid-cursor" };
 
+/**
+ * The provision's printed citation (`§ 1729 89/2012 Sb.`), beside its reader
+ * link: a source list names the link by it rather than by the link's host.
+ * Absent where the act has no number or its jurisdiction no citation profile.
+ */
+const provisionCitationField = ({
+  anchor,
+  country,
+  eli,
+}: {
+  anchor: string;
+  country: string;
+  eli: string;
+}): { citation?: string } => {
+  const work = statuteActNumber(eli);
+  const citation =
+    work === null
+      ? null
+      : anchorProvisionCitation({
+          anchor,
+          jurisdiction: country,
+          workIdentifier: work,
+        });
+  return citation === null ? {} : { citation };
+};
+
 const provisionItemResult = ({
   blocksByDocumentId,
   item,
@@ -958,12 +986,20 @@ const provisionItemResult = ({
         }),
         sourceUrl: version.sourceUrl,
       });
+      const cited = {
+        ...links,
+        ...provisionCitationField({
+          anchor: item.anchor,
+          country: version.country,
+          eli: item.eli,
+        }),
+      };
       if (!version.allowsDerivedAi) {
         return {
           type: "item",
           item: {
             ...subject,
-            ...links,
+            ...cited,
             message: WITHHELD_WORDING_MESSAGE,
             status: PROVISION_STATUS.textWithheld,
           },
@@ -1000,7 +1036,7 @@ const provisionItemResult = ({
         type: "item",
         item: {
           ...subject,
-          ...links,
+          ...cited,
           text: window.text,
           truncated: window.truncated,
           nextTextCursor: window.nextTextCursor,
@@ -1310,6 +1346,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
         }),
         sourceUrl: item.sourceUrl,
       }),
+      ...provisionCitationField({ anchor, country: item.country, eli }),
       documentId: item.documentId,
       resourceName: legislationResourceName(item.documentId),
       versionValidFrom: item.versionValidFrom,
