@@ -40,16 +40,16 @@ import {
   annotationProperty,
   DAY_MS,
   isExpired,
+  type QuarantineEntry,
+  type QuarantineRecord,
   quarantineRecordSchema,
   readRegistry,
+  type Registry,
   REGISTRY_FILE,
   REPOSITORY_ROOT,
   serializeRegistry,
   splitTestId,
   testId,
-  type QuarantineEntry,
-  type QuarantineRecord,
-  type Registry,
 } from "./flaky-test-quarantine";
 
 export const HISTORY_WINDOW_DAYS = 7;

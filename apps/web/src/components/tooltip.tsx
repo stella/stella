@@ -3,8 +3,8 @@ import type { PropsWithChildren } from "react";
 import type { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
 import {
-  TooltipPopup,
   Tooltip as TooltipRoot,
+  TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";

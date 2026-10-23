@@ -10,9 +10,9 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   foldRulingIdentity,
+  RULING_IDENTITY_VERSION,
   rulingGroupKeys,
   rulingKeysOf,
-  RULING_IDENTITY_VERSION,
 } from "./decision-ruling-identity";
 
 const decision = {

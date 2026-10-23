@@ -13,10 +13,10 @@ import {
   isTableChartPlanUsable,
   TABLE_CHART_KINDS,
   TABLE_CHART_LIMITS,
-  tableChartResponseSchema,
   type TableChartPlan,
   type TableChartRequest,
   type TableChartResponse,
+  tableChartResponseSchema,
 } from "@stll/api-contract/table-chart";
 import { sha256Hex } from "@stll/sha256/browser";
 import { Button } from "@stll/ui/button";

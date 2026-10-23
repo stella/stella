@@ -3,8 +3,8 @@ import {
   and,
   asc,
   eq,
-  gte,
   gt,
+  gte,
   inArray,
   isNotNull,
   isNull,
@@ -17,7 +17,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
@@ -64,9 +64,9 @@ import {
 } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_PROCESSING_QUEUE_NAME,
+  type DocumentProcessingJobData,
   enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
-  type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
 import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
@@ -90,8 +90,8 @@ import {
   ownsPromotedManualOcrClaim,
   requiresOcrPolicy,
   SEARCH_INDEX_ATTEMPT_TIMEOUT_MS,
-  SEARCHABLE_PDF_FAILURE_CODE,
   SEARCH_INDEX_FAILURE_CODE,
+  SEARCHABLE_PDF_FAILURE_CODE,
   shouldPreserveCurrentProjection,
 } from "@/api/lib/document-processing-queue-policy";
 import type { CurrentDocumentSource } from "@/api/lib/document-processing-queue-policy";
@@ -99,18 +99,18 @@ import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-r
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
 import {
   claimDocumentProcessingAttempt,
-  failDocumentProcessingAttempt,
-  failExhaustedQueuedRun,
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
   documentProcessingSleepMs,
+  failDocumentProcessingAttempt,
+  failExhaustedQueuedRun,
 } from "@/api/lib/document-processing-retry";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
-  writeOrganizationFile,
   type FileUsageInput,
   type OrganizationFileUsageError,
+  writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -361,9 +361,7 @@ const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
   claimToken: string,
   cancellationCode:
-    | "policy_disabled"
-    | "source_superseded"
-    | "workspace_unavailable",
+    "policy_disabled" | "source_superseded" | "workspace_unavailable",
 ): Promise<boolean> => {
   const cancelled = await database
     .update(documentProcessingRuns)
@@ -539,10 +537,7 @@ const readCurrentDocumentSource = async ({
 };
 
 type OcrProjectionPersistenceOutcome =
-  | "persisted"
-  | "preserved"
-  | "source_cancelled"
-  | "stale_claim";
+  "persisted" | "preserved" | "source_cancelled" | "stale_claim";
 
 const lockOcrProjectionSource = async (
   tx: RootTransaction,
