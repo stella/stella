@@ -121,7 +121,7 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
   writeFileSync(fixtureFile, JSON.stringify(fixtures));
   const output = path.join(directory, "output");
   writeFileSync(output, "");
-  // A mirror that waits would poll for 90 minutes: fail fast instead.
+  // A mirror that waits would poll until its bounded wait expires: fail fast instead.
   const child = Bun.spawnSync(["bash", "-e", "-o", "pipefail", "-c", script], {
     timeout: 60_000,
     env: {

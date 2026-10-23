@@ -35,7 +35,7 @@ jobs:
     name: Regenerate requested files
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
@@ -172,7 +172,7 @@ jobs:
       && (startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')
           || startsWith(github.event.pull_request.head.ref, 'dependabot/cargo/'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       DEPENDABOT_CHANGESET_PATH: .changeset/dependabot-dependencies-${{ github.event.pull_request.number }}.md
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
@@ -444,7 +444,7 @@ jobs:
       && needs.regenerate-scope.outputs.ready == 'true'
       && needs.regenerate-scope.outputs.needed != 'false'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 12
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       RUSTUP_TOOLCHAIN: 1.99.0

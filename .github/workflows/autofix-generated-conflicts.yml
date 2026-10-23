@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Listing takes about a minute; resolve runs are followed for at most 15
     # minutes and publish runs for 20.
-    timeout-minutes: 45
+    timeout-minutes: 13
     permissions:
       # Starting the per-branch resolve runs and the publish runs, and
       # reading their state and artifacts.

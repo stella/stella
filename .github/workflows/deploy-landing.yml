@@ -27,7 +27,7 @@ jobs:
     # The private workflow refuses non-main refs as well.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: read
     outputs:
@@ -76,7 +76,7 @@ jobs:
     if: needs.scope.outputs.affected == 'true'
     name: Build landing
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 8
     permissions:
       contents: read
     outputs:

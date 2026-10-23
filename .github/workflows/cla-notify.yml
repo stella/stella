@@ -12,6 +12,7 @@ concurrency:
 permissions: {}
 jobs:
   notify:
+    timeout-minutes: 5
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-24.04
     steps:

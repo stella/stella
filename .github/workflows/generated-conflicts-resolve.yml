@@ -38,7 +38,7 @@ jobs:
       && github.ref != 'refs/heads/main'
       && github.sha == inputs.head
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       contents: read
     env:
