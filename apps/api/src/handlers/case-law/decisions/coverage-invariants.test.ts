@@ -50,6 +50,7 @@ test("coverage year bounds cannot read capped facet years", async () => {
       },
     ],
     readArrivals: async () => new Map(),
+    readYearCompleteness: async () => new Map(),
     readFacets: async (country) =>
       Result.ok({
         country: [{ value: country, count: allFacetYears.length }],

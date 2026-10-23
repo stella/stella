@@ -524,6 +524,7 @@ test("per-year missing counts sum to the source missing count", () => {
         expect(missingFromYears).toBe(result.summary.missing);
       },
     ),
+    { numRuns: 100 },
   );
 });
 
