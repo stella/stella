@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import fc from "fast-check";
 
+import { classifyFailure } from "@stll/errors";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -235,6 +236,35 @@ describe("captureError issue grouping", () => {
     expect(firstExceptionValue()).toMatch(
       /^HandlerError\[upstream_unavailable\] 502 transient at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
     );
+  });
+
+  test("names a provider body by its provider status and code", () => {
+    // The shape a provider stream forwards as its run error's raw event: a
+    // plain object, so it has no class, code or frame of its own.
+    const providerBody = {
+      status: 400,
+      error: {
+        code: "invalid_value",
+        message: "Alex Doe <alex@example.test> privileged document text",
+        param: "input[3].call_id",
+        type: "invalid_request_error",
+      },
+    };
+    classifyFailure(providerBody, "provider_request_rejected");
+    captureError(providerBody);
+
+    const properties = captured.at(0)?.properties;
+    expect(firstExceptionValue()).toBe(
+      "UnknownError[invalid_value] 400 provider_request_rejected defect",
+    );
+    expect(properties).toMatchObject({
+      $exception_fingerprint: "UnknownError||||",
+      "error.provider.code": "invalid_value",
+      "error.provider.param": "input[3].call_id",
+      "error.provider.status": "400",
+      "error.provider.type": "invalid_request_error",
+    });
+    expect(JSON.stringify(properties)).not.toContain("alex@example.test");
   });
 
   test.each([
