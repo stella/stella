@@ -29,13 +29,13 @@ import {
   type ScopeOutput,
 } from "./ci-plan-scope";
 import {
-  GENERATORS,
+  allowedOutputs,
   CI_GENERATED_FILES,
   CI_GENERATED_OUTPUTS,
-  allowedOutputs,
-  GUARD_A_EXCLUSIONS,
   derivedPrerequisites,
+  GENERATORS,
   generatorsForFiles,
+  GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
   runGenerators,
@@ -636,7 +636,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .filter(Boolean);
   const changedPaths = [
     [
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "capability-catalog",
       "capability-runtime",
       "cli-registry",
@@ -685,7 +685,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
 
 test("the planned allowlist is exactly the selected committed output union", () => {
   for (const paths of [
-    ".oxfmtrc.json\n",
+    "bunfig.toml\n",
     "packages/api-contract/src/mcp-tool.ts\n",
     "docs/unrelated.md\n",
   ]) {

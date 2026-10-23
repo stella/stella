@@ -31,10 +31,7 @@ export type SafeOutboundAddress = {
 const MAX_OUTBOUND_URL_LENGTH = 2048;
 
 export type SafeOutboundFetchBody =
-  | ArrayBuffer
-  | string
-  | Uint8Array
-  | URLSearchParams;
+  ArrayBuffer | string | Uint8Array | URLSearchParams;
 export type SafeOutboundHeaders = Headers | Record<string, string>;
 
 export type SafeOutboundFetchResponse = {

@@ -60,8 +60,8 @@ import {
 import {
   authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
-  rootDb,
   rlsDb,
+  rootDb,
 } from "@/api/db/root";
 import {
   featureEnrolments,
@@ -110,9 +110,9 @@ import {
   getDemoAccountConfig,
 } from "@/api/lib/auth/demo-account";
 import {
-  requireDemoAccountAccess,
   createDemoAuthSessionGuard,
   createDemoSessionPolicy,
+  requireDemoAccountAccess,
 } from "@/api/lib/auth/demo-account-hooks";
 import {
   createDemoSessionFilter,
@@ -123,10 +123,10 @@ import {
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
 import {
-  requiresHandoffStepUpForAuthPath,
-  requiresHandoffStepUpForRequest,
   createHandoffStepUpGuard,
   HANDOFF_ACCESS_DETAIL,
+  requiresHandoffStepUpForAuthPath,
+  requiresHandoffStepUpForRequest,
 } from "@/api/lib/auth/handoff-step-up-policy";
 import {
   type createWebHandoffService,
@@ -162,8 +162,8 @@ import type { UserProfessionalUseState } from "@/api/lib/auth/professional-use";
 import {
   admitOpenClient,
   authorizationClientId,
-  requireAuthRetention,
   REGISTRATION_RETENTION_SCHEMA_PLUGIN,
+  requireAuthRetention,
   withAuthRetention,
 } from "@/api/lib/auth/registration-adapter";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
@@ -176,8 +176,8 @@ import {
   createReviewAccountDatabaseHooks,
   createReviewAccountPlugin,
   createReviewAccountUserPlugin,
-  REVIEW_ACCOUNT_SIGN_IN_BUDGET,
   requireReviewAccountAccess,
+  REVIEW_ACCOUNT_SIGN_IN_BUDGET,
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
@@ -193,6 +193,7 @@ import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
+import { createSessionTokenRedactionPlugin } from "@/api/lib/auth/session-token-redaction";
 import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
@@ -208,12 +209,12 @@ import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fiel
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  createDesktopLinkGrant,
   consumeDesktopLinkGrant,
+  createDesktopLinkGrant,
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import type {
-  CreateDesktopLinkGrantOptions,
   ConsumeDesktopLinkGrantOptions,
+  CreateDesktopLinkGrantOptions,
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
@@ -295,8 +296,8 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { typedPgArray } from "@/api/lib/search/sql";
 import {
-  assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
+  assertSelfhostEmailOtpAllowed,
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
@@ -2400,6 +2401,7 @@ export const createAuth = (
       ),
       oauthUiFragmentBridgePlugin,
       createSocialLinkHintPlugin(getOAuthState),
+      createSessionTokenRedactionPlugin(createAuthMiddleware),
       // Last, so it records the answer every other hook has settled on.
       createAuthRefusalLogPlugin(createAuthMiddleware),
     ],

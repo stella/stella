@@ -16,11 +16,11 @@ import {
   entities,
   entityVersions,
   fields,
-  properties,
-  workspaceMembers,
   folioCollabRooms,
   folioCollabRoomTokens,
+  properties,
   syntheticSessionControl,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";

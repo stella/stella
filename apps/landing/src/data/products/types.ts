@@ -114,8 +114,7 @@ export type ProductLink =
   | { to: "docx-editor" };
 
 type ProductLinkId =
-  | `product:${ProductSlug}`
-  | Exclude<ProductLink["to"], "product">;
+  `product:${ProductSlug}` | Exclude<ProductLink["to"], "product">;
 
 type ProductLinkForId<TId extends ProductLinkId> =
   TId extends `product:${infer TSlug extends ProductSlug}`

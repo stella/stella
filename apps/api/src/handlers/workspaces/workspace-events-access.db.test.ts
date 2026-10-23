@@ -10,9 +10,9 @@ import {
 
 import {
   newNotificationRealtimeEvent,
+  RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
-  RESOURCE_TYPE,
 } from "@stll/api-contract";
 
 import { rlsDb } from "@/api/db/root";
