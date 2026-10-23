@@ -380,7 +380,7 @@ test(
       false,
     );
     const indexes = unionScans.map(({ index }) => index);
-    expect(indexes).toContain("case_law_decisions_ecli_idx");
+    expect(indexes).toContain("case_law_decisions_ecli_upper_idx");
     expect(indexes).toContain("case_law_decision_identifiers_lookup_idx");
     assertPlan(
       accessPathViolations(

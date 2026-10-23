@@ -782,6 +782,12 @@ export const caseLawDecisions = p.pgTable(
       .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
+    // An identity lookup by ECLI ignores letter case (`Pl.US` and `PL.US`
+    // name one decision), while the column keeps the published spelling.
+    p
+      .index("case_law_decisions_ecli_upper_idx")
+      .on(sql`upper(${t.ecli})`)
+      .where(isNotNull(t.ecli)),
     // A bare docket's lookup reads its whole case file by this key, siblings
     // stored with their sheet included.
     p

@@ -40,11 +40,31 @@ const canonicalDockets = [
   "RV/7500368/2026",
 ] as const;
 
+/** ECLIs as their courts publish them, mixed-case ordinals included. */
 const eclis = [
   "ECLI:CZ:NS:2014:22.CDO.2653.2012.1",
+  "ECLI:CZ:NSS:2010:3.AFS.41.2008.98",
+  "ECLI:CZ:US:2025:Pl.US.32.25.1",
+  "ECLI:CZ:US:2020:3.US.1255.18.2",
   "ECLI:EU:C:2014:317",
   "ECLI:SK:NSSR:2020:1234567.1",
+  "ECLI:SK:USSR:2019:PL.US.12.2018.1",
 ] as const;
+
+/** The same identifier with each letter's case chosen independently. */
+const recasedOf = (identifier: string) =>
+  fc
+    .array(fc.boolean(), {
+      minLength: identifier.length,
+      maxLength: identifier.length,
+    })
+    .map((upper) =>
+      Array.from(identifier, (character, index) =>
+        upper[index] === true
+          ? character.toUpperCase()
+          : character.toLowerCase(),
+      ).join(""),
+    );
 
 /** A publisher's or a typist's spelling of the same identifier. */
 const spellingOf = (identifier: string) =>
@@ -263,6 +283,26 @@ describe("the hits that are the named decision", () => {
         hit("21 Cdo 470/2017"),
       ]),
     ).toHaveLength(1);
+  });
+
+  test("an ECLI names its decision in any letter case", () => {
+    fc.assert(
+      fc.property(
+        fc
+          .constantFrom(...eclis)
+          .chain((ecli) => fc.tuple(fc.constant(ecli), recasedOf(ecli))),
+        ([stored, typed]) => {
+          const named = hit("1 As 1/2000", stored);
+          expect(
+            exactDecisionMatches(identityOf(typed), [
+              named,
+              hit("2 As 2/2000", "ECLI:CZ:NSS:2000:2.AS.2.2000.1"),
+            ]),
+          ).toEqual([named]);
+        },
+      ),
+      propertyConfig(),
+    );
   });
 
   test("structural separators keep otherwise similar dockets distinct", () => {
