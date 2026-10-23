@@ -475,9 +475,14 @@ describe("terminology: catalogue copy quality", () => {
   });
 
   test("reports the expected replacement tone", () => {
-    expect(findForbiddenGuidance("Oops!", "Oops!", "en", rules)).toEqual([
-      guidance,
-    ]);
+    expect(
+      findForbiddenGuidance({
+        source: "Oops!",
+        target: "Oops!",
+        locale: "en",
+        rules,
+      }),
+    ).toEqual([guidance]);
   });
 
   test("allows concrete copy and non-emoji symbols", () => {

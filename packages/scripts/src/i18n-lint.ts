@@ -547,14 +547,22 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
   return rules;
 };
 
+type ForbiddenGuidanceOptions = {
+  source: string;
+  target: string;
+  locale: string;
+  rules: ForbiddenRule[];
+  key?: string;
+};
+
 /** Actionable guidance for the forbidden rules matched by a catalogue value. */
-export const findForbiddenGuidance = (
-  source: string,
-  target: string,
-  locale: string,
-  rules: ForbiddenRule[],
-  key?: string,
-): string[] => {
+export const findForbiddenGuidance = ({
+  source,
+  target,
+  locale,
+  rules,
+  key,
+}: ForbiddenGuidanceOptions): string[] => {
   const guidance = new Set<string>();
   for (const rule of rules) {
     if (
@@ -831,13 +839,13 @@ if (import.meta.main) {
           } else if (!isSuppressed(baseline, category, key, locale, entry)) {
             const guidance =
               category === "terminology"
-                ? findForbiddenGuidance(
-                    entry.source,
-                    entry.target,
+                ? findForbiddenGuidance({
+                    source: entry.source,
+                    target: entry.target,
                     locale,
                     rules,
                     key,
-                  )
+                  })
                 : [];
             const suffix =
               guidance.length > 0 ? ` (${guidance.join("; ")})` : "";
