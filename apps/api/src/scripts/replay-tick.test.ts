@@ -96,10 +96,10 @@ describe("scheduled replay entrypoint", () => {
     expect(stderr).not.toContain("S3_BUCKET");
   });
 
-  test("committed enrolment remains disabled for every source", () => {
+  test("committed enrolment previews only the Constitutional Court and enrols nothing", () => {
     expect(
-      new Set(Object.values(REPLAY_ENROLMENT).map(({ mode }) => mode)),
-    ).toEqual(new Set(["off"]));
+      Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
+    ).toEqual([[ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }]]);
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {
@@ -132,6 +132,7 @@ describe("scheduled replay entrypoint", () => {
       await runReplayTickScript({
         args: [],
         environment: enabledEnvironment,
+        policies: [{ mode: "off" }, { mode: "off" }],
         runEnabled,
         log: () => undefined,
       }),
