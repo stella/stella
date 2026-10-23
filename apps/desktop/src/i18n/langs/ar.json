@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "تعذّر على stella desktop فتح stella على الويب.",
     "errorReadState": "تعذّر على stella desktop قراءة حالته الحالية.",
     "errorRevealAppData": "تعذّر على stella desktop إظهار بيانات التطبيق.",
-    "errorUpdateAutostart": "تعذّر على stella desktop تحديث البدء عند تسجيل الدخول.",
     "errorUpdateLanguage": "تعذّر على stella desktop تحديث لغة الواجهة.",
     "errorUpdatePreferences": "تعذّر على stella desktop تحديث إعدادات الإشعارات.",
     "sendCrashReports": "إرسال تقارير الأعطال والأخطاء",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "فتح الإعدادات",
     "permissionDenied": "متوقف في إعدادات النظام.",
     "permissionManaged": "تديره مؤسستك",
+    "errorUpdateAutostart": "تعذّر على stella desktop تحديث البدء عند تسجيل الدخول.",
     "errorPermissions": "تعذّر على stella desktop قراءة هذا الإذن أو تغييره."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "فتح الإعدادات",
     "errorLoad": "تعذّر على stella desktop تحميل الإعداد.",
     "tryAgain": "إعادة المحاولة",
+    "fixTitle": "تم إيقاف إذن",
+    "fixBody": "يحتاج stella desktop إليه لشيء أعددته. أعد تشغيله، أو اختر «ليس الآن» حتى لا نسأل مجدداً.",
+    "notNow": "ليس الآن",
+    "introduceActivityTitle": "جديد: الخط الزمني للنشاط",
+    "introduceActivityBody": "أصبح النشاط متاحاً لحسابك. لا يُسجَّل أي شيء حتى تبدأه في نافذة النشاط.",
+    "openActivity": "فتح النشاط",
+    "guideWaiting": "شغّل stella desktop في القائمة أعلاه للسماح بتسهيلات الاستخدام.",
+    "guideAllowed": "stella desktop مسموح له",
     "never": {
       "screenRecording": "تسجيل الشاشة",
       "microphone": "الميكروفون",

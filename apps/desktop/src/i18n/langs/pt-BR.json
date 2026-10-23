@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "O stella desktop não conseguiu abrir a stella web.",
     "errorReadState": "O stella desktop não conseguiu ler seu estado atual.",
     "errorRevealAppData": "O stella desktop não conseguiu mostrar os dados do aplicativo.",
-    "errorUpdateAutostart": "O stella desktop não conseguiu atualizar o início ao fazer login.",
     "errorUpdateLanguage": "O stella desktop não conseguiu atualizar o idioma da interface.",
     "errorUpdatePreferences": "O stella desktop não conseguiu atualizar as configurações de notificação.",
     "sendCrashReports": "Enviar relatórios de falhas e erros",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Abrir configurações",
     "permissionDenied": "Desativado nas configurações do sistema.",
     "permissionManaged": "Gerenciado pela sua organização",
+    "errorUpdateAutostart": "O stella desktop não conseguiu atualizar o início ao fazer login.",
     "errorPermissions": "O stella desktop não conseguiu ler nem alterar esta permissão."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Abrir configurações",
     "errorLoad": "O stella desktop não conseguiu carregar a configuração.",
     "tryAgain": "Tentar novamente",
+    "fixTitle": "Uma permissão foi desativada",
+    "fixBody": "O stella desktop precisa dela para algo que você configurou. Ative-a novamente ou escolha Agora não para não perguntarmos mais.",
+    "notNow": "Agora não",
+    "introduceActivityTitle": "Novo: linha do tempo de atividade",
+    "introduceActivityBody": "A atividade agora está disponível para sua conta. Nada é registrado até você iniciá-la na janela de atividade.",
+    "openActivity": "Abrir atividade",
+    "guideWaiting": "Ative o stella desktop na lista acima para permitir Acessibilidade.",
+    "guideAllowed": "O stella desktop tem permissão",
     "never": {
       "screenRecording": "Gravação de tela",
       "microphone": "Microfone",

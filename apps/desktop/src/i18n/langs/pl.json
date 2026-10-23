@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "stella desktop nie mógł otworzyć stella web.",
     "errorReadState": "stella desktop nie mógł odczytać swojego bieżącego stanu.",
     "errorRevealAppData": "stella desktop nie mógł wyświetlić danych aplikacji.",
-    "errorUpdateAutostart": "stella desktop nie mogła zmienić uruchamiania przy logowaniu.",
     "errorUpdateLanguage": "stella desktop nie mógł zmienić języka interfejsu.",
     "errorUpdatePreferences": "stella desktop nie mógł zaktualizować ustawień powiadomień.",
     "sendCrashReports": "Wysyłaj raporty awarii i błędów",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Otwórz ustawienia",
     "permissionDenied": "Wyłączone w ustawieniach systemu.",
     "permissionManaged": "Zarządzane przez Twoją organizację",
+    "errorUpdateAutostart": "stella desktop nie mogła zmienić uruchamiania przy logowaniu.",
     "errorPermissions": "stella desktop nie mógł odczytać ani zmienić tego uprawnienia."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Otwórz ustawienia",
     "errorLoad": "stella desktop nie mógł wczytać konfiguracji.",
     "tryAgain": "Spróbuj ponownie",
+    "fixTitle": "Wyłączono uprawnienie",
+    "fixBody": "stella desktop potrzebuje go do czegoś, co skonfigurowano. Włącz je ponownie albo wybierz Nie teraz, aby nie pytać więcej.",
+    "notNow": "Nie teraz",
+    "introduceActivityTitle": "Nowość: oś czasu aktywności",
+    "introduceActivityBody": "Aktywność jest teraz dostępna dla Twojego konta. Nic nie jest zapisywane, dopóki nie uruchomisz jej w oknie aktywności.",
+    "openActivity": "Otwórz aktywność",
+    "guideWaiting": "Włącz stella desktop na liście powyżej, aby zezwolić na Dostępność.",
+    "guideAllowed": "stella desktop ma uprawnienie",
     "never": {
       "screenRecording": "Nagrywanie ekranu",
       "microphone": "Mikrofon",

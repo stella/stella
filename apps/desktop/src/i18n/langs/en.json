@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "stella desktop could not open stella web.",
     "errorReadState": "stella desktop could not read its current state.",
     "errorRevealAppData": "stella desktop could not reveal app data.",
-    "errorUpdateAutostart": "stella desktop could not update start-on-login.",
     "errorUpdateLanguage": "stella desktop could not update the interface language.",
     "errorUpdatePreferences": "stella desktop could not update notification settings.",
     "sendCrashReports": "Send crash and error reports",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Open settings",
     "permissionDenied": "Turned off in system settings.",
     "permissionManaged": "Managed by your organization",
+    "errorUpdateAutostart": "stella desktop could not update start-on-login.",
     "errorPermissions": "stella desktop could not read or change this permission."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Open settings",
     "errorLoad": "stella desktop could not load setup.",
     "tryAgain": "Try again",
+    "fixTitle": "A permission was turned off",
+    "fixBody": "stella desktop needs it for something you set up. Turn it back on, or choose Not now to stop asking.",
+    "notNow": "Not now",
+    "introduceActivityTitle": "New: activity timeline",
+    "introduceActivityBody": "Activity is now available for your account. Nothing is recorded until you start it in the activity window.",
+    "openActivity": "Open activity",
+    "guideWaiting": "Turn on stella desktop in the list above to allow Accessibility.",
+    "guideAllowed": "stella desktop is allowed",
     "never": {
       "screenRecording": "Screen recording",
       "microphone": "Microphone",

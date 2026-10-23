@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "stella desktop nepavyko atidaryti stella web.",
     "errorReadState": "stella desktop nepavyko nuskaityti dabartinės būsenos.",
     "errorRevealAppData": "stella desktop nepavyko parodyti programos duomenų.",
-    "errorUpdateAutostart": "stella desktop nepavyko atnaujinti paleidimo prisijungiant.",
     "errorUpdateLanguage": "stella desktop nepavyko pakeisti sąsajos kalbos.",
     "errorUpdatePreferences": "stella desktop nepavyko atnaujinti pranešimų nustatymų.",
     "sendCrashReports": "Siųsti strigčių ir klaidų ataskaitas",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Atidaryti nustatymus",
     "permissionDenied": "Išjungta sistemos nustatymuose.",
     "permissionManaged": "Tvarko jūsų organizacija",
+    "errorUpdateAutostart": "stella desktop nepavyko atnaujinti paleidimo prisijungiant.",
     "errorPermissions": "stella desktop nepavyko perskaityti arba pakeisti šio leidimo."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Atidaryti nustatymus",
     "errorLoad": "stella desktop nepavyko įkelti sąrankos.",
     "tryAgain": "Bandyti dar kartą",
+    "fixTitle": "Leidimas buvo išjungtas",
+    "fixBody": "stella desktop jo reikia tam, ką nustatėte. Vėl jį įjunkite arba pasirinkite Ne dabar, kad daugiau neklaustume.",
+    "notNow": "Ne dabar",
+    "introduceActivityTitle": "Nauja: veiklos laiko juosta",
+    "introduceActivityBody": "Veikla dabar pasiekiama jūsų paskyroje. Niekas neįrašoma, kol jos nepaleisite veiklos lange.",
+    "openActivity": "Atidaryti veiklą",
+    "guideWaiting": "Įjunkite stella desktop sąraše aukščiau, kad leistumėte pritaikymą neįgaliesiems.",
+    "guideAllowed": "stella desktop leidžiama",
     "never": {
       "screenRecording": "Ekrano įrašymas",
       "microphone": "Mikrofonas",

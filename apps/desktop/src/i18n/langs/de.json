@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "stella desktop konnte stella web nicht öffnen.",
     "errorReadState": "stella desktop konnte seinen aktuellen Status nicht lesen.",
     "errorRevealAppData": "stella desktop konnte die App-Daten nicht anzeigen.",
-    "errorUpdateAutostart": "stella desktop konnte den Start bei der Anmeldung nicht aktualisieren.",
     "errorUpdateLanguage": "stella desktop konnte die Sprache der Oberfläche nicht ändern.",
     "errorUpdatePreferences": "stella desktop konnte die Benachrichtigungseinstellungen nicht aktualisieren.",
     "sendCrashReports": "Absturz- und Fehlerberichte senden",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Einstellungen öffnen",
     "permissionDenied": "In den Systemeinstellungen ausgeschaltet.",
     "permissionManaged": "Von Ihrer Organisation verwaltet",
+    "errorUpdateAutostart": "stella desktop konnte den Start bei der Anmeldung nicht aktualisieren.",
     "errorPermissions": "stella desktop konnte diese Berechtigung nicht lesen oder ändern."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Einstellungen öffnen",
     "errorLoad": "stella desktop konnte die Einrichtung nicht laden.",
     "tryAgain": "Erneut versuchen",
+    "fixTitle": "Eine Berechtigung wurde ausgeschaltet",
+    "fixBody": "stella desktop braucht sie für etwas, das Sie eingerichtet haben. Schalten Sie sie wieder ein oder wählen Sie „Nicht jetzt“, damit nicht mehr gefragt wird.",
+    "notNow": "Nicht jetzt",
+    "introduceActivityTitle": "Neu: Aktivitätsübersicht",
+    "introduceActivityBody": "Aktivität ist jetzt für Ihr Konto verfügbar. Nichts wird aufgezeichnet, bis Sie sie im Aktivitätsfenster starten.",
+    "openActivity": "Aktivität öffnen",
+    "guideWaiting": "Schalten Sie stella desktop in der Liste oben ein, um Bedienungshilfen zu erlauben.",
+    "guideAllowed": "stella desktop ist erlaubt",
     "never": {
       "screenRecording": "Bildschirmaufnahme",
       "microphone": "Mikrofon",

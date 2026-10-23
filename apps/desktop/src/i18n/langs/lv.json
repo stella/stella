@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "stella desktop nevarēja atvērt stella web.",
     "errorReadState": "stella desktop nevarēja nolasīt savu pašreizējo stāvokli.",
     "errorRevealAppData": "stella desktop nevarēja rādīt lietotnes datus.",
-    "errorUpdateAutostart": "stella desktop neizdevās atjaunināt palaišanu piesakoties.",
     "errorUpdateLanguage": "stella desktop nevarēja mainīt saskarnes valodu.",
     "errorUpdatePreferences": "stella desktop nevarēja atjaunināt paziņojumu iestatījumus.",
     "sendCrashReports": "Sūtīt avāriju un kļūdu ziņojumus",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Atvērt iestatījumus",
     "permissionDenied": "Izslēgts sistēmas iestatījumos.",
     "permissionManaged": "Pārvalda jūsu organizācija",
+    "errorUpdateAutostart": "stella desktop neizdevās atjaunināt palaišanu piesakoties.",
     "errorPermissions": "stella desktop nevarēja nolasīt vai mainīt šo atļauju."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Atvērt iestatījumus",
     "errorLoad": "stella desktop nevarēja ielādēt iestatīšanu.",
     "tryAgain": "Mēģināt vēlreiz",
+    "fixTitle": "Atļauja tika izslēgta",
+    "fixBody": "stella desktop tā ir vajadzīga kaut kam, ko iestatījāt. Ieslēdziet to atkal vai izvēlieties Ne tagad, lai vairs nejautātu.",
+    "notNow": "Ne tagad",
+    "introduceActivityTitle": "Jaunums: aktivitāšu laika josla",
+    "introduceActivityBody": "Aktivitāte tagad ir pieejama jūsu kontā. Nekas netiek ierakstīts, līdz to palaižat aktivitāšu logā.",
+    "openActivity": "Atvērt aktivitāti",
+    "guideWaiting": "Ieslēdziet stella desktop sarakstā augstāk, lai atļautu pieejamību.",
+    "guideAllowed": "stella desktop ir atļauts",
     "never": {
       "screenRecording": "Ekrāna ierakstīšana",
       "microphone": "Mikrofons",

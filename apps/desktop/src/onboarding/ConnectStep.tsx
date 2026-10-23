@@ -98,6 +98,7 @@ export const ConnectStep = ({ onBack, onContinue, snapshot }: StepProps) => {
           </span>
         ) : (
           <Button
+            disabled={waiting}
             onClick={() => {
               void signIn();
             }}

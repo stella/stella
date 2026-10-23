@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "stella desktop nemohl otevřít stella web.",
     "errorReadState": "stella desktop nemohl přečíst svůj aktuální stav.",
     "errorRevealAppData": "stella desktop nemohl zobrazit data aplikace.",
-    "errorUpdateAutostart": "Aplikaci stella desktop se nepodařilo nastavit spouštění při přihlášení.",
     "errorUpdateLanguage": "stella desktop nemohl změnit jazyk rozhraní.",
     "errorUpdatePreferences": "stella desktop nemohl aktualizovat nastavení oznámení.",
     "sendCrashReports": "Odesílat hlášení pádů a chyb",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Otevřít nastavení",
     "permissionDenied": "Vypnuto v nastavení systému.",
     "permissionManaged": "Spravuje vaše organizace",
+    "errorUpdateAutostart": "Aplikaci stella desktop se nepodařilo nastavit spouštění při přihlášení.",
     "errorPermissions": "stella desktop nemohl přečíst nebo změnit toto oprávnění."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Otevřít nastavení",
     "errorLoad": "stella desktop nemohl načíst nastavení.",
     "tryAgain": "Zkusit znovu",
+    "fixTitle": "Oprávnění bylo vypnuto",
+    "fixBody": "stella desktop ho potřebuje pro něco, co jste nastavili. Znovu ho zapněte, nebo zvolte Teď ne a už se nebudeme ptát.",
+    "notNow": "Teď ne",
+    "introduceActivityTitle": "Novinka: přehled aktivity",
+    "introduceActivityBody": "Aktivita je teď pro váš účet dostupná. Nic se nezaznamenává, dokud ji nespustíte v okně aktivity.",
+    "openActivity": "Otevřít aktivitu",
+    "guideWaiting": "Zapněte stella desktop v seznamu výše a povolte tak Zpřístupnění.",
+    "guideAllowed": "stella desktop má povolení",
     "never": {
       "screenRecording": "Záznam obrazovky",
       "microphone": "Mikrofon",

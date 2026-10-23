@@ -11,7 +11,9 @@ import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import { ConnectStep } from "./ConnectStep";
 import { DoneStep } from "./DoneStep";
+import { FixView } from "./FixView";
 import { HowItWorksStep } from "./HowItWorksStep";
+import { IntroduceView } from "./IntroduceView";
 import { reportOnboardingFailure } from "./onboarding-telemetry";
 import {
   isOnboardingSnapshot,
@@ -126,6 +128,15 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
     }
   };
 
+  const close = async (
+    command: "onboarding_dismiss" | "onboarding_open_activity",
+  ) => {
+    const result = await Result.tryPromise(async () => invoke(command));
+    if (Result.isError(result)) {
+      reportOnboardingFailure();
+    }
+  };
+
   return (
     <main
       className={cn(
@@ -153,6 +164,33 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
           </div>
         );
       case "ready":
+        switch (flow.snapshot.mode.type) {
+          case "fix":
+            return (
+              <FixView
+                onDismiss={() => {
+                  void close("onboarding_dismiss");
+                }}
+                permissions={flow.snapshot.mode.permissions}
+              />
+            );
+          case "introduce":
+            return (
+              <IntroduceView
+                onDismiss={() => {
+                  void close("onboarding_dismiss");
+                }}
+                onOpenActivity={() => {
+                  void close("onboarding_open_activity");
+                }}
+              />
+            );
+          case "tour":
+            break;
+          default:
+            flow.snapshot.mode satisfies never;
+            return panic("Unknown onboarding mode.");
+        }
         return (
           <div
             className="motion-safe:animate-swap-in flex min-h-0 flex-1 flex-col"

@@ -10,11 +10,13 @@ use tauri::{AppHandle, Emitter, LogicalSize, Manager, State, webview::PageLoadEv
 
 use crate::device_preference::DevicePreference;
 use crate::feature_gate::{DesktopFeature, FeatureGates};
+use crate::permissions::{Permission, PermissionRow, PermissionStatus};
 
 pub const ONBOARDING_WINDOW_LABEL: &str = "onboarding";
 /// Payload-free: the window re-reads the snapshot.
 pub const CHANGED_EVENT: &str = "onboarding-changed";
 const PROGRESS_FILE_NAME: &str = "onboarding-v1.json";
+const HISTORY_FILE_NAME: &str = "onboarding-history-v1.json";
 const WINDOW_WIDTH: f64 = 620.0;
 const WINDOW_HEIGHT: f64 = 540.0;
 
@@ -135,11 +137,77 @@ pub enum Progress {
   Completed,
 }
 
+/// A feature setup explains on its own when it becomes available after the
+/// tour. Activity keeps its account-owned consent in its own window; this
+/// only introduces it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Introduction {
+  ActivityTimeline,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupHistory {
+  /// Permissions seen granted; one that goes missing reopens setup for it.
+  pub granted: Vec<Permission>,
+  pub introduced: Vec<Introduction>,
+}
+
+/// What the setup window shows: the tour, the permissions that were turned
+/// off since, or a feature that became available.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Mode {
+  Tour,
+  Fix { permissions: Vec<Permission> },
+  Introduce { feature: Introduction },
+}
+
+/// Needed permissions that were granted before and are not now.
+pub fn revoked(granted: &[Permission], rows: &[PermissionRow]) -> Vec<Permission> {
+  rows
+    .iter()
+    .filter(|row| {
+      granted.contains(&row.permission) && row.status != PermissionStatus::Granted
+    })
+    .map(|row| row.permission)
+    .collect()
+}
+
+/// What setup opens at launch, if anything.
+pub fn launch_mode(
+  progress: Progress,
+  history: &SetupHistory,
+  rows: &[PermissionRow],
+) -> Option<Mode> {
+  match progress {
+    Progress::InProgress { .. } => Some(Mode::Tour),
+    Progress::Completed => {
+      let permissions = revoked(&history.granted, rows);
+      (!permissions.is_empty()).then_some(Mode::Fix { permissions })
+    }
+  }
+}
+
+/// Remembers every permission granted now; a permission is forgotten only
+/// when the user declines to turn it back on.
+pub fn remember_granted(granted: &mut Vec<Permission>, rows: &[PermissionRow]) {
+  for row in rows {
+    if row.status == PermissionStatus::Granted && !granted.contains(&row.permission) {
+      granted.push(row.permission);
+    }
+  }
+}
+
 pub struct Onboarding {
   progress: Progress,
   /// The step the last snapshot reported; kept for this run only.
   shown: Option<Step>,
   preference: DevicePreference,
+  history: SetupHistory,
+  history_preference: DevicePreference,
+  mode: Mode,
 }
 
 pub type OnboardingState = Mutex<Onboarding>;
@@ -154,10 +222,33 @@ impl Onboarding {
       .unwrap_or(Progress::InProgress {
         resume: Step::Welcome,
       });
+    let history_preference =
+      DevicePreference::in_app_data(HISTORY_FILE_NAME);
+    let history = history_preference
+      .read()
+      .and_then(|stored| serde_json::from_str(&stored).ok())
+      .unwrap_or_default();
     Self {
+      history,
+      history_preference,
+      mode: Mode::Tour,
       progress,
       shown: None,
       preference,
+    }
+  }
+
+  fn update_history(&mut self, change: impl FnOnce(&mut SetupHistory)) {
+    let before = self.history.clone();
+    change(&mut self.history);
+    if self.history == before {
+      return;
+    }
+    let written = serde_json::to_string(&self.history)
+      .map_err(|error| error.to_string())
+      .and_then(|value| self.history_preference.write(&value));
+    if let Err(error) = written {
+      tracing::warn!(error = %error, "onboarding history could not be saved");
     }
   }
 
@@ -191,11 +282,23 @@ pub struct DocumentApp {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OnboardingSnapshot {
+  pub mode: Mode,
   pub step: Step,
   pub steps: Vec<Step>,
   pub linked: bool,
   pub activity_available: bool,
   pub document_app: Option<DocumentApp>,
+}
+
+async fn permission_rows(app: &AppHandle) -> Result<Vec<PermissionRow>, String> {
+  let probe = app.clone();
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::permissions::snapshot(&probe).rows
+  })
+  .await
+  .map_err(crate::logging::with_cause_logged(
+    "permission status could not be read",
+  ))
 }
 
 async fn flow_context(app: &AppHandle) -> FlowContext {
@@ -218,6 +321,7 @@ async fn flow_context(app: &AppHandle) -> FlowContext {
 
 async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
   let context = flow_context(app).await;
+  let rows = permission_rows(app).await?;
   let state = app.state::<OnboardingState>();
   let step = {
     let mut onboarding = locked(&state)?;
@@ -225,6 +329,7 @@ async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
     if step != onboarding.step() && onboarding.progress != Progress::Completed {
       onboarding.save(Progress::InProgress { resume: step });
     }
+    onboarding.update_history(|history| remember_granted(&mut history.granted, &rows));
     onboarding.shown = Some(step);
     step
   };
@@ -234,7 +339,9 @@ async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
     .unwrap_or(None);
   #[cfg(not(target_os = "macos"))]
   let document_app = None;
+  let mode = locked(&state)?.mode.clone();
   Ok(OnboardingSnapshot {
+    mode,
     step,
     steps: visible_steps(context, step),
     linked: context.linked,
@@ -264,6 +371,60 @@ pub fn show_if_pending(app: &AppHandle, background_launch: bool) {
     .lock()
     .is_ok_and(|onboarding| onboarding.progress != Progress::Completed);
   if pending {
+    show(app);
+  } else {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+      let rows = match permission_rows(&app).await {
+        Ok(rows) => rows,
+        Err(error) => {
+          tracing::warn!(error = %error, "onboarding permissions could not be read");
+          return;
+        }
+      };
+      let mode = {
+        let state = app.state::<OnboardingState>();
+        let Ok(mut onboarding) = state.lock() else {
+          return;
+        };
+        let mode = launch_mode(onboarding.progress, &onboarding.history, &rows);
+        onboarding.update_history(|history| remember_granted(&mut history.granted, &rows));
+        if let Some(mode) = &mode {
+          onboarding.mode = mode.clone();
+        }
+        mode
+      };
+      if mode.is_some() {
+        show(&app);
+      }
+    });
+  }
+}
+
+/// Introduces a feature the server turned on after the tour, once.
+pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
+  let introduction = match feature {
+    DesktopFeature::ActivityTimeline => Introduction::ActivityTimeline,
+    DesktopFeature::TimeBilling => return,
+  };
+  if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_some() {
+    return;
+  }
+  let introduce = {
+    let state = app.state::<OnboardingState>();
+    let Ok(mut onboarding) = state.lock() else {
+      return;
+    };
+    let introduce = onboarding.progress == Progress::Completed
+      && !onboarding.history.introduced.contains(&introduction);
+    if introduce {
+      onboarding.mode = Mode::Introduce {
+        feature: introduction,
+      };
+    }
+    introduce
+  };
+  if introduce {
     show(app);
   }
 }
@@ -345,6 +506,9 @@ async fn apply(app: &AppHandle, from: Step, input: Input) -> Result<(), String> 
   let context = flow_context(app).await;
   let state = app.state::<OnboardingState>();
   let mut onboarding = locked(&state)?;
+  if onboarding.mode != Mode::Tour {
+    return Ok(());
+  }
   if onboarding.progress == Progress::Completed {
     return Ok(());
   }
@@ -384,8 +548,55 @@ pub async fn onboarding_complete(
   app: AppHandle,
   state: State<'_, OnboardingState>,
 ) -> Result<(), String> {
+  let rows = permission_rows(&app).await?;
+  let activity = app
+    .state::<FeatureGates>()
+    .is_enabled(DesktopFeature::ActivityTimeline);
+  locked(&state)?.update_history(|history| {
+    remember_granted(&mut history.granted, &rows);
+    if activity && !history.introduced.contains(&Introduction::ActivityTimeline) {
+      history.introduced.push(Introduction::ActivityTimeline);
+    }
+  });
   locked(&state)?.save(Progress::Completed);
   close_window(&app);
+  Ok(())
+}
+
+/// Closes a fix or an introduction. A permission still off is forgotten so
+/// setup does not ask again at every launch; an introduction is not repeated.
+#[tauri::command]
+pub async fn onboarding_dismiss(app: AppHandle) -> Result<(), String> {
+  let rows = permission_rows(&app).await?;
+  let state = app.state::<OnboardingState>();
+  {
+    let mut onboarding = locked(&state)?;
+    let mode = std::mem::replace(&mut onboarding.mode, Mode::Tour);
+    onboarding.update_history(|progress| match mode {
+      Mode::Tour => {}
+      Mode::Fix { .. } => {
+        let still_off = revoked(&progress.granted, &rows);
+        progress
+          .granted
+          .retain(|permission| !still_off.contains(permission));
+      }
+      Mode::Introduce { feature } => {
+        if !progress.introduced.contains(&feature) {
+          progress.introduced.push(feature);
+        }
+      }
+    });
+  }
+  close_window(&app);
+  Ok(())
+}
+
+/// Opens the activity window from its introduction, where its own consent
+/// starts recording.
+#[tauri::command]
+pub async fn onboarding_open_activity(app: AppHandle) -> Result<(), String> {
+  onboarding_dismiss(app.clone()).await?;
+  crate::activity_window::show(&app);
   Ok(())
 }
 
@@ -632,5 +843,108 @@ mod tests {
       .unwrap(),
       serde_json::json!({ "status": "inProgress", "resume": "tryIt" })
     );
+  }
+
+  #[test]
+  fn setup_history_round_trips_independently_of_tour_progress() {
+    for history in [
+      SetupHistory::default(),
+      SetupHistory {
+        granted: vec![Permission::Notifications, Permission::Accessibility],
+        introduced: vec![Introduction::ActivityTimeline],
+      },
+    ] {
+      let stored = serde_json::to_string(&history).unwrap();
+      assert_eq!(serde_json::from_str::<SetupHistory>(&stored).unwrap(), history);
+    }
+  }
+
+  fn rows(statuses: &[(Permission, PermissionStatus)]) -> Vec<PermissionRow> {
+    statuses
+      .iter()
+      .map(|(permission, status)| PermissionRow {
+        permission: *permission,
+        status: *status,
+      })
+      .collect()
+  }
+
+  const STATUSES: [PermissionStatus; 5] = [
+    PermissionStatus::NotDetermined,
+    PermissionStatus::Granted,
+    PermissionStatus::Denied,
+    PermissionStatus::Managed,
+    PermissionStatus::NotApplicable,
+  ];
+
+  #[test]
+  fn only_a_permission_granted_before_and_not_now_is_revoked() {
+    for before in [false, true] {
+      for status in STATUSES {
+        let granted = if before {
+          vec![Permission::Notifications]
+        } else {
+          vec![]
+        };
+        let current = rows(&[(Permission::Notifications, status)]);
+        let expected = before && status != PermissionStatus::Granted;
+        assert_eq!(
+          revoked(&granted, &current) == vec![Permission::Notifications],
+          expected,
+          "{before} {status:?}"
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn launch_opens_the_tour_until_completed_and_then_only_for_revoked_permissions() {
+    let current = rows(&[
+      (Permission::Notifications, PermissionStatus::Denied),
+      (Permission::OpenAtLogin, PermissionStatus::Granted),
+    ]);
+    let mut history = SetupHistory {
+      granted: vec![Permission::Notifications, Permission::OpenAtLogin],
+      ..SetupHistory::default()
+    };
+    assert_eq!(
+      launch_mode(
+        Progress::InProgress { resume: Step::Welcome },
+        &history,
+        &current,
+      ),
+      Some(Mode::Tour)
+    );
+    assert_eq!(
+      launch_mode(Progress::Completed, &history, &current),
+      Some(Mode::Fix {
+        permissions: vec![Permission::Notifications]
+      })
+    );
+    history.granted = vec![Permission::OpenAtLogin];
+    assert_eq!(launch_mode(Progress::Completed, &history, &current), None);
+  }
+
+  #[test]
+  fn remembering_grants_adds_and_never_forgets() {
+    let mut granted = vec![Permission::Accessibility];
+    remember_granted(
+      &mut granted,
+      &rows(&[
+        (Permission::Notifications, PermissionStatus::Granted),
+        (Permission::Accessibility, PermissionStatus::Denied),
+        (Permission::OpenAtLogin, PermissionStatus::NotDetermined),
+      ]),
+    );
+    assert_eq!(
+      granted,
+      vec![Permission::Accessibility, Permission::Notifications]
+    );
+    let before = granted.clone();
+    remember_granted(
+      &mut granted,
+      &rows(&[(Permission::Notifications, PermissionStatus::Granted)]),
+    );
+    assert_eq!(granted, before);
   }
 }

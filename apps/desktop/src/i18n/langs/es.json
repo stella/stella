@@ -182,7 +182,6 @@
     "errorOpenStellaWeb": "stella desktop no pudo abrir stella web.",
     "errorReadState": "stella desktop no pudo leer su estado actual.",
     "errorRevealAppData": "stella desktop no pudo mostrar los datos de la app.",
-    "errorUpdateAutostart": "stella desktop no pudo actualizar el inicio de la aplicación al iniciar sesión.",
     "errorUpdateLanguage": "stella desktop no pudo cambiar el idioma de la interfaz.",
     "errorUpdatePreferences": "stella desktop no pudo actualizar la configuración de notificaciones.",
     "sendCrashReports": "Enviar informes de fallos y errores",
@@ -227,6 +226,7 @@
     "permissionOpenSettings": "Abrir ajustes",
     "permissionDenied": "Desactivado en los ajustes del sistema.",
     "permissionManaged": "Gestionado por su organización",
+    "errorUpdateAutostart": "stella desktop no pudo actualizar el inicio de la aplicación al iniciar sesión.",
     "errorPermissions": "stella desktop no pudo leer ni cambiar este permiso."
   },
   "clipboard": {
@@ -578,6 +578,14 @@
     "openSettings": "Abrir ajustes",
     "errorLoad": "stella desktop no pudo cargar la configuración.",
     "tryAgain": "Reintentar",
+    "fixTitle": "Se desactivó un permiso",
+    "fixBody": "stella desktop lo necesita para algo que configuró. Vuelva a activarlo o elija Ahora no para que no se le pregunte más.",
+    "notNow": "Ahora no",
+    "introduceActivityTitle": "Novedad: cronología de actividad",
+    "introduceActivityBody": "La actividad ya está disponible para su cuenta. No se registra nada hasta que la inicie en la ventana de actividad.",
+    "openActivity": "Abrir actividad",
+    "guideWaiting": "Active stella desktop en la lista de arriba para permitir Accesibilidad.",
+    "guideAllowed": "stella desktop tiene permiso",
     "never": {
       "screenRecording": "Grabación de pantalla",
       "microphone": "Micrófono",
