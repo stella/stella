@@ -12,8 +12,8 @@ import { actYearCondition } from "@/api/lib/legal-search/legislation-act-number"
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";

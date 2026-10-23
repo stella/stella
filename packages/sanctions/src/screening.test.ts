@@ -6,15 +6,15 @@ import { parseCzList } from "./cz";
 import type { EntityType, ParsedList, SanctionsEntry } from "./entry";
 import { parseEuList } from "./eu";
 import {
+  hasExcessQueryTokens,
   MAX_QUERY_CHARACTERS,
   MAX_QUERY_TOKENS,
-  hasExcessQueryTokens,
   nameReading,
 } from "./normalise";
 import {
-  DEFAULT_CUTOFF,
   buildScreeningIndex,
   buildScreeningIndexCooperatively,
+  DEFAULT_CUTOFF,
   screen,
 } from "./screening";
 import type { ScreeningQuery } from "./screening";

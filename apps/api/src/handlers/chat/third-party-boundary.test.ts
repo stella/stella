@@ -11,11 +11,11 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
-  toPersistedChatMessageContentV3,
   createChatAttachmentPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   applyChatToolPolicy,

@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
   mcpOAuthState,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -27,7 +27,7 @@ import {
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import {
-  MCP_OAUTH_BINDING_FAILURE_CODE,
+  bindDiscoveredMetadata,
   buildAuthorizeUrl,
   buildMcpClientMetadataDocument,
   clientRegistrationMode,
@@ -35,10 +35,10 @@ import {
   createOAuthState,
   createPkce,
   discoverOAuthMetadataForApproval,
-  bindDiscoveredMetadata,
-  getOAuthEndpointOrigins,
   getMcpClientMetadataDocumentUrl,
   getMcpOAuthRedirectUri,
+  getOAuthEndpointOrigins,
+  MCP_OAUTH_BINDING_FAILURE_CODE,
   mcpAuthorizationApprovalRequiredError,
   pickRequestedScopes,
   registerOAuthClient,
@@ -263,8 +263,7 @@ type LoadedConnector = {
   orgApprovedEndpointOrigins: string[] | null;
   oauthConfirmedEndpointOrigins: string[] | null;
   authorizationReviewStatus:
-    | typeof mcpConnectorAuthorizationReviews.$inferSelect.status
-    | null;
+    typeof mcpConnectorAuthorizationReviews.$inferSelect.status | null;
   url: string;
 };
 
