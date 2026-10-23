@@ -1,14 +1,12 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Clock3Icon } from "@stll/ui/icons";
 
-import { PermissionsSection } from "../mainview/PermissionsSection";
-import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
-import { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
-import { FeatureRow } from "./FeatureRow";
+import type { Permission } from "../shared/permissions";
+import { ActivityExplainer } from "./ActivityExplainer";
 
 type IntroduceViewProps = {
+  activityPermissions: readonly Permission[];
   onDismiss: () => void;
   onOpenActivity: () => void;
 };
@@ -19,6 +17,7 @@ type IntroduceViewProps = {
  * account.
  */
 export const IntroduceView = ({
+  activityPermissions,
   onDismiss,
   onOpenActivity,
 }: IntroduceViewProps) => {
@@ -26,23 +25,10 @@ export const IntroduceView = ({
   return (
     <>
       <h1 className="text-xl font-semibold">{t("introduceActivityTitle")}</h1>
-      <p className="text-muted-foreground mt-1 max-w-md text-sm leading-relaxed">
+      <p className="text-muted-foreground mt-1 mb-4 max-w-md text-sm leading-relaxed text-pretty">
         {t("introduceActivityBody")}
       </p>
-      <div className="bg-card mt-5 overflow-hidden rounded-xl border">
-        <FeatureRow
-          badge={
-            DESKTOP_PLATFORM === "mac" ? t("staysLocalMac") : t("staysLocalPc")
-          }
-          description={t("howActivityBody")}
-          icon={<Clock3Icon className="size-4" />}
-          title={t("howActivity")}
-        />
-        <PermissionsSection
-          only={["accessibility"]}
-          window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
-        />
-      </div>
+      <ActivityExplainer permissions={activityPermissions} />
       <div className="mt-auto flex justify-end gap-2 pt-5">
         <Button onClick={onDismiss} variant="ghost">
           {t("later")}

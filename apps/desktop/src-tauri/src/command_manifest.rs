@@ -43,6 +43,7 @@ macro_rules! with_stella_commands {
       onboarding::onboarding_open_settings => "onboarding_open_settings",
       onboarding::onboarding_dismiss => "onboarding_dismiss",
       onboarding::onboarding_open_activity => "onboarding_open_activity",
+      onboarding::onboarding_restart => "onboarding_restart",
       accessibility_guide::accessibility_guide_get_state => "accessibility_guide_get_state",
       i18n::get_desktop_language => "get_desktop_language",
       i18n::set_desktop_language => "set_desktop_language",

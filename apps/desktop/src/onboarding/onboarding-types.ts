@@ -7,6 +7,7 @@ export const ONBOARDING_STEPS = [
   "welcome",
   "connect",
   "howItWorks",
+  "activity",
   "permissions",
   "tryIt",
   "done",
@@ -32,6 +33,8 @@ export type OnboardingMode =
 
 export type OnboardingSnapshot = {
   activityAvailable: boolean;
+  /** Asked on the Activity step; the Permissions step shows the rest. */
+  activityPermissions: Permission[];
   mode: OnboardingMode;
   documentApp: DocumentApp | null;
   linked: boolean;
@@ -85,6 +88,8 @@ export const isOnboardingSnapshot = (
   value["steps"].every(isStep) &&
   typeof value["linked"] === "boolean" &&
   typeof value["activityAvailable"] === "boolean" &&
+  Array.isArray(value["activityPermissions"]) &&
+  value["activityPermissions"].every(isPermission) &&
   (value["documentApp"] === null || isDocumentApp(value["documentApp"]));
 
 /**

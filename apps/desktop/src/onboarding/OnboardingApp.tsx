@@ -9,6 +9,7 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
+import { ActivityStep } from "./ActivityStep";
 import { ConnectStep } from "./ConnectStep";
 import { DoneStep } from "./DoneStep";
 import { FixView } from "./FixView";
@@ -177,6 +178,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
           case "introduce":
             return (
               <IntroduceView
+                activityPermissions={flow.snapshot.activityPermissions}
                 onDismiss={() => {
                   void close("onboarding_dismiss");
                 }}
@@ -222,6 +224,8 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
         return <ConnectStep {...props} />;
       case "howItWorks":
         return <HowItWorksStep {...props} />;
+      case "activity":
+        return <ActivityStep {...props} />;
       case "permissions":
         return <PermissionsStep {...props} />;
       case "tryIt":
