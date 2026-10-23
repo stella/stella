@@ -24,8 +24,7 @@ export type ActionPeriodPolicy = {
  * the kind still identifies each admitted phase and its cost record.
  */
 export type ActionPeriodScope =
-  | { type: "per_kind" }
-  | { type: "pooled"; poolKey: string };
+  { type: "per_kind" } | { type: "pooled"; poolKey: string };
 
 export const PER_KIND_PERIOD_SCOPE = {
   type: "per_kind",

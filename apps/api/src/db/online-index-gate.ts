@@ -50,8 +50,7 @@ export const createOnlineIndexHold = (): OnlineIndexHoldRef => ({
  * boundary, which cannot be missing, or an injected reader.
  */
 export type OnlineIndexEbsSource =
-  | ConfiguredEbsConfiguration
-  | { type: "reader"; read: () => Promise<Signal> };
+  ConfiguredEbsConfiguration | { type: "reader"; read: () => Promise<Signal> };
 
 export type OnlineIndexGateOptions = {
   ebs: OnlineIndexEbsSource;
@@ -126,8 +125,7 @@ type ObservedIndexWorkOptions = {
   observer: OnlineMigrationConnection;
   pid: number;
   statement:
-    | string
-    | ((guardedConnection: OnlineMigrationConnection) => Promise<void>);
+    string | ((guardedConnection: OnlineMigrationConnection) => Promise<void>);
   config: OnlineIndexConfig;
   clock: () => number;
   readBalance: () => Promise<Signal>;

@@ -189,10 +189,7 @@ const runTauriSigner: CommandRunner = (cwd, file) => {
 };
 
 type DesktopReleaseCommand =
-  | "stamp"
-  | "configure-windows"
-  | "resign"
-  | "upload";
+  "stamp" | "configure-windows" | "resign" | "upload";
 
 const isDesktopReleaseCommand = (
   command: string,

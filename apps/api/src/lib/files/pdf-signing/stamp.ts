@@ -93,10 +93,7 @@ export type ViewerBox = {
 };
 
 export type StampPlacementRejection =
-  | "page_not_found"
-  | "off_page"
-  | "too_small"
-  | "too_large";
+  "page_not_found" | "off_page" | "too_small" | "too_large";
 
 export type StampPlacement =
   | {

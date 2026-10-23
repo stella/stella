@@ -247,8 +247,7 @@ const featureUnavailableToolResult = ({
   toolName,
   args,
 }: McpToolSurface & { toolName: string; args: Record<string, unknown> }):
-  | CallToolResult
-  | undefined => {
+  CallToolResult | undefined => {
   const definition = getStaticMcpToolDefinition(toolName, mode);
   if (
     isMcpDescriptorFeatureEnabled({

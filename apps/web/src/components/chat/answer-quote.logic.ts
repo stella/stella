@@ -140,8 +140,7 @@ export const locateQuoteInBlocks = (
   let first: Block | undefined;
   for (const piece of pieces) {
     let match:
-      | { block: Block | undefined; end: number; runIndex: number }
-      | undefined;
+      { block: Block | undefined; end: number; runIndex: number } | undefined;
     for (const [offset, candidate] of runs.slice(runIndex).entries()) {
       const candidateIndex = runIndex + offset;
       const candidateFrom = candidateIndex === runIndex ? from : 0;

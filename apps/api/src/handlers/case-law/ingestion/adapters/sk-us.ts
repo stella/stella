@@ -214,8 +214,7 @@ const FIELDS_TO_RETURN: string[] = [];
 // ── Cursor helpers ──────────────────────────────────────────
 
 type YearCursor = { year: number; offset: number } & (
-  | { status: "walking" }
-  | { status: "refused-frontier" }
+  { status: "walking" } | { status: "refused-frontier" }
 );
 
 const parseCursor = (cursor: string | null): YearCursor => {

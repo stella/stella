@@ -26,9 +26,7 @@ export const MAX_FINALIZE_ATTEMPTS = 3;
 const FINALIZE_LEASE_MS = 120_000;
 
 type StoredSignature =
-  | { status: "stored" }
-  | { status: "conflict" }
-  | { status: "closed" };
+  { status: "stored" } | { status: "conflict" } | { status: "closed" };
 
 /**
  * Keep the desktop's verified signature. The first one wins; a later call
