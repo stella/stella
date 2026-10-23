@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
@@ -23,7 +25,7 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 // withholding stella:external_mcps / stella:skills, so the dynamic gateway
 // loaders never run and no DB is touched.
 const contextWith = (
-  enabledRegistrySlugs: readonly string[] | undefined,
+  enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined,
   memberRole: McpRequestContext["memberRole"] = "owner",
 ): McpRequestContext =>
   asTestRaw<McpRequestContext>({
@@ -31,7 +33,7 @@ const contextWith = (
       ? {}
       : {
           loadEnabledRegistrySlugs: async () =>
-            await Promise.resolve(Result.ok(enabledRegistrySlugs)),
+            await Promise.resolve(readPresent(enabledRegistrySlugs)),
         }),
     grantedScopes: [],
     memberRole,
@@ -310,7 +312,7 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
       ...contextWith(undefined),
       loadEnabledRegistrySlugs: async () => {
         loads += 1;
-        return await Promise.resolve(Result.ok(["orsr"]));
+        return await Promise.resolve(readPresent(["orsr"]));
       },
     });
 
