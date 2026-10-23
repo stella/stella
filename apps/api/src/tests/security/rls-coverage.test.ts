@@ -856,6 +856,33 @@ describe("policy coverage", () => {
     }
   });
 
+  test("outbound actions inherit thread scope and permit select, insert and update", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) => policy.table_name === "outbound_actions",
+    );
+    expect(policies).toHaveLength(4);
+    for (const policy of policies) {
+      if (policy.command === "d") {
+        expect(policy.permissive).toBe(false);
+        expect(policy.using_expr).toBe("false");
+        continue;
+      }
+      const expression =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expression).toContain("chat_threads");
+      expect(expression).toContain("data_workspace_ids");
+      expect(expression).toContain(SETTING_USER_ID);
+      expect(expression).toContain(SETTING_ORGANIZATION_ID);
+      expect(expression).toContain(WORKSPACE_ACCESS_VIEW_NAME);
+    }
+    expect(
+      privilegesForTable(
+        await fetchStellaTablePrivileges(testDb),
+        "outbound_actions",
+      ),
+    ).toEqual(["INSERT", "SELECT", "UPDATE"]);
+  });
+
   test("daily targets require the active organization and owner or organization management", async () => {
     const policies = (await fetchStellaPolicies(testDb)).filter(
       (policy) => policy.table_name === "time_daily_targets",

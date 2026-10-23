@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adding outboundAction does not change parser IDs or parsed records.
 // parser-output-unchanged: Adding citation doctrine review, search-history, chat revision, reader answer and chat tool grant ID kinds does not change parser IDs or parsed records.
 import * as v from "valibot";
 
@@ -164,6 +165,7 @@ export type SafeIdType =
   | "numberSeries"
   | "reportExport"
   | "schedulerJobRun"
+  | "outboundAction"
   | "sharepointConnection"
   | "sharepointOAuthState"
   | "styleSet"

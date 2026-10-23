@@ -61,6 +61,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
   [
+    "apps/api/src/handlers/outbound-actions/routes.ts",
+    "Authenticated confirmation of a user's prepared outbound actions is available on every deployment",
+  ],
+  [
     "apps/api/src/handlers/desktop-time-entries/routes.ts",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
