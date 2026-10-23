@@ -246,7 +246,8 @@ const RESTRICTED_IMPORT_RULES = {
         ]),
         hit: EXPORT_HIT.binding,
       },
-      owners: [],
+      // Reads only the sidebar's own open-state cookie, a layout choice.
+      owners: ["apps/web/src/lib/sidebar-state.ts"],
     },
   ],
   // `<MatterIcon>` always resolves a matter colour (or paints the deliberate

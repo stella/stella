@@ -39,6 +39,7 @@ import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
+import { readSidebarStateAttribute } from "@/lib/sidebar-state";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
@@ -149,10 +150,13 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     // recovered hydration error. The server renders the document's own
     // language on pages that show one, and the interface locale otherwise;
     // data-lang-source tells prepaint-init.js to keep a document language.
+    // data-sidebar-state carries the sidebar's stored state from the server
+    // render to the browser (see lib/sidebar-state.ts).
     <html
       lang={lang}
       dir={dir}
       data-lang-source={langSource}
+      data-sidebar-state={readSidebarStateAttribute()}
       suppressHydrationWarning
     >
       <head>

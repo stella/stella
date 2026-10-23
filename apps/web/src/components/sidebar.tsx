@@ -28,13 +28,12 @@ import {
 } from "@stll/ui/sidebar";
 
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
+import { DEFAULT_SIDEBAR_OPEN } from "@/lib/sidebar-state";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-
-const DEFAULT_SIDEBAR_OPEN = true;
 
 /**
  * App glue around `@stll/ui/sidebar`'s generic shell: wires the app's
- * persisted (localStorage-backed) open state in as a controlled value. The
+ * persisted (cookie-backed) open state in as a controlled value. The
  * shell itself stays host-agnostic and does not persist anything on its own.
  */
 const SidebarProvider = ({
