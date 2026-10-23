@@ -18,12 +18,12 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   nullAsAbsent,
-  validationErrorResult,
   toolDataResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
-  defineValibotMcpTool,
   defineMcpToolOutput,
+  defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
 import { handoffLinkResult } from "@/api/mcp/web-handoff-links-core";
 

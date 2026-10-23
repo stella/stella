@@ -1,6 +1,6 @@
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as cheerio from "cheerio";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -27,16 +27,15 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
   IngestionResult,
-  SyncPage,
   ListingIdentity,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
@@ -47,6 +46,7 @@ import type {
   SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
+  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchNalus,
@@ -75,30 +75,30 @@ import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
   absentDecisionTextFields,
   absentTextField,
   checkedDecisionMetadata,
-  sourceTextField,
   type DecisionTextFields,
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
 import {
   READ_OUTCOME_METADATA_KEY,
-  readOutcomeOfStatus,
-  storedReadUnavailable,
   type ReadOutcome,
+  readOutcomeOfStatus,
   type ReadRefusalScope,
   type ReadUnavailableCause,
   type StoredReadOutcome,
+  storedReadUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type {
-  RawIngestionResult,
   DecisionJudgeInput,
+  RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";

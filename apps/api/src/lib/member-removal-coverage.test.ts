@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as agentSchema from "@/api/db/agent-auth-schema";
@@ -69,6 +69,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_research_answers.run",
   "case_law_research_columns.content",
   "case_law_research_columns.tool",
+  "case_law_sitemap_shard_counts.months",
   "case_law_sources.config",
   "case_law_sources.descriptor",
   "chat_thread_compactions.summary",

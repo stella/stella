@@ -4,7 +4,7 @@ import {
   NoSuchKey,
   type S3Client,
 } from "@aws-sdk/client-s3";
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { Readable } from "node:stream";
 import * as v from "valibot";
 
@@ -12,16 +12,16 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import {
-  MailAuthenticationError,
-  mailboxDomain,
   type MailAuthentication,
+  MailAuthenticationError,
   type MailAuthResult,
+  mailboxDomain,
   type MailVerifier,
 } from "@/api/lib/email/inbound/authentication";
 import {
+  type InboundDeliveryStore,
   ingestInboundMail,
   recordOversizedInboundMail,
-  type InboundDeliveryStore,
 } from "@/api/lib/email/inbound/ingest";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import { parseOneMailbox } from "@/api/lib/email/inbound/message";
