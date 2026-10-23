@@ -52,6 +52,13 @@ const ENTITY_FEATURE_GATE_MIGRATION =
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  // Installs the stored-key organization guard function and trigger without
+  // dynamic SQL or timeout changes.
+  "20261020000100_stored_keys_organization_scope/migration.sql:a8f5e5afd839562bffe89b8c47b72fa43ccc40ef80a824bf3279151ed3e1dcb5",
+  "20261020000100_stored_keys_organization_scope/migration.sql:5126fea771b35cdd4a26652f19b7bd1ceffa44d999dc79cfc56869f870c834ae",
+  // Checks stored-key ownership with bounded existence reads before the
+  // static constraint validations.
+  "20261020000200_stored_keys_organization_scope_validate/migration.sql:4fe1c7457c1ef05de1ae41b2c0975e3accd0d9961f57d58744f1197f0222efb6",
   // Renames legacy resource paths in stable order with collision checks and
   // transaction-local snapshots. Static writes retain the 1s lock and 30s
   // statement budgets; a timeout rolls back the entire cutover.
