@@ -722,6 +722,18 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     reason:
       "SET DEFAULT changes only the catalog default for future rows (no rewrite or scan) under a 1s lock_timeout.",
   },
+  {
+    migration: "20261022120000_professional_use_acceptance_source",
+    form: "add-column",
+    reason:
+      "Merged history adds a constant-default column as a catalog-only change under a 1s lock_timeout.",
+  },
+  {
+    migration: "20261022120000_professional_use_acceptance_source",
+    form: "add-constraint",
+    reason:
+      "Merged history adds the CHECK constraint NOT VALID under a 1s lock_timeout, then validates it separately.",
+  },
 ];
 export type LockBaselineEntry = {
   migration: string;
