@@ -7,14 +7,14 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 /** A broken matcher must not keep an otherwise useful API instance out forever. */
-export const SANCTIONS_STARTUP_WARMUP_BOUND_MS = 10 * 60 * 1000;
+const SANCTIONS_STARTUP_WARMUP_BOUND_MS = 10 * 60 * 1000;
 const SANCTIONS_STARTUP_POLL_MS = 1000;
 const STARTUP_SCREEN_FAILED_SINK = failureSink({
   event: "sanctions.startup_warmup_screen_failed",
   expected: [],
 });
 
-export type SanctionsStartupWarmupStatus =
+type SanctionsStartupWarmupStatus =
   | { status: "warming" }
   | {
       status: "terminal";

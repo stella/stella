@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
 
 type Fetch = (
   input: string | URL | Request,
@@ -16,7 +17,12 @@ const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const proveSanctionsStartup = async ({
   baseUrl,
-  fetch: request = fetch,
+  fetch: request = async (input, { signal, ...init } = {}) =>
+    await fetchWithTimeout(input, {
+      ...init,
+      signal: signal ?? undefined,
+      timeout: { type: "headers", ms: POLL_TIMEOUT_MS },
+    }),
   sleep = Bun.sleep,
   now = Date.now,
   pollIntervalMs = POLL_INTERVAL_MS,

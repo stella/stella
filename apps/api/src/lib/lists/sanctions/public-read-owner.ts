@@ -16,13 +16,15 @@ export const sanctionsStartupWarmup = createSanctionsStartupWarmup({
       },
       practiceJurisdictions: [],
     });
-    return result.unwrap().lists.map((list) => ({
-      ...list,
-      loaderState:
-        list.reason === null
-          ? null
-          : screenPublicSanctionsSubject.warmupStartupState(list.source),
-    }));
+    return result
+      .unwrap("Startup screening failure must be retried by the warmup owner")
+      .lists.map((list) => ({
+        ...list,
+        loaderState:
+          list.reason === null
+            ? null
+            : screenPublicSanctionsSubject.warmupStartupState(list.source),
+      }));
   },
   terminalize: screenPublicSanctionsSubject.warmupTerminalize,
 });

@@ -73,7 +73,7 @@ type WarmTarget = {
   terminal: boolean;
 };
 
-export type SanctionsEditionWarmupState = "warming" | "retrying" | "terminal";
+type SanctionsEditionWarmupState = "warming" | "retrying" | "terminal";
 
 type WarmFailure = {
   reason: SanctionsScreeningFailureCause;
