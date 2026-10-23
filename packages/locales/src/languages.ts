@@ -51,7 +51,12 @@ export const LANGUAGES = [
     endonym: "Aragonés",
     uiAvailable: false,
   },
-  { code: "as", englishName: "Assamese", endonym: "অসমীয়া", uiAvailable: false },
+  {
+    code: "as",
+    englishName: "Assamese",
+    endonym: "অসমীয়া",
+    uiAvailable: false,
+  },
   { code: "av", englishName: "Avaric", endonym: "Авар", uiAvailable: false },
   { code: "ae", englishName: "Avestan", endonym: "Avesta", uiAvailable: false },
   {
@@ -91,7 +96,12 @@ export const LANGUAGES = [
     endonym: "Bislama",
     uiAvailable: false,
   },
-  { code: "bo", englishName: "Tibetan", endonym: "བོད་ཡིག", uiAvailable: false },
+  {
+    code: "bo",
+    englishName: "Tibetan",
+    endonym: "བོད་ཡིག",
+    uiAvailable: false,
+  },
   {
     code: "bs",
     englishName: "Bosnian",
@@ -160,7 +170,12 @@ export const LANGUAGES = [
     uiLocale: "de",
   },
   { code: "dv", englishName: "Divehi", endonym: "ދިވެހި", uiAvailable: false },
-  { code: "dz", englishName: "Dzongkha", endonym: "རྫོང་ཁ", uiAvailable: false },
+  {
+    code: "dz",
+    englishName: "Dzongkha",
+    endonym: "རྫོང་ཁ",
+    uiAvailable: false,
+  },
   { code: "el", englishName: "Greek", endonym: "Ελληνικά", uiAvailable: false },
   {
     code: "en",
@@ -600,7 +615,12 @@ export const LANGUAGES = [
     uiAvailable: false,
   },
   { code: "sg", englishName: "Sango", endonym: "Sängö", uiAvailable: false },
-  { code: "sa", englishName: "Sanskrit", endonym: "संस्कृतम्", uiAvailable: false },
+  {
+    code: "sa",
+    englishName: "Sanskrit",
+    endonym: "संस्कृतम्",
+    uiAvailable: false,
+  },
   { code: "si", englishName: "Sinhala", endonym: "සිංහල", uiAvailable: false },
   {
     code: "sk",

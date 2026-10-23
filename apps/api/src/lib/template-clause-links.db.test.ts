@@ -88,7 +88,7 @@ const template = (id: SafeId<"template">, name: string) => ({
   organizationId,
   name,
   fileName: `${name}.docx`,
-  s3Key: `templates/${id}.docx`,
+  s3Key: `${organizationId}/templates/${id}.docx`,
   sizeBytes: 1,
   createdBy: userId,
 });

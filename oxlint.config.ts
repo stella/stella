@@ -19,13 +19,13 @@ import {
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
+  designLintBacklogOverrides,
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
   SIZE_LINT_POLICY_OVERRIDES,
   SIZE_LINT_RULES,
-  designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";
@@ -383,8 +383,8 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-decorated-search-input.fixture.tsx", [
     "no-decorated-search-input/no-decorated-search-input",
   ]),
-  fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
-    "no-legal-cliche-glyph/no-legal-cliche-glyph",
+  fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
+    "no-banned-glyph/no-banned-glyph",
   ]),
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
@@ -1282,6 +1282,7 @@ const config = defineConfig({
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
+    "no-unowned-icon/no-unowned-icon": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
     "no-direct-lucide-import/no-direct-lucide-import": "error",
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
@@ -1530,10 +1531,11 @@ const config = defineConfig({
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
+    "./.oxlint-plugins/no-unowned-icon.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
-    "./.oxlint-plugins/no-legal-cliche-glyph.ts",
+    "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
@@ -1547,6 +1549,7 @@ const config = defineConfig({
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
@@ -2185,6 +2188,17 @@ const config = defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      // Every Bun SQL client and bun-sql drizzle database comes from the
+      // owner, which decodes int8 by column mode (Bun 1.4.4 returns strings).
+      files: [
+        "apps/**/*.{ts,tsx,mts}",
+        "packages/**/*.{ts,tsx,mts}",
+        "scripts/**/*.{ts,mts}",
+        ".oxlint-plugins/__fixtures__/sql-client-owner.fixture.ts",
+      ],
+      rules: { "sql-client-owner/sql-client-owner": "error" },
     },
     {
       files: [
@@ -3267,21 +3281,21 @@ const config = defineConfig({
       },
     },
     {
-      // Scales of justice and gavels are the stock iconography of legal
-      // software: decorative, interchangeable, and drawn by every product in
-      // the category. This design system names the concept instead — a court
-      // is a Landmark, a decision a FileText. Scoped to the surfaces a reader
-      // sees, so a script or a fixture elsewhere is unaffected.
+      // Glyphs this design system never draws: scales of justice and gavels
+      // (legal cliché; a court is a Landmark, a decision a FileText) and
+      // robots (the AI is not a character; its actions use AiActionIcon).
+      // Scoped to the surfaces a reader sees, so a script or a fixture
+      // elsewhere is unaffected.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "packages/ui/src/**/*.{ts,tsx}",
         "packages/workspace-ui/src/**/*.{ts,tsx}",
         "apps/landing/src/**/*.{ts,tsx}",
         "apps/desktop/src/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-legal-cliche-glyph.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/no-banned-glyph.fixture.tsx",
       ],
       rules: {
-        "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
+        "no-banned-glyph/no-banned-glyph": "error",
       },
     },
     {

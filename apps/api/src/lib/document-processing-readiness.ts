@@ -9,9 +9,9 @@ import {
   isTransientRedisConnectionError,
 } from "@/api/lib/redis-client";
 import {
+  type CoordinationKey,
   coordinationKey,
   coordinationSetArguments,
-  type CoordinationKey,
 } from "@/api/lib/redis-keys";
 import { withTimeout } from "@/api/lib/with-timeout";
 
