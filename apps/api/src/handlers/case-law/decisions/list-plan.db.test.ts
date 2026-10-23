@@ -2,9 +2,13 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import type { Static } from "elysia";
 
 import { caseLawSources } from "@/api/db/schema";
-import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
+import {
+  listDecisionsPageQuery,
+  type listDecisionsQuerySchema,
+} from "@/api/handlers/case-law/decisions/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -17,6 +21,8 @@ import {
 const DECISIONS = 5000;
 const DB_TEST_TIMEOUT_MS = 120_000;
 const sourceId = createSafeId<"caseLawSource">();
+/** One decision in fifty: a court whose walk must be its own index range. */
+const SMALL_COURT = "Krajský soud v Brně";
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
@@ -35,11 +41,14 @@ beforeAll(
     await db.execute(sql`
       INSERT INTO case_law_decisions
         (id, source_id, case_number, citation_key, court, country, language,
-         language_group_key, decision_date, created_at)
+         language_group_key, decision_type, decision_date, created_at)
       SELECT gen_random_uuid(), ${sourceId}::uuid, i || ' Cdo ' || i || '/2020',
-        i || 'cdo' || i || '/2020', 'Nejvyšší soud',
-        CASE WHEN i % 4 = 0 THEN 'SVK' ELSE 'CZE' END, 'cs',
+        i || 'cdo' || i || '/2020',
+        CASE WHEN i % 50 = 2 THEN ${SMALL_COURT} ELSE 'Nejvyšší soud' END,
+        CASE WHEN i % 4 = 0 THEN 'SVK' ELSE 'CZE' END,
+        CASE WHEN i % 10 = 3 THEN 'en' ELSE 'cs' END,
         CASE WHEN i % 4 = 1 THEN NULL ELSE 'group:' || (i / 3)::text END,
+        CASE WHEN i % 3 = 0 THEN 'rozsudek' ELSE 'usnesení' END,
         DATE '2020-01-01' + (i % 97),
         TIMESTAMPTZ '2020-01-01' + (i || ' seconds')::interval
       FROM generate_series(1, ${DECISIONS}::int) AS i
@@ -102,6 +111,113 @@ test(
       row.languageGroupKey === null ? [] : [row.languageGroupKey],
     );
     expect(new Set(groupKeys).size).toBe(groupKeys.length);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+type BrowseQuery = Static<typeof listDecisionsQuerySchema>;
+type BrowseFilter = Exclude<keyof BrowseQuery, "cursor" | "limit" | "offset">;
+
+/** The indexes whose order is the walk's: a page is a range of one of them. */
+const WALK_SCAN =
+  /Index Scan Backward using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\n\s+Index Cond: ([^\n]+)/u;
+
+type FilterAccess =
+  | {
+      /** The index range itself narrows to the filter. */
+      type: "index-range";
+      query: BrowseQuery;
+      indexCond: RegExp;
+    }
+  | {
+      /** A filter on the walk: a page reads rows until it holds enough matches. */
+      type: "walk-filter";
+      query: BrowseQuery;
+      reason: string;
+    };
+
+/**
+ * How the browse walk serves each filter of the public query. Total over the
+ * schema's filters, so a new filter does not compile until it states which
+ * access path serves it, and the plan below proves the statement.
+ */
+const FILTER_ACCESS = {
+  country: {
+    type: "index-range",
+    query: { country: "CZE" },
+    indexCond: /\(country\)::text = 'CZE'::text/u,
+  },
+  court: {
+    type: "index-range",
+    query: { country: "CZE", court: SMALL_COURT },
+    indexCond: /\(court\)::text = 'Krajský soud v Brně'::text/u,
+  },
+  dateFrom: {
+    type: "index-range",
+    query: { country: "CZE", dateFrom: "2020-03-01" },
+    indexCond:
+      /COALESCE\(decision_date, '-infinity'::date\) >= '2020-03-01'::date/u,
+  },
+  dateTo: {
+    type: "index-range",
+    query: { country: "CZE", dateTo: "2020-01-20" },
+    indexCond:
+      /COALESCE\(decision_date, '-infinity'::date\) <= '2020-01-20'::date/u,
+  },
+  decisionType: {
+    type: "walk-filter",
+    query: { country: "CZE", decisionType: "rozsudek" },
+    reason: "a canonical kind folded from the stated type; no index holds it",
+  },
+  language: {
+    type: "walk-filter",
+    query: { country: "CZE", language: "en" },
+    reason: "no browse index is led by language",
+  },
+  sourceId: {
+    type: "walk-filter",
+    query: { country: "CZE", sourceId },
+    reason: "no browse index is led by source",
+  },
+} as const satisfies Record<BrowseFilter, FilterAccess>;
+
+const explainWalk = async (query: BrowseQuery) =>
+  await withPublicLawReaderRole(db, async (roleTx) => {
+    // SAFETY: the role transaction supplies the select surface the read uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+    const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+    const page = listDecisionsPageQuery({
+      query,
+      limit: 50,
+      cursor: undefined,
+      tx,
+    });
+    const natural = planLines(
+      await roleTx.execute(sql`EXPLAIN (COSTS OFF) ${page.getSQL()}`),
+    ).join("\n");
+    await roleTx.execute(sql`SET LOCAL enable_seqscan = off`);
+    const forced = planLines(
+      await roleTx.execute(sql`EXPLAIN (COSTS OFF) ${page.getSQL()}`),
+    ).join("\n");
+    return [natural, forced];
+  });
+
+test.each(Object.entries(FILTER_ACCESS))(
+  "the browse walk serves its %s filter from a range of a walk index",
+  async (_filter, access) => {
+    for (const plan of await explainWalk(access.query)) {
+      const walk = WALK_SCAN.exec(plan);
+      expect(walk, plan).not.toBeNull();
+      // Nothing above the walk re-sorts or re-reads the rows it returns, so
+      // the page limit stops the walk.
+      expect(plan.slice(0, walk?.index)).not.toMatch(
+        /\b(Sort|Bitmap Heap Scan)\b/u,
+      );
+      expect(plan).not.toContain("Seq Scan on case_law_decisions");
+      if (access.type === "index-range") {
+        expect(walk?.[2]).toMatch(access.indexCond);
+      }
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );
