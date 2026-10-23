@@ -232,6 +232,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    maxPages: 3,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
@@ -275,7 +276,7 @@ export const filesystemEntitiesOptions = (
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
+export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   infiniteQueryOptions({
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {
@@ -317,6 +318,7 @@ const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    maxPages: 3,
     // The key carries the visible fieldIds, so showing/hiding a column changes
     // it and refetches. Keep the previous rows on screen during that refetch
     // (and on filter/sort/paging changes) instead of dropping every group to
@@ -471,7 +473,7 @@ const fetchAllWorkspaceFolders = async ({
 // organizer payload.
 export const workspaceFoldersOptions = (workspaceId: string) =>
   queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "folders"],
+    queryKey: entitiesKeys.folders(workspaceId),
     queryFn: async ({ signal }) =>
       await fetchAllWorkspaceFolders({ signal, workspaceId }),
   });
@@ -529,7 +531,7 @@ const fetchAllWorkspaceFiles = async ({
 // whole matter, but no single request returns the whole file set.
 export const workspaceFilesOptions = (workspaceId: string) =>
   queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "files"],
+    queryKey: entitiesKeys.files(workspaceId),
     queryFn: async ({ signal }) =>
       await fetchAllWorkspaceFiles({ signal, workspaceId }),
   });

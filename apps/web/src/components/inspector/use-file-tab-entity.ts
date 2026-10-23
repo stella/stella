@@ -7,7 +7,6 @@ import type { WorkspaceFieldContent } from "@stll/workspace-ui/types";
 import {
   EMAIL_CHAT_MODE,
   getEmailChatMode,
-  getEmailExtractionRefetchInterval,
   shouldSurfaceEmailChatResolutionError,
 } from "@/components/inspector/email-html-viewer.logic";
 import { getEntityFileDownloadRenditions } from "@/components/inspector/file-download-service.logic";
@@ -111,11 +110,6 @@ export const useFileTabEntity = ({
   const query = useQuery({
     ...entityOptions(tab.workspaceId, tab.entityId),
     enabled: shouldQueryFileTabEntity(queryInput),
-    refetchInterval: ({ state }) =>
-      getEmailExtractionRefetchInterval({
-        extractionFileFieldId: state.data?.extractionFileFieldId,
-        isEmailViewerActive: queryInput.isEmailViewerActive,
-      }),
   });
   const entityState = useMemo(
     () =>

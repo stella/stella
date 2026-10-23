@@ -40,8 +40,6 @@ type WorkflowKey = { workspaceId: string };
 type WorkflowTargetCountOptionsInput =
   QueryOptionsInput<WorkflowTargetCountKey>;
 
-const WORKFLOW_STATUS_POLL_INTERVAL_MS = 2000;
-
 export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
   queryOptions({
     queryKey: workspaceKeys.workflow(key.workspaceId),
@@ -115,8 +113,6 @@ export const useIsWorkflowRunning = (inputWorkspaceId?: string) => {
 export const useWorkflowStatus = (workspaceId: string) =>
   useQuery({
     ...workflowOptions({ key: { workspaceId } }),
-    refetchInterval: (query) =>
-      query.state.data?.running ? WORKFLOW_STATUS_POLL_INTERVAL_MS : false,
   });
 
 type JustificationsOptionsInput = QueryOptionsInput<JustificationsKey>;

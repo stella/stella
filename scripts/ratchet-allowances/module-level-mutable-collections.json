@@ -1,0 +1,5 @@
+{
+  "metric": "module-level-mutable-collections",
+  "delta": 1,
+  "reason": "The workspace mutation census keeps one module-level set while loading mutation modules so it can record every exported mutation hook exactly once and enforce bounded invalidations across the complete workspace mutation surface."
+}
