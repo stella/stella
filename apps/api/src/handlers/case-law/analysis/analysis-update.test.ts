@@ -195,7 +195,7 @@ describe("applyAnalysisUpdate", () => {
     expect(calls.claims).toBe(1);
     expect(calls.saves).toHaveLength(1);
     expect(calls.saves[0]?.contentHash).toBe(CONTENT_HASH);
-    expect(outcome.analysis.version).toBe(3);
+    expect(outcome.analysis.version).toBe(4);
     expect(outcome.analysis.inputFingerprint).toBe(FINGERPRINT);
     expect(outcome.analysis.model).toBe("some-provider/some-model");
     expect(outcome.analysis.holding.language).toBe("cs");

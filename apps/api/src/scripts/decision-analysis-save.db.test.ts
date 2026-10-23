@@ -155,7 +155,7 @@ describe("storing an analysis against the decision row", () => {
       submission,
     });
 
-  test("writes a version 3 analysis onto an empty row", async () => {
+  test("writes a version 4 analysis onto an empty row", async () => {
     const decisionId = await insertDecision(null);
 
     expect((await save(decisionId)).kind).toBe("saved");
@@ -165,7 +165,7 @@ describe("storing an analysis against the decision row", () => {
     if (stored === null || "status" in stored) {
       return;
     }
-    expect(stored.version).toBe(3);
+    expect(stored.version).toBe(4);
     expect(stored.inputFingerprint).toBe(FINGERPRINT);
     expect(stored.model).toBe("some-provider/some-model");
   });
