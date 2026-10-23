@@ -5994,6 +5994,7 @@
       "downloadFailed": "Allalaadimine ebaõnnestus",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
+      "emptyFile": "Fail on tühi.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",

@@ -5994,6 +5994,7 @@
       "downloadFailed": "Stažení se nezdařilo",
       "downloadPdf": "Stáhnout jako PDF",
       "downloadSearchablePdf": "Prohledávatelné PDF",
+      "emptyFile": "Soubor je prázdný.",
       "includeReferenceNumber": "Přidat referenční číslo",
       "itemLimitReached": "Tento spis dosáhl limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",
