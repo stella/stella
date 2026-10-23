@@ -237,8 +237,37 @@ fn detected_apps() -> Vec<DetectedApp> {
     .collect()
 }
 
-/// Windows records each app's microphone use in the consent store; an app
-/// whose last use has a start but no stop is capturing now.
+/// One app's last microphone use as the Windows consent store records it.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+struct ConsentRecord {
+  /// A package family name, or for desktop apps the executable path with
+  /// `#` in place of `\`.
+  name: String,
+  packaged: bool,
+  last_used_start: Option<u64>,
+  last_used_stop: Option<u64>,
+}
+
+/// An app whose last use has a start but no stop is capturing now.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn capturing_windows_apps(records: &[ConsentRecord]) -> Vec<DetectedApp> {
+  records
+    .iter()
+    .filter(|record| {
+      record.last_used_start.is_some_and(|start| start != 0)
+        && record.last_used_stop == Some(0)
+    })
+    .filter_map(|record| {
+      if record.packaged {
+        Some(record.name.as_str())
+      } else {
+        record.name.rsplit('#').next()
+      }
+    })
+    .filter_map(classify_windows)
+    .collect()
+}
+
 #[cfg(target_os = "windows")]
 fn detected_apps() -> Vec<DetectedApp> {
   use windows_registry::{CURRENT_USER, Key};
@@ -246,39 +275,31 @@ fn detected_apps() -> Vec<DetectedApp> {
   const CONSENT_STORE: &str = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone";
   const NON_PACKAGED: &str = "NonPackaged";
 
-  let capturing = |key: &Key| {
-    key
-      .get_u64("LastUsedTimeStart")
-      .is_ok_and(|start| start != 0)
-      && key.get_u64("LastUsedTimeStop").is_ok_and(|stop| stop == 0)
-  };
-  let capturing_children = |parent: &Key| -> Vec<String> {
-    parent
-      .keys()
-      .map(|names| {
-        names
-          .filter(|name| name.as_str() != NON_PACKAGED)
-          .filter(|name| parent.open(name).is_ok_and(|key| capturing(&key)))
-          .collect()
+  let children = |parent: &Key, packaged: bool| -> Vec<ConsentRecord> {
+    let Ok(names) = parent.keys() else {
+      return Vec::new();
+    };
+    names
+      .filter(|name| name.as_str() != NON_PACKAGED)
+      .filter_map(|name| {
+        let key = parent.open(&name).ok()?;
+        Some(ConsentRecord {
+          last_used_start: key.get_u64("LastUsedTimeStart").ok(),
+          last_used_stop: key.get_u64("LastUsedTimeStop").ok(),
+          name,
+          packaged,
+        })
       })
-      .unwrap_or_default()
+      .collect()
   };
   let Ok(store) = CURRENT_USER.open(CONSENT_STORE) else {
     return Vec::new();
   };
-  let mut records = capturing_children(&store);
+  let mut records = children(&store, true);
   if let Ok(non_packaged) = store.open(NON_PACKAGED) {
-    // Desktop apps are recorded by executable path, with `#` for `\`.
-    records.extend(
-      capturing_children(&non_packaged)
-        .into_iter()
-        .filter_map(|path| path.rsplit('#').next().map(str::to_string)),
-    );
+    records.extend(children(&non_packaged, false));
   }
-  records
-    .iter()
-    .filter_map(|record| classify_windows(record))
-    .collect()
+  capturing_windows_apps(&records)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -331,6 +352,91 @@ mod tests {
       "ms-teams.exe"
     );
     assert!(classify_windows("notepad.exe").is_none());
+  }
+
+  fn record(
+    name: &str,
+    packaged: bool,
+    start: Option<u64>,
+    stop: Option<u64>,
+  ) -> ConsentRecord {
+    ConsentRecord {
+      name: name.to_string(),
+      packaged,
+      last_used_start: start,
+      last_used_stop: stop,
+    }
+  }
+
+  #[test]
+  fn windows_consent_records_name_only_apps_capturing_now() {
+    let records = [
+      record("MSTeams_8wekyb3d8bbwe", true, Some(133_000), Some(0)),
+      record(
+        "C:#Program Files#Zoom#bin#Zoom.exe",
+        false,
+        Some(133_000),
+        Some(0),
+      ),
+      // Finished use, never used, and an app outside the catalog.
+      record("C:#Apps#slack.exe", false, Some(133_000), Some(133_100)),
+      record("C:#Apps#Discord.exe", false, Some(0), Some(0)),
+      record("C:#Apps#Signal.exe", false, None, None),
+      record("C:#Windows#notepad.exe", false, Some(133_000), Some(0)),
+      record(
+        "Microsoft.WindowsSoundRecorder_8wekyb3d8bbwe",
+        true,
+        Some(133_000),
+        Some(0),
+      ),
+    ];
+    let identifiers: Vec<_> = capturing_windows_apps(&records)
+      .into_iter()
+      .map(|app| app.identifier)
+      .collect();
+    assert_eq!(identifiers, ["ms-teams.exe", "Zoom.exe"]);
+  }
+
+  #[test]
+  fn macos_capture_processes_become_calls_through_the_detector() {
+    let sample = |detector: &mut CallDetector, bundle_ids: &[&str]| {
+      let apps: Vec<_> = bundle_ids
+        .iter()
+        .filter_map(|bundle_id| classify_macos(bundle_id))
+        .collect();
+      detector.observe(&apps).map(|call| call.identifier)
+    };
+    let mut detector = CallDetector::default();
+    // Dictation and a voice memo hold the microphone: never a call.
+    assert_eq!(
+      sample(
+        &mut detector,
+        &["com.apple.SpeechRecognitionCore", "com.apple.VoiceMemos"]
+      ),
+      None
+    );
+    // Chrome's audio helper must hold it for four samples.
+    for _ in 0..3 {
+      assert_eq!(sample(&mut detector, &["com.google.Chrome.helper"]), None);
+    }
+    assert_eq!(
+      sample(&mut detector, &["com.google.Chrome.helper"]).as_deref(),
+      Some("com.google.Chrome")
+    );
+    // Teams' helper is a call at once, but the ongoing Chrome call keeps it.
+    assert_eq!(
+      sample(
+        &mut detector,
+        &["com.google.Chrome.helper", "com.microsoft.teams2.helper"]
+      )
+      .as_deref(),
+      Some("com.google.Chrome")
+    );
+    // Chrome hangs up while Teams holds the microphone: Teams takes over.
+    assert_eq!(
+      sample(&mut detector, &["com.microsoft.teams2.helper"]).as_deref(),
+      Some("com.microsoft.teams2")
+    );
   }
 
   #[test]

@@ -173,7 +173,8 @@ pub fn run() {
         );
       // Clipboard history initializes on a dedicated thread because the OS
       // keychain can block on authorization and the watcher runs continuously.
-      {
+      // Managed policy can turn it off: then nothing is read or recorded.
+      if !managed_policy::current().clipboard_disabled {
         let clipboard_manager = Arc::clone(&clipboard_manager);
         let clipboard_handle = handle.clone();
         let watcher_telemetry = desktop_telemetry.clone();
@@ -201,7 +202,7 @@ pub fn run() {
       // Registration is intentionally non-fatal: the shortcut may already be
       // taken, and the clipboard stays reachable from the tray.
       if clipboard_shortcut::register_at_launch(&handle)
-        != clipboard_shortcut::ShortcutRegistration::Active
+        == clipboard_shortcut::ShortcutRegistration::Unavailable
       {
         desktop_telemetry.capture(desktop_telemetry::DesktopErrorReport {
           window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
