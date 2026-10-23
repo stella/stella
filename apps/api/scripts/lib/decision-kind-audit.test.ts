@@ -15,16 +15,17 @@ const row = {
 } satisfies DecisionKindAuditRow;
 
 test.each([
-  ["ROZSUDEK JMÉNEM REPUBLIKY", "judgment"],
-  ["Rozsudok", "judgment"],
-  ["USNESENÍ", "order"],
-  ["Uznesenie", "order"],
-  ["NÁLEZ", "finding"],
-  ["TRESTNÝ ROZKAZ V MENE", "penal_order"],
-] as const)("audit reads own title %s as %s", (heading, kind) => {
+  ["ROZSUDEK JMÉNEM REPUBLIKY", "judgment", "usn."],
+  ["Rozsudok", "judgment", "usn."],
+  ["USNESENÍ", "order", "rozsudek"],
+  ["Uznesenie", "order", "rozsudek"],
+  ["NÁLEZ", "finding", "usn."],
+  ["TRESTNÍ PŘÍKAZ", "penal_order", "usn."],
+  ["TRESTNÝ ROZKAZ V MENE", "penal_order", "usn."],
+] as const)("audit reads own title %s as %s", (heading, kind, stated) => {
   const report = auditDecisionKinds({
     vocabulary: {},
-    rows: [{ ...row, stated: null, headings: [heading] }],
+    rows: [{ ...row, stated, headings: [heading] }],
   });
   expect(report.conflicts.map(({ headingKind }) => headingKind)).toEqual([
     kind,
@@ -33,17 +34,20 @@ test.each([
 
 test("audit reports missing values and conflicting own headings without reading body citations", () => {
   const result = auditDecisionKinds({
-    vocabulary: { CZE: ["new-form", "usn."] },
+    vocabulary: { CZE: ["new-form", "usn.", "new-form,usn."] },
     rows: [
       row,
       { ...row, id: "conflict", stated: "rozsudek" },
       { ...row, id: "missing", stated: null, headings: [] },
+      { ...row, id: "unstated", stated: null },
       { ...row, id: "quoted", headings: ["Odůvodnění: rozsudek soudu"] },
     ],
   });
   expect(result.missing).toEqual([
     { source: "CZE", stated: "new-form", id: null },
+    { source: "CZE", stated: "new-form,usn.", id: null },
     { source: row.source, stated: null, id: "missing" },
+    { source: row.source, stated: null, id: "unstated" },
   ]);
   expect(result.conflicts).toEqual([
     {
@@ -94,6 +98,16 @@ test("audit compares kind shares within the same ECLI court across sources, incl
           ecli: "ECLI:CZ:NSS:2026:1.AS.1.2026.1",
         })),
       ],
+    }).shareJumps,
+  ).toEqual([]);
+  expect(
+    auditDecisionKinds({
+      vocabulary: {},
+      rows: [...rows, ...other].map((item) => ({
+        ...item,
+        court: "Supreme Court",
+        ecli: null,
+      })),
     }).shareJumps,
   ).toEqual([]);
 });

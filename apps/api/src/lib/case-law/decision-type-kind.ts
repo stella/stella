@@ -207,6 +207,23 @@ export const readDecisionType = (stated: string): DecisionTypeReading => {
   };
 };
 
+/**
+ * Whether a stored type names a form the table does not know, including one
+ * part of a joined list (`new-form,usn.`), so an audit lists it for mapping.
+ */
+export const hasUnmappedDecisionType = (stated: string): boolean => {
+  const reading = readDecisionType(stated);
+  if (reading.type !== "joined") {
+    return reading.type === "unmapped";
+  }
+  return (decisionTypeKey(stated) ?? "")
+    .split(JOINED_TYPES_SEPARATOR)
+    .some((part) => {
+      const partKey = decisionTypeKey(part);
+      return partKey !== undefined && !KIND_BY_KEY.has(partKey);
+    });
+};
+
 /** The canonical kind a stored decision type states; `other` when none. */
 export const decisionTypeKind = (
   stated: string | null | undefined,
@@ -274,7 +291,8 @@ export const DECISION_TYPE_KIND_BY_KEY: ReadonlyMap<string, DecisionTypeKind> =
  * (`order`) get the same rows. Anything else is matched as stated.
  */
 type DecisionTypeFilter =
-  { type: "kind"; kind: DecisionTypeKind } | { type: "stated"; stated: string };
+  | { type: "kind"; kind: DecisionTypeKind }
+  | { type: "stated"; stated: string };
 
 export const decisionTypeFilter = (requested: string): DecisionTypeFilter => {
   if (isDecisionTypeKind(requested)) {

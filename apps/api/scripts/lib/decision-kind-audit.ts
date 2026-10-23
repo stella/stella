@@ -1,4 +1,5 @@
 import {
+  DECISION_TYPE_KIND_OTHER,
   DECISION_TYPE_KINDS,
   type DecisionTypeKind,
 } from "@stll/api-contract/case-law-decision-types";
@@ -6,7 +7,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   decisionTypeKind,
-  readDecisionType,
+  hasUnmappedDecisionType,
 } from "@/api/lib/case-law/decision-type-kind";
 
 export type DecisionKindAuditRow = {
@@ -23,14 +24,18 @@ const HEADING_KINDS = [
   [/^(?:rozsudek|rozsudok)(?:\s|$)/u, "judgment"],
   [/^(?:usnesení|uznesenie)(?:\s|$)/u, "order"],
   [/^nález(?:\s|$)/u, "finding"],
-  [/^trestný rozkaz(?:\s|$)/u, "penal_order"],
+  [/^(?:trestní příkaz|trestný rozkaz)(?:\s|$)/u, "penal_order"],
 ] as const;
 
-/** ECLI court codes allow comparison across publishers without a court-name guess. */
-const courtKey = ({ ecli, court }: DecisionKindAuditRow) => {
+/**
+ * The ECLI court code, the only key that names one court across publishers. A
+ * row without one is never compared by court name: two publishers can use the
+ * same name for different courts.
+ */
+const ecliCourtKey = ({ ecli }: DecisionKindAuditRow) => {
   const [, country, code] = /^ECLI:(CZ|SK):([^:]+):/u.exec(ecli ?? "") ?? [];
   return country === undefined || code === undefined
-    ? court
+    ? undefined
     : `${country}:${code}`;
 };
 
@@ -65,7 +70,7 @@ export const auditDecisionKinds = ({
   }[] = [];
   for (const [source, values] of Object.entries(vocabulary)) {
     for (const stated of values) {
-      if (readDecisionType(stated).type === "unmapped") {
+      if (hasUnmappedDecisionType(stated)) {
         missing.push({ source, stated, id: null });
       }
     }
@@ -73,10 +78,7 @@ export const auditDecisionKinds = ({
   const courts = new Map<string, Map<string, SourceCounts>>();
   for (const row of rows) {
     const mapped = decisionTypeKind(row.stated);
-    if (
-      row.stated === null ||
-      readDecisionType(row.stated).type === "unmapped"
-    ) {
+    if (row.stated === null || hasUnmappedDecisionType(row.stated)) {
       missing.push({ source: row.source, stated: row.stated, id: row.id });
     }
     const headingKinds = new Set(
@@ -90,19 +92,25 @@ export const auditDecisionKinds = ({
         );
       }),
     );
-    for (const headingKind of headingKinds) {
+    // A title contradicts only a kind the publisher stated; an absent or
+    // unknown type is reported as missing above, not as a conflict.
+    const statesKind = mapped !== DECISION_TYPE_KIND_OTHER;
+    const court = ecliCourtKey(row);
+    for (const headingKind of statesKind ? headingKinds : []) {
       if (headingKind !== mapped) {
         conflicts.push({
           id: row.id,
           source: row.source,
-          court: courtKey(row),
+          court: court ?? row.court,
           stated: row.stated,
           mapped,
           headingKind,
         });
       }
     }
-    const court = courtKey(row);
+    if (court === undefined) {
+      continue;
+    }
     const sources = courts.get(court) ?? new Map<string, SourceCounts>();
     courts.set(court, sources);
     const counts = sources.get(row.source) ?? {
