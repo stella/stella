@@ -41,11 +41,11 @@ export const Route = createFileRoute("/_protected/admin/vat-rates")({
       vatRatesOptions(context.user.activeOrganizationId),
       (error) =>
         getAnalytics().captureError(error, {
-          fingerprintKey: "settings.organization.vat-rates.loader:failure",
+          fingerprintKey: "admin.vat-rates.loader:failure",
           scope: {
             type: "request",
             method: "GET",
-            routeTemplate: "/_protected/settings/organization/vat-rates",
+            routeTemplate: "/_protected/admin/vat-rates",
           },
         }),
     );

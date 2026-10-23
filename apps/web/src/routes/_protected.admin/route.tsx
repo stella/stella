@@ -80,12 +80,11 @@ export const Route = createFileRoute("/_protected/admin")({
             }),
             (error) =>
               getAnalytics().captureError(error, {
-                fingerprintKey:
-                  "settings.organization.route.beforeLoad:failure",
+                fingerprintKey: "admin.route.beforeLoad:failure",
                 scope: {
                   type: "request",
                   method: "GET",
-                  routeTemplate: "/_protected/settings/organization",
+                  routeTemplate: "/_protected/admin",
                 },
               }),
           );

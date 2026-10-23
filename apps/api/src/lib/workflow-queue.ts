@@ -70,12 +70,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
-import {
-  collectFullWorkflowTargetIds,
-  fetchExplicitWorkflowTargetRows,
-  readFullWorkflowSnapshotCursor,
-} from "@/api/lib/workflow-target-queries";
-import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
+import { collectWorkflowTargetIds } from "@/api/lib/workflow-target-queries";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
   AIJustification,
@@ -613,34 +608,12 @@ const planAndEnqueueWorkflow = async (
     );
     await runStateStore.extendPlanningLease({ runLockTtlSec, workspaceId });
 
-    const isExplicitRun =
-      inputEntityIds !== undefined && inputEntityIds.length > 0;
-    const fullWorkflowCreatedAtCutoff = isExplicitRun
-      ? null
-      : await readFullWorkflowSnapshotCursor({ scopedDb });
-    const explicitEntityIds = isExplicitRun
-      ? resolveWorkflowTargetEntityIds({
-          entityRows: await fetchExplicitWorkflowTargetRows({
-            inputEntityIds,
-            scopedDb,
-            workspaceId,
-          }),
-          inputEntityIds,
-          inputOrder,
-        })
-      : [];
-    const fullWorkflowEntityIds = isExplicitRun
-      ? []
-      : await collectFullWorkflowTargetIds({
-          createdAtCutoff:
-            fullWorkflowCreatedAtCutoff ??
-            panic("Full workflow target collection requires a snapshot cursor"),
-          scopedDb,
-          workspaceId,
-        });
-    const targetEntityIds = isExplicitRun
-      ? explicitEntityIds
-      : fullWorkflowEntityIds;
+    const targetEntityIds = await collectWorkflowTargetIds({
+      inputEntityIds,
+      inputOrder,
+      scopedDb,
+      workspaceId,
+    });
     const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {

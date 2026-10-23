@@ -56,11 +56,11 @@ export const Route = createFileRoute("/_protected/admin/audit-logs")({
       }),
       (error: unknown) => {
         getAnalytics().captureError(error, {
-          fingerprintKey: "settings.organization.audit-logs.loader:failure",
+          fingerprintKey: "admin.audit-logs.loader:failure",
           scope: {
             type: "request",
             method: "GET",
-            routeTemplate: "/_protected/settings/organization/audit-logs",
+            routeTemplate: "/_protected/admin/audit-logs",
           },
         });
       },
