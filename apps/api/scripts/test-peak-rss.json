@@ -9920,14 +9920,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/auth/session-lifetime-revocation.test.ts": {
-      "peakMb": 182,
-      "baselineMb": 182,
-      "source": {
-        "runId": "37987009011",
-        "job": "measure-3"
-      }
-    },
     "src/lib/auth/review-account-policy.test.ts": {
       "peakMb": 242,
       "baselineMb": 213,
@@ -9950,14 +9942,6 @@
       "source": {
         "runId": "39090756337",
         "job": "measure-3"
-      }
-    },
-    "src/lib/auth/session-bearer.test.ts": {
-      "peakMb": 213,
-      "baselineMb": 213,
-      "source": {
-        "runId": "39090756337",
-        "job": "measure-1"
       }
     },
     "src/lib/auth/session-lifetime-revocation.test.ts": {
