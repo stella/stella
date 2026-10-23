@@ -89,6 +89,7 @@ const mcpOffered = (role: MemberRole): ReadonlySet<string> =>
       listOfferedStaticMcpToolDefinitions({
         context: mcpContextFor(role),
         mode,
+        enabledRegistrySlugs: undefined,
       }).map((definition) => definition.name),
     ),
   );
@@ -680,9 +681,11 @@ describe("write tool account access", () => {
         userEmail: "limited@example.test",
       });
       const offered = new Set(
-        listOfferedStaticMcpToolDefinitions({ context, mode: "default" }).map(
-          (definition) => definition.name,
-        ),
+        listOfferedStaticMcpToolDefinitions({
+          context,
+          mode: "default",
+          enabledRegistrySlugs: undefined,
+        }).map((definition) => definition.name),
       );
       expect(offered.has("update_organization_settings")).toBe(false);
       expect(offered.has("set_practice_jurisdictions")).toBe(false);
