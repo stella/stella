@@ -48,9 +48,11 @@ import {
 } from "./ci-plan-scope";
 import { prHeavyJobs } from "./ci-pr-jobs";
 import {
-  NEEDS_EXPRESSION,
-  PLAN_EXPRESSION,
+  embedsExpression,
+  GITHUB_EXPRESSION_LIMIT,
   renderResultInputs,
+  RESULT_INPUTS_RUN,
+  RESULT_INPUTS_STEP,
 } from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
@@ -574,6 +576,12 @@ const resultStep = v.parse(
     env: v.record(v.string(), v.string()),
   }),
   evaluationSteps.at(0),
+);
+const resultInputsSteps = resultJob.steps.filter((step) =>
+  v.is(v.object({ name: v.literal(RESULT_INPUTS_STEP) }), step),
+);
+const resultInputsStepIndex = resultJob.steps.findIndex((step) =>
+  v.is(v.object({ name: v.literal(RESULT_INPUTS_STEP) }), step),
 );
 
 const jobScopes = v.parse(
@@ -1108,7 +1116,6 @@ test("the result gate evaluates every job in the workflow", () => {
   }
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
-  expect(resultStep.run).toContain(NEEDS_EXPRESSION);
   for (const {
     item: { label },
     exitCode,
@@ -2793,7 +2800,50 @@ test("jobs that need ci-plan never hand its outputs over in the environment", ()
       .map(({ where, key }) => `${where}: ${key}`);
   });
   expect(offenders).toEqual([]);
-  expect(resultStep.run).toContain(PLAN_EXPRESSION);
+});
+
+test("ci-result's outcome step reads its inputs from the step written right before it", () => {
+  // The harness runs RESULT_INPUTS_RUN before the outcome script, so the
+  // workflow must declare exactly that script, immediately before it.
+  expect(resultInputsSteps).toEqual([
+    { name: RESULT_INPUTS_STEP, run: RESULT_INPUTS_RUN },
+  ]);
+  expect(resultJob.steps[resultInputsStepIndex + 1]).toBe(
+    evaluationSteps.at(0),
+  );
+  expect(embedsExpression(resultStep.run)).toBe(false);
+});
+
+test("no workflow string that embeds an expression exceeds GitHub's expression limit", async () => {
+  // GitHub evaluates a string embedding an expression as one expression and
+  // refuses the whole workflow file when one exceeds the limit, so no
+  // pull_request run starts at all.
+  const directory = new URL("../.github/workflows/", import.meta.url);
+  const offenders: string[] = [];
+  const visit = (value: unknown, where: string) => {
+    if (typeof value === "string") {
+      if (embedsExpression(value) && value.length > GITHUB_EXPRESSION_LIMIT) {
+        offenders.push(`${where} (${value.length} characters)`);
+      }
+    } else if (Array.isArray(value)) {
+      for (const [index, item] of value.entries()) {
+        visit(item, `${where}[${index}]`);
+      }
+    } else if (typeof value === "object" && value !== null) {
+      for (const [key, item] of Object.entries(value)) {
+        visit(item, `${where}.${key}`);
+      }
+    }
+  };
+  for (const file of new Bun.Glob("*.{yml,yaml}").scanSync(
+    directory.pathname,
+  )) {
+    visit(
+      Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
+      file,
+    );
+  }
+  expect(offenders).toEqual([]);
 });
 
 test("metadata runs report the required result while scope-changing labels still run", () => {
