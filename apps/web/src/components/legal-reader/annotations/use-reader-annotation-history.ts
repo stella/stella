@@ -185,7 +185,7 @@ export const useReaderAnnotationHistory = ({
           ? {}
           : {
               actionProps: {
-                children: back === "undo" ? t("common.undo") : t("common.redo"),
+                children: back === "undo" ? t("common.undo") : t("folio.redo"),
                 onClick: () => {
                   detached(step(back), "legal-reader.annotation-history");
                 },

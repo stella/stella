@@ -12,7 +12,7 @@ export const READER_ANNOTATION_HISTORY_LIMIT = 50;
 type AnnotationSubject = ReaderAnnotation["kind"];
 
 /** One named change, without the mark it is applied to. */
-export type AnnotationChange = UpdateAnnotationInput extends infer Change
+type AnnotationChange = UpdateAnnotationInput extends infer Change
   ? Change extends UpdateAnnotationInput
     ? Omit<Change, "id">
     : never
@@ -112,7 +112,7 @@ export const takeReaderAnnotationStep = (
  * Puts a step on top of one direction: the opposite of a step just taken, or
  * the step itself when taking it failed and it is still owed.
  */
-export const pushReaderAnnotationStep = (
+const pushReaderAnnotationStep = (
   history: ReaderAnnotationHistory,
   direction: ReaderAnnotationHistoryDirection,
   entry: ReaderAnnotationHistoryEntry,

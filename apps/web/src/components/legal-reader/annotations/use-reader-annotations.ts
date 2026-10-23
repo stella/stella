@@ -400,7 +400,7 @@ export const useReaderAnnotations = (
         store: before,
         target: targetKey,
       });
-      const created = next.items.at(-1)?.rowIds ?? [];
+      const created = optionalArray(next.items.at(-1)?.rowIds);
       return await Promise.resolve(commit(next, "create").map(() => created));
     },
     remove: async (id: string) =>
