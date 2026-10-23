@@ -4,7 +4,11 @@ import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { sha256Base64Url as legacyBase64Url } from "@stll/sha256/node";
 
 import { auditLogs } from "@/api/db/schema";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditAction,
+} from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { decodePaginationCursor } from "@/api/lib/pagination";
@@ -30,6 +34,14 @@ const entityVersionId = toSafeId<"entityVersion">(
   "00000000-0000-0000-0000-000000000002",
 );
 const propertyId = "00000000-0000-0000-0000-000000000003";
+const MCP_WEB_HANDOFF_AUDIT_ACTION_PREFIX = "mcp_web_handoff.";
+
+const isMcpWebHandoffAuditAction = (
+  action: AuditAction,
+): action is Extract<
+  AuditAction,
+  `${typeof MCP_WEB_HANDOFF_AUDIT_ACTION_PREFIX}${string}`
+> => action.startsWith(MCP_WEB_HANDOFF_AUDIT_ACTION_PREFIX);
 
 describe("parseFieldAuditResourceId", () => {
   test("keeps persisted field ids on the field lookup path", () => {
@@ -273,6 +285,18 @@ describe("activity target sources", () => {
     expect(VISIBLE_ACTIVITY_ACTIONS).not.toContain(AUDIT_ACTION.DOWNLOAD);
     expect(VISIBLE_ACTIVITY_ACTIONS).toContain(AUDIT_ACTION.REVIEW);
     expect(VISIBLE_ACTIVITY_ACTIONS).toContain(AUDIT_ACTION.EXECUTE);
+  });
+});
+
+describe("visible activity actions", () => {
+  test("excludes every handoff audit action from the activity feed", () => {
+    const handoffActions = Object.values(AUDIT_ACTION).filter(
+      isMcpWebHandoffAuditAction,
+    );
+    expect(handoffActions.length).toBeGreaterThan(0);
+    for (const action of handoffActions) {
+      expect(VISIBLE_ACTIVITY_ACTION_BY_ACTION[action]).toBeNull();
+    }
   });
 });
 
