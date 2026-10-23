@@ -151,7 +151,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason: "scope declarations start with this contract",
@@ -186,7 +186,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 12,
+    version: 13,
     scope: {
       type: "all",
       reason: "scope declarations start with this contract",
