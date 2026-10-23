@@ -4,12 +4,12 @@ import { FIRST_PARTY_MODEL_PROVIDERS } from "@stll/ai-catalog";
 import type { FirstPartyModelProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
-import { assertOfflineCheckPreload } from "../../../scripts/offline-check-startup";
 import { findNewerGenerationModels } from "./model-catalog-discovery";
 import type {
   FindNewerGenerationModelsOptions,
   GenerationGuardFailure,
 } from "./model-catalog-discovery";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const snapshotPath = new URL(
   "../../ai-catalog/upstream/models.dev.gen.json",

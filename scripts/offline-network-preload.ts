@@ -10,6 +10,8 @@ import { syncBuiltinESMExports } from "node:module";
 import net from "node:net";
 import tls from "node:tls";
 
+import { installOfflineCheckPreloadMarker } from "../packages/scripts/src/offline-check-startup";
+
 // The preload is confined to verification: refresh commands retain their transport.
 class OfflineCheckNetworkError extends TaggedError("OfflineCheckNetworkError")<{
   message: string;
@@ -18,12 +20,7 @@ class OfflineCheckNetworkError extends TaggedError("OfflineCheckNetworkError")<{
 // A declaration is constructable, so calls and constructors throw the same error.
 const checkName = Bun.main || "unknown check";
 
-Object.defineProperty(globalThis, Symbol.for("stella.offline-check-preload"), {
-  configurable: false,
-  enumerable: false,
-  writable: false,
-  value: true,
-});
+installOfflineCheckPreloadMarker();
 
 function disabledNetwork(): never {
   process.exitCode = 1;

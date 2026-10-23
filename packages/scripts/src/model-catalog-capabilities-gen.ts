@@ -50,7 +50,6 @@ import type {
   TemperaturePolicy,
 } from "@stll/ai-catalog";
 
-import { assertOfflineCheckPreload } from "../../../scripts/offline-check-startup";
 import {
   parseOpenRouterReasoningDefaults,
   parseUpstreamCapabilities,
@@ -65,6 +64,7 @@ import {
   MODELS_DEV_KEY_BY_PROVIDER,
   loadModelCatalogSnapshot,
 } from "./model-catalog-snapshot";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
