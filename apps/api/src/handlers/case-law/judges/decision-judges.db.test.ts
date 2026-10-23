@@ -281,10 +281,8 @@ test(
     }
 
     expect(pages).toEqual([
-      { linked: 2, cursor: pagedIds[0], done: false },
-      { linked: 2, cursor: pagedIds[1], done: false },
-      { linked: 2, cursor: pagedIds[2], done: false },
-      { linked: 0, cursor: pagedIds[2], done: true },
+      ...pagedIds.map((id) => ({ linked: 2, cursor: id, done: false })),
+      { linked: 0, cursor: pagedIds.at(-1) ?? null, done: true },
     ]);
     for (const id of pagedIds) {
       expect((await storedJudges(id)).map(({ judgeId }) => judgeId)).toEqual([

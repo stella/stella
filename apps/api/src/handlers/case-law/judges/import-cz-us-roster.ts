@@ -97,7 +97,7 @@ const PORTRAIT_EXTENSIONS = {
   "image/webp": "webp",
 } as const satisfies Readonly<Record<string, string>>;
 
-export type PortraitContentType = keyof typeof PORTRAIT_EXTENSIONS;
+type PortraitContentType = keyof typeof PORTRAIT_EXTENSIONS;
 
 type ServedPortraitType = {
   contentType: PortraitContentType;
@@ -162,7 +162,7 @@ const normalizeSpace = (value: string): string =>
 const TERM_DATE_PATTERN =
   /(?:\b(?<until>do)\s+)?(?<date>\d{1,2}\.\s*\d{1,2}\.\s*\d{4})/gu;
 
-export type JusticeTerm = {
+type JusticeTerm = {
   termStart?: string;
   termEnd?: string;
 };
@@ -216,7 +216,7 @@ const latest = (dates: readonly string[]): string | undefined =>
  * listing's non-judicial entries are told from a justice whose dates the
  * court did not print.
  */
-export const parseJusticeTerm = (
+const parseJusticeTerm = (
   lines: readonly string[],
 ): JusticeTerm | undefined => {
   const spans = lines.filter(isBenchLine).map(parseOfficeSpan);
@@ -330,7 +330,7 @@ export const parseJusticePage = ({
 
 /* -- ports --------------------------------------------------------------- */
 
-export type CaseLawJudgeId = SafeId<"caseLawJudge">;
+type CaseLawJudgeId = SafeId<"caseLawJudge">;
 
 export type StoredRosterJudge = {
   id: CaseLawJudgeId;
@@ -341,7 +341,7 @@ export type StoredRosterJudge = {
   portraitS3Key: string | null;
 };
 
-export type NewRosterJudge = {
+type NewRosterJudge = {
   id: CaseLawJudgeId;
   fullName: string;
   nameKey: string;
@@ -355,7 +355,7 @@ export type NewRosterJudge = {
  * columns move together, because the row's check constraint holds them all
  * null or all set.
  */
-export type RosterJudgePatch = {
+type RosterJudgePatch = {
   fullName?: string;
   termStart?: string | null;
   termEnd?: string | null;
@@ -367,7 +367,7 @@ export type RosterJudgePatch = {
   updatedAt?: Date;
 };
 
-export type InsertedRosterJudge = {
+type InsertedRosterJudge = {
   id: CaseLawJudgeId;
   inserted: boolean;
 };
@@ -412,7 +412,7 @@ export type RosterPortraitStore = {
 
 /* -- the import ---------------------------------------------------------- */
 
-export type RosterImportFailure = {
+type RosterImportFailure = {
   name: string;
   profileUrl: string;
   reason: string;
