@@ -200,9 +200,7 @@ type TanStackTextForTaskOptions = GenerateTanStackBaseOptions &
  * run. `allow-incomplete` returns whatever text arrived.
  */
 export type TanStackTextFinishPolicy =
-  | "allow-incomplete"
-  | "allow-output-ceiling"
-  | "require-complete";
+  "allow-incomplete" | "allow-output-ceiling" | "require-complete";
 
 /**
  * A bound on one awaited model call, owned by the call rather than threaded in
@@ -678,8 +676,7 @@ const admittedAbortController = ({
   userId,
   abortController,
 }: Pick<AdmittedChatRunOptions, "admission" | "userId" | "abortController">):
-  | AbortController
-  | undefined => {
+  AbortController | undefined => {
   switch (admission.type) {
     case "organization": {
       // Checks the proof still admits work, then joins its signal.

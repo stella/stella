@@ -36,10 +36,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 
 type SkillScope = "team" | "private";
 type BlueprintId =
-  | "check-against-rules"
-  | "intake-to-draft"
-  | "answer-from-sources"
-  | "blank";
+  "check-against-rules" | "intake-to-draft" | "answer-from-sources" | "blank";
 type BlueprintCardId = Exclude<BlueprintId, "blank">;
 
 export type BlueprintCreatedSkill = {
