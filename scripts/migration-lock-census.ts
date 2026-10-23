@@ -734,6 +734,66 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     reason:
       "Merged history adds the CHECK constraint NOT VALID under a 1s lock_timeout, then validates it separately.",
   },
+  {
+    migration: "20261020000100_stored_keys_organization_scope",
+    form: "add-constraint",
+    reason:
+      "CHECK constraints are added NOT VALID, avoiding a table scan while the 5s lock_timeout bounds lock acquisition.",
+  },
+  {
+    migration: "20261020000100_stored_keys_organization_scope",
+    form: "create-trigger",
+    reason:
+      "Creating the trigger is a metadata-only change with lock acquisition bounded by the 5s lock_timeout.",
+  },
+  {
+    migration: "20261020120000_field_cell_ownership",
+    form: "add-column",
+    reason:
+      "Nullable, default-free columns are catalog-only changes under a 1s lock_timeout.",
+  },
+  {
+    migration: "20261020120000_republished_ruling_identity_raw",
+    form: "add-column",
+    reason:
+      "Nullable, default-free columns are catalog-only changes under a 5s lock_timeout.",
+  },
+  {
+    migration: "20261020140000_republished_alias_moved_identities",
+    form: "create-table-references",
+    reason:
+      "The foreign key is created with its new empty table, avoiding an existing-row scan under the 1s lock_timeout.",
+  },
+  {
+    migration: "20261020140000_republished_alias_moved_identities",
+    form: "row-level-security",
+    reason:
+      "Row-level security is enabled on the new empty table before it is available to concurrent application traffic.",
+  },
+  {
+    migration: "20261020140000_republished_alias_moved_identities",
+    form: "create-policy",
+    reason:
+      "The policy is created on the new empty table before it is available to concurrent application traffic.",
+  },
+  {
+    migration: "20261022120000_scheduler_pause_bound",
+    form: "add-column",
+    reason:
+      "The nullable, default-free column is a catalog-only change under a 1s lock_timeout.",
+  },
+  {
+    migration: "20261022120000_scheduler_pause_bound",
+    form: "add-constraint",
+    reason:
+      "CHECK constraints are added NOT VALID, avoiding a table scan while the 1s lock_timeout bounds lock acquisition.",
+  },
+  {
+    migration: "20261022120000_scheduler_pause_bound",
+    form: "create-trigger",
+    reason:
+      "Creating the trigger is a metadata-only change with lock acquisition bounded by the 1s lock_timeout.",
+  },
 ];
 export type LockBaselineEntry = {
   migration: string;
@@ -824,7 +884,7 @@ export const checkMigrationLocks = ({
         continue;
       }
       errors.push(
-        `${file}:${line}: ${lockMode} ${form} needs a reviewed safety acknowledgement or typed lock allowance with a reason`,
+        `${file}:${line}: ${lockMode} ${form} needs a reviewed safety acknowledgement or typed lock allowance with a reason; add { migration, form, reason } to MIGRATION_LOCK_ALLOWANCES in scripts/migration-lock-census.ts`,
       );
     }
   }

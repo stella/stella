@@ -214,6 +214,11 @@ describe("migration lock census", () => {
       checkMigrationLocks({ sources, baseline }).errors.join("\n"),
     ).toContain("ACCESS EXCLUSIVE add-column needs");
     expect(
+      checkMigrationLocks({ sources, baseline }).errors.join("\n"),
+    ).toContain(
+      "add { migration, form, reason } to MIGRATION_LOCK_ALLOWANCES in scripts/migration-lock-census.ts",
+    );
+    expect(
       checkMigrationLocks({
         sources: source(`${sql}${sql}`),
         baseline,
