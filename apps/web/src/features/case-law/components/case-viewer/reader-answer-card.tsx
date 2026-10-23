@@ -144,6 +144,7 @@ export const ReaderAnswerCard = ({
     budget: t("readerAnswers.budgetError"),
     model: t("readerAnswers.modelError"),
     network: t("readerAnswers.networkError"),
+    selection: t("readerAnswers.selectionError"),
     timeout: t("readerAnswers.timeoutError"),
   } satisfies Record<NonNullable<ReaderAnswerCardProps["error"]>, string>;
   const errorText = failure === undefined ? undefined : errorMessages[failure];

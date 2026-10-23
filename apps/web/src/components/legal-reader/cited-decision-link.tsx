@@ -149,8 +149,14 @@ export const CitedDecisionLink = ({
   ...chip
 }: CitedDecisionLinkProps) => (
   <>
-    <span className={className}>{children}</span>{" "}
-    <CitedDecisionChip {...chip} label={undefined} />
+    <span className={className}>{children}</span>
+    {/* The chip is not the decision's words: as reader chrome it stays off
+        the offsets a selection is stored in, so a quote around a citation
+        still matches the decision text. */}
+    <span data-reader-chrome="">
+      {" "}
+      <CitedDecisionChip {...chip} label={undefined} />
+    </span>
   </>
 );
 

@@ -1,4 +1,4 @@
-// parser-output-unchanged: Validation actions are named for schema publication; accepted AST values are identical.
+// parser-output-unchanged: anchored text units read the AST without changing it; accepted AST values are identical.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -384,6 +384,70 @@ export const plainTextOf = (inlines: readonly Inline[]): string => {
     }
   }
   return out;
+};
+
+/**
+ * One unit of text the reader marks with `data-anchor`: a selection inside it
+ * is stored as offsets into `text`. Headings and paragraphs are their own
+ * unit; a table is a container, and each cell is a unit of its own under
+ * `tableCellPieceId`. An image carries no text, so it has none.
+ */
+export type AnchoredText = { anchorId: string; text: string };
+
+/**
+ * Every anchored text unit of `blocks`, in reading order. The reader's marks
+ * and every server check of a stored selection read this one list, so text
+ * the reader lets someone select is text the server can find.
+ */
+export const anchoredTextsOf = (blocks: readonly Block[]): AnchoredText[] =>
+  blocks.flatMap((block): AnchoredText[] => {
+    switch (block.type) {
+      case "heading":
+      case "paragraph":
+        return [{ anchorId: block.anchorId, text: plainTextOf(block.inlines) }];
+      case "table":
+        return block.rows.flatMap((row, rowIndex) =>
+          row.map((cell, columnIndex) => ({
+            anchorId: tableCellPieceId({
+              blockId: block.id,
+              columnIndex,
+              rowIndex,
+            }),
+            text: plainTextOf(cell.inlines),
+          })),
+        );
+      case "image":
+        return [];
+      default:
+        return panic(block satisfies never);
+    }
+  });
+
+/** A selection stored against one anchored text unit. */
+export type AnchoredSelection = {
+  anchorId: string;
+  startOffset: number;
+  endOffset: number;
+  quote: string;
+};
+
+/**
+ * Whether `selection` is exactly the text at its offsets in one of `texts`.
+ * The reader checks a selection with this before it is sent, and the server
+ * checks it again on receipt, so both refuse the same selections.
+ */
+export const anchoredSelectionMatches = (
+  texts: readonly AnchoredText[],
+  { anchorId, startOffset, endOffset, quote }: AnchoredSelection,
+): boolean => {
+  const unit = texts.find((text) => text.anchorId === anchorId);
+  return (
+    unit !== undefined &&
+    startOffset >= 0 &&
+    endOffset <= unit.text.length &&
+    endOffset > startOffset &&
+    unit.text.slice(startOffset, endOffset) === quote
+  );
 };
 
 /**
