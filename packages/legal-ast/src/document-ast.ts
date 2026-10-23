@@ -386,6 +386,37 @@ export const plainTextOf = (inlines: readonly Inline[]): string => {
   return out;
 };
 
+/** A run of words the reader renders under its own `data-anchor`. */
+type ReaderAnchorPiece = { anchorId: string; text: string };
+
+/**
+ * The anchored pieces a reader selection can land in, each with the text
+ * its offsets index. A table is anchored per cell, an image not at all.
+ */
+export const readerAnchorPiecesOf = (block: Block): ReaderAnchorPiece[] => {
+  switch (block.type) {
+    case "heading":
+    case "paragraph":
+      return [{ anchorId: block.anchorId, text: plainTextOf(block.inlines) }];
+    case "table":
+      return block.rows.flatMap((row, rowIndex) =>
+        row.map((cell, columnIndex) => ({
+          anchorId: tableCellPieceId({
+            blockId: block.id,
+            columnIndex,
+            rowIndex,
+          }),
+          text: plainTextOf(cell.inlines),
+        })),
+      );
+    case "image":
+      return [];
+    default:
+      block satisfies never;
+      return panic(`Unhandled block type: ${String(block)}`);
+  }
+};
+
 /**
  * Trailing spaces and tabs before a line break, which carry no meaning
  * in rendered text and would otherwise survive into the search text.
