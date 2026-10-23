@@ -207,6 +207,25 @@ describe("document conversion input", () => {
     });
   });
 
+  test.each(["application/xhtml+xml", "text/html"] as const)(
+    "refuses a UTF-16 declaration in single-byte %s input",
+    async (mime) => {
+      const declaration =
+        mime === "text/html"
+          ? '<meta charset="UTF-16">'
+          : '<?xml version="1.0" encoding="UTF-16"?>';
+      const input = encode(
+        `${declaration}<html><img src="https://example.test/a.png"/></html>`,
+      );
+
+      expect(await checkConversionInput(mime, input)).toEqual({
+        kind: "refuse",
+        format: mime,
+        reason: { kind: "unsupported_encoding", encoding: "utf-16" },
+      });
+    },
+  );
+
   test("checks a UTF-16 XML document part", async () => {
     const input = await zipBytes(
       "word/document.xml",

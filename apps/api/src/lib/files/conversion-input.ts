@@ -325,14 +325,15 @@ const decodeText = (bytes: Uint8Array): DecodedText => {
   if (declared === null) {
     return { kind: "unsupported_encoding", encoding: declaration };
   }
-  const signature = signatureEncoding(bytes);
-  if (bom === null && signature !== null && declared !== signature) {
+  // A byte order mark decides the encoding for every reader. Without one, the
+  // converter reads the bytes by their signature, so the inspected text is
+  // only that decoding; a declaration naming another encoding is refused.
+  const matchesBytes =
+    declared === detected || (declaration === "utf-16" && detected !== "utf-8");
+  if (bom === null && !matchesBytes) {
     return { kind: "unsupported_encoding", encoding: declaration };
   }
-  const encoding =
-    bom ??
-    (declaration === "utf-16" && detected !== "utf-8" ? detected : declared);
-  return { kind: "source", value: new TextDecoder(encoding).decode(bytes) };
+  return { kind: "source", value: tentative };
 };
 
 const latin1 = (bytes: Uint8Array): string =>
