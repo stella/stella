@@ -1,5 +1,25 @@
 # @stll/ui
 
+## 0.49.4
+
+### Patch Changes
+
+- [#6589](https://github.com/stella/stella/pull/6589) [`2a2225a`](https://github.com/stella/stella/commit/2a2225ad2fe786c32d74335505b64a26560a2e89) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Scroll areas capped with a max height now scroll inside the cap instead of growing past it.
+
+- [#6507](https://github.com/stella/stella/pull/6507) [`da8acf8`](https://github.com/stella/stella/commit/da8acf8bb696689ab5f17f50a000ff647b17cdda) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Loader` draws a plain spinner for busy controls and rows; `LoaderState` keeps the Stella mark for empty regions.
+
+## 0.49.3
+
+### Patch Changes
+
+- [#6583](https://github.com/stella/stella/pull/6583) [`85cae51`](https://github.com/stella/stella/commit/85cae51c030a8fbb6421dd13456001dd5a9dcdde) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The outline rail opens its panel when the pointer rests on the tick strip, not the moment it crosses it.
+
+## 0.49.2
+
+### Patch Changes
+
+- [#6512](https://github.com/stella/stella/pull/6512) [`0bf6d20`](https://github.com/stella/stella/commit/0bf6d20b7a8225cc3cc27a933d2e09608b31dc8c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A toast that closes on its own shows a faint countdown line that holds while the toast is hovered, focused or the window is in the background; the same plain message raised again refreshes the toast on screen instead of stacking a copy.
+
 ## 0.49.1
 
 ### Patch Changes

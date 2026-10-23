@@ -1,4 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
@@ -507,6 +508,82 @@ describe("the engine's messages", () => {
       },
     ]);
   });
+});
+
+describe("a call's arguments are a JSON object", () => {
+  // What a call cut off while its input streamed holds: nothing yet, or the
+  // start of an object.
+  const CUT_OFF = ["", '{"name": '] as const;
+  const withArguments = (
+    format: "model-messages" | "openai-chat" | "openai-responses",
+    text: string,
+  ): ProviderRequest => {
+    const call = { arguments: text, name: "mcp__external__delete" };
+    const result = '{"error":"This call never returned a result"}';
+    switch (format) {
+      case "model-messages":
+        return {
+          earlierSteps: [],
+          format,
+          messages: [
+            { content: "Delete the draft", role: "user" },
+            {
+              content: null,
+              role: "assistant",
+              toolCalls: [{ function: call, id: "a", type: "function" }],
+            },
+            { content: result, role: "tool", toolCallId: "a" },
+          ],
+        };
+      case "openai-chat":
+        return {
+          body: {
+            messages: [
+              { content: "Delete the draft", role: "user" },
+              {
+                content: null,
+                role: "assistant",
+                tool_calls: [{ function: call, id: "a", type: "function" }],
+              },
+              { content: result, role: "tool", tool_call_id: "a" },
+            ],
+          },
+          format,
+        };
+      case "openai-responses":
+        return {
+          body: {
+            input: [
+              { content: "Delete the draft", role: "user", type: "message" },
+              { ...call, call_id: "a", type: "function_call" },
+              { call_id: "a", output: result, type: "function_call_output" },
+            ],
+          },
+          format,
+        };
+      default:
+        format satisfies never;
+        return panic("Unhandled request format");
+    }
+  };
+
+  for (const format of [
+    "model-messages",
+    "openai-chat",
+    "openai-responses",
+  ] as const) {
+    test(`${format}: a call whose input is an object passes`, () => {
+      expect(problemsOf(withArguments(format, '{"name":"draft"}'))).toEqual([]);
+    });
+
+    for (const text of CUT_OFF) {
+      test(`${format}: a call with arguments ${JSON.stringify(text)} is a finding`, () => {
+        expect(problemsOf(withArguments(format, text))).toEqual([
+          "a tool call's arguments are not a JSON object",
+        ]);
+      });
+    }
+  }
 });
 
 describe("the wire format of a provider request", () => {

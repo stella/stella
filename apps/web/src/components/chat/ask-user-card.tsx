@@ -21,6 +21,7 @@ import type {
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
@@ -184,6 +185,7 @@ export const AskUserCard = ({
   const analysisRehypePlugins = useMemo(
     () => [
       ...Object.values(defaultRehypePlugins),
+      rehypeScopeAnswerIds,
       ...(pairs.length > 0
         ? [[rehypeAnonSpans, pairs] satisfies Pluggable]
         : []),
