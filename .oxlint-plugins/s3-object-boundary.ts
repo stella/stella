@@ -47,11 +47,11 @@ import type { ImportedFromOptions } from "./utils.ts";
 import {
   filenameForContext,
   getPropertyName,
+  invokedCallee,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isImportedFrom,
-  invokedCallee,
   memberPropertyName,
   resolveVariable,
   stableInitializer,

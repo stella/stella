@@ -1,6 +1,6 @@
 import type { MouseEventHandler, ReactElement, ReactNode } from "react";
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";

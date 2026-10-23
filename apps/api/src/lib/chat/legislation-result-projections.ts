@@ -7,13 +7,13 @@ import {
 } from "@stll/api-contract/legislation-expression";
 
 import {
-  PROVISION_STATUS,
   PROVISION_ABSENCE_STATUSES,
+  PROVISION_STATUS,
 } from "../legal-search/legislation-provision-vocabulary";
 import {
   passthroughId,
-  publicUrl,
   projectionBranch,
+  publicUrl,
 } from "./projection-fields";
 
 /**

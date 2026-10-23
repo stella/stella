@@ -15,10 +15,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -33,22 +33,22 @@ import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { DOCUMENT_TRANSLATION_TARGET_CODES } from "@/components/document-language-picker.logic";
 import {
   documentTranslationPreparationOptions,
-  invalidateDocumentTranslationOutputQueries,
-  documentTranslationRunOptions,
-  isDocumentTranslationRunActive,
   type DocumentTranslationRun,
+  documentTranslationRunOptions,
+  invalidateDocumentTranslationOutputQueries,
+  isDocumentTranslationRunActive,
 } from "@/components/document-translation-queries";
 import {
   activeTranslationChoice,
-  canTranslateDocument,
   canStartDocumentTranslation,
+  canTranslateDocument,
   commentPolicyStateForSource,
   DEFAULT_TRANSLATION_CHOICE,
   defaultDocumentTranslationTarget,
-  documentTranslationRunFailureKey,
-  openDocumentTranslationOutput,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
+  documentTranslationRunFailureKey,
+  openDocumentTranslationOutput,
   type TranslationChoice,
 } from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

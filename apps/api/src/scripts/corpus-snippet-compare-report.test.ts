@@ -10,9 +10,9 @@ import {
   passageSkipReason,
   renderSnippetCompareMarkdown,
   SnippetCompareFileError,
+  type SnippetCompareQueryRow,
   snippetCompareReport,
   summarizeSnippetComparison,
-  type SnippetCompareQueryRow,
 } from "@/api/scripts/corpus-snippet-compare-report";
 
 /** Argument and query-file parsing, the fragment comparison, the renderings. */

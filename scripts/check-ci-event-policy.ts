@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
@@ -113,8 +113,7 @@ type CheckMainConcurrencyOptions = {
   file: string;
   workflow: v.InferOutput<typeof workflowSchema>;
   concurrencyPolicy:
-    | v.InferOutput<typeof policySchema>["pushMain"][string]
-    | undefined;
+    v.InferOutput<typeof policySchema>["pushMain"][string] | undefined;
 };
 
 const checkMainConcurrency = ({

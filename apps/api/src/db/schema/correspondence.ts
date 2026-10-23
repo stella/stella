@@ -9,8 +9,8 @@ import {
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
   CORRESPONDENCE_SOURCES,
-  type CorrespondenceAddress,
   type CorrespondenceActorDisplay,
+  type CorrespondenceAddress,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
 

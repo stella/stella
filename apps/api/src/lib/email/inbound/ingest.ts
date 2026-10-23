@@ -1,10 +1,10 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type {
-  CorrespondenceAuthResult,
-  CorrespondenceAuthentication,
   CorrespondenceAuthenticatedSender,
+  CorrespondenceAuthentication,
+  CorrespondenceAuthResult,
   CorrespondenceDropReason,
   CorrespondenceProvenance,
   ParsedCorrespondence,
@@ -15,20 +15,20 @@ import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import { parseInboundAddressToken } from "@/api/lib/email/inbound/address";
 import {
   hasAlignedAuthentication,
-  verifyOriginalSignature,
   type MailAuthentication,
   type MailAuthResult,
   type MailEnvelope,
   type MailVerifier,
+  verifyOriginalSignature,
 } from "@/api/lib/email/inbound/authentication";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
   correspondenceFromMessage,
-  InboundMessageError,
-  parseInboundMessage,
   type InboundAttachment,
+  InboundMessageError,
   type InboundMessageErrorReason,
   type ParsedInboundMessage,
+  parseInboundMessage,
 } from "@/api/lib/email/inbound/message";
 
 const AUTH_PROJECTION = {

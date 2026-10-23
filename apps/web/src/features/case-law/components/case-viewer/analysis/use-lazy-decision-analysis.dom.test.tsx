@@ -6,8 +6,8 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import type {
-  DecisionAnalysisKey,
   AnalysisQueryResult,
+  DecisionAnalysisKey,
 } from "@/features/case-law/queries/decision-analysis";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
