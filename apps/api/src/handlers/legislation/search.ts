@@ -5,13 +5,13 @@ import { status } from "elysia";
 import type { Static } from "elysia";
 
 import {
-  PUBLIC_LEGISLATION_COUNTRIES,
   isPublicLegislationCountry,
+  PUBLIC_LEGISLATION_COUNTRIES,
 } from "@stll/api-contract/legislation-publication";
 import {
   SEARCH_PAGINATION_COMPLETE,
-  type SearchPaginationOutcome,
   SEARCH_TOTAL_NOT_COUNTED,
+  type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -22,9 +22,9 @@ import { envBase } from "@/api/env-base";
 import { projectLegislationSearchHit } from "@/api/handlers/legislation/search-response";
 import {
   PUBLIC_JURISDICTIONS_DESCRIPTION,
+  type SearchLegislationBody,
   searchLegislationBodySchema,
   searchLegislationResponseSchema,
-  type SearchLegislationBody,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -39,9 +39,9 @@ import {
   noCourtTierSql,
 } from "@/api/lib/legal-search/authority-sql";
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import type {
@@ -50,14 +50,14 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  type SearchCursor,
+  type CorpusCandidateRankingInput,
   readCorpusIndexSearchPage,
   SCORED_SCAN_TRANSPORT,
-  type CorpusCandidateRankingInput,
+  type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
-  corpusAppliedProjection,
   type CorpusAppliedProjection,
+  corpusAppliedProjection,
 } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
@@ -95,19 +95,19 @@ import {
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import {
-  redistributableLegislationSource,
-  publishedLegislationDocumentFor,
   publishedLegislationCountryFor,
+  publishedLegislationDocumentFor,
+  redistributableLegislationSource,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
   inForceToday,
+  type LegislationVersionRef,
   legislationVersionRef,
   legislationVersionRefAt,
   notWithdrawn,
   openedBy,
-  type LegislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
@@ -1195,8 +1195,9 @@ const createIndexRecorder = ({
 }) => {
   const scan: IndexScanTiming = { durationMs: 0, candidateCount: 0, rounds: 0 };
   let rejectionAttribution:
-    | { type: "page_read" }
-    | { type: "ranking_callback" } = { type: "page_read" };
+    { type: "page_read" } | { type: "ranking_callback" } = {
+    type: "page_read",
+  };
   let openedAt: number | undefined = now();
   const closeInterval = () => {
     if (openedAt !== undefined) {

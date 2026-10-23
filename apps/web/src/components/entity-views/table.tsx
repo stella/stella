@@ -71,11 +71,11 @@ import { useTableStore } from "@/lib/workspaces/table-store";
 
 import {
   ENTITY_VIEW_GROUP,
-  entryId,
+  entityViewSortValues,
   entryDueDate,
+  entryId,
   entryStatus,
   entryType,
-  entityViewSortValues,
   isEntityViewSortColumn,
 } from "./model";
 import { NewEntityViewTask } from "./new-task";

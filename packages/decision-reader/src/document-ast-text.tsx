@@ -28,7 +28,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { useDisplayElisionPolicy } from "./display-elision-policy";
-import { useReaderPresentation, useReaderMessages } from "./reader-adapters";
+import { useReaderMessages, useReaderPresentation } from "./reader-adapters";
 import type { ReaderMessageKey } from "./reader-adapters";
 import type { ReaderMark, ReaderMarkRange, SearchPiece } from "./reader-search";
 import { readerHref, useSourceLinkPolicy } from "./source-link-policy";

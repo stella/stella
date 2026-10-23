@@ -8,8 +8,8 @@ import { Script } from "node:vm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  generateCapabilityRuntime,
   generateCapabilityCatalogRuntime,
+  generateCapabilityRuntime,
 } from "./generate-capability-runtime";
 import { serializeDispatchModule } from "./lib/capability-catalog";
 

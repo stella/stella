@@ -1,4 +1,4 @@
-import { describe, expect, test, expectTypeOf } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import type { SafeId } from "@/lib/safe-id";

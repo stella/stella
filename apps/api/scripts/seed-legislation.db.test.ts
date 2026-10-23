@@ -15,7 +15,7 @@ import { readNamedLegislationWorks } from "@/api/lib/legal-search/legislation-wo
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { seedLegislation, SECTION_51_VERSION_DATE } from "./seed-legislation";
+import { SECTION_51_VERSION_DATE, seedLegislation } from "./seed-legislation";
 
 test("local seeding creates searchable Czech statute versions and converges on replay", async () => {
   const client = await createTestPglite();

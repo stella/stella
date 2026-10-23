@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
     "keyRequired": {
+      "accountRestricted": "As configurações do provedor de IA não estão disponíveis para esta conta.",
+      "configUnreadable": "Não foi possível ler a configuração do provedor de IA. Peça a um administrador da organização para reconectá-lo.",
       "cta": "Abrir configurações de IA",
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
+      "permissionRequired": "Somente um administrador da organização pode conectar um provedor de IA.",
+      "seatRequired": "Peça a um administrador da organização para atribuir uma vaga a você.",
       "title": "Conectar provedor de IA"
     },
     "refinePlaceholder": "Como a IA deve ajustar a redação?",

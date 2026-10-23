@@ -1,9 +1,6 @@
 import { panic } from "better-result";
 
 import {
-  orderKanbanCellsByColumns,
-  resolveKanbanColumnBands,
-  resolveKanbanGrouping,
   type KanbanBoardCell,
   type KanbanBoardColumn,
   type KanbanBoardLane,
@@ -11,9 +8,12 @@ import {
   type KanbanBuiltInGroup,
   type KanbanColumnBandSpan,
   type KanbanGroup,
-  type KanbanGroupOption,
   type KanbanGrouping,
+  type KanbanGroupOption,
   type KanbanSchema,
+  orderKanbanCellsByColumns,
+  resolveKanbanColumnBands,
+  resolveKanbanGrouping,
 } from "@stll/ui/kanban";
 
 import type { GenericProperty } from "./types";
@@ -28,8 +28,7 @@ export type KanbanEmptyGroupVisibility =
 
 /** A persisted reference keeps a real option distinct from the No value lane. */
 export type KanbanSavedGroupReference =
-  | { type: "option"; value: string }
-  | { type: "uncategorized" };
+  { type: "option"; value: string } | { type: "uncategorized" };
 
 export type KanbanSavedAxisState<TGroupId extends string = string> = {
   emptyGroups: KanbanEmptyGroupVisibility;

@@ -30,10 +30,10 @@ import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 
 import {
-  parseEmail,
-  parsedEmailToText,
   type EmailAttachment,
   type EmailParseError,
+  parsedEmailToText,
+  parseEmail,
 } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import {

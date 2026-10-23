@@ -67,8 +67,8 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
-  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
+  CHAT_MESSAGE_RENDER_POLICY,
   collectAnonRestorations,
   DATA_URL_PREFIX,
   decodeBase64DataUrl,
@@ -131,8 +131,8 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
-  findChatRequestError,
   type ChatRequestError,
+  findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
@@ -1118,8 +1118,7 @@ export const ChatErrorMessage = ({
   error: Error;
   isGenerating: boolean;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
@@ -1277,8 +1276,7 @@ const AssistantMessageActions = ({
   exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   /** Present on the main chat surface; enables the export action. Omitted on
    *  embedded surfaces (file-chat overlay, template studio) that don't export. */
   threadRef?: ChatThreadRef | undefined;
@@ -1384,10 +1382,7 @@ type ChatThreadMessagesProps = {
   messages: ChatUIMessage[];
   onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
   answerRewriteAvailability?:
-    | "available"
-    | "anonymized"
-    | "unknown"
-    | undefined;
+    "available" | "anonymized" | "unknown" | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1395,8 +1390,7 @@ type ChatThreadMessagesProps = {
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
@@ -1414,8 +1408,7 @@ type ChatThreadMessagesProps = {
   /** Mirrors an ask-user card's local edit-mode up to the page so it can
    *  keep treating a reopened answered card as a live clarification. */
   onAskUserEditingChange?:
-    | ((toolCallId: string, isEditing: boolean) => void)
-    | undefined;
+    ((toolCallId: string, isEditing: boolean) => void) | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
     destination: CreateDocumentDestination,
@@ -1780,8 +1773,7 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
 };
 
 type ProcessStepTitleKey =
-  | ReturnType<typeof getChatToolTitleKey>
-  | "chat.reasoning";
+  ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
 
 const getProcessStepTitleKey = (
   entry: AssistantPartRenderEntry,
