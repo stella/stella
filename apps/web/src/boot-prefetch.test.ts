@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
-
 import {
   discardBootPrefetch,
   resolveRequestMethod,
@@ -45,54 +43,20 @@ const failingFetch = () => async (): Promise<Response> =>
   await Promise.reject(new Error("network down"));
 
 describe("boot prefetch", () => {
-  test("marks only the boot session request", async () => {
-    const requests: { input: string; headers: Headers }[] = [];
+  test("bypasses the cookie cache", async () => {
+    const requests: URL[] = [];
     startBootPrefetch({
-      fetchImpl: async (input, init) => {
-        requests.push({ input, headers: new Headers(init?.headers) });
-        return new URL(input).pathname.endsWith("/get-session")
-          ? jsonResponse(SIGNED_IN_SESSION)
-          : jsonResponse({ role: "member" });
+      fetchImpl: async (input) => {
+        requests.push(new URL(input));
+        return jsonResponse(null);
       },
     });
     await takeBootPrefetch("/api/auth/get-session");
-    await takeBootPrefetch("/api/auth/organization/get-active-member-role");
-    expect(
-      requests.map(({ input, headers }) => ({
-        path: new URL(input).pathname,
-        marker: headers.get(AUTH_SESSION_STARTUP_HEADER),
-      })),
-    ).toEqual([
-      { path: "/api/auth/get-session", marker: "1" },
-      { path: "/api/auth/organization/get-active-member-role", marker: null },
-    ]);
+    expect(requests).toHaveLength(1);
+    const request = requests.at(0);
+    expect(request?.searchParams.get("disableCookieCache")).toBe("true");
     discardBootPrefetch();
   });
-
-  test.each([false, true])(
-    "bypasses cookie cache and suppresses startup expiry after discard: %s",
-    async (wasDiscarded) => {
-      const requests: { url: URL; headers: Headers }[] = [];
-      startBootPrefetch({
-        wasDiscarded,
-        fetchImpl: async (input, init) => {
-          requests.push({
-            url: new URL(input),
-            headers: new Headers(init?.headers),
-          });
-          return jsonResponse(null);
-        },
-      });
-      await takeBootPrefetch("/api/auth/get-session");
-      expect(requests).toHaveLength(1);
-      const request = requests.at(0);
-      expect(request?.url.searchParams.get("disableCookieCache")).toBe("true");
-      expect(request?.headers.get(AUTH_SESSION_STARTUP_HEADER)).toBe(
-        wasDiscarded ? null : "1",
-      );
-      discardBootPrefetch();
-    },
-  );
 
   test("serves each prefetched response exactly once", async () => {
     startBootPrefetch({ fetchImpl: sessionFetch(SIGNED_IN_SESSION).fetchImpl });

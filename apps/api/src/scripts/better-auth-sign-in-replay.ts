@@ -16,6 +16,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { makeSignature } from "better-auth/crypto";
 import { Result, TaggedError } from "better-result";
 import { SQL } from "bun";
+import { desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
@@ -24,7 +25,9 @@ import { errorOutputLogger } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { session as authSession } from "@/api/db/auth-schema";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import { isRecord } from "@/api/lib/type-guards";
 import { normalizeBetterAuthOAuthBaseUrl } from "@/api/mcp/resource-policy-contract";
 import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
@@ -122,13 +125,12 @@ const readRows = async (client: SQL) => {
          ORDER BY a.id
          LIMIT ${MAX_SIGN_IN_ROWS + 1}
       `;
-      const sessions: unknown = await client`
-        SELECT token, user_id AS "userId"
-          FROM session
-         WHERE expires_at > now()
-         ORDER BY expires_at DESC
-         LIMIT ${MAX_SESSION_ROWS}
-      `;
+      const sessions = await drizzle({ client })
+        .select({ token: authSession.token, userId: authSession.userId })
+        .from(authSession)
+        .where(liveSessionPredicate(new Date()))
+        .orderBy(desc(authSession.expiresAt))
+        .limit(MAX_SESSION_ROWS);
       const userCount: unknown =
         await client`SELECT count(*)::text AS "count" FROM "user"`;
       const accountCount: unknown =

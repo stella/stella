@@ -1,8 +1,9 @@
-import { and, eq, gt, like, sql } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 
 import { session } from "@/api/db/auth-schema";
 import type { RootDatabase } from "@/api/db/root";
 import { syntheticSessionControl } from "@/api/db/schema";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import { escapeLike } from "@/api/lib/escape-like";
 
 import {
@@ -47,7 +48,7 @@ export const readSyntheticSessionAuthority = async (
         eq(session.activeOrganizationId, SYNTHETIC_PRINCIPAL.org.id),
         eq(session.refreshMode, "fixed"),
         like(session.id, `${escapeLike(SYNTHETIC_SESSION_PREFIX)}%`),
-        gt(session.expiresAt, sql`${now.toISOString()}::timestamptz`),
+        liveSessionPredicate(now),
       ),
     )
     .limit(1);

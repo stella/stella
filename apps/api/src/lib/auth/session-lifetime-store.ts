@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { randomBytes } from "node:crypto";
@@ -7,9 +7,10 @@ import { session } from "@/api/db/auth-schema";
 import { revokeUserSessionById } from "@/api/lib/auth-artifacts";
 import {
   SESSION_ABSOLUTE_AGE_MS,
-  SESSION_PRIOR_TOKEN_GRACE_MS,
+  SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
 import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 
 const SESSION_ACTIVITY_WRITE_INTERVAL_MS = 5 * 60 * 1000;
@@ -61,18 +62,6 @@ export const createDatabaseSessionLifetimeStore = (
       ),
     );
 
-  // Every credential check enforces the absolute lifetime from creation, so
-  // no request path, boundary or activity level can keep a session past it.
-  const liveSessionPredicate = (now: Date, table = session) =>
-    and(
-      sql`${table.expiresAt} > ${now}::timestamptz`,
-      sql`${table.createdAt} > ${new Date(now.getTime() - SESSION_ABSOLUTE_AGE_MS)}::timestamptz`,
-      or(
-        isNull(table.lastSeenAt),
-        sql`${table.expiresAt} > ${table.lastSeenAt}::timestamptz`,
-      ),
-    );
-
   const findCurrentSession = async (token: string, now: Date) =>
     (await db.query.session.findFirst({
       where: {
@@ -82,7 +71,7 @@ export const createDatabaseSessionLifetimeStore = (
     })) ?? null;
 
   return {
-    observe: async ({ token, now }) => {
+    observe: async ({ token, now, presentedToken }) => {
       const current = await findCurrentSession(token, now);
       if (!current) {
         return null;
@@ -90,7 +79,14 @@ export const createDatabaseSessionLifetimeStore = (
       const staleBefore = new Date(
         now.getTime() - SESSION_ACTIVITY_WRITE_INTERVAL_MS,
       );
-      if (current.lastSeenAt !== null && current.lastSeenAt > staleBefore) {
+      // Internal SDK calls can use the resolved token before the client has it.
+      const confirmsRotation =
+        current.token === presentedToken && current.priorTokenHash !== null;
+      if (
+        !confirmsRotation &&
+        current.lastSeenAt !== null &&
+        current.lastSeenAt > staleBefore
+      ) {
         return current;
       }
       const staleActivity = or(
@@ -101,6 +97,9 @@ export const createDatabaseSessionLifetimeStore = (
       const rows = await db
         .update(session)
         .set({
+          ...(confirmsRotation
+            ? { priorTokenHash: null, priorTokenExpiresAt: null }
+            : {}),
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
           updatedAt: session.updatedAt,
         })
@@ -108,7 +107,9 @@ export const createDatabaseSessionLifetimeStore = (
           and(
             credentialPredicate({ token, now }),
             liveSessionPredicate(now),
-            staleActivity,
+            confirmsRotation
+              ? and(eq(session.token, token), isNotNull(session.priorTokenHash))
+              : staleActivity,
           ),
         )
         .returning();
@@ -125,7 +126,7 @@ export const createDatabaseSessionLifetimeStore = (
           token: randomBytes(32).toString("hex"),
           priorTokenHash: hashSessionToken(token),
           priorTokenExpiresAt: new Date(
-            now.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS,
+            now.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS,
           ),
           // A refresh never reaches past the absolute lifetime.
           expiresAt: sql`LEAST(${expiresAt}::timestamptz, ${session.createdAt} + ${`${SESSION_ABSOLUTE_AGE_MS} milliseconds`}::interval)`,
@@ -136,6 +137,7 @@ export const createDatabaseSessionLifetimeStore = (
           and(
             eq(session.token, token),
             eq(session.refreshMode, "automatic"),
+            sql`${session.expiresAt} < ${session.createdAt}::timestamptz + ${`${SESSION_ABSOLUTE_AGE_MS} milliseconds`}::interval`,
             liveSessionPredicate(now),
             // Due inside the refresh window, and at most once per update interval:
             // an expiry shortened by the absolute lifetime stays inside the

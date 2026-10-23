@@ -45,6 +45,7 @@ import {
   TWO_FACTOR_SESSION_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
@@ -84,6 +85,7 @@ const clientWorkspaceId = workspaceId();
 const memberPersonalWorkspaceId = workspaceId();
 const liveOwnerSessionId = tid();
 const expiredOwnerSessionId = tid();
+const cappedOwnerSessionId = tid();
 const liveMemberSessionId = tid();
 
 testState.beforeAll(async () => {
@@ -162,6 +164,13 @@ testState.beforeAll(async () => {
       id: liveOwnerSessionId,
       token: tid(),
       userId: ownerInFull,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+    {
+      id: cappedOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      createdAt: new Date(Date.now() - SESSION_ABSOLUTE_AGE_MS - 1),
       expiresAt: new Date("2100-01-01T00:00:00.000Z"),
     },
     {
@@ -414,6 +423,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
     const candidates = [
       liveOwnerSessionId,
       expiredOwnerSessionId,
+      cappedOwnerSessionId,
       liveMemberSessionId,
     ];
 
@@ -436,7 +446,11 @@ describe("resolveUserRealtimeAuthorization", () => {
     const authorized = await resolveUserRealtimeAuthorization(
       {
         organizationId: orgFull,
-        sessionIds: [liveOwnerSessionId, expiredOwnerSessionId],
+        sessionIds: [
+          liveOwnerSessionId,
+          expiredOwnerSessionId,
+          cappedOwnerSessionId,
+        ],
         userId: ownerInFull,
       },
       testDb,

@@ -26,7 +26,7 @@ import {
   createSessionLifetime,
   SESSION_ABSOLUTE_AGE_MS,
   SESSION_LIFETIME_FIELDS,
-  SESSION_PRIOR_TOKEN_GRACE_MS,
+  SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
@@ -34,6 +34,7 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -219,7 +220,7 @@ describe("session rollout policies", () => {
     );
   });
 
-  test("rotates every refreshed session and honours the prior token only briefly", async () => {
+  test("rotates every refreshed session and honours the prior token until its recovery ceiling", async () => {
     const fixture = await insertSession();
     const refreshed = await store.refresh({
       token: fixture.token,
@@ -232,13 +233,13 @@ describe("session rollout policies", () => {
     expect(
       await store.observe({
         token: fixture.token,
-        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS - 1),
+        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS - 1),
       }),
     ).not.toBeNull();
     expect(
       await store.observe({
         token: fixture.token,
-        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS + 1),
+        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS + 1),
       }),
     ).toBeNull();
   });
@@ -349,11 +350,11 @@ describe("session refresh credentials", () => {
     expect(persisted?.priorTokenHash).toBe(hashSessionToken(fixture.token));
     expect(persisted?.priorTokenHash).not.toBe(fixture.token);
     expect(persisted?.priorTokenExpiresAt).toEqual(
-      new Date(NOW.getTime() + 60_000),
+      new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS),
     );
   });
 
-  test("the prior credential works only before the sixty-second boundary", async () => {
+  test("the unconfirmed prior credential works only before the recovery ceiling", async () => {
     const fixture = await insertSession();
     const current = await store.refresh({
       token: fixture.token,
@@ -363,10 +364,13 @@ describe("session refresh credentials", () => {
     expect(current).not.toBeNull();
     const grace = await store.observe({
       token: fixture.token,
-      now: new Date(NOW.getTime() + 59_999),
+      now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS - 1),
     });
     expect(grace?.token).toBe(current?.token);
-    for (const elapsedMs of [60_000, 60_001]) {
+    for (const elapsedMs of [
+      SESSION_PRIOR_TOKEN_RECOVERY_MS,
+      SESSION_PRIOR_TOKEN_RECOVERY_MS + 1,
+    ]) {
       expect(
         await store.observe({
           token: fixture.token,
@@ -377,7 +381,7 @@ describe("session refresh credentials", () => {
     expect(
       await store.observe({
         token: current?.token ?? "missing-credential",
-        now: new Date(NOW.getTime() + 60_001),
+        now: new Date(NOW.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS + 1),
       }),
     ).not.toBeNull();
   });
@@ -604,6 +608,78 @@ const createHttpSession = async (cacheEnabled: boolean) => {
 };
 
 describe("native authentication session responses", () => {
+  test.each(["cap", "revocation"] as const)(
+    "cookie cache bounds stale %s snapshots to its window",
+    async (transition) => {
+      const fixture = await createHttpSession(true);
+      let requestCookie = fixture.cookie;
+      const createdAt = new Date(
+        fixture.clock.getTime() - SESSION_ABSOLUTE_AGE_MS + 30_000,
+      );
+      if (transition === "cap") {
+        await testDb
+          .update(session)
+          .set({ createdAt })
+          .where(eq(session.id, fixture.original.id));
+        const snapshot = await fixture.requestSession({
+          disableCookieCache: true,
+        });
+        expect(await snapshot.json()).toMatchObject({
+          session: { id: fixture.original.id },
+        });
+        const tokenCookie =
+          fixture.cookie
+            .split("; ")
+            .find((cookie) =>
+              cookie.startsWith("better-auth.session_token="),
+            ) ?? panic("Sign-in has no token cookie");
+        requestCookie = `${tokenCookie}; ${responseCookies(snapshot)}`;
+      } else {
+        await store.revokeById({
+          sessionId: fixture.original.id,
+          userId: brandPersistedUserId(fixture.original.userId),
+        });
+      }
+      fixture.advance(59_000);
+      await runWithQueryCounter(async (counter) => {
+        const cached = await fixture.requestSession({ requestCookie });
+        expect(await cached.json()).toMatchObject({
+          session: {
+            id: fixture.original.id,
+            createdAt: (transition === "cap"
+              ? createdAt
+              : fixture.original.createdAt
+            ).toISOString(),
+          },
+        });
+        expect(counter.count).toBe(0);
+      });
+      fixture.advance(1001);
+      const expiredCache = await fixture.requestSession({ requestCookie });
+      expect(await expiredCache.json()).toBeNull();
+    },
+  );
+
+  test("a session already capped skips the native refresh write", async () => {
+    const fixture = await createHttpSession(false);
+    await testDb
+      .update(session)
+      .set({
+        createdAt: new Date(fixture.clock.getTime() - 89 * DAY_MS),
+        updatedAt: new Date(fixture.clock.getTime() - 2 * DAY_MS),
+        lastSeenAt: fixture.clock,
+        expiresAt: new Date(fixture.clock.getTime() + DAY_MS),
+      })
+      .where(eq(session.id, fixture.original.id));
+    await runWithQueryCounter(async (counter) => {
+      const response = await fixture.requestSession();
+      expect(await response.json()).toMatchObject({
+        session: { token: fixture.original.token },
+      });
+      expect(counter.count).toBe(2);
+    });
+  });
+
   test.each([false, true])(
     "removes an expired current session through native resolution with cookie cache %s",
     async (cacheEnabled) => {
@@ -712,15 +788,35 @@ describe("native authentication session responses", () => {
       expect(await response.json()).toBeNull();
     },
   );
-  test("native refresh forwards a new cookie and expires the prior cached credential after grace", async () => {
+  test("the replacement cookie confirms rotation on its first cached read", async () => {
     const fixture = await createHttpSession(true);
-    const createdAt = new Date(fixture.clock.getTime() - 30 * DAY_MS);
+    await testDb
+      .update(session)
+      .set({
+        updatedAt: new Date(fixture.clock.getTime() - 2 * DAY_MS),
+        expiresAt: new Date(fixture.clock.getTime() + DAY_MS),
+      })
+      .where(eq(session.id, fixture.original.id));
+    const rotated = await fixture.requestSession({ disableCookieCache: true });
+    const newCookie = responseCookies(rotated);
+    expect(newCookie).toContain("session_data=");
+    expect(
+      await (await fixture.requestSession({ requestCookie: newCookie })).json(),
+    ).toMatchObject({ session: { id: fixture.original.id } });
+    expect(
+      await (await fixture.requestSession({ disableCookieCache: true })).json(),
+    ).toBeNull();
+  });
+
+  test("native refresh recovers a dropped cookie until the replacement is presented", async () => {
+    const fixture = await createHttpSession(true);
+    const createdAt = new Date(fixture.clock.getTime() - 85 * DAY_MS);
     await testDb
       .update(session)
       .set({
         createdAt,
         updatedAt: new Date(fixture.clock.getTime() - 2 * DAY_MS),
-        expiresAt: new Date(fixture.clock.getTime() + 28 * DAY_MS),
+        expiresAt: new Date(fixture.clock.getTime() + DAY_MS),
       })
       .where(eq(session.id, fixture.original.id));
     const refreshed = await fixture.requestSession({
@@ -766,7 +862,24 @@ describe("native authentication session responses", () => {
       session: { token: current.token },
     });
     expect(responseCookies(inFlight)).toContain("session_token=");
-    fixture.advance(1);
+    fixture.advance(60_001);
+    const retryAfterDroppedResponse = await fixture.requestSession({
+      disableCookieCache: true,
+    });
+    expect(await retryAfterDroppedResponse.json()).toMatchObject({
+      session: { token: current.token },
+    });
+    fixture.advance(60_000);
+    expect(
+      await (await fixture.requestSession({ disableCookieCache: true })).json(),
+    ).toMatchObject({ session: { token: current.token } });
+    const confirmed = await fixture.requestSession({
+      requestCookie: refreshedCookie,
+      disableCookieCache: true,
+    });
+    expect(await confirmed.json()).toMatchObject({
+      session: { token: current.token },
+    });
     const stale = await fixture.requestSession({ disableCookieCache: true });
     expect(await stale.json()).toBeNull();
     fixture.advance(1);

@@ -26,7 +26,6 @@ import {
   count,
   eq,
   exists,
-  gt,
   inArray,
   isNotNull,
   or,
@@ -174,6 +173,10 @@ import {
   SESSION_LIFETIME_FIELDS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
+import {
+  liveSessionAdapterWhere,
+  liveSessionPredicate,
+} from "@/api/lib/auth/session-liveness";
 import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
@@ -2667,7 +2670,7 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
           where: [
             { field: "id", value: session.id },
             { field: "userId", value: user.id },
-            { field: "expiresAt", operator: "gt", value: new Date() },
+            ...liveSessionAdapterWhere(new Date()),
           ],
           select: ["id"],
         });
@@ -2958,7 +2961,7 @@ export const resolveUserRealtimeAuthorization = async (
       and(
         eq(authSession.userId, member.userId),
         inArray(authSession.id, uniqueSessionIds),
-        gt(authSession.expiresAt, new Date()),
+        liveSessionPredicate(new Date(), authSession),
       ),
     )
     .where(
@@ -2998,7 +3001,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(authSession.userId, member.userId),
         inArray(authSession.id, uniqueSessionIds),
-        gt(authSession.expiresAt, new Date()),
+        liveSessionPredicate(new Date(), authSession),
       ),
     )
     .innerJoin(

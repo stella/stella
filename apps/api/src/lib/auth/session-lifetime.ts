@@ -8,11 +8,13 @@ import {
   createAuthEndpoint,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
-import { parseSessionOutput, parseUserOutput } from "better-auth/db";
+import { parseUserOutput } from "better-auth/db";
 import * as v from "valibot";
 
-import { DAY_IN_MS } from "@stll/time";
-
+import {
+  liveSessionAdapterWhere,
+  SESSION_ABSOLUTE_AGE_MS,
+} from "@/api/lib/auth/session-liveness";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -21,10 +23,13 @@ import {
   SYNTHETIC_SESSION_PREFIX,
 } from "@/api/lib/synthetic-principal/constants";
 
-export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
-export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
+export { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
+
+export const SESSION_PRIOR_TOKEN_RECOVERY_MS = 10 * 60 * 1000;
 const cookieCacheVersion = (session: Pick<Session, "id">) =>
-  session.id.startsWith(SYNTHETIC_SESSION_PREFIX)
+  // Pending rotations require one storage read before their snapshot is reusable.
+  session.id.startsWith(SYNTHETIC_SESSION_PREFIX) ||
+  ("priorTokenHash" in session && typeof session.priorTokenHash === "string")
     ? Bun.randomUUIDv7()
     : "session-lifetime-v2";
 
@@ -78,6 +83,7 @@ export const SESSION_LIFETIME_FIELDS = {
 type SessionObservation = {
   token: string;
   now: Date;
+  presentedToken?: string;
 };
 
 type SessionRefresh = {
@@ -107,7 +113,7 @@ const resolveObservedSession = async (
   const user = await internalAdapter.findUserById(session.userId);
   return user
     ? {
-        session: parseSessionOutput(options, session),
+        session,
         user: parseUserOutput(options, user),
       }
     : null;
@@ -137,6 +143,18 @@ const createRevokeSessionByIdEndpoint = (
     },
   );
 
+const readPresentedSessionToken = async () => {
+  const ctx = tryGetCurrentAuthEndpointContext();
+  if (!ctx?.getSignedCookie) {
+    return undefined;
+  }
+  const token = await ctx.getSignedCookie(
+    ctx.context.authCookies.sessionToken.name,
+    ctx.context.secret,
+  );
+  return typeof token === "string" ? token : undefined;
+};
+
 export const createSessionLifetime = ({
   store,
   now = () => new Date(),
@@ -157,9 +175,17 @@ export const createSessionLifetime = ({
       memo = new Map();
       observations.set(ctx, memo);
     }
-    const result = store.observe({ token, now: now() });
+    const result = store.observe({
+      token,
+      now: now(),
+      presentedToken: await readPresentedSessionToken(),
+    });
     memo?.set(token, result);
-    return await result;
+    const observed = await result;
+    if (observed) {
+      memo?.set(observed.token, result);
+    }
+    return observed;
   };
 
   const forgetObservations = () => {
@@ -239,6 +265,14 @@ export const createSessionLifetime = ({
     };
     adapter.updateSession = async (token, data) => {
       if (data.expiresAt) {
+        const current = await observe(token);
+        if (
+          !current ||
+          current.expiresAt.getTime() >=
+            current.createdAt.getTime() + SESSION_ABSOLUTE_AGE_MS
+        ) {
+          return current;
+        }
         forgetObservations();
         const ctx = tryGetCurrentAuthEndpointContext();
         const refreshed = await store.refresh({
@@ -276,7 +310,7 @@ export const createSessionLifetime = ({
         where: [
           { field: "priorTokenHash", value: hashSessionToken(token) },
           { field: "priorTokenExpiresAt", operator: "gt", value: now() },
-          { field: "expiresAt", operator: "gt", value: now() },
+          ...liveSessionAdapterWhere(now()),
         ],
         select: ["token"],
       });
