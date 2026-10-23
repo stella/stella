@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
+      "accountRestricted": "Nastavenia poskytovateľa AI nie sú pre tento účet dostupné.",
+      "configUnreadable": "Konfiguráciu poskytovateľa AI nemožno načítať. Požiadajte správcu organizácie o opätovné pripojenie.",
       "cta": "Otvoriť nastavenia AI",
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
+      "permissionRequired": "Poskytovateľa AI môže pripojiť iba správca organizácie.",
+      "seatRequired": "Požiadajte správcu organizácie, aby vám priradil licenciu.",
       "title": "Pripojiť poskytovateľa AI"
     },
     "refinePlaceholder": "Ako má AI upraviť znenie?",

@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountRestricted": "AI provider settings are unavailable for this account.",
+      "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
       "description": "Add provider credentials to start using AI features.",
+      "permissionRequired": "Only an organization admin can connect an AI provider.",
+      "seatRequired": "Ask an organization admin to assign you a seat.",
       "title": "Connect AI provider"
     },
     "refinePlaceholder": "How should the AI adjust the wording?",

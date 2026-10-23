@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Options de réécriture",
     "editWithAI": "Modifier avec l’IA",
     "keyRequired": {
+      "accountRestricted": "Les paramètres du fournisseur d’IA ne sont pas disponibles pour ce compte.",
+      "configUnreadable": "La configuration du fournisseur d’IA ne peut pas être lue. Demandez à un administrateur de l’organisation de le reconnecter.",
       "cta": "Ouvrir les paramètres IA",
       "description": "Ajoutez les identifiants d’un fournisseur pour commencer à utiliser les fonctions IA.",
+      "permissionRequired": "Seul un administrateur de l’organisation peut connecter un fournisseur d’IA.",
+      "seatRequired": "Demandez à un administrateur de l’organisation de vous attribuer une place.",
       "title": "Connecter un fournisseur IA"
     },
     "refinePlaceholder": "Comment l’IA doit-elle ajuster la formulation ?",

@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
+      "accountRestricted": "Ustawienia dostawcy AI są niedostępne dla tego konta.",
+      "configUnreadable": "Nie można odczytać konfiguracji dostawcy AI. Poproś administratora organizacji o ponowne połączenie.",
       "cta": "Otwórz ustawienia AI",
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
+      "permissionRequired": "Tylko administrator organizacji może połączyć dostawcę AI.",
+      "seatRequired": "Poproś administratora organizacji o przydzielenie Ci miejsca.",
       "title": "Połącz dostawcę AI"
     },
     "refinePlaceholder": "Jak AI ma dostosować sformułowanie?",

@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
+      "accountRestricted": "Tehisintellekti pakkuja seaded pole selle konto jaoks saadaval.",
+      "configUnreadable": "Tehisintellekti pakkuja seadistust ei saa lugeda. Paluge organisatsiooni administraatoril see uuesti ühendada.",
       "cta": "Ava AI seaded",
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
+      "permissionRequired": "Tehisintellekti pakkuja saab ühendada ainult organisatsiooni administraator.",
+      "seatRequired": "Paluge organisatsiooni administraatoril teile koht määrata.",
       "title": "Ühenda AI teenusepakkuja"
     },
     "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?",
