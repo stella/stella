@@ -1,5 +1,5 @@
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -53,7 +53,7 @@ import { Result, panic } from "better-result";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
-import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
+import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -102,11 +102,11 @@ import type {
   ParsePlKisDocumentOutput,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   checkedDecisionMetadata,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";

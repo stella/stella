@@ -19,8 +19,8 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import {
-  DEFAULT_INVOKE_RATE_LIMIT,
   consumeInvokeCapabilityRateLimit,
+  DEFAULT_INVOKE_RATE_LIMIT,
 } from "@/api/mcp/capability-rate-limit";
 import { createMcpGatewayRateLimiter } from "@/api/mcp/gateway/rate-limit";
 

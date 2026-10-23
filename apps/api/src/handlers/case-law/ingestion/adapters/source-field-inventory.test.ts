@@ -69,8 +69,8 @@ import {
   isClassifiedMetadataKey,
   METADATA_TEXT_DISPOSITIONS,
   metadataDisplayTextOf,
-  metadataTextAddressDispositionsForAdapter,
   metadataNullOnlyAddressesForAdapter,
+  metadataTextAddressDispositionsForAdapter,
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 

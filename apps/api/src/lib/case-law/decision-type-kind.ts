@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import {
   DECISION_TYPE_KIND_OTHER,
-  isDecisionTypeKind,
   type DecisionTypeKind,
+  isDecisionTypeKind,
 } from "@stll/api-contract/case-law-decision-types";
 
 import inventory from "@/api/lib/case-law/decision-type-inventory.json" with { type: "json" };

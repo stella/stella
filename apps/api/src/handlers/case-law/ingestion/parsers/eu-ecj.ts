@@ -60,12 +60,12 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
   ANONYMIZED_CLASS,
-  type WalkInlinesOptions,
   appendTextInline,
   inlinesToPlainText,
   ownTableRows,
   visibleHtmlText,
   walkInlines,
+  type WalkInlinesOptions,
 } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────

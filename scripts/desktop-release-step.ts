@@ -1,7 +1,7 @@
 import {
   existsSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";

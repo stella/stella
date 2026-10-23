@@ -1,8 +1,8 @@
 import {
   createMcpHandler,
   fromJsonSchema,
-  McpServer,
   isLegacyRequest,
+  McpServer,
 } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
@@ -21,28 +21,28 @@ import api from "@/api/server";
 
 import {
   AUTHENTICATED_PROBES,
+  CANARY_CLIENT_IDS,
   type CanaryFetcher,
-  createJsonRpcRequest,
   createDeploymentFetcher,
+  createJsonRpcRequest,
   evaluateAuthorizationMetadata,
   evaluateAuthorize,
   evaluateCredentialExpiry,
   evaluateDesktopRedeem,
   evaluateDiscovery,
   evaluateInitialize,
-  evaluateStreamAvailability,
-  evaluateToolsList,
   evaluateRegistration,
+  evaluateStreamAvailability,
   evaluateToolCall,
+  evaluateToolsList,
   evaluateUnauthenticated,
   LOOPBACK_REDIRECTS,
-  CANARY_CLIENT_IDS,
+  runAuthenticatedStreamProbe,
   runDesktopProbe,
-  runStagingCredentialJourneys,
+  runNamedProbe,
   runOAuthJourneys,
   runReviewAccountJourney,
-  runAuthenticatedStreamProbe,
-  runNamedProbe,
+  runStagingCredentialJourneys,
   summarize,
 } from "./mcp-canary";
 

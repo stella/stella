@@ -34,9 +34,9 @@ import type {
   ChatMessageRole,
   ChatPart,
   ChatTanStackPart,
-  PersistableChatPartType,
-  PersistableChatMessageCandidate,
   PersistableChatMessage,
+  PersistableChatMessageCandidate,
+  PersistableChatPartType,
   PersistableTerminalAssistantMessage,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";

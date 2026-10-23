@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { getDomain } from "tldts";
 import * as v from "valibot";
 
-import { withTimeout, TimeoutError } from "@stll/concurrency/with-timeout";
+import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 

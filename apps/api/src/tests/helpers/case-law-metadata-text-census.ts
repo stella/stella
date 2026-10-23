@@ -14,10 +14,10 @@ import { AT_RIS_APPLICATIONS } from "@/api/handlers/case-law/ingestion/adapters/
  * publisher identifier stored as the publisher spells it.
  */
 import {
-  metadataUrlKeys,
+  META_URL_DIAGNOSTICS,
   metadataUrlChildSchema,
   metadataUrlItemSchema,
-  META_URL_DIAGNOSTICS,
+  metadataUrlKeys,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 

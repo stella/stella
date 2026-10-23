@@ -1,9 +1,6 @@
 import { panic } from "better-result";
 
 import {
-  orderKanbanCellsByColumns,
-  resolveKanbanColumnBands,
-  resolveKanbanGrouping,
   type KanbanBoardCell,
   type KanbanBoardColumn,
   type KanbanBoardLane,
@@ -11,9 +8,12 @@ import {
   type KanbanBuiltInGroup,
   type KanbanColumnBandSpan,
   type KanbanGroup,
-  type KanbanGroupOption,
   type KanbanGrouping,
+  type KanbanGroupOption,
   type KanbanSchema,
+  orderKanbanCellsByColumns,
+  resolveKanbanColumnBands,
+  resolveKanbanGrouping,
 } from "@stll/ui/kanban";
 
 import type { GenericProperty } from "./types";

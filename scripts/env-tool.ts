@@ -30,9 +30,9 @@ import { collabEnvInvariantViolation } from "../apps/collab/src/env-schema";
 import { envWebInvariantViolation } from "../apps/web/src/env-schema";
 import {
   BUILD_KIND,
-  secretExampleInvariantViolation,
   LOCAL_DEV_OPT_IN,
   resolveRuntimeMode,
+  secretExampleInvariantViolation,
 } from "../packages/runtime-mode/src/index";
 import {
   AMBIENT_ENV_KEYS,

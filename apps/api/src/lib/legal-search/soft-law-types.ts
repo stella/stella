@@ -3,16 +3,16 @@ import type { Result } from "better-result";
 
 import type {
   SourceFieldInventory,
+  SourceSliceWalk,
   SourceSurfaceCensus,
   SourceTotalCount,
-  SourceSliceWalk,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 
 import {
-  type SoftLawFetchError,
   SOFT_LAW_BLOCK_REASONS,
   type SoftLawFetch,
+  type SoftLawFetchError,
 } from "./soft-law-access-types";
 
 export const SOFT_LAW_KINDS = [

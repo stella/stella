@@ -6,14 +6,14 @@ import { createDetached } from "@stll/errors";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import {
-  RUNTIME_WORKER_FILES,
   resolveRuntimeWorkerPath,
+  RUNTIME_WORKER_FILES,
 } from "@/api/lib/runtime-worker-path";
 
 import type {
   SanctionsMatcherLoad,
-  SanctionsMatcherReply,
   SanctionsMatcherMessage,
+  SanctionsMatcherReply,
   SanctionsMatcherRequest,
 } from "./matcher-protocol";
 import type {
@@ -278,6 +278,7 @@ const matchSanctionsRequest = async ({
     query: request.query,
     cutoff: request.cutoff,
     limit: request.limit,
+    ...(request.maxWork === undefined ? {} : { maxWork: request.maxWork }),
   });
 };
 
