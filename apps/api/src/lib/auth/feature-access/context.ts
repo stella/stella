@@ -5,7 +5,7 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
-import { env } from "@/api/env";
+import { readFeatureAccessGrants } from "@/api/env-feature-access";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
@@ -34,7 +34,7 @@ export const resolveFeatureAccessSnapshot = async ({
   organizationId,
   userId,
   registry = FEATURE_REGISTRY,
-  grants = env.API_FEATURE_ACCESS_GRANTS,
+  grants = readFeatureAccessGrants().grants,
 }: ResolveFeatureAccessSnapshotOptions): Promise<FeatureAccessSnapshot> => {
   const { candidates, enrolmentFeatureIds } = featureAccessReadPlan({
     organizationId,

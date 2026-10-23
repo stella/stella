@@ -14,6 +14,7 @@ import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { accountExportsRoute } from "@/api/handlers/account-exports/routes";
 import {
   agentAuthConfirmRoute,
@@ -815,6 +816,7 @@ const startServer = async (): Promise<void> => {
   }
 
   startMemoryPressureHandler();
+  await startFeatureAccessGrantsRefresh();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
