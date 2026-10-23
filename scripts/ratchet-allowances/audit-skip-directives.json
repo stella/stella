@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 5,
+  "reason": "Search-history jurisdiction migration, legacy-entry adoption, and tombstone compaction are internal maintenance writes performed under the audited user mutation that owns each transaction."
+}

@@ -146,9 +146,7 @@ export const searchHistoryEntryInputSchema = t.Union([
   ),
 ]);
 
-export type SearchHistoryEntryInput = Static<
-  typeof searchHistoryEntryInputSchema
->;
+type SearchHistoryEntryInput = Static<typeof searchHistoryEntryInputSchema>;
 
 /** What a browser kept before history was stored per country: no country. */
 const uncountriedSearchEntrySchema = t.Object(

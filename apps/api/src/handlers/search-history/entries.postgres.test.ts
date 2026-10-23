@@ -302,11 +302,19 @@ if (!databaseUrl || !enabled) {
       await withHistory(databaseUrl, async (fixture) => {
         const entries = [
           {
-            entry: { kind: "search", query: " Náhrada škody " },
+            entry: {
+              kind: "search",
+              query: " Náhrada škody ",
+              jurisdiction: "CZE",
+            },
             usedAt: "2020-01-02T03:04:05.000Z",
           },
           {
-            entry: { kind: "search", query: "NÁHRADA\tškody" },
+            entry: {
+              kind: "search",
+              query: "NÁHRADA\tškody",
+              jurisdiction: "CZE",
+            },
             usedAt: "2020-02-02T03:04:05.000Z",
           },
           {
@@ -419,7 +427,7 @@ if (!databaseUrl || !enabled) {
                 ...(await getImportClockBody(fixture)),
                 entries: [
                   {
-                    entry: { kind: "search", query },
+                    entry: { kind: "search", query, jurisdiction: "CZE" },
                     usedAt: "2020-01-01T00:00:00Z",
                   },
                 ],
@@ -477,7 +485,11 @@ if (!databaseUrl || !enabled) {
                 ...(await getImportClockBody(fixture)),
                 entries: [
                   {
-                    entry: { kind: "search", query: "  NÁHRADA\t škody  " },
+                    entry: {
+                      kind: "search",
+                      query: "  NÁHRADA\t škody  ",
+                      jurisdiction: "CZE",
+                    },
                     usedAt: "2020-01-01T00:00:00Z",
                   },
                 ],
@@ -565,15 +577,27 @@ if (!databaseUrl || !enabled) {
                 ...(await getImportClockBody(fixture)),
                 entries: [
                   {
-                    entry: { kind: "search", query: "Náhrada škody" },
+                    entry: {
+                      kind: "search",
+                      query: "Náhrada škody",
+                      jurisdiction: "CZE",
+                    },
                     usedAt: "2026-01-02T03:04:05.000Z",
                   },
                   {
-                    entry: { kind: "search", query: " Náhrada  škody " },
+                    entry: {
+                      kind: "search",
+                      query: " Náhrada  škody ",
+                      jurisdiction: "CZE",
+                    },
                     usedAt: "2026-01-02T03:04:04.000Z",
                   },
                   {
-                    entry: { kind: "search", query: "NÁHRADA\t škody" },
+                    entry: {
+                      kind: "search",
+                      query: "NÁHRADA\t škody",
+                      jurisdiction: "CZE",
+                    },
                     usedAt: "2026-01-02T03:04:06.000Z",
                   },
                 ],
@@ -1325,7 +1349,7 @@ if (!databaseUrl || !enabled) {
                 ...(await getImportClockBody(fixture)),
                 entries: [
                   {
-                    entry: { kind: "search", query },
+                    entry: { kind: "search", query, jurisdiction: "CZE" },
                     usedAt: "2020-01-01T00:00:00Z",
                   },
                 ],

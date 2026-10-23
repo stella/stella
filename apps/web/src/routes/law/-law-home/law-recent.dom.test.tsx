@@ -44,12 +44,14 @@ const seed = [
   {
     ...usage,
     kind: "search",
+    jurisdiction: "CZE",
     id: toSafeId<"searchHistoryEntry">("history-search"),
     query: "náhrada škody",
   },
   {
     ...usage,
     kind: "decision",
+    jurisdiction: "CZE",
     id: toSafeId<"searchHistoryEntry">("history-court"),
     documentId: "decision-1",
     title: "23 Cdo 1001/2021 · Nejvyšší soud",
@@ -64,6 +66,7 @@ const seed = [
   {
     ...usage,
     kind: "decision",
+    jurisdiction: "CZE",
     id: toSafeId<"searchHistoryEntry">("history-unknown"),
     documentId: "decision-2",
     title: "47 C 57/2023",
@@ -74,6 +77,7 @@ const seed = [
   {
     ...usage,
     kind: "decision",
+    jurisdiction: "CZE",
     id: toSafeId<"searchHistoryEntry">("history-untiered"),
     documentId: "decision-3",
     title: "23 Cdo 1002/2021 · Nejvyšší soud",
@@ -84,6 +88,7 @@ const seed = [
   {
     ...usage,
     kind: "statute",
+    jurisdiction: "CZE",
     id: toSafeId<"searchHistoryEntry">("history-statute"),
     documentId: "statute-1",
     title: "Act",
