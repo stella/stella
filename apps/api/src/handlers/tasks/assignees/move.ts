@@ -15,8 +15,8 @@ import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   lockTaskAssignmentMembers,
-  writeTaskAssignments,
   removeTaskAssignment,
+  writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
 
 const moveAssigneeBodySchema = t.Object({

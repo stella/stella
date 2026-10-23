@@ -26,8 +26,8 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import {
-  isTaskPriority,
   isListItemType,
+  isTaskPriority,
   isTaskStatus,
   toISODate,
 } from "@/components/workspaces/tasks/task-detail-constants";

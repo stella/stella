@@ -73,8 +73,8 @@ import {
   changeStatutesIndexQuery,
   readStatuteIntent,
   STATUTE_MAX_QUERY_LENGTH,
-  statutesIndexSearchSchema,
   type StatutesIndexSearch,
+  statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
 import {
   useStatuteColumnPreferences,

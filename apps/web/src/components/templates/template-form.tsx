@@ -12,8 +12,8 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
-  DialogFormState,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -21,13 +21,13 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import {
+  AiActionIcon,
   AlertTriangleIcon,
   ChevronDownIcon,
   LandmarkIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
@@ -83,8 +83,8 @@ import {
   readClauseWarnings,
   readUndecidedConditionLabels,
   runLeadingSingleFlight,
-  visibleItemFields,
   savedFillNotices,
+  visibleItemFields,
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";

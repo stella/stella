@@ -6,11 +6,11 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
-  caseLawDecisionAliases,
-  caseLawDecisionSourceIdentities,
   caseLawCitationDoctrineReviews,
-  caseLawDecisionSupplements,
+  caseLawDecisionAliases,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
+  caseLawDecisionSupplements,
   caseLawIndexJobs,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";

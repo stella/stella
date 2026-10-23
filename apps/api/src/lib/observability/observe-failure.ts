@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 /**
  * The failure emitter: one call observes a failure, and the owner decides the
  * record, its severity, whether it is captured, and what it counts.
@@ -11,12 +10,14 @@ import { Result } from "better-result";
  * Returns nothing: retry, park and exit decisions keep their own predicates.
  */
 
+import { Result } from "better-result";
+
 import {
   type ExceptionScope,
-  type RequestExceptionScope,
-  type HandlerExceptionScope,
-  sanitizeQueryErrorText,
   type FailureGrade,
+  type HandlerExceptionScope,
+  type RequestExceptionScope,
+  sanitizeQueryErrorText,
 } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";

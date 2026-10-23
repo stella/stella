@@ -4,9 +4,9 @@ import {
   hashSchemaInput,
   normalizeApprovalSchema,
   parseWithStandardSchema,
-  toolDefinition,
   type StreamChunk,
   type Tool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
   convertToolsToProviderFormat as convertAnthropicTools,

@@ -110,8 +110,8 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
-  restoreReviewRun,
   restoredRunId,
+  restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
@@ -239,8 +239,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type {
   Negotiation,
   PlaybookListItem,
-  Position,
   PlaybookPositionsValue,
+  Position,
 } from "@/lib/knowledge/playbook-types";
 import { positionReferencePassages } from "@/lib/knowledge/playbook-types";
 import {

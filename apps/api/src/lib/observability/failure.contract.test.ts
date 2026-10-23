@@ -68,8 +68,8 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
-  initRequestContext,
   getRequestFailure,
+  initRequestContext,
 } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,

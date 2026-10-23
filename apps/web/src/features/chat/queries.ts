@@ -35,9 +35,9 @@ import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
-  DecisionChatThreadKey,
   ChatThreadOptionsInput,
   ChatThreadTitleKey,
+  DecisionChatThreadKey,
   FileChatThreadKey,
   GroupedChatThreadsKey,
   TemplateChatThreadKey,

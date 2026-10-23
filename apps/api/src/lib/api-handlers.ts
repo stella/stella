@@ -48,12 +48,12 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
-  isFeatureEnabled,
   isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import type {
-  FeatureAccessSnapshot,
   FeatureAccessProof,
+  FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
 import {
   getContentDeliveryReceiptError,
@@ -82,8 +82,8 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
-  recordRequestExceptionScope,
   getRequestContext,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import {
   hasMemberPermission,

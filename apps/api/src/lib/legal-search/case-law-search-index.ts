@@ -11,11 +11,11 @@ import {
   CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
-  publishedCaseLawDecisions,
   caseLawSearchBackfillFailures,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -11,9 +11,9 @@ import { MODEL_RATES } from "@stll/ai-catalog";
 
 import {
   computeRawUsageMicroUnits,
+  MICRO_UNITS_PER_USAGE_UNIT,
   normalizeProviderPromptTokens,
   usageUnitsFromTokens,
-  MICRO_UNITS_PER_USAGE_UNIT,
 } from "@/api/lib/usage/unit-model";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";

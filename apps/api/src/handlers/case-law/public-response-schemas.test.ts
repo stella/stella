@@ -6,8 +6,8 @@ import { assertProperty } from "@stll/property-testing";
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
 import {
-  citationSummaryResponseSchema,
   citationsResponseSchema,
+  citationSummaryResponseSchema,
   corpusStatusResponseSchema,
   coverageResponseSchema,
   decisionFacetsResponseSchema,

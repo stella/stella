@@ -8,17 +8,17 @@ import {
 } from "@stll/property-testing";
 
 import {
-  expectRegistryResponse,
-  registryString,
-  registryExtras,
-  forEachRegistryMutation,
-  expectRegistryOutcome,
   expectNullableString,
+  expectRegistryOutcome,
+  expectRegistryResponse,
+  forEachRegistryMutation,
+  registryExtras,
+  registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupByKrsNumber } from "./client.js";
 import { parseAddress, parseEntity } from "./parse.js";
 import { normalizeRegon } from "./regon.js";
-import type { KrsRawAdres, KrsLookupResponse } from "./types.js";
+import type { KrsLookupResponse, KrsRawAdres } from "./types.js";
 
 const address = fc
   .record(

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {

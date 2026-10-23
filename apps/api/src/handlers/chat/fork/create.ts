@@ -10,6 +10,7 @@ import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
+  chatMessageFromPersisted,
   createChatAttachmentPart,
   getAwaitingUserInteractions,
   getChatAttachmentFilename,
@@ -17,7 +18,6 @@ import {
   getChatAttachmentPlaceholder,
   getChatAttachmentUrl,
   isChatAttachmentPart,
-  chatMessageFromPersisted,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";

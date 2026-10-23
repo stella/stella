@@ -19,8 +19,8 @@ import { optionalOrganizationSettingsOptions } from "@/queries/organization-sett
 
 import {
   CAPABILITY_REASON_KEYS,
-  resolveActionCapabilities,
   isCapabilityActionVisible,
+  resolveActionCapabilities,
 } from "./action-capabilities.logic";
 import type {
   ActionCapabilities,

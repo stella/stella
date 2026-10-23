@@ -21,13 +21,13 @@ import {
 import {
   CASE_LAW_TOTAL_REPORTER,
   type CaseLawCountryCompleteness,
-  type CaseLawCoverageHealth,
-  type CaseLawSourceCompleteness,
-  type CaseLawTotalReporter,
   caseLawCountryCompleteness,
   caseLawCountryHealth,
+  type CaseLawCoverageHealth,
+  type CaseLawSourceCompleteness,
   caseLawSourceCompleteness,
   caseLawSourceHealth,
+  type CaseLawTotalReporter,
 } from "@/api/handlers/case-law/decisions/coverage-health";
 import {
   type CaseLawKnownGaps,
@@ -57,8 +57,8 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  SOURCE_REPORT_FEATURE,
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
 } from "@/api/lib/legal-search/source-registry-membership";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";

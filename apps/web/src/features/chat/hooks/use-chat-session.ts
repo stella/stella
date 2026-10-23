@@ -42,8 +42,8 @@ import {
   getChatAssistantTurnError,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
-  isSuggestChangesApplyOutput,
   isNonPersistentGrantChatToolName,
+  isSuggestChangesApplyOutput,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -59,19 +59,19 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
+  buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
-  createDocumentDraftTabId,
   type CreateDocumentDraft,
+  createDocumentDraftTabId,
   findReadyCreateDocumentDraftMessageId,
   isCreateDocumentDraftPayload,
   isCreateDocumentDraftSettlementActive,
   isSameCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
-  selectTerminalCreateDocumentDraftIds,
   selectSettleableCreateDocumentDrafts,
+  selectTerminalCreateDocumentDraftIds,
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
@@ -84,11 +84,11 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { entityReferenceHref } from "@/components/references/reference.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
-  isChatMessageStartError,
-  sendThreadChatMessage,
   type ChatRuntime,
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
+  isChatMessageStartError,
+  sendThreadChatMessage,
 } from "@/features/chat/chat-runtime";
 import {
   chatToolGrantsOptions,
@@ -115,11 +115,11 @@ import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/u
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
-  reduceSendQueue,
-  snapshotChatRequestOptions,
   type QueuedChatEntry,
+  reduceSendQueue,
   type SendQueueEvent,
   type SendQueueState,
+  snapshotChatRequestOptions,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,

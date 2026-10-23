@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { normalizeUnicode, ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
+import { ARABIC_DIGIT_FOLDS, normalizeUnicode } from "@stll/text-normalize";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 export const MAX_VAT_RATE_BPS = 2_147_483_647;

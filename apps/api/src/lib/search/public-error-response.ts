@@ -10,8 +10,8 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import {
   boundedString,
-  truncateTextBytes,
   nullableBoundedString,
+  truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 /** Display caps for unauthenticated errors, independent of authenticated details. */

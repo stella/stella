@@ -18,8 +18,8 @@ import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { cn } from "@stll/ui/utils";
 
 import {
-  citedProvisionClick,
   CITED_PROVISION_CLICK,
+  citedProvisionClick,
 } from "@/components/legal-reader/cited-provision-link.logic";
 import {
   keepReadingPosition,

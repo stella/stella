@@ -50,9 +50,9 @@ import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
-  getChatAttachmentMimeType,
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
+  getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
   isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
@@ -70,8 +70,8 @@ import {
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
 import {
-  readChatTurnTiming,
   OWNER_LOST_OUTCOME,
+  readChatTurnTiming,
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
@@ -100,8 +100,8 @@ import {
   detectModelLoop,
   getLoopRecoveryKey,
   shouldInjectLoopRecovery,
-  shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
+  shouldSurfaceFinalContentLoop,
 } from "@/api/handlers/chat/loop-detector";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
@@ -178,9 +178,9 @@ import {
   chatSystemPrompts,
 } from "@/api/lib/chat/chat-request";
 import {
-  chatToolMapToArray,
   type ChatTool,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
@@ -208,8 +208,8 @@ import {
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import {
-  createStreamMessageCapture,
   type ChatStreamProcessor,
+  createStreamMessageCapture,
 } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,

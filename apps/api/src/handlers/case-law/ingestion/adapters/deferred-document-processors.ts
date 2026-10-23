@@ -14,8 +14,8 @@ import {
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   type DecisionDocumentOutcome,
-  type FetchDecisionDocumentOptions,
   fetchDecisionDocument,
+  type FetchDecisionDocumentOptions,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 

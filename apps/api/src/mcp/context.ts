@@ -80,9 +80,9 @@ import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidan
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import {
+  type ReadOutcome,
   readPresent,
   readUnavailable,
-  type ReadOutcome,
 } from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";

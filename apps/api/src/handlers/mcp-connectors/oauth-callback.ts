@@ -6,9 +6,9 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpOAuthState,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -31,14 +31,14 @@ import {
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
-  MCP_OAUTH_BINDING_FAILURE_CODE,
-  discoverOAuthMetadataForApproval,
   bindDiscoveredMetadata,
-  getOAuthEndpointOrigins,
-  validateApprovedOAuthIssuer,
+  discoverOAuthMetadataForApproval,
   exchangeAuthorizationCode,
+  getOAuthEndpointOrigins,
+  MCP_OAUTH_BINDING_FAILURE_CODE,
   observeAuthorizationResponseBinding,
   tokenExpiresAt,
+  validateApprovedOAuthIssuer,
 } from "@/api/lib/mcp-upstream/oauth";
 import type {
   ApprovedMcpIssuerBinding,

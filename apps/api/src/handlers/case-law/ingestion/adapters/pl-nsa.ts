@@ -1,6 +1,6 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
  * `JuDDGES/pl-nsa` (CC BY 4.0).
@@ -37,11 +37,11 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
-  excludedSourceSurface,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -78,8 +78,8 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlNsaDecision,
-  plNsaSectionHeading,
   PL_NSA_TEXT_SECTIONS,
+  plNsaSectionHeading,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import type {
   PlNsaSectionTexts,

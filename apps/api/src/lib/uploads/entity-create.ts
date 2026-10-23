@@ -18,7 +18,7 @@
  *   workspace `lastActivityAt` bump, and post-promote PDF-derivative
  *   + extraction enqueues.
  */
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, ne, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -80,9 +80,9 @@ import {
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
-  UploadFinalizeError,
   finalizeErr,
   finalizeOk,
+  UploadFinalizeError,
 } from "@/api/lib/uploads/runtime";
 
 type ResolveFileNameProps = {

@@ -4,8 +4,8 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -17,8 +17,8 @@ import {
   chatThreads,
   entities,
   entityVersions,
-  fileChatThreads,
   fields,
+  fileChatThreads,
   workspaces,
 } from "@/api/db/schema";
 import {
@@ -66,8 +66,8 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import {
-  organizationFileUsageHandlerError,
   OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";

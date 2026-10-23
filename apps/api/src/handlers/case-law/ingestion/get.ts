@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, count, desc, eq, gte, inArray, lte, max, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -24,8 +24,8 @@ import {
   CASE_LAW_SOURCE_ROWS_INVARIANT,
 } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  SOURCE_REPORT_FEATURE,
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 

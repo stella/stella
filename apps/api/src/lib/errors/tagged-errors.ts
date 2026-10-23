@@ -30,8 +30,8 @@ import { panic, TaggedError } from "better-result";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 import {
-  declareFingerprintFields,
   declareFailureClass,
+  declareFingerprintFields,
   FetchBoundaryError,
 } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";

@@ -7,8 +7,8 @@ import { DocxArchiveError } from "@stll/docx-utils";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 
 import {
-  actionAdmissionRefusal,
   type ActionAdmissionError,
+  actionAdmissionRefusal,
 } from "./action-admission-error";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,

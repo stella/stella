@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { isNotNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
@@ -18,8 +18,8 @@ import {
 import type {
   AdmittedDecisions,
   BoundedCaseLawIngestionBatch,
-  CaseLawIngestionBatchRecord,
   CaseLawBatchFailureReason,
+  CaseLawIngestionBatchRecord,
   RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";

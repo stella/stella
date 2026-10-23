@@ -221,10 +221,10 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
-  finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
-  setSecurityHeaders,
   CORS_EXPOSED_HEADERS,
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";

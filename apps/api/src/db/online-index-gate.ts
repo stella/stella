@@ -10,9 +10,9 @@ import {
 import type { BuildProgress, Signal, Verdict } from "@stll/db-load-gate/health";
 import {
   AUTOVACUUM_SQL,
-  LONG_TRANSACTION_SQL,
   autovacuumOnTarget,
   busyWindow,
+  LONG_TRANSACTION_SQL,
   longTransaction,
 } from "@stll/db-load-gate/indicators";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";

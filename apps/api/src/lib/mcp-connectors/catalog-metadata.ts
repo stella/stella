@@ -4,7 +4,7 @@ import {
   isToggleableNativeToolBackendSlug,
   loadRecommended,
 } from "@stll/catalogue";
-import { isCountryCode, type CountryCode } from "@stll/country-codes";
+import { type CountryCode, isCountryCode } from "@stll/country-codes";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
 

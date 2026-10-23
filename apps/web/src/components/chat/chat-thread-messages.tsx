@@ -67,8 +67,8 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
-  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
+  CHAT_MESSAGE_RENDER_POLICY,
   collectAnonRestorations,
   DATA_URL_PREFIX,
   decodeBase64DataUrl,
@@ -131,8 +131,8 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
-  findChatRequestError,
   type ChatRequestError,
+  findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";

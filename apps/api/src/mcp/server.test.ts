@@ -1,7 +1,7 @@
 import {
   Client,
-  StreamableHTTPClientTransport,
   type FetchLike,
+  StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import {
   CLIENT_CAPABILITIES_META_KEY,
@@ -10,9 +10,9 @@ import {
 } from "@modelcontextprotocol/server";
 import type {
   CallToolResult,
-  Tool as McpTool,
   ReadResourceResult,
   Resource,
+  Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";

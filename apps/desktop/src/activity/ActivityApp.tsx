@@ -21,12 +21,12 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeOffIcon,
+  FileTextIcon,
   LockKeyholeIcon,
   PauseIcon,
   PlayIcon,
   ShieldAlertIcon,
   TextIcon,
-  FileTextIcon,
   Trash2Icon,
   XIcon,
 } from "@stll/ui/icons";

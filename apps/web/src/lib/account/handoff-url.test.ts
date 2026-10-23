@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
 
 import {
-  sanitizeHandoffUrl,
   handoffNavigationDestination,
+  sanitizeHandoffUrl,
 } from "@/lib/account/handoff-url";
 
 const capture = async (href: string) => {

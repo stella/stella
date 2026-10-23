@@ -40,10 +40,10 @@ import {
 import {
   graphFingerprintOf,
   readCitationGraphFacts,
+  SIGNIFICANCE_PROMPT_VERSION,
   significanceOutputSchema,
   significanceSystemPrompt,
   significanceUserMessage,
-  SIGNIFICANCE_PROMPT_VERSION,
 } from "./significance";
 import type { CitationGraphFacts } from "./significance";
 

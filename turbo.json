@@ -610,15 +610,6 @@
       ],
       "cache": false
     },
-    "format": {
-      "dependsOn": ["transit"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.oxfmtrc.json",
-        "$TURBO_ROOT$/scripts/check-format-environment.ts",
-        "$TURBO_ROOT$/scripts/run-oxfmt.ts"
-      ]
-    },
     "i18n:check": {
       "dependsOn": ["transit"],
       "cache": false
@@ -800,7 +791,6 @@
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**",
-        "$TURBO_ROOT$/.oxfmtrc.json",
         "!.env*",
         "!.turbo/**",
         "!.cache/**",
@@ -886,7 +876,7 @@
     "@stll/mcp-apps#build": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.oxfmtrc.json",
+        "$TURBO_ROOT$/bunfig.toml",
         "!.env*",
         "!.turbo/**",
         "!.cache/**",

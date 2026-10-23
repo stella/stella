@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";
 
