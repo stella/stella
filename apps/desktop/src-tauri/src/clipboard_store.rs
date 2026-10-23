@@ -77,7 +77,7 @@ impl ClipboardStore {
 
   fn image_path(&self, blob_id: &str, suffix: &str) -> Result<PathBuf, String> {
     uuid::Uuid::parse_str(blob_id)
-      .map_err(|_| "clipboard image identifier is invalid".to_string())?;
+      .map_err(|error| format!("clipboard image identifier is invalid: {error}"))?;
     Ok(self.image_directory().join(format!("{blob_id}{suffix}")))
   }
 
@@ -87,7 +87,7 @@ impl ClipboardStore {
     associated_data: &[u8],
   ) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| "clipboard encryption key is invalid".to_string())?;
+      .map_err(|error| format!("clipboard encryption key is invalid: {error}"))?;
     let nonce = Nonce::generate();
     let ciphertext = cipher
       .encrypt(
@@ -97,7 +97,7 @@ impl ClipboardStore {
           aad: associated_data,
         },
       )
-      .map_err(|_| "clipboard image encryption failed".to_string())?;
+      .map_err(|error| format!("clipboard image encryption failed: {error}"))?;
     let mut blob = Vec::with_capacity(IMAGE_BLOB_HEADER_BYTES + ciphertext.len());
     blob.push(IMAGE_BLOB_VERSION);
     blob.extend_from_slice(nonce.as_slice());
@@ -114,9 +114,9 @@ impl ClipboardStore {
       return Err("clipboard image blob is invalid".to_string());
     }
     let nonce = Nonce::try_from(&blob[1..IMAGE_BLOB_HEADER_BYTES])
-      .map_err(|_| "clipboard image nonce is invalid".to_string())?;
+      .map_err(|error| format!("clipboard image nonce is invalid: {error}"))?;
     let cipher = Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| "clipboard encryption key is invalid".to_string())?;
+      .map_err(|error| format!("clipboard encryption key is invalid: {error}"))?;
     cipher
       .decrypt(
         &nonce,
@@ -125,7 +125,7 @@ impl ClipboardStore {
           aad: associated_data,
         },
       )
-      .map_err(|_| "clipboard image could not be decrypted".to_string())
+      .map_err(|error| format!("clipboard image could not be decrypted: {error}"))
   }
 
   fn write_encrypted_blob(
