@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   parseStagingState,
-  StagingStateError,
   stagingCheckDisposition,
   stagingFailureDisposition,
+  StagingStateError,
 } from "../helpers/staging-state";
 
 describe("staging state", () => {

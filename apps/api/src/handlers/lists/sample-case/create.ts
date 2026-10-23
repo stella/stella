@@ -44,8 +44,8 @@ import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   documentWriteRefusal,
-  DocumentWriteRefusedError,
   documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferResult } from "@/api/lib/entities/create-from-buffer";

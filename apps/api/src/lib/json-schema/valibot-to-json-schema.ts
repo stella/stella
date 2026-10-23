@@ -1,7 +1,7 @@
 import {
   type ConversionConfig,
-  toJsonSchema as convertToJsonSchema,
   type JsonSchema,
+  toJsonSchema as convertToJsonSchema,
 } from "@valibot/to-json-schema";
 import type { GenericSchema } from "valibot";
 

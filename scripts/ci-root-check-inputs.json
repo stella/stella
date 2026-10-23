@@ -251,7 +251,7 @@
       "docs/module-ownership/**",
       "docs/module-ownership.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Outbound transport ownership": [
       "apps/api/**",
@@ -272,11 +272,11 @@
       "docs/module-ownership/**",
       "scripts/**",
       ".oxlint-plugins/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Generated artifact formatting invariants": [
       "@stll/scripts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "scripts/**"
     ],
     "Schema introspection invariants": [
@@ -289,7 +289,7 @@
       "packages/ui/src/styles/theme.css",
       "DESIGN.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Suppression waiver ledger": [
       "apps/*/src/**",
