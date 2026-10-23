@@ -1999,6 +1999,25 @@ describe("contributor signature workflow", () => {
     expect(workflow.jobs["verify-signatures"]?.if).toContain(
       "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request'))",
     );
+    const jobIf = workflow.jobs["verify-signatures"]?.if ?? "";
+    expect(jobIf).toContain(
+      `!contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)`,
+    );
+    // A skipped required job still reports the `cla` context as skipped. Only
+    // trusted organization associations and the already-exempt bot skip it.
+    const shouldRunForPullRequest = (association: string, actor = "author") =>
+      actor !== "dependabot[bot]" &&
+      !["OWNER", "MEMBER", "COLLABORATOR"].includes(association);
+    for (const association of ["OWNER", "MEMBER", "COLLABORATOR"]) {
+      expect(shouldRunForPullRequest(association), association).toBe(false);
+    }
+    for (const association of [
+      "NONE",
+      "FIRST_TIME_CONTRIBUTOR",
+      "CONTRIBUTOR",
+    ]) {
+      expect(shouldRunForPullRequest(association), association).toBe(true);
+    }
     expect(workflow.permissions).toEqual({
       contents: "read",
       checks: "write",
