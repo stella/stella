@@ -26,6 +26,7 @@ try {
   // step and no such evidence the jobs API may still be catching up, so cancel as before.
   const lost = jobs.filter((job) => job.conclusion === "failure"
     && !(job.steps || []).some((step) => step.conclusion === "failure")
+    && (job.steps || []).every((step) => !step.status || step.status === "completed")
     && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
   if (!failures.length && lost.length) {
     core.notice(\`\${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.\`);

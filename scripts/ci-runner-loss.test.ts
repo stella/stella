@@ -31,6 +31,17 @@ test("runnerLost identifies failures without a failed step", () => {
       steps: [{ conclusion: "success" }, { conclusion: null }],
     }),
   ).toBe(false);
+  // A cancelled step next to one still running is not yet evidence either.
+  expect(
+    runnerLost({
+      name: "unfinished",
+      conclusion: "failure",
+      steps: [
+        { conclusion: "cancelled", status: "completed" },
+        { conclusion: null, status: "in_progress" },
+      ],
+    }),
+  ).toBe(false);
   for (const conclusion of ["cancelled", "skipped", "success"]) {
     expect(runnerLost({ ...lost, conclusion })).toBe(false);
   }
