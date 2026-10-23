@@ -14,6 +14,7 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { rootDb } = await import("@/api/db/root");
   const { user, organization, verification, oauthResource } =
     await import("@/api/db/auth-schema");
+  const { userProfessionalUseAcceptances } = await import("@/api/db/schema");
   const { getBetterAuthOAuthResources } =
     await import("@/api/lib/oauth-resource-policy");
   const { getAuthEndpointUrl } = await import("@/api/lib/auth/auth-paths");
@@ -191,6 +192,11 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         where: { organizationId: { eq: organizationId } },
       }),
     ).toEqual(memberships);
+    const firstAcceptances = await rootDb
+      .select()
+      .from(userProfessionalUseAcceptances)
+      .where(eq(userProfessionalUseAcceptances.userId, created.id));
+    expect(firstAcceptances).toHaveLength(1);
 
     await runCommand("set-password", password);
     const accounts = await context.internalAdapter.findAccounts(created.id);
@@ -226,6 +232,12 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         where: { organizationId: { eq: organizationId } },
       }),
     ).toEqual(memberships);
+    expect(
+      await rootDb
+        .select()
+        .from(userProfessionalUseAcceptances)
+        .where(eq(userProfessionalUseAcceptances.userId, created.id)),
+    ).toEqual(firstAcceptances);
     expect(await context.internalAdapter.findAccounts(created.id)).toEqual(
       accounts,
     );

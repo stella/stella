@@ -17,6 +17,11 @@ export default {
         reason: "Accepts the current statement for the authenticated account.",
       },
       {
+        path: "apps/api/src/scripts/review-account.ts",
+        reason:
+          "Records acceptance while provisioning the operator-owned review account.",
+      },
+      {
         path: "apps/api/src/lib/auth/professional-use.db.test.ts",
         reason: "Exercises account acceptance and its organization receipts.",
       },

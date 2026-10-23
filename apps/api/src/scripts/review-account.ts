@@ -15,7 +15,9 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { bindOwnerReviewAccountOrganizationStore } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
+import { acceptAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   bindReviewAccountOrganizationStore,
   createReviewAccountAuthStore,
@@ -34,6 +36,14 @@ const createStore = async (): Promise<ReviewAccountStore> => ({
       createReviewAccountOrganizationStore,
     ),
   ),
+  acceptProfessionalUse: async (userId) => {
+    const accepted = await acceptAccountProfessionalUse(
+      brandPersistedUserId(userId),
+    );
+    if (accepted.isErr()) {
+      throw accepted.error;
+    }
+  },
 });
 
 const readStdin = (): AsyncIterable<Uint8Array> => {

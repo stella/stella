@@ -3,11 +3,11 @@
  * (`auth.professionalUseStatement` in the web catalogs). Changing the English
  * statement changes its hash; update the version and the hash together.
  */
-export const PROFESSIONAL_USE_STATEMENT_VERSION = "2026-10";
+export const PROFESSIONAL_USE_STATEMENT_VERSION = "2026-10-confirmation";
 
 /** SHA-256 of the English statement this version names. */
 export const PROFESSIONAL_USE_STATEMENT_SHA256 =
-  "d4ae049f755b017246cccc22405611ecf214ffd84b8c8354d10a16a6d14819d5";
+  "bda7b7a0e0ad28f70f9ae90d62930ca4e109fa01c0f17209bdc5854839addac2";
 
 /**
  * The registration request field naming the statement version the page
