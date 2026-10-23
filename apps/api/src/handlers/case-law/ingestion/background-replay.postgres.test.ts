@@ -528,7 +528,7 @@ if (!databaseUrl || !enabled) {
                   })
                   .where(eq(caseLawDecisions.id, id));
               } finally {
-                await held.release();
+                held.release();
                 await running;
               }
               expect(await running).toMatchObject({
@@ -905,13 +905,13 @@ if (!databaseUrl || !enabled) {
               await lease?.release();
             } finally {
               controller.abort();
-              await held.release();
+              held.release();
               await running;
             }
           },
         });
       } finally {
-        await held.release();
+        held.release();
         fake.stop();
       }
     });
