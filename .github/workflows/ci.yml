@@ -6488,6 +6488,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          # The labels the run event carried, read from this step's env block in
+          # the job log by merge-bar.
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           RUN_REQUIRED: ${{ needs.ci-plan.outputs.run_required }}
           COMPLETED_RUN_ID: ${{ needs.ci-plan.outputs.completed_run_id }}
           COMPLETION_MARKER: ${{ needs.ci-plan.outputs.completion_marker }}
@@ -6736,7 +6739,7 @@ jobs:
                 case "$evidence" in
                   evaluated-success)
                     echo "Metadata mirror: run $evidence_run evaluated every required job of head $HEAD_SHA successfully."
-                    pass_through_reason=metadata-mirror
+                    pass_through_reason=metadata
                     reused_from_run_id="$evidence_run"
                     return 0
                     ;;
