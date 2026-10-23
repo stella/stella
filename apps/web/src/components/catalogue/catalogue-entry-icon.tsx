@@ -1,10 +1,10 @@
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { EyeOffIcon, GlobeIcon, type LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { getCatalogueIconImageSrc } from "@/components/catalogue/catalogue-entry-icon.logic";
 import { DocxIcon } from "@/components/document-icon";
 import { McpIcon } from "@/components/mcp-icon";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
 
 /**
  * Single source of truth for catalogue entry iconography. Resolution
@@ -42,6 +42,8 @@ export const CatalogueEntryIcon = ({
   size = 24,
   className,
 }: CatalogueEntryIconProps) => {
+  const proxiedIconSrc = useProxiedIconSrc(iconUrl);
+
   if (slug === "create-docx") {
     return <DocxIcon className={className} height={size} width={size} />;
   }
@@ -75,9 +77,7 @@ export const CatalogueEntryIcon = ({
     );
   }
 
-  const safeIconHref = iconUrl ? sanitizeHref(iconUrl) : undefined;
-
-  if (safeIconHref) {
+  if (proxiedIconSrc) {
     return (
       <img
         alt=""
@@ -86,7 +86,7 @@ export const CatalogueEntryIcon = ({
           "rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10",
         )}
         height={size}
-        src={safeIconHref}
+        src={proxiedIconSrc}
         style={{ width: size, height: size }}
         width={size}
       />

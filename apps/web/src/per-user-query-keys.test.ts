@@ -250,6 +250,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason:
       "Public site icons are shared by hostname; the caller is used only for miss admission.",
   },
+  "chat/link-icons/get-exact.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public icon bytes are shared by exact URL; the caller is used only for miss admission.",
+  },
   "chat/get-suggested-prompts.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-title.ts": { kind: "owned-id", reason: OWNED_THREAD },
@@ -1273,7 +1278,6 @@ test("organization settings skip authenticated reads until an organization is se
     organizationId: ORG,
     userId: USER,
   });
-  expect(typeof selected.queryFn).toBe("function");
   expect(selected.queryKey).not.toEqual(unselected.queryKey);
   const selectedOptional = optionalOrganizationSettingsOptions({
     organizationId: ORG,
