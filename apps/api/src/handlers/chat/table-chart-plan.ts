@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
+  isTableChartable,
   isTableChartPlanUsable,
   TABLE_CHART_LIMITS,
   tableChartPlanSchema,
@@ -84,6 +85,10 @@ export const planTableChart = async ({
   decide,
   decisionOptions,
 }: PlanTableChartOptions): Promise<TableChartResponse> => {
+  // No plan could pass the usability check, so no decision is spent on it.
+  if (!isTableChartable(table)) {
+    return { status: "unavailable" };
+  }
   const titleCriteria = Object.fromEntries([
     ["none", "No title or not stated"] as const,
     ...table.headers.map(

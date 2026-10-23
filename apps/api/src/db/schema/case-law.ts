@@ -2477,6 +2477,32 @@ export const caseLawSitemapShards = p.pgTable(
   ],
 );
 
+/**
+ * One country's month counts, staged by the sitemap refresh until every
+ * public country is counted and `case_law_sitemap_shards` is replaced whole.
+ */
+export const caseLawSitemapShardCounts = p.pgTable(
+  "case_law_sitemap_shard_counts",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    months: p.jsonb().notNull(),
+    pages: p.integer().notNull(),
+    countedAt: timestamptz("counted_at").notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_sitemap_shard_counts_pages_positive",
+      sql`${t.pages} > 0`,
+    ),
+    p.pgPolicy("case_law_sitemap_shard_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);
+
 export const CASE_LAW_BROWSE_FACET_KINDS = [
   "country",
   "court",

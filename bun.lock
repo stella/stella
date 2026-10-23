@@ -125,6 +125,7 @@
         "@stll/template-conditions": "workspace:*",
         "@stll/template-packs": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/text-search": "catalog:",
         "@stll/time": "0.4.1",
         "@stll/transactional": "workspace:*",
         "@stll/user-agent": "workspace:*",
@@ -1566,11 +1567,13 @@
     "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch",
     "@tanstack/ai-anthropic@0.19.5": "patches/@tanstack%2Fai-anthropic@0.19.5.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
-    "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
+    "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@tanstack/ai-bedrock@0.4.3": "patches/@tanstack%2Fai-bedrock@0.4.3.patch",
+    "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
     "@tanstack/ai-gemini@0.36.0": "patches/@tanstack%2Fai-gemini@0.36.0.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
+    "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "happy-dom@21.0.1": "patches/happy-dom@21.0.1.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
     "mailauth@7.1.1": "patches/mailauth@7.1.1.patch",
@@ -1641,6 +1644,7 @@
     "@stll/fuzzy-search": "1.4.0",
     "@stll/regex-set": "1.0.5",
     "@stll/regex-set-wasm": "1.0.5",
+    "@stll/text-search": "1.0.11",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -3296,6 +3300,8 @@
     "@stll/test-kit": ["@stll/test-kit@0.3.0", "", { "dependencies": { "@stll/time": "0.4.1", "better-result": "3.0.1" }, "peerDependencies": { "drizzle-orm": ">=1.0.0-rc.4 <2" }, "optionalPeers": ["drizzle-orm"] }, "sha512-NanJqdSXNwgABJ9bYsl6dYYiOSbA5LNoUT6bZ/cKeVGqewXTBICv+XNBtlLDwe/H4nQUeujQs+193OrkbaWAJw=="],
 
     "@stll/text-normalize": ["@stll/text-normalize@workspace:packages/text-normalize"],
+
+    "@stll/text-search": ["@stll/text-search@1.0.11", "", { "dependencies": { "@stll/aho-corasick": "^1.0.4", "@stll/fuzzy-search": "^1.1.4", "@stll/regex-set": "^1.0.5" } }, "sha512-umetpBnznO8BBaRAXyErWkyn22/bjsy2A+ylnqkD9ZYl6aRwxSyOlf5rQSzqqALIzdUVSeIbwOq3EEnWa7/U5Q=="],
 
     "@stll/time": ["@stll/time@0.4.1", "", { "dependencies": { "better-result": "3.0.1", "temporal-polyfill": "1.0.5" } }, "sha512-kfssSdiycaokO9nAT6ItmWf+oQ6Vf3SIrWUQ+FaM7JZp84i0yRg975OBcM7scI1RZTPjHti3PAXJE+wmQRdPLw=="],
 
