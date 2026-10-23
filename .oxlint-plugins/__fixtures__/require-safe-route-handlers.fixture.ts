@@ -7,7 +7,7 @@ declare const app: {
 declare const rawHandler: unknown;
 declare const endpoint: { handler: unknown };
 declare const endpointWithConfig: {
-  config: { body: unknown; permissions: unknown };
+  config: { body: unknown; permissions: unknown; accountAccess: unknown };
   handler: unknown;
 };
 
@@ -31,5 +31,6 @@ export const projectedConfigRoute = app.post(
   {
     body: endpointWithConfig.config.body,
     permissions: endpointWithConfig.config.permissions,
+    accountAccess: endpointWithConfig.config.accountAccess,
   },
 );
