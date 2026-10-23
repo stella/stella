@@ -32,6 +32,7 @@ import {
 import type {
   AIJustification,
   AIResult,
+  BatchSettlement,
   GenerateBatchProps,
   GenerateBatchResult,
   ResolvedFile,
@@ -293,6 +294,7 @@ export const generateBatch = async (
         aiJustifications: [],
         skippedPropertyIds,
         unsupportedPropertyIds: [],
+        settlements: new Map(),
       });
     }
 
@@ -301,11 +303,16 @@ export const generateBatch = async (
     );
 
     if (hasUnsupportedFiles) {
+      const settlements = new Map<SafeId<"property">, BatchSettlement>();
+      for (const property of aiInputProperties) {
+        settlements.set(property.id, "unsupported");
+      }
       return Result.ok({
         aiResults: [],
         aiJustifications: [],
         skippedPropertyIds,
         unsupportedPropertyIds: aiInputProperties.map((p) => p.id),
+        settlements,
       });
     }
 
@@ -369,10 +376,12 @@ export const generateBatch = async (
 
     const aiResults: AIResult[] = [];
     const aiJustifications: AIJustification[] = [];
+    const settlements = new Map<SafeId<"property">, BatchSettlement>();
 
     for (const property of aiInputProperties) {
       const propertyResult = output[property.id];
       if (!propertyResult) {
+        settlements.set(property.id, "notStated");
         continue;
       }
 
@@ -383,8 +392,7 @@ export const generateBatch = async (
 
       const content = fieldContentFromValidated(validated);
       if (content === null) {
-        // The model reported no value for this text/int property. Leave the
-        // cell unwritten rather than persist a fabricated placeholder.
+        settlements.set(property.id, "notStated");
         continue;
       }
 
@@ -409,6 +417,7 @@ export const generateBatch = async (
         propertyId: property.id,
         content,
       });
+      settlements.set(property.id, "answered");
     }
 
     return Result.ok({
@@ -416,5 +425,6 @@ export const generateBatch = async (
       aiJustifications,
       skippedPropertyIds,
       unsupportedPropertyIds: [],
+      settlements,
     });
   });

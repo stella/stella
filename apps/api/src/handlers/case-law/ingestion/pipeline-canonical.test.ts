@@ -7,8 +7,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusUploadIntents,
-  caseLawDecisions,
   caseLawDecisionIdentifiers,
+  caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -20,9 +20,9 @@ import { processDecision as processDecisionWithDependencies } from "@/api/handle
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -36,8 +36,8 @@ import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   approveMetadataUrls,

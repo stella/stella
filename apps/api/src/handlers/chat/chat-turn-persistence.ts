@@ -39,9 +39,9 @@ import type {
 import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import type {
-  ChatTurnTiming,
-  ChatTurnOutcome,
   ChatMessageRole,
+  ChatTurnOutcome,
+  ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";

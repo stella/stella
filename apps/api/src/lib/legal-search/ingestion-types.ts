@@ -13,8 +13,8 @@ import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
-  TextField,
   ReadDecisionTextFields,
+  TextField,
 } from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_TEXT_FIELD,
@@ -33,11 +33,11 @@ import type {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import {
-  toPlainText,
-  PlainTextError,
-  toPlainTextMetadataObject,
   type PlainText,
+  PlainTextError,
   type PlainTextMetadataValue,
+  toPlainText,
+  toPlainTextMetadataObject,
 } from "@/api/lib/case-law/plain-text";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -45,8 +45,8 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
-  withDocumentStageWindow,
   type DocumentStagePageOptions,
+  withDocumentStageWindow,
 } from "@/api/lib/legal-search/document-stage-observation";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {

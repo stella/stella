@@ -1,3 +1,4 @@
+import "@/api/register-schema-formats";
 import { KindGuard, type TSchema } from "@sinclair/typebox";
 import { ValueErrorType } from "@sinclair/typebox/errors";
 import { Value, type ValueError } from "@sinclair/typebox/value";
@@ -36,9 +37,9 @@ import {
 } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
-  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
-  isServiceClassification,
   type CatalogServiceClassification,
+  isServiceClassification,
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "@/api/lib/rate-limit/service-classification";
 import {
   HANDLER_KINDS,
@@ -109,8 +110,8 @@ import {
   oauthScopeRecoveryHint,
   quoteToolName,
   searchIndexUnavailableResult,
-  structuredErrorResult,
   structuredEgressPlan,
+  structuredErrorResult,
   untypedStructuredEgressPlan,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";

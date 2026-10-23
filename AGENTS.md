@@ -300,7 +300,7 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
-`bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
+`bun run typecheck` uses Bun’s native checker through the workspace
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. Manual checks dispatch offers
@@ -363,7 +363,7 @@ then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select
 narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
 index or page.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, oxfmt. For these, use `WebFetch` or
+**Not covered (no `llms.txt`):** Tailwind CSS. For it, use `WebFetch` or
 `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.

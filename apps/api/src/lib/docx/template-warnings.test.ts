@@ -9,8 +9,8 @@ import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { discoverTemplate } from "./discover-template";
 import {
   fieldOverlayWarnings,
-  type RegistryAvailabilityLoader,
   inlineBytesIgnoredWarning,
+  type RegistryAvailabilityLoader,
   TEMPLATE_WARNING_CODES,
   type TemplateWarningCode,
 } from "./template-warnings";
