@@ -282,9 +282,7 @@ export const useReviewActions = ({
   );
 
   type RejectStagedSuggestionResult =
-    | { status: "not-staged" }
-    | { status: "rejected" }
-    | { status: "failed" };
+    { status: "not-staged" } | { status: "rejected" } | { status: "failed" };
 
   const rejectStagedSuggestion = useLatestCallback(
     (item: ReviewSuggestion): RejectStagedSuggestionResult => {

@@ -6,8 +6,8 @@ import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  capturedExceptionIdentity,
   automaticExceptionKey,
+  capturedExceptionIdentity,
   fingerprintExceptionEvent,
   fingerprintExceptionScope,
   isExceptionFingerprintKey,

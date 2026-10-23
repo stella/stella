@@ -2,9 +2,9 @@ import { handlerErrorContext } from "@stll/errors/exception-context";
 
 import {
   captureError,
-  createErrorCapture,
   captureObservedError,
   captureRequestError,
+  createErrorCapture,
 } from "@/api/lib/analytics/capture";
 
 // Every capture needs a source-owned path, including errors without stacks.

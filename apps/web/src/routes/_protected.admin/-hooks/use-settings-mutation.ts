@@ -21,8 +21,7 @@ type ErrorToast = { title: string; description?: string };
 
 type UseSettingsMutationOptions<TVariables, TData> = {
   exceptionScope:
-    | HandlerExceptionScope
-    | ((variables: TVariables) => HandlerExceptionScope);
+    HandlerExceptionScope | ((variables: TVariables) => HandlerExceptionScope);
   mutationFn: (variables: TVariables) => Promise<TData>;
   /** Key to invalidate once the mutation resolves. */
   invalidate: QueryKey;

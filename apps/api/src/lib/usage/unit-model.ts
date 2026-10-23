@@ -102,8 +102,7 @@ type UsageTokenField = Extract<
 >;
 
 type UsageShapeAnomaly =
-  | `invalid-${UsageTokenField}`
-  | "cache-tokens-exceed-included-prompt";
+  `invalid-${UsageTokenField}` | "cache-tokens-exceed-included-prompt";
 
 type UsageShapeAnomalyOptions = {
   modelId: string;

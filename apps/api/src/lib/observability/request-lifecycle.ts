@@ -33,10 +33,10 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import {
-  recordRequestExceptionScope,
   getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";

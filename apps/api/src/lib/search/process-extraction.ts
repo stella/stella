@@ -164,9 +164,7 @@ type PersistedNativeExtractionProjection = {
 };
 
 export type NativeExtractionProjectionOutcome =
-  | "persisted"
-  | "preserved"
-  | "source_cancelled";
+  "persisted" | "preserved" | "source_cancelled";
 
 export const persistNativeExtractionProjection = async (
   {

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { createDetached } from "./detached";
-import { exceptionScopeIdentity, type ExceptionScope } from "./exception-scope";
+import { type ExceptionScope, exceptionScopeIdentity } from "./exception-scope";
 import {
   getExceptionScopes,
   withExceptionScope,

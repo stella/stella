@@ -1,4 +1,4 @@
-import { exceptionScopeIdentity, type ExceptionScope } from "@stll/errors";
+import { type ExceptionScope, exceptionScopeIdentity } from "@stll/errors";
 import {
   exceptionCauseChainIdentity,
   exceptionCauseFieldsIdentity,

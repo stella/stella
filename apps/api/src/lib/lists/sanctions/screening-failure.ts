@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-import { declareFingerprintFields, declareFailureClass } from "@stll/errors";
+import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import type { SanctionsSource } from "@stll/sanctions";
 

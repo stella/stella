@@ -6,7 +6,7 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import { rootDb } from "@/api/db/root";
 import { documentProcessingEnvInvariantViolation } from "@/api/env-document-processing-worker-schema";
-import { createBullMqWorkerHost, BullMqWorker } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 
 const SRC_DIR = path.resolve(import.meta.dir, "..");

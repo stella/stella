@@ -16,9 +16,7 @@ const PARAGRAPH_RANGE_PATTERN = /^\d+(?:[-–]\d+)?$/u;
 const PARAGRAPH_RANGE_SEPARATOR = /[-–]/u;
 
 export type DecisionParagraphRangeErrorReason =
-  | "garbage"
-  | "reversed"
-  | "too-wide";
+  "garbage" | "reversed" | "too-wide";
 
 export class DecisionParagraphRangeError extends TaggedError(
   "DecisionParagraphRangeError",

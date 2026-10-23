@@ -81,8 +81,7 @@ type GenerateWorkflowDataProps = {
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
   onPartialAnswer?:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
   /** Injected by tests; the org's resolved decision model otherwise, null for none. */
   decisionModel?: DecisionModel | null | undefined;
   /** External model-resolution boundary, injected by focused integration tests. */
@@ -182,8 +181,7 @@ type SystemOnePhaseOptions = {
   textInputs: TextInput[];
   abortSignal: AbortSignal;
   onPartialAnswer:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
 };
 
 type SystemOnePhaseResult = {
@@ -330,8 +328,7 @@ export const generateWorkflowData = async ({
   });
 
   type WorkflowMessagePart =
-    | DocumentPart<AnthropicDocumentMetadata>
-    | TextPart<AnthropicTextMetadata>;
+    DocumentPart<AnthropicDocumentMetadata> | TextPart<AnthropicTextMetadata>;
 
   const messageContent: WorkflowMessagePart[] = [];
   const extractedTextFileCount = files.filter(

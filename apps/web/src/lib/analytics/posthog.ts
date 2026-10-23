@@ -19,15 +19,15 @@ import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import {
+  automaticExceptionKey,
+  capturedApiErrorIdentity,
+  capturedExceptionIdentity,
   fingerprintExceptionEvent,
   fingerprintExceptionScope,
-  isExceptionScopeFingerprint,
-  automaticExceptionKey,
-  isExceptionFingerprintKey,
-  capturedExceptionIdentity,
-  capturedApiErrorIdentity,
-  readApiErrorIdentity,
   isApiErrorCode,
+  isExceptionFingerprintKey,
+  isExceptionScopeFingerprint,
+  readApiErrorIdentity,
   sanitizeFingerprintFields,
 } from "@/lib/analytics/exception-fingerprint";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";

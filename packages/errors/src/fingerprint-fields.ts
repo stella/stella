@@ -44,8 +44,7 @@ export const readFingerprintFields = ({
   prototypes,
   read,
 }: ReadFingerprintFieldsOptions):
-  | Readonly<Record<string, string>>
-  | undefined => {
+  Readonly<Record<string, string>> | undefined => {
   const fields = prototypes.flatMap((prototype) => {
     const registered = declarations.get(prototype) ?? [];
     if (!Object.hasOwn(prototype, "constructor")) {

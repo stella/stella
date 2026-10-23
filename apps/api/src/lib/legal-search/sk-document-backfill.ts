@@ -185,8 +185,7 @@ export type SkDocumentFetch = (
 
 /** What one gated download established. */
 export type SkDocumentRead =
-  | ReadOutcome<Response>
-  | { type: "refused-target"; reason: string };
+  ReadOutcome<Response> | { type: "refused-target"; reason: string };
 
 export type FetchPdfBytesOptions = {
   documentUrl: string;

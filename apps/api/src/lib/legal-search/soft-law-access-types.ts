@@ -29,9 +29,7 @@ export class SoftLawContentTypeMismatchError extends TaggedError(
   contentType: string;
 }> {}
 export type SoftLawFetchError =
-  | SoftLawBlockedError
-  | SoftLawAccessError
-  | SoftLawContentTypeMismatchError;
+  SoftLawBlockedError | SoftLawAccessError | SoftLawContentTypeMismatchError;
 export type SoftLawFetch = ((
   url: string,
   options?: { expectedContentTypes: readonly string[] },

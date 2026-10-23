@@ -160,8 +160,7 @@ type AnalysisUnavailableCode = CaseLawAnalysisUnavailableCode;
 
 /** Whose key a failed run used, as a reader may be told. */
 type AnalysisFailureKeyView =
-  | { source: "organization"; provider: string }
-  | { source: "platform" };
+  { source: "organization"; provider: string } | { source: "platform" };
 
 export type GenerateAnalysisResponse =
   | {
@@ -298,8 +297,7 @@ type RunGenerationOptions = {
 
 /** External model-resolution boundary; supplied by focused tests only. */
 type AnalysisModelResolver = () =>
-  | ResolvedTanStackTextModel
-  | Promise<ResolvedTanStackTextModel>;
+  ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
 
 const runGeneration = async ({
   admission,

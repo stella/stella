@@ -8,9 +8,7 @@ import { declareFingerprintFields } from "@stll/errors";
  * an operator whether decoding or a corpus-version change invalidated it.
  */
 export type InvalidLegalSearchCursorReason =
-  | "dictionary_mismatch"
-  | "target_mismatch"
-  | "undecodable";
+  "dictionary_mismatch" | "target_mismatch" | "undecodable";
 
 /**
  * A continuation page cannot be served for the cursor it was asked with.
@@ -41,5 +39,4 @@ export class LegalSearchUnavailableError extends TaggedError(
 }> {}
 
 export type LegalSearchError =
-  | InvalidLegalSearchCursorError
-  | LegalSearchUnavailableError;
+  InvalidLegalSearchCursorError | LegalSearchUnavailableError;

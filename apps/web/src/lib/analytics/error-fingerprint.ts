@@ -1,8 +1,8 @@
 import type { ExceptionScope } from "@stll/errors";
 
 import {
-  capturedExceptionIdentity,
   capturedApiErrorIdentity,
+  capturedExceptionIdentity,
   fingerprintExceptionEvent,
   fingerprintExceptionScope,
 } from "@/lib/analytics/exception-fingerprint";

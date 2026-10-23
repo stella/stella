@@ -14,11 +14,7 @@ export const CORPUS_SLICE_EXPORT_TABLES = [
 ] as const;
 
 type CorpusSliceShardName =
-  | "sources"
-  | "decisions"
-  | "supplements"
-  | "citations"
-  | "objects";
+  "sources" | "decisions" | "supplements" | "citations" | "objects";
 
 export type CorpusSliceTransferManifest = {
   corpus: CorpusSliceManifest;

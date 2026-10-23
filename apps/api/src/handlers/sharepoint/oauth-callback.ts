@@ -42,8 +42,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type CallbackRedirectInput =
-  | { status: "connected" }
-  | { status: "error"; reason: string };
+  { status: "connected" } | { status: "error"; reason: string };
 
 const buildCallbackRedirectUrl = (
   frontendUrl: string,

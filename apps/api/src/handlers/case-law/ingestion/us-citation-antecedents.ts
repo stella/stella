@@ -182,8 +182,7 @@ const isSubstantiveParty = (party: string): boolean =>
   party.split(" ").some((word) => !GENERIC_PARTY_WORDS.has(word));
 
 type NameEvidence =
-  | { type: "caption"; key: string }
-  | { type: "party"; key: string };
+  { type: "caption"; key: string } | { type: "party"; key: string };
 
 /** The name printed as `Name, ` right before a short form, if any. */
 const nameBefore = (text: string): NameEvidence | null => {

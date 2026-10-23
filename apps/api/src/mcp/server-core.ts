@@ -139,8 +139,7 @@ const toolResultDisposition = (annotations: McpTool["annotations"]) =>
   annotations?.readOnlyHint === true ? "read" : "mutation";
 
 type ByteStreamReadResult =
-  | { done: false; value: Uint8Array }
-  | { done: true; value?: undefined };
+  { done: false; value: Uint8Array } | { done: true; value?: undefined };
 
 const isByteStreamReadResult = (
   value: unknown,
@@ -550,8 +549,7 @@ const withTransportAcceptHeader = (request: Request): Request => {
 };
 
 type McpRequestFrame =
-  | { request: Request; status: "within_limit" }
-  | { status: "too_large" };
+  { request: Request; status: "within_limit" } | { status: "too_large" };
 
 type DeclaredBodyLength = "undeclared" | "within_limit" | "too_large";
 
@@ -1283,10 +1281,7 @@ export const createMcpHttpRequestHandler = ({
     const reportTransportError = (
       error: unknown,
       operation:
-        | "close_transport"
-        | "close_server"
-        | "cancel_stream"
-        | "read_stream",
+        "close_transport" | "close_server" | "cancel_stream" | "read_stream",
     ) => {
       captureError(
         error,

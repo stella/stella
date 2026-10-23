@@ -1164,8 +1164,7 @@ type ResolveAuthorizationTokenOptions = {
 };
 
 type ResolvedAuthorizationToken =
-  | { type: "ok"; value: string | null }
-  | { type: "skip" };
+  { type: "ok"; value: string | null } | { type: "skip" };
 
 const resolveAuthorizationToken = async ({
   dependencies,

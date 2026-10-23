@@ -3,10 +3,10 @@ import { Result } from "better-result";
 import {
   createDetached,
   type ExceptionScope,
-  type RequestExceptionScope,
-  type HandlerExceptionScope,
   type FailureGrade,
   type FailureReason,
+  type HandlerExceptionScope,
+  type RequestExceptionScope,
 } from "@stll/errors";
 import { Temporal } from "@stll/time";
 

@@ -71,8 +71,7 @@ const createReaderAnswerRuntime = (scope: string) => {
   };
 };
 type ReaderAnswerErrorOrigin =
-  | { type: "operation" }
-  | { type: "stream"; messageId: string };
+  { type: "operation" } | { type: "stream"; messageId: string };
 type ReaderAnswerErrors = ReadonlyMap<
   string,
   ReaderAnswerErrorOrigin & { error: APIError | ReaderAnswerFailure }

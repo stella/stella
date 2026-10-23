@@ -30,8 +30,8 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { SourceTotalCount } from "@/api/lib/legal-search/ingestion-types";
 import {
-  SOURCE_REPORT_FEATURE,
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 import {

@@ -564,8 +564,7 @@ type FolderPickerProps = {
 };
 
 type FolderDraft =
-  | { type: "create"; name: string }
-  | { type: "edit"; name: string };
+  { type: "create"; name: string } | { type: "edit"; name: string };
 
 const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();

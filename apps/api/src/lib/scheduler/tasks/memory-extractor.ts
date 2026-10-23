@@ -563,8 +563,7 @@ const extractCandidates = async ({
     settings.value;
 
   let analytics:
-    | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
-    | undefined;
+    ReturnType<typeof createTanStackAIAnalyticsCallbacks> | undefined;
 
   const tried = await Result.tryPromise({
     try: async () => {

@@ -33,9 +33,7 @@ import { detached } from "@/lib/detached";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type TimerPanelState =
-  | { type: "list" }
-  | { type: "start" }
-  | { type: "confirm"; timer: TimeTimer };
+  { type: "list" } | { type: "start" } | { type: "confirm"; timer: TimeTimer };
 
 class TimerSnapshotConflictError extends TaggedError(
   "TimerSnapshotConflictError",
