@@ -20,8 +20,8 @@ import { BILINGUAL_TABLE_LAYOUT } from "@/api/lib/bilingual/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildBilingualFileName } from "@/api/lib/document-translation/output";
 import {
-  DocumentWriteRefusedError,
   documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";

@@ -19,15 +19,15 @@ import * as v from "valibot";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
-  CLI_CONTRACT_SURFACE_PATHS,
   canonicalJson,
+  CLI_CONTRACT_SURFACE_PATHS,
+  type CliContractSurface,
+  type CliContractSurfacePart,
   findSurfaceDrift,
   readHeadSurface,
   readPublishedPackageSurface,
-  type CliContractSurface,
-  type CliContractSurfacePart,
 } from "./check-cli-release-coupling";
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 import {
   findUnbuildableGeneratedImports,
   formatGeneratedImportViolation,

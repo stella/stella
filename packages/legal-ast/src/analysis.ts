@@ -97,7 +97,9 @@ export type AnalysisAbstract = {
  * fence. Produced in-app only: it is a property of the corpus, which no
  * external producer of a document analysis can see.
  */
-export type AnalysisSignificance = {
+export type AnalysisSignificanceStatement = {
+  /** Absent on statements stored before `none` existed. */
+  kind?: "statement" | undefined;
   text: string;
   language: string;
   graphFingerprint: AnalysisGraphFingerprint;
@@ -106,6 +108,20 @@ export type AnalysisSignificance = {
   /** Which revision of the significance prompt wrote this text. */
   promptVersion: number;
 };
+
+/**
+ * No later decision cites this one, read from the graph itself: there is
+ * nothing to say, so no model is asked and nothing is shown. Fenced on the
+ * graph like a statement, so the first citing decision makes it stale.
+ */
+export type AnalysisSignificanceNone = {
+  kind: "none";
+  graphFingerprint: AnalysisGraphFingerprint;
+  generatedAt: string;
+};
+
+export type AnalysisSignificance =
+  AnalysisSignificanceStatement | AnalysisSignificanceNone;
 
 type DecisionAnalysisCore = {
   generatedAt: string;
@@ -247,18 +263,26 @@ export const analysisAbstractSchema: v.GenericSchema<AnalysisAbstract> =
   });
 
 export const analysisSignificanceSchema: v.GenericSchema<AnalysisSignificance> =
-  v.strictObject({
-    text: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(ANALYSIS_SIGNIFICANCE_MAX_LENGTH),
-    ),
-    language: v.pipe(v.string(), v.minLength(1)),
-    graphFingerprint: graphFingerprintSchema,
-    generatedAt: v.string(),
-    model: v.string(),
-    promptVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  });
+  v.union([
+    v.strictObject({
+      kind: v.literal("none"),
+      graphFingerprint: graphFingerprintSchema,
+      generatedAt: v.string(),
+    }),
+    v.strictObject({
+      kind: v.exactOptional(v.literal("statement")),
+      text: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(ANALYSIS_SIGNIFICANCE_MAX_LENGTH),
+      ),
+      language: v.pipe(v.string(), v.minLength(1)),
+      graphFingerprint: graphFingerprintSchema,
+      generatedAt: v.string(),
+      model: v.string(),
+      promptVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    }),
+  ]);
 
 const decisionAnalysisCoreEntries = {
   generatedAt: v.string(),
@@ -367,11 +391,20 @@ export const isSignificanceCurrent = ({
   promptVersion: number;
 }): boolean => {
   const significance = analysisLayersOf(analysis).significance;
+  if (significance?.graphFingerprint !== graphFingerprint) {
+    return false;
+  }
+  // `none` was read from the graph, not written by a prompt.
   return (
-    significance?.graphFingerprint === graphFingerprint &&
-    significance.promptVersion === promptVersion
+    significance.kind === "none" || significance.promptVersion === promptVersion
   );
 };
+
+/** The statement a reader is shown: none when there is nothing to say. */
+export const significanceStatementOf = (
+  significance: AnalysisSignificance | null,
+): AnalysisSignificanceStatement | null =>
+  significance === null || significance.kind === "none" ? null : significance;
 
 export const parsePersistedDecisionAnalysis = (
   val: unknown,

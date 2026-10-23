@@ -27,10 +27,10 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
 import {
   euProvisionAnchor,
-  parseEuProvisionReference,
-  parseEuProvisionAnchor,
-  normalizeEuProvisionReference,
   locateEuProvisionCitations,
+  normalizeEuProvisionReference,
+  parseEuProvisionAnchor,
+  parseEuProvisionReference,
   parseEuWorkIdentifier,
 } from "./eu-provision-citations";
 import { formatWorkIdentifier } from "./provision-citation-profile";

@@ -3,10 +3,10 @@ import { describe, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -174,7 +174,7 @@ const withScratch = async <T>(
                   },
                 });
               } finally {
-                connection.release();
+                await connection.release();
               }
             },
           });
@@ -615,9 +615,9 @@ if (!runPostgresTests || databaseUrl === undefined) {
               await gate.unsafe(RELEASE_SCHEMA_GATE);
               // swallow-ok: finally drains the first migration runner after its applied result has been asserted
               await firstRun.catch(() => undefined);
-              gate.release();
-              first.release();
-              second.release();
+              await gate.release();
+              await first.release();
+              await second.release();
             }
           });
         },
@@ -709,7 +709,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               { phase: "online", outcome: "failed" },
             ]);
           } finally {
-            connection.release();
+            await connection.release();
           }
         });
       });
@@ -788,7 +788,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               (await ledgerRows(observer)).map(({ name }) => name),
             ).toEqual([A]);
           } finally {
-            connection.release();
+            await connection.release();
           }
         });
       });
@@ -843,7 +843,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               (await ledgerRows(observer)).map(({ name }) => name),
             ).toEqual([A]);
           } finally {
-            connection.release();
+            await connection.release();
           }
         });
       });
@@ -968,7 +968,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           }
         } finally {
           await blocker.unsafe("ROLLBACK");
-          blocker.release();
+          await blocker.release();
           rmSync(environmentDirectory, { recursive: true, force: true });
         }
       });
@@ -1167,7 +1167,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             } finally {
               stdout.mockRestore();
               await holder.release();
-              connection.release();
+              await connection.release();
             }
             expect(
               (await ledgerRows(observer)).map(({ name }) => name),
@@ -1233,7 +1233,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   true,
                 );
                 expect(sleeps).toEqual([10, 10]);
-                expect(await ledgerRows(observer)).toEqual([]);
+                expect([...(await ledgerRows(observer))]).toEqual([]);
                 const [probe] = await observer.unsafe<{ exists: boolean }[]>(
                   "SELECT to_regclass('migration_probe') IS NOT NULL AS exists",
                 );
@@ -1242,7 +1242,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               } finally {
                 stdout.mockRestore();
                 await holder.release();
-                connection.release();
+                await connection.release();
               }
               // The failed run released the lane; the next one applies the set.
               expect(appliedResult(await run(folder)).insertedNames).toEqual([
@@ -1313,7 +1313,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             );
             expect(initial.insertedNames).toHaveLength(corpusMigrations.length);
           } finally {
-            initialConnection.release();
+            await initialConnection.release();
           }
 
           const baseline = await ledgerRows(observer);
@@ -1344,7 +1344,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 expect(result.predictedNames).toEqual([]);
                 expect(result.insertedNames).toEqual([]);
               } finally {
-                connection.release();
+                await connection.release();
               }
               await assertMigrationHistory({
                 context: "startup",

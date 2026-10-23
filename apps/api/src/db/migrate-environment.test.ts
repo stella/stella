@@ -105,10 +105,12 @@ const runMigrateEntrypoint = async (environment: Record<string, string>) => {
       nodePath.join(directory, "src", dependency),
     );
   }
-  await symlink(
-    nodePath.join(API_ROOT, "src/db/migration-runner.ts"),
-    nodePath.join(directory, "src/db/migration-runner.ts"),
-  );
+  for (const module of ["migration-runner.ts", "sql-client.ts"]) {
+    await symlink(
+      nodePath.join(API_ROOT, "src/db", module),
+      nodePath.join(directory, "src/db", module),
+    );
+  }
   await symlink(
     nodePath.join(API_ROOT, "../../node_modules"),
     nodePath.join(directory, "node_modules"),
