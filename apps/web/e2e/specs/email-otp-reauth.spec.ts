@@ -1,9 +1,7 @@
-import type { FileRouteTypes } from "@/routeTree.gen";
-
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 
-const RETURN_PATH = "/settings/account/profile" satisfies FileRouteTypes["to"];
+const RETURN_PATH = "/settings/account/profile";
 const RETURN_SEARCH = new URLSearchParams({
   redirectTo: RETURN_PATH,
 }).toString();
