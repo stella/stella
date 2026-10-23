@@ -180,6 +180,11 @@ const provisionStatusReadFailure = failureSink({
   expected: [],
 });
 
+const sliceCompletenessReadFailure = failureSink({
+  event: "case_law.coverage.slice_completeness_unavailable",
+  expected: [],
+});
+
 class CoverageError extends TaggedError("CoverageError")<{
   message: string;
   cause?: unknown;
@@ -394,8 +399,8 @@ export const loadCaseLawCoverage = async ({
     catch: coverageError("reading case-law slice completeness failed"),
   });
   if (Result.isError(yearCompleteness)) {
-    logger.warn("case_law.coverage.slice_completeness_unavailable", {
-      "error.type": errorTag(yearCompleteness.error),
+    observeFailure(yearCompleteness.error, {
+      sink: sliceCompletenessReadFailure,
     });
   }
 

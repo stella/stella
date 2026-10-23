@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import { caseLawCoverageSlices } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -185,22 +186,35 @@ export const readCaseLawCoverageYearsQuery = async (
       THEN left(${caseLawCoverageSlices.slice}, 4)::integer
     ELSE NULL
   END`;
-  const rows = await tx
-    .select({
-      sourceId: caseLawCoverageSlices.sourceId,
-      year: sliceYear,
-      missing: sql<number>`coalesce(sum(greatest(${caseLawCoverageSlices.reported} - ${caseLawCoverageSlices.collected}, 0)), 0)::integer`,
-      shortSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.collected} < ${caseLawCoverageSlices.reported})::integer`,
-      unlistedSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.reported} IS NULL)::integer`,
-      latestWalkError: sql<
-        string | null
-      >`(array_agg(left(${caseLawCoverageSlices.walkError}, ${COVERAGE_WALK_ERROR_MAX_LENGTH}) ORDER BY ${caseLawCoverageSlices.checkedAt} DESC) FILTER (WHERE ${caseLawCoverageSlices.walkError} IS NOT NULL))[1]`,
-    })
-    .from(caseLawCoverageSlices)
-    .where(inArray(caseLawCoverageSlices.sourceId, reconciledSourceIds))
-    .groupBy(caseLawCoverageSlices.sourceId, sliceYear)
-    .orderBy(caseLawCoverageSlices.sourceId, sliceYear)
-    .limit(COVERAGE_YEAR_ROWS_BOUND);
+  const read = await readBounded(
+    tx
+      .select({
+        sourceId: caseLawCoverageSlices.sourceId,
+        year: sliceYear,
+        missing: sql<number>`coalesce(sum(greatest(${caseLawCoverageSlices.reported} - ${caseLawCoverageSlices.collected}, 0)), 0)::integer`,
+        shortSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.collected} < ${caseLawCoverageSlices.reported})::integer`,
+        unlistedSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.reported} IS NULL)::integer`,
+        latestWalkError: sql<
+          string | null
+        >`(array_agg(left(${caseLawCoverageSlices.walkError}, ${COVERAGE_WALK_ERROR_MAX_LENGTH}) ORDER BY ${caseLawCoverageSlices.checkedAt} DESC) FILTER (WHERE ${caseLawCoverageSlices.walkError} IS NOT NULL))[1]`,
+      })
+      .from(caseLawCoverageSlices)
+      .where(inArray(caseLawCoverageSlices.sourceId, reconciledSourceIds))
+      .groupBy(caseLawCoverageSlices.sourceId, sliceYear)
+      .orderBy(caseLawCoverageSlices.sourceId, sliceYear),
+    COVERAGE_YEAR_ROWS_BOUND,
+  );
+  if (read.type === "overflow") {
+    // A truncated ledger cannot be summarized: no source claims a count.
+    for (const sourceId of reconciledSourceIds) {
+      result.set(String(sourceId), {
+        type: "not_reconciled",
+        reason: "The slice ledger exceeds the coverage read bound.",
+      });
+    }
+    return result;
+  }
+  const rows = read.rows;
   const bySource = new Map<string, CoverageYearAggregate[]>();
   for (const row of rows) {
     if (row.year === null) {
