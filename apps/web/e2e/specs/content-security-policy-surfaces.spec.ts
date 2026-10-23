@@ -10,6 +10,30 @@ import { createUploadedDocumentRoute } from "../helpers/document";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
+test.describe("authenticated content security policy", () => {
+  test.use({ locale: "en-US" });
+
+  test("chat hydrates and accepts input with the enforced policy", async ({
+    page,
+  }) => {
+    const policy = await installContentSecurityPolicyCollector(page);
+    await page.goto("/chat/new", { waitUntil: "domcontentloaded" });
+    const main = page.getByRole("main");
+    await expect(main).toBeVisible();
+    const composer = main.getByRole("textbox", {
+      name: /type your question/iu,
+    });
+    await composer.fill("CSP hydration check");
+    await expect(composer).toHaveText("CSP hydration check");
+    await policy.assertClean();
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(main).toBeVisible();
+    await composer.fill("CSP reload check");
+    await expect(composer).toHaveText("CSP reload check");
+    await policy.assertClean();
+  });
+});
+
 test.describe("public legal reader content security policy", () => {
   test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
 

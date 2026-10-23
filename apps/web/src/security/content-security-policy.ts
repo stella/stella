@@ -61,7 +61,7 @@ export const buildContentSecurityPolicy = (
 
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval' 'unsafe-inline'${posthogOrigin === null ? "" : ` ${posthogOrigin}`}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${posthogOrigin === null ? "" : ` ${posthogOrigin}`}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://lh3.googleusercontent.com",
     "font-src 'self' data:",

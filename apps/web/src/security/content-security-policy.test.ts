@@ -43,7 +43,7 @@ describe("document content security policy", () => {
     expect(policy).not.toContain("'unsafe-eval'");
     expect(policy).not.toMatch(/(?:^|\s)(?:https:|\*)(?:\s|;|$)/u);
     expect(policy).toContain(
-      "script-src 'self' 'nonce-request-nonce' 'strict-dynamic' 'wasm-unsafe-eval' 'unsafe-inline' https://events.example.test",
+      "script-src 'self' 'nonce-request-nonce' 'strict-dynamic' 'wasm-unsafe-eval' https://events.example.test",
     );
   });
 
