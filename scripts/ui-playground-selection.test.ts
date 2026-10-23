@@ -321,13 +321,16 @@ test("bare and unquoted CSS imports resolve against the stylesheet", () => {
     write("apps/web/src/routes/dev/fixture.ts", 'import "./a.css";\n');
     write(
       "apps/web/src/routes/dev/a.css",
-      '@import "tailwindcss";\n@import "tokens.css";\n@import url(layout.css);\n',
+      '@import "tailwindcss";\n@import "tokens.css";\n@import url(layout.css);\n@import "theme.css?dark";\n',
     );
     write("apps/web/src/routes/dev/tokens.css", ":root {}\n");
     write("apps/web/src/routes/dev/layout.css", ".page {}\n");
+    write("apps/web/src/routes/dev/theme.css", ":root {}\n");
     for (const file of [
       "apps/web/src/routes/dev/tokens.css",
       "apps/web/src/routes/dev/layout.css",
+      // A resource query names the same stylesheet.
+      "apps/web/src/routes/dev/theme.css",
     ]) {
       expect(selectGeometrySpecs([file], root), file).toEqual([spec]);
     }

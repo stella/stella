@@ -301,7 +301,9 @@ export const staticImportClosure = (
         ),
       ]
         .map((match) => match[1] ?? match[2])
-        .filter((imported): imported is string => imported !== undefined);
+        .filter((imported): imported is string => imported !== undefined)
+        // A resource query or hash names the same file (`tokens.css?theme`).
+        .map((imported) => imported.split(/[?#]/u, 1)[0] ?? imported);
       for (const imported of imports) {
         // CSS resolves a bare path against the stylesheet first; only a path
         // with no such file is a package (`@import "tailwindcss"`).
