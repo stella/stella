@@ -4,6 +4,8 @@ import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
+import { isApiDate } from "@/api/lib/json-schema/api-date";
+
 const dateSchema = t.String({ format: "date" });
 
 describe("API calendar date boundaries", () => {
@@ -26,6 +28,7 @@ describe("API calendar date boundaries", () => {
             normalized.getUTCFullYear() === year &&
             normalized.getUTCMonth() === month - 1 &&
             normalized.getUTCDate() === day;
+          expect(isApiDate(value)).toBe(expected);
           expect(compiled.Check(value)).toBe(expected);
           expect(Value.Check(dateSchema, value)).toBe(expected);
         }
