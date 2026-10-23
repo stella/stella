@@ -57,6 +57,8 @@ const workflow = v.parse(
 const jobs = workflow.jobs;
 const prDepth = prDepthJobs({ jobs });
 const patchId = "d".repeat(40);
+const planConfig =
+  '{"CI_POSTGRES_PR_SELECTION":"","CI_PR_DEPTH_PILOT":"","CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL":"","MERGE_QUEUE_DEPTH":""}';
 const planner = jobs["ci-plan"];
 const result = jobs["ci-result"];
 if (!planner || !result) {
@@ -133,6 +135,7 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   base_sha: pr.base.sha,
   patch_id: patchId,
   workflow_version: pr.head.sha,
+  plan_config: planConfig,
   pr_depth_jobs: prDepth,
   suite_depth: depth,
   coverage_profile: profile,
@@ -276,6 +279,7 @@ const decide = async ({
           event === "merge_group" ? JSON.stringify(entryChain) : "null",
         MERGE_PARENT: mergeParent,
         WORKFLOW_VERSION: pr.head.sha,
+        PLAN_CONFIG: planConfig,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
       },
     },
@@ -642,6 +646,7 @@ const recordEvidence = (
         COVERAGE_PROFILE: "normal-v1",
         PATCH_ID: patchId,
         WORKFLOW_VERSION: pr.head.sha,
+        PLAN_CONFIG: planConfig,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
@@ -816,6 +821,10 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
     ["bad attempt", { ...valid, run_attempt: 0 }],
     ["other patch", { ...valid, patch_id: "e".repeat(40) }],
     ["other workflow", { ...valid, workflow_version: "e".repeat(40) }],
+    [
+      "other plan config",
+      { ...valid, plan_config: '{"CI_POSTGRES_PR_SELECTION":"on"}' },
+    ],
     [
       "failed PR-depth job",
       {
@@ -1280,6 +1289,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           COVERAGE_PROFILE: "normal-v1",
           PATCH_ID: patchId,
           WORKFLOW_VERSION: pr.head.sha,
+          PLAN_CONFIG: planConfig,
           PR_DEPTH_JOBS: JSON.stringify(prDepth),
           GITHUB_STEP_SUMMARY: "/dev/null",
           PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
@@ -1477,6 +1487,7 @@ test("an armed run records its planned queue-only suites as armed proof", async 
     JSON.parse(resultEnv["HEAVY_PROOF_JOBS"] ?? ""),
   );
   const plan = {
+    ci_tests_required: "true",
     package_checks_required: "true",
     mobile_build_required: "true",
   };
@@ -1632,6 +1643,15 @@ test("a merge that changes the pull request side, or lacks parent evidence, runs
       "other CI version",
       { evidence: { ...parentEvidence, workflow_version: "f".repeat(40) } },
     ],
+    [
+      "other plan config",
+      {
+        evidence: {
+          ...parentEvidence,
+          plan_config: '{"CI_POSTGRES_PR_SELECTION":"on"}',
+        },
+      },
+    ],
     ["other depth", { depth: "full" }],
     ["changed scope", { pull: { ...pr, title: "fix: another scope" } }],
     ["parent is the head", { mergeParent: pr.head.sha }],
@@ -1749,6 +1769,20 @@ test("the patch-id step names the parent only of a merge of the base, with the p
     expect(after["merge_parent"]).toBe(parent);
     expect(after["patch_id"]).toMatch(/^[0-9a-f]{40}$/u);
     expect(after["patch_id"]).toBe(before["patch_id"]);
+
+    // Reusing the same parents is insufficient when a manual resolution
+    // changes the automatic merge tree.
+    write("resolution.txt", ["manual resolution"]);
+    git("add", "resolution.txt");
+    git("commit", "--quiet", "--amend", "--no-edit");
+    expect(
+      runPatchIdStep({
+        repository,
+        base: far,
+        head: git("rev-parse", "HEAD"),
+      })["merge_parent"],
+    ).toBe("");
+    git("reset", "--quiet", "--hard", merged);
 
     // A merge-queue run never names a parent.
     expect(

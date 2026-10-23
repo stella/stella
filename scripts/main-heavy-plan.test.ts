@@ -327,8 +327,7 @@ test("query budgets select affected changes and explicit recordings", () => {
           },
         };
         expect(selected(condition, value), `${event}/${required}/${mode}`).toBe(
-          (event === "pull_request" || event === "merge_group") &&
-            required === "true",
+          event === "merge_group" && required === "true",
         );
         const called = {
           ...value,

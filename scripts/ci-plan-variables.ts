@@ -60,8 +60,17 @@ export const planVariablesExpression = (
     }
     visited.add(file);
     const workflow = record(readWorkflow(file));
+    const jobs = record(workflow["jobs"]);
+    // Planner steps can read variables directly; those values affect evidence
+    // reuse even when no job predicate mentions them.
+    const planner = jobs["ci-plan"];
+    if (file === ".github/workflows/ci.yml" && isRecord(planner)) {
+      for (const name of predicateVariables(JSON.stringify(planner))) {
+        names.add(name);
+      }
+    }
     // Include all reachable job predicates, a conservative superset of plan gates.
-    for (const value of Object.values(record(workflow["jobs"]))) {
+    for (const value of Object.values(jobs)) {
       const job = record(value);
       if (typeof job["if"] === "string") {
         for (const name of predicateVariables(job["if"])) {

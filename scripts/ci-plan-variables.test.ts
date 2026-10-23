@@ -12,6 +12,10 @@ const readWorkflow = (file: string): unknown =>
 
 test("CI records every variable read by reachable job predicates", () => {
   const expression = planVariablesExpression(readWorkflow);
+  expect(expression).toContain('"CI_POSTGRES_PR_SELECTION"');
+  expect(expression).toContain('"CI_PR_DEPTH_PILOT"');
+  expect(expression).toContain('"CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL"');
+  expect(expression).toContain('"MERGE_QUEUE_DEPTH"');
   expect(readWorkflow(".github/workflows/ci.yml")).toMatchObject({
     jobs: { "ci-plan": { outputs: { variables: expression } } },
   });

@@ -343,38 +343,34 @@ const checkJobEventPolicy = ({
     }
     return [];
   }
-  if (eventPolicy === "pr-opt-in") {
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
-    if (
-      key === "ci.yml/service-suites" ||
-      key === "ci.yml/postgres-service-suites"
-    ) {
-      if (
-        !requiresPostgresPrSwitch({ key, condition, planOutputs }) ||
-        ["", "off"].some(
-          (value) =>
-            !definitelyFalse(
-              condition,
-              contextWithPlanOutputs({
-                outputs: planOutputs,
-                context: {
-                  values: {
-                    "github.event_name": "pull_request",
-                    "vars.CI_POSTGRES_PR_SELECTION": value,
-                    "needs.ci-plan.outputs.corpus_suites_required": "false",
-                  },
+  const condition =
+    typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
+  if (
+    (key === "ci.yml/service-suites" ||
+      key === "ci.yml/postgres-service-suites") &&
+    (!requiresPostgresPrSwitch({ key, condition, planOutputs }) ||
+      ["", "off"].some(
+        (value) =>
+          !definitelyFalse(
+            condition,
+            contextWithPlanOutputs({
+              outputs: planOutputs,
+              context: {
+                values: {
+                  "github.event_name": "pull_request",
+                  "vars.CI_POSTGRES_PR_SELECTION": value,
+                  "needs.ci-plan.outputs.corpus_suites_required": "false",
                 },
-              }),
-            ),
-        )
-      ) {
-        problems.push(
-          `${key}: Postgres PR suites must require the disabled-by-default switch`,
-        );
-      }
-      return problems;
-    }
+              },
+            }),
+          ),
+      ))
+  ) {
+    problems.push(
+      `${key}: Postgres PR suites must require the disabled-by-default switch`,
+    );
+  }
+  if (eventPolicy === "pr-opt-in") {
     if (
       key !== "ci.yml/fix-tests-on-base" ||
       !condition.includes(
@@ -395,8 +391,6 @@ const checkJobEventPolicy = ({
     problems.push(`${key}: schema policy belongs to Database Migrations`);
   }
   if (periodic) {
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
     const scopeValues = Object.fromEntries(
       Array.from(
         condition.matchAll(/needs\.ci-plan\.outputs\.(\w+_required)/gu),
@@ -431,8 +425,6 @@ const checkJobEventPolicy = ({
     if (!Object.hasOwn(triggers, event)) {
       continue;
     }
-    const condition =
-      typeof job.if === "boolean" ? String(job.if) : (job.if ?? "true");
     if (
       !definitelyFalse(condition, {
         values: { "github.event_name": event },

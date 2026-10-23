@@ -588,6 +588,8 @@ const heavyGateContext = (event: string) => ({
   values: {
     "github.event_name": event,
     "needs.ci-plan.result": "success",
+    "needs.ci-plan.outputs.heavy_proof": "true",
+    "needs.ci-plan.outputs.armed_delta": "false",
     "needs.pr-heavy-gate.result":
       event === EVENT.pullRequest ? "success" : "skipped",
   },
@@ -948,6 +950,7 @@ const resultGateCase = ({
       PR_DEPTH_REUSED: plannedOutputs["pr_depth_reused"] ?? "false",
       PR_DEPTH_SOURCE_RUN_ID: plannedOutputs["pr_depth_source_run_id"] ?? "99",
       PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
+      PLAN_CONFIG: "{}",
       ...prHeavyEnv(plannedOutputs),
       QUEUE_DEPTH: plannedOutputs["queue_depth"] ?? "full",
       HEAVY_ONLY: String(heavyOnly),
@@ -3436,14 +3439,14 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
     expect(jobIf(ciJobs["e2e-production-shard"])).toContain(
       "needs.ci-plan.outputs.e2e_production_required == 'true'",
     );
-    expect(fastRequired).toContain("e2e-production-shard");
-    expect(fastRequired).toContain("web-build");
+    expect(fastRequired).not.toContain("e2e-production-shard");
+    expect(fastRequired).not.toContain("web-build");
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
         results: { "e2e-production-shard": "skipped" },
       }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
@@ -3458,10 +3461,19 @@ test("PR e2e selection schedules its build and shard together", () => {
     event: EVENT.pullRequest,
     depth: SUITE_DEPTH.fast,
   } as const;
-  expect(runsAtDepth(jobIf(ciJobs["web-build"]), selected)).toBe(true);
+  expect(runsAtDepth(jobIf(ciJobs["web-build"]), selected)).toBe(false);
+  expect(
+    runsAtDepth(jobIf(ciJobs["web-build"]), { ...selected, armed: true }),
+  ).toBe(true);
   expect(runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), selected)).toBe(
-    true,
+    false,
   );
+  expect(
+    runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), {
+      ...selected,
+      armed: true,
+    }),
+  ).toBe(true);
 
   const values = {
     "github.event_name": EVENT.pullRequest,
@@ -3572,6 +3584,7 @@ const queueOnlyJobs = Object.fromEntries(
           key === "ci.yml/service-suites" ||
           key === "ci.yml/postgres-service-suites") &&
         key.startsWith("ci.yml/") &&
+        key !== "ci.yml/pr-heavy-gate" &&
         gatedJobs.includes(key.slice("ci.yml/".length)),
     )
     .map(([key]) => [
@@ -3595,6 +3608,7 @@ type DepthContext = {
   /** The QUEUE_BROWSER_SUITES repository variable; GitHub reads unset as ''. */
   queueBrowserSuites?: string;
   corpusRequired?: boolean;
+  armed?: boolean;
 };
 const bareExpression = (condition: string) =>
   /^\$\{\{([\s\S]*)\}\}$/u.exec(condition.trim())?.[1] ?? condition;
@@ -3610,6 +3624,7 @@ const runsAtDepth = (
     proveFix = false,
     queueBrowserSuites = "",
     corpusRequired = false,
+    armed = false,
   }: DepthContext,
 ) => {
   const selectedQueueDepth = event === EVENT.mergeGroup ? queueDepth : "full";
@@ -3627,7 +3642,7 @@ const runsAtDepth = (
         "needs.ci-plan.outputs.pr_depth_reused": prDepthReused,
         // An unarmed pull request; a merge group without armed proof.
         "needs.ci-plan.outputs.heavy_proof": String(
-          event !== EVENT.pullRequest,
+          event !== EVENT.pullRequest || armed,
         ),
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
         "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
@@ -4823,6 +4838,8 @@ test("service-suite scopes run on pull requests only for selected corpus coverag
           () => `'${suiteDepth}'`,
         )
         .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+        .replaceAll("needs.ci-plan.outputs.heavy_proof", "'true'")
+        .replaceAll("needs.ci-plan.outputs.armed_delta", "'false'")
         .replaceAll("!cancelled()", "'true' == 'true'")
         .replaceAll("needs.ci-plan.result", "'success'")
         .replaceAll("needs.pr-heavy-gate.result", "'success'")
@@ -5200,6 +5217,8 @@ test("pull requests and merge groups preserve corpus engine detector scope at ev
       .replaceAll("needs.ci-plan.outputs.suite_depth", () => `'${suiteDepth}'`)
       .replaceAll("needs.ci-plan.outputs.queue_depth", () => `'${queueDepth}'`)
       .replaceAll("vars.CI_POSTGRES_PR_SELECTION", "'off'")
+      .replaceAll("needs.ci-plan.outputs.heavy_proof", "'true'")
+      .replaceAll("needs.ci-plan.outputs.armed_delta", "'false'")
       .replaceAll("!cancelled()", "'true' == 'true'")
       .replaceAll("needs.ci-plan.result", "'success'")
       .replaceAll("needs.pr-heavy-gate.result", "'skipped'")
@@ -6535,6 +6554,8 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "needs.ci-plan.outputs.corpus_suites_required": "false",
           "needs.ci-plan.outputs.postgres_suites_required": "true",
           "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.heavy_proof": "true",
+          "needs.ci-plan.outputs.armed_delta": "false",
           "needs.ci-plan.outputs.suite_depth":
             event === EVENT.pullRequest ? "fast" : "full",
           "needs.ci-plan.outputs.postgres_pr_required": String(enabled),
@@ -6741,6 +6762,7 @@ const heavyGatePlanOutput = ({ event, plan }: HeavyGatePlanOptions) => {
         values: {
           "github.event_name": event,
           "steps.completed-depth.outputs.run_required": "true",
+          "steps.completed-depth.outputs.armed": "true",
           "steps.completed-depth.outputs.pr_heavy_suites": "run",
           "steps.changed-files.outputs.package_checks_required":
             plan["package_checks_required"] ?? "",
@@ -7068,7 +7090,9 @@ test("browser planning, scheduling and result gates agree across events and dept
             exitCode:
               (event === EVENT.mergeGroup && depth === SUITE_DEPTH.fast) ||
               result === "failure" ||
-              (planned === "true" && result === "skipped")
+              ((event !== EVENT.pullRequest || depth === SUITE_DEPTH.full) &&
+                planned === "true" &&
+                result === "skipped")
                 ? 1
                 : 0,
           }));
@@ -7174,7 +7198,7 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
       event: EVENT.pullRequest,
       results: { "ci-browser": "skipped" },
     }),
-  ).toBe(1);
+  ).toBe(0);
   expect(
     evaluateResult({
       event: EVENT.pullRequest,
@@ -7242,6 +7266,10 @@ const armedRuns = (
         "inputs.heavy_only": event === EVENT.workflowDispatch,
         "inputs.pr_depth_only": false,
         "needs.ci-plan.outputs.heavy_proof": heavyProof,
+        "needs.ci-plan.outputs.armed_delta":
+          event === EVENT.pullRequest && heavyProof === "true"
+            ? "true"
+            : "false",
         "needs.ci-plan.outputs.run_required": "true",
         "needs.ci-plan.outputs.trusted": "true",
         "needs.ci-plan.outputs.suite_depth":
@@ -7249,7 +7277,7 @@ const armedRuns = (
         "needs.ci-plan.outputs.queue_depth":
           event === EVENT.mergeGroup ? "thin" : "full",
         "needs.ci-plan.outputs.heavy_web_build_required": "false",
-        "vars.CI_POSTGRES_PR_SELECTION": "off",
+        "vars.CI_POSTGRES_PR_SELECTION": "on",
         "vars.QUEUE_BROWSER_SUITES": "",
         "github.event.pull_request.labels.*.name": [],
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
@@ -7305,7 +7333,7 @@ test("every queue-only job follows the armed proof and skips proven merge groups
     expect(armedRuns(condition, EVENT.mergeGroup, "true"), job).toBe(true);
     expect(armedRuns(condition, EVENT.mergeGroup, "false"), job).toBe(kept);
     expect(armedRuns(condition, EVENT.workflowDispatch, "true"), job).toBe(
-      true,
+      job !== "pr-heavy-gate" && job !== "web-build",
     );
   }
 });
@@ -7582,6 +7610,7 @@ test("an armed delta skips every normal job but still runs the queue-only suites
           PATH: Bun.env["PATH"] ?? "",
           GITHUB_OUTPUT: output,
           NORMAL_REUSED: normalReused,
+          NORMAL_SOURCE_RUN_ID: "99",
           RUN_REQUIRED: runRequired,
           ROUTE_SMOKE_REQUIRED: routeSmoke,
           MARKETING_REQUIRED: "false",
@@ -7958,9 +7987,9 @@ test("the planner derives the PR heavy jobs from everything waiting on the gate"
       job,
     ).toEqual(["ci-plan", "pr-heavy-gate"]);
   }
-  expect(fastRequired.filter((job) => PR_HEAVY_JOBS.includes(job))).toEqual(
-    expect.arrayContaining(["ci-tests", "ci-browser", "web-build"]),
-  );
+  expect(fastRequired.filter((job) => PR_HEAVY_JOBS.includes(job))).toEqual([
+    "ci-tests",
+  ]);
 });
 
 type HeavyRunOptions = { event: Event; gate: string };
@@ -8086,6 +8115,8 @@ test("every scope that plans a pull request heavy suite also plans its gate", ()
           "steps.check.outputs.trusted": "true",
           "steps.completed-depth.outputs.run_required": "true",
           "steps.completed-depth.outputs.pr_heavy_suites": "run",
+          "steps.suites.outputs.run_required": "true",
+          "steps.suites.outputs.armed_delta": "false",
           "steps.depth.outputs.suite_depth": SUITE_DEPTH.fast,
           "steps.pilot.outputs.coverage_profile": "normal-v1",
           "needs.ci-plan.result": "success",
@@ -8096,6 +8127,9 @@ test("every scope that plans a pull request heavy suite also plans its gate", ()
         fallback: (path) => (path.startsWith("steps.") ? "" : undefined),
       },
     });
+    context.values["needs.ci-plan.outputs.heavy_proof"] = "true";
+    context.values["needs.ci-plan.outputs.run_required"] = "true";
+    context.values["needs.ci-plan.outputs.armed_delta"] = "false";
     const gate = context.fallback?.(
       "needs.ci-plan.outputs.pr_heavy_gate_required",
     );

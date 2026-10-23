@@ -181,6 +181,8 @@ const context = ({
     event: modelledEvent(event),
     plan: {
       ...plan,
+      heavy_proof: String(event !== "pull_request" || proveFix),
+      armed_delta: "false",
       queue_depth: queueDepth,
       ...(event === "pull_request"
         ? { fix_tests_on_base_required: "true" }
@@ -203,7 +205,7 @@ const context = ({
         normal_completion: "required",
         run_required: value.needs["ci-plan"]?.outputs["run_required"] ?? "true",
         pr_heavy_suites: "run",
-        armed: "false",
+        armed: String(proveFix),
         armed_proof: "",
       },
     },
@@ -283,7 +285,7 @@ test("computed browser planning retains trust and suite scopes across queue dept
                 runRequired === "true" &&
                 (trusted === "true" || event.event === "workflow_dispatch") &&
                 (event.event === "pull_request"
-                  ? desktopRequired === "true"
+                  ? false
                   : suiteDepth === "full");
               expect(
                 selected(ci.jobs["ci-browser"]?.if, value),
@@ -366,6 +368,12 @@ const expectedPrSelection = ({
   if (disposition === undefined) {
     panic(`Missing CI event disposition: ${job}`);
   }
+  if (disposition === "armed") {
+    return (
+      value.needs["ci-plan"]?.outputs["heavy_proof"] === "true" &&
+      (job === "e2e-report" ? baseline : true)
+    );
+  }
   if (job === "ci-browser") {
     expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
@@ -438,6 +446,7 @@ const expectedServiceSelection = (value: ReturnType<typeof context>) => {
   const event = value.github.event_name;
   return (
     outputs["run_required"] !== "false" &&
+    (event !== "pull_request" || outputs["heavy_proof"] === "true") &&
     (outputs["package_checks_required"] === "true" ||
       outputs["collab_redis_required"] === "true") &&
     (outputs["trusted"] === "true" || event === "workflow_dispatch") &&
@@ -457,6 +466,8 @@ const expectedPostgresSelection = (value: ReturnType<typeof context>) => {
   }
   return (
     outputs["run_required"] !== "false" &&
+    (value.github.event_name !== "pull_request" ||
+      outputs["heavy_proof"] === "true") &&
     (outputs["trusted"] === "true" ||
       value.github.event_name === "workflow_dispatch") &&
     outputs["postgres_suites_required"] === "true" &&
@@ -970,7 +981,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           expected = expectedServiceSelection(value);
         } else if (job === "postgres-service-suites") {
           expected = expectedPostgresSelection(value);
-        } else if (job === "route-smoke") {
+        } else if (job === "route-smoke" && event.event !== "pull_request") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({
