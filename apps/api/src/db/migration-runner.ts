@@ -1,7 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import type { ReservedSQL } from "bun";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
@@ -30,6 +29,7 @@ import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
+import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
 
 type LedgerRow = {
@@ -112,7 +112,7 @@ $$;
 `;
 
 type AdoptionOptions = {
-  database: ReturnType<typeof drizzle>;
+  database: ReturnType<typeof createDatabase>;
   migrations: ReturnType<typeof readMigrationFiles>;
   migrationsSchema: string;
   migrationsTable: string;
@@ -518,7 +518,7 @@ export const runMigrations = async ({
     await connection.unsafe(restoreTimeout);
 
     const migrations = readMigrationFiles({ migrationsFolder });
-    const database = drizzle({ client: connection });
+    const database = createDatabase({ client: connection });
     const preflight = await preflightAndAdopt({
       database,
       migrations,

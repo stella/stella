@@ -25,15 +25,15 @@ import {
   normalizeCountry,
 } from "@stll/agent-input";
 import {
+  PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
   PUBLIC_LAW_DOMAIN,
-  PUBLIC_COUNTRY_CAPABILITIES,
-  publicCountryUnavailableIn,
-  publicCountryUnavailableSchema,
   type PublicCountryCapabilities,
-  type PublicLawDomain,
   type PublicCountrySurface,
   type PublicCountryUnavailable,
+  publicCountryUnavailableIn,
+  publicCountryUnavailableSchema,
+  type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
 
 import { PUBLIC_ERROR_TEXT_BYTES } from "@/api/lib/search/public-error-response";

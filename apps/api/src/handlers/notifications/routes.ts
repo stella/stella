@@ -41,7 +41,7 @@ export const notificationsRoute = new Elysia({
       user,
     }: {
       request: Request;
-      session: { activeOrganizationId: SafeId<"organization"> };
+      session: { activeOrganizationId: SafeId<"organization">; id: string };
       user: { id: SafeId<"user"> };
     }) => {
       if (new URL(request.url).searchParams.has("token")) {
@@ -52,6 +52,7 @@ export const notificationsRoute = new Elysia({
 
       const stream = subscribeUser({
         organizationId: session.activeOrganizationId,
+        sessionId: session.id,
         signal: request.signal,
         userId: user.id,
       });
@@ -62,15 +63,19 @@ export const notificationsRoute = new Elysia({
   .get("/", listNotifications.handler, {
     query: listNotifications.config.query,
     permissions: listNotifications.config.permissions,
+    accountAccess: listNotifications.config.accountAccess,
   })
   .post("/read-all", markAllNotificationsRead.handler, {
     permissions: markAllNotificationsRead.config.permissions,
+    accountAccess: markAllNotificationsRead.config.accountAccess,
   })
   .post("/announcements", publishAnnouncement.handler, {
     body: publishAnnouncement.config.body,
     permissions: publishAnnouncement.config.permissions,
+    accountAccess: publishAnnouncement.config.accountAccess,
   })
   .patch("/:notificationId/read", markNotificationRead.handler, {
     params: markNotificationRead.config.params,
     permissions: markNotificationRead.config.permissions,
+    accountAccess: markNotificationRead.config.accountAccess,
   });

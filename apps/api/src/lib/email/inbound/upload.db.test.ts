@@ -48,8 +48,8 @@ import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueu
 import { processUploadedMailJob } from "@/api/lib/email/inbound/upload-queue";
 import { toArrayBuffer } from "@/api/lib/files/outlook-msg.test-fixture";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,

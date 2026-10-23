@@ -35,8 +35,8 @@ import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipel
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";

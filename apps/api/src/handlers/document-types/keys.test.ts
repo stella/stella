@@ -14,6 +14,9 @@ describe("slugifyDocumentTypeKey", () => {
     expect(slugifyDocumentTypeKey("Data Processing Agreement (DPA)")).toBe(
       "data-processing-agreement-dpa",
     );
+    expect(slugifyDocumentTypeKey("Příloha: Újúma & náhrada / 2026? #1")).toBe(
+      "p-loha-j-ma-n-hrada-2026-1",
+    );
   });
 
   test("falls back to a stable key when nothing is slug-able", () => {
@@ -47,5 +50,13 @@ describe("uniqueDocumentTypeKey", () => {
     const key = uniqueDocumentTypeKey("nda", taken);
     expect(taken.has(key)).toBe(false);
     expect(key.startsWith("nda")).toBe(true);
+  });
+
+  test("keeps collision suffixes inside the persisted key length", () => {
+    const base = "a".repeat(120);
+    const key = uniqueDocumentTypeKey(base, new Set([base]));
+
+    expect(key).toBe(`${"a".repeat(118)}-2`);
+    expect(key).toHaveLength(120);
   });
 });

@@ -9,8 +9,8 @@ import {
   draftToAdopt,
   rebasePlaybookDraft,
   resolvePaneSaveStatus,
-  resolveServerFollow,
   resolveSavedPlaybookState,
+  resolveServerFollow,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import {
   createPlaybookBaseline,

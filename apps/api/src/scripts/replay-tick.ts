@@ -4,10 +4,10 @@ import { eq, type SQLWrapper } from "drizzle-orm";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
-  isHeldTooLong,
-  nextBatch,
   type BatchState,
   type HealthConfig,
+  isHeldTooLong,
+  nextBatch,
   type Verdict,
 } from "@stll/db-load-gate/health";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
@@ -28,27 +28,27 @@ import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
   REPLAY_HEALTH_CONFIG,
-  replayKillRequested,
   type ReplayEnrolment,
+  replayKillRequested,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import {
   classifyReplayFailure,
   replayFailure,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
 import {
-  enterCaseLawMaintenanceLane,
-  createCaseLawMaintenanceCleanupHandles,
   type CaseLawRootHandle,
   type CaseLawScriptHandles,
+  createCaseLawMaintenanceCleanupHandles,
+  enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import type {
-  CaseLawSourceIngestionLease,
   acquireCaseLawSourceIngestionLease,
+  CaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
-  PARSER_VERSIONS,
   type AdapterKey,
+  PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { isLocalTestRun } from "@/api/runtime-mode";
 

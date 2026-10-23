@@ -10,14 +10,14 @@ import {
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import {
-  providerDiagnosticSchema,
   type ProviderDiagnostic,
+  providerDiagnosticSchema,
 } from "@stll/api-contract/provider-setup";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   type DecisionAnalysis,
-  type PersistedDecisionAnalysis,
   parsePersistedDecisionAnalysis,
+  type PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
@@ -27,8 +27,7 @@ import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 /** Whose AI key the failed run called the provider with. */
 export type AnalysisFailureKey =
-  | { source: "organization"; provider: string }
-  | { source: "platform" };
+  { source: "organization"; provider: string } | { source: "platform" };
 
 /**
  * Why the reader has no analysis: the server will not make one, the last run
