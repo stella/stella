@@ -116,6 +116,8 @@ export const getFileTabDisplayState = ({
       nativePreviewKind !== "text",
     needsPropertyResolution:
       isNativeDocxDisplay && tab.propertyId === undefined,
+    needsConversionStatus:
+      nativePreviewKind === "pdf" && tab.mimeType !== PDF_MIME,
     officeViewerFormat: getNativeOfficeViewerFormat(tab.mimeType),
     renderId: tab.renderId ?? tab.id,
     scaleOffset,

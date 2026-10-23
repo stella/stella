@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import type {
   QuickJSAsyncContext,
   QuickJSDeferredPromise,
@@ -12,12 +12,12 @@ import { Temporal } from "@stll/time";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import {
+  buildHostBridgePrelude,
+  buildNameGuidePrelude,
   SANDBOX_CONSOLE_BRIDGE_GLOBAL,
   SANDBOX_HOST_BRIDGE_GLOBAL,
   SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL,
   SANDBOX_NAME_GUIDE_ERROR_NAME,
-  buildHostBridgePrelude,
-  buildNameGuidePrelude,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 import { transpileSandboxSource } from "@/api/handlers/chat/tools/execute/sandbox/transpile";
 import { SandboxError } from "@/api/lib/errors/tagged-errors";

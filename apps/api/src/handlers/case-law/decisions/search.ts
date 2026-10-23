@@ -22,17 +22,17 @@ import {
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  countedSearchTotal,
+  type DecisionSearchMatch,
+  DEFAULT_SEARCH_EXCERPT,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_END,
   SEARCH_PAGE_REACH,
-  searchPageEnd,
   SEARCH_PAGINATION_COMPLETE,
-  countedSearchTotal,
-  DEFAULT_SEARCH_EXCERPT,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
+  searchPageEnd,
   type SearchTotal,
-  type DecisionSearchMatch,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
@@ -42,8 +42,8 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
@@ -57,8 +57,8 @@ import {
   readDecisionIdentityHits,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
-  searchIdentityRole,
   identityAnswerPage,
+  searchIdentityRole,
   withPinnedDecisions,
 } from "@/api/handlers/case-law/decisions/search-identity-role";
 import {
@@ -100,8 +100,8 @@ import {
 } from "@/api/lib/case-law/decision-page-offset";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import {
-  decodeDecisionSearchCursor,
   type DecisionSearchCursor,
+  decodeDecisionSearchCursor,
   encodeDecisionSearchCursor,
 } from "@/api/lib/case-law/decision-search-cursor";
 import type {
@@ -113,13 +113,13 @@ import {
   decisionTypeKindBuckets,
   foldStatedDecisionTypeBuckets,
   groupCourtsByTier,
-  presentCourtYear,
   labelSourceBuckets,
+  presentCourtYear,
   readCaseLawSourceNames,
 } from "@/api/lib/case-law/decision-search-facets";
 import {
-  decisionSearchCategorySql,
   decisionHasLegalSentenceSql,
+  decisionSearchCategorySql,
 } from "@/api/lib/case-law/decision-search-metadata-sql";
 import {
   decisionDatedFilterSql,
@@ -166,8 +166,8 @@ import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
   caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
-  caseLawCorpusServingGeneration,
   caseLawCorpusDocumentCanRecur,
+  caseLawCorpusServingGeneration,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
@@ -176,15 +176,15 @@ import {
   createCorpusAggregateCache,
 } from "@/api/lib/legal-search/corpus-aggregate-cache";
 import {
-  createCorpusHitDispositionCounter,
   type CorpusHitDispositionCounter,
+  createCorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
-  courtPartitionsForCourtFilter,
   type CorpusIndexGroupContract,
+  courtPartitionsForCourtFilter,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   readServingCorpusIndexTargetTx,
@@ -192,9 +192,9 @@ import {
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
+  CorpusCandidateRankingInput,
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
-  CorpusCandidateRankingInput,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -203,13 +203,13 @@ import {
   sumCorpusIndexScans,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
-  caseLawCorpusQueryFields,
   type CaseLawCorpusQueryFields,
+  caseLawCorpusQueryFields,
   requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
-  corpusRevisionClause,
   type CorpusProjectionRevision,
+  corpusRevisionClause,
 } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   type CorpusFacetQuery,
@@ -219,10 +219,10 @@ import {
 import {
   caseLawCorpusQuery,
   type CorpusQueryToken,
-  formatCorpusQueryTokens,
-  quoteCorpusValue,
   type CorpusTermExpander,
+  formatCorpusQueryTokens,
   partitionCorpusFunctionWords,
+  quoteCorpusValue,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
@@ -297,9 +297,9 @@ import {
 } from "@/api/lib/search/highlight";
 
 import {
-  type RelaxedExclusions,
   rankByTermCoverage,
   readTermCoverage,
+  type RelaxedExclusions,
   relaxedFetchLimit,
   shouldRelaxCaseLawSearch,
 } from "./search-relaxed";

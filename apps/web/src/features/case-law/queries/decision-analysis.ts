@@ -9,14 +9,14 @@ import {
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import {
-  providerDiagnosticSchema,
   type ProviderDiagnostic,
+  providerDiagnosticSchema,
 } from "@stll/api-contract/provider-setup";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
   type DecisionAnalysis,
-  type PersistedDecisionAnalysis,
   parsePersistedDecisionAnalysis,
+  type PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";

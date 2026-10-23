@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountRestricted": "AI provider settings are unavailable for this account.",
+      "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
       "description": "Add provider credentials to start using AI features.",
+      "permissionRequired": "Only an organization admin can connect an AI provider.",
+      "seatRequired": "Ask an organization admin to assign you a seat.",
       "title": "Connect AI provider"
     },
     "refinePlaceholder": "How should the AI adjust the wording?",
@@ -3525,6 +3529,12 @@
       "title": "Anonymization vocabulary",
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
+    },
+    "conversionRefusal": {
+      "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
+      "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
+      "unsupportedField": "This document contains {fieldType}, which can't be converted.",
+      "unsupportedReference": "This document refers to an external resource in {element} {attribute}, so it can't be converted."
     },
     "external": {
       "confirmDescription": "You're about to visit an external website.",

@@ -1,6 +1,6 @@
 import {
-  Fragment,
   forwardRef,
+  Fragment,
   memo,
   useEffect,
   useEffectEvent,
@@ -34,10 +34,10 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {

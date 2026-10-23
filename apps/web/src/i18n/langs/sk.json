@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
+      "accountRestricted": "Nastavenia poskytovateľa AI nie sú pre tento účet dostupné.",
+      "configUnreadable": "Konfiguráciu poskytovateľa AI nemožno načítať. Požiadajte správcu organizácie o opätovné pripojenie.",
       "cta": "Otvoriť nastavenia AI",
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
+      "permissionRequired": "Poskytovateľa AI môže pripojiť iba správca organizácie.",
+      "seatRequired": "Požiadajte správcu organizácie, aby vám priradil licenciu.",
       "title": "Pripojiť poskytovateľa AI"
     },
     "refinePlaceholder": "Ako má AI upraviť znenie?",
@@ -3525,6 +3529,12 @@
       "title": "Anonymizačný slovník",
       "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
+    },
+    "conversionRefusal": {
+      "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
+      "unsupportedEncoding": "Tento dokument používa nepodporované kódovanie {encoding}, preto ho nemožno konvertovať.",
+      "unsupportedField": "Tento dokument obsahuje pole {fieldType}, ktoré nemožno konvertovať.",
+      "unsupportedReference": "Tento dokument odkazuje na externý prostriedok v {element} {attribute}, preto ho nemožno konvertovať."
     },
     "external": {
       "confirmDescription": "Chystáte sa navštíviť externý web.",

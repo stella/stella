@@ -1,10 +1,10 @@
 import {
   CancelledError,
+  type QueryClient,
   queryOptions,
   useMutation,
   useQuery,
   useQueryClient,
-  type QueryClient,
 } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
@@ -30,8 +30,8 @@ import { migrateLocalLawHistory } from "@/lib/law-search-history/law-search-hist
 import {
   LAW_HISTORY_DISPLAY_LIMIT,
   LAW_HISTORY_STORAGE_KEY,
-  readLawRecent,
   type LawRecentFilter,
+  readLawRecent,
 } from "@/lib/law-search-history/law-search-history.logic";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 

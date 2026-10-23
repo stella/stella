@@ -13,7 +13,7 @@
 // fails safe to the full check.
 
 import { panic, Result, TaggedError } from "better-result";
-import { appendFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { totalmem } from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -21,8 +21,8 @@ import { stripVTControlCharacters } from "node:util";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
   CODE_CHECK_LEGS,
-  ownsCodeCheckPath,
   type CodeCheckLeg,
+  ownsCodeCheckPath,
 } from "../packages/scripts/src/code-quality-partition";
 import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";

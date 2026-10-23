@@ -7,7 +7,9 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import {
+  type Advisory,
   AuditCommandError,
+  type Baseline,
   BaselineError,
   check,
   checkRelease,
@@ -15,8 +17,6 @@ import {
   pruneBaseline,
   readBaseline,
   runDependencyAuditCli,
-  type Advisory,
-  type Baseline,
 } from "./dependency-audit";
 import {
   expiringAcceptances,

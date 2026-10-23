@@ -13,19 +13,19 @@ import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  getModelReasoningCapabilities,
   BYOK_MODEL_OPTIONS,
-  MODEL_TASK_OVERRIDE_GROUP,
-  resolveDefaultModel,
   getModelRate,
+  getModelReasoningCapabilities,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
+  MODEL_TASK_OVERRIDE_GROUP,
+  resolveDefaultModel,
   resolveReasoningEffort,
   shouldEmitTemperature,
   supportsStreamingToolUse,
@@ -34,8 +34,8 @@ import {
 import type {
   AIProvider,
   BYOKProvider,
-  ModelTask,
   ModelOverrideGroup,
+  ModelTask,
   ReasoningEffort,
   ResolvedReasoningEffort,
   TanStackAIProvider,
@@ -47,12 +47,12 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
-  resolveOrgAIModelForTask,
-  normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
+  normalizeProviderRegion,
   type OrgAIConfig,
   type OrgAIProviderConfig,
+  resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";

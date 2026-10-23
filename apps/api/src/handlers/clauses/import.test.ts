@@ -6,9 +6,9 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { auditLogs, clauseCategories, clauses } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  createAuditRecorder,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";

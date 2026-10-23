@@ -61,8 +61,8 @@ import {
   insertPastedTextChip,
   PASTED_TEXT_ATTACHMENTS_ATTR,
   PastedText,
-  readPastedTextAttachments,
   pastedTextChipContent,
+  readPastedTextAttachments,
 } from "@/components/chat-pasted-text-extension";
 import type {
   PastedTextAttachment,
