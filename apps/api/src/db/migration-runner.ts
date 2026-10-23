@@ -5,8 +5,6 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
-import { createDatabase } from "@/api/db/sql-client";
-
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import {
@@ -31,6 +29,7 @@ import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
+import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
 
 type LedgerRow = {

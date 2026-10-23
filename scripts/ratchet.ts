@@ -89,6 +89,13 @@ const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
 
+// The single owners of a transport: callers reach fetch and Bun SQL clients
+// through them, so their own acquisition is the capability, not a legacy site.
+const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/db/sql-client.ts",
+]);
+
 // Shared source globs + exclusions for the app-source metrics.
 const APP_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
@@ -3060,10 +3067,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       for (const file of scanRepoFiles(context, [
         "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
       ])) {
-        if (
-          !isApiProductionModule(file) ||
-          file === "apps/api/src/lib/safe-outbound-fetch.ts"
-        ) {
+        if (!isApiProductionModule(file) || TRANSPORT_OWNER_MODULES.has(file)) {
           continue;
         }
         for (const capability of outboundTransportReferences({

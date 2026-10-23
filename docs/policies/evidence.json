@@ -65,7 +65,7 @@
         },
         {
           "path": ".github/dependabot.yml",
-          "contains": ["package-ecosystem: bun", "default-days: 5"]
+          "contains": ["package-ecosystem: \"bun\"", "default-days: 5"]
         }
       ]
     },

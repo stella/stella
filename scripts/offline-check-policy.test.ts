@@ -515,7 +515,7 @@ test("every protected blocking check has a transport-safe local import closure",
     ),
   );
   const entries = checks.flatMap((check) =>
-    check.protected ? [check.entry] : [],
+    check.protected && check.entry !== null ? [check.entry] : [],
   );
   expect(entries.length).toBeGreaterThan(0);
   expect(

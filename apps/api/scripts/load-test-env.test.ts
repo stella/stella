@@ -149,10 +149,12 @@ test("migration preserves the deployment environment despite a local test file",
         path.join(directory, "src", dependency),
       );
     }
-    await symlink(
-      path.join(apiRoot, "src/db/migration-runner.ts"),
-      path.join(directory, "src/db/migration-runner.ts"),
-    );
+    for (const module of ["migration-runner.ts", "sql-client.ts"]) {
+      await symlink(
+        path.join(apiRoot, "src/db", module),
+        path.join(directory, "src/db", module),
+      );
+    }
     await Bun.write(path.join(directory, ".env.test"), environmentSource);
     const result = await runEntrypoint({
       directory,

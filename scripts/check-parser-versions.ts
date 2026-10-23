@@ -417,13 +417,13 @@ class StaticTree {
     for (const name of this.versionDeclarations.get(file) ?? []) {
       const declaration = `\\b(?:const|let|var)\\s+${name}(?:\\s*:[^=;]+)?\\s*=\\s*`;
       source = source.replace(
-        new RegExp(`(?<=${declaration})\\d+\\b`, "u"),
-        "0",
+        new RegExp(`(${declaration})\\d+\\b`, "u"),
+        (_, start: string) => `${start}0`,
       );
       source = source.replace(
         new RegExp(`(${declaration}\\{)([^}]*)(\\})`, "u"),
         (_, start: string, properties: string, end: string) =>
-          `${start}${properties.replace(/(?<=:\s*)\d+\b/gu, "0")}${end}`,
+          `${start}${properties.replace(/(:\s*)\d+\b/gu, (_number, colon: string) => `${colon}0`)}${end}`,
       );
     }
     return printedCode(file, source);
