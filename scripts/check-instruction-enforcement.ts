@@ -217,8 +217,10 @@ export type CiInputs = {
   readonly commands: readonly string[];
   /** Root package scripts. */
   readonly rootScripts: Readonly<Record<string, string>>;
-  /** Each workspace's package scripts, for `turbo run <task>`. */
-  readonly workspaceScripts: readonly Readonly<Record<string, string>>[];
+  /** Each workspace's package scripts by its directory, for `turbo run <task>`. */
+  readonly workspaceScripts: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+  >;
   readonly ratchetIds: ReadonlySet<string>;
   /** Workflows a pull request or the merge queue triggers. */
   readonly pullRequestWorkflows: ReadonlySet<string>;
@@ -232,6 +234,8 @@ export type CiInputs = {
 export type CiReach = {
   readonly text: string;
   readonly scripts: ReadonlySet<string>;
+  /** The `turbo run` tasks CI reaches in every workspace. */
+  readonly tasks: ReadonlySet<string>;
 };
 
 /** The CI commands plus every package script they reach. */
@@ -267,7 +271,7 @@ export const ciReach = (inputs: CiInputs): CiReach => {
         continue;
       }
       tasks.add(task);
-      for (const workspace of inputs.workspaceScripts) {
+      for (const workspace of Object.values(inputs.workspaceScripts)) {
         const body = workspace[task];
         if (body !== undefined) {
           pending.push(body);
@@ -275,7 +279,7 @@ export const ciReach = (inputs: CiInputs): CiReach => {
       }
     }
   }
-  return { text: pending.join("\n"), scripts };
+  return { text: pending.join("\n"), scripts, tasks };
 };
 
 const mentionsPath = (text: string, repoPath: string): boolean =>
@@ -319,13 +323,15 @@ export const checkProblem = (
 
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 
+const WORKSPACE_DIR = /^(?:apps|packages)\/[^/]+/u;
+
 /**
- * Why a test path does not guard anything, if it does not. Workspace tests run
- * through their package's test task; a root `scripts/` test runs only when a
- * CI command names it.
+ * Why a test path does not guard anything, if it does not. A workspace test
+ * runs only when its workspace has a `test` script and CI reaches the `test`
+ * task; any other test runs only when a CI command names it.
  */
 export const testProblem = (
-  inputs: Pick<CiInputs, "exists">,
+  inputs: Pick<CiInputs, "exists" | "workspaceScripts">,
   reach: CiReach,
   testPath: string,
   isDirectory: boolean,
@@ -336,10 +342,19 @@ export const testProblem = (
   if (!isDirectory && !TEST_FILE.test(testPath)) {
     return "not a test file";
   }
-  if (testPath.startsWith("scripts/") && !mentionsPath(reach.text, testPath)) {
-    return "root script test not run by CI";
+  const workspace = WORKSPACE_DIR.exec(testPath)?.[0];
+  if (workspace === undefined) {
+    if (mentionsPath(reach.text, testPath)) {
+      return undefined;
+    }
+    return testPath.startsWith("scripts/")
+      ? "root script test not run by CI"
+      : "test outside a workspace not run by CI";
   }
-  return undefined;
+  if (inputs.workspaceScripts[workspace]?.["test"] === undefined) {
+    return `${workspace} has no test script`;
+  }
+  return reach.tasks.has("test") ? undefined : "workspace tests not run by CI";
 };
 
 // --- Sources and ledger -----------------------------------------------------
@@ -740,14 +755,19 @@ const runCheck = (): number => {
     rootScripts: stringRecord(
       isRecord(rootPackage) ? rootPackage["scripts"] : undefined,
     ),
-    workspaceScripts: [
-      ...new Bun.Glob("{apps,packages}/*/package.json").scanSync({
-        cwd: repoRoot,
+    workspaceScripts: Object.fromEntries(
+      [
+        ...new Bun.Glob("{apps,packages}/*/package.json").scanSync({
+          cwd: repoRoot,
+        }),
+      ].map((file) => {
+        const manifest = readJson(file);
+        return [
+          path.posix.dirname(file),
+          stringRecord(isRecord(manifest) ? manifest["scripts"] : undefined),
+        ];
       }),
-    ].map((file) => {
-      const manifest = readJson(file);
-      return stringRecord(isRecord(manifest) ? manifest["scripts"] : undefined);
-    }),
+    ),
     ratchetIds: ratchetMetricIds(),
     exists,
   };

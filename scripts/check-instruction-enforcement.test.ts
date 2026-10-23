@@ -237,18 +237,24 @@ describe("checkProblem and testProblem", () => {
     "scripts/orphan.test.ts",
     "apps/api/src/a.test.ts",
     "apps/api/src/helper.ts",
+    "packages/untested/src/a.test.ts",
+    ".oxlint-plugins/__tests__/rule.test.ts",
   ]);
   const inputs: CiInputs = {
     commands: [
       "bun run check:guard\nbash scripts/run-guards.sh",
       "bun --bun turbo run lint",
+      "bun --bun turbo run test",
       "bun test scripts/guard.test.ts\nbun scripts/ratchet.ts --check",
     ],
     rootScripts: {
       "check:guard": "bun scripts/guard.ts --check",
       "check:idle": "bun scripts/unused.ts",
     },
-    workspaceScripts: [{ lint: "bun scripts/lint-workspace.ts" }],
+    workspaceScripts: {
+      "apps/api": { lint: "bun scripts/lint-workspace.ts", test: "bun test" },
+      "packages/untested": { lint: "bun scripts/lint-workspace.ts" },
+    },
     ratchetIds: new Set(["as-casts"]),
     pullRequestWorkflows: new Set([".github/workflows/ci.yml"]),
     scheduledWorkflows: new Set([".github/workflows/audit.yml"]),
@@ -323,6 +329,30 @@ describe("checkProblem and testProblem", () => {
     expect(testProblem(inputs, reach, "scripts/orphan.test.ts", false)).toBe(
       "root script test not run by CI",
     );
+  });
+
+  test("a workspace test runs only through a reached test task", () => {
+    expect(
+      testProblem(inputs, reach, "packages/untested/src/a.test.ts", false),
+    ).toBe("packages/untested has no test script");
+    const lintOnly = ciReach({
+      ...inputs,
+      commands: ["bun --bun turbo run lint"],
+    });
+    expect(testProblem(inputs, lintOnly, "apps/api/src/a.test.ts", false)).toBe(
+      "workspace tests not run by CI",
+    );
+  });
+
+  test("a test outside the workspaces and scripts runs only when CI names it", () => {
+    expect(
+      testProblem(
+        inputs,
+        reach,
+        ".oxlint-plugins/__tests__/rule.test.ts",
+        false,
+      ),
+    ).toBe("test outside a workspace not run by CI");
   });
 });
 
