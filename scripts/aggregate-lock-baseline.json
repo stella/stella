@@ -2371,21 +2371,9 @@
   },
   {
     "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
-    "fingerprint": "42c2e2530f4b5781e2487fcb811207c561f21f73d6b05992218c5fab4204ef87",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
     "fingerprint": "9cd561de2d5bc69f52ae21a7ff7b29673e412ece73f584b19a09bbcd9688e923",
     "count": 1,
     "reason": "lock table in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
-    "fingerprint": "ba2c8c81fb5f3b119bd4571a013cab18647f8785e8f936611fcf2ff2921805cf",
-    "count": 1,
-    "reason": "Existing sitemap shard refresh transaction; its loop now walks the pages-public country list instead of the search list, which changes its source fingerprint without changing the acquisition, its order or the count."
   },
   {
     "file": "apps/api/src/lib/cell-lock.ts",
