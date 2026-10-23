@@ -111,6 +111,9 @@ export const PG_SQL_STATE_REASON = {
   "57014": "pg_query_canceled",
   "28P01": "pg_auth_failed",
   "28000": "pg_auth_failed",
+  "22007": "pg_invalid_input",
+  "22008": "pg_invalid_input",
+  "22P02": "pg_invalid_input",
 } as const satisfies Record<PgLifecycleSqlState, FailureReason> &
   Record<string, FailureReason>;
 
