@@ -6,6 +6,17 @@ defaults:
 
 on:
   pull_request:
+    paths:
+      - bun.lock
+      - "**/package.json"
+      - Cargo.lock
+      - "**/Cargo.lock"
+      - Cargo.toml
+      - "**/Cargo.toml"
+      - .github/workflows/dependency-audit.yml
+      - scripts/dependency-audit.ts
+      - scripts/check-trusted-dependencies.ts
+      - scripts/retry.sh
   push:
     branches: [main]
   schedule:
@@ -44,7 +55,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json'; then
+          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json' Cargo.lock ':(glob)**/Cargo.lock' Cargo.toml ':(glob)**/Cargo.toml' .github/workflows/dependency-audit.yml scripts/dependency-audit.ts scripts/check-trusted-dependencies.ts scripts/retry.sh; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
