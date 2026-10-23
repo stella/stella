@@ -69,6 +69,9 @@ export const CALL_ID_CARRIER = {
   TOOL_CALL_START: "starts",
 } as const satisfies Record<StreamChunk["type"], CallIdCarrier>;
 
+const callIdCarrier = (type: string): CallIdCarrier =>
+  ownEntry(CALL_ID_CARRIER, type) ?? "none";
+
 /** The call ids `messages` already hold. */
 const callIdsOf = (messages: readonly ModelMessage[]): string[] =>
   messages.flatMap((message) => [
@@ -141,7 +144,7 @@ export const withUniqueToolCallIds = async function* (
   const idOf = (id: string): string => renamed.get(id) ?? id;
   for await (const chunk of chunks) {
     // A type the installed SDK does not name carries no call id it knows.
-    const carrier = ownEntry(CALL_ID_CARRIER, chunk.type) ?? "none";
+    const carrier = callIdCarrier(chunk.type);
     switch (carrier) {
       case "starts": {
         if (chunk.type !== EventType.TOOL_CALL_START) {

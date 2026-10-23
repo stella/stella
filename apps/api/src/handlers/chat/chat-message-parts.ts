@@ -314,7 +314,7 @@ const storedOriginsOf = (
       claimed.add(origin);
     }
   }
-  return parts.map((part, index) => {
+  return parts.map((_, index) => {
     const own = known.at(index);
     if (own !== undefined) {
       return own;

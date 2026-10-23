@@ -97,7 +97,6 @@ const PARTS_ACROSS_RELEASES = {
     earliest: { content: "The NDA is mutual.", type: "text" },
     latest: {
       content: "The NDA is mutual.",
-      metadata: { citations: 0 },
       providerMetadata: { cacheHit: true },
       type: "text",
     },
