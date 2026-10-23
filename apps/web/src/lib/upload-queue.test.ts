@@ -355,7 +355,7 @@ describe("no double upload", () => {
 
         expect(queue.getState()).toBe("done");
         expect(doneEvents).toHaveLength(1);
-        expect(doneEvents[0]!.completed).toHaveLength(1);
+        expect(doneEvents.at(0)?.completed).toHaveLength(1);
         expect(uploader.sawConcurrentDoubleUpload).toBe(false);
       } finally {
         jest.useRealTimers();

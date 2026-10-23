@@ -79,9 +79,11 @@ const prepareFolderTreeUpload = async ({
   propertyId,
   plan,
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
+  for (const placement of plan.files) {
+    assertUploadFileNotEmpty(placement.file.size);
+  }
   const files = [];
   for (const [index, placement] of plan.files.entries()) {
-    assertUploadFileNotEmpty(placement.file.size);
     files.push({
       key: String(index),
       parentKey: placement.parentKey,
