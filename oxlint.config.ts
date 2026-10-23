@@ -1540,6 +1540,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/tooltip-provider-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
@@ -2177,6 +2178,14 @@ const config = defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/tooltip-provider-owner.fixture.tsx",
+      ],
+      rules: {
+        "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
     },
     {
       // Exercise no-direct-unsaved-work-guard against its regression fixture;
@@ -3710,6 +3719,13 @@ const config = defineConfig({
         "require-matter-option-label/require-matter-option-label": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: [...PRODUCT_FRONTEND_FILES, "apps/desktop/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "tooltip-provider-owner/tooltip-provider-owner": "error",
       },
     },
     {
