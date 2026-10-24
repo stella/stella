@@ -8,8 +8,8 @@ export class AdmissionError extends TaggedError("AdmissionError")<{
 }> {}
 
 // Only these document/job/step keys are omitted; new keys participate automatically.
-// YAML comments are absent from the parsed objects. Action inputs stay intact,
-// except a github-script body, which is handled like `run`. A GitHub-hosted
+// YAML comments are absent from the parsed objects. Action inputs, including
+// arbitrary github-script programs, stay intact. A GitHub-hosted
 // runner image does not decide a job's kind, so `runs-on` leaves the job shape
 // only when every label names one (see `projectRunner`).
 export const CLASSIFICATION_EXCLUSIONS = {
@@ -173,15 +173,8 @@ const stepShapes = (value: unknown): JsonRecord[] => {
     const shape = project(step, "step");
     const run = step["run"];
     const script = githubScript(step);
-    // A github-script body is the step's program, like run: it leaves the
-    // definition and contributes its secret references and publication
-    // marker. What the script may write is bounded by the job permissions,
-    // which stay in the digest.
-    if (script !== undefined && isRecord(shape["with"])) {
-      shape["with"] = Object.fromEntries(
-        Object.entries(shape["with"]).filter(([key]) => key !== "script"),
-      );
-    }
+    // Arbitrary JavaScript effects cannot be proven from keyword matches:
+    // retain the complete body in `with`, including calls through aliases.
     const bodies = [run, script].filter(
       (body): body is string => typeof body === "string",
     );

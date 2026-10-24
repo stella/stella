@@ -1124,8 +1124,8 @@ test("classification ignores unrelated workflow and composite action edits", () 
 });
 
 // A GitHub-hosted runner change is not among them: it cannot change a job's
-// kind (see "job digests follow kind inputs, not the runner or a github-script
-// body"). A self-hosted runner can.
+// kind (see "job digests omit only standard hosted runner labels").
+// A self-hosted runner can.
 for (const change of [
   "    permissions: {contents: write}\n",
   `    env: {TOKEN: '${githubExpression("secrets.RELEASE_TOKEN")}'}\n`,
@@ -1730,10 +1730,9 @@ test("GitHub on keys retain their string identity in canonical YAML", () => {
   expect(extraKey.value.digest).not.toBe(original.value.digest);
 });
 
-// The digest asks for a re-review only when the job's kind can change: its
-// hosted runner and a github-script body cannot, while the secrets a script reads,
-// the job's permissions and the actions it uses can.
-test("job digests follow kind inputs, not the runner or a github-script body", () => {
+// Hosted image labels cannot change classification. Arbitrary script effects
+// cannot be inferred from permissions or keyword matching alone.
+test("job digests omit only standard hosted runner labels", () => {
   type WorkflowOptions = {
     runner?: string;
     script?: string;
@@ -1797,7 +1796,7 @@ test("job digests follow kind inputs, not the runner or a github-script body", (
   }
   expect(
     digest(workflow({ script: "for (;;) { await github.paginate(x); }" })),
-  ).toBe(original);
+  ).not.toBe(original);
   expect(digest(workflow({ script: "core.info(secrets.TOKEN);" }))).not.toBe(
     original,
   );
@@ -1806,6 +1805,16 @@ test("job digests follow kind inputs, not the runner or a github-script body", (
       workflow({ script: "await github.rest.repos.createRelease(context);" }),
     ),
   ).not.toBe(original);
+  const loggingWithWrite = digest(workflow({ permissions: "write" }));
+  for (const script of [
+    "await github.rest.git.createRef({ ...context.repo, ref: 'refs/tags/v1', sha: context.sha });",
+    "const create = github.rest.git.createRef; await create({ ...context.repo, ref: 'refs/tags/v1', sha: context.sha });",
+    "const method = 'create' + 'Ref'; await github.rest.git[method](params);",
+  ]) {
+    expect(digest(workflow({ permissions: "write", script }))).not.toBe(
+      loggingWithWrite,
+    );
+  }
   expect(digest(workflow({ permissions: "write" }))).not.toBe(original);
   expect(
     digest(
