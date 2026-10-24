@@ -13,6 +13,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { tailwindEntryPoints } from "./generate-tailwind-classes";
+import { generatorsForFiles } from "./generated-files";
+
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const pluginPath = path.join(repositoryRoot, "node_modules/oxlint-tailwindcss");
 const generatedCache = path.join(repositoryRoot, ".tailwind-cache");
@@ -70,7 +73,7 @@ const lintFixture = async ({
         env: {
           ...process.env,
           OXLINT_TAILWINDCSS_CACHE_DIR: cache,
-          ...(readOnly ? { OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1" } : {}),
+          OXLINT_TAILWINDCSS_CACHE_READ_ONLY: readOnly ? "1" : "0",
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -166,27 +169,104 @@ test("concurrent declaration writers merge answers in the same shard", async () 
   }
 });
 
-test("all Tailwind package lint scripts use the shared read-only cache", async () => {
-  for (const packagePath of [
-    "apps/web/package.json",
-    "apps/desktop/package.json",
-    "apps/playground/package.json",
-    "packages/mcp-apps/package.json",
-  ]) {
-    const manifest = JSON.parse(
-      await readFile(path.join(repositoryRoot, packagePath), "utf-8"),
+test("oxlint.config.ts makes every lint read the committed cache", () => {
+  const cacheEnv = (overrides: Record<string, string>) => {
+    const child = Bun.spawnSync(
+      [
+        "bun",
+        "-e",
+        'await import("./oxlint.config.ts"); console.log(JSON.stringify([process.env.OXLINT_TAILWINDCSS_CACHE_DIR, process.env.OXLINT_TAILWINDCSS_CACHE_READ_ONLY]));',
+      ],
+      {
+        cwd: repositoryRoot,
+        env: {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(
+              ([name]) => !name.startsWith("OXLINT_TAILWINDCSS_CACHE_"),
+            ),
+          ),
+          ...overrides,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
     );
-    for (const [name, command] of Object.entries(manifest.scripts)) {
-      if (
-        name !== "lint" &&
-        name !== "lint:fix" &&
-        !name.startsWith("lint:profile")
-      ) {
-        continue;
-      }
-      expect(command).toContain("OXLINT_TAILWINDCSS_CACHE_DIR=.tailwind-cache");
-      expect(command).toContain("OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1");
+    expect(child.exitCode, child.stderr.toString()).toBe(0);
+    return JSON.parse(child.stdout.toString());
+  };
+  expect(cacheEnv({})).toEqual([generatedCache, "1"]);
+  expect(
+    cacheEnv({
+      OXLINT_TAILWINDCSS_CACHE_DIR: "/generation",
+      OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "0",
+    }),
+  ).toEqual(["/generation", "0"]);
+});
+
+test("the repository lint refuses a missing cache without any env", async () => {
+  const cache = await mkdtemp(path.join(tmpdir(), "stella-tailwind-empty-"));
+  try {
+    const child = Bun.spawn(
+      [
+        "bun",
+        "--bun",
+        "oxlint",
+        "-c",
+        "oxlint.config.ts",
+        "--format",
+        "json",
+        "apps/playground/src/App.tsx",
+      ],
+      {
+        cwd: repositoryRoot,
+        env: {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(
+              ([name]) => name !== "OXLINT_TAILWINDCSS_CACHE_READ_ONLY",
+            ),
+          ),
+          OXLINT_TAILWINDCSS_CACHE_DIR: cache,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout] = await Promise.all([
+      new Response(child.stdout).text(),
+      child.exited,
+    ]);
+    const messages = v
+      .parse(report, JSON.parse(stdout))
+      .diagnostics.map(({ message }) => message);
+    expect(
+      messages.some((message) =>
+        message.includes("Tailwind cache is incomplete: missing snapshot"),
+      ),
+    ).toBe(true);
+    expect(await readdir(cache)).toEqual([]);
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
+});
+
+test("the cache generator owns every Tailwind entry point", () => {
+  const selects = (file: string) =>
+    generatorsForFiles([file]).some(({ id }) => id === "tailwind-class-cache");
+  expect(tailwindEntryPoints.map(({ root }) => root)).toContain("apps/landing");
+  for (const { root, stylesheet } of tailwindEntryPoints) {
+    for (const file of [
+      stylesheet,
+      `${root}/src/example.tsx`,
+      `${root}/package.json`,
+    ]) {
+      expect({ file, selected: selects(file) }).toEqual({
+        file,
+        selected: true,
+      });
     }
+  }
+  for (const file of ["oxlint.config.ts", "packages/ui/src/styles/theme.css"]) {
+    expect({ file, selected: selects(file) }).toEqual({ file, selected: true });
   }
 });
 

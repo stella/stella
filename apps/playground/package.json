@@ -8,8 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && OXLINT_TAILWINDCSS_CACHE_DIR=.tailwind-cache OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1 bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/playground",
-    "lint:fix": "cd ../.. && OXLINT_TAILWINDCSS_CACHE_DIR=.tailwind-cache OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1 bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/playground"
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/playground",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/playground"
   },
   "dependencies": {
     "@stll/folio-react": "catalog:",

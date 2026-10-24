@@ -22,8 +22,8 @@
     "test": "bun ../../scripts/prepare-mcp-apps.ts && bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
     "typecheck": "bun ../../scripts/prepare-mcp-apps.ts && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=src/shared/generated/tsconfig.json",
-    "lint": "cd ../.. && OXLINT_TAILWINDCSS_CACHE_DIR=.tailwind-cache OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1 bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/mcp-apps",
-    "lint:fix": "cd ../.. && OXLINT_TAILWINDCSS_CACHE_DIR=.tailwind-cache OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1 bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/mcp-apps",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
     "prepack": "bun run build",
     "build": "bun ../../scripts/prepare-mcp-apps.ts"
   },

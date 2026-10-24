@@ -49,6 +49,13 @@ import {
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
 // Override paths are therefore relative to the repo root.
 
+// Every lint reads the committed Tailwind cache and never compiles the design
+// system; only scripts/generate-tailwind-classes.ts opts out to fill it. The
+// config loads before any plugin module, so the plugin sees these defaults.
+process.env["OXLINT_TAILWINDCSS_CACHE_DIR"] ??=
+  `${import.meta.dirname}/.tailwind-cache`;
+process.env["OXLINT_TAILWINDCSS_CACHE_READ_ONLY"] ??= "1";
+
 const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   files: [`.oxlint-plugins/__fixtures__/${file}`],
   rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
