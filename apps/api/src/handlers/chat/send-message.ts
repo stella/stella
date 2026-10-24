@@ -9,8 +9,8 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
@@ -23,13 +23,13 @@ import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
-  getActiveFileModelBinding,
   type ActiveFileModelBinding,
   type ActiveFileSourceForModel,
+  getActiveFileModelBinding,
 } from "@/api/handlers/chat/active-file-model-source";
 import {
-  resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
+  resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
 import {
   chatMessageFromPersisted,
@@ -77,22 +77,22 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  agUiSendMessageBodySchema,
   CHAT_EDIT_APPLY_MODE,
   CHAT_RUN_MODE,
-  agUiSendMessageBodySchema,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
   resolveBrowserClientCapability,
-  validateToolCallParts,
   validateMessage,
+  validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   bindChatTurnRunId,
+  CHAT_METERED_PROVIDER_TIMEOUT_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
-  CHAT_METERED_PROVIDER_TIMEOUT_MS,
   isChatTurnNotOwned,
   isChatTurnRunIdTaken,
   startChatTurnRun,
@@ -204,8 +204,8 @@ import {
   resolveRegistryToolOutputRefs,
 } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import {
-  chatToolNamesForSkills,
   type ChatSkillToolContext,
+  chatToolNamesForSkills,
 } from "@/api/handlers/chat/tools/skill-tool-availability";
 import { scopedExternalConnectors } from "@/api/handlers/chat/tools/source-scope";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
@@ -257,13 +257,13 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
   CHAT_REF_INPUT_STATE,
-  isChatRefContext,
-  resolveChatRefInputState,
   type ChatEntityRefContext,
   type ChatRefBinding,
   type ChatRefContext,
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
+  isChatRefContext,
+  resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
 import {
   type ChatThreadNamesRead,
@@ -2061,6 +2061,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const uploadResult = await uploadMessageFiles({
       message: stampedValidatedMessage.message,
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId: thread.data.id,
@@ -2800,6 +2801,7 @@ export const createSendMessage = (
               functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,
             }),
           store: createVisualStore({
+            organizationId: session.activeOrganizationId,
             recordAuditEvent,
             safeDb,
             threadId: body.threadId,
@@ -3309,6 +3311,11 @@ export const createSendMessage = (
                   systemSafe,
                   systemUntrusted,
                   userId: user.id,
+                  viewer: {
+                    kind: "session",
+                    sessionId: session.id,
+                    userId: user.id,
+                  },
                   workspaceId,
                 });
 

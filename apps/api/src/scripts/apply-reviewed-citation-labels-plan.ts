@@ -17,8 +17,8 @@ import {
   CITATION_REVIEW_ORIGIN,
   CITATION_REVIEW_ORIGIN_PRECEDENCE,
   CITATION_REVIEW_ORIGINS,
-  REVIEWABLE_POLARITIES,
   citationReviewOutranks,
+  REVIEWABLE_POLARITIES,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   AiCitationReviewOrigin,

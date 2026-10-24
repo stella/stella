@@ -1,4 +1,5 @@
 name: Publish marketing screenshots
+run-name: "Publish marketing screenshots of run ${{ inputs.capture_run_id }}"
 
 defaults:
   run:

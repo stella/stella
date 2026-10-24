@@ -5,8 +5,8 @@ import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-t
 
 import {
   REPLAY_ROW_OUTCOME,
-  replayRowResult,
   type ReplayRowResult,
+  replayRowResult,
 } from "./replay";
 
 const dispositions = {

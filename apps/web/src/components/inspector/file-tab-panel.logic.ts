@@ -47,11 +47,7 @@ export const shouldRunFileAnonymizationPipeline = ({
   !isNativeDocxDisplay;
 
 export type FileTabNativePreviewKind =
-  | "email"
-  | "markdown"
-  | "office"
-  | "pdf"
-  | "text";
+  "email" | "markdown" | "office" | "pdf" | "text";
 
 export const getFileTabNativePreviewKind = ({
   fileName,
@@ -116,6 +112,8 @@ export const getFileTabDisplayState = ({
       nativePreviewKind !== "text",
     needsPropertyResolution:
       isNativeDocxDisplay && tab.propertyId === undefined,
+    needsConversionStatus:
+      nativePreviewKind === "pdf" && tab.mimeType !== PDF_MIME,
     officeViewerFormat: getNativeOfficeViewerFormat(tab.mimeType),
     renderId: tab.renderId ?? tab.id,
     scaleOffset,
