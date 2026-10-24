@@ -88,27 +88,30 @@ const definition = defineValibotMcpTool({
     "Adds an expiring handoff credential tied to existing user consent; it does not modify workspace records.",
   _meta: { ui: { visibility: ["app"] } },
 });
-const handler: TypedMcpToolHandler<v.InferInput<typeof outputSchema>> = async ({
-  args,
-  context,
-}) => {
-  const parsed = v.safeParse(inputSchema, args);
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
-  }
-  const result = await withWebHandoffLinks(
-    { content: [], structuredContent: { url: parsed.output.url } },
-    context,
-    "click",
+export const createWebHandoffToolSet = (decorate = withWebHandoffLinks) => {
+  const handler: TypedMcpToolHandler<
+    v.InferInput<typeof outputSchema>
+  > = async ({ args, context }) => {
+    const parsed = v.safeParse(inputSchema, args);
+    if (!parsed.success) {
+      return validationErrorResult(parsed.issues);
+    }
+    const result = await decorate(
+      { content: [], structuredContent: { url: parsed.output.url } },
+      context,
+      "click",
+    );
+    const output = v.safeParse(outputSchema, result.structuredContent);
+    if (!output.success) {
+      return panic("Web handoff link result must preserve its URL field");
+    }
+    return toolDataResult(output.output);
+  };
+  return defineMcpToolSet(
+    [definition] as const satisfies readonly McpToolDefinition[],
+    { [MCP_WEB_HANDOFF_TOOL_NAME]: handler },
+    { [MCP_WEB_HANDOFF_TOOL_NAME]: defineMcpToolOutput(outputSchema) },
   );
-  const output = v.safeParse(outputSchema, result.structuredContent);
-  if (!output.success) {
-    return panic("Web handoff link result must preserve its URL field");
-  }
-  return toolDataResult(output.output);
 };
-export const WEB_HANDOFF_TOOL_SET = defineMcpToolSet(
-  [definition] as const satisfies readonly McpToolDefinition[],
-  { [MCP_WEB_HANDOFF_TOOL_NAME]: handler },
-  { [MCP_WEB_HANDOFF_TOOL_NAME]: defineMcpToolOutput(outputSchema) },
-);
+
+export const WEB_HANDOFF_TOOL_SET = createWebHandoffToolSet();
