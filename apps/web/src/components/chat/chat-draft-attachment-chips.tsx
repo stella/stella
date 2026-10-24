@@ -3,16 +3,27 @@ import { useId, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronRightIcon, TextIcon, XIcon } from "@stll/ui/icons";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { ChevronRightIcon, CommandIcon, TextIcon, XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import { AttachmentChip } from "@/components/chat/attachment-chip";
+import type {
+  AttachmentChipAction,
+  AttachmentChipKind,
+} from "@/components/chat/attachment-chip";
 import { DocumentIcon } from "@/components/document-icon";
 
 type ChatAttachmentChipItem =
   | Omit<Extract<ChatDraftAttachment, { type: "file" }>, "file">
   | Extract<ChatDraftAttachment, { type: "pasted_text" }>;
+
+const chipKind = (item: ChatAttachmentChipItem): AttachmentChipKind => {
+  if (item.type === "pasted_text") {
+    return "pasted_text";
+  }
+  return item.mimeType.startsWith("image/") ? "image" : "file";
+};
 
 type ChatAttachmentChipProps = {
   item: ChatAttachmentChipItem;
@@ -49,71 +60,54 @@ export const ChatAttachmentChip = ({
     expandLabel = t("common.showLess");
   }
 
+  const actions: AttachmentChipAction[] = [];
+  if (item.type === "pasted_text") {
+    actions.push({
+      label: expandLabel,
+      icon: ({ className }) => (
+        <DirectionalIcon
+          className={cn(className, expanded && "rotate-90")}
+          flip={!expanded}
+          icon={ChevronRightIcon}
+        />
+      ),
+      onClick: () => {
+        if (behavior.type === "draft") {
+          behavior.onExpand(item.id);
+          return;
+        }
+        setDisclosure(expanded ? "collapsed" : "expanded");
+      },
+      disclosure:
+        behavior.type === "sent"
+          ? { controls: contentId, expanded }
+          : undefined,
+    });
+  }
+  if (behavior.type === "draft") {
+    actions.push({
+      label: t("common.remove"),
+      icon: ({ className }) => (
+        <XIcon aria-hidden="true" className={className} />
+      ),
+      onClick: () => behavior.onRemove(item.id),
+    });
+  }
+
   return (
     <div className="max-w-full min-w-0">
-      <div className="bg-muted/50 flex w-fit max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
-        {item.type === "file" ? (
-          <DocumentIcon
-            className="text-muted-foreground size-3 shrink-0"
-            mimeType={item.mimeType}
-          />
-        ) : (
-          <TextIcon
-            aria-hidden="true"
-            className="text-muted-foreground size-3 shrink-0"
-          />
-        )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                className="focus-visible:outline-ring max-w-40 min-w-0 cursor-default truncate rounded-sm text-start focus-visible:outline-2"
-                dir="auto"
-                type="button"
-              />
-            }
-          >
-            <bdi>{title}</bdi>
-          </TooltipTrigger>
-          <TooltipPopup>
-            <bdi>{title}</bdi>
-          </TooltipPopup>
-        </Tooltip>
-        {item.type === "pasted_text" && (
-          <button
-            aria-controls={behavior.type === "sent" ? contentId : undefined}
-            aria-expanded={behavior.type === "sent" ? expanded : undefined}
-            aria-label={expandLabel}
-            onClick={() => {
-              if (behavior.type === "draft") {
-                behavior.onExpand(item.id);
-                return;
-              }
-              setDisclosure(expanded ? "collapsed" : "expanded");
-            }}
-            className="hover:bg-accent focus-visible:outline-ring inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md focus-visible:outline-2"
-            title={expandLabel}
-            type="button"
-          >
-            <DirectionalIcon
-              className={cn("size-3", expanded && "rotate-90")}
-              flip={!expanded}
-              icon={ChevronRightIcon}
-            />
-          </button>
-        )}
-        {behavior.type === "draft" && (
-          <button
-            aria-label={t("common.remove")}
-            onClick={() => behavior.onRemove(item.id)}
-            className="hover:bg-accent focus-visible:outline-ring inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md focus-visible:outline-2"
-            title={t("common.remove")}
-            type="button"
-          >
-            <XIcon aria-hidden="true" className="size-3" />
-          </button>
-        )}
-      </div>
+      <AttachmentChip
+        actions={actions}
+        icon={({ className }) =>
+          item.type === "file" ? (
+            <DocumentIcon className={className} mimeType={item.mimeType} />
+          ) : (
+            <TextIcon aria-hidden="true" className={className} />
+          )
+        }
+        kind={chipKind(item)}
+        title={title}
+      />
       {item.type === "pasted_text" && behavior.type === "sent" && (
         <pre
           className="bg-muted/50 mt-1 max-h-80 overflow-auto rounded-md border p-3 text-sm wrap-break-word whitespace-pre-wrap"
@@ -127,6 +121,18 @@ export const ChatAttachmentChip = ({
     </div>
   );
 };
+
+/**
+ * A reserved slash command such as `/new` in the composer: an action trigger,
+ * not editable content, so it has no expand or remove action of its own.
+ */
+export const ChatCommandChip = ({ label }: { label: string }) => (
+  <AttachmentChip
+    icon={({ className }) => <CommandIcon className={className} />}
+    kind="command"
+    title={label}
+  />
+);
 
 type ChatDraftAttachmentChipsProps = {
   files: ChatDraftAttachment[];
