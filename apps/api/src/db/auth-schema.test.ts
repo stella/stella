@@ -57,7 +57,7 @@ const OAUTH_PROVIDER_MODEL_TABLES = [
   [
     "oauthClient",
     authSchema.oauthClient,
-    ["public", "type", "registrationOrigin"],
+    ["public", "type", "registrationOrigin", "metadataValidatedAt"],
   ],
   ["oauthResource", authSchema.oauthResource, []],
   ["oauthClientResource", authSchema.oauthClientResource, []],
