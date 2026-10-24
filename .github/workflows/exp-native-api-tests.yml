@@ -1,0 +1,89 @@
+name: Experiment - native bun test for the API suite
+
+defaults:
+  run:
+    shell: bash
+
+# Runs only on the experiment branch; it never reaches main.
+on:
+  push:
+    branches: [exp/bun-native-api-tests]
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: native api-${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: false
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        env:
+          NPM_TOKEN: ""
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      - name: Generate sources
+        run: |
+          bun run generate
+          bun --cwd=packages/cli run codegen:runtime
+          bun --cwd=apps/api run generate:capability-runtime
+
+      - name: Restore API test durations
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-durations.json
+          key: api-test-durations-${{ github.run_id }}
+          restore-keys: api-test-durations-
+
+      - name: Runner resources
+        run: nproc; free -m
+
+      - name: Native API tests
+        env:
+          NATIVE_TEST_SHARD: ${{ matrix.shard }}/6
+          NATIVE_TEST_JUNIT: ${{ runner.temp }}/junit-${{ matrix.shard }}.xml
+          API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
+          BUN_OPTIONS: --smol --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
+          FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
+        run: |
+          memory_log="$RUNNER_TEMP/memory.log"
+          (while true; do free -m | awk '/^Mem:/ {print $3}'; sleep 1; done) > "$memory_log" &
+          sampler=$!
+          started=$(date +%s)
+          status=0
+          bun apps/api/scripts/run-tests-native.ts || status=$?
+          kill "$sampler"
+          echo "NATIVE RESULT shard ${{ matrix.shard }}/6: step $(( $(date +%s) - started ))s, exit $status, peak used memory $(sort -n "$memory_log" | tail -n 1) MB"
+          exit "$status"
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-api-junit-${{ matrix.shard }}
+          path: ${{ runner.temp }}/junit-${{ matrix.shard }}.xml
+          if-no-files-found: warn
+          retention-days: 7
