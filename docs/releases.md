@@ -184,13 +184,14 @@ The steps in full:
    gh workflow run main-heavy.yml --ref main -f sha=<release-pr-head-sha> -F release_candidate=true
    ```
 
-   Both gates first refuse a candidate whose VERSION is already tagged or whose
-   SHA differs from the commit that set the pending VERSION on main. Ordinary pinned dispatches leave
+   Both gates first refuse a candidate whose VERSION is already tagged. A
+   candidate that is not yet on `main` must be a release pull request head the
+   trusted release-tree verifier accepts; a candidate on `main` must be the
+   commit that set the pending VERSION. Ordinary pinned dispatches leave
    `release_candidate` false and skip this check. The release-candidate heavy run dispatches
    `main-pr-depth.yml` and `deploy-staging.yml` for the same SHA. The version
    commit's staging run is started automatically after merge, reusing the
-   candidate's proof when their trees match. A full staging run also refuses a
-   SHA that `main` does not contain. When staging does not answer, the
+   candidate's proof when their trees match. Outside a release-candidate run, staging refuses a SHA that `main` does not contain. When staging does not answer, the
    release-candidate run starts it through the infra repository's
    `staging-power.yml` (`action=on`, `hours=2`; the lease powers it off
    again), waits up to 15 minutes for that run and up to 45 minutes for
