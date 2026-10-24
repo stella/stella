@@ -14,8 +14,8 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   fileComparisonUploads,
-  schedulerJobs,
   schedulerJobRuns,
+  schedulerJobs,
   systemAuditRuns,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";

@@ -9,9 +9,7 @@
 //   (ES-BORME, PT-publicacoes).
 
 export type RegistryAdapterShape =
-  | { type: "rpc" }
-  | { type: "local-index" }
-  | { type: "event-stream" };
+  { type: "rpc" } | { type: "local-index" } | { type: "event-stream" };
 
 export type RegistryDescriptor<Scheme extends string> = {
   slug: string;

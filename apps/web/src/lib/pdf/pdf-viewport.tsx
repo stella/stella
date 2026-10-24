@@ -52,8 +52,7 @@ type PDFViewportProps = {
   searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
-    | ((summary: SearchMatchSummary) => void)
-    | undefined;
+    ((summary: SearchMatchSummary) => void) | undefined;
   renderPage: (props: PDFPageProps) => ReactNode;
 };
 

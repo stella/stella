@@ -12,8 +12,8 @@ import {
   timeEntrySuggestions,
 } from "@/api/db/schema";
 import {
-  clusterActivitySignals,
   type ActivitySignal,
+  clusterActivitySignals,
   type SuggestionCluster,
 } from "@/api/handlers/time-entries/suggestions/cluster";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

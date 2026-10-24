@@ -5,36 +5,36 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
-import type { FailureRecord } from "./ci-failure-digest";
+import { digestFile, type FailureRecord } from "./ci-failure-digest";
 import {
   buildHistory,
   collectEvidence,
+  type Evidence,
   fetchLatestHistory,
   findFlakyChecks,
+  type Gh,
   GhCommandError,
   HISTORY_ARTIFACT,
   HISTORY_FILE,
   HISTORY_WINDOW_DAYS,
+  jobFamily,
   jobSummary,
+  type Observation,
   PROPOSAL_THRESHOLD,
-  PROPOSED_QUARANTINE_DAYS,
   proposalBody,
+  PROPOSED_QUARANTINE_DAYS,
   proposeQuarantine,
   quarantineArtifactName,
   quarantineCandidates,
-  jobFamily,
   resolveOwners,
   resolveTestFile,
-  type Evidence,
-  type Gh,
-  type Observation,
 } from "./flaky-test-history";
 import {
   DAY_MS,
   parseRegistry,
-  serializeRegistry,
   type QuarantineEntry,
   type Registry,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const NOW = new Date("2026-10-17T12:00:00.000Z");
@@ -600,7 +600,11 @@ describe("evidence collection", () => {
         // Run 2 predates structured test identities.
         writeFileSync(
           path.join(dir, "ci-failures.json"),
-          JSON.stringify(rest.at(1) === "1" ? digest : [{ job: "x" }]),
+          JSON.stringify(
+            rest.at(1) === "1"
+              ? digestFile(digest, { GITHUB_RUN_ID: "1" })
+              : { version: 1, failures: [{ job: "x" }] },
+          ),
         );
         return Result.ok("");
       }
@@ -796,6 +800,74 @@ describe("evidence collection", () => {
       );
     }
   });
+
+  test.each([1001, 2, 1000, 1002])(
+    "checks the combined count after splitting a capped listing: %s",
+    async (combinedCount) => {
+      const listed: string[] = [];
+      const gh: Gh = async (args) => {
+        const url = args.at(-1) ?? "";
+        if (url.includes("/workflows/ci.yml/runs?created=2026-10-10")) {
+          listed.push(url);
+          const isWholeDay = url.includes(
+            "created=2026-10-10T00:00:00Z..2026-10-10T23:59:59Z",
+          );
+          const firstHalf = listed.length === 2;
+          const halfCount = firstHalf
+            ? Math.ceil(combinedCount / 2)
+            : Math.floor(combinedCount / 2);
+          const count = isWholeDay ? 1 : halfCount;
+          const runs = Array.from({ length: count }, (_, index) => ({
+            id: firstHalf
+              ? index + 1
+              : Math.ceil(combinedCount / 2) + index + 1,
+            head_sha: "abc",
+            head_branch: "feature",
+            conclusion: "success",
+            run_started_at: firstHalf
+              ? "2026-10-10T08:00:00Z"
+              : "2026-10-10T20:00:00Z",
+          }));
+          return Result.ok(
+            JSON.stringify([
+              { total_count: isWholeDay ? 1001 : count, workflow_runs: runs },
+            ]),
+          );
+        }
+        if (url.includes("/runs?")) {
+          return Result.ok(
+            JSON.stringify([{ total_count: 0, workflow_runs: [] }]),
+          );
+        }
+        return Result.ok(artifacts([]));
+      };
+      const collected = await collectEvidence({
+        gh,
+        repository: "stella/stella",
+        now: NOW,
+        workdir: tmpdir(),
+      });
+      expect(collected.isOk()).toBe(combinedCount === 1001);
+      if (collected.isErr()) {
+        expect(collected.error.message).toContain(
+          `GitHub reported 1001, but returned ${combinedCount}`,
+        );
+      } else {
+        expect(collected.value.evidence.runs).toHaveLength(1001);
+      }
+      expect(listed).toEqual([
+        expect.stringContaining(
+          "created=2026-10-10T00:00:00Z..2026-10-10T23:59:59Z",
+        ),
+        expect.stringContaining(
+          "created=2026-10-10T00:00:00Z..2026-10-10T11:59:59Z",
+        ),
+        expect.stringContaining(
+          "created=2026-10-10T12:00:00Z..2026-10-10T23:59:59Z",
+        ),
+      ]);
+    },
+  );
 
   test("refuses a truncated artifact listing", async () => {
     const gh: Gh = async (args) => {

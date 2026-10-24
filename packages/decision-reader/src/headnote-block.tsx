@@ -22,8 +22,7 @@ type CourtChip = { abbreviation: string; tier: CourtTier };
  * boolean that can be set with the first.
  */
 export type HeadnoteOrigin =
-  | { type: "ai" }
-  | { type: "court"; chip: CourtChip | null };
+  { type: "ai" } | { type: "court"; chip: CourtChip | null };
 
 /**
  * The mark itself. The court's chip stands beside the court's name, which the

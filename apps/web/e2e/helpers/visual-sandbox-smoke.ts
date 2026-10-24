@@ -9,8 +9,8 @@ import { E2E_API_ORIGIN } from "./api";
 import {
   createNetworkCollector,
   diffNetworkBaseline,
-  summarizeCapture,
   type NetworkBaselineEntry,
+  summarizeCapture,
 } from "./network";
 import { createBrowserErrorCollector } from "./test";
 

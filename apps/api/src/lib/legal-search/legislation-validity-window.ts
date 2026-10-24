@@ -4,9 +4,9 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
   isEligibleLegislationExpression,
-  type LegislationExpressionEligibility,
   LEGISLATION_APPLICABLE_EXPRESSION_KINDS,
   LEGISLATION_APPLICABLE_WINDOW_DISPOSITION,
+  type LegislationExpressionEligibility,
 } from "@stll/api-contract/legislation-expression";
 
 /** Works with no version window sort below every dated consolidation. */
