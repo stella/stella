@@ -1,12 +1,12 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { VAT_RATE_PRESET_COUNTRIES } from "@stll/api-contract";
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 
 const originalFetch = globalThis.fetch;
 const previousApiUrl = process.env["VITE_API_URL"];
-beforeAll(() => {
-  process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
-});
+process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const { sendVatRateCommand } = await import("./vat-rates");
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
@@ -29,7 +29,6 @@ test.each(VAT_RATE_PRESET_COUNTRIES)(
       },
       { preconnect: () => undefined },
     );
-    const { sendVatRateCommand } = await import("./vat-rates");
     expect(await sendVatRateCommand({ type: "applyPreset", country })).toEqual({
       added: 3,
       skipped: 2,
@@ -37,6 +36,9 @@ test.each(VAT_RATE_PRESET_COUNTRIES)(
     expect(requests).toHaveLength(1);
     const request = requests.at(0);
     expect(request?.method).toBe("POST");
+    expect(request?.headers.get(CAPABILITY_REQUEST_HEADER)).toBe(
+      "vat-rates.presets.create",
+    );
     expect(
       request === undefined ? undefined : new URL(request.url).pathname,
     ).toBe("/v1/vat-rates/apply-preset");

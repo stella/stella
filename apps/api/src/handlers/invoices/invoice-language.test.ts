@@ -4,9 +4,8 @@ import { t } from "elysia";
 
 import { INVOICE_LANGUAGES } from "@stll/api-contract";
 
+import { invoiceLanguageForCountry } from "@/api/lib/billing/invoice-language";
 import { tInvoiceLanguage } from "@/api/lib/custom-schema";
-
-import { invoiceLanguageForCountry } from "./invoice-language";
 
 describe("invoice language schema", () => {
   test("an omitted language stays omitted, so the client, organization and seller defaults decide", () => {

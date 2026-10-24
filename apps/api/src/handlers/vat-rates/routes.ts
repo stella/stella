@@ -32,6 +32,7 @@ export const vatRateRoute = new Elysia({ prefix: "/vat-rates" })
   })
   .post("/apply-preset", applyVatRatePreset.handler, {
     permissions: applyVatRatePreset.config.permissions,
+    accountAccess: applyVatRatePreset.config.accountAccess,
     body: applyVatRatePreset.config.body,
   })
   .patch("/:vatRateId", updateVatRate.handler, {

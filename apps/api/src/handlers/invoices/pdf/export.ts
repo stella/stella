@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
@@ -51,16 +52,19 @@ const invoiceRenderRejection = ({
   const infrastructureFailure = ["timeout", "crashed", "memory"].includes(
     reason,
   );
-  return new HandlerError({
-    status: infrastructureFailure ? 503 : 409,
-    message: infrastructureFailure
-      ? "The invoice PDF renderer is temporarily unavailable."
-      : diagnostics.join("\n") || `Invoice rendering was rejected: ${reason}`,
-    hint: infrastructureFailure
-      ? "Try exporting the invoice again later."
-      : "Check the seller payment details and invoice dates before exporting.",
-    retryable: infrastructureFailure,
-  });
+  return classifyFailure(
+    new HandlerError({
+      status: infrastructureFailure ? 503 : 409,
+      message: infrastructureFailure
+        ? "The invoice PDF renderer is temporarily unavailable."
+        : diagnostics.join("\n") || `Invoice rendering was rejected: ${reason}`,
+      hint: infrastructureFailure
+        ? "Try exporting the invoice again later."
+        : "Check the seller payment details and invoice dates before exporting.",
+      retryable: infrastructureFailure,
+    }),
+    infrastructureFailure ? "invoice_renderer_failed" : "conflict",
+  );
 };
 
 // permissions-exempt: rendering a temporary copy needs the same matter read

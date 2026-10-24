@@ -17,10 +17,10 @@ import {
   vatRates,
   workspaces,
 } from "@/api/db/schema";
-import { invoiceLanguageForCountry } from "@/api/handlers/invoices/invoice-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 
+import { invoiceLanguageForCountry } from "./invoice-language";
 import {
   buyerSnapshotFromContact,
   decideInvoiceVat,

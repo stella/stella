@@ -24,13 +24,13 @@
     "@stll/money": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
-    "bysquare": "4.1.0",
     "lzma1": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
+    "bysquare": "4.1.0",
     "fast-check": "catalog:"
   }
 }
