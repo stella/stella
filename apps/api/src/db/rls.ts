@@ -1833,11 +1833,13 @@ type InvoicePolicyColumns = {
   id: p.AnyPgColumn;
   organizationId: p.AnyPgColumn;
   workspaceId: p.AnyPgColumn;
+  clientId: p.AnyPgColumn;
+  originalInvoiceId: p.AnyPgColumn;
 };
 
 /** The owner-evaluated predicate sees hidden lines, preventing partial invoices. */
 export const invoicePolicies = (table: InvoicePolicyColumns) => {
-  const access = sql`public.stella_invoice_access(${table.id}, ${table.organizationId}, ${table.workspaceId})`;
+  const access = sql`public.stella_invoice_access(${table.id}, ${table.organizationId}, ${table.workspaceId}, ${table.clientId}, ${table.originalInvoiceId})`;
   return [
     p.pgPolicy("invoices_workspace_select", {
       for: "select",

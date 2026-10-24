@@ -34,24 +34,39 @@ ALTER TABLE invoice_lines ADD CONSTRAINT invoice_lines_recorded_snapshot_check C
  OR (recorded_description IS NOT NULL AND recorded_quantity IS NOT NULL AND recorded_unit_price IS NOT NULL AND recorded_net_amount IS NOT NULL)
 ) NOT VALID;--> statement-breakpoint
 -- Client backfill runs in bounded committed batches in the online migration phase.
--- stella-migration-safety: reviewed security-definer - Reads hidden invoice line ownership only; tenant and actor membership are checked and search_path is fixed.
-CREATE FUNCTION public.stella_invoice_access(invoice_id uuid, org_id text, matter_id uuid)
+-- stella-migration-safety: reviewed security-definer - Reads complete invoice and linked-original ownership only; tenant and actor membership are checked and search_path is fixed.
+CREATE FUNCTION public.stella_invoice_access(invoice_id uuid, org_id text, matter_id uuid, client_id uuid, source_original_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+ WITH authorized_original AS (
+   SELECT original.id FROM public.invoices original
+   WHERE original.id = source_original_id AND original.organization_id = org_id
+     AND original.client_id IS NOT DISTINCT FROM stella_invoice_access.client_id
+     AND original.workspace_id IS NOT DISTINCT FROM matter_id
+     AND original.document_type IN ('invoice', 'advance')
+     AND (CASE WHEN original.workspace_id IS NULL
+       THEN EXISTS (SELECT 1 FROM public.invoice_lines original_line WHERE original_line.invoice_id = original.id)
+       ELSE original.workspace_id IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces) END)
+     AND NOT EXISTS (SELECT 1 FROM public.invoice_lines original_line WHERE original_line.invoice_id = original.id
+       AND original_line.workspace_id NOT IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces))
+ )
  SELECT org_id = current_setting('app.organization_id', true)
  AND EXISTS (SELECT 1 FROM public.member m WHERE m.organization_id = org_id
    AND m.user_id = current_setting('app.user_id', true)
    AND (m.role IN ('owner', 'admin') OR (
-     -- A client invoice is visible to members who can open every matter on it;
-     -- one with no lines left has no such matter, so only billing admins see it.
+     -- Empty client invoices stay admin-only, except credit drafts whose whole
+     -- original is authorized. Credit notes retain that original scope after
+     -- adding lines; they never expose a hidden original through a subset.
      (CASE WHEN matter_id IS NULL
        THEN EXISTS (SELECT 1 FROM public.invoice_lines any_line WHERE any_line.invoice_id = stella_invoice_access.invoice_id)
+         OR EXISTS (SELECT 1 FROM authorized_original)
        ELSE matter_id IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces) END)
      AND NOT EXISTS (SELECT 1 FROM public.invoice_lines l WHERE l.invoice_id = stella_invoice_access.invoice_id
        AND l.workspace_id NOT IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces))
+     AND (source_original_id IS NULL OR EXISTS (SELECT 1 FROM authorized_original))
    )))
 $$;--> statement-breakpoint
-REVOKE ALL ON FUNCTION public.stella_invoice_access(uuid,text,uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_invoice_access(uuid,text,uuid) TO stella;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.stella_invoice_access(uuid,text,uuid,uuid,uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_invoice_access(uuid,text,uuid,uuid,uuid) TO stella;--> statement-breakpoint
 -- stella-migration-safety: reviewed security-definer - Enforces invoice/client/matter tenant consistency for old and new writers; fixed search path and trigger-only use.
 CREATE FUNCTION public.stella_invoice_client_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 DECLARE invoice_row public.invoices; matter_row public.workspaces;
@@ -111,10 +126,10 @@ DROP POLICY invoices_workspace_insert ON invoices;--> statement-breakpoint
 DROP POLICY invoices_workspace_update ON invoices;--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-object - Replaces matter-only visibility with complete-invoice authorization.
 DROP POLICY invoices_workspace_delete ON invoices;--> statement-breakpoint
-CREATE POLICY invoices_workspace_select ON invoices FOR SELECT TO stella USING (public.stella_invoice_access(id,organization_id,workspace_id));--> statement-breakpoint
-CREATE POLICY invoices_workspace_insert ON invoices FOR INSERT TO stella WITH CHECK (public.stella_invoice_access(id,organization_id,workspace_id));--> statement-breakpoint
-CREATE POLICY invoices_workspace_update ON invoices FOR UPDATE TO stella USING (public.stella_invoice_access(id,organization_id,workspace_id)) WITH CHECK (public.stella_invoice_access(id,organization_id,workspace_id));--> statement-breakpoint
-CREATE POLICY invoices_workspace_delete ON invoices FOR DELETE TO stella USING (public.stella_invoice_access(id,organization_id,workspace_id));--> statement-breakpoint
+CREATE POLICY invoices_workspace_select ON invoices FOR SELECT TO stella USING (public.stella_invoice_access(id,organization_id,workspace_id,client_id,original_invoice_id));--> statement-breakpoint
+CREATE POLICY invoices_workspace_insert ON invoices FOR INSERT TO stella WITH CHECK (public.stella_invoice_access(id,organization_id,workspace_id,client_id,original_invoice_id));--> statement-breakpoint
+CREATE POLICY invoices_workspace_update ON invoices FOR UPDATE TO stella USING (public.stella_invoice_access(id,organization_id,workspace_id,client_id,original_invoice_id)) WITH CHECK (public.stella_invoice_access(id,organization_id,workspace_id,client_id,original_invoice_id));--> statement-breakpoint
+CREATE POLICY invoices_workspace_delete ON invoices FOR DELETE TO stella USING (public.stella_invoice_access(id,organization_id,workspace_id,client_id,original_invoice_id));--> statement-breakpoint
 CREATE POLICY invoice_lines_complete_invoice ON invoice_lines AS RESTRICTIVE FOR ALL TO stella USING (EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_id)) WITH CHECK (EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_id));
 --> statement-breakpoint
 CREATE POLICY review_reset_owner_select ON invoices FOR SELECT USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoices'::regclass) AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), ''));--> statement-breakpoint
@@ -163,7 +178,13 @@ BEGIN
    RAISE EXCEPTION 'Matter billing access denied' USING ERRCODE = '42501';
  END IF;
  SELECT COUNT(*) INTO invoice_count FROM public.invoices i JOIN public.workspaces w ON w.id = matter_id AND w.organization_id = i.organization_id
- WHERE i.workspace_id = matter_id OR EXISTS (SELECT 1 FROM public.invoice_lines l WHERE l.invoice_id = i.id AND l.workspace_id = matter_id);
+ -- Resource reservations follow the linked original even before credit lines exist;
+ -- list and export amounts still belong only to the credit note's own lines.
+ WHERE i.workspace_id = matter_id OR EXISTS (SELECT 1 FROM public.invoice_lines l WHERE l.invoice_id = i.id AND l.workspace_id = matter_id)
+ OR EXISTS (SELECT 1 FROM public.invoices original JOIN public.invoice_lines original_line ON original_line.invoice_id = original.id
+   WHERE original.id = i.original_invoice_id AND original.organization_id = i.organization_id
+     AND original.client_id IS NOT DISTINCT FROM i.client_id AND original.workspace_id IS NOT DISTINCT FROM i.workspace_id
+     AND original_line.workspace_id = matter_id);
  RETURN invoice_count;
 END $$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.stella_matter_invoice_count(uuid) FROM PUBLIC;--> statement-breakpoint

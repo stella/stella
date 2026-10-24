@@ -213,7 +213,7 @@ const isInvoiceAccessPredicate = (expression: string | null): boolean =>
     .replaceAll(/["()\s]/gu, "")
     .replaceAll("public.", "")
     .replaceAll("invoices.", "") ===
-  "stella_invoice_accessid,organization_id,workspace_id";
+  "stella_invoice_accessid,organization_id,workspace_id,client_id,original_invoice_id";
 
 const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
   policy.table_name === "invoice_lines" &&
@@ -296,24 +296,31 @@ describe("policy coverage", () => {
     ).toBeDefined();
     expect(
       isInvoiceAccessPredicate(
-        "stella_invoice_access(id, organization_id, workspace_id)",
+        "stella_invoice_access(id, organization_id, workspace_id, client_id, original_invoice_id)",
       ),
     ).toBe(true);
     expect(
       isInvoiceAccessPredicate(
-        'public.stella_invoice_access("invoices"."id", ("invoices"."organization_id")::text, "invoices"."workspace_id")',
+        'public.stella_invoice_access("invoices"."id", ("invoices"."organization_id")::text, "invoices"."workspace_id", "invoices"."client_id", "invoices"."original_invoice_id")',
       ),
     ).toBe(true);
     expect(
       isInvoiceAccessPredicate(
-        "stella_invoice_access(id, organization_id, NULL)",
+        "stella_invoice_access(id, organization_id, NULL, client_id, original_invoice_id)",
       ),
     ).toBe(false);
     expect(
       isInvoiceAccessPredicate(
-        "stella_invoice_access(id, NULL::text, workspace_id)",
+        "stella_invoice_access(id, NULL::text, workspace_id, client_id, original_invoice_id)",
       ),
     ).toBe(false);
+
+    for (const expression of [
+      "stella_invoice_access(id, organization_id, workspace_id, NULL, original_invoice_id)",
+      "stella_invoice_access(id, organization_id, workspace_id, client_id, NULL)",
+    ]) {
+      expect(isInvoiceAccessPredicate(expression)).toBe(false);
+    }
 
     expect(
       restrictivePolicyViolation({ ...deny, using_expr: "true" }),
@@ -651,7 +658,7 @@ describe("policy coverage", () => {
 
   test("invoice access pins tenant, membership and every participating matter", async () => {
     const rows = await testDb.execute<{ definition: string }>(sql`
-      SELECT pg_get_functiondef('public.stella_invoice_access(uuid,text,uuid)'::regprocedure) AS definition
+      SELECT pg_get_functiondef('public.stella_invoice_access(uuid,text,uuid,uuid,uuid)'::regprocedure) AS definition
     `);
     const definition = rows.rows.at(0)?.definition;
     expect(definition).toBeDefined();
@@ -661,6 +668,9 @@ describe("policy coverage", () => {
       "m.organization_id = org_id",
       "m.user_id = current_setting('app.user_id'",
       "l.workspace_id NOT IN",
+      "original.id = source_original_id",
+      "original.client_id IS NOT DISTINCT FROM",
+      "original_line.workspace_id NOT IN",
       "stella_authorized_workspaces",
     ]) {
       expect(definition).toContain(boundary);

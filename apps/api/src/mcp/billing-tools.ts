@@ -463,7 +463,7 @@ const resolveInvoiceWorkspace = async ({
               : invoiceInMatter(table, requestedMatterId),
           ),
       },
-      columns: { workspaceId: true },
+      columns: { workspaceId: true, originalInvoiceId: true },
       with: {
         lines: {
           columns: { workspaceId: true },
@@ -480,7 +480,35 @@ const resolveInvoiceWorkspace = async ({
   if (requestedMatterId !== undefined) {
     return row === undefined ? null : requestedMatterId;
   }
-  return row?.workspaceId ?? row?.lines.at(0)?.workspaceId ?? null;
+  const ownMatter = row?.workspaceId ?? row?.lines.at(0)?.workspaceId;
+  if (ownMatter !== undefined) {
+    return ownMatter;
+  }
+  const originalInvoiceId = row?.originalInvoiceId;
+  if (originalInvoiceId === null || originalInvoiceId === undefined) {
+    return null;
+  }
+  // An empty credit draft inherits a participating matter from its original,
+  // after both invoices pass complete row and credential authorization.
+  const original = await context.scopedDb((tx) =>
+    tx.query.invoices.findFirst({
+      where: {
+        id: { eq: originalInvoiceId },
+        organizationId: { eq: context.organizationId },
+        RAW: (table) =>
+          invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds),
+      },
+      columns: { workspaceId: true },
+      with: {
+        lines: {
+          columns: { workspaceId: true },
+          orderBy: { position: "asc", id: "asc" },
+          limit: 1,
+        },
+      },
+    }),
+  );
+  return original?.workspaceId ?? original?.lines.at(0)?.workspaceId ?? null;
 };
 
 /**
