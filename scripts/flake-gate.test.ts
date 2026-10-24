@@ -197,9 +197,11 @@ test("the real API manifest selects unit and Postgres files through their exact 
   const postgres = "apps/api/src/db/prod-parity.postgres.test.ts";
   // The regression must reach the compound script and service wrapper from the repository.
   expect(apiManifest.scripts.test).toContain(
-    "bun --cwd=../../packages/cli run codegen:runtime &&",
+    "bun --cwd=../../packages/cli run codegen:runtime || exit 1;",
   );
-  expect(apiManifest.scripts.test).toContain("&& bun scripts/run-tests.ts");
+  expect(apiManifest.scripts.test).toContain(
+    "|| exit 1; bun scripts/run-tests.ts",
+  );
   expect(apiManifest.scripts["test:postgres"]).toBe(
     `bun ${apiManifest.ciGateTestRunners["test:postgres"].runner}`,
   );
@@ -265,7 +267,9 @@ test("the real API manifest selects unit and Postgres files through their exact 
 
 test("the web entry retains file scoping and its DOM isolation with seeded trial flags", async () => {
   await withFixture((root) => {
-    expect(webManifest.scripts.test).toContain("&& bun scripts/run-tests.ts");
+    expect(webManifest.scripts.test).toContain(
+      "|| exit 1; bun scripts/run-tests.ts",
+    );
     write(root, "apps/web/package.json", JSON.stringify(webManifest));
     const file = "apps/web/src/selected.dom.test.tsx";
     write(root, file, "");

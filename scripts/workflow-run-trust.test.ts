@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 
@@ -9,6 +11,41 @@ import {
   usesDefaultCacheScope,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
+import { workflowJobSteps } from "./workflow-steps";
+
+test("the trusted producer emits true for approved PR and full-run events", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const run = workflowJobSteps(workflow, "ci-plan").find(
+    (step) => step["id"] === "check",
+  )?.["run"];
+  expect(typeof run).toBe("string");
+  if (typeof run !== "string") {
+    throw new TypeError("Missing trust producer");
+  }
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "trust-output-"));
+  try {
+    for (const event of [
+      "pull_request",
+      "workflow_dispatch",
+      "schedule",
+      "push",
+    ]) {
+      const output = nodePath.join(directory, event);
+      const result = Bun.spawnSync(["bash", "-e", "-c", run], {
+        env: { ...process.env, EVENT_NAME: event, GITHUB_OUTPUT: output },
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8")).toBe("trusted=true\n");
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 // A workflow_run workflow runs in the default branch's context, with its
 // secrets and cache scope, for any completed run of a workflow with the

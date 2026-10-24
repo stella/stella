@@ -1,9 +1,14 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
+import {
+  PILOT_ALWAYS,
+  pilotFastJobs,
+  pilotQueueJobs,
+} from "./ci-pr-pilot-plan";
 import { renderResultInputs } from "./ci-result-inputs";
 import { evaluate } from "./github-expression";
 
@@ -95,6 +100,26 @@ const decide = async ({
   });
   return { outputs, notices };
 };
+
+test("pilot plan commands emit the exact selected job lists", () => {
+  for (const queue of [false, true]) {
+    const plan = queue ? pilotQueueJobs(workflow) : pilotFastJobs(workflow);
+    expect(plan.status).toBe("valid");
+    if (plan.status !== "valid") {
+      throw new TypeError(plan.message);
+    }
+    const result = Bun.spawnSync([
+      process.execPath,
+      fileURLToPath(new URL("ci-pr-pilot-plan.ts", import.meta.url)),
+      fileURLToPath(new URL("../.github/workflows/ci.yml", import.meta.url)),
+      ...(queue ? ["queue"] : []),
+    ]);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toBe(
+      `${queue ? "queue_jobs" : "fast_jobs"}=${JSON.stringify(plan.jobs)}\n`,
+    );
+  }
+});
 
 test("coverage profile requires a current repository certification", async () => {
   const cases = [

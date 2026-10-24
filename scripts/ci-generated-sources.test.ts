@@ -777,6 +777,7 @@ test("API boot entry points prepare capability runtime sources before starting",
       ).toBeGreaterThan(preparation);
     }
     expect(steps.at(preparation)?.if).toBe(steps.at(boot)?.if);
+    expect(steps.at(preparation)?.["continue-on-error"]).toBeUndefined();
   };
   assertPrepared(action.runs.steps);
   const missing = action.runs.steps.filter(
@@ -798,7 +799,6 @@ test("API boot entry points prepare capability runtime sources before starting",
     "build",
     "build:analyze",
     "dev",
-    "test",
     "test:property",
     "lint",
     "lint:fix",
@@ -807,6 +807,21 @@ test("API boot entry points prepare capability runtime sources before starting",
       "bun run generate:capability-runtime &&",
     );
   }
+  const apiTest = api.scripts["test"] ?? panic("API test script is missing");
+  expect(apiTest).toContain("bun run generate:capability-runtime || exit 1;");
+  expect(
+    apiTest.indexOf("generate:capability-runtime || exit 1;"),
+  ).toBeLessThan(apiTest.indexOf("bun scripts/run-tests.ts"));
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      "-c",
+      `bun() { if [[ "$*" == *generate:capability-runtime* ]]; then return 7; fi; if [[ "$*" == *scripts/run-tests.ts* ]]; then echo TEST-RAN; fi; return 0; }; ${apiTest}`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout.toString()).not.toContain("TEST-RAN");
   const root = v.parse(
     v.object({ scripts: v.record(v.string(), v.string()) }),
     JSON.parse(

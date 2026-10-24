@@ -1,0 +1,7 @@
+[
+  {
+    "context": "vars.QUEUE_BROWSER_SUITES",
+    "reason": "Merge-group browser suites run unless this repository toggle is explicitly set to off.",
+    "value": ""
+  }
+]

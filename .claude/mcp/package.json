@@ -5,7 +5,7 @@
   "scripts": {
     "eval:retrieval": "bun build docs-retrieval.eval.ts --target=node --packages=external --outfile=.cache/docs-retrieval.eval.mjs 1>&2 && node .cache/docs-retrieval.eval.mjs",
     "serve:http": "bun run stella-docs-http.ts",
-    "test": "bun test *.test.ts"
+    "test": "bun test ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

@@ -23,10 +23,12 @@ import {
   type ChangedFileScopeInput,
   computeChangedFileScope,
   DEFAULT_DETECTORS,
+  OUTPUT_ORDER,
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { sourceImportClosure } from "./detect-route-smoke-changes";
 import { GENERATORS } from "./generated-files";
+import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
 
 markdownReaders();
 
@@ -655,6 +657,38 @@ test("changed-file scope handles former shell edge cases in process", () => {
   expect(unknown["dependency_malware_required"]).toBe("true");
   expect(unknown["e2e_core_required"]).toBe("true");
   expect(unknown["service_suites_pr_required"]).toBe("true");
+});
+
+test("registered changed-file outputs select covered changes at fast and full depth", () => {
+  const outputs = TRUSTED_OUTPUT_PRODUCERS.filter(
+    (producer) =>
+      producer.job === "ci-plan" && producer.stepId === "changed-files",
+  ).flatMap((producer) => producer.outputNames);
+  expect(outputs.length).toBeGreaterThan(0);
+  for (const suiteDepth of ["fast", "full"] as const) {
+    const scope = computeChangedFileScope({
+      changedFiles: [
+        ".github/workflows/ci.yml",
+        "bun.lock",
+        "apps/api/src/db/schema.ts",
+        "apps/collab/src/server.ts",
+      ],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "pull_request",
+      suiteDepth,
+      heavyOnly: false,
+      prTitle: "",
+    });
+    for (const output of outputs) {
+      const known = OUTPUT_ORDER.find((candidate) => candidate === output);
+      expect(known, `${suiteDepth}/${output}`).toBeDefined();
+      expect(
+        known === undefined ? undefined : scope[known],
+        `${suiteDepth}/${output}`,
+      ).toBe("true");
+    }
+  }
 });
 
 test("the real changed-file step preserves paths and fails closed on git failures", () => {

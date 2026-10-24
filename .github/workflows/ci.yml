@@ -6246,7 +6246,7 @@ jobs:
           bun test scripts/check-parser-versions.test.ts
           bun scripts/check-parser-versions.ts
 
-      # The Markdown checks and the dated waiver guard share this install.
+      # The Markdown checks and independent planner proofs share this install.
       - name: Install dependencies
         id: install
         if: ${{ !cancelled() }}
@@ -6265,6 +6265,23 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      # Planner and receipt proofs cannot depend on the outputs they establish.
+      # This job and its install run independently of package selection or reuse.
+      - name: Test CI output producer proofs
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: false
+        timeout-minutes: 10
+        run: >-
+          bun test --timeout 50000
+          scripts/ci-plan.test.ts
+          scripts/ci-plan-scope.test.ts
+          scripts/ci-pr-pilot.test.ts
+          scripts/ci-completed-depth.test.ts
+          scripts/workflow-run-trust.test.ts
+          scripts/detect-e2e-changes.test.ts
+          scripts/ci-static-checks.test.ts
+          scripts/test-gate.test.ts
 
       # Workflow job classifications fail more red pull requests than any
       # other check and take seconds, so they run here, before the heavy

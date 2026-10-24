@@ -29,7 +29,10 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { ty
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
-import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
+import {
+  API_TEST_SHARD_IDS,
+  FULL_TEST_JOB_SHARDS,
+} from "./api-test-shard-plan";
 import { readSelectionGraph } from "./ci-affected-selection";
 import { planCiApiTests } from "./ci-api-test-plan";
 import {
@@ -72,6 +75,7 @@ import {
   thinJobs,
 } from "./main-heavy-plan";
 import { unlistedTests } from "./run-unlisted-script-tests";
+import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -5973,7 +5977,9 @@ test("workflow and planner changes run every planner test as a merge-group gate"
     for (const { job, step } of selected) {
       expect(admitted, file).toContain(job);
       expect(resultJob.needs, file).toContain(job);
-      expect(jobScopes[job], job).toBe("package_checks_required");
+      expect(jobScopes[job], job).toBe(
+        job === "ci-quick-checks" ? null : "package_checks_required",
+      );
       const body = v.parse(v.record(v.string(), v.unknown()), ciJobs[job]);
       expect(body["continue-on-error"] ?? false, job).toBe(false);
       expect(step["continue-on-error"] ?? false, file).toBe(false);
@@ -6874,6 +6880,27 @@ test("API planning only loads dependencies after installation and emits install-
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       const values = readFileSync(output, "utf-8");
       expect(values).toContain(`api_test_shards=${String(expected)}\n`);
+      const matrixLine = values
+        .split("\n")
+        .find((line) => line.startsWith("ci_tests_matrix="));
+      expect(matrixLine).toBeDefined();
+      const declared = TRUSTED_OUTPUT_PRODUCERS.find(
+        (producer) => producer.stepId === "api-tests",
+      );
+      const declaredShards =
+        declared?.declaredShards ?? panic("Missing declared API shard set");
+      const emittedMatrix = v.parse(
+        v.object({ shard: v.array(v.string()) }),
+        JSON.parse(matrixLine?.slice("ci_tests_matrix=".length) ?? "null"),
+      );
+      expect(
+        emittedMatrix.shard.every((shard) =>
+          declaredShards.some((candidate) => candidate === shard),
+        ),
+      ).toBe(true);
+      if (!selected && expected === String(API_TEST_SHARD_IDS.length)) {
+        expect(emittedMatrix.shard).toEqual([...declaredShards]);
+      }
       if (selectedRequired) {
         expect(values).toContain(`ci_tests_required=${selectedRequired}\n`);
         expect(values).toContain(`ci_tests_matrix=${String(selected)}\n`);

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  compileOutputAliases,
+  conjunctiveOutputConditions,
   contextFromNested,
   contextWithPlanOutputs,
   definitelyFalse,
@@ -9,6 +11,229 @@ import {
 } from "./github-expression";
 
 const none = { values: {} };
+
+describe("bounded output condition conjunctions", () => {
+  const output = "needs.plan.outputs.selected";
+  const outputs = new Map(
+    [output, "needs.plan.outputs.other"].map(
+      (reference) => [reference, reference] as const,
+    ),
+  );
+  test.each([
+    [[`${output} == 'true'`, `${output} == 'false'`], "contradictory"],
+    [[`${output} == 'true'`, `${output} != 'true'`], "contradictory"],
+    [[output, `${output} == ''`], "contradictory"],
+    [
+      [`${output} == 'TRUE'`, `(${output} == 'true') && !cancelled()`],
+      "consistent",
+    ],
+    [[`${output} != 'false'`, `${output} == 'true'`], "consistent"],
+    [
+      [`${output} == 'true' || github.event_name == 'workflow_dispatch'`],
+      "consistent",
+    ],
+    [[`!(${output} == 'false')`], "consistent"],
+    [[`${output} == 'true'`, `!(${output} == 'true')`], "contradictory"],
+    [[`contains(${output}, 'true')`], "unresolved"],
+    [[`${output} == needs.plan.outputs.other`], "unresolved"],
+    [["false"], "contradictory"],
+    [[`${output} == 'true' &&`], "unresolved"],
+    [[`(${output} == 'true') && (success() || failure())`], "consistent"],
+  ] as const)("bounds %j as %s", (conditions, type) => {
+    expect(
+      conjunctiveOutputConditions({
+        conditions,
+        outputs,
+        context: contextFromNested({
+          cancelled: () => false,
+          success: () => true,
+          failure: () => false,
+        }),
+      }).type,
+    ).toBe(type);
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [...conditions].toReversed(),
+        outputs,
+        context: contextFromNested({
+          cancelled: () => false,
+          success: () => true,
+          failure: () => false,
+        }),
+      }).type,
+    ).toBe(type);
+  });
+
+  test.each([
+    "steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+    "needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser')",
+    "needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')",
+  ])("keeps the real workflow alternatives consistent: %s", (condition) => {
+    const registered = new Map(
+      [
+        "steps.check.outputs.trusted",
+        "needs.ci-plan.outputs.coverage_profile",
+        "needs.ci-plan.outputs.pilot_fast_jobs",
+        "needs.ci-plan.outputs.suite_depth",
+        "needs.ci-plan.outputs.service_suites_pr_required",
+      ].map((reference) => [reference, reference] as const),
+    );
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [condition],
+        outputs: registered,
+      }),
+    ).toEqual({ type: "consistent" });
+  });
+
+  test("follows composite aliases without losing producer constraints", () => {
+    const first = "needs.plan.outputs.first";
+    const second = "needs.plan.outputs.second";
+    const substitutions = compileOutputAliases({
+      aliases: new Map([
+        [first, { expression: `${output} == 'true'`, outputs }],
+        [second, { expression: `${first} == 'true'`, outputs }],
+      ]),
+      boundReferences: new Set(),
+    });
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${second} == 'true'`, `${output} == 'false'`],
+        outputs,
+        substitutions,
+      }).type,
+    ).toBe("contradictory");
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${second} == 'true'`, `${output} == 'true'`],
+        outputs,
+        substitutions,
+      }).type,
+    ).toBe("consistent");
+  });
+
+  test.each([
+    ["needs.plan.outputs.boolean", "consistent"],
+    ["!needs.plan.outputs.boolean", "contradictory"],
+    ["needs.plan.outputs.boolean == 'false'", "contradictory"],
+    ["needs.plan.outputs.boolean == 'true'", "consistent"],
+    ["!needs.plan.outputs.copy", "contradictory"],
+    ["needs.plan.outputs.possibly_empty", "unresolved"],
+  ] as const)(
+    "preserves job output string semantics: %s",
+    (condition, type) => {
+      const substitutions = compileOutputAliases({
+        aliases: new Map([
+          [
+            "needs.plan.outputs.boolean",
+            { expression: `${output} == 'true'`, outputs },
+          ],
+          [
+            "needs.plan.outputs.copy",
+            { expression: "needs.plan.outputs.boolean", outputs },
+          ],
+          [
+            "needs.plan.outputs.possibly_empty",
+            { expression: `${output} && ${output}`, outputs },
+          ],
+        ]),
+        boundReferences: new Set(),
+      });
+      expect(
+        conjunctiveOutputConditions({
+          conditions: [`${output} == 'true'`, condition],
+          outputs,
+          substitutions,
+        }).type,
+      ).toBe(type);
+    },
+  );
+
+  test("applies the DNF cap after substituting a composite alias", () => {
+    const producers = new Map(
+      Array.from(
+        { length: 7 },
+        (_, index) =>
+          [`steps.scope.outputs.field${index}`, `scope/field${index}`] as const,
+      ),
+    );
+    const expression = [...producers.keys()]
+      .map((reference) => `(${reference} == 'a' || ${reference} == 'b')`)
+      .join(" && ");
+    const substitutions = compileOutputAliases({
+      aliases: new Map([
+        ["needs.scope.outputs.composite", { expression, outputs: producers }],
+      ]),
+      boundReferences: new Set(),
+    });
+    expect(
+      conjunctiveOutputConditions({
+        conditions: ["needs.scope.outputs.composite == 'true'"],
+        outputs: producers,
+        substitutions,
+      }),
+    ).toEqual({
+      type: "unresolved",
+      reason: "output condition DNF exceeds 64 disjuncts",
+    });
+  });
+
+  test("caps DNF expansion before granting output consistency", () => {
+    const registered = new Map(
+      Array.from(
+        { length: 7 },
+        (_, index) =>
+          [`needs.plan.outputs.field${index}`, `field${index}`] as const,
+      ),
+    );
+    const condition = Array.from(
+      { length: 7 },
+      (_, index) =>
+        `(needs.plan.outputs.field${index} == 'a' || needs.plan.outputs.field${index} == 'b')`,
+    ).join(" && ");
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [condition],
+        outputs: registered,
+      }),
+    ).toEqual({
+      type: "unresolved",
+      reason: "output condition DNF exceeds 64 disjuncts",
+    });
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [
+          condition.replace(
+            "needs.plan.outputs.field6 == 'a' || needs.plan.outputs.field6 == 'b'",
+            "true",
+          ),
+        ],
+        outputs: registered,
+      }).type,
+    ).toBe("consistent");
+  });
+
+  test("producer identities bind constraints across output aliases", () => {
+    const first = "needs.plan.outputs.selected_a";
+    const second = "needs.plan.outputs.selected_b";
+    const aliases = new Map([
+      [first, "plan/steps.selection.outputs.required"],
+      [second, "plan/steps.selection.outputs.required"],
+    ]);
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${first} == 'true'`, `${second} == 'false'`],
+        outputs: aliases,
+      }).type,
+    ).toBe("contradictory");
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${first} == 'true'`, `${second} == 'true'`],
+        outputs: aliases,
+      }).type,
+    ).toBe("consistent");
+  });
+});
 
 describe("GitHub expression evaluation", () => {
   test("nested contexts preserve projections, status functions and unknown paths", () => {
