@@ -579,6 +579,11 @@ test("the route generator guard rejects missing script and direct pin", async ()
 });
 
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
+  expect(
+    generatorsForFiles([
+      "packages/api-contract/src/document-version-upload.ts",
+    ]).map(({ id }) => id),
+  ).toContain("cli-registry");
   const requiredIds = [
     "capability-catalog",
     "capability-runtime",

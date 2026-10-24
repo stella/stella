@@ -2198,20 +2198,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
-    "function": "module/uploadPreparedFileEntity",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
-    "function": "module/uploadPreparedFileEntity",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/lib/workspaces/time-entries-api.ts",
     "function": "module/requestTimeEntries",
     "kind": "numeric-timeout",
