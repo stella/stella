@@ -424,6 +424,41 @@ test("selected files replace package directory filters and exclude failing sibli
   });
 });
 
+test("package ignore patterns keep dedicated tests out of normal repeat trials", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "packages/filtered/package.json",
+      JSON.stringify({
+        scripts: {
+          test: "bun test src --path-ignore-patterns '**/*.property.test.ts'",
+        },
+      }),
+    );
+    const eligible = "packages/filtered/src/ordinary.test.ts";
+    const dedicated = "packages/filtered/src/nested/edition.property.test.ts";
+    for (const file of [eligible, dedicated]) {
+      write(
+        root,
+        file,
+        'import {test} from "bun:test"; test("case", () => {});',
+      );
+    }
+    const selected = selectTargets({
+      root,
+      changed: [eligible, dedicated],
+      hasDb: false,
+    });
+    expect(selected.targets.map(({ file }) => file)).toEqual([eligible]);
+    expect(selected.skipped).toEqual([
+      {
+        file: dedicated,
+        reason: "not gated (excluded by package test script)",
+      },
+    ]);
+  });
+});
+
 test("Cargo target exclusions are reported once as not gated", async () => {
   const target = {
     file: "src/windows/tests.rs",

@@ -13,13 +13,13 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "test": "bun test src",
+    "test": "bun test src --path-ignore-patterns '**/*.property.test.ts'",
     "evaluate": "bun scripts/evaluate.ts",
     "prove:real-editions": "bun scripts/prove-real-editions.ts",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/sanctions",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/sanctions",
-    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
+    "test:property": "./scripts/test-property.sh --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
     "@stll/country-codes": "workspace:*",
