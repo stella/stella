@@ -66,7 +66,10 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import {
+  CapabilityAction,
+  CapabilityActionChrome,
+} from "@/lib/organization/feature-access/capability-actions";
 
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
@@ -838,7 +841,9 @@ export const AnnotationToolbar = ({
         </div>
         {mode === "authenticated" && (
           <>
-            <span className="bg-border mx-1 h-4 w-px" />
+            <CapabilityActionChrome action={{ capability: "ai" }}>
+              <span className="bg-border mx-1 h-4 w-px" />
+            </CapabilityActionChrome>
             <CapabilityAction action={{ capability: "ai" }} surface="control">
               {(capabilityProps) => (
                 <Button

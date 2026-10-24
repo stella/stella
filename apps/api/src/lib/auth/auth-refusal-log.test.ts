@@ -1,6 +1,10 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthEndpoint,
+  createAuthMiddleware,
+} from "better-auth/api";
 import { describe, expect, test } from "bun:test";
 
 import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
@@ -26,6 +30,7 @@ describe("auth refusal log", () => {
         "auth.path": "/oauth2/token",
         "http.status_code": 400,
         "auth.error_code": "invalid_scope",
+        "auth.refusal_delivery": "response",
         "oauth.grant_type": "refresh_token",
         "oauth.refusal_reason": "scope_mismatch",
         "oauth.client_id": "client",
@@ -49,6 +54,7 @@ describe("auth refusal log", () => {
         "auth.path": "/oauth2/token",
         "http.status_code": 401,
         "auth.error_code": "other",
+        "auth.refusal_delivery": "response",
       },
     });
     expect(
@@ -63,10 +69,61 @@ describe("auth refusal log", () => {
     });
   });
 
-  test("ignores successes, redirects and server errors", () => {
+  test("describes an authorize error redirect without its target", () => {
+    const thrown = describeAuthRefusal({
+      path: "/oauth2/authorize",
+      returned: new APIError(
+        "FOUND",
+        undefined,
+        new Headers({
+          location:
+            "https://api.example.test/api/auth/error?error=invalid_client&error_description=Metadata+document+fetch+returned+HTTP+404",
+        }),
+      ),
+      body: undefined,
+    });
+    expect(thrown).toEqual({
+      type: "refused",
+      attributes: {
+        "auth.path": "/oauth2/authorize",
+        "http.status_code": 302,
+        "auth.error_code": "invalid_client",
+        "auth.refusal_delivery": "redirect",
+      },
+    });
+
+    const fetched = describeAuthRefusal({
+      path: "/oauth2/authorize",
+      returned: {
+        redirect: true,
+        url: "https://client.example.test/callback#error=access_denied&state=private-state",
+      },
+      body: undefined,
+    });
+    expect(fetched).toEqual({
+      type: "refused",
+      attributes: {
+        "auth.path": "/oauth2/authorize",
+        "http.status_code": 200,
+        "auth.error_code": "access_denied",
+        "auth.refusal_delivery": "redirect",
+      },
+    });
+    expect(JSON.stringify([thrown, fetched])).not.toMatch(
+      /example\.test|private-state|Metadata/u,
+    );
+  });
+
+  test("ignores successes, plain redirects and server errors", () => {
     for (const returned of [
       { ok: true },
       new APIError("FOUND", undefined, new Headers({ location: "/" })),
+      new APIError(
+        "FOUND",
+        undefined,
+        new Headers({ location: "https://client.example.test/cb?code=abc" }),
+      ),
+      { redirect: true, url: "/oauth/consent?client_id=client" },
       new APIError("INTERNAL_SERVER_ERROR"),
     ]) {
       expect(
@@ -91,6 +148,20 @@ describe("auth refusal log", () => {
       plugins: [
         {
           id: "test-auth-refusal-log",
+          // Refuses the way the OAuth authorize endpoint does: by throwing a
+          // redirect to the error page.
+          endpoints: {
+            refuse: createAuthEndpoint(
+              "/fixture/refuse",
+              { method: "GET" },
+              async (ctx) => {
+                await Promise.resolve();
+                throw ctx.redirect(
+                  `${ctx.context.baseURL}/error?error=invalid_client`,
+                );
+              },
+            ),
+          },
           hooks: {
             after: [
               {
@@ -119,11 +190,24 @@ describe("auth refusal log", () => {
     });
 
     expect(response.status).toBe(401);
+
+    const redirected = await auth.handler(
+      new Request("http://localhost:3001/api/auth/fixture/refuse"),
+    );
+
+    expect(redirected.status).toBe(302);
     expect(refusals).toEqual([
       {
         "auth.path": "/sign-in/email",
         "http.status_code": 401,
         "auth.error_code": "invalid_email_or_password",
+        "auth.refusal_delivery": "response",
+      },
+      {
+        "auth.path": "/fixture/refuse",
+        "http.status_code": 302,
+        "auth.error_code": "invalid_client",
+        "auth.refusal_delivery": "redirect",
       },
     ]);
   });
