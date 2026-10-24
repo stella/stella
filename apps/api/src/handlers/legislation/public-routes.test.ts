@@ -5,6 +5,7 @@ import nodePath from "node:path";
 import {
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
+  PUBLIC_COUNTRY_SURFACE_OPEN,
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
 } from "@stll/api-contract/public-country-capability";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -32,8 +33,10 @@ describe("public statute routes", () => {
     async (country) => {
       const urls = [
         `/law/statutes?country=${country}`,
-        // A pages-public country's sitemap is a page route, and it is served.
-        ...(PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "pages_public"
+        // A sitemap is a page route: it is served wherever pages are open.
+        ...(PUBLIC_COUNTRY_SURFACE_OPEN.pages[
+          PUBLIC_COUNTRY_CAPABILITIES[country].legislation
+        ]
           ? []
           : [`/law/sitemap/statutes/shard?country=${country.toLowerCase()}`]),
       ];
@@ -51,16 +54,14 @@ describe("public statute routes", () => {
     },
   );
 
-  // Its statute pages and sitemap are page routes, served from the database
-  // and covered by the page db tests; search and listing stay unavailable.
-  test("a pages-public country returns typed unavailable for statute search and listing", async () => {
+  test("an unlaunched country returns typed unavailable for statute search and listing", async () => {
     const urls = [
-      "/law/statutes?country=SVK",
-      "/law/statutes/facets?country=SVK",
+      "/law/statutes?country=AUT",
+      "/law/statutes/facets?country=AUT",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
     const search = await searchLegislationHandler(
-      { jurisdiction: "SVK", query: "synthetic" },
+      { jurisdiction: "AUT", query: "synthetic" },
       () => panic("Unavailable country must not reach the database"),
       "unobserved",
     );
@@ -68,8 +69,8 @@ describe("public statute routes", () => {
       code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
       response: {
         status: "unavailable",
-        country: "SVK",
-        reason: "pages_public",
+        country: "AUT",
+        reason: "pending_public",
       },
     });
     for (const request of requests) {
@@ -79,8 +80,8 @@ describe("public statute routes", () => {
       );
       expect(await response.json()).toMatchObject({
         status: "unavailable",
-        country: "SVK",
-        reason: "pages_public",
+        country: "AUT",
+        reason: "pending_public",
       });
     }
   });
