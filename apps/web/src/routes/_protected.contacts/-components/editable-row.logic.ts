@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { tryToMinorUnits } from "@stll/money";
 
 import {
@@ -24,8 +25,12 @@ export const EDITABLE_FIELD_POLICY = {
   organizationName: { valueKind: "text", maxLength: 512 },
   displayName: { valueKind: "text", maxLength: 512 },
   notes: { valueKind: "text", maxLength: null },
-  registrationNumber: { valueKind: "text", maxLength: 64 },
-  taxId: { valueKind: "text", maxLength: 64 },
+  registrationNumber: {
+    valueKind: "text",
+    maxLength: PARTY_IDENTIFIER_MAX_LENGTH,
+  },
+  taxId: { valueKind: "text", maxLength: PARTY_IDENTIFIER_MAX_LENGTH },
+  vatId: { valueKind: "text", maxLength: PARTY_IDENTIFIER_MAX_LENGTH },
   defaultHourlyRate: { valueKind: "money" },
   currency: { valueKind: "text", maxLength: 3 },
   paymentTermDays: { valueKind: "nonNegativeInteger", maximum: 365 },
@@ -175,6 +180,8 @@ export const buildTextContactPayload = (
       return { suffix: value || null };
     case "taxId":
       return { taxId: value || null };
+    case "vatId":
+      return { vatId: value || null };
     default:
       field satisfies never;
       return panic(`Unhandled field: ${String(field)}`);
