@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-const lint = (source: string) =>
+const lint = async (source: string) =>
   lintSingleRule("no-placeholder-stella-mark", source, {
     sourcePath: "source.tsx",
   });
