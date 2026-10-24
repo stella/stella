@@ -354,3 +354,38 @@ for (const [schedule, bounded] of [
     ).toEqual(bounded ? [] : [2, 4]);
   });
 }
+
+test("effect ownership follows invoked cleanup helpers, not dormant closures", async () => {
+  const dormant = [
+    "const unused = () => clearInterval(id);",
+    "function unused() { clearInterval(id); }",
+    "const stop = () => clearInterval(id); const unused = () => stop();",
+  ];
+  const invoked = [
+    "const stop = () => clearInterval(id); stop();",
+    "const stop = () => clearInterval(id); const forward = () => stop(); forward();",
+    "(() => clearInterval(id))();",
+    "function stop() { clearInterval(id); } stop();",
+  ];
+  const results = await Promise.all([
+    ...dormant.map((body) =>
+      lintSingleRule(
+        RULE,
+        `useEffect(() => { const id = setInterval(tick, 10); return () => { ${body} }; }, []);`,
+      ),
+    ),
+    ...invoked.map((body) =>
+      lintSingleRule(
+        RULE,
+        `useEffect(() => { const id = setInterval(tick, 10); return () => { ${body} }; }, []);`,
+      ),
+    ),
+    lintSingleRule(
+      RULE,
+      "useMountEffect(() => { let frame = 0; const tick = () => { if (ready()) frame = requestAnimationFrame(tick); }; frame = requestAnimationFrame(tick); return () => { const unused = () => cancelAnimationFrame(frame); }; });",
+    ),
+  ]);
+  expect(results.slice(0, dormant.length)).toEqual([[1], [1], [1]]);
+  expect(results.slice(dormant.length, -1)).toEqual([[], [], [], []]);
+  expect(results.at(-1)).not.toEqual([]);
+});

@@ -551,11 +551,17 @@ const returnedFunctions = (
 // Functions an effect returns as its cleanup, plus functions those cleanups
 // call by name.
 const cleanupFunctions = (context: LoopContext, effect: AstNode): AstNode[] => {
-  const returned = returnedFunctions(context, effect);
-  const cleanups = new Set(returned);
-  for (const cleanup of returned) {
+  const cleanups = new Set(returnedFunctions(context, effect));
+  // Iterating the growing set follows invoked helpers once, including cycles.
+  for (const cleanup of cleanups) {
     for (const node of everyNode(cleanup.body)) {
-      const called = namedCallTarget(context, node);
+      if (
+        node.type !== "CallExpression" ||
+        enclosingFunctions(node).at(0) !== cleanup
+      ) {
+        continue;
+      }
+      const called = functionFor(context, node.callee);
       if (called !== null) {
         cleanups.add(called);
       }
@@ -590,7 +596,10 @@ const isOwned = (
     (cancel) =>
       cancelsHandle(context, cancel, handle) &&
       (loopBody === null || !isWithin(cancel.node, loopBody)) &&
-      (owners === null || owners.some((owner) => isWithin(cancel.node, owner))),
+      (owners === null ||
+        owners.some(
+          (owner) => enclosingFunctions(cancel.node).at(0) === owner,
+        )),
   );
 };
 
