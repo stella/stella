@@ -169,7 +169,7 @@ privileged_exit=0
 privileged_output=$(docker run --rm --name "$probe" --label "$owner_label=$run_id" \
   --network "container:$postgres" "${api_env[@]}" \
   --env "DATABASE_URL=$legacy_database_url" \
-  "$image_id" timeout 30 /app/server 2>&1) || privileged_exit=$?
+  "$image_id" timeout 30 bun --no-env-file /app/server.js 2>&1) || privileged_exit=$?
 if [[ "$privileged_exit" == 0 || "$privileged_exit" == 124 \
   || "$privileged_output" != *'Database login requires NOSUPERUSER NOBYPASSRLS role attributes.'* ]]; then
   printf 'FAIL: privileged database login did not fail startup\n%s\n' "$privileged_output" >&2
