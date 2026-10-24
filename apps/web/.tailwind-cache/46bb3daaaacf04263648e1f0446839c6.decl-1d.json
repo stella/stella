@@ -1,0 +1,21 @@
+{
+  "md:after:flex": {
+    "valid": true,
+    "declarations": [
+      ["@::after", "content", "var(--tw-content)"],
+      ["@::after", "display", "flex"]
+    ],
+    "values": {
+      "var(--tw-content)": {
+        "p": ["--tw-content"],
+        "f": [],
+        "u": true
+      },
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

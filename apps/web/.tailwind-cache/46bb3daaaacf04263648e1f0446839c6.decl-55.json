@@ -1,0 +1,30 @@
+{
+  "bg-(--matter-sidebar-tint)": {
+    "valid": true,
+    "declarations": [["", "background-color", "var(--matter-sidebar-tint)"]],
+    "values": {
+      "var(--matter-sidebar-tint)": {
+        "p": ["--matter-sidebar-tint"],
+        "f": [],
+        "u": true
+      }
+    }
+  },
+  "bg-foreground/10": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--foreground) 10%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--foreground) 10%, transparent)": {
+        "p": ["--foreground"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

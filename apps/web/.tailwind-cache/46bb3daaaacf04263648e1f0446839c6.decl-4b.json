@@ -1,0 +1,15 @@
+{
+  "text-[calc(0.8rem*var(--reader-text-scale))]": {
+    "valid": true,
+    "declarations": [
+      ["", "font-size", "calc(0.8rem * var(--reader-text-scale))"]
+    ],
+    "values": {
+      "calc(0.8rem * var(--reader-text-scale))": {
+        "p": ["--reader-text-scale"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

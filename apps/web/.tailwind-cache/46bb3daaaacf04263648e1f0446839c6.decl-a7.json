@@ -1,0 +1,13 @@
+{
+  "max-w-(--reader-measure)": {
+    "valid": true,
+    "declarations": [["", "max-width", "var(--reader-measure)"]],
+    "values": {
+      "var(--reader-measure)": {
+        "p": ["--reader-measure"],
+        "f": [],
+        "u": true
+      }
+    }
+  }
+}

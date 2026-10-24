@@ -64,6 +64,24 @@ const MODEL_CATALOG_INPUTS = [
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "tailwind-class-cache",
+    outputKind: "committed",
+    outputs: ["apps/web/.tailwind-cache/**"],
+    inputs: [
+      "apps/web/src/**/*.css",
+      "apps/web/src/**/*.{ts,tsx,js,jsx}",
+      "apps/web/package.json",
+      "scripts/generate-tailwind-classes.ts",
+      "patches/oxlint-tailwindcss@1.16.0.patch",
+      "package.json",
+      "bun.lock",
+    ],
+    write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
+    check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "migration-lock-baseline",
     outputKind: "committed",
     outputs: ["scripts/migration-lock-baseline.ts"],

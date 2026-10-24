@@ -1,0 +1,24 @@
+{
+  "group-hover:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "w-[150%]": {
+    "valid": true,
+    "declarations": [["", "width", "150%"]],
+    "values": {
+      "150%": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "group-focus-within/row:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "group-hover/column:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "h-[calc(--spacing(11)-2px)]": {
+    "valid": true,
+    "declarations": [["", "height", "calc(calc(var(--spacing) * 11) - 2px)"]],
+    "values": {
+      "calc(calc(var(--spacing) * 11) - 2px)": {
+        "p": ["--spacing"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "w-[min(1280px,calc(100vw-48px))]": {
+    "valid": true,
+    "declarations": [["", "width", "min(1280px, calc(100vw - 48px))"]],
+    "values": {
+      "min(1280px, calc(100vw - 48px))": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

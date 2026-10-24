@@ -1,0 +1,19 @@
+{
+  "bg-primary/12": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--primary) 12%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--primary) 12%, transparent)": {
+        "p": ["--primary"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

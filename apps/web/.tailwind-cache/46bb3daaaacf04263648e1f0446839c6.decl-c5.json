@@ -1,0 +1,24 @@
+{
+  "[@media(any-pointer:coarse)]:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "text-[var(--doc-text)]": {
+    "valid": true,
+    "declarations": [["", "color", "var(--doc-text)"]],
+    "values": {
+      "var(--doc-text)": {
+        "p": ["--doc-text"],
+        "f": [],
+        "u": true
+      }
+    }
+  }
+}

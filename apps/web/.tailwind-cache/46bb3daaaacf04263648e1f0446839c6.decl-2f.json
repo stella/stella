@@ -1,0 +1,24 @@
+{
+  "h-[600px]": {
+    "valid": true,
+    "declarations": [["", "height", "600px"]],
+    "values": {
+      "600px": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "opacity-[0.18]": {
+    "valid": true,
+    "declarations": [["", "opacity", "0.18"]],
+    "values": {
+      "0.18": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

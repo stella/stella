@@ -1,0 +1,24 @@
+{
+  "-start-[7px]": {
+    "valid": true,
+    "declarations": [["", "inset-inline-start", "calc(7px * -1)"]],
+    "values": {
+      "calc(7px * -1)": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "min-h-[300px]": {
+    "valid": true,
+    "declarations": [["", "min-height", "300px"]],
+    "values": {
+      "300px": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

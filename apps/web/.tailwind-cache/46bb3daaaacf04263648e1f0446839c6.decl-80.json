@@ -1,0 +1,19 @@
+{
+  "bg-popover/40": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--popover) 40%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--popover) 40%, transparent)": {
+        "p": ["--popover"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

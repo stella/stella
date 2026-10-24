@@ -1,0 +1,71 @@
+{
+  "[&>button:first-child]:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "border-border/40": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "border-color",
+        "color-mix(in oklab, var(--border) 40%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--border) 40%, transparent)": {
+        "p": ["--border"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "border-s-[3px]": {
+    "valid": true,
+    "declarations": [
+      ["", "border-inline-start-style", "var(--tw-border-style)"],
+      ["", "border-inline-start-width", "3px"]
+    ],
+    "values": {
+      "var(--tw-border-style)": {
+        "p": ["--tw-border-style"],
+        "f": [],
+        "u": true
+      },
+      "3px": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "data-[stuck=true]:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "md:group-hover:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

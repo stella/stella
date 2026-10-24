@@ -1,0 +1,13 @@
+{
+  "group-focus-within/menu-item:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

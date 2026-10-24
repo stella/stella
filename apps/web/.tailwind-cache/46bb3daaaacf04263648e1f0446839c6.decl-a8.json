@@ -1,0 +1,47 @@
+{
+  "*:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "bg-foreground/15": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--foreground) 15%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--foreground) 15%, transparent)": {
+        "p": ["--foreground"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "bg-muted-foreground/30": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--muted-foreground) 30%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--muted-foreground) 30%, transparent)": {
+        "p": ["--muted-foreground"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

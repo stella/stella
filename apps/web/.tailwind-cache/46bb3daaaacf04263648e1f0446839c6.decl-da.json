@@ -1,0 +1,29 @@
+{
+  "group/act": {
+    "valid": false,
+    "declarations": [],
+    "values": {}
+  },
+  "scale-[0.667]": {
+    "valid": true,
+    "declarations": [["", "scale", "0.667"]],
+    "values": {
+      "0.667": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "supports-[backdrop-filter]:group-data-[stuck=true]/sticky:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

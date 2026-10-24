@@ -1,0 +1,30 @@
+{
+  "bg-border/0": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--border) 0%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--border) 0%, transparent)": {
+        "p": ["--border"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "text-[9px]": {
+    "valid": true,
+    "declarations": [["", "font-size", "9px"]],
+    "values": {
+      "9px": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

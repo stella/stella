@@ -1,0 +1,19 @@
+{
+  "bg-muted/30": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--muted) 30%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--muted) 30%, transparent)": {
+        "p": ["--muted"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

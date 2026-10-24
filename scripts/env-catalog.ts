@@ -1599,14 +1599,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
-  // Tailwind lint worker liveness tuning. The test hooks are confined to the
-  // plugin regression suite and are inert unless explicitly set.
+  // Tailwind lint cache configuration.
   "OXLINT_TAILWINDCSS_CACHE_DIR",
-  "OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS",
-  "OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_CACHE_READ_ONLY",
   "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
-  "OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS",
-  "OXLINT_TAILWINDCSS_WORKER_TEST_HOOK",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",

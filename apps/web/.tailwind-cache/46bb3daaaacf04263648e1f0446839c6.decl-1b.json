@@ -1,0 +1,54 @@
+{
+  "bg-muted/25": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--muted) 25%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--muted) 25%, transparent)": {
+        "p": ["--muted"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "data-highlighted:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "group-[.is-assistant]:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "text-[calc(0.7rem*var(--reader-text-scale))]": {
+    "valid": true,
+    "declarations": [
+      ["", "font-size", "calc(0.7rem * var(--reader-text-scale))"]
+    ],
+    "values": {
+      "calc(0.7rem * var(--reader-text-scale))": {
+        "p": ["--reader-text-scale"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

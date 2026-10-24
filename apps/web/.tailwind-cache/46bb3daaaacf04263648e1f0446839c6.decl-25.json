@@ -1,0 +1,36 @@
+{
+  "bg-success/15": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--success) 15%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--success) 15%, transparent)": {
+        "p": ["--success"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "border-success/30": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "border-color",
+        "color-mix(in oklab, var(--success) 30%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--success) 30%, transparent)": {
+        "p": ["--success"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

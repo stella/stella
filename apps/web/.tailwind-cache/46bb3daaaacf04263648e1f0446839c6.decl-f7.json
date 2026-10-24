@@ -1,0 +1,24 @@
+{
+  "[&_br]:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "w-[min(28rem,var(--available-width))]": {
+    "valid": true,
+    "declarations": [["", "width", "min(28rem, var(--available-width))"]],
+    "values": {
+      "min(28rem, var(--available-width))": {
+        "p": ["--available-width"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

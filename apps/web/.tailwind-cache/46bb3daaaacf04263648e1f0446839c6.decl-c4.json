@@ -1,0 +1,52 @@
+{
+  "[&_h6]:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "bg-background/65": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--background) 65%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--background) 65%, transparent)": {
+        "p": ["--background"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "data-[pinned]:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": {
+      "flex": {
+        "p": [],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "scroll-mt-[var(--reader-anchor-offset)]": {
+    "valid": true,
+    "declarations": [["", "scroll-margin-top", "var(--reader-anchor-offset)"]],
+    "values": {
+      "var(--reader-anchor-offset)": {
+        "p": ["--reader-anchor-offset"],
+        "f": [],
+        "u": true
+      }
+    }
+  }
+}
