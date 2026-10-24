@@ -1545,7 +1545,12 @@ describe("detect-e2e-changes", () => {
             for (const webResult of ["success", "skipped", "failure"]) {
               for (const heavyResult of ["success", "skipped", "failure"]) {
                 for (const heavyOnly of [false, true]) {
-                  for (const cancelled of [false, true]) {
+                  for (const [cancelled, armed] of [
+                    [false, false],
+                    [false, true],
+                    [true, false],
+                    [true, true],
+                  ] as const) {
                     const context = {
                       github: { event_name: event },
                       inputs: { heavy_only: heavyOnly },
@@ -1560,6 +1565,10 @@ describe("detect-e2e-changes", () => {
                             run_required: "true",
                             trusted: String(trusted),
                             e2e_production_required: String(planned),
+                            // A pull request runs the suite once armed.
+                            heavy_proof: String(
+                              event !== "pull_request" || armed,
+                            ),
                           },
                         },
                         "web-build": { result: webResult },
@@ -1572,8 +1581,9 @@ describe("detect-e2e-changes", () => {
                       planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (webResult === "success" || heavyResult === "success") &&
-                      (event !== "merge_group" || !cancelled);
-                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`;
+                      (event !== "merge_group" || !cancelled) &&
+                      (event !== "pull_request" || armed);
+                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}/${armed}`;
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       label,

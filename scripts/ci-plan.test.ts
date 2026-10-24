@@ -3761,14 +3761,14 @@ test("spec-tree PRs plan production shards and their web build at fast depth", (
     expect(jobIf(ciJobs["e2e-production-shard"])).toContain(
       "needs.ci-plan.outputs.e2e_production_required == 'true'",
     );
-    expect(fastRequired).toContain("e2e-production-shard");
-    expect(fastRequired).toContain("web-build");
+    expect(fastRequired).not.toContain("e2e-production-shard");
+    expect(fastRequired).not.toContain("web-build");
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
         results: { "e2e-production-shard": "skipped" },
       }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
       evaluateResult({
         event: EVENT.pullRequest,
@@ -3783,12 +3783,12 @@ test("PR e2e selection schedules its build and shard together", () => {
     event: EVENT.pullRequest,
     depth: SUITE_DEPTH.fast,
   } as const;
-  expect(runsAtDepth(jobIf(ciJobs["web-build"]), selected)).toBe(true);
+  expect(runsAtDepth(jobIf(ciJobs["web-build"]), selected)).toBe(false);
   expect(
     runsAtDepth(jobIf(ciJobs["web-build"]), { ...selected, armed: true }),
   ).toBe(true);
   expect(runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), selected)).toBe(
-    true,
+    false,
   );
   expect(
     runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), {
@@ -7437,7 +7437,9 @@ test("browser planning, scheduling and result gates agree across events and dept
             exitCode:
               (event === EVENT.mergeGroup && depth === SUITE_DEPTH.fast) ||
               result === "failure" ||
-              (planned === "true" && result === "skipped")
+              ((event !== EVENT.pullRequest || depth === SUITE_DEPTH.full) &&
+                planned === "true" &&
+                result === "skipped")
                 ? 1
                 : 0,
           }));
@@ -7543,7 +7545,7 @@ test("a planted desktop path plans the PR desktop browser leg while unrelated pa
       event: EVENT.pullRequest,
       results: { "ci-browser": "skipped" },
     }),
-  ).toBe(1);
+  ).toBe(0);
   expect(
     evaluateResult({
       event: EVENT.pullRequest,
@@ -7657,11 +7659,7 @@ test("every queue-only job follows the armed proof and skips proven merge groups
       continue;
     }
     const job = key.slice("ci.yml/".length);
-    // The gate has a dual role: normal PR checks added on main wait on it,
-    // while armed runs reuse it before the queue-only suites.
-    const followsArming =
-      policy === "armed" || (job === "pr-heavy-gate" && policy === "pr-fast");
-    expect(followsArming, job).toBe(gated.includes(job));
+    expect(policy === "armed", job).toBe(gated.includes(job));
   }
   expect(heavyProofList.toSorted()).toEqual(
     gated.filter((job) => resultJob.needs.includes(job)).toSorted(),
@@ -7677,9 +7675,7 @@ test("every queue-only job follows the armed proof and skips proven merge groups
     const condition = jobIf(ciJobs[job]);
     expect(condition, job).toContain(HEAVY_PROOF_GATE);
     const kept = Object.hasOwn(MERGE_GROUP_HEAVY_KEEP, job);
-    expect(armedRuns(condition, EVENT.pullRequest, "false"), job).toBe(
-      job === "pr-heavy-gate",
-    );
+    expect(armedRuns(condition, EVENT.pullRequest, "false"), job).toBe(false);
     expect(armedRuns(condition, EVENT.pullRequest, "true"), job).toBe(true);
     expect(armedRuns(condition, EVENT.mergeGroup, "true"), job).toBe(true);
     expect(armedRuns(condition, EVENT.mergeGroup, "false"), job).toBe(kept);
@@ -8007,7 +8003,8 @@ test("an armed delta skips every normal job but still runs the queue-only suites
       EVENT.pullRequest,
       "true",
     );
-    expect(scheduled, job).toBe(gated.includes(job));
+    // The queue-only suites wait on the gate, so it runs with them.
+    expect(scheduled, job).toBe(gated.includes(job) || job === "pr-heavy-gate");
   }
 });
 
@@ -8339,11 +8336,7 @@ test("the planner derives the PR heavy jobs from everything waiting on the gate"
     ).toEqual(["ci-plan", "pr-heavy-gate"]);
   }
   expect(fastRequired.filter((job) => PR_HEAVY_JOBS.includes(job))).toEqual([
-    "ci-browser",
     "ci-tests",
-    "e2e-landing",
-    "e2e-production-shard",
-    "web-build",
   ]);
 });
 
@@ -8485,8 +8478,6 @@ test("every scope that plans a pull request heavy suite also plans its gate", ()
     context.values["needs.ci-plan.outputs.heavy_proof"] = "true";
     context.values["needs.ci-plan.outputs.run_required"] = "true";
     context.values["needs.ci-plan.outputs.armed_delta"] = "false";
-    context.values["needs.ci-plan.outputs.ci_tests_required"] =
-      scopes["steps.changed-files.outputs.package_checks_required"] ?? "";
     const gate = context.fallback?.(
       "needs.ci-plan.outputs.pr_heavy_gate_required",
     );

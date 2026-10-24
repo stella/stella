@@ -7,6 +7,7 @@ import {
   MISSING_JOB_PREDICATE,
   unmodeledFastRequiredJobs,
 } from "./fast-required-predicates";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 
 const CI_YML = await Bun.file(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -23,6 +24,37 @@ function editedCi(edit: (jobs: Jobs) => void): string {
   const workflow = v.parse(workflowSchema, Bun.YAML.parse(CI_YML));
   edit(workflow.jobs);
   return JSON.stringify(workflow);
+}
+
+// A queue-only suite's armed-proof clause; the mechanism tests below lift it
+// so the suite reads as the fast-required job it is on an armed run.
+const QUEUE_ONLY_CLAUSE = new RegExp(
+  `${HEAVY_PROOF_GATE.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\s+&&\\s+\\(needs\\.ci-plan\\.outputs\\.run_required != 'false'\\s+\\|\\|\\s+needs\\.ci-plan\\.outputs\\.armed_delta == 'true'\\)\\s+&&\\s+`,
+  "u",
+);
+
+/** `jobs` with `id` fast-required again: listed and without its queue-only clause. */
+function asFastRequired(jobs: Jobs, id: string): void {
+  const target = job(jobs, id);
+  const condition = v.parse(v.string(), target["if"]);
+  if (!QUEUE_ONLY_CLAUSE.test(condition)) {
+    throw new TypeError(`${id} is not a queue-only suite`);
+  }
+  target["if"] = condition.replace(QUEUE_ONLY_CLAUSE, "");
+  const steps = job(jobs, "ci-result")["steps"];
+  const fastRequired = v.looseObject({
+    env: v.looseObject({ FAST_REQUIRED: v.string() }),
+  });
+  const step = Array.isArray(steps)
+    ? steps.find((candidate) => v.is(fastRequired, candidate))
+    : undefined;
+  if (!v.is(fastRequired, step)) {
+    throw new TypeError("ci-result declares no FAST_REQUIRED");
+  }
+  step.env.FAST_REQUIRED = JSON.stringify([
+    ...v.parse(v.array(v.string()), JSON.parse(step.env.FAST_REQUIRED)),
+    id,
+  ]);
 }
 
 function job(jobs: Jobs, id: string): Record<string, unknown> {
@@ -64,7 +96,11 @@ describe("fast-required predicates", () => {
 
   test("a fast-depth scope takes precedence over the full-depth scope", () => {
     const outputs = new Map(
-      fastRequiredJobs(CI_YML).map(({ job: id, output }) => [id, output]),
+      fastRequiredJobs(
+        editedCi((jobs) => {
+          asFastRequired(jobs, "web-build");
+        }),
+      ).map(({ job: id, output }) => [id, output]),
     );
     expect(outputs.get("web-build")).toBe("web_build_pr_required");
     expect(outputs.get("ci-quick-checks")).toBeNull();
@@ -177,6 +213,7 @@ describe("fast-required predicates", () => {
   test("the reusable-workflow exception holds only for a reusable workflow", () => {
     const unknownAtom = (keepUses: boolean): string =>
       editedCi((jobs) => {
+        asFastRequired(jobs, "query-perf");
         const target = job(jobs, "query-perf");
         target["if"] =
           `${v.parse(v.string(), target["if"])} && github.actor != 'bot'`;
@@ -187,9 +224,7 @@ describe("fast-required predicates", () => {
           target["steps"] = [];
         }
       });
-    // Lever 1 removes queue-only query-perf from FAST_REQUIRED, so neither
-    // definition participates in the fast merge-gate model anymore.
     expect(unmodeledIds(unknownAtom(true))).toEqual([]);
-    expect(unmodeledIds(unknownAtom(false))).toEqual([]);
+    expect(unmodeledIds(unknownAtom(false))).toEqual(["query-perf"]);
   });
 });

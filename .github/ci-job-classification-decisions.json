@@ -127,7 +127,7 @@
   "candidate:.github/workflows/ci.yml/pr-heavy-gate": {
     "kind": "support",
     "qualifier": "Gates merge-required heavy suites on successful pull-request quick checks.",
-    "reviewedDigest": "1a8ebe67107e67f7f639765dcef6a212c59e9464a3ac90ae4d5fbbf2cf37d89d"
+    "reviewedDigest": "e53279489dfe700b69c81dbddcd829d67f539834082b0ac49622bd1bc6b91f94"
   },
   "candidate:.github/workflows/ci.yml/docker-checks": {
     "kind": "support",
@@ -162,7 +162,7 @@
   "candidate:.github/workflows/ci.yml/ci-browser": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "4696988fd7fc6a88b535cc01e04edb5b95acb3407c5a67b0ff8f36fe1c7055bd"
+    "reviewedDigest": "be08b4f77b171ee105db7853c91116b2fa5403649b90c266016ef4d1d8a13bee"
   },
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
@@ -182,12 +182,12 @@
   "candidate:.github/workflows/ci.yml/postgres-service-suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "fccdd01658d1f257f564357c67b145f238c21578ee295d444df640eae9d50594"
+    "reviewedDigest": "6f8b61b6f35750421d722f7c157693db4424fa115366604b186a449fbda9dcd2"
   },
   "candidate:.github/workflows/ci.yml/service-suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "d3ab4b715490834536b628884738a0587c6c01da965f969ed5bc805db34bb815"
+    "reviewedDigest": "854b5a0dffa845289b0dd524d2b93c10ce6bbb73db703c063e340f2df2a74c8d"
   },
   "candidate:.github/workflows/ci.yml/migration-upgrade-rehearsal": {
     "kind": "support",
@@ -207,7 +207,7 @@
   "candidate:.github/workflows/ci.yml/web-build": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "56824b1a66f6bbca62fc238927ff0f7268e5eb1620f64ba2663db80305967baf"
+    "reviewedDigest": "41f4f7637eeae614b2369e8503398e9b48c5a18817756521f00a720200555df3"
   },
   "candidate:.github/workflows/ci.yml/web-image-smoke": {
     "kind": "support",
@@ -237,7 +237,7 @@
   "candidate:.github/workflows/ci.yml/e2e-production-shard": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "aeb9b559037d338b1df8796546ee68ddd00ec17a8d42932c1a18546af1c7e809"
+    "reviewedDigest": "a171a1f740f8c1a9de33b62496ca59be1e080699e92a9e046c10c71e6b336f1c"
   },
   "candidate:.github/workflows/ci.yml/stack-redaction-browsers": {
     "kind": "support",
@@ -252,7 +252,7 @@
   "candidate:.github/workflows/ci.yml/e2e-landing": {
     "kind": "support",
     "qualifier": "Builds and tests affected landing pages at every CI depth, subject to trust and the pull-request heavy gate.",
-    "reviewedDigest": "e49b475bf11a9d64270961888a6575786a5c771e098571808c42768e05ceb528"
+    "reviewedDigest": "09e9c72ce26f2c41a4dc6f6ca412511fd678e69d3801fb5a31b1ce22a656bef2"
   },
   "candidate:.github/workflows/ci.yml/marketing-screenshots": {
     "kind": "support",
@@ -312,7 +312,7 @@
   "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
     "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs.",
-    "reviewedDigest": "1f336653a7fbfa4d74659ca83a5f8c1942abe08e68e2cc8e8b27dac8a8539e15"
+    "reviewedDigest": "b3846c6d193d319accbee155288fc264895b6d9da97ad65934249a6bf6b014e8"
   },
   "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "1210d0211d68c969630ec4b5b923dc1dfc1d34b1b7f989f24863f7590c6f8ae7"
+    "reviewedDigest": "7fb4b9c29a857bb832e71d9b6215da6c53cf0568e0a5a2ff9f33d2f277ce8f1e"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "d2a7f8eae62bcf87f0bc16ce12cb508d33daa59529513df272c9b183e7cba5e5"
+    "reviewedDigest": "e2a37f54dccdf390403c037f433c1df9ed41d5a14e5176df04229161024ca717"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
