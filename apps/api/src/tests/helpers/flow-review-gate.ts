@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  WORK_OBLIGATION_SOURCE,
   entities,
   flowRuns,
   flowRunSteps,
-  workspaces,
-  workspaceMembers,
+  WORK_OBLIGATION_SOURCE,
   workObligations,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";

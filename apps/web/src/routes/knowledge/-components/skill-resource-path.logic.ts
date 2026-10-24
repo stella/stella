@@ -15,8 +15,7 @@ export const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 const BINARY_EXTENSION_RE = /\.(?:docx|pdf)$/iu;
 
 export type ReservePathResult =
-  | { type: "ok"; path: string }
-  | { type: "invalid" };
+  { type: "ok"; path: string } | { type: "invalid" };
 
 /**
  * Reserve a collision-free `references/<name>` path for one uploaded file,

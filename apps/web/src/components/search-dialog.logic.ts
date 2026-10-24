@@ -1,4 +1,6 @@
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { panic } from "better-result";
+
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
@@ -37,6 +39,30 @@ type EagerSearchTypesOptions = {
   scope: SearchScope;
   types: GlobalSearchResultType[];
 };
+
+/** Case law is an external source: only All and Case law scopes reach it. */
+export const isSearchTypeInScope = (
+  type: GlobalSearchResultType,
+  scope: SearchScope,
+): boolean => {
+  switch (scope) {
+    case "all":
+    case "registries":
+      return true;
+    case "matters":
+      return type !== "case-law" && type !== "contact";
+    case "case-law":
+      return type === "case-law";
+    default:
+      return panic(`Unhandled search scope: ${String(scope)}`);
+  }
+};
+
+/** Turning public law off while its scope is picked falls back to All. */
+export const resolveSearchScope = (
+  scope: SearchScope,
+  caseLawEnabled: boolean,
+): SearchScope => (scope === "case-law" && !caseLawEnabled ? "all" : scope);
 
 export const resolveEagerSearchTypes = ({
   mode,
@@ -225,8 +251,7 @@ export const getRecentFileRoute = ({
 });
 
 type DialogCloseActionState =
-  | { status: "idle" }
-  | { status: "pending"; run: () => void };
+  { status: "idle" } | { status: "pending"; run: () => void };
 
 export const createDialogCloseActionQueue = () => {
   let state: DialogCloseActionState = { status: "idle" };

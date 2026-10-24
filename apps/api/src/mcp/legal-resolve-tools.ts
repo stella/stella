@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -9,7 +10,6 @@ import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { LAW_READ_SCOPE } from "@/api/handlers/legal-resolve/scope";
-import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { LIMITS } from "@/api/lib/limits";
 
 import { defineMcpToolSet } from "./tool-types";
@@ -17,9 +17,9 @@ import type { TypedMcpToolHandler } from "./tool-types";
 import {
   countryInputSchema,
   countryNormalization,
+  featureDisabledHint,
   nullAsAbsent,
   structuredErrorResult,
-  featureDisabledHint,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";

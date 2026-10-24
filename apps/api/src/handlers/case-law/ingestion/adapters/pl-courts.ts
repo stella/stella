@@ -4,6 +4,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { vApiDate } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import { classifyFailure } from "@stll/errors";
@@ -73,14 +74,13 @@ import {
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
@@ -259,6 +259,8 @@ export const plCourtsModifiedSince = (
  * restarts the crawl: names are stable input, never derived from the date the
  * policy is read on.
  */
+// parser-output-unchanged: [pl-courts] Strict calendar dates apply only to crawl-window parameters; stored decision parsing and replay are unchanged.
+// parser-output-unchanged: [pl-ncourt] The shared adapter module changes only PL courts crawl-window validation, not decision construction or replay.
 export const PL_COURTS_WALK_KINDS = {
   /**
    * A window of the dump bounded by judgment date. Either bound may be

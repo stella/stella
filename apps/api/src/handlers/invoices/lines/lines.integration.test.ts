@@ -16,11 +16,11 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
+  featureEnrolments,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
   timeEntries,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import deleteExpense from "@/api/handlers/expenses/delete";

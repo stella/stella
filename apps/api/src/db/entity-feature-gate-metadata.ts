@@ -4,9 +4,9 @@ import type { SQL } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgRole } from "drizzle-orm/pg-core";
 import type {
   AnyPgColumn,
-  PgTable,
   PgPolicy,
   PgPolicyConfig,
+  PgTable,
 } from "drizzle-orm/pg-core";
 
 import { compareCodeUnit } from "@stll/collation";

@@ -17,8 +17,8 @@ import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-cred
 import {
   assertManagedOpenRouterModel,
   fetchManagedOpenRouterCompletion,
-  managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  managedProviderUnavailable,
   PROVIDER_DATA_POLICY,
   withoutModelVariant,
 } from "@/api/lib/chat/provider-data-policy";

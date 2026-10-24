@@ -1,8 +1,9 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { vApiDate } from "@stll/api-contract/api-date";
+
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
-import { vApiDate } from "@/api/lib/json-schema/api-date";
 
 /**
  * The structured output one column of any kind asks a model for, keyed by the
@@ -16,10 +17,7 @@ import { vApiDate } from "@/api/lib/json-schema/api-date";
 
 /** `null` is an explicit "the source does not state this", valid for every kind. */
 export type Answer =
-  | string
-  | string[]
-  | null
-  | { amount: number; currency: string | null };
+  string | string[] | null | { amount: number; currency: string | null };
 
 type AnswerKind = AiExtractablePropertyContent["type"];
 

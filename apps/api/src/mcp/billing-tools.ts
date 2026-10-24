@@ -3,6 +3,7 @@ import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -37,7 +38,6 @@ import {
   SAVE_TIME_ENTRY_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
-import { vApiDate } from "@/api/lib/json-schema/api-date";
 import {
   createCursorPage,
   decodePaginationCursor,

@@ -6,14 +6,19 @@ import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 import * as v from "valibot";
 
-import { isApiDate, vApiDate } from "@/api/lib/json-schema/api-date";
+import { isApiDate, vApiDate } from "@stll/api-contract/api-date";
+
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 const dateSchema = t.String({ format: "date" });
 const dateTimeSchema = t.String({ format: "date-time" });
 
 const API_SOURCE_ROOT = `${import.meta.dir}/../..`;
-const VALIBOT_DATE_OWNER = "lib/json-schema/api-date.ts";
+const API_CONTRACT_SOURCE_ROOT = `${import.meta.dir}/../../../../../packages/api-contract/src`;
+const DATE_SCHEMA_SOURCES = [
+  { root: API_SOURCE_ROOT, canonicalOwner: null },
+  { root: API_CONTRACT_SOURCE_ROOT, canonicalOwner: "api-date.ts" },
+] as const;
 // Development helpers and one-off scripts never take a request or write a row.
 const OUTSIDE_RUNTIME = /^(?:dev|scripts|tests)\//u;
 
@@ -176,17 +181,19 @@ describe("API date-time storage boundaries", () => {
 
 test("every Valibot date schema checks the calendar day", async () => {
   const loose: string[] = [];
-  for (const filename of new Glob("**/*.ts").scanSync(API_SOURCE_ROOT)) {
-    if (
-      filename === VALIBOT_DATE_OWNER ||
-      filename.endsWith(".test.ts") ||
-      OUTSIDE_RUNTIME.test(filename)
-    ) {
-      continue;
-    }
-    const source = await Bun.file(`${API_SOURCE_ROOT}/${filename}`).text();
-    if (source.includes(".isoDate()")) {
-      loose.push(filename);
+  for (const { root, canonicalOwner } of DATE_SCHEMA_SOURCES) {
+    for (const filename of new Glob("**/*.ts").scanSync(root)) {
+      if (
+        filename === canonicalOwner ||
+        filename.endsWith(".test.ts") ||
+        OUTSIDE_RUNTIME.test(filename)
+      ) {
+        continue;
+      }
+      const source = await Bun.file(`${root}/${filename}`).text();
+      if (source.includes(".isoDate()")) {
+        loose.push(`${root}/${filename}`);
+      }
     }
   }
   // `isoDate()` alone passes impossible days and year 0000; use `vApiDate`.

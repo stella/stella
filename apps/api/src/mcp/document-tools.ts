@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
@@ -57,7 +58,6 @@ import {
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
-import { vApiDate } from "@/api/lib/json-schema/api-date";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
