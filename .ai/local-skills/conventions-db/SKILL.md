@@ -112,7 +112,7 @@ follow `apps/api/src/db/case-law-publication-indexes.ts`.
 - Keep transactions short; perform S3, network, conversion, and other external
   I/O outside them.
 - Close every read-decide-write race. Lock the decisive row with `SELECT ...
-  FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
+FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
   clause and check the affected-row count.
 - Make retries converge. Stable identities, unique constraints, conditional
   transitions, and idempotency keys are stronger than read-before-insert
