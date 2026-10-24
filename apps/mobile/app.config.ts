@@ -10,6 +10,9 @@ import type { ConfigPlugin } from "expo/config-plugins";
 
 const VARIANTS = ["development", "preview", "production"] as const;
 
+/** The store version; `scripts/fingerprint.ts` hashes its release line. */
+export const APP_VERSION = "0.1.0";
+
 type Variant = (typeof VARIANTS)[number];
 
 /**
@@ -84,7 +87,7 @@ const appConfigBase = ({
 }): ExpoConfig => ({
   name: VARIANT_CONFIG[variant].name,
   slug: "stella",
-  version: "0.1.0",
+  version: APP_VERSION,
   orientation: "default",
   scheme: VARIANT_CONFIG[variant].scheme,
   userInterfaceStyle: "automatic",
