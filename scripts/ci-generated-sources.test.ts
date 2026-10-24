@@ -881,7 +881,9 @@ const STARTS_WEB_FROM_SOURCE =
 const REGISTRY_PREPARE = "bun scripts/ci-generated-sources.ts prepare";
 const preparesGeneratedSources = (run: string) =>
   lexShell(run).some((event) => {
-    if (event.type !== "command") return false;
+    if (event.type !== "command") {
+      return false;
+    }
     const words = programWords(event.words);
     return (
       words.at(0) === "bun" &&
