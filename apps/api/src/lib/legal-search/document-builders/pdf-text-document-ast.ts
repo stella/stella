@@ -10,8 +10,9 @@
  * - A line printed at the same edge of most pages (`6 | Adopted`) is running
  *   furniture, not text.
  * - Footnotes sit at a page's foot after an empty line, each a lone mark line
- *   followed by an indented first line; the marks ascend through the
- *   document.
+ *   followed by an indented first line. Further notes need a body reference
+ *   and either a blank separator or one unambiguous indented start for their
+ *   label. Ambiguous numbers stay text. The marks ascend through the document.
  * - A footnote reference is the next mark the document has not referenced
  *   yet: a lone line of marks (the superscript printed above the line it
  *   belongs to) or the mark glued to the word or punctuation before it.
@@ -176,25 +177,56 @@ type PageSplit = {
   notes: Footnote[];
 };
 
+type ReadNotesOptions = {
+  lines: readonly string[];
+  start: number;
+  after: number;
+  bodyEnd: number;
+};
+
 /** The notes from `start`, or `null` when their marks do not ascend from `after`. */
-const readNotes = (
-  lines: readonly string[],
-  start: number,
-  after: number,
-): Footnote[] | null => {
+const readNotes = ({
+  lines,
+  start,
+  after,
+  bodyEnd,
+}: ReadNotesOptions): Footnote[] | null => {
+  const starts = new Map<number, number>();
+  for (let index = start; index < lines.length; index += 1) {
+    if (FOOTNOTE_MARK_LINE.test(lines[index] ?? "")) {
+      const label = Number(lines[index]);
+      starts.set(label, (starts.get(label) ?? 0) + 1);
+    }
+  }
+  const labels = new Set(
+    lines
+      .slice(start)
+      .filter((line) => FOOTNOTE_MARK_LINE.test(line))
+      .map(Number),
+  );
+  const referenced = new Set(
+    bodyLines(
+      lines.slice(0, bodyEnd),
+      new ReferenceCursor([...labels].toSorted((a, b) => a - b)),
+    ).flatMap(({ marks }) => marks.map(({ label }) => Number(label))),
+  );
   const notes: Footnote[] = [];
   let previous = after;
   for (let index = start; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    // A missing indent needs a separating blank line; a consecutive integer
-    // inside a note can be substantive text.
+    const label = Number(line);
+    // A body reference cannot disambiguate repeated note-shaped numbers.
+    // Without a separator, preserve all competing starts as literal text.
     if (
-      isNoteStart(lines, index) ||
-      (isBlank(lines[index - 1]) &&
-        FOOTNOTE_MARK_LINE.test(line) &&
-        Number(line) === previous + 1)
+      FOOTNOTE_MARK_LINE.test(line) &&
+      (index === start ||
+        (referenced.has(label) &&
+          ((isBlank(lines[index - 1]) &&
+            (isNoteStart(lines, index) || label === previous + 1)) ||
+            (label > previous &&
+              isNoteStart(lines, index) &&
+              starts.get(label) === 1))))
     ) {
-      const label = Number(line);
       if (label <= previous) {
         return null;
       }
@@ -244,7 +276,7 @@ const splitFootnotes = (lines: readonly string[], after: number): PageSplit => {
     } else {
       continue;
     }
-    const notes = readNotes(lines, start, after);
+    const notes = readNotes({ lines, start, after, bodyEnd });
     if (notes !== null) {
       return { body: lines.slice(0, bodyEnd), carried, notes };
     }

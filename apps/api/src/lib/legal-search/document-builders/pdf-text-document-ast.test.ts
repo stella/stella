@@ -136,12 +136,19 @@ describe("the PDF text builder", () => {
     );
   });
 
-  test.each([1, 17, 98])(
-    "preserves a standalone numeric fact within footnote %i",
-    (label) => {
-      const count = label + 1;
+  test.each(
+    [1, 17, 98].flatMap((label) =>
+      [label + 1, 42].flatMap((count) =>
+        ["in total.", " in total."].map(
+          (continuation) => [label, count, continuation] as const,
+        ),
+      ),
+    ),
+  )(
+    "preserves numeric fact %i/%i with continuation %s",
+    (label, count, continuation) => {
       const ast = build(
-        `Body.${label}\n\n${label}\n Number of controllers:\n${count}\nin total.`,
+        `Body.${label}\n\n${label}\n Number of controllers:\n${count}\n${continuation}`,
       );
       const notes = ast.blocks.filter(
         (block) => block.type === "paragraph" && block.note !== undefined,
@@ -168,6 +175,43 @@ describe("the PDF text builder", () => {
       { id: "fn-2", plainText: "Second note." },
     ]);
   });
+
+  test("keeps ambiguous contiguous note-shaped lines and their numeric facts literal", () => {
+    const ast = build(
+      "Body.1 Body.2\n\n1\n First note.\n2\n Second note controllers:\n2\n in total.",
+    );
+    expect(
+      ast.blocks
+        .filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        )
+        .map(({ id, plainText }) => ({ id, plainText })),
+    ).toEqual([
+      {
+        id: "fn-1",
+        plainText: "First note. 2 Second note controllers: 2 in total.",
+      },
+    ]);
+  });
+
+  test.each(["Second note.", " Second note."])(
+    "retains an indented numeric fact before the separated next note: %s",
+    (nextNote) => {
+      const ast = build(
+        `Body.1 Body.2\n\n1\n Controllers:\n2\n in total.\n\n2\n${nextNote}`,
+      );
+      expect(
+        ast.blocks
+          .filter(
+            (block) => block.type === "paragraph" && block.note !== undefined,
+          )
+          .map(({ id, plainText }) => ({ id, plainText })),
+      ).toEqual([
+        { id: "fn-1", plainText: "Controllers: 2 in total." },
+        { id: "fn-2", plainText: "Second note." },
+      ]);
+    },
+  );
 
   test.each(["DPIA.", "GDPR.", "DSA.", "CJEU,"])(
     "recognizes a footnote after punctuation on %s",
@@ -333,6 +377,7 @@ const layout: fc.Arbitrary<Layout> = fc.record({
   linesPerPage: fc.integer({ min: 4, max: 12 }),
   loneMarks: fc.boolean(),
   numericFacts: fc.boolean(),
+  indentedNumericFacts: fc.boolean(),
   separator: fc.boolean(),
 });
 
@@ -372,6 +417,7 @@ type Layout = {
   linesPerPage: number;
   loneMarks: boolean;
   numericFacts: boolean;
+  indentedNumericFacts: boolean;
   separator: boolean;
 };
 
@@ -379,6 +425,7 @@ const render = ({
   linesPerPage,
   loneMarks,
   numericFacts,
+  indentedNumericFacts,
   sections,
   separator,
 }: Layout): { text: string; expected: Expected } => {
@@ -467,10 +514,17 @@ const render = ({
     if (notes.length > 0 && separator) {
       out.push(" ");
     }
-    for (const label of notes) {
+    for (const [index, label] of notes.entries()) {
+      if (index > 0) {
+        out.push("");
+      }
       out.push(String(label), ` Note ${label}`);
       if (numericFacts) {
-        out.push("Controllers:", String(label + 1), "in total.");
+        out.push(
+          "Controllers:",
+          String(label + 1),
+          indentedNumericFacts ? " in total." : "in total.",
+        );
       }
       out.push("text.");
     }
@@ -483,6 +537,34 @@ const render = ({
 };
 
 describe("PDF text builder output", () => {
+  test("preserves every unseparated numeric fact with arbitrary indentation", () => {
+    assertProperty(
+      "pdf-note-unseparated-numeric-facts",
+      fc.property(
+        fc.array(fc.tuple(fc.integer({ min: 1, max: 999 }), fc.boolean()), {
+          minLength: 1,
+          maxLength: 20,
+        }),
+        (facts) => {
+          const lines = facts.flatMap(([value, indented]) => [
+            String(value),
+            indented ? " controllers." : "controllers.",
+          ]);
+          const ast = build(
+            ["Body.1", "", "1", " Count:", ...lines].join("\n"),
+          );
+          const notes = ast.blocks.filter(
+            (block) => block.type === "paragraph" && block.note !== undefined,
+          );
+          expect(notes).toHaveLength(1);
+          expect(notes.at(0)?.plainText).toBe(
+            `Count: ${lines.map((line) => line.trim()).join(" ")}`,
+          );
+        },
+      ),
+    );
+  });
+
   test("recovers the structure a text layer prints", () => {
     assertProperty(
       "recovers the structure a text layer prints",
