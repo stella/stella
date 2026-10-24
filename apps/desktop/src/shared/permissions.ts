@@ -53,3 +53,5 @@ export const isPermissionsSnapshot = (
 /** How often a visible permissions view re-reads the OS: changes happen in
  *  System Settings, which sends no event this app can subscribe to. */
 export const PERMISSION_REFRESH_MS = 2000;
+
+export { isPermission };
