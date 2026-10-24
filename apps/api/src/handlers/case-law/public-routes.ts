@@ -24,10 +24,7 @@ import {
   listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
-import {
-  createSafePublicSubjectFollowUpHandler,
-  createSafePublicSubjectHandler,
-} from "@/api/handlers/case-law/decisions/public-subject";
+import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import readCaseLawCoverage from "@/api/handlers/case-law/decisions/read-coverage";
 import {
   projectDecisionReader,
@@ -496,7 +493,7 @@ const listSitemapShards = createSafeBoundedPublicHandler(
  * Public-read routes: no auth, no session, no organization context.
  * Decisions are public records; protected workspace features live elsewhere.
  */
-export const publicCaseLawRoute = new Elysia({
+const publicCaseLawContentRoute = new Elysia({
   prefix: "/case",
 })
   .use(
@@ -529,10 +526,6 @@ export const publicCaseLawRoute = new Elysia({
     response: readDecisionBySlug.config.response,
     beforeHandle: ({ query }) =>
       rejectInvalidCursor(query.citationsCursor, decodeDecisionCitationCursor),
-  })
-  .get("/decisions/:decisionId/summary", readDecisionSummaryRoute.handler, {
-    params: readDecisionSummaryRoute.config.params,
-    response: readDecisionSummaryRoute.config.response,
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,
@@ -598,3 +591,20 @@ export const publicCaseLawRoute = new Elysia({
     query: listSitemapShardDecisions.config.query,
     response: listSitemapShardDecisions.config.response,
   });
+
+// The summary has no cursor hook. Keep its chain separate so the capability
+// compiler can prove its only route gate is the shared deployment flag.
+const publicDecisionSummaryRoute = new Elysia({ prefix: "/case" })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+    ),
+  )
+  .get("/decisions/:decisionId/summary", readDecisionSummaryRoute.handler, {
+    params: readDecisionSummaryRoute.config.params,
+    response: readDecisionSummaryRoute.config.response,
+  });
+
+export const publicCaseLawRoute = new Elysia()
+  .use(publicCaseLawContentRoute)
+  .use(publicDecisionSummaryRoute);

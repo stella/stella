@@ -104,6 +104,7 @@ const readDecisionSummary = async (
 const readDecisionSummaryRoute = createSafePublicSubjectHandler({
   config: {
     contract: "patch",
+    access: "read",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
