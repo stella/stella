@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Moja organizácia",
     "password": "Heslo",
     "professionalUse": {
-      "description": "Pri zakladaní vášho účtu sa vám toto vyhlásenie nezobrazilo. Ak chcete pokračovať, prijmite ho.",
       "title": "Potvrďte profesionálne použitie"
     },
     "professionalUseStatement": "Vytvorením účtu potvrdzujete, že stellu používate na profesionálne účely, a beriete na vedomie, že stella je nástroj pre právnych profesionálov a nenahrádza právne poradenstvo.",
@@ -4235,6 +4234,22 @@
       "guestStorageUnavailable": "Zvýraznenia a poznámky sa na tejto karte nepodarilo uložiť.",
       "highlight": "Zvýrazniť",
       "highlightedPassage": "Zvýraznená pasáž",
+      "history": {
+        "colorRestored": "Farba obnovená",
+        "commentRemoved": "Komentár odstránený",
+        "commentRestored": "Komentár obnovený",
+        "highlightRemoved": "Zvýraznenie odstránené",
+        "highlightRestored": "Zvýraznenie obnovené",
+        "markChanged": "Zvýraznenie alebo komentár sa medzitým zmenili inde, preto zostávajú bez zmeny.",
+        "markGone": "Toto zvýraznenie alebo komentár už neexistuje.",
+        "nothingToRedo": "Nie je čo zopakovať",
+        "nothingToUndo": "Nie je čo vrátiť",
+        "redoShortcut": "Znova vykonať zmenu zvýraznenia alebo komentára",
+        "styleRestored": "Štýl obnovený",
+        "textRestored": "Text komentára obnovený",
+        "undoShortcut": "Vrátiť zmenu zvýraznenia alebo komentára",
+        "visibilityRestored": "Zdieľanie obnovené"
+      },
       "removeHighlight": "Odstrániť zvýraznenie",
       "sharedBadge": "Zdieľané",
       "styleHighlight": "Zvýraznenie",
