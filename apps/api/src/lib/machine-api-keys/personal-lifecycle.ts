@@ -70,8 +70,7 @@ type Principal = {
  * Revocation and policy changes only manage existing keys.
  */
 type KeyMutationAuthority =
-  | { type: "issue"; sessionId: string }
-  | { type: "manage" };
+  { type: "issue"; sessionId: string } | { type: "manage" };
 const MANAGE = { type: "manage" } as const satisfies KeyMutationAuthority;
 type MutationOptions = Principal & {
   recordAuditEvent: AuditRecorder;

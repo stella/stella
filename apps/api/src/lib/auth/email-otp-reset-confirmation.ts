@@ -13,8 +13,7 @@ const EMAIL_OTP_SIGN_IN_PATH = "/sign-in/email-otp";
 const NO_EMAIL_OTP_ACCESS_RESET = { type: "none" } as const;
 
 type EmailOtpResetConfirmation =
-  | typeof NO_EMAIL_OTP_ACCESS_RESET
-  | { type: "confirmed"; userId: string };
+  typeof NO_EMAIL_OTP_ACCESS_RESET | { type: "confirmed"; userId: string };
 
 type EmailOtpResetConfirmationOptions = {
   path: string;
