@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
+import { QueryPromise } from "drizzle-orm/query-promise";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -51,10 +52,18 @@ type ScopedDbMockOptions = {
   };
 };
 
-const awaitableRows = <TRow>(rows: TRow[]) => {
-  const result = Promise.resolve(rows);
-  return { then: result.then.bind(result) };
-};
+class FixtureQuery<TRow> extends QueryPromise<TRow[]> {
+  private readonly rows: TRow[];
+
+  constructor(rows: TRow[]) {
+    super();
+    this.rows = rows;
+  }
+
+  async execute() {
+    return await Promise.resolve(this.rows);
+  }
+}
 
 // Query fixtures provide the rows matching their select boundary. Keep the
 // awaitable builder shape intact for locking and bounded reads.
@@ -62,7 +71,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   let rowOffset = 0;
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
-    return Object.assign(awaitableRows(selected), {
+    return Object.assign(new FixtureQuery(selected), {
       for: async () => await Promise.resolve(selected),
     });
   };
@@ -71,7 +80,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     return { limit };
   };
   const where = () =>
-    Object.assign(awaitableRows(rows), {
+    Object.assign(new FixtureQuery(rows), {
       limit,
       offset,
       for: async () => await Promise.resolve(rows),
@@ -79,7 +88,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     });
   return {
     from: () =>
-      Object.assign(awaitableRows(rows), {
+      Object.assign(new FixtureQuery(rows), {
         where,
         innerJoin: () => ({ where }),
         leftJoin: () => ({ where }),

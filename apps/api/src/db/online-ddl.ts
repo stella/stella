@@ -67,6 +67,9 @@ const quoteIdentifier = (identifier: string): string => {
   return `"${identifier}"`;
 };
 
+const quoteLiteral = (value: string): string =>
+  `'${value.replaceAll("'", "''")}'`;
+
 type LockTakingOptions = {
   tableName: string;
   text: string;
@@ -100,11 +103,13 @@ const lockTaking = ({
 /** An index declared for the online phase, with its own build statement. */
 export type OnlineIndexDeclaration = RequiredMigrationIndex & {
   /**
-   * The declared build, read only by `createIndexConcurrently`. Without it,
-   * the build renders from `definitionBody`, PostgreSQL's own definition.
+   * The declared build, read only by `createIndexConcurrently`. An index
+   * without one belongs to a schema migration rather than the online phase.
    */
   createSql?: string;
 };
+
+type OnlineBuildDeclaration = OnlineIndexDeclaration & { createSql: string };
 
 type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
 
@@ -112,27 +117,18 @@ type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
  * Whether the online phase may build the index. One without a declared build
  * belongs to a schema migration, so its absence is a broken deploy.
  */
-export const declaresOnlineBuild = ({
-  createSql,
-}: OnlineIndexDeclaration): boolean => createSql !== undefined;
+export const declaresOnlineBuild = (
+  index: OnlineIndexDeclaration,
+): index is OnlineBuildDeclaration => index.createSql !== undefined;
 
 const createSqlTarget =
   /^CREATE (?:UNIQUE )?INDEX CONCURRENTLY "?([A-Za-z_][A-Za-z0-9_]*)"? ON public\."?([A-Za-z_][A-Za-z0-9_]*)"? /u;
 
 export const createIndexConcurrently = ({
   createSql,
-  definitionBody,
-  isUnique,
   name,
   tableName,
-}: OnlineIndexDeclaration): LockTakingStatement => {
-  if (createSql === undefined) {
-    return lockTaking({
-      tableName,
-      text: `CREATE ${isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(name)} ${definitionBody}`,
-      lockQueue: "beside_writers",
-    });
-  }
+}: OnlineBuildDeclaration): LockTakingStatement => {
   // The gate watches the declared table, so the build must be on it.
   const match = createSqlTarget.exec(createSql);
   const builtName = match?.at(1);
@@ -144,7 +140,7 @@ export const createIndexConcurrently = ({
   }
   return lockTaking({
     tableName,
-    text: createSql,
+    text: spliced(createSql),
     lockQueue: "beside_writers",
   });
 };
@@ -212,7 +208,7 @@ WITH target AS (
 SELECT
   EXISTS (SELECT 1 FROM pg_catalog.pg_index i, target t WHERE i.indexrelid=t.index_id AND i.indrelid=t.table_id
     AND i.indisunique AND i.indisvalid AND i.indisready AND i.indimmediate
-    AND pg_get_indexdef(i.indexrelid)='CREATE UNIQUE INDEX ${INVOICE_TENANT_UNIQUE_INDEX.name} ${INVOICE_TENANT_UNIQUE_INDEX.definitionBody}') AS "indexReady",
+    AND pg_get_indexdef(i.indexrelid)=${quoteLiteral(`CREATE UNIQUE INDEX ${INVOICE_TENANT_UNIQUE_INDEX.name} ${INVOICE_TENANT_UNIQUE_INDEX.definitionBody}`)}) AS "indexReady",
   EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_id_org_unique') AS "uniquePresent",
   EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_id_org_unique'
     AND c.contype='u' AND c.conindid=t.index_id AND c.conkey=t.referenced_columns AND NOT c.condeferrable AND NOT c.condeferred) AS "uniqueReady",
@@ -399,9 +395,6 @@ export const setRowLevelSecurity = (
   accessExclusive(tableName, [
     `ALTER TABLE "public".${quoteIdentifier(tableName)} ${mode.toUpperCase()} ROW LEVEL SECURITY`,
   ]);
-
-const quoteLiteral = (value: string): string =>
-  `'${value.replaceAll("'", "''")}'`;
 
 /**
  * A call to a function declared `online` in `DDL_FUNCTIONS`, gated on the

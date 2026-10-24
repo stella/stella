@@ -115,9 +115,9 @@ test("select fixtures retain synchronous query methods through every awaitable s
   expect(await query.from().where().for()).toEqual(rows);
   expect(await query.from().where().limit(2)).toEqual(rows.slice(0, 2));
   expect(await query.from().where().limit(2).for()).toEqual(rows.slice(0, 2));
-  expect(await query.from().where().orderBy().offset(1).limit(1)).toEqual([
-    rows[1],
-  ]);
+  expect(await query.from().where().orderBy().offset(1).limit(1)).toEqual(
+    rows.slice(1, 2),
+  );
   expect(await query.from().where().offset(1).limit(2).for()).toEqual(
     rows.slice(1),
   );

@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import {
   and,
+  asc,
   eq,
   getColumns,
   getColumnTable,
@@ -13,6 +14,7 @@ import {
 } from "drizzle-orm";
 import type { Subquery } from "drizzle-orm";
 import { getTableConfig, PgColumn, PgTable } from "drizzle-orm/pg-core";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type {
   LockConfig,
   LockStrength,
@@ -36,6 +38,7 @@ import {
   invoiceLines,
   invoices,
   pdfSigningSessions,
+  timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -2444,6 +2447,25 @@ export const lockInvoiceInStatus = async (
   }
   return invoice;
 };
+
+/** Caller holds the timer-owner and complete matter advisory set. */
+export const lockBillingTimeEntrySources = async (
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
+  condition: SQL | undefined,
+) =>
+  await readBounded(
+    {
+      limit: (cap) =>
+        tx
+          .select({ id: timeEntries.id })
+          .from(timeEntries)
+          .where(condition)
+          .orderBy(asc(timeEntries.id))
+          .limit(cap)
+          .for("update"),
+    },
+    LIMITS.timeEntriesPerWorkspace,
+  );
 
 /** Caller holds timer-owner locks; all selected matter advisory keys are acquired together. */
 export const withBillingMatterAdvisoryLocks = async (

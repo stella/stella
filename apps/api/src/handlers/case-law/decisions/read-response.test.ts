@@ -48,6 +48,7 @@ const decisionWithText = (text: string) => {
     languageGroupKey: text,
     decisionDate: text,
     decisionType: text,
+    citationCount: 17,
     documentAst: {
       version: 1,
       source: {

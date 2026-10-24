@@ -1,5 +1,11 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -141,6 +147,8 @@ describe("API deployment health receipt", () => {
     const success = {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
       MCP_SMOKE: "success",
       CORPUS_PREFLIGHT: "success",
       CORPUS_SEARCH_WAIVED: "false",
@@ -149,7 +157,13 @@ describe("API deployment health receipt", () => {
     };
     const cases = [
       { outcomes: success, state: "success" },
-      ...["WEB_SMOKE", "API_SMOKE", "MCP_SMOKE"].flatMap((smoke) =>
+      ...[
+        "WEB_SMOKE",
+        "API_SMOKE",
+        "MCP_SMOKE",
+        "DEPLOYED_JOURNEYS",
+        "MOCK_JOURNEYS",
+      ].flatMap((smoke) =>
         ["failure", "skipped", ""].map((outcome) => ({
           outcomes: { ...success, [smoke]: outcome },
           state: "failure",
@@ -1173,4 +1187,78 @@ describe("desktop release workflows", () => {
       );
     });
   });
+});
+
+test("target-owned journeys require their harness before setup and execution", () => {
+  const requiredFiles = [
+    ".github/actions/user-journeys/action.yml",
+    "apps/web/e2e/playwright.journeys.config.ts",
+  ];
+  let guardedJobs = 0;
+  for (const file of ["user-journeys.yml", "deploy-staging.yml"]) {
+    const workflow = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    expect(isRecord(jobs)).toBe(true);
+    if (!isRecord(jobs)) {
+      continue;
+    }
+    for (const job of Object.values(jobs)) {
+      const rawSteps = isRecord(job) ? job["steps"] : undefined;
+      const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+      const journey = steps.findIndex(
+        (step) => step["uses"] === "./.github/actions/user-journeys",
+      );
+      if (journey === -1) {
+        continue;
+      }
+      guardedJobs += 1;
+      const guard = steps.findIndex(
+        (step) => step["name"] === "Require target journey harness",
+      );
+      const checkout = steps
+        .slice(0, journey)
+        .findLastIndex(
+          (step) =>
+            typeof step["uses"] === "string" &&
+            step["uses"].startsWith("actions/checkout@"),
+        );
+      const setup = steps.findIndex((step) => step["name"] === "Setup Bun");
+      expect(guard).toBeGreaterThan(checkout);
+      expect(checkout).toBeGreaterThanOrEqual(0);
+      expect(guard).toBeLessThan(setup);
+      expect(setup).toBeLessThan(journey);
+      const script = steps.at(guard)?.["run"];
+      expect(typeof script).toBe("string");
+      if (typeof script !== "string") {
+        continue;
+      }
+      for (const absent of [undefined, ...requiredFiles]) {
+        const directory = mkdtempSync(path.join(tmpdir(), "journey-harness-"));
+        try {
+          for (const required of requiredFiles) {
+            if (required !== absent) {
+              const target = path.join(directory, required);
+              mkdirSync(path.dirname(target), { recursive: true });
+              writeFileSync(target, "fixture");
+            }
+          }
+          const result = Bun.spawnSync(["bash", "-c", script], {
+            cwd: directory,
+          });
+          expect(result.exitCode).toBe(absent === undefined ? 0 : 1);
+          if (absent !== undefined) {
+            expect(new TextDecoder().decode(result.stdout)).toContain(absent);
+          }
+        } finally {
+          rmSync(directory, { recursive: true, force: true });
+        }
+      }
+    }
+  }
+  expect(guardedJobs).toBe(4);
 });

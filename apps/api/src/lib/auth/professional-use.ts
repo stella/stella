@@ -45,8 +45,6 @@ const USER_CREATION_ORIGIN = {
   socialRegistration: "social_registration",
   /** The self-host first-account sign-up on the sign-in panel. */
   bootstrapRegistration: "bootstrap_registration",
-  /** A provider ID token posted straight to the API; no Stella page is shown. */
-  identityTokenSignIn: "identity_token_sign_in",
   /** An agent's verified identity, provisioned without a browser. */
   agentProvisioning: "agent_provisioning",
   /** The operator command that creates the review account. */
@@ -76,7 +74,6 @@ const STATEMENT_AT_CREATION = {
   email_otp_registration: { type: "shown", displayedVersionIn: "request_body" },
   social_registration: { type: "shown", displayedVersionIn: "oauth_state" },
   bootstrap_registration: { type: "shown", displayedVersionIn: "request_body" },
-  identity_token_sign_in: { type: "not_shown" },
   agent_provisioning: { type: "not_shown" },
   operator_command: { type: "not_shown" },
 } as const satisfies Record<UserCreationOrigin, StatementAtCreation>;
@@ -90,7 +87,10 @@ const USER_CREATION_PATH_ORIGINS = new Map([
   ["/sign-in/email-otp", USER_CREATION_ORIGIN.emailOtpRegistration],
   ["/callback/:id", USER_CREATION_ORIGIN.socialRegistration],
   ["/sign-up/email", USER_CREATION_ORIGIN.bootstrapRegistration],
-  ["/sign-in/social", USER_CREATION_ORIGIN.identityTokenSignIn],
+  // Better Auth reports this initiating path to the user-creation hook after
+  // the provider callback. ID-token sign-in is disabled for every provider,
+  // so every account created here came through the OAuth state above.
+  ["/sign-in/social", USER_CREATION_ORIGIN.socialRegistration],
   [AGENT_IDENTITY_CREATE_USER_PATH, USER_CREATION_ORIGIN.agentProvisioning],
   [REVIEW_ACCOUNT_CREATE_USER_PATH, USER_CREATION_ORIGIN.operatorCommand],
 ]);

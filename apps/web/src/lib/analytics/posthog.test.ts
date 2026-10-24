@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
+import * as posthogSdk from "posthog-js";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
@@ -78,7 +79,7 @@ const resetMock = mock((options?: ResetOptions) => {
 });
 const groupMock = mock((_type: string, _key: string) => undefined);
 
-const posthogMock = {
+const posthogMock = Object.assign(new posthogSdk.PostHog(), {
   capture: captureMock,
   captureException: captureExceptionMock,
   get_distinct_id: getDistinctIdMock,
@@ -88,7 +89,7 @@ const posthogMock = {
   _isIdentified: isIdentifiedMock,
   register: registerMock,
   reset: resetMock,
-};
+});
 
 Object.defineProperty(globalThis, "__APP_VERSION__", {
   configurable: true,
@@ -100,6 +101,7 @@ Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
 });
 
 void mock.module("posthog-js", () => ({
+  ...posthogSdk,
   posthog: posthogMock,
 }));
 

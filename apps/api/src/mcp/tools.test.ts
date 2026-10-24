@@ -594,6 +594,7 @@ const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  citationCount: 2,
   identifiers: [
     { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "29 Cdo 123/2024" },
   ],
@@ -6538,6 +6539,7 @@ describe("OpenAI-compatible MCP tools", () => {
           languageAlternates: [],
           citationsFrom: [],
           citationsTo: [],
+          citationCount: 0,
         } satisfies ReadCaseLawDecisionSuccess);
         readGatedDecisionCitationDigestMock.mockResolvedValue(digest);
         const result = await handleMcpToolCall({

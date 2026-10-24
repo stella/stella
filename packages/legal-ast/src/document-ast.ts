@@ -1,4 +1,3 @@
-// parser-output-unchanged: Validation actions are named for schema publication; accepted AST values are identical.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -943,6 +942,20 @@ export const footnoteGroupsShareLabels = (
   return true;
 };
 
+/** Block and anchor identities address one location each within a document. */
+const hasUniqueBlockIdentities = (blocks: readonly Block[]): boolean => {
+  const ids = new Set<string>();
+  const anchors = new Set<string>();
+  for (const { anchorId, id } of blocks) {
+    if (ids.has(id) || anchors.has(anchorId)) {
+      return false;
+    }
+    ids.add(id);
+    anchors.add(anchorId);
+  }
+  return true;
+};
+
 export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.object({
     version: v.literal(1),
@@ -953,6 +966,10 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.check(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
     "Adjacent footnote blocks sharing a noteId must repeat one label",
+  ),
+  v.check(
+    ({ blocks }) => hasUniqueBlockIdentities(blocks),
+    "Block ids and anchorIds must be unique",
   ),
 );
 
@@ -1003,6 +1020,10 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
         block === null ? [] : [fillBlockPlainText(block)],
       ),
     })),
+    v.check(
+      ({ blocks }) => hasUniqueBlockIdentities(blocks),
+      "Block ids and anchorIds must be unique",
+    ),
   );
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>

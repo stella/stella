@@ -25,11 +25,12 @@ import { PermissionRow } from "./PermissionRow";
  * which notify no one.
  */
 export const PermissionsSection = ({
+  only,
   window: telemetryWindow,
 }: {
+  only?: readonly PermissionsSnapshot["rows"][number]["permission"][];
   window: DesktopTelemetryWindow;
 }) => {
-  const t = useTranslations("settings");
   const [snapshot, setSnapshot] = useState<PermissionsSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
   // Polls, focus, visibility and user actions read concurrently; only the
@@ -107,6 +108,35 @@ export const PermissionsSection = ({
     }
   };
 
+  return (
+    <PermissionsContent
+      apply={apply}
+      failed={failed}
+      snapshot={
+        snapshot && only
+          ? {
+              rows: snapshot.rows.filter(({ permission }) =>
+                only.includes(permission),
+              ),
+            }
+          : snapshot
+      }
+    />
+  );
+};
+
+type PermissionsContentProps = {
+  failed: boolean;
+  apply: (run: () => Promise<unknown>) => Promise<void>;
+  snapshot: PermissionsSnapshot | null;
+};
+
+const PermissionsContent = ({
+  apply,
+  failed,
+  snapshot,
+}: PermissionsContentProps) => {
+  const t = useTranslations("settings");
   return (
     <>
       {snapshot?.rows.map((row, index) => (

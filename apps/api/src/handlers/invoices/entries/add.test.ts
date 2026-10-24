@@ -98,6 +98,7 @@ describe("addEntries currency enforcement", () => {
         },
       ]);
       const { safeDb } = createScopedDbMock({
+        execute: async () => [{ id: toSafeId<"workspace">("ws_test") }],
         selectDistinct: () => createSelectQueryMock([]),
         // The invoice holds no lines yet, so the line limit leaves room.
         $count: async () => 0,

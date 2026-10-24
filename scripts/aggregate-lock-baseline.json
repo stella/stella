@@ -2215,12 +2215,6 @@
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "2e7e640a1c6f753b5d5271a42be4dcbbc0564f06ef4c3f6aae1a3549439ee26f",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
     "fingerprint": "843c3c089ea63ede290e9f4599e4ad419f56006954fa15d36605b00060457b36",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."

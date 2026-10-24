@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import {
@@ -10,7 +10,10 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withBillingMatterAdvisoryLocks } from "@/api/lib/db/aggregate-lock";
+import {
+  lockBillingTimeEntrySources,
+  withBillingMatterAdvisoryLocks,
+} from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -207,19 +210,7 @@ export async function guardRunningTimeEntries(
       sql`SELECT pg_advisory_xact_lock(hashtext(${options.workspaceId}))`,
     );
   }
-  const lockedRead = await readBounded(
-    {
-      limit: (cap) =>
-        tx
-          .select({ id: timeEntries.id })
-          .from(timeEntries)
-          .where(condition)
-          .orderBy(asc(timeEntries.id))
-          .limit(cap)
-          .for("update"),
-    },
-    LIMITS.timeEntriesPerWorkspace,
-  );
+  const lockedRead = await lockBillingTimeEntrySources(tx, condition);
   if (lockedRead.type === "overflow") {
     return refuse(
       new HandlerError({

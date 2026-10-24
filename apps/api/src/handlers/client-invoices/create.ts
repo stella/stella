@@ -166,8 +166,8 @@ const createClientInvoice = createSafeRootHandler(
         clientId: params.clientId,
         body: createInvoiceInput({
           ...invoiceDetails,
-          timeEntryIds: first.timeEntryIds,
-          expenseIds: first.expenseIds,
+          timeEntryIds: [...first.timeEntryIds],
+          expenseIds: [...first.expenseIds],
         }),
         now,
         recordAuditEvent,

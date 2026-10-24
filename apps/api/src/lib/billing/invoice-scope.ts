@@ -31,7 +31,6 @@ export const invoiceInMatter = (
   sql`(${invoiceTouchesMatter(table, workspaceId)} OR (${table.workspaceId} IS NULL AND EXISTS (SELECT 1 FROM public.workspaces invoice_matter WHERE invoice_matter.id = ${workspaceId} AND invoice_matter.organization_id = ${table.organizationId} AND invoice_matter.client_id = ${table.clientId})))`;
 
 /** Credential scope covers this invoice and every matter of its linked original. */
-// sql-perf-allow: index invoice_lines_invoice_position_idx bounds each invoice and linked-original credential fence.
 export const invoiceWithinMatterAllowlist = (
   table: Pick<InvoiceScopeColumns, "id" | "workspaceId"> & {
     originalInvoiceId: SQLWrapper;

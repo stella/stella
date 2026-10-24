@@ -172,20 +172,29 @@ The steps in full:
 
 5. Merge the commit to `main` and note its SHA. This version commit is the
    only commit that can ship under that version. The push dispatches
-   `release-tag.yml` with its exact SHA; missing gates fail the tag run.
+   `release-tag.yml` and staging with its exact SHA; missing gates fail the tag run.
+   When the merged tree matches the release pull request head and that head
+   already passed staging, the staging proof is reused instead of deploying
+   the identical tree again. Otherwise staging deploys and verifies the version
+   commit.
    `main` stays open: later merges do not affect this release.
-6. Deploy that exact commit to staging:
+6. The release-candidate gates start at the cut by themselves: when the release
+   pull request opens or updates, `release-proof.yml` dispatches
+   `deploy-staging.yml` and `main-heavy.yml` once for its head with
+   `release_candidate=true`. To run them again by hand:
 
    ```bash
-   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha> -F release_candidate=true
-   gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
+   gh workflow run main-heavy.yml --ref main -f sha=<release-pr-head-sha> -F release_candidate=true
    ```
 
-   Both gates first refuse a candidate whose VERSION is already tagged or whose
-   SHA differs from the commit that set the pending VERSION on main. Ordinary pinned dispatches leave
+   Both gates first refuse a candidate whose VERSION is already tagged. A
+   candidate that is not yet on `main` must be a release pull request head the
+   trusted release-tree verifier accepts; a candidate on `main` must be the
+   commit that set the pending VERSION. Ordinary pinned dispatches leave
    `release_candidate` false and skip this check. The release-candidate heavy run dispatches
-   `main-pr-depth.yml` for the same SHA. The staging run also refuses a
-   SHA that `main` does not contain. When staging does not answer, the
+   `main-pr-depth.yml` for the same SHA. The version
+   commit's staging run is started automatically after merge, reusing the
+   candidate's proof when their trees match. Outside a release-candidate run, staging refuses a SHA that `main` does not contain. When staging does not answer, the
    release-candidate run starts it through the infra repository's
    `staging-power.yml` (`action=on`, `hours=2`; the lease powers it off
    again), waits up to 15 minutes for that run and up to 45 minutes for
