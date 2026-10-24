@@ -11,13 +11,13 @@ import type {
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import {
   awaitSandboxAdmissionIdle,
-  getSandboxAdmissionSnapshot,
   MAX_SANDBOX_LOG_ENTRIES,
   MAX_SANDBOX_LOG_ENTRY_LENGTH,
   runSandbox as runSandboxInternal,
   SANDBOX_LOG_OVERFLOW_MARKER,
   SandboxAdmissionNotIdleError,
   strandSandboxHostWorkForTest,
+  whenSandboxAdmissionQueued,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
@@ -62,40 +62,6 @@ const createDeferredPromise = (): DeferredPromise => {
     reject: deferredReject,
     resolve: deferredResolve,
   };
-};
-
-type WaitForConditionProps = {
-  condition: () => boolean;
-  timeoutMs?: number;
-};
-
-// Poll a condition that is GUARANTEED to become true under correct behaviour
-// (e.g. "the second run has been pushed onto the admission queue"). The
-// timeout is a bug guard, not an observation window: it only fires when the
-// property under test is actually broken, so it is set generously (just below
-// the 15s per-test ceiling) rather than tuned to expected wall-clock progress.
-// Never use this to wait a fixed interval "long enough" for background work.
-const waitForCondition = async ({
-  condition,
-  timeoutMs = 12_000,
-}: WaitForConditionProps): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
-  while (!condition()) {
-    if (Date.now() > deadline) {
-      throw new Error("Condition was not met before timeout.");
-    }
-    await ownerSleep(5);
-  }
-};
-
-// Observe "exactly N runs are parked in the admission queue" as a state
-// transition on the live counters. Once a waiter is visibly queued, admission
-// has already run and denied it a slot, so asserting "it has not started" right
-// after this is deterministic — no sleep window that a slow runner can miss.
-const waitForQueuedWaiters = async (count: number): Promise<void> => {
-  await waitForCondition({
-    condition: () => getSandboxAdmissionSnapshot().queuedWaiters === count,
-  });
 };
 
 type HoldGate = {
@@ -856,7 +822,7 @@ describe("runSandbox", () => {
 
     // Once the second run is visibly parked in the admission queue, it was
     // definitively denied a slot while the first still holds the per-key slot.
-    await waitForQueuedWaiters(1);
+    await whenSandboxAdmissionQueued(1);
     expect(gate.startedLabels).toEqual(["first"]);
 
     gate.release("first");
@@ -916,7 +882,7 @@ describe("runSandbox", () => {
     await Promise.all(admitted.map(async (label) => gate.whenStarted(label)));
     // e being visibly parked in the queue proves it was denied a slot while
     // all four admitted runs are still holding theirs.
-    await waitForQueuedWaiters(1);
+    await whenSandboxAdmissionQueued(1);
     expect(new Set(gate.startedLabels)).toEqual(new Set(admitted));
     expect(gate.startedLabels).not.toContain("e");
 
@@ -954,7 +920,7 @@ describe("runSandbox", () => {
       concurrencyKey,
       limits: { maxDurationMs: secondBudgetMs },
     });
-    await waitForQueuedWaiters(1);
+    await whenSandboxAdmissionQueued(1);
 
     // Keep the second run queued for strictly longer than its entire execution
     // budget. The property is inherently about wall-clock, but the wait only

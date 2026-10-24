@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -125,17 +127,18 @@ const acquireClock = async (fixture: HistoryFixture) => {
   return result;
 };
 
-const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const clock = await acquireClock(fixture);
-    if (Date.parse(clock.issuedAt) > cutoff.getTime()) {
-      return clock;
-    }
-    // Both clocks must differ despite the issued clock's millisecond rounding.
-    await Bun.sleep(1);
-  }
-  return panic("Expected an import clock strictly after the database cutoff");
-};
+// Both clocks must differ despite the issued clock's millisecond rounding,
+// so this reads the database clock until it has moved past the cutoff.
+const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) =>
+  await waitForExternalState({
+    description: "an import clock strictly after the database cutoff",
+    intervalMs: 1,
+    timeoutMs: 1000,
+    read: async () => {
+      const clock = await acquireClock(fixture);
+      return Date.parse(clock.issuedAt) > cutoff.getTime() && clock;
+    },
+  });
 
 const readHistory = async (fixture: HistoryFixture) => {
   const result = await list.handler(

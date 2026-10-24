@@ -317,18 +317,14 @@ const lastInvocationArgs = async (page: Page, command: string) =>
  * conclusive after that window.
  */
 const waitForTooltip = async (page: Page) =>
-  page.evaluate(async () => {
-    const deadline = performance.now() + 800;
-    while (performance.now() < deadline) {
-      if (document.querySelector('[data-slot="tooltip-popup"]')) {
-        return true;
-      }
-      await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
-    return false;
-  });
+  await page
+    .locator('[data-slot="tooltip-popup"]')
+    .first()
+    .waitFor({ state: "attached", timeout: 800 })
+    .then(
+      () => true,
+      () => false,
+    );
 
 test("captures use a caller-scoped delta and recover a burst revision gap", async ({
   page,

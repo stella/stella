@@ -9,6 +9,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   caseLawDecisions,
   caseLawSources,
@@ -39,7 +41,7 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
 const TARGET = { family: "case_law", generation: "case_law_v7" } as const;
 const LOCK_WAIT_POLL_MS = 20;
-const LOCK_WAIT_ATTEMPTS = 100;
+const LOCK_WAIT_TIMEOUT_MS = 2000;
 
 type RelationLock = { relation: string; mode: string; granted: boolean };
 
@@ -71,16 +73,19 @@ const waitingOn = async (
   db: GatedTestDb,
   pid: number,
   relation: string,
-): Promise<RelationLock[]> => {
-  for (let attempt = 0; attempt < LOCK_WAIT_ATTEMPTS; attempt += 1) {
-    const locks = await relationLocksOf(db, pid);
-    if (locks.some((lock) => lock.relation === relation && !lock.granted)) {
-      return locks;
-    }
-    await Bun.sleep(LOCK_WAIT_POLL_MS);
-  }
-  return panic(`backend ${String(pid)} never waited on ${relation}`);
-};
+): Promise<RelationLock[]> =>
+  await waitForExternalState({
+    description: `backend ${String(pid)} waits on ${relation}`,
+    intervalMs: LOCK_WAIT_POLL_MS,
+    timeoutMs: LOCK_WAIT_TIMEOUT_MS,
+    read: async () => {
+      const locks = await relationLocksOf(db, pid);
+      return (
+        locks.some((lock) => lock.relation === relation && !lock.granted) &&
+        locks
+      );
+    },
+  });
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("corpus serving flip lock order (postgres)", () => {

@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { setInterval } from "node:timers/promises";
 
 import { REQUEST_ID_HEADER } from "@stll/api-contract";
 
@@ -104,28 +105,35 @@ describe("x-request-id response header", () => {
   // resuming there adopted the in-flight request's id and stamped it on
   // unrelated work from then on.
   test("the ambient id belongs to its own request and never to background work", async () => {
-    const signal = { done: false };
+    const controller = new AbortController();
     const backgroundIds: (string | undefined)[] = [];
     const backgroundLoop = async () => {
-      while (!signal.done) {
-        await Bun.sleep(BACKGROUND_WAIT_MS);
-        backgroundIds.push(getRequestId());
+      try {
+        for await (const _tick of setInterval(BACKGROUND_WAIT_MS, undefined, {
+          signal: controller.signal,
+        })) {
+          backgroundIds.push(getRequestId());
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) throw error;
       }
     };
     const background = backgroundLoop();
 
     const mismatches: string[] = [];
-    for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
-      const response = await fetch(new URL("/ping", server.url));
-      const ambient = await response.text();
-      const header = response.headers.get(REQUEST_ID_HEADER);
-      if (ambient !== header) {
-        mismatches.push(`${header ?? "(no header)"} !== ${ambient}`);
+    try {
+      for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
+        const response = await fetch(new URL("/ping", server.url));
+        const ambient = await response.text();
+        const header = response.headers.get(REQUEST_ID_HEADER);
+        if (ambient !== header) {
+          mismatches.push(`${header ?? "(no header)"} !== ${ambient}`);
+        }
       }
+    } finally {
+      controller.abort();
+      await background;
     }
-
-    signal.done = true;
-    await background;
 
     expect(mismatches).toEqual([]);
     expect(backgroundIds.filter((id) => id !== undefined)).toEqual([]);

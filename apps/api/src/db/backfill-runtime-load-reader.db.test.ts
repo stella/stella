@@ -18,6 +18,7 @@ import {
 } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -633,8 +634,12 @@ describe.skipIf(!enabled)(
           );
           await client`SELECT pg_stat_force_next_flush()`;
           const seen = new Set<string>();
-          const deadline = performance.now() + 110_000;
-          while (seen.size < 2 && performance.now() < deadline) {
+          // Autovacuum workers run on the server's schedule; each read checks
+          // the verdict while a phase is still active.
+          await waitForExternalState({
+            description: "autovacuum and autoanalyze run on public.target_a",
+            timeoutMs: 110_000,
+            read: async () => {
             const progress = await client`
           SELECT 'vacuum' AS phase, progress.pid FROM pg_stat_progress_vacuum AS progress
           JOIN pg_stat_activity AS worker USING (pid)
@@ -678,10 +683,11 @@ describe.skipIf(!enabled)(
               expect((await readB()).kind).toBe("normal");
               seen.add(phase);
             }
-            if (seen.size < 2) {
-              await Bun.sleep(10);
-            }
-          }
+            return seen.size === 2;
+          },
+          // The diagnostics below name what was observed.
+          onTimeout: () => undefined,
+          });
           if (seen.size !== 2) {
             const settings =
               await client`SELECT current_setting('autovacuum') AS enabled, current_setting('autovacuum_naptime') AS naptime`;

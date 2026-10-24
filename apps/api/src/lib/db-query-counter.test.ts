@@ -1,5 +1,6 @@
 import type { BunRequest } from "bun";
 import { afterAll, describe, expect, test } from "bun:test";
+import { setInterval } from "node:timers/promises";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -203,17 +204,17 @@ afterAll(async () => {
 });
 
 // Queries from work that belongs to no request: started before any request
-// exists and never awaited by one.
-const runBackgroundQueries = async (signal: {
-  done: boolean;
-}): Promise<void> => {
-  const loop = async () => {
-    while (!signal.done) {
-      await Bun.sleep(BACKGROUND_QUERY_WAIT_MS);
+// exists and never awaited by one. Each tick resumes after a real timer.
+const runBackgroundQueries = async (signal: AbortSignal): Promise<void> => {
+  try {
+    for await (const _tick of setInterval(BACKGROUND_QUERY_WAIT_MS, undefined, {
+      signal,
+    })) {
       queryCountLogger.logQuery("SELECT background", []);
     }
-  };
-  return loop();
+  } catch (error) {
+    if (!signal.aborted) throw error;
+  }
 };
 
 describe("db query counter HTTP header", () => {
@@ -270,17 +271,19 @@ describe("db query counter HTTP header", () => {
   });
 
   test("a request counts its own queries and no others", async () => {
-    const signal = { done: false };
-    const background = runBackgroundQueries(signal);
+    const controller = new AbortController();
+    const background = runBackgroundQueries(controller.signal);
 
     const counts: (string | null)[] = [];
-    for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
-      const response = await fetch(new URL("/queries/4", server.url));
-      counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
+    try {
+      for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
+        const response = await fetch(new URL("/queries/4", server.url));
+        counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
+      }
+    } finally {
+      controller.abort();
+      await background;
     }
-
-    signal.done = true;
-    await background;
 
     expect(counts).toEqual(Array.from({ length: REQUEST_ROUNDS }, () => "4"));
   });

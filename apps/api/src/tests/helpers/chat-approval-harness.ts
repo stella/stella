@@ -351,6 +351,8 @@ export const createApprovalHarness = ({
     notify: () => void;
   }>();
   const turnSettlementFailures = new Map<string, unknown>();
+  /** Every run started on a thread, by its terminal promise. */
+  const runSettlements = new Map<string, Promise<unknown>[]>();
   const notifyTurnSettlement = (threadId: string) => {
     for (const listener of turnSettlementListeners) {
       if (listener.threadId === threadId) {
@@ -464,6 +466,10 @@ export const createApprovalHarness = ({
       // The run owns every terminal path, including checkpoint restoration and
       // failures that produce no onFinish event. Its notification only wakes
       // the persisted-row oracle; it does not replace that oracle.
+      runSettlements.set(props.threadId, [
+        ...(runSettlements.get(props.threadId) ?? []),
+        props.run.settled,
+      ]);
       void props.run.settled.then(
         () => notifyTurnSettlement(props.threadId),
         (error: unknown) => {
@@ -1674,8 +1680,15 @@ export const createApprovalHarness = ({
       threadId,
     });
 
+  /** Resolves once every run started on `threadId` has finished, including
+   *  the work it does after its turn settles. */
+  const awaitRunsSettled = async (threadId: SafeId<"chatThread">) => {
+    await Promise.allSettled(runSettlements.get(threadId) ?? []);
+  };
+
   return {
     approveContext,
+    awaitRunsSettled,
     /** Resolves once no turn on the thread is still accepted or running. */
     awaitSettledTurns,
     checkWebClient,

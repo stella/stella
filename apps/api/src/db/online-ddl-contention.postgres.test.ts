@@ -3,6 +3,7 @@ import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import type { OnlineIndexConfig } from "../env-online-index";
 import { isRecord } from "../lib/type-guards";
@@ -381,15 +382,21 @@ const contendedGate = (
   clock,
   ebs: healthyEbs(clock),
   wait: async (_milliseconds, signal) => {
-    for (let attempt = 0; attempt < 400 && !signal.aborted; attempt++) {
-      const rows = await observer<
-        { waiting: boolean }[]
-      >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND wait_event_type = 'Lock') AS waiting`;
-      if (rows.at(0)?.waiting === true) {
-        return;
-      }
-      await Bun.sleep(5);
-    }
+    await waitForExternalState({
+      description: `backend ${String(pid)} waits on the contender`,
+      intervalMs: 5,
+      timeoutMs: 2000,
+      read: async () =>
+        signal.aborted ||
+        (
+          await observer<
+            { waiting: boolean }[]
+          >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND wait_event_type = 'Lock') AS waiting`
+        ).at(0)?.waiting === true,
+      // Proceeds either way: the gate under test decides what a missing
+      // wait means.
+      onTimeout: () => undefined,
+    });
   },
   log: (record) => {
     records.push(record);

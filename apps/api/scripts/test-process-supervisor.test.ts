@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { buildApiTestCommand } from "./api-test-command";
 import {
   testProcessBudgets,
@@ -619,10 +621,11 @@ posixTest(
         }
         return Result.try(() => process.kill(pid, 0)).isOk();
       };
-      for (let attempt = 0; attempt < 100 && alive(); attempt += 1) {
-        await Bun.sleep(10);
-      }
-      expect(alive()).toBe(false);
+      await waitForExternalState({
+        description: `worker ${String(pid)} exits`,
+        timeoutMs: 1000,
+        read: () => !alive(),
+      });
     } finally {
       fixture.cleanup();
     }
@@ -686,10 +689,11 @@ posixTest(
         }
         return Result.try(() => process.kill(pid, 0)).isOk();
       };
-      for (let attempt = 0; attempt < 100 && alive(); attempt += 1) {
-        await Bun.sleep(10);
-      }
-      expect(alive()).toBe(false);
+      await waitForExternalState({
+        description: `worker ${String(pid)} exits`,
+        timeoutMs: 1000,
+        read: () => !alive(),
+      });
     } finally {
       fixture.cleanup();
     }
@@ -808,15 +812,12 @@ posixTest(
       expect(result.exitCode).toBe(124);
       expect(existsSync(heartbeatPath)).toBe(true);
       const afterLeaderExit = readFileSync(heartbeatPath, "utf-8");
-      const heartbeatDeadline = Date.now() + 1000;
-      while (
-        readFileSync(heartbeatPath, "utf-8") === afterLeaderExit &&
-        Date.now() < heartbeatDeadline
-      ) {
-        await Bun.sleep(20);
-      }
-      const liveHeartbeat = readFileSync(heartbeatPath, "utf-8");
-      expect(liveHeartbeat).not.toBe(afterLeaderExit);
+      await waitForExternalState({
+        description: "the descendant writes a heartbeat after the leader exits",
+        intervalMs: 20,
+        timeoutMs: 1000,
+        read: () => readFileSync(heartbeatPath, "utf-8") !== afterLeaderExit,
+      });
       fixture.supervisor.dispose();
       await Bun.sleep(100);
       const afterDispose = readFileSync(heartbeatPath, "utf-8");

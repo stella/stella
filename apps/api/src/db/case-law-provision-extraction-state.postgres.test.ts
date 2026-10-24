@@ -11,6 +11,7 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -42,23 +43,22 @@ const waitForBackendState = async (
   observer: SQL,
   { pid, state }: { pid: number; state: "blocked" | "sleeping" | "closed" },
 ) => {
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    const [row] = await observer`
-      SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked,
-        EXISTS (
-          SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
-            AND state = 'active' AND query = 'SELECT pg_sleep(30)'
-        ) AS sleeping,
-        NOT EXISTS (
-          SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
-        ) AS closed`;
-    if (row?.[state] === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  throw new Error(`backend ${String(pid)} never became ${state}`);
+  await waitForExternalState({
+    description: `backend ${String(pid)} is ${state}`,
+    timeoutMs: 3000,
+    read: async () => {
+      const [row] = await observer`
+        SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked,
+          EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+              AND state = 'active' AND query = 'SELECT pg_sleep(30)'
+          ) AS sleeping,
+          NOT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+          ) AS closed`;
+      return row?.[state] === true;
+    },
+  });
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
@@ -619,7 +619,11 @@ if (!databaseUrl || !runPostgresTests) {
             execute: async (
               query: string,
               params: readonly (
-                string | number | bigint | boolean | null
+                | string
+                | number
+                | bigint
+                | boolean
+                | null
               )[] = [],
             ) => {
               await reserved.unsafe(query, [...params]);
@@ -627,7 +631,11 @@ if (!databaseUrl || !runPostgresTests) {
             query: async (
               query: string,
               params: readonly (
-                string | number | bigint | boolean | null
+                | string
+                | number
+                | bigint
+                | boolean
+                | null
               )[] = [],
             ): Promise<readonly unknown[]> =>
               await reserved.unsafe(query, [...params]),
