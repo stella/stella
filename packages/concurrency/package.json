@@ -12,7 +12,6 @@
     "./sleep": "./src/sleep.ts",
     "./event-loop": "./src/event-loop.ts",
     "./backoff-delay": "./src/backoff-delay.ts",
-    "./retry-advised": "./src/retry-advised.ts",
     "./chunk": "./src/chunk.ts"
   },
   "scripts": {

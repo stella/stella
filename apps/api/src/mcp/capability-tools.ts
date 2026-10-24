@@ -741,21 +741,6 @@ const mapStatusResponse = (
   }
   const code = statusCodeToErrorCode(statusCode);
   const message = statusResponseMessage(responseBody);
-  if (
-    statusCode === 503 &&
-    isRecord(responseBody) &&
-    responseBody["retryable"] === true
-  ) {
-    return structuredErrorResult({
-      code: "upstream_unavailable",
-      message,
-      retryable: true,
-      retryAfterMs:
-        typeof responseBody["retryAfterMs"] === "number"
-          ? responseBody["retryAfterMs"]
-          : undefined,
-    });
-  }
   if (code === "internal_error") {
     return structuredErrorResult({
       code,
@@ -779,11 +764,6 @@ const mapStatusResponse = (
       retryable:
         isRecord(responseBody) && typeof responseBody["retryable"] === "boolean"
           ? responseBody["retryable"]
-          : undefined,
-      retryAfterMs:
-        isRecord(responseBody) &&
-        typeof responseBody["retryAfterMs"] === "number"
-          ? responseBody["retryAfterMs"]
           : undefined,
     }),
   );

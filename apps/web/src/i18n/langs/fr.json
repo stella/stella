@@ -5996,7 +5996,6 @@
       "downloadFailed": "Échec du téléchargement",
       "downloadPdf": "Télécharger en PDF",
       "downloadSearchablePdf": "PDF avec texte recherchable",
-      "finalizeBusy": "Serveur occupé ; nouvelle tentative dans {seconds, number} s (tentative {attempt, number})",
       "includeReferenceNumber": "Inclure le numéro de référence",
       "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",
       "maxEntitiesReached": "Nombre maximal d’éléments atteint",

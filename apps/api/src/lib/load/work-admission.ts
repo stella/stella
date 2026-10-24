@@ -80,7 +80,6 @@ export const createWorkAdmission = ({
     };
   };
   const states = {
-    upload: createPoolState("upload"),
     "heavy-sidecar": createPoolState("heavy-sidecar"),
   } as const satisfies Record<WorkPool, PoolState>;
 
@@ -198,7 +197,6 @@ export const createWorkAdmission = ({
     admit,
     stats: () =>
       ({
-        upload: poolMetrics("upload"),
         "heavy-sidecar": poolMetrics("heavy-sidecar"),
       }) as const satisfies Record<WorkPool, ReturnType<typeof poolMetrics>>,
   };

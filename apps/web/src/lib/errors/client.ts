@@ -10,11 +10,6 @@ export class ClientUnknownError extends TaggedError("ClientUnknownError")<{
   message: string;
 }> {}
 
-export class TerminalUploadError extends TaggedError("TerminalUploadError")<{
-  message: string;
-  cause: unknown;
-}> {}
-
 export const transformUnknownError = (error: unknown) => {
   if (error instanceof Error) {
     return error;

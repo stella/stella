@@ -853,14 +853,11 @@ export const LIMITS = {
    *  may hold at once. Finalizing reads, scans and may rewrite the whole file,
    *  peaking near six copies, so this keeps a burst of large uploads well
    *  inside the task's memory. A single file above it still runs alone. */
-  workPoolUploadSlots: 4,
-  workPoolUploadBytes: 150 * 1024 * 1024,
-  workPoolUploadMaxWaiters: 32,
+  uploadFinalizeInFlightBytes: 150 * 1024 * 1024,
   /** How long a finalization waits for that budget before it fails as
    *  retryable. The wait comes before the upload is claimed, so it never
    *  counts against the claim timeout. */
-  workPoolUploadMaxWaitMs: 20_000,
-  workPoolUploadDeadlineMs: 120_000,
+  uploadFinalizeAdmissionWaitMs: 20_000,
   workPoolHeavySidecarSlots: 1,
   workPoolHeavySidecarBytes: 150 * 1024 * 1024,
   workPoolHeavySidecarMaxWaiters: 0,

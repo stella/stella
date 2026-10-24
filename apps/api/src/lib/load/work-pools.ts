@@ -1,6 +1,6 @@
 import { LIMITS } from "@/api/lib/limits";
 
-const WORK_POOLS = ["upload", "heavy-sidecar"] as const;
+const WORK_POOLS = ["heavy-sidecar"] as const;
 export type WorkPool = (typeof WORK_POOLS)[number];
 
 export type WorkPoolLimits = {
@@ -13,14 +13,6 @@ export type WorkPoolLimits = {
 };
 
 export const WORK_POOL_LIMITS = {
-  upload: {
-    slots: LIMITS.workPoolUploadSlots,
-    bytes: LIMITS.workPoolUploadBytes,
-    maxWaiters: LIMITS.workPoolUploadMaxWaiters,
-    maxWaitMs: LIMITS.workPoolUploadMaxWaitMs,
-    deadlineMs: LIMITS.workPoolUploadDeadlineMs,
-    memoryCloseAt: 0.75,
-  },
   "heavy-sidecar": {
     slots: LIMITS.workPoolHeavySidecarSlots,
     bytes: LIMITS.workPoolHeavySidecarBytes,

@@ -21,7 +21,6 @@ import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
 import { sha256Hex as hashSha256Hex } from "./sha256.js";
-import { sleep, uploadRetryDecision } from "./upload-retry.js";
 
 const LIST_PROPERTIES_CAPABILITY = "properties.list";
 const UPLOAD_CAPABILITIES = {
@@ -121,10 +120,6 @@ export type UploadDocumentDependencies = {
     url: string;
   }) => Promise<Result<void, string | CliActionAdmissionRefusal>>;
   readLocalFile: (filePath: string) => Promise<Result<LocalFile, string>>;
-  onFinalizeRetry?:
-    | ((options: { attempt: number; delayMs: number }) => void)
-    | undefined;
-  waitForFinalizeRetry?: ((delayMs: number) => Promise<void>) | undefined;
 };
 
 const readBoundedLocalFile = async (
@@ -240,11 +235,9 @@ const putPresignedObject = async ({
 export const createUploadDocumentDependencies = ({
   serverUrl,
   token,
-  onFinalizeRetry,
 }: {
   serverUrl: string;
   token: string;
-  onFinalizeRetry?: UploadDocumentDependencies["onFinalizeRetry"];
 }): UploadDocumentDependencies => ({
   invoke: async (capability, input, confirm) => {
     const called = await callTool({
@@ -267,7 +260,6 @@ export const createUploadDocumentDependencies = ({
   },
   put: putPresignedObject,
   readLocalFile: readBoundedLocalFile,
-  ...(onFinalizeRetry === undefined ? {} : { onFinalizeRetry }),
 });
 
 const invocationFailure = (
@@ -495,38 +487,13 @@ export const uploadDocument = async ({
     });
   }
 
-  const finalizeInput = buildUploadFinalizeInput({
-    uploadId: reservation.uploadId,
-    workspaceId: input.workspaceId,
-  });
-  let finalized = await dependencies.invoke(
+  const finalized = await dependencies.invoke(
     UPLOAD_CAPABILITIES.finalize,
-    finalizeInput,
+    buildUploadFinalizeInput({
+      uploadId: reservation.uploadId,
+      workspaceId: input.workspaceId,
+    }),
   );
-  for (let attempt = 1; finalized.status === "tool-error"; attempt += 1) {
-    const payload = parsePayload(finalized.result);
-    const envelope = isRecord(payload) ? payload["error"] : undefined;
-    if (!isRecord(envelope) || envelope["retryable"] !== true) {
-      break;
-    }
-    const decision = uploadRetryDecision({
-      attempt,
-      advisedDelayMs:
-        typeof envelope["retryAfterMs"] === "number"
-          ? envelope["retryAfterMs"]
-          : undefined,
-    });
-    if (decision.type === "give-up") {
-      break;
-    }
-    dependencies.onFinalizeRetry?.({ attempt, delayMs: decision.delayMs });
-    await (dependencies.waitForFinalizeRetry?.(decision.delayMs) ??
-      sleep(decision.delayMs));
-    finalized = await dependencies.invoke(
-      UPLOAD_CAPABILITIES.finalize,
-      finalizeInput,
-    );
-  }
   if (finalized.status !== "ok") {
     return Result.err({
       type: "finalize",

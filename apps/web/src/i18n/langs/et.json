@@ -5996,7 +5996,6 @@
       "downloadFailed": "Allalaadimine ebaõnnestus",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
-      "finalizeBusy": "Server on hõivatud; uus katse {seconds, number} s pärast (katse {attempt, number})",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",

@@ -27,7 +27,6 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { stellaToast } from "@stll/ui/toast";
 import { useContentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -81,40 +80,6 @@ type LabelPreset = {
   color: string;
 };
 
-const useFinalizeBusyToast = () => {
-  const t = useTranslations();
-  const toastId = useRef<ReturnType<typeof stellaToast.add> | undefined>(
-    undefined,
-  );
-  const dismiss = () => {
-    if (toastId.current !== undefined) {
-      stellaToast.dismiss(toastId.current);
-      toastId.current = undefined;
-    }
-  };
-  const report = (event: { retryAfterS: number; attempt: number } | null) => {
-    if (event === null) {
-      dismiss();
-      return;
-    }
-    const description = t("workspaces.files.finalizeBusy", {
-      seconds: event.retryAfterS,
-      attempt: event.attempt,
-    });
-    if (toastId.current === undefined) {
-      toastId.current = stellaToast.add({
-        type: "loading",
-        title: t("workspaces.files.uploading"),
-        description,
-        timeout: 0,
-      });
-      return;
-    }
-    stellaToast.update(toastId.current, { description });
-  };
-  return { dismiss, report };
-};
-
 const LABEL_PRESETS: LabelPreset[] = [
   { key: "draft", color: "bg-foreground-disabled" },
   {
@@ -142,7 +107,6 @@ export const VersionsSidebar = ({
 
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
-  const finalizeBusyToast = useFinalizeBusyToast();
 
   // The viewport is the scrollable element of the Base UI ScrollArea
   // (forwarded via `viewportRef`); it is both the IntersectionObserver
@@ -275,24 +239,18 @@ export const VersionsSidebar = ({
   const handleUploadVersion = async (file: File) => {
     setIsUploading(true);
     try {
-      const result = await uploadEntityVersion({
-        workspaceId,
-        entityId,
-        file,
-        onFinalizeBusy: finalizeBusyToast.report,
-      });
+      const result = await uploadEntityVersion({ workspaceId, entityId, file });
       switch (result.type) {
         case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
           return;
         case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
           await invalidateVersions();
-          break;
+          return;
         default:
           result satisfies never;
           panic(`Unhandled entity version upload: ${String(result)}`);
       }
     } finally {
-      finalizeBusyToast.dismiss();
       setIsUploading(false);
     }
   };

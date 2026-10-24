@@ -161,9 +161,7 @@ class UploadFlowHost extends App {
     this.events.addEventListener(event, listener);
   }
 
-  override async callServerTool(
-    input: Parameters<App["callServerTool"]>[0],
-  ): Promise<Awaited<ReturnType<App["callServerTool"]>>> {
+  override async callServerTool(input: Parameters<App["callServerTool"]>[0]) {
     this.toolCalls.push(input);
     const capability = input.arguments?.["capability"];
     this.timeline.push(String(capability));
@@ -207,71 +205,6 @@ const selectUploadTarget = (
     },
   });
 };
-
-test.each(["retryable", "non-retryable"] as const)(
-  "%s finalize refusal follows its retry advice",
-  async (kind) => {
-    const app = new UploadFlowHost({ name: "retry-host", version: "1.0.0" });
-    let finalizeCalls = 0;
-    app.callServerTool = async (input) => {
-      app.toolCalls.push(input);
-      const capability = input.arguments?.["capability"];
-      if (capability === DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve) {
-        return {
-          content: [],
-          structuredContent: {
-            result: {
-              uploadId: "reserved-upload",
-              url: "https://storage.example/upload",
-              headers: {},
-            },
-          },
-        };
-      }
-      if (
-        capability === DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize
-      ) {
-        finalizeCalls += 1;
-        if (finalizeCalls === 1) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error: {
-                    message: "server busy",
-                    retryable: kind === "retryable",
-                    retryAfterMs: 1000,
-                  },
-                }),
-              },
-            ],
-          };
-        }
-        return { content: [] };
-      }
-      return { content: [] };
-    };
-    const runtime = createDocumentUploadRuntime(app, {
-      waitForFinalizeRetry: async () => {},
-    });
-    selectUploadTarget(app, "original");
-    runtime.selectFile(new File(["payload"], "version.docx"));
-    const put = spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(null, { status: 200 }),
-    );
-    try {
-      await runtime.upload();
-      expect(finalizeCalls).toBe(kind === "retryable" ? 2 : 1);
-      if (kind === "retryable") {
-        expect(runtime.getSnapshot().status).toBe("success");
-      }
-    } finally {
-      put.mockRestore();
-    }
-  },
-);
 
 test.each(["success", "put-failure", "finalize-failure"] as const)(
   "document upload %s finalizes or aborts the captured reservation and matter",

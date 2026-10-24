@@ -2147,25 +2147,6 @@ describe("capability executor upload purpose gate", () => {
   // to satisfy the uuid pattern rather than the short test alias.
   const WORKSPACE_ID = "33333333-3333-4333-8333-333333333333";
 
-  test("maps upload finalization refusal advice into the capability envelope", () => {
-    const result = mapHandlerResult({
-      id: "uploads.update",
-      result: new ElysiaCustomStatusResponse(503, {
-        message: "Upload processing is busy; retry shortly",
-        retryable: true,
-        retryAfterMs: 20_000,
-      }),
-    });
-    expect(result).toMatchObject({
-      status: "error",
-      error: {
-        code: "upstream_unavailable",
-        retryable: true,
-        retryAfterMs: 20_000,
-      },
-    });
-  });
-
   // A pending upload the finalize gate reads its purpose from.
   const storedPurposeDb = (purpose: string) =>
     asTestRaw<McpRequestContext["scopedDb"]>(

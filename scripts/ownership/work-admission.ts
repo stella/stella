@@ -12,17 +12,8 @@ export default {
     names: ["admitWork"],
     allowed: [
       {
-        path: "apps/api/src/handlers/uploads/update.ts",
-        reason: "Upload finalization holds the upload pool while processing.",
-      },
-      {
         path: "apps/api/src/lib/files/office-evidence.ts",
         reason: "Office evidence extraction holds the heavy-sidecar pool.",
-      },
-      {
-        path: "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts",
-        reason:
-          "Upload integration coverage holds the pool to verify refusal behavior.",
       },
     ],
   },

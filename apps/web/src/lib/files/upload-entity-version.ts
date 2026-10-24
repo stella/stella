@@ -12,7 +12,6 @@ import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
 } from "./attached-template-upload-preflight";
-import { retryRefusedFinalize } from "./finalize-retry";
 import { completeEntityVersionUpload } from "./upload-entity-version.logic";
 
 // Stall ceiling, not a target duration: a healthy slow upload of a large file
@@ -24,12 +23,6 @@ type UploadEntityVersionOptions = {
   entityId: string;
   file: File;
   signal?: AbortSignal | undefined;
-  onFinalizeBusy?:
-    | ((event: { retryAfterS: number; attempt: number } | null) => void)
-    | undefined;
-  finalizeWait?:
-    | ((delayMs: number, signal?: AbortSignal) => Promise<void>)
-    | undefined;
 };
 
 export const ENTITY_VERSION_UPLOAD_RESULT = {
@@ -65,8 +58,6 @@ export const uploadEntityVersion = async ({
   entityId,
   file,
   signal,
-  onFinalizeBusy,
-  finalizeWait,
 }: UploadEntityVersionOptions): Promise<EntityVersionUploadResult> => {
   signal?.throwIfAborted();
   const preflight = await preflightAttachedTemplateUpload([file]);
@@ -109,25 +100,10 @@ export const uploadEntityVersion = async ({
     await completeEntityVersionUpload({
       abort: async () => await abortUpload(workspaceId, uploadId),
       finalize: async () => {
-        const response = await retryRefusedFinalize({
-          finalize: async () => {
-            const next = await wsClient({ uploadId }).finalize.post(
-              undefined,
-              signal ? { fetch: { signal } } : undefined,
-            );
-            if (next.error) {
-              return next;
-            }
-            return next;
-          },
-          refusalResponse: (result) =>
-            result.error && result.response.status === 503
-              ? result.response
-              : null,
-          signal,
-          onBusy: onFinalizeBusy,
-          wait: finalizeWait,
-        });
+        const response = await wsClient({ uploadId }).finalize.post(
+          undefined,
+          signal ? { fetch: { signal } } : undefined,
+        );
         if (response.error) {
           throw toAPIError(response.error);
         }

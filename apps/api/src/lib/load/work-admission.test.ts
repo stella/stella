@@ -30,7 +30,7 @@ test("the process pool resets only after admitted work settles", async () => {
     started = resolve;
   });
   const running = admitWork({
-    pool: "upload",
+    pool: "heavy-sidecar",
     kind: "test-reset",
     run: async () => {
       started();
@@ -56,7 +56,7 @@ test("memory pressure refuses new work", async () => {
     readRssBytes: () => Number.MAX_SAFE_INTEGER,
   });
   const result = await admission.admit({
-    pool: "upload",
+    pool: "heavy-sidecar",
     kind: "test",
     run: async () => 1,
   });
@@ -72,7 +72,7 @@ test("memory pressure refuses new work", async () => {
   expect(records[0]).toMatchObject({
     message: "work.refused",
     attributes: {
-      pool: "upload",
+      pool: "heavy-sidecar",
       kind: "test",
       reason: "memory",
       retryAfterMs: expect.any(Number),
@@ -89,7 +89,7 @@ test("admission emits no refusal event", async () => {
   });
   const admission = createWorkAdmission({ readRssBytes: () => 0 });
   await admission.admit({
-    pool: "upload",
+    pool: "heavy-sidecar",
     kind: "test",
     bytes: 42,
     run: async () => undefined,

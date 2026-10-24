@@ -125,8 +125,7 @@
     "positive": "مُقرّ",
     "supportive": "متَّبع",
     "mixed": "متباين",
-    "unclassified": "غير مصنَّف",
-    "busyRetrying": "الخادم مشغول، جارٍ إعادة المحاولة…"
+    "unclassified": "غير مصنَّف"
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -254,8 +253,7 @@
     "positive": "Potvrzeno",
     "supportive": "Následováno",
     "mixed": "Smíšené",
-    "unclassified": "Neklasifikováno",
-    "busyRetrying": "Server je zaneprázdněn, opakuji pokus…"
+    "unclassified": "Neklasifikováno"
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -383,8 +381,7 @@
     "positive": "Gebilligt",
     "supportive": "Gefolgt",
     "mixed": "Uneinheitlich",
-    "unclassified": "Nicht eingeordnet",
-    "busyRetrying": "Server ausgelastet, erneuter Versuch…"
+    "unclassified": "Nicht eingeordnet"
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -512,8 +509,7 @@
     "positive": "Endorsed",
     "supportive": "Followed",
     "mixed": "Mixed",
-    "unclassified": "Unclassified",
-    "busyRetrying": "Server busy, retrying…"
+    "unclassified": "Unclassified"
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -641,8 +637,7 @@
     "positive": "Heaks kiidetud",
     "supportive": "Järgitud",
     "mixed": "Vastuoluline",
-    "unclassified": "Liigitamata",
-    "busyRetrying": "Server on hõivatud, proovin uuesti…"
+    "unclassified": "Liigitamata"
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -770,8 +765,7 @@
     "positive": "Approuvée",
     "supportive": "Suivie",
     "mixed": "Mitigée",
-    "unclassified": "Non classée",
-    "busyRetrying": "Serveur occupé, nouvelle tentative…"
+    "unclassified": "Non classée"
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -899,8 +893,7 @@
     "positive": "Megerősített",
     "supportive": "Követett",
     "mixed": "Vegyes",
-    "unclassified": "Besorolatlan",
-    "busyRetrying": "A kiszolgáló foglalt, újrapróbálkozás…"
+    "unclassified": "Besorolatlan"
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -1028,8 +1021,7 @@
     "positive": "Apstiprināts",
     "supportive": "Sekots",
     "mixed": "Pretrunīgs",
-    "unclassified": "Neklasificēts",
-    "busyRetrying": "Serveris ir aizņemts, mēģina vēlreiz…"
+    "unclassified": "Neklasificēts"
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -1157,8 +1149,7 @@
     "positive": "Patvirtintas",
     "supportive": "Sekama",
     "mixed": "Mišrus",
-    "unclassified": "Neklasifikuota",
-    "busyRetrying": "Serveris užimtas, bandoma dar kartą…"
+    "unclassified": "Neklasifikuota"
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -1286,8 +1277,7 @@
     "positive": "Zaaprobowane",
     "supportive": "Podzielone",
     "mixed": "Mieszane",
-    "unclassified": "Niesklasyfikowane",
-    "busyRetrying": "Serwer jest zajęty, ponawianie próby…"
+    "unclassified": "Niesklasyfikowane"
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -1415,8 +1405,7 @@
     "positive": "Endossada",
     "supportive": "Seguida",
     "mixed": "Mista",
-    "unclassified": "Não classificada",
-    "busyRetrying": "Servidor ocupado, tentando novamente…"
+    "unclassified": "Não classificada"
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -1544,8 +1533,7 @@
     "positive": "Potvrdené",
     "supportive": "Nasledované",
     "mixed": "Zmiešané",
-    "unclassified": "Neklasifikované",
-    "busyRetrying": "Server je zaneprázdnený, opakujem pokus…"
+    "unclassified": "Neklasifikované"
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -1673,7 +1661,6 @@
     "positive": "Respaldada",
     "supportive": "Seguida",
     "mixed": "Mixta",
-    "unclassified": "Sin clasificar",
-    "busyRetrying": "Servidor ocupado, reintentando…"
+    "unclassified": "Sin clasificar"
   }
 }

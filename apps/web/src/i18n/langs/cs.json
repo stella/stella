@@ -5996,7 +5996,6 @@
       "downloadFailed": "Stažení se nezdařilo",
       "downloadPdf": "Stáhnout jako PDF",
       "downloadSearchablePdf": "Prohledávatelné PDF",
-      "finalizeBusy": "Server je zaneprázdněn; další pokus za {seconds, number} s (pokus {attempt, number})",
       "includeReferenceNumber": "Přidat referenční číslo",
       "itemLimitReached": "Tento spis dosáhl limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",
