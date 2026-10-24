@@ -1,10 +1,18 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { contextFromNested, evaluate } from "./github-expression";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
@@ -217,4 +225,121 @@ test("scheduled main validation delegates ancestry to trusted main tooling befor
       'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
     );
   }
+});
+
+// The raw steps, with their conditions, for the release dispatch rules.
+const rawValidationSteps = v.parse(
+  v.array(
+    v.looseObject({
+      name: v.optional(v.string()),
+      if: v.optional(v.string()),
+      run: v.optional(v.string()),
+    }),
+  ),
+  v.parse(
+    v.object({
+      jobs: v.object({
+        validate: v.looseObject({ steps: v.array(v.unknown()) }),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/main-heavy.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  ).jobs.validate.steps,
+);
+const rawStep = (name: string) =>
+  rawValidationSteps.find((step) => step.name === name) ??
+  panic(`main-heavy.yml is missing step ${name}`);
+
+test("a version commit's push run and a release candidate dispatch PR depth for that commit", () => {
+  const condition =
+    rawStep("Dispatch release PR-depth checks").if ??
+    panic("the PR-depth dispatch needs a condition");
+  const decide = (context: object) =>
+    evaluate(condition, contextFromNested(context));
+  const release = {
+    event_name: "push",
+    event: { head_commit: { message: "chore: release v0.9.63 (#6740)" } },
+  };
+  expect(decide({ github: release, steps: { reuse: { outputs: {} } } })).toBe(
+    true,
+  );
+  expect(
+    decide({
+      github: {
+        event_name: "push",
+        event: { head_commit: { message: "fix(web): keep one row" } },
+      },
+      steps: { reuse: { outputs: {} } },
+    }),
+  ).toBe(false);
+  const candidate = {
+    github: { event_name: "workflow_dispatch", event: {} },
+    inputs: { sha: "a".repeat(40), release_candidate: true },
+  };
+  expect(decide({ ...candidate, steps: { reuse: { outputs: {} } } })).toBe(
+    true,
+  );
+  // A commit whose heavy run already passed dispatches nothing again.
+  expect(
+    decide({ ...candidate, steps: { reuse: { outputs: { run: "false" } } } }),
+  ).toBe(false);
+});
+
+test("a dispatch reuses a commit's passed heavy run and a push never asks", () => {
+  const script =
+    rawStep("Reuse completed release proof").run ??
+    panic("the reuse step needs a script");
+  const run = (event: string, state: string) => {
+    const directory = mkdtempSync(path.join(tmpdir(), "main-heavy-reuse-"));
+    try {
+      const calls = path.join(directory, "calls");
+      const output = path.join(directory, "output");
+      writeFileSync(output, "");
+      mkdirSync(path.join(directory, "scripts"));
+      writeFileSync(
+        path.join(directory, "scripts/gh-retry.sh"),
+        `echo "$*" >> "${calls}"\necho '${state}'\n`,
+      );
+      // No tree proof: the step falls through to running the suites.
+      writeFileSync(
+        path.join(directory, "scripts/verify-release-tree-proof.sh"),
+        `echo verify >> "${calls}"\nexit 1\n`,
+      );
+      const child = Bun.spawnSync(["bash", "-euc", script], {
+        cwd: directory,
+        env: {
+          ...process.env,
+          EVENT: event,
+          SHA: "b".repeat(40),
+          GITHUB_REPOSITORY: "stella/stella",
+          GITHUB_OUTPUT: output,
+        },
+      });
+      return {
+        exitCode: child.exitCode,
+        output: readFileSync(output, "utf-8"),
+        calls: readFileSync(calls, "utf-8").trim().split("\n"),
+      };
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  };
+  const reused = run("workflow_dispatch", "success");
+  expect(reused.exitCode).toBe(0);
+  expect(reused.output).toBe("run=false\n");
+  expect(reused.calls).toHaveLength(1);
+  expect(reused.calls[0]).toContain(`commits/${"b".repeat(40)}/statuses`);
+  // A failed or missing heavy result is tested again.
+  for (const state of ["failure", ""]) {
+    const retried = run("workflow_dispatch", state);
+    expect(retried.output).toBe("");
+    expect(retried.calls.at(-1)).toBe("verify");
+  }
+  const pushed = run("push", "success");
+  expect(pushed.output).toBe("");
+  expect(pushed.calls).toEqual(["verify"]);
 });

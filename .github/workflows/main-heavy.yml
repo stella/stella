@@ -116,8 +116,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ inputs.sha || github.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
+          # One heavy run per commit: a dispatch for a commit whose heavy run
+          # already passed (for a version commit, the run its push started)
+          # reuses that result, and neither the suites nor PR depth run again.
+          if [[ "$EVENT" == workflow_dispatch ]]; then
+            passed=$(bash scripts/gh-retry.sh api "repos/$GITHUB_REPOSITORY/commits/$SHA/statuses?per_page=100" \
+              --jq '[.[] | select(.context == "main/heavy" and .creator.login == "github-actions[bot]")] | first | .state // ""')
+            if [[ "$passed" == success ]]; then
+              echo "::notice::main/heavy already passed on $SHA; reusing it."
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
           if proof=$(bash scripts/verify-release-tree-proof.sh --find-proof "$GITHUB_REPOSITORY" "$SHA") && [[ -n "$proof" ]]; then
             if bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"; then
               echo "proof=$proof" >> "$GITHUB_OUTPUT"
@@ -127,11 +140,16 @@ jobs:
             fi
           fi
 
+      # A version commit gets PR depth for itself: main/pr-depth otherwise runs
+      # only on whichever commit is main's tip when it starts.
       - name: Dispatch release PR-depth checks
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true && steps.reuse.outputs.run != 'false' }}
+        if: >-
+          ${{ steps.reuse.outputs.run != 'false' && (
+          (github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true)
+          || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v'))) }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          SHA: ${{ inputs.sha }}
+          SHA: ${{ inputs.sha || github.sha }}
         with:
           retries: 2
           script: |
