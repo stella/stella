@@ -1437,6 +1437,7 @@ const CONTRACT_CORPUS = {
                   unitPrice: 100,
                   vatRateBps: 2100,
                   vatTreatment: "domestic_vat",
+                  exemptionReason: null,
                   netAmount: 100,
                   vatAmount: 21,
                   grossAmount: 121,
