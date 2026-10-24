@@ -55,6 +55,7 @@
     "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
+    "agent-device": "0.21.28",
     "bun-types": "catalog:",
     "expo-doctor": "1.20.4",
     "fast-check": "catalog:"

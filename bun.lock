@@ -407,6 +407,7 @@
         "@stll/sha256": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
+        "agent-device": "0.21.28",
         "bun-types": "catalog:",
         "expo-doctor": "1.20.4",
         "fast-check": "catalog:",
@@ -3867,6 +3868,8 @@
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 
     "agent-cli-detector": ["agent-cli-detector@0.1.7", "", { "bin": { "agent-cli-detector": "dist/cli.js" } }, "sha512-d8OWDVdZMgjhLUT9ZPgSv/BdFFF9pVuscC0JdUSz3bjwE15gcp6u/o0/JooM2yyAWC49KThFhXlgTXRa9B7yng=="],
+
+    "agent-device": ["agent-device@0.21.28", "", { "peerDependencies": { "ai": "^6.0.0 || ^7.0.0" }, "optionalPeers": ["ai"], "bin": { "agent-device": "bin/agent-device.mjs" } }, "sha512-uGEENVhPzSpIACrVlt16O1mloODWJyAemTCT0boDb4L006JXN2rG747u1TRoQJudOpdP/Pm2urxNRHeECLMLfg=="],
 
     "ajv": ["ajv@8.20.0", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "fast-uri": "^3.0.1", "json-schema-traverse": "^1.0.0", "require-from-string": "^2.0.2" } }, "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA=="],
 
