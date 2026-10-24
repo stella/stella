@@ -12,6 +12,8 @@ import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-c
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 import type { McpCredentialType } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
+import type { McpErrorCode } from "@/api/mcp/error-codes";
+import type { McpTransport } from "@/api/mcp/request-metrics";
 
 export const SERVER_ANALYTICS_EVENTS = {
   aiGeneration: "$ai_generation",
@@ -20,6 +22,7 @@ export const SERVER_ANALYTICS_EVENTS = {
   exception: "$exception",
   feedbackReportSubmitted: "feedback_report_submitted",
   mcpSessionInitialized: "mcp_session_initialized",
+  mcpToolCalled: "mcp_tool_called",
   releaseFailureWindow: RELEASE_FAILURE_EVENT,
 } as const;
 
@@ -109,6 +112,30 @@ export type McpSessionInitializedProperties = {
   mode: McpMode;
 };
 
+type McpToolCalledBaseProperties = {
+  tool: string;
+  mode: McpMode;
+  duration_ms: number;
+  credential_type: McpCredentialType | "unspecified";
+  transport: McpTransport;
+  client_name?: string;
+  client_version?: string;
+};
+
+export type McpInternalErrorClass =
+  | "timeout"
+  | "upstream"
+  | "validation"
+  | "unknown";
+
+/** Metadata-only contract for a single observed MCP tool invocation. */
+export type McpToolCalledProperties = McpToolCalledBaseProperties &
+  (
+    | { outcome: "ok" | "tool_error" }
+    | { outcome: "refused"; error_code: McpErrorCode | "unknown" }
+    | { outcome: "internal_error"; error_class: McpInternalErrorClass }
+  );
+
 /**
  * What happened to one delivery channel for one report. Not a boolean: a
  * deployment with no GitHub token, a channel that was never tried because the
@@ -190,6 +217,11 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
         distinctId: CustomerDistinctId;
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;
+      }
+    | {
+        distinctId: CustomerDistinctId;
+        event: typeof SERVER_ANALYTICS_EVENTS.mcpToolCalled;
+        properties: McpToolCalledProperties;
       }
     | {
         event: typeof SERVER_ANALYTICS_EVENTS.releaseFailureWindow;
