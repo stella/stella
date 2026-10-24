@@ -700,6 +700,12 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261024190300_invoice_line_exemption_reason",
+    form: "add-column",
+    reason:
+      "The nullable, default-free exemption basis is a catalog-only addition to invoice lines without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
+  },
+  {
     migration: "20261019010000_invoice_party_tax_vat_ids",
     form: "add-column",
     reason:
