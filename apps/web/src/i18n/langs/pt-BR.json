@@ -644,6 +644,7 @@
         "eso9": "Planilha de importação ESO9 (XLSX)",
         "exporting": "Preparando exportação…",
         "isdoc": "Fatura eletrônica ISDOC (ABRA Gen e outros)",
+        "ksefFa3": "Fatura eletrônica KSeF FA(3) (XML)",
         "spreadsheets": "Planilhas",
         "xlsx": "Faturas (XLSX)",
         "xlsxLines": "Itens de fatura (XLSX)"

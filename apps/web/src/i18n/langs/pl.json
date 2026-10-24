@@ -644,6 +644,7 @@
         "eso9": "Arkusz importu ESO9 (XLSX)",
         "exporting": "Przygotowywanie eksportu…",
         "isdoc": "E-faktura ISDOC (ABRA Gen i inne)",
+        "ksefFa3": "E-faktura KSeF FA(3) (XML)",
         "spreadsheets": "Arkusze",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Pozycje faktur (XLSX)"

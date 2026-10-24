@@ -374,6 +374,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "use-debounce",
   "use-intl",
   "uuid",
+  "xmllint-wasm",
 ]
   .map(noLlmsTxt)
   .concat(
