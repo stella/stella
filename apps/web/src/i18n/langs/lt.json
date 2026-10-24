@@ -1612,6 +1612,7 @@
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorConnectionFailed": "Nepavyko prisijungti prie pokalbio. Patikrinkite ryšį ir bandykite dar kartą.",
+    "sendErrorContinuationRejected": "Pokalbio tęsti nepavyko. Norėdami pradėti iš naujo, išsiųskite naują žinutę.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",

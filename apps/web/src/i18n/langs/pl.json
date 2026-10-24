@@ -1612,6 +1612,7 @@
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorConnectionFailed": "Nie udało się połączyć z czatem. Sprawdź połączenie i spróbuj ponownie.",
+    "sendErrorContinuationRejected": "Nie udało się kontynuować czatu. Wyślij nową wiadomość, aby zacząć od nowa.",
     "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
     "sendErrorLoopDetected": "Odpowiedź AI powtórzyła się zbyt wiele razy. Spróbuj ponownie z węższą prośbą.",
     "sendErrorModelUnavailable": "Skonfigurowany model AI nie jest już dostępny. Poproś administratora obszaru roboczego o zaktualizowanie modelu w ustawieniach organizacji.",
