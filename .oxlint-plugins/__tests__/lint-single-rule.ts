@@ -88,7 +88,8 @@ const traceLintRun = (
   run: LintRunTrace | undefined,
   event: { stage: string; pid?: number; cases?: number; exitCode?: number },
 ) => {
-  if (process.env.CI !== "true" || run === undefined) {
+  const { CI: ci } = process.env;
+  if (ci !== "true" || run === undefined) {
     return;
   }
   process.stderr.write(
