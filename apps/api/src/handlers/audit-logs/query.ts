@@ -3,6 +3,10 @@ import type { SQL } from "drizzle-orm";
 import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import {
+  API_STORABLE_INSTANT_CHECK,
+  apiDateTimeSchema,
+} from "@stll/api-contract/api-date";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -74,6 +78,7 @@ export const readAuditLogsQuerySchema = v.object({
     v.pipe(
       v.string(),
       v.isoTimestamp(),
+      API_STORABLE_INSTANT_CHECK,
       v.description("Only entries created on or after this ISO date-time"),
     ),
   ),
@@ -81,10 +86,11 @@ export const readAuditLogsQuerySchema = v.object({
     v.pipe(
       v.string(),
       v.isoTimestamp(),
+      API_STORABLE_INSTANT_CHECK,
       v.description("Only entries created on or before this ISO date-time"),
     ),
   ),
-  toExclusive: v.exactOptional(v.pipe(v.string(), v.isoTimestamp())),
+  toExclusive: v.exactOptional(apiDateTimeSchema),
   limit: v.exactOptional(
     numberFromString(
       v.pipe(

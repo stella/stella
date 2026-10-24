@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import type { DesktopAccountIdentity } from "@stll/api-contract/desktop-rpc";
 
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
@@ -39,7 +40,12 @@ const renewDesktopAccount = createSafeBoundedPublicHandler(
     ]),
     response: safePublicHandlerResponseSchemasWithStatusText(
       v.object({
-        expiresAt: v.pipe(v.string(), v.isoTimestamp(), v.maxLength(64)),
+        expiresAt: v.pipe(
+          v.string(),
+          v.isoTimestamp(),
+          API_STORABLE_INSTANT_CHECK,
+          v.maxLength(64),
+        ),
         identity: v.object({
           userId: userIdSchema,
           organizationId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),

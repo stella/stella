@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -21,6 +22,7 @@ export const searchHistoryImportClockSchema = v.strictObject({
   issuedAt: v.pipe(
     v.string(),
     v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
     v.maxLength(64),
     v.description(
       "The database time returned by search-history/import-clock. Obtain it before capturing clientNow.",

@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "./api-date";
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
 import {
   isResourceRef,
@@ -197,7 +198,7 @@ const takeoverRequestedEventSchema = v.object({
   type: v.literal(REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED),
   data: v.object({
     requestedBy: nonEmptyStringSchema,
-    requestedAt: v.pipe(v.string(), v.isoTimestamp()),
+    requestedAt: apiDateTimeSchema,
   }),
 });
 

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, gt, lt, or } from "drizzle-orm";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
 import { sha256Base64ToHex } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
@@ -20,7 +21,11 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { getS3 } from "@/api/lib/s3";
-import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
+import {
+  headObject,
+  readTenantS3ArrayBuffer,
+  S3ObjectMissingError,
+} from "@/api/lib/s3-presign";
 import {
   extractFileText,
   resolveExtractionMimeType,
@@ -196,11 +201,20 @@ const extractProcuracao = createSafeRootHandler(
       const objectHead = await headObject(key);
       if (Result.isError(objectHead)) {
         return Result.err(
-          new HandlerError({
-            status: 422,
-            message: "The source upload is incomplete",
-            cause: objectHead.error,
-          }),
+          S3ObjectMissingError.is(objectHead.error)
+            ? new HandlerError({
+                status: 422,
+                message: "The source upload is incomplete",
+                cause: objectHead.error,
+              })
+            : classifyFailure(
+                new HandlerError({
+                  status: 500,
+                  message: "Failed to read the source upload",
+                  cause: objectHead.error,
+                }),
+                "upstream_unavailable",
+              ),
         );
       }
       if (

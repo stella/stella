@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { Temporal } from "@stll/time";
 
 import { entities, fields } from "@/api/db/schema";
@@ -25,8 +26,8 @@ const BUILT_IN_DATE_IDS = [...INTERNAL_DATE_IDS, ...TASK_DATE_IDS] as const;
 const BUILT_IN_DATE_ID_SET: ReadonlySet<string> = new Set(BUILT_IN_DATE_IDS);
 
 const calendarTasksBodySchema = v.object({
-  dateFrom: v.pipe(v.string(), v.isoTimestamp()),
-  dateTo: v.pipe(v.string(), v.isoTimestamp()),
+  dateFrom: apiDateTimeSchema,
+  dateTo: apiDateTimeSchema,
   datePropertyIds: v.pipe(
     v.array(v.pipe(v.string(), v.minLength(1))),
     v.minLength(1),

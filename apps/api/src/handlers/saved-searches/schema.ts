@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { ENTITY_KINDS } from "@/api/db/schema";
@@ -16,7 +17,7 @@ import {
 } from "@/api/lib/saved-searches";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
-const timestampSchema = v.pipe(v.string(), v.isoTimestamp());
+const timestampSchema = apiDateTimeSchema;
 
 const timeFilterSchema = v.union([
   v.strictObject({

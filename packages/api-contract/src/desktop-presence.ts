@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "./api-date";
 import policy from "./desktop-presence-policy.json";
 
 export const DESKTOP_PRESENCE_POLICY = policy;
@@ -28,7 +29,12 @@ export type DesktopPresenceReport = v.InferOutput<
 const desktopSchema = v.strictObject({
   version: desktopVersionSchema,
   protocol: desktopProtocolSchema,
-  lastSeenAt: v.pipe(v.string(), v.maxLength(32), v.isoTimestamp()),
+  lastSeenAt: v.pipe(
+    v.string(),
+    v.maxLength(32),
+    v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
+  ),
 });
 
 export const desktopPresenceSchema = v.variant("type", [

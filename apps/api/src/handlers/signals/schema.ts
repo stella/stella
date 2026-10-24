@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import {
   booleanFromString,
   numberFromString,
@@ -69,7 +70,7 @@ export const createRequestBodySchema = v.object({
 });
 
 export const snoozeBodySchema = v.object({
-  until: v.pipe(v.string(), v.isoTimestamp()),
+  until: apiDateTimeSchema,
 });
 
 export const dismissBodySchema = v.object({

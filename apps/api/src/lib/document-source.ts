@@ -22,6 +22,8 @@
 
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 export const documentSourceSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("upload") }),
   v.strictObject({ kind: v.literal("desktop-edit") }),
@@ -39,7 +41,7 @@ export const documentSourceSchema = v.variant("kind", [
     kind: v.literal("signature"),
     baseVersionId: v.pipe(v.string(), v.uuid()),
     certificateSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
-    signingTime: v.pipe(v.string(), v.isoTimestamp()),
+    signingTime: apiDateTimeSchema,
     level: v.picklist(["B-B", "B-T", "B-LT"]),
     /** The authority whose trusted time the signature carries. */
     timestampAuthorityUrl: v.nullable(v.pipe(v.string(), v.url())),

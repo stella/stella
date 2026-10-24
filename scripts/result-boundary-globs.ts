@@ -35,6 +35,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
@@ -231,6 +233,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",
+  // Browser startup captures detector installation failures in its outer Result.
+  "apps/web/src/lib/analytics/web-hang/web-hang-detector.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",

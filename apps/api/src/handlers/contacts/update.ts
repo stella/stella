@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
@@ -26,10 +27,12 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { patchContactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import {
+  invoiceLanguageSchema,
   minorUnitAmountSchema,
   resourceIdSchema,
   userIdSchema,
@@ -69,9 +72,15 @@ const updateContactBodySchema = v.object({
   tags: v.optional(v.nullable(v.pipe(v.array(v.string()), v.maxLength(50)))),
   color: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
   registrationNumber: v.optional(
-    v.nullable(v.pipe(v.string(), v.maxLength(64))),
+    v.nullable(v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH))),
   ),
-  taxId: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
+  taxId: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH))),
+  ),
+  vatId: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH))),
+  ),
+  vatPayer: v.optional(v.nullable(v.boolean())),
   bankAccounts: v.optional(
     v.nullable(v.pipe(v.array(bankAccountSchema), v.maxLength(10))),
   ),
@@ -83,6 +92,7 @@ const updateContactBodySchema = v.object({
   paymentTermDays: v.optional(
     v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(365))),
   ),
+  invoiceLanguage: v.optional(v.nullable(invoiceLanguageSchema)),
   originatingAttorneyId: v.optional(v.nullable(userIdSchema)),
   responsibleAttorneyId: v.optional(v.nullable(userIdSchema)),
 });
@@ -165,6 +175,42 @@ const contactRateUpdates = async ({
   });
 };
 
+/** Lock the contact row and read what the update validates against. */
+const lockExistingContact = async ({
+  tx,
+  contactId,
+  organizationId,
+}: {
+  tx: Transaction;
+  contactId: UpdateContactHandlerProps["contactId"];
+  organizationId: UpdateContactHandlerProps["organizationId"];
+}) => {
+  const rows = await tx
+    .select({
+      id: contacts.id,
+      type: contacts.type,
+      metadata: contacts.metadata,
+      currency: contacts.currency,
+      defaultHourlyRate: contacts.defaultHourlyRate,
+      dateOfBirthYear: contacts.dateOfBirthYear,
+      dateOfBirthMonth: contacts.dateOfBirthMonth,
+      dateOfBirthDay: contacts.dateOfBirthDay,
+      nationalityCodes: contacts.nationalityCodes,
+      taxId: contacts.taxId,
+      vatId: contacts.vatId,
+    })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.id, contactId),
+        eq(contacts.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -203,28 +249,11 @@ export const updateContactHandler = async function* ({
           }),
         };
       }
-      const existingRows = await tx
-        .select({
-          id: contacts.id,
-          type: contacts.type,
-          metadata: contacts.metadata,
-          currency: contacts.currency,
-          defaultHourlyRate: contacts.defaultHourlyRate,
-          dateOfBirthYear: contacts.dateOfBirthYear,
-          dateOfBirthMonth: contacts.dateOfBirthMonth,
-          dateOfBirthDay: contacts.dateOfBirthDay,
-          nationalityCodes: contacts.nationalityCodes,
-        })
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.id, contactId),
-            eq(contacts.organizationId, organizationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const existing = existingRows.at(0);
+      const existing = await lockExistingContact({
+        tx,
+        contactId,
+        organizationId,
+      });
       if (!existing) {
         return { kind: "not_found" as const };
       }
@@ -274,11 +303,12 @@ export const updateContactHandler = async function* ({
           "color",
           "tags",
           "registrationNumber",
-          "taxId",
+          "vatPayer",
           "bankAccounts",
           "billingAddress",
           "currency",
           "paymentTermDays",
+          "invoiceLanguage",
           "originatingAttorneyId",
           "responsibleAttorneyId",
         ]),
@@ -294,6 +324,13 @@ export const updateContactHandler = async function* ({
                 : [],
             }),
         ...pickDefined(rateUpdates.value, ["defaultHourlyRate"]),
+        ...(rest.taxId === undefined && rest.vatId === undefined
+          ? {}
+          : patchContactTaxIdentifiers({
+              stored: { taxId: existing.taxId, vatId: existing.vatId },
+              taxId: rest.taxId,
+              vatId: rest.vatId,
+            })),
       };
       if (Object.keys(updates).length === 0) {
         return {
@@ -322,10 +359,13 @@ export const updateContactHandler = async function* ({
           tags: updates.tags,
           registrationNumber: updates.registrationNumber,
           taxId: updates.taxId,
+          vatId: updates.vatId,
+          vatPayer: updates.vatPayer,
           bankAccounts: updates.bankAccounts,
           billingAddress: updates.billingAddress,
           currency: updates.currency,
           paymentTermDays: updates.paymentTermDays,
+          invoiceLanguage: updates.invoiceLanguage,
           originatingAttorneyId: updates.originatingAttorneyId,
           responsibleAttorneyId: updates.responsibleAttorneyId,
           metadata: updates.metadata,

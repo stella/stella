@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { INVOICE_LANGUAGES } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { safeIdSchema } from "@stll/api-contract/safe-id";
 import { UUID_PATTERN } from "@stll/uuid-codec";
@@ -156,3 +157,6 @@ export const uniqueItems = <TItem>(
   UNIQUE_ITEMS_CHECKS.add(check);
   return check;
 };
+
+/** A language invoices are issued in; an omitted one falls to the defaults. */
+export const invoiceLanguageSchema = v.picklist(INVOICE_LANGUAGES);

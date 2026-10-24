@@ -5,7 +5,7 @@ import {
   REVIEW_FLAGS,
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
-import { apiDateSchema } from "@stll/api-contract/api-date";
+import { apiDateSchema, apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { JsonObject } from "@/api/lib/json-value";
 import {
@@ -383,7 +383,7 @@ const cellMetadataSchema = v.object({
       v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
       v.object({
         addedBy: v.pipe(v.string(), v.minLength(1)),
-        addedAt: v.pipe(v.string(), v.isoTimestamp()),
+        addedAt: apiDateTimeSchema,
       }),
     ),
   ),
@@ -391,7 +391,7 @@ const cellMetadataSchema = v.object({
   lockProvenance: v.exactOptional(
     v.object({
       lockedBy: v.pipe(v.string(), v.minLength(1)),
-      lockedAt: v.pipe(v.string(), v.isoTimestamp()),
+      lockedAt: apiDateTimeSchema,
       reason: cellLockReasonSchema,
     }),
   ),

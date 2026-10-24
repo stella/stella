@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
+
 import { abortableTx } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -38,6 +40,7 @@ const config = {
     clientNow: v.pipe(
       v.string(),
       v.isoTimestamp(),
+      API_STORABLE_INSTANT_CHECK,
       v.maxLength(64),
       v.description(
         "The importing device's current clock, captured after obtaining clock from search-history/import-clock and immediately before sending this request. Used to correct entry timestamps; clocks differing by more than one day are rejected.",

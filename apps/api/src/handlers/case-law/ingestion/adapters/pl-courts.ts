@@ -2,6 +2,8 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: Judgment-date walk windows now also reject nonexistent calendar dates; parsed decisions are unchanged.
+// parser-output-unchanged: [pl-courts] Strict calendar dates apply only to crawl-window parameters; stored decision parsing and replay are unchanged.
+// parser-output-unchanged: [pl-ncourt] The shared adapter module changes only PL courts crawl-window validation, not decision construction or replay.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 

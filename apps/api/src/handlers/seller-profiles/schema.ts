@@ -1,12 +1,17 @@
 import * as v from "valibot";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 const name = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
-const registrationId = v.pipe(v.string(), v.maxLength(64));
-const vatId = v.pipe(v.string(), v.maxLength(64));
+const registrationId = v.pipe(
+  v.string(),
+  v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH),
+);
+const taxId = v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH));
+const vatId = v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH));
 const vatPayer = v.pipe(
   v.boolean(),
   v.description(
@@ -25,6 +30,7 @@ const bic = v.pipe(
 );
 const accountNumber = v.pipe(v.string(), v.maxLength(64));
 const footerNotes = v.pipe(v.string(), v.maxLength(10_000));
+const registrationText = v.pipe(v.string(), v.maxLength(10_000));
 
 export const sellerProfileParams = v.object({
   sellerProfileId: resourceIdSchema("sellerProfile"),
@@ -33,7 +39,10 @@ export const sellerProfileParams = v.object({
 export const createSellerProfileBody = v.object({
   legalName: name,
   registrationId: v.optional(registrationId),
+  taxId: v.optional(taxId),
   vatId: v.optional(vatId),
+  registerEntry: v.optional(registrationText),
+  barRegistration: v.optional(registrationText),
   vatPayer: v.optional(vatPayer),
   addressLine1: v.optional(addressLine),
   addressLine2: v.optional(addressLine),
@@ -50,7 +59,10 @@ export const createSellerProfileBody = v.object({
 export const updateSellerProfileBody = v.object({
   legalName: v.optional(name),
   registrationId: v.optional(v.nullable(registrationId)),
+  taxId: v.optional(v.nullable(taxId)),
   vatId: v.optional(v.nullable(vatId)),
+  registerEntry: v.optional(v.nullable(registrationText)),
+  barRegistration: v.optional(v.nullable(registrationText)),
   vatPayer: v.optional(vatPayer),
   addressLine1: v.optional(v.nullable(addressLine)),
   addressLine2: v.optional(v.nullable(addressLine)),
@@ -67,7 +79,10 @@ export const updateSellerProfileBody = v.object({
 export const SELLER_PROFILE_EDITABLE_FIELDS = [
   "legalName",
   "registrationId",
+  "taxId",
   "vatId",
+  "registerEntry",
+  "barRegistration",
   "vatPayer",
   "addressLine1",
   "addressLine2",

@@ -44,6 +44,24 @@ export const EXPENSE_CATEGORIES = [
   "other",
 ] as const;
 
+/** Languages in which Stella can render an invoice document. */
+export const INVOICE_LANGUAGES = [
+  "ar",
+  "cs",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fr",
+  "hu",
+  "lt",
+  "lv",
+  "pl",
+  "pt-BR",
+  "sk",
+] as const;
+export type InvoiceLanguage = (typeof INVOICE_LANGUAGES)[number];
+
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
 export const TIME_ENTRY_SOURCES = [

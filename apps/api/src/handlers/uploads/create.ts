@@ -26,10 +26,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -43,46 +40,31 @@ import {
   validateEntityCreate,
 } from "@/api/lib/uploads/entity-create";
 import {
+  documentUploadFileFields,
+  uploadFileSizeSchema,
+} from "@/api/lib/uploads/file-metadata-schema";
+import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
+  uploadTimeline,
 } from "@/api/lib/uploads/runtime";
 
-const baseFileMetadataSchema = {
-  name: defaultVarcharSchema,
-  mimeType: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
-  size: v.pipe(
-    v.number(),
-    v.integer(),
-    v.minValue(1),
-    v.maxValue(FILE_SIZE_LIMIT_BYTES.document),
-  ),
-  // Lowercase hex, exactly 64 chars. The same format the legacy
-  // entity upload stores at `fields.content.sha256Hex`, so we can
-  // round-trip without re-encoding inside the migration.
-  sha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
-} as const;
-
 const skillPackFileMetadataSchema = {
-  ...baseFileMetadataSchema,
-  size: v.pipe(
-    v.number(),
-    v.integer(),
-    v.minValue(1),
-    v.maxValue(FILE_SIZE_LIMIT_BYTES.skillPack),
-  ),
+  ...documentUploadFileFields,
+  size: uploadFileSizeSchema(FILE_SIZE_LIMIT_BYTES.skillPack),
 } as const;
 
 const entityCreatePresignBodySchema = v.object({
   purpose: v.literal("entity_create"),
   propertyId: resourceIdSchema("property"),
   parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
-  ...baseFileMetadataSchema,
+  ...documentUploadFileFields,
 });
 
 const entityVersionPresignBodySchema = v.object({
   purpose: v.literal("entity_version"),
   entityId: resourceIdSchema("entity"),
-  ...baseFileMetadataSchema,
+  ...documentUploadFileFields,
 });
 
 const agentSkillPresignBodySchema = v.object({
@@ -223,9 +205,7 @@ const presignUpload = createSafeHandler(
       workspaceId,
     });
     const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
-    );
+    const { urlExpiresAt, finalizeDeadline } = uploadTimeline(now);
     const purposeData = toPurposeData(purposeBody);
 
     const presign = await presignUploadUrl({
@@ -252,7 +232,8 @@ const presignUpload = createSafeHandler(
     }
 
     type PresignWriteResult =
-      { status: "ok" } | { status: EntityCreateWriteFailureStatus };
+      | { status: "ok" }
+      | { status: EntityCreateWriteFailureStatus };
 
     // Persist intent. RLS pins the row to this workspace, so even
     // a stolen URL can only be finalized by a request that
@@ -295,7 +276,7 @@ const presignUpload = createSafeHandler(
           declaredSize: purposeBody.size,
           declaredSha256: purposeBody.sha256Hex,
           status: "pending",
-          expiresAt,
+          expiresAt: finalizeDeadline,
           createdAt: now,
         });
 
@@ -314,7 +295,7 @@ const presignUpload = createSafeHandler(
     return Result.ok({
       uploadId,
       url: presign.value.url,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: urlExpiresAt.toISOString(),
       headers: presign.value.headers,
     });
   },

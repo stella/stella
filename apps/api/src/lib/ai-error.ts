@@ -644,7 +644,8 @@ const aiKindHandlerError = (
  * status answers the caller, the classification tells a failure sink what
  * happened. A provider 429 answered 429 is still an exhausted quota, not a
  * client error. For everything else, returns the caller's fallback so
- * unrelated bugs aren't masked as "AI unavailable".
+ * unrelated bugs aren't masked as "AI unavailable"; a cancelled generation
+ * keeps that fallback and is classified as cancelled.
  */
 export const aiHandlerError = (
   error: unknown,
@@ -674,9 +675,14 @@ export const aiHandlerError = (
                 },
         })
       : mapped;
-  return kind === "unknown"
-    ? handlerError
-    : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  if (kind !== "unknown") {
+    return classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  }
+  // The fallback wraps the helper's cancelled 502, and a grader reads a brand
+  // only at the failure node, so the wrapper carries the cancellation itself.
+  return isCancelledGeneration(error)
+    ? classifyFailure(handlerError, "generation_cancelled")
+    : handlerError;
 };
 
 type AIErrorStatusBody = {

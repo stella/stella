@@ -7,6 +7,7 @@ import {
   resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -147,7 +148,7 @@ export const refineSearchBodySchema = v.object({
   locale: v.optional(v.pipe(v.string(), v.maxLength(16))),
 });
 
-const isoDateTime = v.pipe(v.string(), v.isoTimestamp());
+const isoDateTime = apiDateTimeSchema;
 
 export const summarizeSearchBodySchema = v.object({
   query: v.pipe(

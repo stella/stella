@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { count, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
@@ -24,10 +26,12 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import {
+  invoiceLanguageSchema,
   minorUnitAmountSchema,
   resourceIdSchema,
   userIdSchema,
@@ -59,8 +63,16 @@ export const createContactBodySchema = v.object({
   metadata: v.optional(contactMetadataSchema),
   tags: v.optional(v.pipe(v.array(v.string()), v.maxLength(50))),
   color: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  registrationNumber: v.optional(v.pipe(v.string(), v.maxLength(64))),
-  taxId: v.optional(v.pipe(v.string(), v.maxLength(64))),
+  registrationNumber: v.optional(
+    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
+  ),
+  taxId: v.optional(
+    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
+  ),
+  vatId: v.optional(
+    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
+  ),
+  vatPayer: v.optional(v.nullable(v.boolean())),
   bankAccounts: v.optional(v.pipe(v.array(bankAccountSchema), v.maxLength(10))),
   billingAddress: v.optional(billingAddressSchema),
   defaultHourlyRate: v.optional(minorUnitAmountSchema(0)),
@@ -68,6 +80,7 @@ export const createContactBodySchema = v.object({
   paymentTermDays: v.optional(
     v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(365)),
   ),
+  invoiceLanguage: v.optional(v.nullable(invoiceLanguageSchema)),
   originatingAttorneyId: v.optional(userIdSchema),
   responsibleAttorneyId: v.optional(userIdSchema),
 });
@@ -148,7 +161,11 @@ export const insertContactRow = async ({
       tags: body.tags,
       color: body.color,
       registrationNumber: body.registrationNumber,
-      taxId: body.taxId,
+      ...contactTaxIdentifiers({
+        taxId: body.taxId ?? null,
+        vatId: body.vatId ?? null,
+      }),
+      vatPayer: body.vatPayer,
       bankAccounts: body.bankAccounts,
       billingAddress: body.billingAddress,
       defaultHourlyRate:
@@ -157,6 +174,7 @@ export const insertContactRow = async ({
           : cents(body.defaultHourlyRate),
       currency: body.currency,
       paymentTermDays: body.paymentTermDays,
+      invoiceLanguage: body.invoiceLanguage,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
       createdBy: userId,

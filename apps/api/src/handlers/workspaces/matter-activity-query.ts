@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import type {
   MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
@@ -60,8 +61,8 @@ export const matterActivityFilterQueryProperties = {
       v.literal(MATTER_ACTIVITY_CATEGORY_SCHEMA_VALUES[7]),
     ]),
   ),
-  from: v.exactOptional(v.pipe(v.string(), v.isoTimestamp())),
-  toExclusive: v.exactOptional(v.pipe(v.string(), v.isoTimestamp())),
+  from: v.exactOptional(apiDateTimeSchema),
+  toExclusive: v.exactOptional(apiDateTimeSchema),
 };
 
 type MatterActivityFilterQuery = {

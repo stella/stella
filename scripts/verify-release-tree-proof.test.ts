@@ -803,7 +803,9 @@ describe("release proof trust boundary", () => {
         expect(verify(proof, proof, true).exitCode).toBe(0);
         expect(verify(proof, proof).exitCode).not.toBe(0);
         git("update-ref", "refs/remotes/origin/main", target);
-        expect(verify(proof, proof, true).exitCode).not.toBe(0);
+        const stale = verify(proof, proof, true);
+        expect(stale.exitCode).toBe(3);
+        expect(stale.stderr.toString()).toContain("RELEASE_TREE_PROOF_STALE");
       },
     ));
 });

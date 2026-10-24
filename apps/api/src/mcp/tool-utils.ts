@@ -12,7 +12,6 @@ import {
   askSentence,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
-import { apiDateSchema } from "@stll/api-contract/api-date";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { declareFailureClass } from "@stll/errors";
 import {
@@ -98,7 +97,6 @@ export const MAX_LIST_LIMIT = LIMITS.mcpListPageSizeMax;
 export const MAX_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeMax;
 export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
-export const ISO_DATE_SCHEMA = apiDateSchema;
 
 /**
  * Characters of long document text one tool response may carry. Every

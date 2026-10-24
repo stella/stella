@@ -8,6 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { Readable } from "node:stream";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
@@ -38,7 +39,7 @@ const sesDeliverySchema = v.object({
   mail: v.object({
     messageId: v.pipe(v.string(), v.regex(/^[a-zA-Z0-9-]{1,256}$/u)),
     source: boundedString,
-    timestamp: v.pipe(v.string(), v.isoTimestamp()),
+    timestamp: apiDateTimeSchema,
     commonHeaders: v.optional(
       v.object({
         from: v.optional(v.pipe(v.array(boundedString), v.maxLength(2))),

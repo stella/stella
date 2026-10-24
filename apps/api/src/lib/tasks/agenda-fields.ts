@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
+
 import type { AgendaAttendee } from "@/api/db/schema";
 import {
   AGENDA_ATTENDEE_TYPES,
@@ -22,6 +24,7 @@ const agendaDateTimeSchema = v.nullable(
   v.pipe(
     v.string(),
     v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
     v.maxLength(AGENDA_DATE_TIME_MAX_LENGTH),
   ),
 );

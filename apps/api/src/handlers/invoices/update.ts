@@ -3,6 +3,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import type { InvoiceLanguage } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import type { InvoiceDocumentType } from "@stll/invoicing";
@@ -24,7 +25,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  invoiceLanguageSchema,
+  resourceIdSchema,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -41,6 +46,7 @@ const updateInvoiceBodySchema = v.object({
   dueDate: v.exactOptional(v.nullable(apiDateSchema)),
   reference: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
   currency: v.exactOptional(currencyCodeSchema),
+  language: v.exactOptional(invoiceLanguageSchema),
   notes: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
   taxableSupplyDate: v.exactOptional(v.nullable(apiDateSchema)),
   sellerProfileId: v.exactOptional(
@@ -52,6 +58,7 @@ const updateInvoiceBodySchema = v.object({
   buyerRegistrationId: v.exactOptional(
     v.nullable(v.pipe(v.string(), v.maxLength(64))),
   ),
+  buyerTaxId: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
   buyerVatId: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
   buyerAddressLine1: v.exactOptional(
     v.nullable(v.pipe(v.string(), v.maxLength(512))),
@@ -71,6 +78,7 @@ const updateInvoiceBodySchema = v.object({
 const BUYER_FIELDS = [
   "buyerName",
   "buyerRegistrationId",
+  "buyerTaxId",
   "buyerVatId",
   "buyerAddressLine1",
   "buyerAddressLine2",
@@ -85,6 +93,7 @@ const invoiceParamsSchema = workspaceParams({
 
 type InvoiceUpdateSource = {
   currency: string;
+  language: InvoiceLanguage;
   dueDate: string | null;
   invoiceDate: string;
   invoiceNumber: string | null;
@@ -145,6 +154,12 @@ const buildInvoiceUpdateAuditChanges = (
     changes["currency"] = {
       old: existing.currency,
       new: changedFields.currency,
+    };
+  }
+  if (changedFields.language !== undefined) {
+    changes["language"] = {
+      old: existing.language,
+      new: changedFields.language,
     };
   }
   if (changedFields.taxableSupplyDate !== undefined) {
@@ -281,6 +296,7 @@ const updateInvoice = createSafeHandler(
       "reference",
       "notes",
       "currency",
+      "language",
       "taxableSupplyDate",
       "sellerProfileId",
     ]);

@@ -5,7 +5,7 @@ import {
 } from "@valibot/to-json-schema";
 import { type GenericSchema, safeParse } from "valibot";
 
-import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
+import { API_DATE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/api-date";
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { wireValueOf } from "@stll/api-contract/http-input";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
@@ -67,8 +67,8 @@ const stripRouteInternalMetadata = stripMetadataExcept(isExtensionKeyword);
  * an error.
  */
 const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
+  ...API_DATE_RUNTIME_ONLY_CHECKS,
   ...ANALYSIS_RUNTIME_ONLY_CHECKS,
-  API_CALENDAR_DATE_CHECK,
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
   ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
@@ -76,8 +76,8 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
 
 const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
   [
+    ...API_DATE_RUNTIME_ONLY_CHECKS,
     ...ANALYSIS_RUNTIME_ONLY_CHECKS,
-    API_CALENDAR_DATE_CHECK,
     ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
     ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
   ].map(({ requirement }) => requirement),

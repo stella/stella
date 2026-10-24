@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { VAT_RATE_PRESET_COUNTRIES } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -29,4 +30,7 @@ export const updateVatRateBody = v.object({
   rateBps: v.optional(rateBps),
   validFrom: v.optional(date),
   validTo: v.optional(v.nullable(date)),
+});
+export const applyVatRatePresetBody = v.object({
+  country: v.picklist(VAT_RATE_PRESET_COUNTRIES),
 });

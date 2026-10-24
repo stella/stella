@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
@@ -36,6 +37,7 @@ const desktopRegistryMetadata = v.strictObject({
     v.pipe(
       v.string(),
       v.isoTimestamp(),
+      API_STORABLE_INSTANT_CHECK,
       v.check((value) => Result.try(() => Temporal.Instant.from(value)).isOk()),
     ),
     // verifyApiKey decodes metadata with better-auth's JSON reviver, which

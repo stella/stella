@@ -1,6 +1,7 @@
 import path from "node:path";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -250,7 +251,7 @@ export const envApiServerSchema = {
             v.regex(/^[A-Za-z0-9_-]+$/u),
           ),
           sha256: v.pipe(v.string(), v.regex(/^[a-fA-F0-9]{64}$/u)),
-          notAfter: v.pipe(v.string(), v.isoTimestamp()),
+          notAfter: apiDateTimeSchema,
         }),
       ),
       v.minLength(1),

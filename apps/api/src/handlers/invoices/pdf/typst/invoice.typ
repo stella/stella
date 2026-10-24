@@ -31,7 +31,7 @@
 )
 #set par(leading: 0.55em, spacing: 0.9em)
 
-#let label-text(body) = text(size: 7pt, weight: "semibold", fill: muted, tracking: 0.04em, upper(body))
+#let label-text(body) = text(size: 7pt, weight: "semibold", fill: muted, tracking: 0.04em, body)
 #let field-list(items) = for item in items [
   #item.label: #item.value \
 ]
@@ -53,7 +53,7 @@
     if data.isDraft {
       linebreak()
       box(fill: rgb("#fff4d6"), inset: (x: 6pt, y: 3pt), radius: 3pt,
-        text(size: 8pt, weight: "semibold", fill: rgb("#7a5600"), upper(data.draftLabel)))
+        text(size: 8pt, weight: "semibold", fill: rgb("#7a5600"), data.draftLabel))
     }
   },
 )
@@ -99,9 +99,10 @@
     ).map(h => text(size: 7pt, weight: "semibold", fill: muted, upper(h))),
   ),
   ..data.lines.map(line => (
-    line.description,
-    if line.quantity != none { line.quantity } else { [] },
-    if line.unitPrice != none { line.unitPrice } else { [] },
+    table.cell(colspan: 6, inset: (x: 5pt, top: 6pt, bottom: 2pt), text(size: 8pt, line.description)),
+    [],
+    if line.quantity != none { [#data.labels.quantity: #line.quantity] } else { [] },
+    if line.unitPrice != none { [#data.labels.unitPrice: #line.unitPrice] } else { [] },
     line.net,
     [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
     text(weight: "medium", line.total),
@@ -132,12 +133,18 @@
       text(fill: white, weight: "bold", size: 17pt, data.totals.gross),
     ))
 }))
+#if data.legalNotes.len() > 0 {
+  block(fill: tint, inset: 9pt, radius: 4pt, width: 100%,
+    data.legalNotes.map(note => [#note \ ]).join())
+  v(12pt)
+}
+
 #v(16pt)
 
 // Payment block with the payment QR code (SPAYD, PAY by square or ZBP).
 #if data.payment != none {
   block(breakable: false, grid(
-    columns: if data.payment.qrSvg != none { (1fr, 32mm) } else { (1fr,) },
+    columns: if data.payment.qrSvg != none { (1fr, data.payment.qrWidthMm * 1mm) } else { (1fr,) },
     gutter: 16pt,
     {
       label-text(data.labels.payment)
@@ -146,7 +153,7 @@
       if data.payment.accountNumber != none [#data.payment.accountNumber]
     },
     ..if data.payment.qrSvg != none {
-      (image(bytes(data.payment.qrSvg), format: "svg", width: 32mm),)
+      (image(bytes(data.payment.qrSvg), format: "svg", width: data.payment.qrWidthMm * 1mm),)
     } else { () },
   ))
 }

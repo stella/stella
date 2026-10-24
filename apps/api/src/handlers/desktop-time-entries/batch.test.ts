@@ -285,6 +285,30 @@ test("batch rejects unknown fields before authorization", async () => {
   }
 });
 
+test.each(["2026-02-30", "1900-02-29", "2026-04-31", "0000-01-01"])(
+  "batch rejects invalid calendar date %s before authorization",
+  async (dateWorked) => {
+    let authorizationCalls = 0;
+    const endpoint = createDesktopTimeEntryBatchEndpoint(async () => {
+      authorizationCalls += 1;
+      return panic("Invalid calendar date must not reach authorization");
+    });
+    await using server = serve({ "/batch": { PUT: endpoint } });
+    const response = await server.fetch(
+      new Request("http://localhost/batch", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...BODY,
+          entries: BODY.entries.map((entry) => ({ ...entry, dateWorked })),
+        }),
+      }),
+    );
+    expect(response.status).toBe(422);
+    expect(authorizationCalls).toBe(0);
+  },
+);
+
 test("uppercase matter identifiers converge with lowercase database identities and fingerprints", async () => {
   await using harness = createBatchHarness();
   const { send, writes } = harness;

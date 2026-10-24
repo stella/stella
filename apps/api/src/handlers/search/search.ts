@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { isEntityKind } from "@stll/api-contract";
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
@@ -25,7 +26,7 @@ import type {
   GlobalSearchHit,
 } from "@/api/lib/search/types";
 
-const isoDateTime = v.pipe(v.string(), v.isoTimestamp());
+const isoDateTime = apiDateTimeSchema;
 
 export const searchBodySchema = v.object({
   query: v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),

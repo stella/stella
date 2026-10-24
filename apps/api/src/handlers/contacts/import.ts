@@ -10,7 +10,10 @@ import {
   contacts,
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
-import { validateContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
+import {
+  importedTaxIdentifiers,
+  validateContactImportCandidate,
+} from "@/api/handlers/contacts/contact-import-file";
 import type {
   ContactImportCandidate,
   ContactImportIssue,
@@ -278,7 +281,7 @@ const importContacts = createSafeRootHandler(
                     addresses: contact.addresses,
                     tags: contact.tags,
                     registrationNumber: contact.registrationNumber,
-                    taxId: contact.taxId,
+                    ...importedTaxIdentifiers(contact.taxId, body.taxIdScheme),
                     ...(contact.dateOfBirth === undefined
                       ? {}
                       : dateOfBirthToColumns(contact.dateOfBirth)),

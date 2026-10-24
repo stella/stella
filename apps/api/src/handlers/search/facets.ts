@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
@@ -16,7 +18,7 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { searchGlobalFacet } from "@/api/lib/search/index-global";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
-const isoDateTime = v.pipe(v.string(), v.isoTimestamp());
+const isoDateTime = apiDateTimeSchema;
 
 const FACET_NAMES = ["editor", "workspace", "mimeType"] as const;
 

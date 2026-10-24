@@ -667,6 +667,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `vat-rates.archive` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates archive` |
 | `vat-rates.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates create` |
 | `vat-rates.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates list` |
+| `vat-rates.presets.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates presets-create` |
 | `vat-rates.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability vat-rates update` |
 
 ## view-templates
