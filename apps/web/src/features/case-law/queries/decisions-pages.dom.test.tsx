@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import {
+  DECISION_SEARCH_MATCHES,
   SEARCH_PAGE_END,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
@@ -78,6 +79,9 @@ const installSearch = () => {
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         pageReach: SEARCH_PAGE_REACH.REACHED,
         hits: ranks.map((rank) => ({
+          match: DECISION_SEARCH_MATCHES.at(
+            rank % DECISION_SEARCH_MATCHES.length,
+          ),
           decisionId: decisionIdAt(rank),
           caseNumber: caseNumberAt(rank),
           court: "Nejvyšší soud",
@@ -150,6 +154,20 @@ const firstRow = (view: ReturnType<typeof render>) =>
   view.getByTestId("rows").firstElementChild?.textContent;
 
 describe("a page of case-law results", () => {
+  test("search pages preserve every match classification for the result rows", async () => {
+    installSearch();
+    const page = await makeClient().query(
+      decisionsPageOptions({ filters: FILTERS, page: 1, pageSize: PAGE_SIZE }),
+    );
+    const matches = page.decisions.map((decision) => {
+      if (!("match" in decision)) {
+        throw new TypeError("Expected a search hit with match metadata");
+      }
+      return decision.match;
+    });
+    expect(new Set(matches)).toEqual(new Set(DECISION_SEARCH_MATCHES));
+  });
+
   test("a jump fetches that page directly, in one request", async () => {
     const requests = installSearch();
     const client = makeClient();

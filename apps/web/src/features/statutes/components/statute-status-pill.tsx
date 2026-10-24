@@ -13,6 +13,7 @@ const STATUS_CLASS = {
   draft: "bg-muted text-muted-foreground",
   historical: "bg-muted text-muted-foreground",
   repealed: "bg-destructive/12 text-destructive",
+  unknown: "bg-muted text-muted-foreground",
 } as const satisfies Record<StatuteStatus, string>;
 
 /**

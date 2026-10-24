@@ -8,6 +8,11 @@ import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
 import {
+  AI_ERROR_KINDS,
+  AI_FAILURE_CODES,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+} from "@stll/api-contract";
+import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
@@ -373,6 +378,33 @@ describe("chat thread messages", () => {
 
     expect(html).toContain(messages.chat.sendErrorStreamIncomplete);
     expect(html).toContain(messages.chat.resend);
+  });
+
+  test.each(AI_ERROR_KINDS.filter((kind) => kind !== "unknown"))(
+    "a failed chat turn says what the REST failure says for %s",
+    (kind) => {
+      const restMessage = toAPIError({
+        status: 502,
+        value: {
+          code: AI_FAILURE_CODES[kind],
+          message: "Private provider detail",
+        },
+      }).message;
+      const html = renderWithProviders(
+        <ChatErrorMessage error={new Error(kind)} isGenerating={false} />,
+      );
+
+      expect(renderedText(html)).toContain(restMessage);
+      expect(renderedText(html)).not.toContain(messages.chat.sendError);
+    },
+  );
+
+  test("an unknown AI failure keeps the chat's own copy", () => {
+    const html = renderWithProviders(
+      <ChatErrorMessage error={new Error("unknown")} isGenerating={false} />,
+    );
+
+    expect(renderedText(html)).toContain(messages.chat.sendError);
   });
 
   test("shows a copy action at the end of assistant responses", () => {
@@ -1178,6 +1210,45 @@ describe("chat thread messages", () => {
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
   });
 
+  test("does not render remote image attachment URLs", () => {
+    const remoteUrl = "https://untrusted.example/evidence.png";
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          {
+            type: "image",
+            source: {
+              type: "url",
+              value: remoteUrl,
+              mimeType: "image/png",
+            },
+            metadata: { filename: "evidence.png" },
+          },
+        ],
+        role: "user",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("evidence.png");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain(remoteUrl);
+  });
+
   test("shows retry only on the latest assistant response", () => {
     const chatMessages: ChatUIMessage[] = [
       {
@@ -1349,6 +1420,62 @@ describe("chat thread messages", () => {
       expect(html).not.toContain(messages.chat.sendError);
     },
   );
+
+  test("explains a permanent approval continuation rejection without offering resend", () => {
+    const refusal = toAPIError({
+      status: 400,
+      value: {
+        code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+        message: "Private continuation mismatch details",
+      },
+    });
+    const html = renderWithProviders(
+      <ChatErrorMessage
+        error={new Error("SDK transport wrapper", { cause: refusal })}
+        isGenerating={false}
+        onResend={() => {}}
+      />,
+    );
+    expect(html).toContain(messages.chat.sendErrorContinuationRejected);
+    expect(html).not.toContain("Resend");
+    expect(html).not.toContain("Private continuation mismatch details");
+  });
+
+  test("hides every retry action after a permanent approval continuation rejection", () => {
+    const refusal = toAPIError({
+      status: 400,
+      value: {
+        code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+        message: "Private continuation mismatch details",
+      },
+    });
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        error={new Error("SDK transport wrapper", { cause: refusal })}
+        messages={[
+          {
+            id: "answer-A",
+            role: "assistant",
+            parts: [{ type: "text", content: "Answer awaiting continuation" }],
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+    expect(html).toContain("Answer awaiting continuation");
+    expect(html).toContain(messages.chat.sendErrorContinuationRejected);
+    expect(html).not.toContain('aria-label="Retry"');
+    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toContain(">Resend</button>");
+  });
 
   test("maps model-unavailable stream errors to admin-facing copy", () => {
     const html = renderWithProviders(

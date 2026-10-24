@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { generateBunToolchain } from "./generate-bun-toolchain";
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 import {
   DELEGATED_CHECKS_ENV,
   delegatedGeneratorIds,
   runGeneratorChecks,
 } from "./generated-files-guard";
-import { evaluate, type Context } from "./github-expression";
+import { type Context, evaluate } from "./github-expression";
 import { workflowJobSteps } from "./workflow-steps";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -220,13 +220,26 @@ const contexts = (sources: readonly string[]): Context[] => {
     if (contextPath.startsWith("inputs.")) {
       return [false, true];
     }
+    // A needed job either succeeded or did not; every other result compares
+    // the same as a skip.
+    if (/^needs\.[\w-]+\.result$/u.test(contextPath)) {
+      return ["success", "skipped"];
+    }
     return ["true", "false", ""];
   };
-  let expanded: Context[] = [{ values: {} }];
+  // The run itself is live, so status checks such as `!cancelled()` resolve.
+  const status = {
+    always: true,
+    success: true,
+    failure: false,
+    cancelled: false,
+  };
+  let expanded: Context[] = [{ values: {}, status }];
   for (const contextPath of paths) {
     expanded = expanded.flatMap((context) =>
       domain(contextPath).map((value) => ({
         values: { ...context.values, [contextPath]: value },
+        status,
       })),
     );
   }

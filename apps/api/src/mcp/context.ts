@@ -54,10 +54,12 @@ import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveCredentialMemberAuthorization,
+} from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -77,14 +79,19 @@ import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-fil
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
-import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import {
+  type ReadOutcome,
+  readPresent,
+  readUnavailable,
+} from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
@@ -248,6 +255,8 @@ export type McpRequestContext = {
   accessibleWorkspaces: AccessibleWorkspace[];
   /** Resolved transport client IP used by shared gateway/REST abuse budgets. */
   clientIp?: string | null;
+  credentialType?: "oauth" | "api-key" | "anonymous";
+  clientId?: string | null;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -273,15 +282,18 @@ export type McpRequestContext = {
    * AND enabled for the org). The `lookup_business_registry` list projection narrows its
    * `registry` enum to these and drops the tool when empty, mirroring the
    * in-app chat tool so the MCP surface never advertises a registry the
-   * call cannot execute. Computed once from organization settings and registry
-   * credential availability.
+   * call cannot execute. Read from organization settings and registry
+   * credential availability on first use, at most once per request: only
+   * discovery narrows by it, so a `tools/call` never pays the settings read and
+   * credential decryption behind it.
    *
-   * `undefined` means "not resolved" (a synthetic/test context, or a settings
-   * read fault): the projection then leaves the full enum advertised and the
-   * call-time gate stays the backstop. It is NOT the same as an empty array,
-   * which means the org can reach no registry and the tool is dropped.
+   * Absent (a synthetic/test context) or an unavailable read leaves the full
+   * enum advertised, and the call-time gate stays the backstop. Neither is
+   * the same as a present empty list, which means the org can reach no
+   * registry and the tool is dropped.
    */
-  enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
+  loadEnabledRegistrySlugs?:
+    (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>) | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -296,8 +308,7 @@ export type McpRequestContext = {
   createOperationDatabaseScope?: (() => McpOperationDatabaseScope) | undefined;
   /** Pin one workspace only after an MCP access/status gate proves it. */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   /**
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
@@ -383,6 +394,62 @@ export const loadAccessibleMcpWorkspaces = async ({
     throw error;
   }
   return outcome.value.workspaces;
+};
+
+const resolveMcpWebHandoffIdentity = (session: McpSession) => {
+  const credential = session.credential;
+  if (credential?.type === "oauth_client") {
+    return { credentialType: "oauth", clientId: credential.clientId } as const;
+  }
+  const credentialType =
+    credential?.type === "machine_api_key" ||
+    credential?.type === "personal_api_key"
+      ? "api-key"
+      : "anonymous";
+  return { credentialType, clientId: null } as const;
+};
+
+const REGISTRY_NARROWING_SINK = failureSink({
+  event: "mcp.registry_narrowing.read_failed",
+  expected: [],
+});
+
+/**
+ * The registries one organization can reach, from its settings and its stored
+ * credentials, read in one scoped transaction.
+ */
+const readEnabledRegistrySlugs = async ({
+  organizationId,
+  safeDb,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}): Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> => {
+  const read = await safeDb(async (tx) => {
+    const settings = await tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+    });
+    const dispatch = await getOrganizationRegistryDispatch({
+      organizationId,
+      // Same transaction: the credential read joins the settings read.
+      scopedDb: async (run) => await run(tx),
+    });
+    return { dispatch, settings };
+  });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: REGISTRY_NARROWING_SINK });
+    return readUnavailable({ kind: "thrown", error: read.error });
+  }
+  const { dispatch, settings } = read.value;
+  return readPresent(
+    availableRegistryHandlersForOrg({
+      disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
+        settings ?? undefined,
+      ),
+      dispatch,
+    }).map((handler) => handler.slug),
+  );
 };
 
 export const resolveMcpSessionContext = async (
@@ -520,44 +587,30 @@ export const resolveMcpSessionContext = async (
     };
   };
   const requestDatabaseScope = createOperationDatabaseScope();
-  const featureAccessSnapshot =
-    Object.keys(FEATURE_REGISTRY).length === 0
-      ? createFeatureAccessSnapshot({
-          organizationId,
-          userId,
-          decisions: new Map(),
-        })
-      : await requestDatabaseScope.scopedDb(
-          async (tx) =>
-            await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
-        );
+  // The membership read above already carries every feature-access fact, so
+  // the snapshot is derived from it rather than read again.
+  const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
+    organizationId,
+    userId,
+    authorization,
+  });
 
-  // Resolve the org's reachable registries once, so the tools/list projection
-  // can narrow the `lookup_business_registry` enum synchronously. On a read
-  // fault, leave it unresolved (undefined) rather than dropping the tool.
-  const [settingsResult, registryDispatch] = await Promise.all([
-    requestDatabaseScope.safeDb((tx) =>
-      tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: { practiceJurisdictions: true, nativeToolOverrides: true },
-      }),
-    ),
-    getOrganizationRegistryDispatch({
+  // Read once, on first use within this request: settings and decrypted
+  // registry credentials in one scoped transaction.
+  let enabledRegistrySlugs:
+    Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> | undefined;
+  const loadEnabledRegistrySlugs = async () => {
+    enabledRegistrySlugs ??= readEnabledRegistrySlugs({
       organizationId,
-      scopedDb: requestDatabaseScope.scopedDb,
-    }),
-  ]);
-  const enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined =
-    Result.isError(settingsResult)
-      ? undefined
-      : availableRegistryHandlersForOrg({
-          disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
-            settingsResult.value ?? undefined,
-          ),
-          dispatch: registryDispatch,
-        }).map((handler) => handler.slug);
+      safeDb: requestDatabaseScope.safeDb,
+    });
+    return await enabledRegistrySlugs;
+  };
+
+  const webHandoffIdentity = resolveMcpWebHandoffIdentity(session);
 
   return {
+    ...webHandoffIdentity,
     ...(auditExecution ? { auditExecution } : {}),
     ...(session.credential === undefined
       ? {}
@@ -579,7 +632,7 @@ export const resolveMcpSessionContext = async (
     ...(session.credential?.type === "agent_run"
       ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
-    enabledRegistrySlugs,
+    loadEnabledRegistrySlugs,
     grantedScopes: session.scopes,
     memberRole,
     organizationId,

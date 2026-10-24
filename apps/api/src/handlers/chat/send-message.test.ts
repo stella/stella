@@ -14,6 +14,7 @@ import {
   chatRunLogs,
   chatThreadNames,
   chatThreads,
+  chatToolGrants,
   chatTurns,
 } from "@/api/db/schema";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
@@ -33,11 +34,11 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
-import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
-  actionAdmissionRefusal,
   type ActionAdmissionError,
+  actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
@@ -178,6 +179,10 @@ const fromSharedReads = (table: unknown, otherwise: () => unknown) => {
   }
   if (table === chatThreadNames) {
     return { where: async () => startedThreadNames };
+  }
+  // The turn loads the user's stored approval grants; these users have none.
+  if (table === chatToolGrants) {
+    return { leftJoin: () => ({ where: () => ({ limit: async () => [] }) }) };
   }
   return otherwise();
 };
@@ -1274,6 +1279,7 @@ describe("send message disconnect handling", () => {
     not_enabled: "not_enabled",
     not_on_plan: "not_on_plan",
     unavailable: "unavailable",
+    feature_disabled: "feature_disabled",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {
     for (const phase of ["period", "context", "dispatch"] as const) {

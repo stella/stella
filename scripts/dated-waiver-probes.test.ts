@@ -2,24 +2,24 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import {
-  removeWaiver,
-  runWaiverProbe,
-  probeDocUrl,
   createProbeBudget,
   PROBE_PHASE_BUDGET_MS,
   PROBE_TIMEOUT_MS,
+  probeDocUrl,
+  removeWaiver,
+  runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
+  type DatedWaiver,
   readTestQuarantines,
   ZERO_AGE_OVERRIDE,
-  type DatedWaiver,
 } from "./dated-waivers";
 import {
-  serializeRegistry,
   type QuarantineEntry,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const waiver = (

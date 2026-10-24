@@ -10,6 +10,7 @@ import {
 import {
   CASE_LAW_SEARCH_REFINE_SYSTEM,
   caseLawRefineOutputSchema,
+  isIncompleteCaseLawRefineGeneration,
   normalizeCaseLawRefinedQuery,
 } from "@/api/handlers/case-law/decisions/search-refine-query";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -146,6 +147,7 @@ const refineCaseLawSearch = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             task: "search-expand",
@@ -173,6 +175,12 @@ const refineCaseLawSearch = createSafeRootHandler(
         },
       });
       if (generated.isErr()) {
+        if (
+          attempt < CASE_LAW_REFINE_MAX_ATTEMPTS &&
+          isIncompleteCaseLawRefineGeneration(generated.error)
+        ) {
+          continue;
+        }
         return Result.err(
           aiHandlerError(generated.error, {
             status: 502,

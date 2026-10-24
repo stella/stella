@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   rebaseSkillMetadataDraft,
-  skillMetadataDraft,
   type SkillMetadataDraft,
+  skillMetadataDraft,
 } from "@/routes/knowledge/-components/skill-metadata-draft.logic";
 
 const SKILL_ID = "0199a1b2-0000-7000-8000-000000000001";

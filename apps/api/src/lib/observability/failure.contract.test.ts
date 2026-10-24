@@ -67,8 +67,8 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
-  initRequestContext,
   getRequestFailure,
+  initRequestContext,
 } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -364,7 +364,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
   {
     name: "this service's own TimeoutError",
     error: () =>
-      new TimeoutError({ message: SENTINEL, label: "probe", timeoutMs: 5 }),
+      new TimeoutError({ message: SENTINEL, label: "probe", timeoutMs: 5 }), // timeout under test
     reason: "timeout_unbounded",
     grade: "defect",
   },

@@ -10,6 +10,7 @@ import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
+import { declaresOnlineBuild } from "./online-ddl";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
@@ -23,8 +24,8 @@ import {
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
-  runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
+  runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
@@ -73,8 +74,14 @@ const runOnlineMigrations = async (
     reserveObserver: async () => ({
       execute: async () => undefined,
       query: async (query) => {
+        if (query.includes("pg_blocking_pids")) {
+          return [];
+        }
         if (query.includes("pg_backend_pid() AS pid")) {
           return [{ pid: 2, database: "test" }];
+        }
+        if (query.includes('"stateAgeMs"')) {
+          return [];
         }
         if (query.includes("ageMs")) {
           return [
@@ -114,6 +121,9 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+/** A pooled session's own timeout, not the role default. */
+const SESSION_STATEMENT_TIMEOUT = "30s";
+const RESTORED_SESSION_TIMEOUT = `SELECT set_config('statement_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_STATEMENT_TIMEOUT])}`;
 const CLEANUP_STALL_CONSTRAINTS = [
   "corpus_index_projection_intents_status_values",
   "corpus_index_projection_intents_status_shape",
@@ -139,6 +149,40 @@ describe("online migrations", () => {
     expect(
       [...repairNames].filter((name) => name.includes("provision")),
     ).toEqual([]);
+  });
+
+  test("startup validation never waits on the online lock and bounds its own statements", async () => {
+    const harness = createHarness();
+    expect(await assertOnlineMigrationsApplied(harness.pool)).toEqual({
+      type: "validated",
+    });
+    expect(harness.statements.at(1)).toBe("SET statement_timeout = '5s'");
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
+    expect(
+      harness.statements.filter((statement) =>
+        statement.includes("SELECT pg_advisory_lock("),
+      ),
+    ).toEqual([]);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup leaves the online phase to a migrate run that holds the lock", async () => {
+    const harness = createHarness({
+      missingIndexes: ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+      onlineLockHeld: true,
+    });
+    expect(await assertOnlineMigrationsApplied(harness.pool)).toEqual({
+      type: "migrator_active",
+    });
+    expect(
+      harness.statements.filter(
+        (statement) =>
+          statement.includes("pg_catalog") ||
+          statement.includes("pg_advisory_unlock"),
+      ),
+    ).toEqual([]);
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
+    expect(harness.released()).toBe(true);
   });
 
   test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
@@ -238,6 +282,7 @@ describe("online migrations", () => {
     );
     for (const step of steps) {
       expect(step.durationMs, step.name).toBe(5);
+      expect(step.retriesSpent, step.name).toBe(0);
       expect(step.outcome, step.name).toBe("complete");
     }
   });
@@ -277,21 +322,25 @@ describe("online migrations", () => {
       kind: "index",
       name: REPORT_EXPORT_INDEX,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
   });
 
   test("creates a missing index online and verifies completion", async () => {
-    const harness = createHarness({
-      missingIndexes: [REPORT_EXPORT_INDEX],
-    });
+    for (const { name } of ONLINE_MIGRATION_INDEXES.filter(
+      declaresOnlineBuild,
+    )) {
+      const harness = createHarness({ missingIndexes: [name] });
 
-    await runOnlineMigrations(harness.pool);
+      await runOnlineMigrations(harness.pool);
 
-    expect(
-      indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT),
-    ).toBeGreaterThan(-1);
-    expect(harness.released()).toBe(true);
+      expect(
+        indexOfStatement(harness.statements, `INDEX CONCURRENTLY "${name}"`),
+        name,
+      ).toBeGreaterThan(-1);
+      expect(harness.released()).toBe(true);
+    }
   });
 
   /**
@@ -758,6 +807,7 @@ describe("online migrations", () => {
       kind: "replacement_drop",
       name: firstLegacy,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
     expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
@@ -811,6 +861,7 @@ describe("online migrations", () => {
         kind: "repair",
         name,
         durationMs: 0,
+        retriesSpent: 0,
         outcome: "deferred",
       });
       expect(
@@ -1139,6 +1190,7 @@ describe("online migrations", () => {
       kind: "repair",
       name: "probe-repair",
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "failed",
     });
   });
@@ -1366,6 +1418,8 @@ type HarnessOptions = {
   missingIndexes?: readonly string[];
   /** Replaced indexes already gone; the rest are present until dropped. */
   retiredIndexes?: readonly string[];
+  /** Another session (a migrate run) holds the online lock. */
+  onlineLockHeld?: boolean;
 };
 
 const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
@@ -1381,6 +1435,7 @@ const createHarness = ({
   emptyRepairTables = false,
   timeoutRepairBatch = false,
   retiredIndexes = [],
+  onlineLockHeld = false,
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
   const legacyIndexes = new Set(
@@ -1448,6 +1503,12 @@ const createHarness = ({
           if (query.includes("pg_advisory_xact_lock")) {
             return [];
           }
+          if (query.includes("pg_try_advisory_lock(hashtext('stella-online")) {
+            return [{ acquired: !onlineLockHeld }];
+          }
+          if (query.includes("current_setting('statement_timeout')")) {
+            return [{ timeout: SESSION_STATEMENT_TIMEOUT }];
+          }
           if (
             query.includes(" AS acquired") ||
             query.includes("pg_try_advisory_lock") ||
@@ -1469,7 +1530,7 @@ const createHarness = ({
           }
           if (
             query.trim() ===
-            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+            "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
           }

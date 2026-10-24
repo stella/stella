@@ -3,26 +3,26 @@ import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 import * as v from "valibot";
 
-import type { ChatCorpusScope } from "@stll/api-contract";
+import type { ChatSourceScope } from "@stll/api-contract";
 
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import {
-  corpusScopeDroppedTools,
   type CorpusResourceCountryResolver,
+  corpusScopeDroppedTools,
   PUBLIC_SOURCE_JURISDICTIONS,
-  restrictChatToolsToCorpusScope,
   scopeCorpusRead,
 } from "@/api/handlers/chat/tools/corpus-scope";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import { restrictChatToolsToSourceScope } from "@/api/handlers/chat/tools/source-scope";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
-const CZECH_CASE_LAW: ChatCorpusScope[] = [
-  { corpus: "case_law", country: "CZE" },
+const CZECH_CASE_LAW: ChatSourceScope[] = [
+  { kind: "corpus", corpus: "case_law", country: "CZE" },
 ];
-const CZECH_LEGISLATION: ChatCorpusScope[] = [
-  { corpus: "legislation", country: "CZE" },
+const CZECH_LEGISLATION: ChatSourceScope[] = [
+  { kind: "corpus", corpus: "legislation", country: "CZE" },
 ];
 
 const CZECH_DECISION = "0f6c2a1e-5b7d-4c1e-9a7b-1d2e3f4a5b6c";
@@ -51,7 +51,7 @@ const RESOLVER: CorpusResourceCountryResolver = {
 };
 
 const scope = async (props: {
-  scopes: readonly ChatCorpusScope[];
+  scopes: readonly ChatSourceScope[];
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
 }) => await scopeCorpusRead({ ...props, resolveCountries: RESOLVER });
@@ -126,7 +126,10 @@ describe("scopeCorpusRead", () => {
 
   it("refuses an omitted optional country when several are scoped", async () => {
     const read = await scope({
-      scopes: [...CZECH_CASE_LAW, { corpus: "case_law", country: "SVK" }],
+      scopes: [
+        ...CZECH_CASE_LAW,
+        { kind: "corpus", corpus: "case_law", country: "SVK" },
+      ],
       toolName: "case_law_coverage",
       args: {},
     });
@@ -263,9 +266,9 @@ describe("scopeCorpusRead", () => {
   });
 
   it("holds each corpus to its own countries when both are scoped", async () => {
-    const scopes: ChatCorpusScope[] = [
+    const scopes: ChatSourceScope[] = [
       ...CZECH_CASE_LAW,
-      { corpus: "legislation", country: "SVK" },
+      { kind: "corpus", corpus: "legislation", country: "SVK" },
     ];
 
     expect(
@@ -286,6 +289,22 @@ describe("scopeCorpusRead", () => {
         }),
       ),
     ).toBe(true);
+  });
+
+  it("refuses every corpus read on a turn whose chips name only a registry", async () => {
+    for (const toolName of [
+      "search_case_law",
+      "search_legislation",
+      "search_boe_legislation",
+    ] as const) {
+      const read = await scope({
+        scopes: [{ kind: "registry", registry: "ares" }],
+        toolName,
+        args: { query: "q", country: "CZE" },
+      });
+
+      expect(Result.isError(read) && read.error.kind).toBe("unavailable");
+    }
   });
 
   it("leaves tenant reads alone", async () => {
@@ -315,7 +334,19 @@ describe("scopeCorpusRead", () => {
   });
 });
 
-describe("restrictChatToolsToCorpusScope", () => {
+/** The public-source drops alone: no registries, no connectors loaded. */
+const restrictChatToolsToCorpusScope = (
+  tools: ChatToolMap,
+  scopes: readonly ChatSourceScope[],
+): ChatToolMap =>
+  restrictChatToolsToSourceScope(tools, {
+    scopes,
+    externalToolNames: [],
+    connectors: [],
+    registries: null,
+  });
+
+describe("public sources under corpus chips", () => {
   const tools = toolMap([
     "execute_typescript",
     "list_matters_direct",
@@ -336,8 +367,8 @@ describe("restrictChatToolsToCorpusScope", () => {
   it("drops InfoSoud when no chip names Czech case law", () => {
     for (const scopes of [
       CZECH_LEGISLATION,
-      [{ corpus: "case_law", country: "SVK" }],
-    ] satisfies ChatCorpusScope[][]) {
+      [{ kind: "corpus", corpus: "case_law", country: "SVK" }],
+    ] satisfies ChatSourceScope[][]) {
       expect(
         Object.keys(restrictChatToolsToCorpusScope(tools, scopes)),
       ).toEqual(["execute_typescript", "list_matters_direct"]);

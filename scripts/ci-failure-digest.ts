@@ -74,6 +74,27 @@ export type FailureRecord = {
   readonly tests: readonly FailedTest[];
 };
 
+export const DIGEST_VERSION = 1;
+
+// The `ci-failures.json` artifact. The flaky-test history reads it back, so
+// both sides go through this envelope.
+export type DigestFile = {
+  readonly version: typeof DIGEST_VERSION;
+  readonly run_id: string | null;
+  readonly run_attempt: string | null;
+  readonly failures: readonly FailureRecord[];
+};
+
+export const digestFile = (
+  failures: readonly FailureRecord[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): DigestFile => ({
+  version: DIGEST_VERSION,
+  run_id: env["GITHUB_RUN_ID"] ?? null,
+  run_attempt: env["GITHUB_RUN_ATTEMPT"] ?? null,
+  failures,
+});
+
 // ---------------------------------------------------------------------------
 // Line normalization
 
@@ -187,6 +208,11 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
 // are records.
 export const POOLED_FAILURE_PREFIX = "FAILED check: ";
 const POOLED_FAILURE_SEPARATOR = " -- ";
+
+// The pool's cause for a check that printed no failed test or error line
+// (exitCodeDetail in ci-check-pool.ts; a test binds the two). It says nothing
+// about why, so the check's own log group supplies the lines.
+export const BARE_EXIT_CAUSE = /^exit code -?\d+$/u;
 
 // The pool opens each check's log group with `<name>: <outcome> in <n> s`.
 const POOLED_GROUP_HEADER =
@@ -913,7 +939,7 @@ export const classify = (
     return "test";
   }
   if (
-    /lint|format|oxlint|oxfmt|biome|prettier|stylelint/u.test(name) ||
+    /lint|format|fmt|oxlint|biome|prettier|stylelint/u.test(name) ||
     LINT_RULE.test(text)
   ) {
     return "lint";
@@ -1124,13 +1150,15 @@ type DigestOptions = {
 };
 
 /**
- * Jobs the result gate fails on: failed or timed-out jobs, and cancelled
- * jobs that contain a failed step (a cancellation can mask a failure).
+ * Jobs the result gate fails on: failed or timed-out jobs, cancelled jobs
+ * that contain a failed step (a cancellation can mask a failure), and the
+ * still-running job with a failed step: the gate running this digest, so a
+ * gate that fails before it evaluates any job still names its own step.
  */
 export const isFailedJob = (job: ApiJob): boolean =>
   job.conclusion === "failure" ||
   job.conclusion === "timed_out" ||
-  (job.conclusion === "cancelled" &&
+  ((job.conclusion === "cancelled" || job.conclusion === null) &&
     (job.steps ?? []).some(({ conclusion }) => conclusion === "failure"));
 
 export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
@@ -1158,7 +1186,10 @@ export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
         segment === undefined ? [] : pooledFailureRecords(segment.lines);
       if (pooled.length > 0) {
         return pooled.map(({ name, cause, groupLines }) => {
-          const lines = [{ message: cause }];
+          const own = BARE_EXIT_CAUSE.test(cause)
+            ? failureLines(groupLines)
+            : [];
+          const lines = own.length > 0 ? own : [{ message: cause }];
           return {
             job: job.name,
             step: name,
@@ -1340,19 +1371,7 @@ const main = (args: readonly string[]): number => {
       return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
     },
   });
-  writeFileSync(
-    jsonFile,
-    `${JSON.stringify(
-      {
-        version: 1,
-        run_id: process.env["GITHUB_RUN_ID"] ?? null,
-        run_attempt: process.env["GITHUB_RUN_ATTEMPT"] ?? null,
-        failures: records,
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  writeFileSync(jsonFile, `${JSON.stringify(digestFile(records), null, 2)}\n`);
   const summary = flagValue(rest, "--summary");
   if (summary !== undefined) {
     appendFileSync(summary, summaryMarkdown(records));

@@ -35,13 +35,14 @@ import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
-  DecisionChatThreadKey,
   ChatThreadOptionsInput,
   ChatThreadTitleKey,
+  DecisionChatThreadKey,
   FileChatThreadKey,
   GroupedChatThreadsKey,
   TemplateChatThreadKey,
 } from "./chat-query-contract";
+import { chatToolGrantsOptions } from "./chat-tool-grants";
 
 const CHAT_THREADS_PAGE_SIZE = 50;
 
@@ -668,6 +669,23 @@ export const fileChatThreadOptions = ({
         threadId,
         workspaceId: key.workspaceId,
       });
+
+      // The tool grants of this thread load with the binding, not after the
+      // overlay mounts: a draft thread has none, and a persisted one starts
+      // its read as soon as its id is known.
+      const grantsOptions = chatToolGrantsOptions({
+        activeOrganizationId,
+        threadId,
+        userId: key.userId,
+      });
+      if (fetched.threadId === null) {
+        client.setQueryData(grantsOptions.queryKey, { grants: [] });
+      } else {
+        detached(
+          client.query(grantsOptions),
+          "chat-queries.prefetch-file-thread-tool-grants",
+        );
+      }
 
       return { threadId, threadExists: fetched.threadId !== null };
     },

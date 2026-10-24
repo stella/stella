@@ -11,10 +11,10 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  publishedCaseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -29,8 +29,8 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
-  ResearchAnswerClaim,
   ResearchAnswerCell,
+  ResearchAnswerClaim,
 } from "@/api/lib/case-law/research-answer-queue";
 import {
   buildAnswerJustification,
@@ -406,6 +406,7 @@ const answerDecision = async (
 
   const tier = await answerWithSystemOne({
     generation: (prompt, questionCount) => ({
+      userId: input.admission.userId,
       dataClass: "customer",
       task: "short-text",
       serviceTier: "standard",
@@ -472,6 +473,7 @@ const answerDecision = async (
         },
       );
       const output = await generateTanStackObjectForTask({
+        userId: input.admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",

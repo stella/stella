@@ -5,8 +5,8 @@ import type { Static } from "elysia";
 import * as v from "valibot";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
 
@@ -36,7 +36,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -246,6 +248,7 @@ const citableSummaryTypes = (
 };
 
 type SearchSummaryChatContext = {
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
@@ -338,6 +341,7 @@ const generateRefinedSearchQuery = async ({
   await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",
@@ -537,6 +541,7 @@ export const summarizeSearchResults = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",
@@ -641,6 +646,7 @@ const resolveSummaryCitations = ({
 };
 
 export const createSearchSummaryChatThread = async ({
+  featureAccessSnapshot,
   accessibleWorkspaceIds,
   body,
   organizationId,
@@ -733,6 +739,12 @@ export const createSearchSummaryChatThread = async ({
       createdAt: now,
       updatedAt: now,
     });
+    const memoryEnabled =
+      featureAccessSnapshot !== undefined &&
+      isFeatureEnabled(featureAccessSnapshot, AI_MEMORY_FEATURE_ID, {
+        organizationId,
+        userId,
+      });
     await tx.insert(chatMessages).values([
       {
         id: userMessageId,
@@ -744,8 +756,7 @@ export const createSearchSummaryChatThread = async ({
           version: 3,
           data: [{ type: "text", content: userText }],
         }),
-        memoryExtractionEligible:
-          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+        memoryExtractionEligible: memoryEnabled,
         createdAt: now,
       },
       {
@@ -762,8 +773,7 @@ export const createSearchSummaryChatThread = async ({
             sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
           },
         }),
-        memoryExtractionEligible:
-          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+        memoryExtractionEligible: memoryEnabled,
         createdAt: new Date(now.getTime() + 1),
       },
     ]);

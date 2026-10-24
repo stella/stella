@@ -64,6 +64,10 @@ export const aggregateFences = () => {
       id: { id: definitionId, organizationId },
       mode: "update",
     },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
     legislationAmendmentWork: {
       aggregate: "legislationAmendmentWork",
       id: {
@@ -176,6 +180,10 @@ export const aggregateFences = () => {
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
     sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
+    chatToolGrants: {
+      aggregate: "chatToolGrants",
+      id: { organizationId, userId },
+    },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

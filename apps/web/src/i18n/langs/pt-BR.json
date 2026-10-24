@@ -9,13 +9,12 @@
       "noOtherSessions": "Nenhuma outra sessão ativa",
       "revokeOtherSessions": "Desconectar outros dispositivos",
       "revokeOtherSessionsConfirm": "Isso encerrará todas as sessões, exceto a atual.",
+      "signedInFrom": "Sessão iniciada por {clientName}",
       "unknownDevice": "Dispositivo desconhecido"
     }
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Voltar ao aplicativo",
-    "billingAndUsage": "Faturamento e uso",
     "billingProfiles": "Perfis de faturamento",
     "deleteDescription": "Exclua permanentemente esta organização e seus dados. Esta ação não pode ser desfeita.",
     "deleteOrganization": "Excluir organização",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Sair da organização",
     "leaveRefusedOnlyOwner": "Você é o único proprietário. Torne outro membro proprietário antes de sair.",
     "modelsAndProviders": "Modelos e provedores",
-    "noPlan": "Nenhum plano ativo",
     "organizationDeleted": "A organização foi excluída.",
     "organizationId": "ID da organização",
     "organizationLeft": "Você saiu da organização.",
-    "overviewDescription": "Gerencie sua organização, as pessoas e as ferramentas.",
-    "people": "Pessoas",
     "planAndUsage": "Plano e uso",
     "title": "Administração da organização",
     "toolsDescription": "Ative ou desative as ferramentas integradas para todas as pessoas desta organização."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Seu assistente vai pedir este endereço",
-    "copiedToast": "Instruções copiadas. Cole-as em uma conversa com seu assistente.",
     "copy": "Copie as instruções para ele",
     "description": "Pergunte ao Claude ou ao ChatGPT sobre seus casos e documentos. Escolha seu assistente para ver um guia curto; leva cerca de um minuto.",
     "instructions": "Conecte-me ao stella, meu espaço de trabalho jurídico. Siga as instruções para agentes de IA em {guideUrl} e use este endereço de servidor: {mcpUrl}",
     "openGuide": "Abrir o guia do {assistant}",
+    "pasteHint": "Cole-as em uma conversa com seu assistente.",
     "selfSetupHint": "Usa o Claude Code ou o Codex?",
     "title": "Use o stella no seu assistente de IA"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
     "keyRequired": {
+      "accountRestricted": "As configurações do provedor de IA não estão disponíveis para esta conta.",
+      "configUnreadable": "Não foi possível ler a configuração do provedor de IA. Peça a um administrador da organização para reconectá-lo.",
       "cta": "Abrir configurações de IA",
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
+      "permissionRequired": "Somente um administrador da organização pode conectar um provedor de IA.",
+      "seatRequired": "Peça a um administrador da organização para atribuir uma vaga a você.",
       "title": "Conectar provedor de IA"
     },
     "refinePlaceholder": "Como a IA deve ajustar a redação?",
@@ -142,6 +142,8 @@
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
       "title": "Não foi possível fazer seu login"
     },
+    "handoffAccount": "Continuar como <account>{email}</account> em <organization>{organizationName}</organization>?",
+    "handoffTitle": "Continuar para a stella",
     "headline": "Clareza para cada caso.",
     "invitation": {
       "declined": "Convite recusado",
@@ -157,11 +159,11 @@
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
     "professionalUse": {
-      "description": "Sua conta foi criada sem que esta declaração fosse exibida para você. Aceite-a para continuar.",
       "title": "Confirme o uso profissional"
     },
     "professionalUseStatement": "Ao criar uma conta, você confirma que usa o stella para fins profissionais e reconhece que o stella é uma ferramenta para profissionais do direito e não substitui a assessoria jurídica.",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
+    "reauthenticationRequired": "Entre novamente para continuar com esta ação.",
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
     "signIn": "Faça login",
@@ -380,6 +382,12 @@
       "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
+      "documentView": {
+        "label": "Visualização do documento",
+        "original": "Original",
+        "reading": "Modo de leitura"
+      },
+      "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
@@ -849,7 +857,6 @@
         "unavailable": "A análise por IA não está disponível para esta decisão."
       },
       "generate": "Gerar ementas com IA",
-      "holdingAnchor": "Ir para o parágrafo",
       "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
       "topics": "Temas",
       "treatment": "Tratamento posterior"
@@ -926,13 +933,10 @@
     },
     "coverage": {
       "completeness": "Completude",
-      "countedOn": "Contado em {date}",
       "courtsHeading": "Por tribunal",
       "courtsUnavailable": "A distribuição por tribunal está indisponível no momento.",
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
-      "exceedsReportedTotal": "Contém mais do que o último total informado pelo órgão em {date}",
-      "gapStatusUnknown": "Situação das lacunas desconhecida",
       "generatedAt": "Números de {date}",
       "globeLabel": "Países cuja jurisprudência o corpus contém, em um globo",
       "healthCurrent": "Atualizado",
@@ -953,7 +957,8 @@
       "searchable": "Pesquisáveis",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
-      "unavailable": "Os dados de cobertura estão indisponíveis no momento."
+      "unavailable": "Os dados de cobertura estão indisponíveis no momento.",
+      "unreadListingPeriods": "Períodos da listagem não lidos"
     },
     "decisionNotFound": "Decisão não encontrada",
     "decisionTypes": {
@@ -1009,6 +1014,9 @@
       "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
     },
     "newestDecisions": "Decisões mais recentes",
+    "noResults": {
+      "hint": "Tente outras palavras, melhore a consulta com IA ou faça a pergunta no chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -1082,6 +1090,10 @@
         "short": "Curto"
       }
     },
+    "rewritten": {
+      "line": "Nenhuma correspondência exata para <bdi>{original}</bdi>; mostrando resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Pesquisar minhas palavras originais"
+    },
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
@@ -1098,6 +1110,8 @@
         "hint": "Remova ou amplie um filtro e pesquise novamente.",
         "message": "Nada corresponde aos filtros aplicados."
       },
+      "partialMatch": "Correspondência parcial",
+      "partialMatches": "Correspondências parciais para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Pesquisar todas as palavras"
     },
@@ -1135,6 +1149,7 @@
       "judges": "Juízes",
       "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
+      "paragraphReference": "Parágrafo {number}",
       "popularName": "Nome popular",
       "portraitCredit": "Fonte dos retratos: {source}",
       "provisionMentions": "{count, number}×",
@@ -1381,6 +1396,7 @@
     "credentialSendDescription": "Envie somente se quiser compartilhar este valor na conversa.",
     "credentialSendTitle": "Esta mensagem pode conter uma credencial",
     "deleteThread": "Excluir conversa",
+    "diagramUnavailable": "Não foi possível exibir este diagrama. O código-fonte está abaixo.",
     "editMode": {
       "autoDirect": "Automático · reescrever",
       "autoDirectDescription": "As edições da IA são aplicadas imediatamente, reescrevendo o documento diretamente (sem controle de alterações).",
@@ -1580,6 +1596,7 @@
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorConnectionFailed": "A conexão com o chat falhou. Verifique sua conexão e tente novamente.",
+    "sendErrorContinuationRejected": "Não foi possível continuar o chat. Envie uma nova mensagem para começar de novo.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
     "sendErrorModelUnavailable": "O modelo de IA configurado não está mais disponível. Peça ao administrador do espaço de trabalho para atualizar o modelo nas configurações da organização.",
@@ -1601,6 +1618,9 @@
         "private": "Suas habilidades de IA",
         "team": "Habilidades de IA da equipe"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Também consultadas ({count, number})"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
@@ -2265,6 +2285,7 @@
     "scopeKnowledgeWrite": "Criar, editar e excluir suas cláusulas e executar playbooks",
     "scopeLawRead": "Ler legislação pública e jurisprudência",
     "scopeMattersWrite": "Criar e editar seus casos e tarefas",
+    "scopeMemoryWrite": "Criar e atualizar as memórias do assistente",
     "scopeOfflineAccess": "Manter você conectado sem exigir aprovação repetida",
     "scopeOnboarding": "Configure as jurisdições de atuação da sua organização",
     "scopeProfile": "Acesse as informações do seu perfil",
@@ -2292,6 +2313,7 @@
     "summaryLineRead": "<group>Ler:</group> {items}",
     "summaryLineUse": "<group>Usar:</group> {items}",
     "summaryMattersWrite": "casos e tarefas",
+    "summaryMemoryWrite": "memórias do assistente",
     "summaryProfile": "perfil",
     "summaryRead": "documentos, casos e contatos",
     "summaryReadAnonymized": "documentos e casos anonimizados",
@@ -2657,6 +2679,7 @@
       "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
       "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
       "contact": "Entre em contato",
+      "featureDisabled": "Este recurso está temporariamente desativado.",
       "notEnabled": "Esta ação não está habilitada para sua organização.",
       "periodExhausted": "Esta ação está pausada para sua organização."
     },
@@ -2692,6 +2715,7 @@
       "aiConfigModelInvalid": "A configuração do modelo de IA é inválida. Verifique os modelos selecionados.",
       "aiConfigProviderInvalid": "A configuração do provedor de IA é inválida. Verifique as configurações do provedor.",
       "aiConfigProviderValidationFailed": "O provedor de IA rejeitou a configuração. Verifique a chave de API e o modelo.",
+      "aiDeadlineExceeded": "A IA não respondeu a tempo. Tente novamente em instantes.",
       "aiOutputInvalid": "A resposta da IA tinha um formato inesperado. Tente novamente.",
       "aiOutputModerated": "O provedor de IA moderou a resposta. Reformule a solicitação ou escolha outro modelo.",
       "aiProviderTaskUnsupported": "O provedor de IA configurado não consegue realizar esta tarefa. Escolha um provedor que consiga.",
@@ -3511,6 +3535,12 @@
       "unsupportedVisualContent": "Este arquivo contém imagens ou gráficos vetoriais que não podem ser verificados quanto a texto sensível. A exportação não está disponível.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
+      "unsupportedEncoding": "Este documento usa a codificação {encoding}, que não é compatível, portanto não pode ser convertido.",
+      "unsupportedField": "Este documento contém um campo {fieldType} que não pode ser convertido.",
+      "unsupportedReference": "Este documento faz referência a um recurso externo em {element} {attribute}, portanto não pode ser convertido."
+    },
     "external": {
       "confirmDescription": "Você está prestes a acessar um site externo.",
       "confirmTitle": "Abrir link externo?",
@@ -4181,7 +4211,9 @@
     "prompt": "O que você procura?",
     "recent": "Recentes",
     "recentCasesFilter": "Decisões",
+    "recentLoadFailed": "Não foi possível carregar a atividade recente.",
     "recentSearchFilter": "Pesquisas",
+    "recentUpdateFailed": "Não foi possível atualizar a atividade recente.",
     "recentlyInForce": "Em vigor recentemente",
     "searchLabel": "Pesquisar na base jurídica",
     "searchPlaceholder": "Número do processo, número da norma, ECLI ou palavras-chave",
@@ -4208,6 +4240,22 @@
       "guestStorageUnavailable": "Não foi possível salvar destaques e notas nesta aba.",
       "highlight": "Destacar",
       "highlightedPassage": "Passagem destacada",
+      "history": {
+        "colorRestored": "Cor restaurada",
+        "commentRemoved": "Comentário removido",
+        "commentRestored": "Comentário restaurado",
+        "highlightRemoved": "Destaque removido",
+        "highlightRestored": "Destaque restaurado",
+        "markChanged": "Este destaque ou comentário foi alterado em outro lugar e, por isso, foi mantido como está.",
+        "markGone": "Este destaque ou comentário não existe mais.",
+        "nothingToRedo": "Nada para refazer",
+        "nothingToUndo": "Nada para desfazer",
+        "redoShortcut": "Refazer alteração de destaque ou comentário",
+        "styleRestored": "Estilo restaurado",
+        "textRestored": "Texto do comentário restaurado",
+        "undoShortcut": "Desfazer alteração de destaque ou comentário",
+        "visibilityRestored": "Compartilhamento restaurado"
+      },
       "removeHighlight": "Remover destaque",
       "sharedBadge": "Compartilhado",
       "styleHighlight": "Destaque",
@@ -4242,6 +4290,10 @@
     "archivedEmpty": "Nenhuma memória arquivada.",
     "archivedToast": "Memória arquivada",
     "createdToast": "Salvo na memória",
+    "deleteConfirmation": "Digite {confirmation} para confirmar",
+    "deleteDescription": "Isso remove esta memória permanentemente. Esta ação não pode ser desfeita.",
+    "deleteTitle": "Excluir memória?",
+    "deletedToast": "Memória excluída",
     "empty": "Ainda não há nada na memória.",
     "kinds": {
       "decision": "Decisão",
@@ -4715,6 +4767,7 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
+    "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
     "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
     "continueInChat": "Continuar no chat",
@@ -4772,6 +4825,7 @@
     "savedSearchesEmpty": "Salve uma pesquisa para usá-la novamente.",
     "scopeFilter": "Escopo da pesquisa",
     "scopePlaceholderAll": "Pesquisar em todas as <scope>fontes</scope>…",
+    "scopePlaceholderCaseLaw": "Pesquisar na <scope>jurisprudência</scope>…",
     "scopePlaceholderMatters": "Pesquisar em todos os <scope>casos</scope>…",
     "scopePlaceholderRegistries": "Pesquisar em <scope>registros</scope>…",
     "scopeRegistries": "Registros",
@@ -4930,7 +4984,7 @@
       "description": "Use o stella pelo seu assistente de IA e veja o que tem acesso à sua conta.",
       "developerDescription": "Endereços do servidor e a ferramenta de linha de comando, para configurações técnicas.",
       "developerTitle": "Acesso para desenvolvedores",
-      "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento.",
+      "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento. As sessões do navegador criadas por esta conexão também serão encerradas.",
       "disconnectConfirmTitle": "Desconectar {clientName}?",
       "disconnectSuccess": "{clientName} foi desconectado",
       "integrationsDescription": "Serviços externos que a IA pode usar por você, como seu repositório de documentos.",
@@ -5983,6 +6037,7 @@
       "downloadFailed": "Falha ao baixar",
       "downloadPdf": "Baixar como PDF",
       "downloadSearchablePdf": "PDF pesquisável",
+      "emptyFile": "O arquivo está vazio.",
       "includeReferenceNumber": "Incluir número de referência",
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",

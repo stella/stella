@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as agentSchema from "@/api/db/agent-auth-schema";
@@ -69,6 +69,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_research_answers.run",
   "case_law_research_columns.content",
   "case_law_research_columns.tool",
+  "case_law_sitemap_shard_counts.months",
   "case_law_sources.config",
   "case_law_sources.descriptor",
   "chat_thread_compactions.summary",
@@ -145,6 +146,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "mcp_connector_authorization_reviews.approved_endpoint_origins",
   "mcp_connectors.oauth_confirmed_endpoint_origins",
   "mcp_oauth_clients.registration_response",
+  "mcp_oauth_state.authorization_response_binding",
   "mcp_user_connections.cached_tools",
   "notifications.metadata",
   "organization_settings.practice_jurisdictions",
@@ -482,6 +484,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "mcp_web_handoff.user_id":
+    "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
   "search_history_entries.user_id":
@@ -505,6 +509,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "sharepoint_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
+  "chat_tool_grants.user_id":
+    "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":

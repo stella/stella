@@ -16,10 +16,10 @@ import { EbsBalanceReadError } from "./ebs-balance-reader";
 import {
   createEbsReaderCache,
   createEbsSignalReader,
+  type EbsConfigurationEvent,
   EbsConfigurationMissingError,
   requireEbsConfiguration,
   resolveEbsConfiguration,
-  type EbsConfigurationEvent,
 } from "./ebs-signal-reader";
 
 const now = Temporal.Instant.from("2026-10-01T12:00:00Z").epochMilliseconds;
@@ -371,7 +371,7 @@ test.each(["factory", "reader"] as const)(
     const read = shared({
       instanceIdentifier: "throwing-instance",
       clock: () => instant,
-      timeoutMs: defaultConfig.readTimeoutMs,
+      timeoutMs: defaultConfig.readTimeoutMs, // timeout: production read deadline under a fake clock
       maxStalenessMs: defaultConfig.maxStalenessMs,
     });
     expect((await read()).isErr()).toBe(true);
@@ -457,7 +457,7 @@ test("unknown startup is cached without synthesizing a datapoint and raw reader 
   const options = {
     instanceIdentifier: "startup-instance",
     clock: () => instant,
-    timeoutMs: defaultConfig.readTimeoutMs,
+    timeoutMs: defaultConfig.readTimeoutMs, // timeout: production read deadline under a fake clock
     maxStalenessMs: defaultConfig.maxStalenessMs,
   };
   const initial = shared(options);
@@ -469,7 +469,7 @@ test("unknown startup is cached without synthesizing a datapoint and raw reader 
   expect(requests).toBe(2);
   for (const different of [
     { ...options, instanceIdentifier: "another-instance" },
-    { ...options, timeoutMs: options.timeoutMs + 1 },
+    { ...options, timeoutMs: options.timeoutMs + 1 }, // timeout: configuration identity variant, never awaited
     { ...options, maxStalenessMs: options.maxStalenessMs + 1 },
   ]) {
     expect((await shared(different)()).isErr()).toBe(true);

@@ -109,12 +109,10 @@ const actorCanAccessWorkspace = async ({
 }): Promise<boolean> => {
   // This condition only preserves the assignment-lock scope. The database
   // rule in the later statement alone decides matter reach.
-  if (
-    !(
-      workspace.clientId !== null &&
-      CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
-    )
-  ) {
+  if (!(
+    workspace.clientId !== null &&
+    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
+  )) {
     await lockMatterAccessAssignments({
       tx,
       organizationId,

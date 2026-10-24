@@ -1,7 +1,10 @@
+import { CHAT_CONTINUATION_REJECTED_ERROR_CODE } from "@stll/api-contract";
+
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { hasRunningToolCallInLatestAssistantMessage } from "@/components/chat/chat-ui-tools";
 import type { ChatStopState } from "@/features/chat/chat-runtime";
 import type { useChatSession } from "@/features/chat/hooks/use-chat-session";
+import { chatRefusal } from "@/lib/errors/api";
 
 /**
  * Where a chat action takes effect: a handler of the thread's session, a
@@ -42,6 +45,11 @@ export const CHAT_USER_ACTIONS = {
   /** Reads whether a saved credential can answer a private input card. */
   "check-saved-private-input": {
     handler: "resolveSecretTarget",
+    via: "session",
+  },
+  /** Reads whether a stored grant still covers a tool before a card uses it. */
+  "check-stored-grant": {
+    handler: "confirmStoredApprovalGrant",
     via: "session",
   },
   /** Resumes the chat with a committed private input receipt. */
@@ -144,12 +152,19 @@ const isLatestAssistantMessage = ({
   return latest?.role === "assistant" && latest.id === messageId;
 };
 
+/** Replaying a mismatched continuation cannot repair its server-owned state. */
+export const canRetryChatRequest = (error: Error | undefined): boolean =>
+  chatRefusal(error)?.code !== CHAT_CONTINUATION_REJECTED_ERROR_CODE;
+
 /** Retry regenerates the latest answer, once no turn runs. */
 export const canRetryAssistantMessage = ({
+  error,
   isGenerating,
   ...message
-}: AssistantMessageActionState): boolean =>
-  !isGenerating && isLatestAssistantMessage(message);
+}: AssistantMessageActionState & { error: Error | undefined }): boolean =>
+  canRetryChatRequest(error) &&
+  !isGenerating &&
+  isLatestAssistantMessage(message);
 
 /**
  * Forking reads persisted history, so it is offered on every settled answer

@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -16,13 +16,15 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 import { deferred } from "@stll/test-kit";
 
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
 import {
   acquireCachedSnapshot,
   acquireCurrentSnapshot,
+  SnapshotBuildError,
   snapshotDigest,
   snapshotInputPaths,
   snapshotKey,
-  SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 
 const temporaryRoots: string[] = [];
@@ -365,7 +367,7 @@ test("dead-owner lock is taken over", async () => {
       writeFileSync(filePath, "valid");
     },
     validate: async () => true,
-    timeoutMs: 2000,
+    timeoutMs: HAPPY_PATH_TIMEOUT_MS,
   });
   expect(result.status).toBe("hit");
   if (result.status === "hit") {
@@ -424,7 +426,7 @@ test("old lock is taken over even when its pid is live", async () => {
       writeFileSync(filePath, "valid");
     },
     validate: async () => true,
-    timeoutMs: 2000,
+    timeoutMs: HAPPY_PATH_TIMEOUT_MS,
   });
   expect(result.status).toBe("hit");
   if (result.status === "hit") {
@@ -528,7 +530,7 @@ test("old takeover directory is removed before stale-lock takeover", async () =>
       writeFileSync(filePath, "valid");
     },
     validate: async () => true,
-    timeoutMs: 2000,
+    timeoutMs: HAPPY_PATH_TIMEOUT_MS,
   });
   expect(result.status).toBe("hit");
   if (result.status === "hit") {

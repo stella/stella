@@ -7,9 +7,14 @@ import { AI_MEMORY_KINDS } from "@/api/db/schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  AI_MEMORY_FEATURE_ID,
+  REMEMBER_TOOL_NAME,
+} from "@/api/lib/feature-access/registry";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalChatToolError,
@@ -19,7 +24,7 @@ import {
 import type { MemoryWriteScopeRequest } from "@/api/lib/memory/persist-explicit-memory";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
-export const REMEMBER_TOOL_NAME = "remember";
+export { REMEMBER_TOOL_NAME } from "@/api/lib/feature-access/registry";
 
 const rememberToolInputSchema = v.strictObject({
   content: v.pipe(
@@ -76,8 +81,7 @@ type CreateRememberToolProps = {
   workspaceId: SafeId<"workspace"> | null;
   /** The turn's statuses of the member's accessible matters. */
   workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 type MemoryWriteScopeRequestOptions = Pick<
@@ -178,6 +182,32 @@ export const createRememberTool = ({
       );
       if (Result.isError(sanitizedContentResult)) {
         return Result.err(sanitizedContentResult.error);
+      }
+
+      const decision = await safeDb(async (tx) =>
+        resolveFeatureAccess({
+          tx,
+          organizationId,
+          userId,
+          featureId: AI_MEMORY_FEATURE_ID,
+        }),
+      );
+      if (Result.isError(decision)) {
+        return Result.err(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "Failed to check memory access.",
+            cause: decision.error,
+          }),
+        );
+      }
+      if (decision.value.status !== "enabled") {
+        return Result.err(
+          new ChatToolError({
+            kind: "unavailable",
+            message: "Memory is unavailable for this account.",
+          }),
+        );
       }
 
       const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds();

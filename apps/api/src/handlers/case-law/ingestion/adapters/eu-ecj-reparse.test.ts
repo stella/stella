@@ -21,9 +21,9 @@ import {
   euEcjAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
+  absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

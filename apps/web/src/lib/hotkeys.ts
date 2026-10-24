@@ -1,5 +1,5 @@
 import { detectPlatform, formatForDisplay } from "@tanstack/react-hotkeys";
-import type { IndividualKey, Hotkey } from "@tanstack/react-hotkeys";
+import type { Hotkey, IndividualKey } from "@tanstack/react-hotkeys";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -11,6 +11,8 @@ export const HOTKEYS = {
   NEW_MATTER: "Mod+Shift+E",
   LOG_TIME: "Mod+Alt+T",
   SELECT_ALL: "Mod+A",
+  UNDO: "Mod+Z",
+  REDO: "Mod+Shift+Z",
   FIND: "Mod+F",
   ACCEPT_SUGGESTION: "Alt+Enter",
   REJECT_SUGGESTION: "Alt+Shift+Enter",
@@ -71,6 +73,8 @@ export type ShortcutLabelKey = Extract<
   | "chat.newChat"
   | "common.selectAll"
   | "docxReview.reject"
+  | "legalReader.annotations.history.redoShortcut"
+  | "legalReader.annotations.history.undoShortcut"
 >;
 
 type ShortcutDescriptorShape = {
@@ -149,6 +153,20 @@ export const SHORTCUT_GROUPS = [
         binding: { type: "hotkey", hotkey: HOTKEYS.FIND },
         labelKey: "common.find",
         contexts: ["workspace"],
+      },
+      // Undo is the same chord on every page that can show a reader (case
+      // law, statutes, the inspector), so no other shortcut may take it.
+      {
+        id: "undoReaderAnnotation",
+        binding: { type: "hotkey", hotkey: HOTKEYS.UNDO },
+        labelKey: "legalReader.annotations.history.undoShortcut",
+        contexts: ["global"],
+      },
+      {
+        id: "redoReaderAnnotation",
+        binding: { type: "hotkey", hotkey: HOTKEYS.REDO },
+        labelKey: "legalReader.annotations.history.redoShortcut",
+        contexts: ["global"],
       },
     ],
   },

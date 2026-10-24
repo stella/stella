@@ -1,11 +1,5 @@
 type Severity =
-  | "info"
-  | "low"
-  | "medium"
-  | "high"
-  | "critical"
-  | "suspicious"
-  | "malicious";
+  "info" | "low" | "medium" | "high" | "critical" | "suspicious" | "malicious";
 
 export type Match = {
   rule: string;
@@ -17,6 +11,7 @@ export type Match = {
 };
 
 export type Scanner = {
+  /** Borrows shared bytes read-only; a mutating implementation must copy first. */
   scan: (bytes: Uint8Array, context?: ScanContext) => Promise<Match[]>;
 };
 
@@ -33,17 +28,18 @@ export type ComposedScanner = (
 export const composeScanners =
   (...scanners: Scanner[]): ComposedScanner =>
   async (buffer, context) => {
-    const results = await Promise.all(
-      scanners.map(async (s) => await s.scan(buffer, context)),
-    );
-
     // An archive is presented to the rule set twice, as raw container bytes
     // and as inflated entries, so one rule can match in both passes. A rule
     // identifies a finding, so the first match for it wins.
     const byRule = new Map<string, Match>();
-    for (const match of results.flat()) {
-      if (!byRule.has(match.rule)) {
-        byRule.set(match.rule, match);
+    // Scanners share read-only input; run one at a time so decompression and
+    // native scan working sets do not overlap.
+    for (const scanner of scanners) {
+      const matches = await scanner.scan(buffer, context);
+      for (const match of matches) {
+        if (!byRule.has(match.rule)) {
+          byRule.set(match.rule, match);
+        }
       }
     }
     return [...byRule.values()];

@@ -92,8 +92,7 @@ export type ReviewFinding = {
    *  compare. Reference standards only; a tier match explains itself through
    *  `rationale` and `matchedRef`. */
   explanation?:
-    | { type: "comparison"; text: string }
-    | { type: "insufficient-evidence" };
+    { type: "comparison"; text: string } | { type: "insufficient-evidence" };
   /** One instruction for the drafter, or `null` when nothing should change. */
   recommendation?: string | null;
   citations: DocxFolioCitation[];

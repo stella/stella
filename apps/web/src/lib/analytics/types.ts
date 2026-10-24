@@ -5,6 +5,7 @@ import type {
 } from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
+import type { KeyActionDurationBucketMs } from "@/lib/analytics/key-action-timing";
 
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
@@ -27,6 +28,7 @@ export const WEB_ANALYTICS_EVENTS = {
   inspectorRestoreRecovered: "inspector_restore_recovered",
   followupShown: "followup_shown",
   followupSelected: "followup_selected",
+  keyActionTimed: "key_action_timed",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -63,6 +65,7 @@ export type Analytics = {
   ) => void;
   captureFollowupShown: (properties: FollowupShownProperties) => void;
   captureFollowupSelected: (properties: FollowupSelectedProperties) => void;
+  captureKeyActionTiming: (properties: KeyActionTiming) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
   ) => Promise<void>;
@@ -71,9 +74,7 @@ export type Analytics = {
 };
 
 export type FollowupSurface =
-  | "chat-thread"
-  | "document-chat"
-  | "inspector-chat";
+  "chat-thread" | "document-chat" | "inspector-chat";
 
 // Click-through needs where and how a suggestion was used, never which
 // conversation it came from.
@@ -89,6 +90,29 @@ type FollowupShownProperties = FollowupProperties & {
 type FollowupSelectedProperties = FollowupProperties & {
   index: number;
   via: "chip" | "ghost-tab";
+};
+
+export type DocumentTimingSurface = "full-view" | "inspector";
+
+export type SearchTimingSurface = "case-law" | "legislation";
+
+export type ChatTimingSurface = FollowupSurface | "template-studio";
+
+/** One user-visible action and where it ran. The surface is the only
+ *  context a timing carries: no document, query, thread or message
+ *  identifies what the action touched. */
+export type KeyActionMeasure =
+  // Click on a document until its editor accepts input.
+  | { action: "document-open"; surface: DocumentTimingSurface }
+  // A checkpoint save from snapshot to the server's confirmation.
+  | { action: "document-save"; surface: DocumentTimingSurface }
+  // A changed search query until its first result page is on screen.
+  | { action: "search-results"; surface: SearchTimingSurface }
+  // A sent chat message until the reply starts streaming, and until it ends.
+  | { action: "chat-first-token" | "chat-total"; surface: ChatTimingSurface };
+
+export type KeyActionTiming = KeyActionMeasure & {
+  durationBucketMs: KeyActionDurationBucketMs;
 };
 
 // Why a guide step could not be shown against the live app surface. Emitted so
@@ -127,7 +151,12 @@ type FeedbackDialogSubmittedProperties = {
 
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }
-  | { type: "recovery"; reference: ErrorReference };
+  | { type: "recovery"; reference: ErrorReference }
+  | {
+      type: "user-visible";
+      feature: string;
+      routeTemplate: string;
+    };
 
 // Stored citations a decision reader could not place: one event per decision,
 // reader surface and reason, counting the rows. A placement gap is a data

@@ -47,8 +47,8 @@ import {
   FulltextFallback,
   HighlightedText,
   InlineContent,
-  WrappedParagraphRun,
   rangesForPiece,
+  WrappedParagraphRun,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
 import { locateExternalCjeuCitations } from "./fallback-legal-anchors";
@@ -57,6 +57,7 @@ import type { HeadnoteOrigin } from "./headnote-block";
 import type { ProvisionAnchorSpan } from "./provision-anchors";
 import { locateProvisionAnchors } from "./provision-anchors";
 import { provisionCardsOf } from "./provision-card.logic";
+import type { ProvisionCardCitations } from "./provision-card.logic";
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
@@ -65,8 +66,8 @@ import type {
   CitationAnchorSource,
   CitedProvisionTarget,
   DecisionProvisionAnchor,
-  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
   ReaderDecision,
 } from "./reader-types";
 import { sanitizeHref } from "./sanitize-href";
@@ -744,9 +745,39 @@ export type PrepareDecisionTextPlacementsOptions = {
   citationAnchors: readonly CitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
   externalProvisionAnchors?:
-    | readonly ExternalDecisionProvisionAnchor[]
-    | undefined;
+    readonly ExternalDecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
+};
+
+export type DecisionProvisionCard = ProvisionCardCitations & {
+  startAnchorId: string;
+};
+
+/** Provision cards grouped by the paragraph whose text cites them. */
+export const prepareDecisionProvisionCards = ({
+  blocks,
+  provisionAnchors,
+}: Pick<
+  PrepareDecisionTextPlacementsOptions,
+  "blocks" | "provisionAnchors"
+>): DecisionProvisionCard[] => {
+  const placement = locateProvisionAnchors({
+    blocks,
+    provisions: provisionAnchors,
+  });
+  const cards: DecisionProvisionCard[] = [];
+  for (const block of blocks) {
+    if (!hasBlockInlines(block)) {
+      continue;
+    }
+    const spans = (placement.anchorsByPieceId[block.id] ?? []).toSorted(
+      (left, right) => left.start - right.start,
+    );
+    for (const card of provisionCardsOf(spans.map(({ source }) => source))) {
+      cards.push({ ...card, startAnchorId: block.anchorId });
+    }
+  }
+  return cards;
 };
 
 export const prepareDecisionTextPlacements = ({

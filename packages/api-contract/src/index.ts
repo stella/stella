@@ -1,6 +1,8 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
+export type { ConversionRefusal } from "./conversion-refusal";
+
 export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
 export {
   currencyCodeSchema,
@@ -160,6 +162,20 @@ export {
   toChatCorpusHref,
 } from "./chat-corpus-scope";
 export type { ChatCorpus, ChatCorpusScope } from "./chat-corpus-scope";
+export {
+  CHAT_CONNECTOR_HREF_PREFIX,
+  CHAT_REGISTRY_HREF_PREFIX,
+  CHAT_SOURCE_SCOPE_KINDS,
+  chatSourceScopeKey,
+  chatSourceScopeKindOfHref,
+  formatChatSourceScopeId,
+  isChatConnectorSlug,
+  isChatSourceScopeKind,
+  parseChatSourceScopeHref,
+  parseChatSourceScopeId,
+  toChatSourceScopeHref,
+} from "./chat-source-scope";
+export type { ChatSourceScope, ChatSourceScopeKind } from "./chat-source-scope";
 export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,

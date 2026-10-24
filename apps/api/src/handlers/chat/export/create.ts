@@ -19,6 +19,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   assertChatThreadScopeMatches,
@@ -34,8 +35,8 @@ import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-exp
 import {
   assembleMessageMarkdown,
   buildChatExportDownload,
-  composePersistedSearchSummaryMarkdown,
   composeExportMarkdown,
+  composePersistedSearchSummaryMarkdown,
   extractPersistedSearchSummarySources,
   type PersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
@@ -283,10 +284,13 @@ const createMessageExport = createSafeRootHandler(
       safeDb(
         async (tx) =>
           await auditedPresignDownload({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
             tx,
             recordAuditEvent,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
             resourceId: messageId,
+            userId: user.id,
+            source: { kind: "request", sessionId: session.id },
             s3Key: key,
             s3Keyspace: "exports",
             expiresInSeconds: CHAT_EXPORT_URL_TTL_SECONDS,

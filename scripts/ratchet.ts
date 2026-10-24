@@ -32,7 +32,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { analyse } from "scslre";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -74,9 +74,10 @@ import {
   isExcludedTestInclusiveSource,
 } from "./source-globs";
 import {
-  unmanagedTransitionTables,
   statusWriteCalls,
+  unmanagedTransitionTables,
 } from "./status-write-shapes";
+import { countUndeclaredEdenWrites } from "./undeclared-eden-writes";
 import {
   countUnsignalledSkips,
   isExcludedSkipSource,
@@ -87,6 +88,13 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
+
+// The single owners of a transport: callers reach fetch and Bun SQL clients
+// through them, so their own acquisition is the capability, not a legacy site.
+const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/db/sql-client.ts",
+]);
 
 // Shared source globs + exclusions for the app-source metrics.
 const APP_SOURCE_GLOBS = [
@@ -1411,7 +1419,7 @@ const countUnhandledDetachedPromises = (content: string): number => {
 // counters extract module specifiers per line and resolve them against the
 // importing file's path. Deliberately NOT literal-stripped: import specifiers
 // ARE string literals. Fidelity limits: the specifier must sit on the same
-// line as its `from`/`import(`/`import` keyword (oxfmt formats imports that
+// line as its `from`/`import(`/`import` keyword (bun fmt formats imports that
 // way), and an import-shaped string inside a template literal would count
 // (stable noise; none today).
 const MODULE_SPECIFIER =
@@ -3059,10 +3067,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       for (const file of scanRepoFiles(context, [
         "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
       ])) {
-        if (
-          !isApiProductionModule(file) ||
-          file === "apps/api/src/lib/safe-outbound-fetch.ts"
-        ) {
+        if (!isApiProductionModule(file) || TRANSPORT_OWNER_MODULES.has(file)) {
           continue;
         }
         for (const capability of outboundTransportReferences({
@@ -3285,6 +3290,18 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: (file) =>
       isExcludedSource(file) || file === "apps/web/src/lib/relative-time.ts",
     count: countAdHocRelativeTimeFormatting,
+  },
+  {
+    scope: "file",
+    id: "undeclared-eden-writes",
+    description:
+      "Eden post/put/patch/delete calls in apps/web outside an invokeCapability or useCapabilityMutation callback, so they run without declaring a catalog capability; each file's count can only shrink",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) => isExcludedSource(file),
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      countUndeclaredEdenWrites(content, file)) satisfies FileCounter,
   },
   {
     scope: "file",
@@ -4841,6 +4858,23 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
+const UNDECLARED_EDEN_WRITE_FIXTURE_LINES = [
+  'import { api, memoriesApi as memories } from "@/lib/api";',
+  'import { invokeCapability } from "@/lib/capabilities/capability-request";',
+  'import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";',
+  "await api.items.post(body);",
+  "await memories({ id }).delete();",
+  "const route = api.items({ id });",
+  "await route.patch(body);",
+  'await invokeCapability("items.create", async (request) => await api.items.post(body, request));',
+  'useCapabilityMutation({ capability: "items.update", mutationFn: async (vars, request) => await route.patch(vars, request) });',
+  "await api.items.get();",
+  "map.delete(key);",
+];
+const SELF_TEST_UNDECLARED_EDEN_WRITES = `${UNDECLARED_EDEN_WRITE_FIXTURE_LINES.join("\n")}\n`;
+// The bare post, the aliased delete and the write through `route`; declared
+// writes, reads and unrelated `delete` calls are excluded.
+const EXPECTED_UNDECLARED_EDEN_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
@@ -6537,6 +6571,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/web/src/undeclared-eden-writes.ts",
+      SELF_TEST_UNDECLARED_EDEN_WRITES,
+    );
+    writeFixture(
+      root,
       "apps/api/src/shared-helper-shapes.ts",
       SELF_TEST_SHARED_API_HELPERS,
     );
@@ -6951,6 +6990,7 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
+      ["undeclared-eden-writes", EXPECTED_UNDECLARED_EDEN_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
         "ad-hoc-relative-time-formatting",

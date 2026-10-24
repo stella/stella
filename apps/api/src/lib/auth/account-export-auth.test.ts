@@ -5,6 +5,7 @@ import Elysia from "elysia";
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 
 import { createAccountExportAuthMacro } from "@/api/lib/auth";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { McpSession } from "@/api/mcp/auth";
 import {
   McpAuthenticationError,
@@ -62,9 +63,13 @@ describe("account export HTTP authentication", () => {
             panic("Bearer requests must not read browser cookies"),
         }),
       )
-      .get("/export", ({ user }) => user, { validateAccountExport: "read" })
+      .get("/export", ({ user }) => user, {
+        validateAccountExport: "read",
+        accountAccess: ACCOUNT_ACCESS.accountControl,
+      })
       .post("/export", ({ user }) => user, {
         validateAccountExport: "write",
+        accountAccess: ACCOUNT_ACCESS.accountControl,
       });
     const headers = {
       authorization: "Bearer oauth-token",

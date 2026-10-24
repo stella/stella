@@ -4,9 +4,9 @@ import { t } from "elysia";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
+  memberAIAccessError,
   ownAIKeyRequiredError,
   storedAIConfigUnreadableError,
-  memberAIAccessError,
 } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -131,6 +131,7 @@ export const createConditionPreviewHandler = ({
                     abortSignal: AbortSignal.any([abortSignal, signal]),
                     generation: {
                       dataClass: "customer",
+                      userId: user.id,
                       orgAIConfig,
                       managedAIResidency,
                       organizationId: session.activeOrganizationId,

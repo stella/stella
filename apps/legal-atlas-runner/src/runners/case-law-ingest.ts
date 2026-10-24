@@ -27,7 +27,7 @@ import {
 import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
 import { Temporal } from "@stll/time";
 
-import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
+import { caseLawIngestionEvents, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
   hasResolvedCitations,
@@ -36,7 +36,7 @@ import {
 } from "@/api/handlers/case-law/citation-authority";
 import {
   countPendingCitations,
-  tryResolveCitationBatch,
+  tryResolveCitationBatch as tryResolveCitationBatchInTransaction,
 } from "@/api/handlers/case-law/citation-resolution";
 import {
   ADAPTER_KEYS,
@@ -102,17 +102,18 @@ import {
   CITATION_RESOLUTION_STEP,
   type CitationResolutionStep,
   runCitationResolutionDrain,
+  tryResolveCitationBatch,
 } from "./citation-resolution-drain";
 import { executeIngestionCycle } from "./cycle-execution";
 import {
+  type CadenceStreaks,
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
   CYCLE_OUTCOME,
-  type CadenceStreaks,
   type CycleCadence,
+  cycleMadeProgress,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
-  cycleMadeProgress,
   stepCadence,
 } from "./cycle-progress";
 import {
@@ -122,17 +123,18 @@ import {
 import { createIngestionHealthRefresh } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
+  nextRecomputeDelayMs,
   RECOMPUTE_OUTCOME,
   type RecomputeOutcome,
-  nextRecomputeDelayMs,
 } from "./recompute-schedule";
+import { createSettlingDeadlineSignal } from "./settling-deadline";
 import {
   DEFERRED_DOCUMENT_DRAIN_TIMING,
   runDeferredDocumentDrain,
 } from "./sk-document-drain";
 import {
-  SOURCE_TOTAL_POLL_TIMING,
   runSourceTotalPoll,
+  SOURCE_TOTAL_POLL_TIMING,
 } from "./source-total-poll";
 import { isTransientConnectionError } from "./transient-connection-error";
 
@@ -333,6 +335,7 @@ const RECONCILIATION_HARD_DEADLINE_MS =
   RECONCILIATION_LISTING_WORST_CASE_MS +
   RECONCILIATION_INGEST_BUDGET_MS +
   RECONCILIATION_UNIT_SETTLE_MS;
+const RECONCILIATION_ABORT_SETTLE_MARGIN_MS = RECONCILIATION_UNIT_SETTLE_MS;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -404,8 +407,7 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
 let storedTotalMaintenance:
-  | ReturnType<typeof createSourceStoredTotalMaintenanceRuntime>
-  | undefined;
+  ReturnType<typeof createSourceStoredTotalMaintenanceRuntime> | undefined;
 const getStoredTotalMaintenance = () => {
   storedTotalMaintenance ??=
     createSourceStoredTotalMaintenanceRuntime(ingestionDb);
@@ -1252,19 +1254,47 @@ export const runCaseLawIngest = async (
     );
     await runCitationResolutionDrain({
       settleBatch: async (): Promise<CitationResolutionStep> => {
+        const signal = AbortSignal.any([
+          drainController.signal,
+          AbortSignal.timeout(BACKFILL_HARD_DEADLINE_MS),
+        ]);
         const batch = await runWithHardDeadline(
           "citation-resolution",
           BACKFILL_HARD_DEADLINE_MS,
           async () =>
-            await tryResolveCitationBatch(backfillDb, { limit: batchSize }),
+            await tryResolveCitationBatch({
+              limit: batchSize,
+              signal,
+              resolveBatch: async (limit) =>
+                await tryResolveCitationBatchInTransaction(backfillDb, {
+                  limit,
+                }),
+            }),
         );
-        if (batch === null) {
-          return { type: CITATION_RESOLUTION_STEP.BUSY };
+        switch (batch.type) {
+          case "busy":
+            return { type: CITATION_RESOLUTION_STEP.BUSY };
+          case "aborted":
+            return batch.counts.scanned === 0
+              ? { type: CITATION_RESOLUTION_STEP.DRAINED }
+              : {
+                  type: CITATION_RESOLUTION_STEP.SETTLED,
+                  counts: batch.counts,
+                };
+          case "settled":
+            return batch.counts.scanned === 0
+              ? { type: CITATION_RESOLUTION_STEP.DRAINED }
+              : {
+                  type: CITATION_RESOLUTION_STEP.SETTLED,
+                  counts: batch.counts,
+                };
+          default: {
+            batch satisfies never;
+            return panic(
+              `Unhandled citation batch outcome: ${JSON.stringify(batch)}`,
+            );
+          }
         }
-        if (batch.scanned === 0) {
-          return { type: CITATION_RESOLUTION_STEP.DRAINED };
-        }
-        return { type: CITATION_RESOLUTION_STEP.SETTLED, counts: batch };
       },
       // Bounded like the batch is. A rejection is safe — the loop catches it
       // and reports the window anyway — but a hang is not: the summary flush
@@ -1503,6 +1533,13 @@ export const runCaseLawIngest = async (
       reconcilable.push({
         adapterKey,
         runWorkUnit: async () => {
+          const signal = AbortSignal.any([
+            drainController.signal,
+            createSettlingDeadlineSignal({
+              hardDeadlineMs: RECONCILIATION_HARD_DEADLINE_MS,
+              settleMarginMs: RECONCILIATION_ABORT_SETTLE_MARGIN_MS,
+            }),
+          ]);
           const outcome = await runWithHardDeadline(
             "case-law-reconciliation",
             RECONCILIATION_HARD_DEADLINE_MS,
@@ -1519,6 +1556,7 @@ export const runCaseLawIngest = async (
                   await Bun.sleep(ms);
                 },
                 sliceRetries,
+                signal,
               }),
           );
           switch (outcome.type) {
@@ -1533,6 +1571,8 @@ export const runCaseLawIngest = async (
               return { turn: RECONCILIATION_TURN.IDLE };
             case "misconfigured":
               return { turn: RECONCILIATION_TURN.MISCONFIGURED };
+            case "aborted":
+              return { turn: RECONCILIATION_TURN.ABORTED };
             default: {
               outcome satisfies never;
               return panic(

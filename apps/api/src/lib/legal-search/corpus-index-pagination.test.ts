@@ -1,4 +1,4 @@
-import { panic, Panic } from "better-result";
+import { Panic, panic } from "better-result";
 import {
   afterEach,
   beforeEach,
@@ -22,10 +22,12 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
-  corpusIndexLexicalScore,
   CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
+  corpusIndexLexicalScore,
+  emptyCorpusIndexScan,
   NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
+  sumCorpusIndexScans,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
@@ -64,8 +66,7 @@ let responseBody: unknown;
  * single-window cases.
  */
 let engineHits:
-  | { document_id: string; anchor_id?: string; chunk_id?: string }[]
-  | null;
+  { document_id: string; anchor_id?: string; chunk_id?: string }[] | null;
 let requestBodies: Record<string, unknown>[];
 /**
  * Wall time the fake engine spends on every request. Zero by default, so only
@@ -2445,4 +2446,32 @@ describe("a page addressed by offset", () => {
     expect(failure).toBeInstanceOf(Panic);
     expect(String(failure)).toContain("placed by its cursor or by its offset");
   });
+});
+
+test("two sequential scans report as one, with every count added", () => {
+  const strict = {
+    rounds: 2,
+    passagesScanned: 40,
+    indexMs: 12,
+    earlyStopped: true,
+    roundCapHit: false,
+    highlightRounds: 1,
+  };
+  const relaxed = {
+    rounds: 1,
+    passagesScanned: 15,
+    indexMs: 5,
+    earlyStopped: false,
+    roundCapHit: true,
+    highlightRounds: 2,
+  };
+  expect(sumCorpusIndexScans(strict, relaxed)).toEqual({
+    rounds: 3,
+    passagesScanned: 55,
+    indexMs: 17,
+    earlyStopped: true,
+    roundCapHit: true,
+    highlightRounds: 3,
+  });
+  expect(sumCorpusIndexScans(strict, emptyCorpusIndexScan())).toEqual(strict);
 });
