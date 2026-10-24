@@ -241,6 +241,7 @@
     "strikethrough": "Tachado",
     "underline": "Subrayado",
     "unnamedClip": "Texto",
+    "clipName": "Nombre",
     "allClips": "Todos los clips",
     "clips": "Clips",
     "externalRegistry": "Registro externo",

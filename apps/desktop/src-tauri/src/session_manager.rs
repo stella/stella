@@ -68,6 +68,7 @@ const REMOTE_SAVE_TIMEOUT: Duration = Duration::from_secs(60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(15);
 const KEYCHAIN_RESTORE_TIMEOUT: Duration = Duration::from_secs(10);
 const OPEN_PROBE_INTERVAL: Duration = Duration::from_secs(1);
+const OPEN_PROBE_IDLE_INTERVAL: Duration = Duration::from_secs(15);
 const CLOSED_RECHECK_COUNT: u8 = 5;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
 const LIBRE_OFFICE_LOCK_PREFIX: &str = ".~lock.";
@@ -1987,7 +1988,7 @@ impl SessionManager {
       match watcher_result {
         Ok(mut w) => match w.watch(&watch_dir, RecursiveMode::NonRecursive) {
           Ok(()) => {
-            ensure_open_probe_window(session, manager, &sid);
+            ensure_open_probe_loop(session, manager, &sid);
             session.watcher = Some(w);
           }
           Err(error) => tracing::warn!(%error, "failed to watch editing directory"),
@@ -2400,7 +2401,7 @@ async fn handle_filesystem_event(
       if is_managed && (session.checkpoint_in_flight || session.finalize_in_flight) {
         session.changed_during_remote_save = true;
       }
-      ensure_open_probe_window(session, &manager, session_id);
+      ensure_open_probe_loop(session, &manager, session_id);
     }
     drop(mgr);
   }
@@ -2438,7 +2439,7 @@ async fn handle_filesystem_event(
   }
 }
 
-fn ensure_open_probe_window(
+fn ensure_open_probe_loop(
   session: &mut DesktopSession,
   manager: &Arc<Mutex<SessionManager>>,
   session_id: &str,
@@ -2450,75 +2451,105 @@ fn ensure_open_probe_window(
   let mgr_clone = Arc::clone(manager);
   let sid = session_id.to_string();
   session.open_probe_timer = Some(tokio::spawn(async move {
-    run_open_probe_window(|| probe_session_open(&mgr_clone, &sid)).await;
+    run_open_probe_loop(|| probe_session_open(&mgr_clone, &sid)).await;
   }));
 }
 
-/// Directory watchers observe Office lock-file removal. Some backends (notably
-/// macOS FSEvents) cannot observe a lockless editor's final descriptor close.
-/// Limit the fallback to activity-triggered confirmation; after this window,
-/// lockless editors use explicit Finish rather than background process polling.
-async fn run_open_probe_window<F, Fut>(mut probe: F)
+enum OpenProbeSchedule {
+  Stopped,
+  Watching,
+  ConfirmingClose,
+}
+
+/// Lockless editors can close without a filesystem event. Keep a sparse
+/// fallback alive; only a suspected close needs the faster confirmation rate.
+async fn run_open_probe_loop<F, Fut>(mut probe: F)
 where
   F: FnMut() -> Fut,
-  Fut: std::future::Future<Output = bool>,
+  Fut: std::future::Future<Output = OpenProbeSchedule>,
 {
-  for _ in 0..CLOSED_RECHECK_COUNT {
-    tokio::time::sleep(OPEN_PROBE_INTERVAL).await;
-    if !probe().await {
-      return;
-    }
+  let mut interval = OPEN_PROBE_INTERVAL;
+  loop {
+    tokio::time::sleep(interval).await;
+    interval = match probe().await {
+      OpenProbeSchedule::Stopped => return,
+      OpenProbeSchedule::Watching => OPEN_PROBE_IDLE_INTERVAL,
+      OpenProbeSchedule::ConfirmingClose => OPEN_PROBE_INTERVAL,
+    };
   }
 }
 
 async fn probe_session_open(
   manager: &Arc<Mutex<SessionManager>>,
   session_id: &str,
-) -> bool {
-  let Some((file_path, file_name)) = ({
+) -> OpenProbeSchedule {
+  probe_session_open_with(manager, session_id, |file_path, file_name| async move {
+    local_file_appears_open(Path::new(&file_path), &file_name).await
+  })
+  .await
+}
+
+async fn probe_session_open_with<F, Fut>(
+  manager: &Arc<Mutex<SessionManager>>,
+  session_id: &str,
+  observe_open: F,
+) -> OpenProbeSchedule
+where
+  F: FnOnce(String, String) -> Fut,
+  Fut: std::future::Future<Output = bool>,
+{
+  let Some((file_path, file_name, generation)) = ({
     let mgr = manager.lock().await;
     let input = mgr.sessions.get(session_id).and_then(|session| {
-      (!session.pending_finalize && !session.takeover_detected)
-        .then(|| (session.file_path.clone(), session.file_name.clone()))
+      (!session.pending_finalize && !session.takeover_detected).then(|| {
+        (
+          session.file_path.clone(),
+          session.file_name.clone(),
+          session.generation,
+        )
+      })
     });
     drop(mgr);
     input
   }) else {
-    return false;
+    return OpenProbeSchedule::Stopped;
   };
 
-  let appears_open = local_file_appears_open(Path::new(&file_path), &file_name).await;
+  let appears_open = observe_open(file_path, file_name).await;
   let mut mgr = manager.lock().await;
   let Some(session) = mgr.sessions.get_mut(session_id) else {
-    return false;
+    return OpenProbeSchedule::Stopped;
   };
-  if session.pending_finalize || session.takeover_detected {
-    return false;
+  if session.generation != generation
+    || session.pending_finalize
+    || session.takeover_detected
+  {
+    return OpenProbeSchedule::Stopped;
   }
   if appears_open {
     session.local_open_seen = true;
     session.closed_recheck_count = 0;
-    return false;
+    return OpenProbeSchedule::Watching;
   }
   if !session.local_open_seen {
-    return true;
+    return OpenProbeSchedule::Watching;
   }
   session.closed_recheck_count = session.closed_recheck_count.saturating_add(1);
   if session.closed_recheck_count < CLOSED_RECHECK_COUNT
     || session.checkpoint_in_flight
     || session.finalize_in_flight
   {
-    return true;
+    return OpenProbeSchedule::ConfirmingClose;
   }
 
-  // The probe window ends before remote work: a new watcher event may safely
-  // cancel/rearm detection without canceling a checkpoint upload.
+  // Stop detection before remote work: a new watcher event may safely rearm
+  // the timer without canceling a checkpoint upload.
   session.open_probe_timer.take();
   mgr.finish_session(session_id);
   mgr.persist_sessions().await;
   drop(mgr);
   retry_session(Arc::clone(manager), session_id).await;
-  false
+  OpenProbeSchedule::Stopped
 }
 
 pub async fn respond_to_takeover(
@@ -2889,7 +2920,7 @@ mod tests {
   }
 
   #[tokio::test(start_paused = true)]
-  async fn open_detection_stops_spawning_for_five_idle_sessions() {
+  async fn open_detection_bounds_probes_for_five_idle_sessions() {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     let spawns = Arc::new(AtomicUsize::new(0));
@@ -2897,11 +2928,9 @@ mod tests {
     for _ in 0..5 {
       let spawns = Arc::clone(&spawns);
       handles.push(tokio::spawn(async move {
-        run_open_probe_window(|| {
-          // A lockless editor requires one probe to establish it is open.
-          // Watcher events, rather than a timer, trigger later probes.
+        run_open_probe_loop(|| {
           spawns.fetch_add(1, Ordering::SeqCst);
-          std::future::ready(false)
+          std::future::ready(OpenProbeSchedule::Watching)
         })
         .await;
       }));
@@ -2910,40 +2939,81 @@ mod tests {
     tokio::time::advance(OPEN_PROBE_INTERVAL).await;
     tokio::task::yield_now().await;
     assert_eq!(spawns.load(Ordering::SeqCst), 5);
-    let initial_spawns = spawns.load(Ordering::SeqCst);
-
-    for _ in 0..60 {
-      tokio::time::advance(Duration::from_secs(1)).await;
+    for _ in 0..3 {
+      tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL).await;
       tokio::task::yield_now().await;
     }
-    assert_eq!(spawns.load(Ordering::SeqCst) - initial_spawns, 0);
+    tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL - OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(spawns.load(Ordering::SeqCst), 20);
     for handle in handles {
-      assert!(handle.is_finished());
-      handle.await.unwrap();
+      assert!(!handle.is_finished());
+      handle.abort();
+      assert!(handle.await.unwrap_err().is_cancelled());
     }
   }
 
   #[tokio::test(start_paused = true)]
-  async fn open_detection_bounds_fallback_without_a_close_event() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    let spawns = Arc::new(AtomicUsize::new(0));
-    let probe_spawns = Arc::clone(&spawns);
+  async fn closing_an_unchanged_lockless_document_finalizes_without_a_filesystem_event()
+  {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let (manager, _, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(move || {
+        let requests = Arc::clone(&request_count);
+        async move {
+          requests.fetch_add(1, Ordering::SeqCst);
+          axum::Json(serde_json::json!({ "outcome": "no_changes" }))
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut("idle-0").unwrap();
+      session.api_base_url = base_url;
+      assert!(
+        session.last_checkpoint_sha.as_deref() == Some(session.last_local_sha.as_str())
+      );
+    }
+    let open = Arc::new(AtomicBool::new(true));
+    let observed_open = Arc::clone(&open);
+    let probe_manager = Arc::clone(&manager);
     let handle = tokio::spawn(async move {
-      run_open_probe_window(|| {
-        probe_spawns.fetch_add(1, Ordering::SeqCst);
-        std::future::ready(true)
+      run_open_probe_loop(|| {
+        probe_session_open_with(&probe_manager, "idle-0", |_, _| {
+          std::future::ready(observed_open.load(Ordering::SeqCst))
+        })
       })
       .await;
     });
     tokio::task::yield_now().await;
-    for _ in 0..60 {
-      tokio::time::advance(Duration::from_secs(1)).await;
+    tokio::time::advance(OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert!(manager.lock().await.sessions["idle-0"].local_open_seen);
+    assert_eq!(requests.load(Ordering::SeqCst), 0);
+    // Closing changes only the OS observation, with no watcher event or save.
+    open.store(false, Ordering::SeqCst);
+    tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    for _ in 1..CLOSED_RECHECK_COUNT {
+      tokio::time::advance(OPEN_PROBE_INTERVAL).await;
       tokio::task::yield_now().await;
     }
-    assert_eq!(spawns.load(Ordering::SeqCst), 5);
-    assert!(handle.is_finished());
+    tokio::time::resume();
     handle.await.unwrap();
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+    assert!(!manager.lock().await.sessions.contains_key("idle-0"));
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
   }
 
   #[derive(Default)]
