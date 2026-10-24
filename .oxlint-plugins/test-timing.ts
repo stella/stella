@@ -474,8 +474,7 @@ const localFunction = (
 const invokesCallback = (context: ScopeContext, callee: unknown): boolean => {
   const binding = resolveImportedExpressionForEnforcement(context, callee);
   return (
-    binding !== null &&
-    binding.imported === "act" &&
+    binding?.imported === "act" &&
     (binding.source === "react" ||
       binding.source === "react-dom/test-utils" ||
       binding.source === "@testing-library/react")
@@ -741,8 +740,7 @@ const isOwnedTimeoutHelper = (
     expression.callee,
   );
   return (
-    binding !== null &&
-    binding.source === "@stll/property-testing" &&
+    binding?.source === "@stll/property-testing" &&
     OWNED_TIMEOUT_HELPERS.has(binding.imported)
   );
 };
