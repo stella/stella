@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { isDbTest } from "../../scripts/test-batch-plan";
+import { isDbTest } from "./test-batch-plan";
 
 test("detects database runtime imports without matching inert source text", () => {
   const testPath = "src/example.test.ts";
