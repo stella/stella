@@ -361,9 +361,9 @@ const makeAttachedTemplateDocxBase64 = async (): Promise<string> => {
       'Target="https://templates.example/remote.dotm" TargetMode="External"/>' +
       "</Relationships>",
   );
-  return Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString(
-    "base64",
-  );
+  return Buffer.from(
+    await zip.generateAsync({ type: "uint8array" }),
+  ).toBase64();
 };
 
 /**

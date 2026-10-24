@@ -158,7 +158,8 @@ export type FolioCollabSnapshotTarget = Pick<
 >;
 
 type FolioCollabSnapshotStoreAuthority =
-  { type: "collab-service" } | { type: "participant"; userId: SafeId<"user"> };
+  | { type: "collab-service" }
+  | { type: "participant"; userId: SafeId<"user"> };
 
 type FolioCollabTokenIssueDb = {
   execute: (query: SQL) => Promise<unknown>;
@@ -949,9 +950,7 @@ export const loadFolioCollabSnapshot = async (
           snapshot: {
             generation: room.generation,
             loadOutcome: loaded.outcome,
-            snapshotBase64: Buffer.from(loaded.snapshotBytes).toString(
-              "base64",
-            ),
+            snapshotBase64: Buffer.from(loaded.snapshotBytes).toBase64(),
             snapshotRevision: room.yjsSnapshotRevision,
           },
           rawSnapshotSha256Hex: hashSha256Hex(snapshotBytes),

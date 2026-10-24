@@ -552,9 +552,7 @@ describe("inbound MIME normalization", () => {
         'Content-Disposition: attachment; filename="large.pdf"',
         "Content-Transfer-Encoding: base64",
         "",
-        Buffer.alloc(INBOUND_MAIL_LIMITS.attachmentBytes + 1, 0x41).toString(
-          "base64",
-        ),
+        Buffer.alloc(INBOUND_MAIL_LIMITS.attachmentBytes + 1, 0x41).toBase64(),
         "--outer--",
       ].join("\r\n"),
     );

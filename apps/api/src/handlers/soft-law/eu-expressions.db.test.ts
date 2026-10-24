@@ -64,9 +64,7 @@ const entry = ({ language, revision, stage }: EntryOptions): SoftLawEntry => ({
   sourceRaw: [
     {
       role: "index",
-      contentBase64: Buffer.from("Publisher index snapshot 1").toString(
-        "base64",
-      ),
+      contentBase64: Buffer.from("Publisher index snapshot 1").toBase64(),
       contentType: "text/html",
     },
   ],

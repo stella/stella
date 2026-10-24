@@ -108,9 +108,10 @@ describe("docx suggestion cursor codec (properties)", () => {
     );
     fc.assert(
       fc.property(nonArray, (value) => {
-        const encoded = Buffer.from(JSON.stringify(value)).toString(
-          "base64url",
-        );
+        const encoded = Buffer.from(JSON.stringify(value)).toBase64({
+          alphabet: "base64url",
+          omitPadding: true,
+        });
         expect(docxSuggestionCursor.decode(encoded)).toBeNull();
       }),
       propertyConfig({ numRuns: 300 }),
