@@ -53,6 +53,9 @@ type Statement = {
   // Start line of the outermost statement whose dollar-quoted body surfaced
   // this one. An acknowledgement above that statement also covers this one.
   enclosingLine?: number;
+  // A dollar-quoted DO/routine body contains a loop plus a relation read or
+  // write. The body is inspected after comments and literals are masked.
+  rowLoop?: boolean;
 };
 
 type GuardedCategory = (typeof GUARDED_CATEGORIES)[number];
@@ -689,7 +692,51 @@ const isVolatileDataWrite = (statement: Statement): boolean =>
   VOLATILE_VALUE_PATTERN.test(statement.text) &&
   executedDmlTargets(statement).some(({ verb }) => verb !== "DELETE");
 
+const ONLINE_BACKFILL_GUIDANCE =
+  "Move data changes to the post-deploy online phase owned by apps/api/src/db/backfill-runtime.ts; use its bounded, resumable backfill pattern.";
+
+const isPreDeployUpdate = (statement: Statement): boolean =>
+  executedDmlTargets(statement).some(({ verb }) => verb === "UPDATE");
+
 const STATEMENT_INVARIANT_RULES = [
+  {
+    id: "pre-deploy-concurrent-index",
+    description: "builds an index concurrently during the pre-deploy phase",
+    matches: ({ deferred, text }) =>
+      !deferred &&
+      /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/iu.test(text),
+    guidance:
+      "Move concurrent index creation to a post-deploy index builder such as apps/api/src/db/case-law-publication-indexes.ts.",
+  },
+  {
+    id: "pre-deploy-validate-constraint",
+    description: "validates a constraint during the pre-deploy phase",
+    matches: ({ deferred, text }) =>
+      !deferred &&
+      /\bALTER\s+TABLE\b[\s\S]*\bVALIDATE\s+CONSTRAINT\b/iu.test(text),
+    guidance:
+      "Add the constraint NOT VALID in the migration, then validate it in the post-deploy online phase owned by apps/api/src/db/online-migrations.ts.",
+  },
+  {
+    id: "pre-deploy-update",
+    description: "updates existing rows during the pre-deploy phase",
+    matches: isPreDeployUpdate,
+    guidance: ONLINE_BACKFILL_GUIDANCE,
+  },
+  {
+    id: "pre-deploy-insert-select",
+    description:
+      "copies existing rows with INSERT ... SELECT during the pre-deploy phase",
+    matches: ({ deferred, text }) => !deferred && isInsertFromQuery(text),
+    guidance: ONLINE_BACKFILL_GUIDANCE,
+  },
+  {
+    id: "pre-deploy-row-loop",
+    description:
+      "loops over relation rows in a DO block or stored function during the pre-deploy phase",
+    matches: ({ rowLoop }) => rowLoop === true,
+    guidance: ONLINE_BACKFILL_GUIDANCE,
+  },
   {
     id: "on-conflict-column-target",
     description: "uses a column-target ON CONFLICT clause",
@@ -954,6 +1001,14 @@ type QuotedBodyOptions = {
 const INDEX_BUILD_HINT_PATTERN =
   /\b(?:CREATE\s+(?:UNIQUE\s+)?INDEX|REINDEX|ALTER\s+TABLE[\s\S]*?\bADD\b[\s\S]*?\b(?:PRIMARY\s+KEY|UNIQUE|EXCLUDE))\b/iu;
 
+// This deliberately recognizes only loops whose masked body also contains a
+// relation read or write. Numeric/control loops remain valid DDL helpers, while
+// cursor loops and batch-looking DML cannot hide a data backfill in a DO block
+// or stored function.
+const ROW_LOOP_PATTERN = /\bLOOP\b/iu;
+const RELATION_ACCESS_PATTERN =
+  /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO)\b/iu;
+
 const surfaceQuotedBody = ({
   prefix,
   body,
@@ -966,13 +1021,17 @@ const surfaceQuotedBody = ({
   // DO executes now; routine definitions are deferred, including nested bodies.
   const deferred = !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(prefix);
   const bodyStatements = parseStatements(body);
+  const maskedBody = bodyStatements.map(({ text }) => text).join("\n");
+  const rowLoop =
+    ROW_LOOP_PATTERN.test(maskedBody) &&
+    RELATION_ACCESS_PATTERN.test(maskedBody);
   const literalFragments = bodyStatements.flatMap(({ literals }) =>
     literals.map(({ value }) => value),
   );
   const executableIndexHint = INDEX_BUILD_HINT_PATTERN.test(
     literalFragments.join(" "),
   );
-  return bodyStatements.map((statement) => {
+  return bodyStatements.map((statement, index) => {
     statement.line += startLine - 1;
     statement.enclosingLine = enclosingLine;
     if (executableIndexHint) {
@@ -980,6 +1039,9 @@ const surfaceQuotedBody = ({
     }
     if (deferred) {
       statement.deferred = true;
+    }
+    if (rowLoop && index === 0) {
+      statement.rowLoop = true;
     }
     return statement;
   });

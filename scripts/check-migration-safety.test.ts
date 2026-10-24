@@ -131,7 +131,7 @@ describe("check-migration-safety", () => {
           SET lock_timeout = '1s';
           SET statement_timeout = '10min';
           COMMIT;
-          CREATE INDEX CONCURRENTLY IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
+          CREATE INDEX IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
           BEGIN;
         `),
       );
@@ -195,11 +195,12 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows an UPDATE bounded by a WHERE clause", () => {
-      expectClean(
+    it("rejects an UPDATE bounded by a WHERE clause in pre-deploy", () => {
+      expectFinding(
         runChecker(
           `UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2;`,
         ),
+        "pre-deploy-update",
       );
     });
 
@@ -237,14 +238,15 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows a WHERE-bounded UPDATE inside a data-modifying CTE", () => {
-      expectClean(
+    it("rejects a WHERE-bounded UPDATE inside a data-modifying CTE", () => {
+      expectFinding(
         runChecker(`
           WITH "u" AS (
             UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2 RETURNING "id"
           )
           SELECT count(*) FROM "u";
         `),
+        "pre-deploy-update",
       );
     });
 
@@ -291,13 +293,78 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows a FROM-join UPDATE bounded by a top-level WHERE", () => {
-      expectClean(
+    it("rejects a FROM-join UPDATE bounded by a top-level WHERE", () => {
+      expectFinding(
         runChecker(`
           UPDATE "documents" AS d
           SET "workspace_id" = w."id"
           FROM "workspaces" AS w
           WHERE d."workspace_slug" = w."slug";
+        `),
+        "pre-deploy-update",
+      );
+    });
+  });
+
+  describe("expand-only pre-deploy migrations", () => {
+    it("rejects every operation owned by the online phase", () => {
+      const refused = [
+        [
+          `CREATE INDEX CONCURRENTLY "documents_status_idx" ON "documents" ("status");`,
+          "pre-deploy-concurrent-index",
+        ],
+        [
+          `CREATE UNIQUE INDEX CONCURRENTLY "documents_slug_idx" ON "documents" ("slug");`,
+          "pre-deploy-concurrent-index",
+        ],
+        [
+          `ALTER TABLE "documents" VALIDATE CONSTRAINT "documents_owner_fk";`,
+          "pre-deploy-validate-constraint",
+        ],
+        [
+          `UPDATE "documents" SET "status" = 'ready' WHERE "status" = 'new';`,
+          "pre-deploy-update",
+        ],
+        [
+          `INSERT INTO "documents_v2" ("id") SELECT "id" FROM "documents";`,
+          "pre-deploy-insert-select",
+        ],
+        [
+          `DO $$ BEGIN FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP; END $$;`,
+          "pre-deploy-row-loop",
+        ],
+        [
+          `CREATE FUNCTION copy_documents() RETURNS void LANGUAGE plpgsql AS $$ BEGIN FOR item IN SELECT id FROM documents LOOP INSERT INTO documents_v2 (id) VALUES (item.id); END LOOP; END $$;`,
+          "pre-deploy-row-loop",
+        ],
+      ] as const;
+
+      for (const [sql, ruleId] of refused) {
+        expectFinding(runChecker(sql), ruleId);
+      }
+    });
+
+    it("allows additive DDL and fixed seed rows", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "document_states" ("id" bigint PRIMARY KEY, "slug" text);
+          ALTER TABLE "documents" ADD COLUMN "state_id" bigint;
+          ALTER TABLE "documents" ADD CONSTRAINT "documents_state_fk"
+            FOREIGN KEY ("state_id") REFERENCES "document_states" ("id") NOT VALID;
+          CREATE INDEX "document_states_slug_idx" ON "document_states" ("slug");
+          INSERT INTO "document_states" ("id", "slug") VALUES (1, 'ready'), (2, 'archived');
+        `),
+      );
+    });
+
+    it("ignores refused syntax in comments, literals and identifiers", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "CREATE INDEX CONCURRENTLY" (
+            "ALTER TABLE x VALIDATE CONSTRAINT y" text DEFAULT 'UPDATE documents SET x = 1',
+            "INSERT INTO x SELECT y FROM z" text
+          );
+          -- DO $$ BEGIN FOR row IN SELECT * FROM documents LOOP END LOOP; END $$;
         `),
       );
     });
@@ -392,7 +459,7 @@ describe("check-migration-safety", () => {
       expectClean(
         runChecker(`
           DROP INDEX CONCURRENTLY IF EXISTS "documents_status_idx";
-          CREATE INDEX CONCURRENTLY IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
+          CREATE INDEX IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
         `),
       );
     });
@@ -522,8 +589,8 @@ describe("check-migration-safety", () => {
     it("clears a finding when the acknowledgement names its rule", () => {
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed unbounded-update - table has under ten rows
-          UPDATE "documents" SET "status" = 'archived';
+          -- stella-migration-safety: reviewed delete-data - table has under ten rows
+          DELETE FROM "documents";
         `),
       );
     });
@@ -563,12 +630,12 @@ describe("check-migration-safety", () => {
     it("lets an acknowledgement above a DO block cover its inner statements", () => {
       expectClean(
         runChecker(`
-          -- stella-migration-safety: reviewed unbounded-update - guarded by the row
+          -- stella-migration-safety: reviewed delete-data - guarded by the row
           -- count check inside the block
           DO $$
           BEGIN
             IF (SELECT count(*) FROM "documents") < 100 THEN
-              UPDATE "documents" SET "status" = 'archived';
+              DELETE FROM "documents";
             END IF;
           END
           $$;
@@ -791,13 +858,14 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it("allows the same statements against an unregistered table", () => {
-      expectClean(
+    it("rejects UPDATE against an unregistered table in pre-deploy", () => {
+      expectFinding(
         runChecker(`
           UPDATE "case_law_polarity_rules"
              SET "source" = 'retired'
            WHERE "pattern" = 'x';
         `),
+        "pre-deploy-update",
       );
     });
 
@@ -997,12 +1065,10 @@ describe("check-migration-safety", () => {
           ALTER TABLE "practice_areas" ADD COLUMN "seen_at" timestamptz DEFAULT clock_timestamp();
           ALTER TABLE "practice_areas" ALTER COLUMN "updated_at" SET DEFAULT current_timestamp;
           INSERT INTO "practice_areas" ("id", "slug", "created_at") VALUES (DEFAULT, 'corporate', DEFAULT);
-          UPDATE "practice_areas" SET "updated_at" = DEFAULT WHERE "slug" = 'corporate';
           -- stella-migration-safety: reviewed delete-data - expired rows only, the sweeper deletes them anyway
           DELETE FROM "verification" WHERE "expires_at" < now();
           -- UPDATE "practice_areas" SET "updated_at" = now();
           INSERT INTO "audit_notes" ("body") VALUES ('set at now() by random()');
-          UPDATE "practice_areas" SET "now" = 'x' WHERE "slug" = 'corporate';
           CREATE OR REPLACE FUNCTION touch_practice_area() RETURNS trigger AS $$
           BEGIN
             UPDATE "practice_areas" SET "updated_at" = now() WHERE "id" = NEW."id";
