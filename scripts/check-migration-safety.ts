@@ -40,8 +40,8 @@ type Statement = {
   literals: { index: number; end: number; value: string }[];
   executableIndexHint?: boolean;
   // A DO block runs this statement's command string through EXECUTE, and the
-  // string writes or copies rows (UPDATE ... SET, INSERT ... SELECT, MERGE).
-  executableRowWrite?: boolean;
+  // string is an operation the pre-deploy phase refuses.
+  executableRefusedOperation?: boolean;
   // Comment, string, and identifier content masked to spaces so keyword scans
   // cannot be fooled by literals.
   text: string;
@@ -728,6 +728,9 @@ const isPreDeployUpdate = (statement: Statement): boolean =>
 
 // Every form that copies or materialises existing rows; WITH NO DATA creates
 // the relation empty.
+const isPreDeployValidateConstraint = (text: string): boolean =>
+  /\bALTER\s+TABLE\b[\s\S]*\bVALIDATE\s+CONSTRAINT\b/iu.test(text);
+
 const isPreDeployRowCopy = (text: string): boolean =>
   isInsertFromQuery(text) ||
   /\bMERGE\s+INTO\b/iu.test(text) ||
@@ -735,6 +738,17 @@ const isPreDeployRowCopy = (text: string): boolean =>
   ((isCreateTableAsQuery(text) ||
     /\bCREATE\s+MATERIALIZED\s+VIEW\b/iu.test(text)) &&
     !/\bWITH\s+NO\s+DATA\b/iu.test(text));
+
+// A command string a DO block runs through EXECUTE, judged by the same
+// detectors as a plain statement. format() placeholders (`%I`, `%1$s`) stand
+// in for names, so they are read as one.
+const isRefusedPreDeployCommand = (command: string): boolean =>
+  parseStatements(command.replace(/%(?:\d+\$)?-?\d*[ILs]/gu, "x")).some(
+    (statement) =>
+      isPreDeployUpdate(statement) ||
+      isPreDeployRowCopy(statement.text) ||
+      isPreDeployValidateConstraint(statement.text),
+  );
 
 const STATEMENT_INVARIANT_RULES = [
   {
@@ -750,8 +764,7 @@ const STATEMENT_INVARIANT_RULES = [
     id: "pre-deploy-validate-constraint",
     description: "validates a constraint during the pre-deploy phase",
     matches: ({ deferred, text }) =>
-      !deferred &&
-      /\bALTER\s+TABLE\b[\s\S]*\bVALIDATE\s+CONSTRAINT\b/iu.test(text),
+      !deferred && isPreDeployValidateConstraint(text),
     guidance:
       "Add the constraint NOT VALID in the migration, then validate it in the post-deploy online phase owned by apps/api/src/db/online-migrations.ts.",
   },
@@ -769,11 +782,13 @@ const STATEMENT_INVARIANT_RULES = [
     guidance: ONLINE_BACKFILL_GUIDANCE,
   },
   {
-    id: "pre-deploy-dynamic-row-write",
+    id: "pre-deploy-dynamic-sql",
     description:
-      "writes or copies rows through EXECUTE in a DO block during the pre-deploy phase",
-    matches: ({ executableRowWrite }) => executableRowWrite === true,
-    guidance: ONLINE_BACKFILL_GUIDANCE,
+      "runs an operation the pre-deploy phase refuses (a row update or copy, VALIDATE CONSTRAINT) through EXECUTE in a DO block",
+    matches: ({ executableRefusedOperation }) =>
+      executableRefusedOperation === true,
+    guidance:
+      "Run the operation as plain SQL in the post-deploy online phase: backfills through apps/api/src/db/backfill-runtime.ts, validation through apps/api/src/db/online-migrations.ts.",
   },
   {
     id: "pre-deploy-row-loop",
@@ -1051,9 +1066,6 @@ const INDEX_BUILD_HINT_PATTERN =
 // cursor loops and batch-looking DML cannot hide a data backfill in a DO block
 // or stored function.
 const ROW_LOOP_PATTERN = /\bLOOP\b/iu;
-// A command string a DO block can EXECUTE that writes or copies rows.
-const EXECUTABLE_ROW_WRITE_PATTERN =
-  /\bUPDATE\s+\S[\s\S]*?\bSET\b|\bINSERT\s+INTO\b[\s\S]*?\bSELECT\b|\bMERGE\s+INTO\b/iu;
 const RELATION_ACCESS_PATTERN =
   /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO)\b/iu;
 
@@ -1094,11 +1106,9 @@ const surfaceQuotedBody = ({
     if (
       !deferred &&
       /\bEXECUTE\b/iu.test(statement.text) &&
-      statement.literals.some(({ value }) =>
-        EXECUTABLE_ROW_WRITE_PATTERN.test(value),
-      )
+      statement.literals.some(({ value }) => isRefusedPreDeployCommand(value))
     ) {
-      statement.executableRowWrite = true;
+      statement.executableRefusedOperation = true;
     }
     return statement;
   });

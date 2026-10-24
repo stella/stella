@@ -372,11 +372,31 @@ describe("check-migration-safety", () => {
         [`REFRESH MATERIALIZED VIEW "document_totals";`, "pre-deploy-row-copy"],
         [
           `DO $$ BEGIN EXECUTE 'UPDATE documents SET status = ''ready'' WHERE id = 1'; END $$;`,
-          "pre-deploy-dynamic-row-write",
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE format('UPDATE %I SET status = %L', 'documents', 'ready'); END $$;`,
+          "pre-deploy-dynamic-sql",
         ],
         [
           `DO $$ BEGIN EXECUTE format('INSERT INTO %I (id) SELECT id FROM documents', 'documents_v2'); END $$;`,
-          "pre-deploy-dynamic-row-write",
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'CREATE TABLE documents_copy AS SELECT * FROM documents'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'CREATE MATERIALIZED VIEW document_totals AS SELECT count(*) FROM documents'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'REFRESH MATERIALIZED VIEW document_totals'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'ALTER TABLE documents VALIDATE CONSTRAINT documents_owner_fk'; END $$;`,
+          "pre-deploy-dynamic-sql",
         ],
         [
           `DO $$ BEGIN FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP; END $$;`,
@@ -411,10 +431,12 @@ describe("check-migration-safety", () => {
         `CREATE TABLE "documents_shape" AS SELECT * FROM "documents" WITH NO DATA;`,
         `CREATE MATERIALIZED VIEW "document_totals" AS SELECT count(*) FROM "documents" WITH NO DATA;`,
         `DO $$ BEGIN EXECUTE 'ALTER TABLE documents ADD COLUMN state text'; END $$;`,
+        `DO $$ BEGIN EXECUTE 'GRANT SELECT, UPDATE ON documents TO stella'; END $$;`,
+        `DO $$ BEGIN EXECUTE 'CREATE TABLE documents_shape AS SELECT * FROM documents WITH NO DATA'; END $$;`,
       ]) {
         const result = runChecker(sql);
         expect(result.stdout + result.stderr, sql).not.toMatch(
-          /pre-deploy-(?:row-copy|dynamic-row-write|update)/u,
+          /pre-deploy-(?:row-copy|dynamic-sql|update)/u,
         );
       }
     });

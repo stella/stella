@@ -7,7 +7,7 @@ export const MIGRATION_SAFETY_RULE_IDS = [
   "pre-deploy-validate-constraint",
   "pre-deploy-update",
   "pre-deploy-row-copy",
-  "pre-deploy-dynamic-row-write",
+  "pre-deploy-dynamic-sql",
   "pre-deploy-row-loop",
   "drop-object",
   "drop-column",
