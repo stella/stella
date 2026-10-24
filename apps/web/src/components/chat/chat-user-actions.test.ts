@@ -35,7 +35,12 @@ describe("assistant message actions", () => {
     expect(
       ["a1", "a2"].flatMap((messageId) =>
         [false, true].map((isGenerating) =>
-          canRetryAssistantMessage({ isGenerating, messageId, messages }),
+          canRetryAssistantMessage({
+            error: undefined,
+            isGenerating,
+            messageId,
+            messages,
+          }),
         ),
       ),
     ).toEqual([false, false, true, false]);
