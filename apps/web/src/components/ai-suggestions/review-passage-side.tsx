@@ -9,7 +9,7 @@
  * marks, the same collapse.
  */
 
-import { Fragment, useCallback, useState } from "react";
+import { Fragment, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -236,7 +236,7 @@ export const ReviewStandardPassages = ({
  */
 const useCollapsedOverflow = () => {
   const [overflows, setOverflows] = useState(false);
-  const contentRef = useCallback((node: HTMLElement | null) => {
+  const contentRef = (node: HTMLElement | null) => {
     if (node === null) {
       return undefined;
     }
@@ -251,7 +251,7 @@ const useCollapsedOverflow = () => {
     return () => {
       observer.disconnect();
     };
-  }, []);
+  };
 
   return { contentRef, overflows };
 };

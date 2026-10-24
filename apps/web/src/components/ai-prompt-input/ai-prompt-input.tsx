@@ -134,6 +134,7 @@ export const AIPromptInput = ({
     activeOrganizationId,
     userId,
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const slashShortcutRows = useMemo(
     () =>
       commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),
@@ -150,16 +151,11 @@ export const AIPromptInput = ({
     isFetchingNextSkillPage,
     isNextSkillPageError,
   ]);
-  const slashItems = useMemo<SlashItem[]>(
-    () =>
-      buildChatSlashItems({
-        shortcuts: slashShortcutRows,
-        skillPages:
-          skillPages && skillPagesForChips(skillPages.pages, skillChips),
-        unavailableSkillIds,
-      }),
-    [slashShortcutRows, skillChips, skillPages, unavailableSkillIds],
-  );
+  const slashItems: SlashItem[] = buildChatSlashItems({
+    shortcuts: slashShortcutRows,
+    skillPages: skillPages && skillPagesForChips(skillPages.pages, skillChips),
+    unavailableSkillIds,
+  });
   const getSlashItems = useLatestCallback(() => slashItems);
 
   const readValue = (editor: Editor): string =>
