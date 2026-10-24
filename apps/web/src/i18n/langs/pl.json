@@ -9,13 +9,12 @@
       "noOtherSessions": "Brak innych aktywnych sesji",
       "revokeOtherSessions": "Wyloguj inne urządzenia",
       "revokeOtherSessionsConfirm": "Spowoduje to zakończenie wszystkich sesji z wyjątkiem bieżącej.",
+      "signedInFrom": "Zalogowano przez {clientName}",
       "unknownDevice": "Nieznane urządzenie"
     }
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Powrót do aplikacji",
-    "billingAndUsage": "Rozliczenia i wykorzystanie",
     "billingProfiles": "Profile rozliczeniowe",
     "deleteDescription": "Trwale usuniesz tę organizację i jej dane. Tej operacji nie można cofnąć.",
     "deleteOrganization": "Usuń organizację",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Opuść organizację",
     "leaveRefusedOnlyOwner": "Jesteś jedynym właścicielem. Zanim odejdziesz, nadaj rolę właściciela innemu członkowi.",
     "modelsAndProviders": "Modele i dostawcy",
-    "noPlan": "Brak aktywnego planu",
     "organizationDeleted": "Organizacja została usunięta.",
     "organizationId": "ID organizacji",
     "organizationLeft": "Opuszczono organizację.",
-    "overviewDescription": "Zarządzaj organizacją, osobami i narzędziami.",
-    "people": "Osoby",
     "planAndUsage": "Plan i wykorzystanie",
     "title": "Administracja organizacji",
     "toolsDescription": "Włącz lub wyłącz wbudowane narzędzia dla wszystkich osób w tej organizacji."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asystent poprosi o ten adres",
-    "copiedToast": "Instrukcje skopiowane. Wklej je do czatu z asystentem.",
     "copy": "Skopiuj mu instrukcje",
     "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
     "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
     "openGuide": "Otwórz instrukcję dla {assistant}",
+    "pasteHint": "Wklej je do czatu z asystentem.",
     "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
     "title": "Korzystaj ze stelli w swoim asystencie AI"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
+      "accountRestricted": "Ustawienia dostawcy AI są niedostępne dla tego konta.",
+      "configUnreadable": "Nie można odczytać konfiguracji dostawcy AI. Poproś administratora organizacji o ponowne połączenie.",
       "cta": "Otwórz ustawienia AI",
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
+      "permissionRequired": "Tylko administrator organizacji może połączyć dostawcę AI.",
+      "seatRequired": "Poproś administratora organizacji o przydzielenie Ci miejsca.",
       "title": "Połącz dostawcę AI"
     },
     "refinePlaceholder": "Jak AI ma dostosować sformułowanie?",
@@ -142,6 +142,8 @@
       "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",
       "title": "Nie udało się Cię zalogować"
     },
+    "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",
+    "handoffTitle": "Przejdź do stella",
     "headline": "Jasność w każdej sprawie.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
@@ -162,6 +164,7 @@
     },
     "professionalUseStatement": "Tworząc konto, potwierdzasz, że korzystasz ze stelli w celach zawodowych, i przyjmujesz do wiadomości, że stella jest narzędziem dla profesjonalistów z branży prawnej i nie zastępuje porady prawnej.",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
+    "reauthenticationRequired": "Zaloguj się ponownie, aby kontynuować tę czynność.",
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
@@ -931,13 +934,10 @@
     },
     "coverage": {
       "completeness": "Kompletność",
-      "countedOn": "Policzono {date}",
       "courtsHeading": "Według sądu",
       "courtsUnavailable": "Zestawienie według sądów jest obecnie niedostępne.",
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
-      "exceedsReportedTotal": "Zawiera więcej, niż wydawca podał ostatnio na {date}",
-      "gapStatusUnknown": "Stan luk nieznany",
       "generatedAt": "Dane na {date}",
       "globeLabel": "Państwa, których orzecznictwo zawiera korpus, na globusie",
       "healthCurrent": "Aktualne",
@@ -958,7 +958,8 @@
       "searchable": "Wyszukiwalne",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne."
+      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
+      "unreadListingPeriods": "Nieodczytane okresy wykazu"
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "decisionTypes": {
@@ -3529,6 +3530,12 @@
       "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "To jest plik {format} w starszym formacie. Zapisz go ponownie jako {replacementExtension}, aby go przekonwertować.",
+      "unsupportedEncoding": "Ten dokument używa nieobsługiwanego kodowania {encoding}, dlatego nie można go przekonwertować.",
+      "unsupportedField": "Ten dokument zawiera pole {fieldType}, którego nie można przekonwertować.",
+      "unsupportedReference": "Ten dokument odwołuje się do zasobu zewnętrznego w {element} {attribute}, dlatego nie można go przekonwertować."
+    },
     "external": {
       "confirmDescription": "Za chwilę przejdziesz do zewnętrznej strony internetowej.",
       "confirmTitle": "Otworzyć link zewnętrzny?",
@@ -4945,7 +4952,7 @@
       "description": "Korzystaj ze stelli w asystencie AI i sprawdzaj, co ma dostęp do Twojego konta.",
       "developerDescription": "Adresy serwera i narzędzie wiersza poleceń do konfiguracji technicznych.",
       "developerTitle": "Dostęp dla programistów",
-      "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie.",
+      "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie. Sesje przeglądarki utworzone przez to połączenie również zostaną wylogowane.",
       "disconnectConfirmTitle": "Rozłączyć {clientName}?",
       "disconnectSuccess": "Rozłączono {clientName}",
       "integrationsDescription": "Zewnętrzne usługi, z których AI może korzystać w Twoim imieniu, np. repozytorium dokumentów.",
@@ -5998,6 +6005,7 @@
       "downloadFailed": "Pobieranie nie powiodło się",
       "downloadPdf": "Pobierz jako PDF",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
+      "emptyFile": "Plik jest pusty.",
       "includeReferenceNumber": "Dołącz numer referencyjny",
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",

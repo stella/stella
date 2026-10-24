@@ -1,8 +1,8 @@
 import {
   EventType,
   RUN_CANCEL_REASON,
-  toServerSentEventsResponse,
   type StreamChunk,
+  toServerSentEventsResponse,
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -30,8 +30,8 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
-  reapOwnerlessChatTurnOnTx,
   readChatTurnTiming,
+  reapOwnerlessChatTurnOnTx,
   settleChatTurnOnTx,
   startChatTurnRun,
   USER_STOP_OUTCOME,
@@ -47,8 +47,8 @@ import {
 } from "@/api/handlers/chat/chat-turn-timing-stream";
 import { joinChatTurn } from "@/api/handlers/chat/turns/resume";
 import type {
-  ChatTurnTiming,
   ChatTurnOutcome,
+  ChatTurnTiming,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -62,6 +62,7 @@ import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -598,6 +599,7 @@ describe("chat run log database contract", () => {
             });
           },
         }),
+        HELD_TEST_STREAM_BINDING,
       );
       const capture = createStreamMessageCapture({
         initialMessages: [],

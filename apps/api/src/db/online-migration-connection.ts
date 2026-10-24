@@ -16,12 +16,7 @@ import type { OnlineTableGate } from "./online-ddl";
  * joined string and split it in SQL (`string_to_array($1, ',')::uuid[]`).
  */
 export type OnlineMigrationParam =
-  | string
-  | number
-  | bigint
-  | boolean
-  | Date
-  | null;
+  string | number | bigint | boolean | Date | null;
 
 const isOnlineMigrationParam = (
   value: unknown,

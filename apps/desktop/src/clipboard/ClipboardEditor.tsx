@@ -1,6 +1,6 @@
 import {
-  Fragment,
   forwardRef,
+  Fragment,
   memo,
   useEffect,
   useEffectEvent,
@@ -34,10 +34,10 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
@@ -65,14 +65,11 @@ import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 
 type SaveState =
-  | { type: "idle" }
-  | { type: "saving" }
-  | { message: string; type: "error" };
+  { type: "idle" } | { type: "saving" } | { message: string; type: "error" };
 
 /** The inline "New group…" panel: closed, or holding the group being created. */
 type GroupDraftState =
-  | { type: "closed" }
-  | (ClipboardGroupDraft & { type: "open" });
+  { type: "closed" } | (ClipboardGroupDraft & { type: "open" });
 
 /** Picking it in the group select opens the draft instead of choosing a group. */
 const NEW_GROUP_OPTION_VALUE = "new-group";

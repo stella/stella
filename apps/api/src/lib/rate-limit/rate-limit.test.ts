@@ -20,9 +20,9 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import {
   InMemoryRateLimitContext,
+  rateLimit,
   scopedGenerator,
   scopedRateLimitKey,
-  rateLimit,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,

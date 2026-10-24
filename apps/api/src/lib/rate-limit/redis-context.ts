@@ -21,7 +21,7 @@ import {
   withCommandTimeout,
 } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 const REQUEST_KEY_SEPARATOR = "\u001f";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
@@ -91,11 +91,7 @@ type RedisRateLimitClient = {
 };
 
 type RedisRateLimitOperation =
-  | "decrement"
-  | "increment"
-  | "read"
-  | "reset"
-  | "complete";
+  "connect" | "decrement" | "increment" | "read" | "reset" | "complete";
 
 type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;
@@ -123,8 +119,7 @@ type RedisConnection = {
 };
 
 type RedisConnectOutcome =
-  | { status: "connected" }
-  | { error: unknown; status: "failed" };
+  { status: "connected" } | { error: unknown; status: "failed" };
 
 type RateLimitCounter = {
   count: number;

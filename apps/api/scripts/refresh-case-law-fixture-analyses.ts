@@ -28,8 +28,8 @@ import { gzipSync } from "node:zlib";
 
 import {
   CASE_LAW_FIXTURES_DIR,
-  readCaseLawFixtureAnalyses,
   type CaseLawFixtureAnalysis,
+  readCaseLawFixtureAnalyses,
 } from "./lib/case-law-fixture-analyses";
 
 const check = process.argv.includes("--check");

@@ -5,17 +5,17 @@ import { Buffer } from "node:buffer";
 
 import { stellaPublicLawReader } from "@/api/db/rls";
 import {
-  softLawSources,
+  softLawDocumentLocators,
   softLawDocuments,
   softLawDocumentVersions,
-  softLawDocumentLocators,
   softLawIngestionAttempts,
+  softLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type {
-  SoftLawExtractionQuality,
   SoftLawEntry,
+  SoftLawExtractionQuality,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

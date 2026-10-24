@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
 
-import { mergeFrameSnapshots, type FrameSnapshot } from "./snapshot-merge";
+import { type FrameSnapshot, mergeFrameSnapshots } from "./snapshot-merge";
 
 const frame = (overrides: Partial<FrameSnapshot>): FrameSnapshot => ({
   elements: [],

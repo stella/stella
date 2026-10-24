@@ -266,6 +266,27 @@ export const DERIVATIVE_FAILURE_REASON = {
 export type DerivativeFailureReason =
   (typeof DERIVATIVE_FAILURE_REASON)[keyof typeof DERIVATIVE_FAILURE_REASON];
 
+const conversionRefusalSchema = t.Union([
+  t.Object({
+    kind: t.Literal("unsupported_encoding"),
+    encoding: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+  t.Object({
+    kind: t.Literal("unsupported_reference"),
+    format: t.String({ minLength: 1, maxLength: 256 }),
+    element: t.String({ minLength: 1, maxLength: 512 }),
+    attribute: t.String({ minLength: 1, maxLength: 512 }),
+  }),
+  t.Object({
+    kind: t.Literal("unsupported_field"),
+    fieldType: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+  t.Object({
+    kind: t.Literal("legacy_format"),
+    replacementExtension: t.UnionEnum([".xlsx", ".pptx"]),
+  }),
+]);
+
 /** Shared by both derivatives so their state machines cannot drift apart. */
 const derivativeStateSchema = t.Union([
   t.Object({
@@ -279,6 +300,7 @@ const derivativeStateSchema = t.Union([
   }),
   t.Object({
     status: t.Literal("failed"),
+    conversionRefusal: t.Optional(conversionRefusalSchema),
     reason: t.Optional(
       t.Union([
         t.Literal(DERIVATIVE_FAILURE_REASON.ENQUEUE),
