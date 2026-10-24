@@ -19,6 +19,7 @@ import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
   sealEdgeHeaders,
+  socketPeerOnce,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -90,10 +91,8 @@ const requestIdentity: Middleware = async ({ request, server }, inner) => {
       ? rawSessionId
       : undefined,
   );
-  // Both addresses start from the socket peer; it is read from the socket
-  // once.
-  const peer = server?.requestIP(request) ?? null;
-  const socket = server === null ? null : { requestIP: () => peer };
+  // Both addresses start from the socket peer, read from the socket once.
+  const socket = socketPeerOnce(request, server ?? null);
   const clientAddress = resolveClientAddress(request, socket);
   // Better Auth reads the address from this header.
   stampClientAddressHeader(request, clientAddress);

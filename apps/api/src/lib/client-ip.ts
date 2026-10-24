@@ -78,6 +78,21 @@ type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
 };
 
+/**
+ * The socket peer, read from the server once per request, as a server the
+ * address resolvers can each ask. `null` without a server (in-process calls).
+ */
+export const socketPeerOnce = (
+  request: Request,
+  server: ServerLike | null,
+): ServerLike | null => {
+  if (server === null) {
+    return null;
+  }
+  const peer = server.requestIP(request);
+  return { requestIP: () => peer };
+};
+
 export type TrustedProxies = { blockList: BlockList };
 
 export const parseTrustedProxies = (
@@ -273,7 +288,8 @@ export const clientAddressConfigurationWarning = ({
   originVerifySecret,
   originVerifySecretPrevious,
 }: ClientAddressConfigurationOptions):
-  "client_ip.viewer_address_unconfigured" | null =>
+  | "client_ip.viewer_address_unconfigured"
+  | null =>
   requiresOriginProof(edgeHeader) &&
   normalizeOriginSecrets({
     current: originVerifySecret,
