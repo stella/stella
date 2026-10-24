@@ -24,9 +24,9 @@ const { createCaseDecisionDetailsTab } =
 const { INSPECTOR_PANE_INTENT } =
   await import("@/components/inspector/inspector-store-types");
 const {
-  inspectorMinimizedStorageKey,
-  inspectorRestorePendingStorageKey,
-  inspectorStateStorageKey,
+  inspectorMinimizedEntry,
+  inspectorRestorePendingEntry,
+  inspectorStateEntry,
 } = await import("@/components/inspector/inspector-storage-keys");
 const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
@@ -44,6 +44,8 @@ const { rootKeys } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
+const { readPersistedState, writePersistedState } =
+  await import("@/lib/persisted-state/registry");
 const { toSafeId } = await import("@/lib/safe-id");
 const { PublicLawInspector } =
   await import("@/routes/law/-components/public-law-inspector");
@@ -75,7 +77,7 @@ const DETAILS_TAB = createCaseDecisionDetailsTab({
   slug: "27-cdo-59-2022",
 });
 
-const inspectorStorageScope = {
+const inspectorScope = {
   organizationId: MEMBER.activeOrganizationId,
   userId: MEMBER.id,
 };
@@ -106,26 +108,23 @@ afterAll(async () => {
 
 /** What a member left behind: the decision's chat tab, with the pane folded. */
 const persistDecisionChat = () => {
-  localArea().setItem(
-    inspectorStateStorageKey(inspectorStorageScope),
-    JSON.stringify({
-      activeId: SAVED_THREAD_ID,
-      collapsedGroupIds: [],
-      groupAssignments: {},
-      groups: [],
-      tabs: [
-        {
-          activeLegalKey: decisionChatKey(DECISION_ID),
-          contextMatterIds: [],
-          id: SAVED_THREAD_ID,
-          label: "Decision chat",
-          started: true,
-          type: "chat",
-        },
-      ],
-    }),
-  );
-  localArea().setItem(inspectorMinimizedStorageKey(inspectorStorageScope), "1");
+  writePersistedState(inspectorStateEntry, inspectorScope, {
+    activeId: SAVED_THREAD_ID,
+    collapsedGroupIds: [],
+    groupAssignments: {},
+    groups: [],
+    tabs: [
+      {
+        activeLegalKey: decisionChatKey(DECISION_ID),
+        contextMatterIds: [],
+        id: SAVED_THREAD_ID,
+        label: "Decision chat",
+        started: true,
+        type: "chat",
+      },
+    ],
+  }).unwrap();
+  writePersistedState(inspectorMinimizedEntry, inspectorScope, true).unwrap();
 };
 
 const rootRoute = createRootRoute();
@@ -183,18 +182,17 @@ describe("a member returning to a decision on the public law surface", () => {
       client.setQueryData(rootKeys.session, { user: { id: MEMBER.id } });
     });
     persistDecisionChat();
-    localArea().setItem(
-      inspectorMinimizedStorageKey(inspectorStorageScope),
-      "0",
-    );
+    writePersistedState(
+      inspectorMinimizedEntry,
+      inspectorScope,
+      false,
+    ).unwrap();
 
     const firstShell = renderMemberInspector(client);
     expect(useInspectorTabsStore.getState().minimized).toBe(false);
-    const session =
-      browserStorage("session") ?? panic("Test requires session storage");
     expect(
-      session.getItem(inspectorRestorePendingStorageKey(inspectorStorageScope)),
-    ).not.toBeNull();
+      readPersistedState(inspectorRestorePendingEntry, inspectorScope),
+    ).not.toBe("");
     firstShell.unmount();
     renderMemberInspector(client);
 
