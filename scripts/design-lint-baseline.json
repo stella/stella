@@ -1059,6 +1059,7 @@
     "apps/api/src/handlers/entities/versions/delete.ts": 2,
     "apps/api/src/handlers/entities/versions/list.ts": 1,
     "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts": 1,
+    "apps/api/src/handlers/memories/update.ts": 1,
     "apps/api/src/handlers/organization-settings/update.ts": 1,
     "apps/api/src/handlers/properties/update.ts": 2,
     "apps/api/src/handlers/sharepoint/oauth-callback.ts": 2,

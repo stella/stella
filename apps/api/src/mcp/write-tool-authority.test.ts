@@ -101,18 +101,29 @@ const noopScopedDb = asTestRaw<ScopedDb>(
 const chatWriteTools = (
   role: MemberRole,
   currentRole: MemberRole | null = role,
-) =>
-  buildChatWriteTools({
-    featureAccessSnapshot: enrolledTimeBillingSnapshot({
-      organizationId: "org_1",
-      userId: "user_1",
-    }),
+) => {
+  const featureAccessSnapshot = enrolledTimeBillingSnapshot({
+    organizationId: "org_1",
+    userId: "user_1",
+  });
+  return buildChatWriteTools({
+    featureAccessSnapshot,
     memberRole: sessionMemberRole(role),
     organizationId: toSafeId<"organization">("org_1"),
     pinServerValidatedWorkspaceId: () => true,
     refRegistry: createChatRefRegistry(),
-    resolveCurrentMembership: async () =>
-      currentRole === null ? null : { role: currentRole },
+    resolveCurrentExecutionContext: async () =>
+      currentRole === null
+        ? null
+        : {
+            accessibleWorkspaces: [],
+            featureAccessSnapshot,
+            pinServerValidatedWorkspaceId: () => false,
+            role: currentRole,
+            safeDb: toSafeDbMock(noopScopedDb),
+            scopedDb: noopScopedDb,
+            userEmail: "member@example.test",
+          },
     safeDb: toSafeDbMock(noopScopedDb),
     scopedDb: noopScopedDb,
     toolDefectMemo: createChatToolDefectMemo(),
@@ -124,6 +135,7 @@ const chatWriteTools = (
     userId: toSafeId<"user">("user_1"),
     workspaceStatusById: new Map(),
   });
+};
 
 /** Run a registered chat write tool and return the refusal it throws, if any. */
 const chatExecutionFailure = async ({

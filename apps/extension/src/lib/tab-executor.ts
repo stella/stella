@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -7,6 +8,7 @@ import {
   type BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
@@ -412,6 +414,7 @@ type PageOperation =
       expectedOrigin: string;
       kind: "action";
       limits: typeof BROWSER_CONTROL_LIMITS;
+      metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
       path: string;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
     }
@@ -419,6 +422,7 @@ type PageOperation =
   | {
       kind: "snapshot";
       limits: typeof BROWSER_CONTROL_LIMITS;
+      metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
     };
 
@@ -439,7 +443,7 @@ const runPageOperation = async (
       if (pageOperation.kind === "locate") {
         return { origin: window.origin, url: window.location.href };
       }
-      const { limits, shadowSegment } = pageOperation;
+      const { limits, metadataType, shadowSegment } = pageOperation;
       const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
       const normalize = (value: string) =>
         value.replaceAll(/\s+/gu, " ").trim();
@@ -838,6 +842,10 @@ const runPageOperation = async (
           ? undefined
           : text;
       };
+      const metadataFor = (value: string | undefined) =>
+        value === undefined
+          ? { type: metadataType.absent }
+          : { type: metadataType.present, value };
       const focusableSelector =
         "a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])";
       const moveFocus = (element: HTMLElement) => {
@@ -997,8 +1005,12 @@ const runPageOperation = async (
           "[role='textbox']",
         ].join(",");
         const elements: {
-          context?: string;
-          href?: string;
+          context:
+            | { type: typeof metadataType.absent }
+            | { type: typeof metadataType.present; value: string };
+          href:
+            | { type: typeof metadataType.absent }
+            | { type: typeof metadataType.present; value: string };
           name: string;
           path: string;
           role: string;
@@ -1021,11 +1033,11 @@ const runPageOperation = async (
                 const href = hrefFor(element);
                 const value = valueFor(element);
                 elements.push({
+                  context: metadataFor(context),
+                  href: metadataFor(href),
                   name: nameFor(element),
                   path,
                   role: roleFor(element),
-                  ...(context === undefined ? {} : { context }),
-                  ...(href === undefined ? {} : { href }),
                   ...(value === undefined ? {} : { value }),
                 });
               }
@@ -1064,14 +1076,28 @@ const runPageOperation = async (
       }
       // Why the element can no longer take the action; null when it still
       // matches the snapshot and accepts it.
+      const targetMetadataMatches = (
+        expected:
+          | { type: typeof metadataType.absent }
+          | { type: typeof metadataType.present; value: string },
+        current: string | undefined,
+      ) => {
+        switch (expected.type) {
+          case metadataType.absent:
+            return current === undefined;
+          case metadataType.present:
+            return current === expected.value;
+          default:
+            expected satisfies never;
+            return panic("Unhandled browser target metadata type");
+        }
+      };
       const targetRefusal = (element: Element) => {
         if (
           nameFor(element) !== action.target.name ||
           roleFor(element) !== action.target.role ||
-          (action.target.href !== undefined &&
-            hrefFor(element) !== action.target.href) ||
-          (action.target.context !== undefined &&
-            contextFor(element) !== action.target.context)
+          !targetMetadataMatches(action.target.href, hrefFor(element)) ||
+          !targetMetadataMatches(action.target.context, contextFor(element))
         ) {
           return {
             error: "The referenced element changed after the page snapshot.",
@@ -1203,7 +1229,8 @@ const runPageOperation = async (
   });
 
 type ActionFrameCheck =
-  { error: BrowserControlResult; ok: false } | { ok: true; origin: string };
+  | { error: BrowserControlResult; ok: false }
+  | { ok: true; origin: string };
 
 /**
  * Reads the origin of the document an element ref points into and holds it
@@ -1277,6 +1304,7 @@ const injectDomAction = async (
         expectedOrigin,
         kind: "action",
         limits: BROWSER_CONTROL_LIMITS,
+        metadataType: BROWSER_CONTROL_TARGET_METADATA,
         path,
         shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
       },
@@ -1335,6 +1363,7 @@ const readSnapshot = async ({
     {
       kind: "snapshot",
       limits: BROWSER_CONTROL_LIMITS,
+      metadataType: BROWSER_CONTROL_TARGET_METADATA,
       shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
     },
   );

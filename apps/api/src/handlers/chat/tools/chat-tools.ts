@@ -228,7 +228,8 @@ type ResolveRegisteredDocxEditModeOptions = {
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
   workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -411,7 +412,8 @@ export type ChatBuiltinApprovalToolName = Exclude<
 >;
 
 type BuiltInChatToolPolicyName =
-  keyof BuiltInChatTools | CurrentSkillEditToolName;
+  | keyof BuiltInChatTools
+  | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
   /** Only the owning chat turn can issue and store displayed visual resources. */
@@ -482,13 +484,10 @@ export type GetChatToolsProps = {
    * call refused as defective in one toolset stays refused in the others.
    */
   toolDefectMemo: ChatToolDefectMemo;
-  /**
-   * Reads the caller's membership when an approved write runs. Tests inject
-   * it; production uses the credential-boundary read.
-   */
-  resolveCurrentMembership?: Parameters<
+  /** Rebuilds live authority for each delayed registry read or write. */
+  resolveCurrentExecutionContext?: Parameters<
     typeof buildChatWriteTools
-  >[0]["resolveCurrentMembership"];
+  >[0]["resolveCurrentExecutionContext"];
   /**
    * The turn's anonymization boundary. Threaded into
    * `createSpawnSubagentsTool` so each subagent's own model calls cross
@@ -583,7 +582,8 @@ export type GetChatToolsProps = {
    * registered by tools or subagents before the memory write.
    */
   resolveMemorySourceWorkspaceIds?:
-    (() => readonly SafeId<"workspace">[]) | undefined;
+    | (() => readonly SafeId<"workspace">[])
+    | undefined;
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Threaded
    * into the projected write tools' MCP context so their `ensureActiveWorkspace`
@@ -593,7 +593,8 @@ export type GetChatToolsProps = {
    * from `accessibleWorkspaces`.
    */
   workspaceStatusById?:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see
@@ -805,6 +806,7 @@ type CreateSecretToolsForTurnProps = Pick<
   | "memberRole"
   | "organizationId"
   | "purpose"
+  | "recordAuditEvent"
   | "safeDb"
   | "threadId"
   | "thirdPartyBoundary"
@@ -816,6 +818,7 @@ const createSecretToolsForTurn = ({
   memberRole,
   organizationId,
   purpose,
+  recordAuditEvent,
   safeDb,
   threadId,
   thirdPartyBoundary,
@@ -825,7 +828,13 @@ const createSecretToolsForTurn = ({
     return {};
   }
   if (purpose === CHAT_TOOL_SET_PURPOSE.validation) {
-    return createSecretTools({ safeDb, organizationId, userId, threadId });
+    return createSecretTools({
+      safeDb,
+      organizationId,
+      userId,
+      threadId,
+      purpose: "validation",
+    });
   }
   if (thirdPartyBoundary.type !== "raw") {
     return {};
@@ -833,23 +842,39 @@ const createSecretToolsForTurn = ({
   if (!hasMemberPermission(memberRole, { integration: ["create"] })) {
     return {};
   }
-  return createSecretTools({ safeDb, organizationId, userId, threadId });
+  if (recordAuditEvent === undefined) {
+    return {};
+  }
+  return createSecretTools({
+    safeDb,
+    organizationId,
+    userId,
+    threadId,
+    purpose: "run",
+    recordAuditEvent,
+  });
+};
+
+const resolveMemoryEnabled = (props: GetChatToolsProps) => {
+  if (props.memoryEnabled !== undefined) {
+    return props.memoryEnabled;
+  }
+  return isMcpDescriptorFeatureEnabled({
+    context: {
+      featureAccessSnapshot: props.featureAccessSnapshot,
+      organizationId: props.organizationId,
+      userId: props.userId,
+    },
+    kind: "tools",
+    id: REMEMBER_TOOL_NAME,
+    featureId: AI_MEMORY_FEATURE_ID,
+  });
 };
 
 const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
     testDependencies,
-    memoryEnabled = isMcpDescriptorFeatureEnabled({
-      context: {
-        featureAccessSnapshot: props.featureAccessSnapshot,
-        organizationId: props.organizationId,
-        userId: props.userId,
-      },
-      kind: "tools",
-      id: REMEMBER_TOOL_NAME,
-      featureId: AI_MEMORY_FEATURE_ID,
-    }),
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,
@@ -869,7 +894,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     activeFile,
     refRegistry,
     toolDefectMemo,
-    resolveCurrentMembership,
+    resolveCurrentExecutionContext,
     thirdPartyBoundary,
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
@@ -895,6 +920,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     promptCachingEnabled = false,
     usageLane,
   } = props;
+  const memoryEnabled = resolveMemoryEnabled(props);
   const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
   const skillDeclarations = honouredSkillDeclarations({
     activeSkillContext,
@@ -910,6 +936,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     memberRole,
     organizationId,
     purpose,
+    recordAuditEvent,
     safeDb,
     threadId,
     thirdPartyBoundary,
@@ -962,6 +989,9 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     recordAuditEvent,
     refRegistry,
+    ...(resolveCurrentExecutionContext === undefined
+      ? {}
+      : { resolveCurrentExecutionContext }),
     safeDb,
     scopedDb,
     scriptCallTools: () => scriptCallTools,
@@ -1262,9 +1292,9 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     pinServerValidatedWorkspaceId,
     recordAuditEvent,
     refRegistry,
-    ...(resolveCurrentMembership === undefined
+    ...(resolveCurrentExecutionContext === undefined
       ? {}
-      : { resolveCurrentMembership }),
+      : { resolveCurrentExecutionContext }),
     safeDb,
     scopedDb,
     toolDefectMemo,

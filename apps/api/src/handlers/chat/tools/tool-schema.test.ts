@@ -447,7 +447,12 @@ const commonProviderOptions = (tools: Tool[]) => ({
 
 type ProviderRequestProbe = {
   provider:
-    "anthropic" | "bedrock" | "google" | "mistral" | "openai" | "openrouter";
+    | "anthropic"
+    | "bedrock"
+    | "google"
+    | "mistral"
+    | "openai"
+    | "openrouter";
   capture: (tools: Tool[]) => Promise<Record<string, unknown>>;
   toolsFromRequest: (request: Record<string, unknown>) => unknown[];
 };
@@ -1338,7 +1343,7 @@ describe("chat tool schemas", () => {
       throw new Error("Expected chat tools to be registered");
     }
 
-    expect(businessRegistryLookup.needsApproval).toBeUndefined();
+    expect(businessRegistryLookup.needsApproval).toBe(true);
     const businessRegistrySchema = convertSchemaToJsonSchema(
       businessRegistryLookup.inputSchema,
     );
@@ -1347,7 +1352,7 @@ describe("chat tool schemas", () => {
     ).toContain("GB");
     expect(getChatToolPolicy(businessRegistryLookup)).toEqual({
       kind: "public_official",
-      needsApproval: false,
+      needsApproval: true,
       requiresAnonymization: false,
     });
     expect(updateEntityFields.needsApproval).toBe(true);

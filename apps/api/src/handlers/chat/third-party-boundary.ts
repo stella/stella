@@ -39,6 +39,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { protectValuesForAnonymization } from "@/api/mcp/field-markers";
 
@@ -1763,7 +1764,8 @@ const anonymizeToolResultTextContent = ({
 };
 
 type ParsedToolResultContent =
-  { type: "json"; value: unknown } | { type: "text"; value: string };
+  | { type: "json"; value: unknown }
+  | { type: "text"; value: string };
 
 const parseToolResultContent = (content: string): ParsedToolResultContent =>
   Result.try((): ParsedToolResultContent => ({
@@ -1810,6 +1812,35 @@ const DEANONYMIZE_INPUT_BY_POLICY_KIND = {
   [CHAT_TOOL_POLICY_KIND.publicUnofficial]: false,
   [CHAT_TOOL_POLICY_KIND.scopeExpansion]: true,
 } as const satisfies Record<ChatToolPolicyKind, boolean>;
+
+const anonymizedToolExecutionError = async ({
+  boundary,
+  error,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  error: unknown;
+}): Promise<ChatToolError> => {
+  let message = "Tool execution failed";
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (typeof error === "string") {
+    message = error;
+  }
+  const prepared = await prepareUnknownForThirdParty({
+    boundary,
+    value: message,
+  });
+  if (Result.isError(prepared)) {
+    throw prepared.error;
+  }
+  return new ChatToolError({
+    kind: ChatToolError.is(error) ? error.kind : "server-defect",
+    message:
+      typeof prepared.value === "string"
+        ? prepared.value
+        : "Tool execution failed",
+  });
+};
 
 export const prepareToolsForThirdParty = ({
   boundary,
@@ -1873,10 +1904,24 @@ export const prepareToolsForThirdParty = ({
           );
         }
 
-        const outputValue: unknown = await execute(toolInput, context);
+        const executed = await Result.tryPromise({
+          try: async () => {
+            const outputValue: unknown = await execute(toolInput, context);
+            return outputValue;
+          },
+          catch: (error) => error,
+        });
+        if (Result.isError(executed)) {
+          // The thrown error is model-visible tool output. It crosses the
+          // same third-party boundary as a successful return value.
+          throw await anonymizedToolExecutionError({
+            boundary,
+            error: executed.error,
+          });
+        }
         const anonymized = await anonymizeToolOutputForThirdParty({
           boundary,
-          outputValue,
+          outputValue: executed.value,
         });
         if (Result.isError(anonymized)) {
           throw anonymized.error;

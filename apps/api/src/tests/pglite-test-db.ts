@@ -32,6 +32,7 @@ import {
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
   installPgliteChatSecretRls,
+  installPgliteChatStoredContentEgress,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteCorpusProjectionRevisionFence,
@@ -837,6 +838,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
 

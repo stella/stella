@@ -24,7 +24,6 @@ import {
   isChatTurnInFlight,
   isExternalInputChatToolName,
   isNonPersistentGrantChatToolName,
-  isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
   isRunningToolPart,
   isToolApprovedByGrant,
@@ -460,24 +459,15 @@ describe("consumeDocumentDeletionToolCalls", () => {
 });
 
 describe("isApprovalPart", () => {
-  test("distinguishes official public lookup tools from other public tools", () => {
-    expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
-    expect(isPublicOfficialChatToolName("infosoud_lookup_case")).toBe(true);
-    expect(isPublicOfficialChatToolName("mcp__salvia__search_decisions")).toBe(
-      false,
-    );
-    // Legacy aliases that pre-date the unified business_registry_lookup
-    // tool should NOT count as currently-registered public-official
-    // tools — they only render in chat history.
-    expect(isPublicOfficialChatToolName("ares_lookup_company")).toBe(false);
-    expect(isPublicOfficialChatToolName("ares_search_companies")).toBe(false);
-  });
-
   test("identifies built-in tools whose external request needs a preview", () => {
     expect(isExternalInputChatToolName("web_search")).toBe(true);
     expect(isExternalInputChatToolName("fetch_url")).toBe(true);
     expect(isExternalInputChatToolName("boe_search_legislation")).toBe(true);
-    expect(isExternalInputChatToolName("boe_get_law")).toBe(false);
+    // Official public registries receive model-chosen arguments too.
+    expect(isExternalInputChatToolName("boe_get_law")).toBe(true);
+    expect(isExternalInputChatToolName("business_registry_lookup")).toBe(true);
+    expect(isExternalInputChatToolName("infosoud_lookup_case")).toBe(true);
+    expect(isExternalInputChatToolName("save_clause")).toBe(false);
   });
 
   test("treats DOCX comment mutation tools as approval parts", () => {
@@ -605,11 +595,6 @@ describe("tool approval grants", () => {
 
   test("keeps the retired save_template card's write summary", () => {
     expect(isRegistryWriteSummaryToolName("save_template")).toBe(true);
-  });
-
-  test("identifies one representative public-official and external-input tool", () => {
-    expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
-    expect(isExternalInputChatToolName("web_search")).toBe(true);
   });
 
   test("treats external MCP approvals as connector-level grants", () => {

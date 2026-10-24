@@ -81,7 +81,8 @@ type CreateRememberToolProps = {
   workspaceId: SafeId<"workspace"> | null;
   /** The turn's statuses of the member's accessible matters. */
   workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
 };
 
 type MemoryWriteScopeRequestOptions = Pick<
@@ -234,6 +235,11 @@ export const createRememberTool = ({
             message: "Failed to save memory.",
             cause: insertResult.error,
           }),
+        );
+      }
+      if (insertResult.value.type === "authority_unavailable") {
+        return Result.err(
+          memoryWriteRefusalChatToolError(insertResult.value.error),
         );
       }
       return Result.ok({ status: "saved" } as const);
