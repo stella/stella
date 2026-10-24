@@ -1,4 +1,4 @@
-export { InvoicingInputError } from "./errors";
+export { InvoicingInputError, type InvoicingResult } from "./errors";
 export { normalizeIban, parseIban } from "./iban";
 export { parseNip } from "./nip";
 export {
@@ -19,6 +19,13 @@ export {
   type CzechQrPaymentResult,
 } from "./qr-payment";
 export { standardVatRateOn, type VatRatePeriod } from "./vat-rate-period";
+export {
+  VAT_RATE_PRESET_COUNTRIES,
+  VAT_RATE_PRESETS,
+  vatRatePeriodsForCountry,
+  type VatRatePreset,
+  type VatRatePresetCountry,
+} from "./vat-rate-presets";
 export type {
   BankPaymentDetails,
   InvoiceDocument,
@@ -42,6 +49,7 @@ export {
   buildMoneyS3Xml,
   buildPohodaXml,
   buildUblFiles,
+  variableSymbolOf,
   type InvoiceExportLine,
   type InvoiceExportLineSource,
   type InvoiceExportRecord,
@@ -50,3 +58,17 @@ export {
   type InvoiceTableCell,
   type InvoiceTableLanguage,
 } from "./exports";
+export {
+  INVOICE_COUNTRIES,
+  INVOICE_COUNTRY_PROFILES,
+  INVOICE_LANGUAGES,
+  invoiceCountryOf,
+  invoiceCountryForVatPrefix,
+  invoiceSellerCountryOf,
+  legalNotesFor,
+  type InvoiceCountry,
+  type InvoiceCountryProfile,
+  type InvoiceLanguage,
+  type InvoicePartyId,
+} from "./profiles/country-profiles";
+export { INVOICE_PDF_LABELS } from "./profiles/pdf-labels";

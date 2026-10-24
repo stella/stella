@@ -1452,6 +1452,7 @@ const config = defineConfig({
   ignorePatterns: [
     ...libraryIgnorePatterns,
     "**/routeTree.gen.ts",
+    "apps/web/src/route-templates.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
