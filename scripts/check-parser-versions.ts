@@ -789,8 +789,7 @@ export const checkParserVersions = ({
 };
 
 type GitResult =
-  | { type: "ok"; output: Uint8Array }
-  | { type: "failed"; detail: string };
+  { type: "ok"; output: Uint8Array } | { type: "failed"; detail: string };
 
 const gitIn =
   (repository: string) =>
@@ -869,8 +868,7 @@ const fetchMissingObjects = (
 };
 
 type ReadGitTreeResult =
-  | { type: "ok"; files: SourceTree }
-  | { type: "failed"; detail: string };
+  { type: "ok"; files: SourceTree } | { type: "failed"; detail: string };
 
 // Read immutable git objects in one batch, without checking out either tree.
 export const readGitTree = (
