@@ -1,10 +1,17 @@
 import { PDF } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { cents, formatMoneyCents } from "@stll/money";
 
-import { buildInvoicePaymentPayload, renderInvoicePdf } from "./render";
-import type { RenderInvoicePdfOptions } from "./render";
+import { buildInvoicePaymentPayload } from "./render-helpers";
+import type { RenderInvoicePdfOptions } from "./render-helpers";
+import { renderInvoiceWithTypst } from "./typst/render-typst";
+import { openTypstSession } from "./typst/session";
+
+const session = openTypstSession();
+afterAll(async () => {
+  await session.close();
+});
 
 const sampleLine = {
   workspaceId: "matter-one",
@@ -29,10 +36,12 @@ const options = {
     dueDate: "2026-10-14",
     taxableSupplyDate: "2026-09-30",
     currency: "CZK",
+    language: "cs",
     reference: "0987654321",
     notes: "Vyřízení záležitosti bez dalších průtahů.",
     buyerName: "Řehoř Žďárský",
     buyerRegistrationId: "01234567",
+    buyerTaxId: "2020123456",
     buyerVatId: "CZ01234567",
     buyerAddressLine1: "Příčná 12",
     buyerAddressLine2: null,
@@ -44,7 +53,8 @@ const options = {
   seller: {
     legalName: "Advokátní kancelář Černý",
     registrationId: "87654321",
-    vatId: null,
+    taxId: "2020876543",
+    vatId: "CZ87654321",
     addressLine1: "Široká 4",
     addressLine2: null,
     city: "Praha",
@@ -53,6 +63,8 @@ const options = {
     iban: "CZ33 0100 0000 0000 0297 0297",
     bic: "KOMBCZPP",
     accountNumber: "2970297/0100",
+    registerEntry: "Fictional register, entry 00000",
+    barRegistration: "Fictional bar, no. 0000",
     footerNotes: "Děkujeme za spolupráci.",
   },
   totals: {
@@ -62,18 +74,27 @@ const options = {
     vatBreakdown: [],
   },
   originalNumber: null,
-  locale: "cs-CZ",
-  lang: "cs",
 } satisfies RenderInvoicePdfOptions;
 
 const textOf = async (value: RenderInvoicePdfOptions) => {
-  const pdf = await PDF.load((await renderInvoicePdf(value)).unwrap());
+  const outcome = (
+    await renderInvoiceWithTypst({
+      invoice: value,
+      session,
+      createdAt: new Date("2026-09-30T08:00:00Z"),
+    })
+  ).unwrap();
+  if (outcome.status !== "rendered") {
+    throw new Error(outcome.diagnostics.join("\n"));
+  }
+  const pdf = await PDF.load(outcome.pdf);
   return {
     pdf,
     text: pdf
       .extractText()
       .map(({ text }) => text)
-      .join("\n"),
+      .join("\n")
+      .replace(/[  ]/gu, " "),
   };
 };
 
@@ -144,6 +165,10 @@ describe("invoice PDF", () => {
         locale: "cs-CZ",
       }).replace(/[\u00a0\u202f]/gu, " "),
     );
+    expect(text).toContain("DIČ: 2020123456");
+    expect(text).toContain("DIČ: 2020876543");
+    expect(text).toContain("CZ01234567");
+    expect(text).toContain("CZ87654321");
   });
 
   test("prints each line's quantity, unit and unit price in the reader's number format", async () => {
@@ -257,6 +282,7 @@ describe("invoice PDF", () => {
     expect(buildInvoicePaymentPayload(draft)?.unwrap()).toEqual({
       status: "payable",
       errorCorrection: "M",
+      scheme: "spayd",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014",
     });
@@ -268,6 +294,7 @@ describe("invoice QR payment", () => {
     expect(buildInvoicePaymentPayload(options)?.unwrap()).toEqual({
       status: "payable",
       errorCorrection: "M",
+      scheme: "spayd",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014*MSG:2026-001",
     });
@@ -307,6 +334,7 @@ describe("invoice QR payment", () => {
     expect(buildInvoicePaymentPayload(polish)?.unwrap()).toEqual({
       status: "payable",
       errorCorrection: "L",
+      scheme: "zbp",
       payload:
         "5260001246|PL|61109010140000071219812874|055555|Kancelaria Nowak i W|2026-001|||",
     });
@@ -320,6 +348,7 @@ describe("invoice QR payment", () => {
       status: "not_payable",
       reason: "not_pln",
       errorCorrection: "L",
+      scheme: "zbp",
     });
     // No NIP on the seller profile, or a foreign VAT ID on a firm that banks
     // in Poland: no code, and the PDF still renders.
@@ -356,5 +385,62 @@ describe("invoice QR payment", () => {
         seller: { ...options.seller, iban: null },
       }),
     ).toBeNull();
+  });
+});
+
+describe("country invoice wording", () => {
+  test("prints a Czech party's tax ID when it has no VAT ID", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: { ...options.seller, taxId: "CZ8765432101", vatId: null },
+      invoice: {
+        ...options.invoice,
+        buyerTaxId: "CZ0123456789",
+        buyerVatId: null,
+      },
+    });
+    expect(text).toContain("CZ8765432101");
+    expect(text).toContain("CZ0123456789");
+  });
+
+  test.each(["sk", "en"] as const)(
+    "prints mandated Slovak reverse-charge wording in %s",
+    async (lang) => {
+      const { text } = await textOf({
+        ...options,
+        seller: { ...options.seller, country: "SK", vatId: "SK1234567890" },
+        invoice: {
+          ...options.invoice,
+          language: lang,
+          lines: [{ ...sampleLine, vatTreatment: "reverse_charge" }],
+        },
+      });
+      expect(text).toContain("Prenesenie daňovej povinnosti.");
+      expect(text).toContain(
+        lang === "sk" ? "Dátum dodania" : "Taxable supply date",
+      );
+    },
+  );
+
+  test("prints an exemption reason with the Slovak prescribed phrase", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: { ...options.seller, country: "SK", vatId: "SK1234567890" },
+      invoice: {
+        ...options.invoice,
+        language: "en",
+        lines: [
+          { ...sampleLine, vatTreatment: "exempt", exemptionReason: "§ 38" },
+        ],
+      },
+    });
+    expect(text).toContain("Dodanie je oslobodené od dane.");
+    expect(text).toContain("§ 38");
+  });
+
+  test("keeps Czech labels while adding the Czech profile note", async () => {
+    const { text } = await textOf(options);
+    expect(text).toContain("Datum zdanitelného plnění");
+    expect(text).toContain("Dodavatel není plátcem DPH.");
   });
 });

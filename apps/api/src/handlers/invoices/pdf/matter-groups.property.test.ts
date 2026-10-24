@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import { groupInvoiceLinesByMatter } from "./matter-groups";
-import type { RenderInvoicePdfOptions } from "./render";
+import type { RenderInvoicePdfOptions } from "./render-helpers";
 
 const line = fc
   .record({

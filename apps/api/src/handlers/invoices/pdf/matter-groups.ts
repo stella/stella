@@ -1,4 +1,4 @@
-import type { RenderInvoicePdfOptions } from "./render";
+import type { RenderInvoicePdfOptions } from "./render-helpers";
 
 type PdfLine = RenderInvoicePdfOptions["invoice"]["lines"][number];
 

@@ -288,6 +288,7 @@ export const readMatterInvoicePrefills = async (
       workspaceId,
       prefill: {
         currency,
+        language: prefill.language,
         invoiceDate: loaded.invoiceDate,
         taxableSupplyDate: loaded.supplyDate,
         dueDays: prefill.dueDays,

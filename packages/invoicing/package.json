@@ -19,6 +19,8 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/invoicing"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
+    "@stll/api-contract": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
@@ -28,6 +30,7 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
+    "bysquare": "4.1.0",
     "fast-check": "catalog:",
     "xmllint-wasm": "catalog:"
   }

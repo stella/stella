@@ -2,8 +2,11 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { INVOICE_COUNTRY_PROFILES, invoiceCountryOf } from "@stll/invoicing";
+
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -79,6 +82,33 @@ const transitionInvoiceBodySchema = t.Object({
 });
 
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+
+const validateReverseChargeBuyer = async (
+  tx: Transaction,
+  invoiceId: SafeId<"invoice">,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const rows = await tx
+    .select({ id: invoiceLines.id, buyerVatId: invoices.buyerVatId })
+    .from(invoiceLines)
+    .innerJoin(invoices, eq(invoices.id, invoiceLines.invoiceId))
+    .where(
+      and(
+        eq(invoiceLines.invoiceId, invoiceId),
+        invoiceInMatter(invoices, workspaceId),
+        eq(invoiceLines.vatTreatment, "reverse_charge"),
+      ),
+    )
+    .limit(1);
+  const reverseCharge = rows.at(0);
+  return reverseCharge !== undefined &&
+    (reverseCharge.buyerVatId ?? "").trim() === ""
+    ? new HandlerError({
+        status: 400,
+        message: "Reverse charge requires a buyer VAT ID",
+      })
+    : null;
+};
 
 const buildVoidEvents = (params: {
   invoiceId: SafeId<"invoice">;
@@ -168,6 +198,81 @@ const releaseInvoiceEntries = async (
   );
 };
 
+type VatCurrencyGuardOptions = {
+  tx: Transaction;
+  sellerProfileId: SafeId<"sellerProfile"> | null;
+  organizationId: SafeId<"organization">;
+  currency: string;
+  vatAmountMinor: number;
+};
+
+const vatCurrencyError = async ({
+  tx,
+  sellerProfileId,
+  organizationId,
+  currency,
+  vatAmountMinor,
+}: VatCurrencyGuardOptions): Promise<HandlerError | null> => {
+  if (vatAmountMinor === 0 || sellerProfileId === null) {
+    return null;
+  }
+  const seller = await tx.query.sellerProfiles.findFirst({
+    where: {
+      id: { eq: sellerProfileId },
+      organizationId: { eq: organizationId },
+    },
+    columns: { country: true, vatId: true },
+  });
+  if (seller === undefined) {
+    return null;
+  }
+  const { vatCurrency } = INVOICE_COUNTRY_PROFILES[invoiceCountryOf(seller)];
+  if (vatCurrency === null || vatCurrency === currency) {
+    return null;
+  }
+  return new HandlerError({
+    status: 409,
+    message: `This seller's VAT invoices must state the VAT amount in ${vatCurrency}`,
+    hint: `Issue the invoice in ${vatCurrency}; converting the VAT amount from another currency is not supported yet.`,
+  });
+};
+
+/** A finalize that reuses an issued number surfaces as a conflict. */
+const duplicateInvoiceNumberError = (
+  error: HandlerError | SafeDbError,
+): HandlerError | null =>
+  DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+    ? new HandlerError({
+        status: 409,
+        message: "An invoice with this number already exists",
+      })
+    : null;
+
+type RefreshDraftInvoiceAmountsOptions = {
+  scope: Parameters<typeof lockDraftInvoiceForLines>[1];
+  now: Date;
+  recordAuditEvent: AuditRecorder;
+};
+
+const refreshDraftInvoiceAmounts = async (
+  tx: Transaction,
+  { scope, now, recordAuditEvent }: RefreshDraftInvoiceAmountsOptions,
+) => {
+  const draft = await lockDraftInvoiceForLines(tx, scope, recordAuditEvent);
+  if (draft.isErr()) {
+    return Result.err(draft.error);
+  }
+  const reverseChargeError = await validateReverseChargeBuyer(
+    tx,
+    scope.invoiceId,
+    scope.workspaceId,
+  );
+  if (reverseChargeError !== null) {
+    return Result.err(reverseChargeError);
+  }
+  return await recalculateInvoiceTotals(tx, scope, now, recordAuditEvent);
+};
+
 const transitionInvoice = createSafeHandler(
   {
     contract: "patch",
@@ -177,7 +282,9 @@ const transitionInvoice = createSafeHandler(
       "using the issue date; configure a default number series first. Manual numbers " +
       "and numbers kept after reverting to draft are preserved. A credit note must " +
       "reference an eligible original and cannot exceed its total. Voiding releases " +
-      "attached entries and clears the paid timestamp.",
+      "attached entries and clears the paid timestamp. A VAT invoice must use the " +
+      "currency its seller's country requires for the VAT amount (EUR for Slovakia, " +
+      "CZK for Czechia).",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -266,25 +373,28 @@ const transitionInvoice = createSafeHandler(
             workspaceId,
             organizationId: session.activeOrganizationId,
           };
+          let vatAmountMinor = existing.vatAmount;
           // Re-finalizing changes status, never the previously issued content.
           if (existing.finalizedAt === null) {
-            const draft = await lockDraftInvoiceForLines(
-              tx,
-              { ...scope, matterLocks },
-              recordAuditEvent,
-            );
-            if (draft.isErr()) {
-              return Result.err(draft.error);
-            }
-            const totals = await recalculateInvoiceTotals(
-              tx,
-              scope,
+            const totals = await refreshDraftInvoiceAmounts(tx, {
+              scope: { ...scope, matterLocks },
               now,
               recordAuditEvent,
-            );
+            });
             if (totals.isErr()) {
               return Result.err(totals.error);
             }
+            vatAmountMinor = totals.value.vatAmountMinor;
+          }
+          const currencyError = await vatCurrencyError({
+            tx,
+            sellerProfileId: existing.sellerProfileId,
+            organizationId: session.activeOrganizationId,
+            currency: existing.currency,
+            vatAmountMinor,
+          });
+          if (currencyError !== null) {
+            return Result.err(currencyError);
           }
           set.finalizedAt = existing.finalizedAt ?? now;
           if (existing.invoiceNumber === null) {
@@ -372,17 +482,11 @@ const transitionInvoice = createSafeHandler(
         return Result.ok({ id: row.id });
       },
     );
-    if (
-      result.isErr() &&
-      DatabaseError.is(result.error) &&
-      result.error.code === PG_ERROR.UNIQUE_VIOLATION
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "An invoice with this number already exists",
-        }),
-      );
+    const conflict = result.isErr()
+      ? duplicateInvoiceNumberError(result.error)
+      : null;
+    if (conflict !== null) {
+      return Result.err(conflict);
     }
     const transitioned = yield* result;
     return Result.ok(transitioned);

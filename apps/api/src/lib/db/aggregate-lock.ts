@@ -2403,6 +2403,8 @@ export const lockInvoiceInStatus = async (
       originalInvoiceId: invoices.originalInvoiceId,
       finalizedAt: invoices.finalizedAt,
       currency: invoices.currency,
+      language: invoices.language,
+      vatAmount: invoices.vatAmount,
       dueDate: invoices.dueDate,
       invoiceDate: invoices.invoiceDate,
       invoiceNumber: invoices.invoiceNumber,

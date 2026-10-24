@@ -136,7 +136,7 @@ const answerBody = (
         break;
       case "snapshot":
         // Materialized from the current messages when the stream yields it.
-        chunks.push({ type: EventType.MESSAGES_SNAPSHOT, messages: [] });
+        chunks.push(buildWireSnapshot([]));
         break;
       case "status":
         steps += 1;
@@ -644,6 +644,88 @@ const reasoningTargetsMessage = ({
         (stepName !== undefined && part.stepId === stepName)),
   );
 
+type ToolTargetOptions = {
+  cause: StreamChunk;
+  message: ChatUIMessage;
+  historyIds: ReadonlySet<string>;
+  activeAssistantId: string | undefined;
+  previous: readonly ChatUIMessage[];
+};
+
+/** START reuses the active assistant when its preferred parent has no state.
+ * ARGS/END route to the owner recorded by START, identified here by the
+ * unique tool-call part already visible in the previous emit. An approval
+ * interrupt updates only the active owner containing the awaited call. */
+const toolTargetsMessage = ({
+  cause,
+  message,
+  historyIds,
+  activeAssistantId,
+  previous,
+}: ToolTargetOptions) => {
+  if (historyIds.has(message.id) || message.role !== "assistant") {
+    return false;
+  }
+  switch (cause.type) {
+    case EventType.TOOL_CALL_START:
+      return (
+        message.id === activeAssistantId &&
+        message.parts.some(
+          (part) => part.type === "tool-call" && part.id === cause.toolCallId,
+        )
+      );
+    case EventType.RUN_FINISHED:
+      return (
+        message.id === activeAssistantId &&
+        message.parts.some(
+          (part) =>
+            part.type === "tool-call" && awaitedCalls(cause).includes(part.id),
+        )
+      );
+    case EventType.TOOL_CALL_ARGS:
+    case EventType.TOOL_CALL_END: {
+      const owners = previous.filter(({ parts }) =>
+        parts.some(
+          (part) => part.type === "tool-call" && part.id === cause.toolCallId,
+        ),
+      );
+      return owners.length === 1 && owners.at(0)?.id === message.id;
+    }
+    default:
+      return false;
+  }
+};
+
+/** Immediate text emission uses the same active fallback owner as START.
+ * Its last text must contain precisely the previous segment plus this delta. */
+const textTargetsMessage = ({
+  cause,
+  message,
+  historyIds,
+  activeAssistantId,
+  previous,
+}: ToolTargetOptions) => {
+  if (
+    cause.type !== EventType.TEXT_MESSAGE_CONTENT ||
+    cause.delta === "" ||
+    message.id !== activeAssistantId ||
+    historyIds.has(message.id) ||
+    message.role !== "assistant"
+  ) {
+    return false;
+  }
+  const previousMessage = previous.find(({ id }) => id === message.id);
+  const previousPart = previousMessage?.parts.at(-1);
+  const part = message.parts.at(-1);
+  return (
+    previousMessage !== undefined &&
+    part?.type === "text" &&
+    part !== previousPart &&
+    part.content ===
+      (previousPart?.type === "text" ? previousPart.content : "") + cause.delta
+  );
+};
+
 type SessionPath =
   | "approval-requested"
   | "approval-responded"
@@ -764,6 +846,20 @@ const expectStableStreamIdentity = ({
           historyIds,
           activeAssistantId,
           stepName,
+        }) &&
+        !toolTargetsMessage({
+          cause,
+          message,
+          historyIds,
+          activeAssistantId,
+          previous: previous.shown,
+        }) &&
+        !textTargetsMessage({
+          cause,
+          message,
+          historyIds,
+          activeAssistantId,
+          previous: previous.shown,
         })
       ) {
         expect(message).toBe(shown);
@@ -869,6 +965,104 @@ describe("streamed chunks keep what they do not change", () => {
         ],
       }),
     ).toThrow("expect(received).toBe(expected)");
+  });
+
+  test("tools reuse the reasoning assistant created after a snapshot", async () => {
+    const history = transcript([
+      [{ type: "text", content: "Earlier settled answer" }],
+    ]);
+    const observed = await streamSession({
+      session: {
+        approved: false,
+        continuation: [],
+        first: { end: "approval", ops: [{ kind: "snapshot" }] },
+        history,
+        regenerate: {
+          end: "approval",
+          ops: [
+            { kind: "snapshot" },
+            { kind: "reasoning", delta: " " },
+            { kind: "tools", calls: [{ args: ['{"query":""}'] }] },
+            { kind: "text", delta: "After tool" },
+            { kind: "text", delta: " and more" },
+          ],
+        },
+      },
+    });
+    expectStableStreamIdentity({ ...observed, history });
+    const historyIds = new Set(history.map(({ id }) => id));
+    const reached = new Set<StreamChunk["type"]>();
+    let unrelatedCloneChecked = false;
+    for (const [index, next] of observed.emits.entries()) {
+      const previous = observed.emits.at(index - 1);
+      const { cause } = next;
+      if (index === 0 || previous === undefined || typeof cause !== "object") {
+        continue;
+      }
+      const activeAssistantId = next.shown.findLast(
+        ({ id, role }) => role === "assistant" && !historyIds.has(id),
+      )?.id;
+      if (
+        next.shown.some(
+          (message) =>
+            !STREAMED_IDS.has(message.id) &&
+            (toolTargetsMessage({
+              cause,
+              message,
+              historyIds,
+              activeAssistantId,
+              previous: previous.shown,
+            }) ||
+              textTargetsMessage({
+                cause,
+                message,
+                historyIds,
+                activeAssistantId,
+                previous: previous.shown,
+              })),
+        )
+      ) {
+        reached.add(cause.type);
+        if (
+          !unrelatedCloneChecked &&
+          cause.type === EventType.TOOL_CALL_START
+        ) {
+          const untouched = next.shown.find(
+            ({ id }) =>
+              historyIds.has(id) &&
+              previous.shown.some((message) => message.id === id),
+          );
+          if (untouched !== undefined) {
+            const corrupted = {
+              ...next,
+              shown: next.shown.map((message) =>
+                message === untouched ? { ...message } : message,
+              ),
+            };
+            expect(() =>
+              expectStableStreamIdentity({
+                changed: observed.changed,
+                history,
+                emits: observed.emits.map((emit, emitIndex) =>
+                  emitIndex === index ? corrupted : emit,
+                ),
+              }),
+            ).toThrow("expect(received).toBe(expected)");
+            unrelatedCloneChecked = true;
+          }
+        }
+      }
+    }
+    expect(unrelatedCloneChecked).toBe(true);
+    expect(reached).toEqual(
+      new Set([
+        EventType.TOOL_CALL_START,
+        EventType.TOOL_CALL_ARGS,
+        EventType.TOOL_CALL_END,
+        EventType.TEXT_MESSAGE_CONTENT,
+        EventType.RUN_FINISHED,
+      ]),
+    );
   });
 
   test("reasoning after tool results owns its SDK assistant without replacing history", async () => {

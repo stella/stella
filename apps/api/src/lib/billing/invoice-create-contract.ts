@@ -1,7 +1,11 @@
 import { t } from "elysia";
 
 import { tInvoiceDocumentType } from "@/api/lib/billing/invoice-document-type";
-import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tCurrencyCode,
+  tInvoiceLanguage,
+  tSafeId,
+} from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 export const createInvoiceBodySchema = t.Object({
@@ -12,6 +16,7 @@ export const createInvoiceBodySchema = t.Object({
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   currency: tCurrencyCode,
+  language: t.Optional(tInvoiceLanguage),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   timeEntryIds: t.Array(tSafeId("timeEntry"), {
     minItems: 0,

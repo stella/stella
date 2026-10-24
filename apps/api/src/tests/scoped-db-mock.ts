@@ -86,14 +86,18 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
       for: async () => await Promise.resolve(rows),
       orderBy: () => ({ limit, offset }),
     });
-  return {
-    from: () =>
-      Object.assign(new FixtureQuery(rows), {
-        where,
-        innerJoin: () => ({ where }),
-        leftJoin: () => ({ where }),
-      }),
+  type JoinedQuery = FixtureQuery<TRow> & {
+    where: typeof where;
+    innerJoin: () => JoinedQuery;
+    leftJoin: () => JoinedQuery;
   };
+  const from = (): JoinedQuery =>
+    Object.assign(new FixtureQuery(rows), {
+      where,
+      innerJoin: from,
+      leftJoin: from,
+    });
+  return { from };
 };
 
 const fixtureSelect =

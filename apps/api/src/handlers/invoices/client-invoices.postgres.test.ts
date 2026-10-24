@@ -464,26 +464,28 @@ if (!databaseUrl || !runPostgres) {
       expect(atTwo.statements).toBe(atOne.statements);
       expect(atLimit.statements).toBe(atOne.statements);
       expect(atLimit.transactionRoundTrips).toBe(atOne.transactionRoundTrips);
-      expect(
-        await clientInvoicePrefillScalingScenario.handler(context),
-      ).toMatchObject({
-        matters: expect.arrayContaining(
-          entryValues.map((entry) => ({
-            workspaceId: entry.workspaceId,
-            prefill: {
-              taxableSupplyDate: entry.dateWorked,
-              timeEntries: [
-                {
-                  id: entry.id,
-                  rateAtEntry: entry.rateAtEntry,
-                  timekeeperName: "Invoice visibility",
-                },
-              ],
-              expenses: [],
-            },
-          })),
-        ),
-      });
+      const selected =
+        await clientInvoicePrefillScalingScenario.handler(context);
+      for (const entry of entryValues) {
+        expect(
+          selected.matters.find(
+            ({ workspaceId }) => workspaceId === entry.workspaceId,
+          ),
+        ).toMatchObject({
+          workspaceId: entry.workspaceId,
+          prefill: {
+            taxableSupplyDate: entry.dateWorked,
+            timeEntries: [
+              {
+                id: entry.id,
+                rateAtEntry: entry.rateAtEntry,
+                timekeeperName: "Invoice visibility",
+              },
+            ],
+            expenses: [],
+          },
+        });
+      }
       // Overflow on the final selected matter must not become an empty or
       // truncated successful group after earlier matters have been loaded.
       const last =

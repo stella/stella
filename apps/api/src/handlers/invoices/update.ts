@@ -3,6 +3,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import type { InvoiceLanguage } from "@stll/api-contract";
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
@@ -29,6 +30,7 @@ import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tCurrencyCode,
+  tInvoiceLanguage,
   tSafeId,
   workspaceParams,
 } from "@/api/lib/custom-schema";
@@ -46,11 +48,13 @@ const updateInvoiceBodySchema = t.Object({
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   currency: t.Optional(tCurrencyCode),
+  language: t.Optional(tInvoiceLanguage),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   taxableSupplyDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   sellerProfileId: t.Optional(t.Nullable(tSafeId("sellerProfile"))),
   buyerName: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 512 }))),
   buyerRegistrationId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  buyerTaxId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
   buyerVatId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
   buyerAddressLine1: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
   buyerAddressLine2: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
@@ -62,6 +66,7 @@ const updateInvoiceBodySchema = t.Object({
 const BUYER_FIELDS = [
   "buyerName",
   "buyerRegistrationId",
+  "buyerTaxId",
   "buyerVatId",
   "buyerAddressLine1",
   "buyerAddressLine2",
@@ -74,6 +79,7 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 type InvoiceUpdateSource = {
   currency: string;
+  language: InvoiceLanguage;
   dueDate: string | null;
   invoiceDate: string;
   invoiceNumber: string | null;
@@ -134,6 +140,12 @@ const buildInvoiceUpdateAuditChanges = (
     changes["currency"] = {
       old: existing.currency,
       new: changedFields.currency,
+    };
+  }
+  if (changedFields.language !== undefined) {
+    changes["language"] = {
+      old: existing.language,
+      new: changedFields.language,
     };
   }
   if (changedFields.taxableSupplyDate !== undefined) {
@@ -259,6 +271,7 @@ const updateInvoice = createSafeHandler(
       "reference",
       "notes",
       "currency",
+      "language",
       "taxableSupplyDate",
       "sellerProfileId",
     ]);

@@ -444,15 +444,13 @@ const resolveCreationDefaults = async (
     documentType === "credit_note"
       ? body.invoiceDate
       : await lastWorkDate(tx, { workspaceId, body });
-  const prefill =
-    documentType === "credit_note"
-      ? null
-      : await resolveInvoicePrefill(tx, {
-          organizationId,
-          workspaceId,
-          sellerProfileId: body.sellerProfileId,
-          supplyDate: body.taxableSupplyDate ?? workDate,
-        });
+  const resolvedPrefill = await resolveInvoicePrefill(tx, {
+    organizationId,
+    workspaceId,
+    sellerProfileId: body.sellerProfileId,
+    supplyDate: body.taxableSupplyDate ?? workDate,
+  });
+  const prefill = documentType === "credit_note" ? null : resolvedPrefill;
   if (prefill?.sellerSource === "not_found") {
     return Result.err(
       new HandlerError({
@@ -471,7 +469,12 @@ const resolveCreationDefaults = async (
     body.dueDate === undefined && prefill !== null
       ? dueDateAfter(body.invoiceDate, prefill.dueDays)
       : (body.dueDate ?? null);
-  return Result.ok({ prefill, taxableSupplyDate, dueDate });
+  return Result.ok({
+    prefill,
+    taxableSupplyDate,
+    dueDate,
+    language: body.language ?? resolvedPrefill.language,
+  });
 };
 
 type CreateDraftInvoiceOptions = {
@@ -886,7 +889,7 @@ export const createDraftInvoice = async (
   if (defaults.isErr()) {
     return Result.err(defaults.error);
   }
-  const { prefill, taxableSupplyDate, dueDate } = defaults.value;
+  const { prefill, taxableSupplyDate, dueDate, language } = defaults.value;
   if (prefill?.vat.reason === "no_vat_rate") {
     return Result.err(
       new HandlerError({
@@ -925,6 +928,7 @@ export const createDraftInvoice = async (
       taxableSupplyDate,
       reference: body.reference ?? null,
       currency: body.currency,
+      language,
       notes: body.notes ?? null,
       status: INVOICE_STATUS.DRAFT,
       sellerProfileId: prefill?.seller?.id ?? null,

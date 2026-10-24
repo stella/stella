@@ -1571,6 +1571,11 @@ const createHarness = ({
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
+          // The contact VAT ID repair's movable-contact probe: none left, so
+          // its completion holds and the phase skips it.
+          if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+            return [];
+          }
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
           }

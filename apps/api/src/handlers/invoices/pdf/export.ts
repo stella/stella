@@ -1,11 +1,14 @@
 import { panic, Result } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
+import { renderInvoiceWithTypst } from "@/api/handlers/invoices/pdf/typst/render-typst";
+import { openTypstSession } from "@/api/handlers/invoices/pdf/typst/session";
+import type { TypstRenderOutcome } from "@/api/handlers/invoices/pdf/typst/session";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -14,16 +17,57 @@ import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  extractFormattingLocale,
-  extractLangFromRequest,
-} from "@/api/lib/locale";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const EXPORT_URL_TTL_SECONDS = 300;
+const invoiceTypstSession = openTypstSession();
+
+const invoiceRenderError = (cause: unknown) => {
+  if (cause instanceof HandlerError) {
+    return cause;
+  }
+  return new HandlerError({
+    status: 409,
+    message:
+      cause instanceof Error
+        ? cause.message
+        : "The invoice PDF could not be rendered.",
+    hint: "Check the seller payment details and invoice dates before exporting.",
+    cause,
+  });
+};
+
+type InvoiceRenderRejection = Extract<
+  TypstRenderOutcome,
+  { status: "rejected" }
+>;
+
+// Renderer infrastructure failures are retryable; any other rejection names
+// invoice data the user must correct.
+const invoiceRenderRejection = ({
+  reason,
+  diagnostics,
+}: InvoiceRenderRejection) => {
+  const infrastructureFailure = ["timeout", "crashed", "memory"].includes(
+    reason,
+  );
+  return classifyFailure(
+    new HandlerError({
+      status: infrastructureFailure ? 503 : 409,
+      message: infrastructureFailure
+        ? "The invoice PDF renderer is temporarily unavailable."
+        : diagnostics.join("\n") || `Invoice rendering was rejected: ${reason}`,
+      hint: infrastructureFailure
+        ? "Try exporting the invoice again later."
+        : "Check the seller payment details and invoice dates before exporting.",
+      retryable: infrastructureFailure,
+    }),
+    infrastructureFailure ? "invoice_renderer_failed" : "conflict",
+  );
+};
 
 const config = {
   contract: "patch",
@@ -47,7 +91,10 @@ const config = {
 
 // permissions-exempt: rendering a temporary copy needs the same matter read
 // permission as the invoice; it does not modify the invoice.
-export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
+export const createInvoicePdfExport = (
+  writeObject = writeS3ObjectWithRetry,
+  renderInvoice = renderInvoiceWithTypst,
+) =>
   createSafeHandler(
     config,
     async function* ({
@@ -56,7 +103,6 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
       session,
       params,
       user,
-      request,
       recordAuditEvent,
     }) {
       const loaded = yield* Result.await(
@@ -132,53 +178,53 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
         );
       }
       const amounts = readInvoiceDocumentLines(loaded.invoice);
-      const rendered = yield* Result.await(
-        Result.tryPromise(
-          async () =>
-            await renderInvoicePdf({
-              ...loaded,
+      const outcome = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await renderInvoice({
+              session: invoiceTypstSession,
+              createdAt: new Date(),
               invoice: {
-                ...loaded.invoice,
-                lines: amounts.lines.map((line, index) => {
-                  const stored = loaded.invoice.lines.at(index);
-                  if (loaded.invoice.lines.length > 0 && !stored) {
-                    return panic("A document line has no stored source");
-                  }
-                  const matter = stored
-                    ? (stored.workspace ??
-                      panic("Invoice line matter is missing"))
-                    : null;
-                  return {
-                    workspaceId: stored ? stored.workspaceId : workspaceId,
-                    workspaceName: matter ? matter.name : loaded.matterName,
-                    description: line.description,
-                    quantity: line.quantity,
-                    unit: line.unit,
-                    unitPrice: line.unitPrice,
-                    netAmount: line.netAmountMinor,
-                    vatAmount: line.vatAmountMinor,
-                    grossAmount: line.grossAmountMinor,
-                    vatRateBps: line.vatRateBps,
-                    vatTreatment: line.vatTreatment,
-                  };
-                }),
+                ...loaded,
+                invoice: {
+                  ...loaded.invoice,
+                  lines: amounts.lines.map((line, index) => {
+                    const stored = loaded.invoice.lines.at(index);
+                    if (loaded.invoice.lines.length > 0 && !stored) {
+                      return panic("A document line has no stored source");
+                    }
+                    const matter = stored
+                      ? (stored.workspace ??
+                        panic("Invoice line matter is missing"))
+                      : null;
+                    return {
+                      workspaceId: stored ? stored.workspaceId : workspaceId,
+                      workspaceName: matter ? matter.name : loaded.matterName,
+                      description: line.description,
+                      quantity: line.quantity,
+                      unit: line.unit,
+                      unitPrice: line.unitPrice,
+                      netAmount: line.netAmountMinor,
+                      vatAmount: line.vatAmountMinor,
+                      grossAmount: line.grossAmountMinor,
+                      vatRateBps: line.vatRateBps,
+                      vatTreatment: line.vatTreatment,
+                    };
+                  }),
+                },
+                totals: amounts.totals,
               },
-              totals: amounts.totals,
-              locale: extractFormattingLocale(request),
-              lang: extractLangFromRequest(request),
             }),
-        ),
+          catch: invoiceRenderError,
+        }),
       );
-      if (rendered.isErr()) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: rendered.error.message,
-            hint: "Check the seller payment details and invoice dates before exporting.",
-          }),
-        );
+      if (outcome.isErr()) {
+        return Result.err(invoiceRenderError(outcome.error));
       }
-      const body = rendered.value;
+      if (outcome.value.status === "rejected") {
+        return Result.err(invoiceRenderRejection(outcome.value));
+      }
+      const body = outcome.value.pdf;
       const number =
         loaded.invoice.status === INVOICE_STATUS.DRAFT
           ? "draft"

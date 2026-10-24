@@ -41,6 +41,7 @@ import { ContactPersonDetailsEditor } from "@/routes/_protected.contacts/-compon
 import { EditableRow } from "@/routes/_protected.contacts/-components/editable-row";
 import { InfoRow } from "@/routes/_protected.contacts/-components/info-row";
 import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-matter-row";
+import { VatPayerSelect } from "@/routes/_protected.contacts/-components/vat-payer-select";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,
@@ -323,9 +324,16 @@ function ContactDetailPage() {
               <EditableRow
                 contact={contact}
                 field="taxId"
-                label={t("contacts.fields.taxId")}
+                label={t("common.taxId")}
                 value={contact.taxId}
               />
+              <EditableRow
+                contact={contact}
+                field="vatId"
+                label={t("common.vatId")}
+                value={contact.vatId}
+              />
+              <VatPayerSelect contact={contact} />
               <EditableRow
                 // A draft is typed in one currency's units; a currency change
                 // remounts the row; its commit guard discards the old draft.

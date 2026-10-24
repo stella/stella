@@ -5,8 +5,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { INVOICE_DUE_DAY_PRESETS } from "@stll/api-contract";
+import { INVOICE_DUE_DAY_PRESETS, INVOICE_LANGUAGES } from "@stll/api-contract";
+import type { InvoiceLanguage } from "@stll/api-contract";
 import type { InvoiceTotals, VatTreatment } from "@stll/invoicing";
+import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
@@ -27,6 +29,13 @@ import {
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Switch } from "@stll/ui/switch";
 import {
   Table,
@@ -128,6 +137,9 @@ type IssuedInvoice = {
   dueDate: string | null;
 };
 
+const isInvoiceLanguage = (value: string | null): value is InvoiceLanguage =>
+  INVOICE_LANGUAGES.some((language) => language === value);
+
 /** A muted note saying where a prefilled value came from. */
 const SourceHint = ({ children }: { children: ReactNode }) => (
   <span className="text-muted-foreground text-xs">{children}</span>
@@ -198,6 +210,7 @@ export const InvoiceComposer = ({
   >(() => new Set(expenses.map((expense) => expense.id)));
   const [invoiceDate, setInvoiceDate] = useState(prefill.invoiceDate);
   const [dueDays, setDueDays] = useState(prefill.dueDays);
+  const [language, setLanguage] = useState(prefill.language);
   const [issued, setIssued] = useState<IssuedInvoice | null>(null);
 
   const selection = { entries, choices, expenses, includedExpenseIds };
@@ -276,6 +289,7 @@ export const InvoiceComposer = ({
           ? {}
           : { expectedTotalAmount: totals.grossAmountMinor }),
         currency,
+        language,
         // The seller the person reviewed, even if the default changes meanwhile.
         ...(prefill.seller === null
           ? {}
@@ -332,8 +346,10 @@ export const InvoiceComposer = ({
             dueDate={dueDate}
             dueDays={dueDays}
             invoiceDate={invoiceDate}
+            language={language}
             onDueDays={setDueDays}
             onInvoiceDate={setInvoiceDate}
+            onLanguage={setLanguage}
             prefill={prefill}
             supplyDate={supplyDate}
           />
@@ -957,8 +973,10 @@ type DetailsStepProps = {
   supplyDate: string;
   dueDays: number;
   dueDate: string | null;
+  language: InvoiceLanguage;
   onInvoiceDate: (date: string) => void;
   onDueDays: (days: number) => void;
+  onLanguage: (language: InvoiceLanguage) => void;
 };
 
 const DetailsStep = ({
@@ -969,11 +987,14 @@ const DetailsStep = ({
   supplyDate,
   dueDays,
   dueDate,
+  language,
   onInvoiceDate,
   onDueDays,
+  onLanguage,
 }: DetailsStepProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
   const dueChoices = [
     ...new Set([...INVOICE_DUE_DAY_PRESETS, prefill.dueDays]),
   ].toSorted((left, right) => left - right);
@@ -1093,6 +1114,28 @@ const DetailsStep = ({
                   : "billing.invoiceComposer.sources.defaultTerm",
               )}
             </SourceHint>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">{t("common.language")}</span>
+            <Select
+              onValueChange={(value) => {
+                if (isInvoiceLanguage(value)) {
+                  onLanguage(value);
+                }
+              }}
+              value={language}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                {INVOICE_LANGUAGES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {displayLanguageName(value, { displayLocale: locale })}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </div>
         </FramePanel>
       </Frame>
