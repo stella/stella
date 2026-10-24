@@ -4,9 +4,9 @@ import { invalidInput, type InvoicingResult } from "../errors";
 import type { InvoiceParty, VatTreatment } from "../types";
 import {
   amountText,
-  exportMattersOf,
   countryCodeOf,
   effectiveVatRateBps,
+  exportMattersOf,
   invoiceDescriptionOf,
   type InvoiceExportLine,
   type InvoiceExportRecord,

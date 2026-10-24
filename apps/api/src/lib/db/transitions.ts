@@ -2,9 +2,9 @@ import { panic } from "better-result";
 import {
   and,
   eq,
+  getColumns,
   inArray,
   isNull,
-  getColumns,
   isSQLWrapper,
   sql,
 } from "drizzle-orm";
@@ -24,9 +24,9 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  timeEntries,
   BILLING_STATUS,
   INVOICE_ATTACHMENT,
+  timeEntries,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
@@ -1721,8 +1721,7 @@ type ClaimInvoiceTimeEntriesOptions = {
   timeEntryIds: SafeId<"timeEntry">[];
   currency: string;
   invoiceAttachment:
-    | typeof INVOICE_ATTACHMENT.CHARGED
-    | typeof INVOICE_ATTACHMENT.COVERED;
+    typeof INVOICE_ATTACHMENT.CHARGED | typeof INVOICE_ATTACHMENT.COVERED;
   now: Date;
   recordAuditEvent: AuditRecorder;
 };

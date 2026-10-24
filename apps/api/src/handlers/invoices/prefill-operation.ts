@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, isNull, ne, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { todayFor } from "@stll/time";

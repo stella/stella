@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
-import { quantityText, type InvoiceTotals } from "@stll/invoicing";
+import { type InvoiceTotals, quantityText } from "@stll/invoicing";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceLines } from "@/api/db/schema";

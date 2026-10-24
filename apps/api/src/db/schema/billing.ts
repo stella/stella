@@ -1,6 +1,6 @@
 import {
-  INVOICE_LINE_SOURCES,
   INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   type InvoiceStatus,
@@ -20,10 +20,10 @@ import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import {
-  timeEntryPolicies,
-  invoicePolicies,
-  invoiceLineVisibilityPolicy,
   invoiceLineOwnerReadPolicy,
+  invoiceLineVisibilityPolicy,
+  invoicePolicies,
+  timeEntryPolicies,
 } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
