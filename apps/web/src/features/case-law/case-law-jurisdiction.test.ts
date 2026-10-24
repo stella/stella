@@ -37,8 +37,8 @@ describe("case-law launch readiness", () => {
     }
   });
 
-  test("identity-only EU decisions do not open search or public pages", () => {
-    expect(publicCaseLawCountryFromParam("eu")).toBeNull();
-    expect(publicCaseLawPageCountryFromParam("eu")).toBeNull();
+  test("launched EU decisions open search and public pages", () => {
+    expect(publicCaseLawCountryFromParam("eu") === "EU").toBe(true);
+    expect(publicCaseLawPageCountryFromParam("eu") === "EU").toBe(true);
   });
 });

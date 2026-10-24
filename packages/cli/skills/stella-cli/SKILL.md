@@ -213,7 +213,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
 - `stella case-law search`
-  - `--country` — Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
@@ -311,7 +311,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
   - `--query` — Search query (string)
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--country` — Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --document-type, --status, --language, --date-from, --date-to, --as-of
 - `stella matter add-member`
   - `--matter-id` — Matter ID (string)

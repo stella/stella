@@ -319,11 +319,19 @@ beforeEach(() => {
       }),
   );
   searchLegislationHandlerMock.mockReset();
-  searchLegislationHandlerMock.mockResolvedValue({
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-    items: [statuteHit],
-    nextCursor: null,
-  });
+  // Likewise each country's statute request returns only that country's statutes.
+  searchLegislationHandlerMock.mockImplementation(
+    async (input: unknown) =>
+      await Promise.resolve({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        items:
+          asTestRaw<{ jurisdiction: string }>(input).jurisdiction ===
+          statuteHit.country
+            ? [statuteHit]
+            : [],
+        nextCursor: null,
+      }),
+  );
   readGatedDecisionMock.mockReset();
   readGatedDecisionMock.mockResolvedValue({
     ...decisionHit,

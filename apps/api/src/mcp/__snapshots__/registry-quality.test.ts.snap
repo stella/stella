@@ -34,7 +34,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 12282,
+          "maxLength": 26936,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -276,14 +276,17 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
                 "CZE",
-                "POL"
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
               ],
               "tool": "search_case_law"
             }
@@ -1104,13 +1107,14 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "SVK"
               ],
               "tool": "search_legislation"
             }
@@ -6670,7 +6674,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 12282,
+          "maxLength": 26936,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -6912,14 +6916,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
                 "CZE",
-                "POL"
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
               ],
               "tool": "search_case_law"
             }
@@ -7740,13 +7747,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "SVK"
               ],
               "tool": "search_legislation"
             }
@@ -14086,7 +14094,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 12282,
+          "maxLength": 26936,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -14328,14 +14336,17 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
                 "CZE",
-                "POL"
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
               ],
               "tool": "search_case_law"
             }
@@ -14846,13 +14857,14 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "SVK"
               ],
               "tool": "search_legislation"
             }
@@ -16202,7 +16214,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 12172,
+          "maxLength": 26827,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -16344,14 +16356,17 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE, POL. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
                 "CZE",
-                "POL"
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
               ],
               "tool": "search_case_law"
             }
@@ -16794,13 +16809,14 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
               "admitted": [
-                "CZE"
+                "CZE",
+                "SVK"
               ],
               "tool": "search_legislation"
             }

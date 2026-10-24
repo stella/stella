@@ -923,7 +923,7 @@ describe.skipIf(!runEngineTests)(
         page.nextCursor ?? panic("fixture issued no strict cursor");
       const callStart = searchCalls.length;
       const response = await searchLegislationHandler(
-        { query: QUERY, jurisdiction: "SVK", limit: 1, cursor },
+        { query: QUERY, jurisdiction: "AUT", limit: 1, cursor },
         legislationDb,
         "unobserved",
         { provider: "corpus-index", loadSearchConfigs: async () => [] },
@@ -933,8 +933,8 @@ describe.skipIf(!runEngineTests)(
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
           domain: "legislation",
-          country: "SVK",
-          reason: "pages_public",
+          country: "AUT",
+          reason: "pending_public",
         },
       });
       expect(searchCalls.length).toBe(callStart);

@@ -3272,12 +3272,12 @@ describe("OpenAI-compatible MCP tools", () => {
     const calls = [
       {
         toolName: "search_case_law",
-        args: { country: "SVK", queries: ["synthetic"] },
+        args: { country: "AUT", queries: ["synthetic"] },
         expectedDomain: "caseLaw",
       },
       {
         toolName: "search_legislation",
-        args: { country: "SVK", query: "synthetic" },
+        args: { country: "AUT", query: "synthetic" },
         expectedDomain: "legislation",
       },
     ];
@@ -3291,8 +3291,8 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(result.structuredContent).toMatchObject({
         status: "unavailable",
         domain: expectedDomain,
-        country: "SVK",
-        reason: "pages_public",
+        country: "AUT",
+        reason: "pending_public",
       });
       expect(result.content).toContainEqual({
         type: "text",
@@ -6505,16 +6505,16 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
     test.each([null, createCitationDigest()])(
-      "identity-only countries report unavailable citations on MCP and CLI (%#)",
+      "unlaunched countries report unavailable citations on MCP and CLI (%#)",
       async (digest) => {
         const base = createReadDecisionResult();
         readGatedDecisionMock.mockResolvedValue({
           ...base,
           id: toSafeId<"caseLawDecision">(DECISION_ID),
-          country: "EU",
+          country: "AUT",
           decisionDate: "2024-02-01",
           documentAst: null,
-          fulltext: "Synthetic EU decision.",
+          fulltext: "Synthetic Austrian decision.",
           identifiers: [
             {
               type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -6556,7 +6556,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 citations: {
                   status: "unavailable",
                   reason: "country_not_search_admitted",
-                  country: "EU",
+                  country: "AUT",
                 },
               },
             },
