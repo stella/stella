@@ -70,8 +70,7 @@ export const getEditableFieldInputAttributes = (field: EditableField) => {
 type NumericContactPayload = { paymentTermDays: number | null };
 
 type NumericContactPayloadResult =
-  | { status: "valid"; payload: NumericContactPayload }
-  | { status: "invalid" };
+  { status: "valid"; payload: NumericContactPayload } | { status: "invalid" };
 
 const NON_NEGATIVE_INTEGER_TOKEN = /^[0-9]+$/u;
 

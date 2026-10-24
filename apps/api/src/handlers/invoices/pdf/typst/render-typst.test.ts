@@ -262,3 +262,25 @@ describe("Typst country invoice wording", () => {
     expect(text).toContain("§ 38");
   });
 });
+
+test("Slovak payment documents carry the complete official print mark at its recommended size", () => {
+  const fixture = invoiceFixture(1);
+  const slovak = buildInvoiceTemplateData({
+    ...fixture,
+    seller: {
+      ...fixture.seller,
+      iban: "SK2711000000123456789012",
+      country: "SK",
+      bic: "FIKTSKBA",
+    },
+    invoice: { ...fixture.invoice, currency: "EUR", language: "sk" },
+  }).unwrap();
+  expect(slovak.payment?.qrWidthMm).toBe(37.254);
+  expect(slovak.payment?.qrSvg).toContain('viewBox="0 0 64 75"');
+  for (const id of ["g3522-3", "g3493-4", "g3487-0"]) {
+    expect(slovak.payment?.qrSvg).toContain(`id="${id}"`);
+  }
+  const czech = buildInvoiceTemplateData(fixture).unwrap();
+  expect(czech.payment?.qrWidthMm).toBe(32);
+  expect(czech.payment?.qrSvg).not.toContain('id="g3522-3"');
+});

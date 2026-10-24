@@ -28,25 +28,71 @@ export type InvoiceCountryProfile = {
   legalNotes: Record<VatTreatment, LegalNote | null>;
 };
 
-const translations = (
-  values: Partial<Record<InvoiceLanguage, string>>,
-  fallback: string,
-) =>
-  ({
-    en: values.en ?? fallback,
-    cs: values.cs ?? fallback,
-    sk: values.sk ?? fallback,
-    de: values.de ?? fallback,
-    fr: values.fr ?? fallback,
-    es: values.es ?? fallback,
-    "pt-BR": values["pt-BR"] ?? fallback,
-    pl: values.pl ?? fallback,
-    hu: values.hu ?? fallback,
-    et: values.et ?? fallback,
-    lv: values.lv ?? fallback,
-    lt: values.lt ?? fallback,
-    ar: values.ar ?? fallback,
-  }) satisfies Record<InvoiceLanguage, string>;
+const NOTE_TRANSLATIONS = {
+  not_vat_payer: {
+    ar: "المورّد غير مسجل في ضريبة القيمة المضافة.",
+    cs: "Dodavatel není plátcem DPH.",
+    de: "Der Lieferant ist nicht umsatzsteuerpflichtig.",
+    en: "The supplier is not a VAT payer.",
+    es: "El proveedor no está sujeto al IVA.",
+    et: "Tarnija ei ole käibemaksukohustuslane.",
+    fr: "Le fournisseur n’est pas assujetti à la TVA.",
+    hu: "A szállító nem áfafizető.",
+    lt: "Tiekėjas nėra PVM mokėtojas.",
+    lv: "Piegādātājs nav PVN maksātājs.",
+    pl: "Dostawca nie jest podatnikiem VAT.",
+    "pt-BR": "O fornecedor não é contribuinte do IVA.",
+    sk: "Dodávateľ nie je platiteľom DPH.",
+  },
+  reverse_charge: {
+    ar: "الاحتساب العكسي للضريبة.",
+    cs: "Přenesení daňové povinnosti.",
+    de: "Steuerschuldnerschaft des Leistungsempfängers.",
+    en: "Reverse charge.",
+    es: "Inversión del sujeto pasivo.",
+    et: "Pöördmaksustamine.",
+    fr: "Autoliquidation.",
+    hu: "Fordított adózás.",
+    lt: "Atvirkštinis apmokestinimas.",
+    lv: "Nodokļa apgrieztā maksāšana.",
+    pl: "Odwrotne obciążenie.",
+    "pt-BR": "Autoliquidação.",
+    sk: "Prenesenie daňovej povinnosti.",
+  },
+  outside_scope: {
+    ar: "يقع مكان تقديم الخدمة خارج الدولة.",
+    cs: "Místo plnění služby je mimo tuzemsko.",
+    de: "Der Leistungsort liegt außerhalb des Landes.",
+    en: "The place of supply of the service is outside the country.",
+    es: "El lugar de prestación del servicio está fuera del país.",
+    et: "Teenuse osutamise koht asub väljaspool riiki.",
+    fr: "Le lieu de prestation du service se situe hors du pays.",
+    hu: "A szolgáltatás teljesítési helye az országon kívül van.",
+    lt: "Paslaugos teikimo vieta yra už šalies ribų.",
+    lv: "Pakalpojuma sniegšanas vieta atrodas ārpus valsts.",
+    pl: "Miejsce świadczenia usługi znajduje się poza krajem.",
+    "pt-BR": "O local da prestação do serviço fica fora do país.",
+    sk: "Miesto dodania služby je mimo tuzemska.",
+  },
+  exempt: {
+    ar: "التوريد معفى من الضريبة.",
+    cs: "Plnění osvobozené od daně.",
+    de: "Die Leistung ist steuerbefreit.",
+    en: "The supply is exempt from tax.",
+    es: "La prestación está exenta de impuestos.",
+    et: "Teenus on maksuvaba.",
+    fr: "La prestation est exonérée de taxe.",
+    hu: "A szolgáltatás adómentes.",
+    lt: "Paslauga neapmokestinama.",
+    lv: "Pakalpojums ir atbrīvots no nodokļa.",
+    pl: "Świadczenie jest zwolnione z podatku.",
+    "pt-BR": "A prestação é isenta de imposto.",
+    sk: "Dodanie je oslobodené od dane.",
+  },
+} satisfies Record<
+  Exclude<VatTreatment, "domestic_vat">,
+  Record<InvoiceLanguage, string>
+>;
 
 const supplyDateLabels = () =>
   ({
@@ -67,10 +113,10 @@ const supplyDateLabels = () =>
 
 const note = (
   mandated: string,
-  translated: Partial<Record<InvoiceLanguage, string>>,
+  translated: Record<InvoiceLanguage, string>,
 ): LegalNote => ({
   mandated,
-  translations: translations(translated, translated.en ?? mandated),
+  translations: translated,
 });
 
 const noLegalNotes = {
@@ -101,24 +147,28 @@ export const INVOICE_COUNTRY_PROFILES = {
       domestic_vat: null,
       // Not prescribed wording; states why no VAT is charged.
       not_vat_payer: note("Dodávateľ nie je platiteľom DPH.", {
+        ...NOTE_TRANSLATIONS.not_vat_payer,
         sk: "Dodávateľ nie je platiteľom DPH.",
         en: "The supplier is not a VAT payer.",
         cs: "Dodavatel není plátcem DPH.",
       }),
       // § 74 ods. 1 písm. k): slovná informácia „prenesenie daňovej povinnosti“.
       reverse_charge: note("Prenesenie daňovej povinnosti.", {
+        ...NOTE_TRANSLATIONS.reverse_charge,
         sk: "Prenesenie daňovej povinnosti.",
         en: "Reverse charge.",
         cs: "Přenesení daňové povinnosti.",
       }),
       // Not prescribed wording; place of supply outside Slovakia (§ 15 ods. 1).
       outside_scope: note("Miesto dodania služby je mimo tuzemska.", {
+        ...NOTE_TRANSLATIONS.outside_scope,
         sk: "Miesto dodania služby je mimo tuzemska.",
         en: "The place of supply of the service is outside the country.",
         cs: "Místo plnění služby je mimo tuzemsko.",
       }),
       // § 74 ods. 1 písm. h): slovná informácia „dodanie je oslobodené od dane“.
       exempt: note("Dodanie je oslobodené od dane.", {
+        ...NOTE_TRANSLATIONS.exempt,
         sk: "Dodanie je oslobodené od dane.",
         en: "The supply is exempt from tax.",
         cs: "Dodání je osvobozeno od daně.",
@@ -136,24 +186,28 @@ export const INVOICE_COUNTRY_PROFILES = {
       domestic_vat: null,
       // Not prescribed wording; states why no VAT is charged.
       not_vat_payer: note("Dodavatel není plátcem DPH.", {
+        ...NOTE_TRANSLATIONS.not_vat_payer,
         cs: "Dodavatel není plátcem DPH.",
         en: "The supplier is not a VAT payer.",
         sk: "Dodávateľ nie je platiteľom DPH.",
       }),
       // § 29 odst. 2 písm. c): „daň odvede zákazník“.
       reverse_charge: note("Daň odvede zákazník.", {
+        ...NOTE_TRANSLATIONS.reverse_charge,
         cs: "Daň odvede zákazník.",
         en: "The customer accounts for the tax.",
         sk: "Daň odvedie zákazník.",
       }),
       // Not prescribed wording; place of supply outside Czechia.
       outside_scope: note("Plnění není předmětem daně v tuzemsku.", {
+        ...NOTE_TRANSLATIONS.outside_scope,
         cs: "Plnění není předmětem daně v tuzemsku.",
         en: "The supply is not subject to domestic tax.",
         sk: "Plnenie nie je predmetom dane v tuzemsku.",
       }),
       // § 29 odst. 2 písm. a): a statement that the supply is exempt.
       exempt: note("Plnění osvobozené od daně.", {
+        ...NOTE_TRANSLATIONS.exempt,
         cs: "Plnění osvobozené od daně.",
         en: "Supply exempt from tax.",
         sk: "Plnenie oslobodené od dane.",

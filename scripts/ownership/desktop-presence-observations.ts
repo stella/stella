@@ -12,6 +12,11 @@ export default {
     names: ["desktopPresence"],
     allowed: [
       {
+        path: "apps/api/src/db/entity-feature-gate-repair.ts",
+        reason:
+          "Full-schema policy introspection: renders the entity feature policies the online cutover installs; reads no rows.",
+      },
+      {
         path: "apps/api/src/lib/member-assignment-offboarding.ts",
         reason: "Clears observations during organization membership removal.",
       },

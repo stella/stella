@@ -12,13 +12,13 @@ import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
   expenses,
+  featureEnrolments,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
   numberSeries,
   sellerProfiles,
   timeEntries,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -199,6 +199,8 @@ describe("invoice transition integration", () => {
     await assertAssignedNumber(first, "AUTO-2026-001");
     expect(await runTransition(first, "finalize")).toEqual({ id: first });
     expect(await readNumber(first)).toBe("AUTO-2026-001");
+    expect(await runTransition(second, "void")).toEqual({ id: second });
+    expect(await readNumber(second)).toBe("AUTO-2026-002");
     const third = await seedInvoice({
       status: INVOICE_STATUS.DRAFT,
       invoiceNumber: null,

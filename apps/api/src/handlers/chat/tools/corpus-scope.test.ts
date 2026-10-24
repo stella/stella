@@ -7,8 +7,8 @@ import type { ChatSourceScope } from "@stll/api-contract";
 
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import {
-  corpusScopeDroppedTools,
   type CorpusResourceCountryResolver,
+  corpusScopeDroppedTools,
   PUBLIC_SOURCE_JURISDICTIONS,
   scopeCorpusRead,
 } from "@/api/handlers/chat/tools/corpus-scope";

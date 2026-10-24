@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { isEntityKind, RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";

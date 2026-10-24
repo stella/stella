@@ -243,11 +243,21 @@ const seedVatRateChange = async () => {
   }
 };
 
-const setClient = async (taxId: string, country = "CZ") => {
+const setClient = async ({
+  taxId,
+  vatId = null,
+  country = "CZ",
+}: {
+  taxId: string;
+  vatId?: string | null;
+  country?: string;
+}) => {
   await db
     .update(contacts)
     .set({
       taxId,
+      vatId,
+      vatPayer: vatId === null ? null : true,
       registrationNumber: "87654321",
       billingAddress: {
         line1: "Na Příkopě 1",
@@ -293,7 +303,7 @@ describe("invoice prefill", () => {
   test("a VAT payer billing a domestic client charges the standard rate and copies the buyer", async () => {
     const seller = await seedSeller("CZ12345678");
     await seedVatRates();
-    await setClient("CZ87654321");
+    await setClient({ taxId: "87654321", vatId: "CZ87654321" });
     const early = await seedEntry("2026-09-02");
     const late = await seedEntry("2026-09-30");
 
@@ -304,6 +314,7 @@ describe("invoice prefill", () => {
       sellerProfileId: seller,
       buyerName: "Contact A2",
       buyerRegistrationId: "87654321",
+      buyerTaxId: "87654321",
       buyerVatId: "CZ87654321",
       buyerAddressLine1: "Na Příkopě 1",
       buyerCity: "Praha",
@@ -327,7 +338,7 @@ describe("invoice prefill", () => {
   test("a seller without a VAT ID is not a VAT payer", async () => {
     await seedSeller(null);
     await seedVatRates();
-    await setClient("CZ87654321");
+    await setClient({ taxId: "87654321", vatId: "CZ87654321" });
     const entry = await seedEntry("2026-09-15");
 
     const invoice = await readInvoice(
@@ -344,7 +355,7 @@ describe("invoice prefill", () => {
   test("a registered person with a VAT ID who is not a payer charges no VAT", async () => {
     await seedSeller("CZ12345678", false);
     await seedVatRates();
-    await setClient("CZ87654321");
+    await setClient({ taxId: "87654321", vatId: "CZ87654321" });
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
@@ -371,7 +382,11 @@ describe("invoice prefill", () => {
   test("a business client registered in another member state is reverse charged", async () => {
     await seedSeller("CZ12345678");
     await seedVatRates();
-    await setClient("DE298765432", "DE");
+    await setClient({
+      taxId: "298765432",
+      vatId: "DE298765432",
+      country: "DE",
+    });
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
@@ -405,7 +420,7 @@ describe("invoice prefill", () => {
   test("a business client outside the EU is invoiced outside the scope of VAT", async () => {
     await seedSeller("CZ12345678");
     await seedVatRates();
-    await setClient("GB123456789", "GB");
+    await setClient({ taxId: "GB123456789", country: "GB" });
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
@@ -432,7 +447,7 @@ describe("invoice prefill", () => {
   test("a free-text tax ID of a Czech client keeps the standard rate", async () => {
     await seedSeller("CZ12345678");
     await seedVatRates();
-    await setClient("HRB123456");
+    await setClient({ taxId: "HRB123456" });
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
@@ -442,7 +457,7 @@ describe("invoice prefill", () => {
       vat: {
         vatTreatment: "domestic_vat",
         vatRateBps: 2100,
-        reason: "client_country_unconfirmed",
+        reason: "domestic_rate",
       },
     });
     const invoice = await readInvoice(
@@ -481,7 +496,7 @@ describe("invoice create with expenses and billed-time changes", () => {
   test("bills expenses and adjusted entries in one call and issues the draft", async () => {
     await seedSeller("CZ12345678");
     await seedVatRates();
-    await setClient("CZ87654321");
+    await setClient({ taxId: "87654321", vatId: "CZ87654321" });
     const written = await seedEntry("2026-09-10", 120);
     const waived = await seedEntry("2026-09-11", 30);
     const fee = await seedExpense("2026-09-12", 60_000);
@@ -587,7 +602,7 @@ describe("invoice create with expenses and billed-time changes", () => {
   test("billing only work before a rate change uses the earlier rate, and a stale reviewed total is refused", async () => {
     await seedSeller("CZ12345678");
     await seedVatRateChange();
-    await setClient("CZ87654321");
+    await setClient({ taxId: "87654321", vatId: "CZ87654321" });
     const early = await seedEntry("2026-09-02");
     await seedEntry("2026-09-30");
 
@@ -636,7 +651,7 @@ describe("invoice create with expenses and billed-time changes", () => {
   test("the reviewed seller stays on the invoice when the default changes before create", async () => {
     const reviewed = await seedSeller("CZ12345678");
     await seedVatRates();
-    await setClient("CZ87654321");
+    await setClient({ taxId: "87654321", vatId: "CZ87654321" });
     const entry = await seedEntry("2026-09-02");
 
     const prefill = await prefillInvoice.handler(
@@ -659,7 +674,7 @@ describe("invoice create with expenses and billed-time changes", () => {
 
   test("a VAT payer without a rate in force on the supply date cannot create an invoice", async () => {
     await seedSeller("CZ12345678");
-    await setClient("CZ87654321");
+    await setClient({ taxId: "87654321", vatId: "CZ87654321" });
     const entry = await seedEntry("2026-09-02");
 
     const refused = await create({

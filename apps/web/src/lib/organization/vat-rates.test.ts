@@ -1,11 +1,45 @@
-import { expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 
-import type { VatRateCommand } from "./vat-rates";
+import { VAT_RATE_PRESET_COUNTRIES } from "@stll/api-contract";
 
-test("country preset commands carry a supported country", () => {
-  const commands = [
-    { type: "applyPreset", country: "SK" },
-    { type: "applyPreset", country: "CZ" },
-  ] as const satisfies readonly VatRateCommand[];
-  expect(commands.map(({ country }) => country)).toEqual(["SK", "CZ"]);
+const originalFetch = globalThis.fetch;
+const previousApiUrl = process.env["VITE_API_URL"];
+beforeAll(() => {
+  process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
 });
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+afterAll(() => {
+  if (previousApiUrl === undefined) {
+    delete process.env["VITE_API_URL"];
+  } else {
+    process.env["VITE_API_URL"] = previousApiUrl;
+  }
+});
+
+test.each(VAT_RATE_PRESET_COUNTRIES)(
+  "preset command posts the selected %s country and returns its result",
+  async (country) => {
+    const requests: Request[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        requests.push(new Request(input, init));
+        return Response.json({ added: 3, skipped: 2 });
+      },
+      { preconnect: () => undefined },
+    );
+    const { sendVatRateCommand } = await import("./vat-rates");
+    expect(await sendVatRateCommand({ type: "applyPreset", country })).toEqual({
+      added: 3,
+      skipped: 2,
+    });
+    expect(requests).toHaveLength(1);
+    const request = requests.at(0);
+    expect(request?.method).toBe("POST");
+    expect(
+      request === undefined ? undefined : new URL(request.url).pathname,
+    ).toBe("/v1/vat-rates/apply-preset");
+    expect(await request?.json()).toEqual({ country });
+  },
+);

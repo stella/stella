@@ -8,5 +8,9 @@ export default {
     "One module talks to the conversion service, so the timeout, the " +
     "spreadsheet fit-to-page pre-processing, and the derivative policy that " +
     "decides which MIME types convert stay together.",
-  enforcement: { kind: "none" },
+  enforcement: {
+    kind: "literal-pattern",
+    pattern: "forms/libreoffice/convert",
+    allowed: [],
+  },
 } as const satisfies OwnershipEntry;

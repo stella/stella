@@ -228,6 +228,13 @@ impl ClipboardItemRetentionClass {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+pub enum ClipboardEditorNameUpdate {
+  Preserve,
+  Set { value: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ClipboardItem {
   Text {
@@ -1480,8 +1487,10 @@ impl ClipboardManager {
     &mut self,
     identifier: &str,
   ) -> Result<bool, String> {
-    let identifier = normalized_identifier(identifier)
-      .map_err(|_| "clipboard source application identifier is invalid".to_string())?;
+    let identifier =
+      normalized_identifier(identifier).map_err(crate::logging::with_cause_logged(
+        "clipboard source application identifier is invalid",
+      ))?;
     let checkpoint = self.checkpoint();
     let original_len = self.source_app_exclusions.len();
     self
@@ -1760,15 +1769,71 @@ impl ClipboardManager {
   }
 
   pub fn set_item_name(&mut self, id: &str, name: &str) -> Result<bool, String> {
-    let name = name.trim();
-    if name.chars().count() > MAX_ITEM_NAME_CHARACTERS {
-      return Err("clipboard item name is invalid".to_string());
-    }
+    let name = valid_item_name(name)?;
     let checkpoint = self.checkpoint();
     let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
       return Ok(false);
     };
-    item.set_name((!name.is_empty()).then(|| name.to_string()));
+    item.set_name(name);
+    prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  /// The editor's Save: name, group and, for a text clip, its content land
+  /// together or not at all. `text` is required for text clips and refused
+  /// for images.
+  pub fn save_editor_item(
+    &mut self,
+    id: &str,
+    name: ClipboardEditorNameUpdate,
+    group_id: Option<String>,
+    text: Option<(&str, Option<&str>)>,
+  ) -> Result<bool, String> {
+    let name = match name {
+      ClipboardEditorNameUpdate::Preserve => None,
+      ClipboardEditorNameUpdate::Set { value } => Some(valid_item_name(&value)?),
+    };
+    if let Some(group_id) = &group_id
+      && !self.groups.iter().any(|group| group.id == *group_id)
+    {
+      return Err("clipboard group does not exist".to_string());
+    }
+    let text = text
+      .map(|(plain_text, html)| {
+        if plain_text.trim().is_empty() || plain_text.len() > MAX_ITEM_TEXT_BYTES {
+          return Err("clipboard item text is invalid".to_string());
+        }
+        if html.is_some_and(|html| html.len() > MAX_ITEM_HTML_BYTES) {
+          return Err("clipboard item formatting is invalid".to_string());
+        }
+        Ok((plain_text, html.and_then(sanitized_html)))
+      })
+      .transpose()?;
+    let checkpoint = self.checkpoint();
+    let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
+      return Ok(false);
+    };
+    match (matches!(&*item, ClipboardItem::Image { .. }), text) {
+      (true, Some(_)) => {
+        return Err("clipboard image cannot be edited as text".to_string());
+      }
+      (false, None) => {
+        return Err("clipboard item text is invalid".to_string());
+      }
+      (true, None) => {}
+      (false, Some((plain_text, html))) => {
+        if !item.same_text_content(plain_text, html.as_deref()) {
+          item.replace_content(plain_text.to_string(), html);
+        }
+      }
+    }
+    if let Some(name) = name {
+      item.set_name(name);
+    }
+    if item.group_id() != group_id.as_deref() {
+      item.set_group_id(group_id, Utc::now());
+    }
     prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
@@ -3450,8 +3515,9 @@ fn read_bounded_image_file(path: &Path) -> Result<Vec<u8>, String> {
   if !metadata.is_file() {
     return Err("clipboard image file is not a regular file".to_string());
   }
-  let byte_size = usize::try_from(metadata.len())
-    .map_err(|_| "clipboard image source is too large".to_string())?;
+  let byte_size = usize::try_from(metadata.len()).map_err(
+    crate::logging::with_cause_logged("clipboard image source is too large"),
+  )?;
   validate_clipboard_image_source_size(byte_size)?;
   // The file can grow between the metadata check and the read, so the read
   // itself stops one byte past the cap rather than trusting the length.
@@ -3465,6 +3531,15 @@ fn read_bounded_image_file(path: &Path) -> Result<Vec<u8>, String> {
   .map_err(|error| format!("clipboard image file could not be read: {error}"))?;
   validate_clipboard_image_source_size(bytes.len())?;
   Ok(bytes)
+}
+
+/// A name the user typed: trimmed, and empty meaning unnamed.
+fn valid_item_name(name: &str) -> Result<Option<String>, String> {
+  let name = name.trim();
+  if name.chars().count() > MAX_ITEM_NAME_CHARACTERS {
+    return Err("clipboard item name is invalid".to_string());
+  }
+  Ok((!name.is_empty()).then(|| name.to_string()))
 }
 
 /// A name the capture itself supplies, held to the cap `set_item_name` keeps.
@@ -6222,6 +6297,184 @@ mod tests {
       Err("clipboard image cannot be edited as text".to_string())
     );
     assert_eq!(manager.items, vec![item]);
+  }
+
+  #[test]
+  fn editor_save_names_regroups_and_rewrites_a_text_clip_together() {
+    let mut manager = ready_manager();
+    assert!(capture(&mut manager, "old", None, Utc::now()));
+    let group_id = manager
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#34d399").unwrap(),
+        None,
+      )
+      .unwrap();
+    let item_id = manager.items[0].id().to_string();
+
+    assert!(
+      manager
+        .save_editor_item(
+          &item_id,
+          ClipboardEditorNameUpdate::Set {
+            value: "  K 21/24  ".to_string()
+          },
+          Some(group_id.clone()),
+          Some(("new", None)),
+        )
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].name(), Some("K 21/24"));
+    assert_eq!(manager.items[0].group_id(), Some(group_id.as_str()));
+    assert_eq!(manager.items[0].plain_text(), Some("new"));
+
+    // Clearing the field unnames the clip.
+    assert!(
+      manager
+        .save_editor_item(
+          &item_id,
+          ClipboardEditorNameUpdate::Set {
+            value: " ".to_string()
+          },
+          None,
+          Some(("new", None))
+        )
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].name(), None);
+    assert_eq!(manager.items[0].group_id(), None);
+  }
+
+  #[test]
+  fn editor_save_names_an_image_without_text() {
+    let item = image_item("image", "image-blob", "image-checksum", 4);
+    let mut manager = ready_manager();
+    manager.items.push(item);
+
+    assert!(
+      manager
+        .save_editor_item(
+          "image",
+          ClipboardEditorNameUpdate::Set {
+            value: "Signature page".to_string()
+          },
+          None,
+          None
+        )
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].name(), Some("Signature page"));
+    assert_eq!(
+      manager.save_editor_item(
+        "image",
+        ClipboardEditorNameUpdate::Set {
+          value: "Other".to_string()
+        },
+        None,
+        Some(("text", None))
+      ),
+      Err("clipboard image cannot be edited as text".to_string())
+    );
+    assert_eq!(manager.items[0].name(), Some("Signature page"));
+  }
+
+  #[test]
+  fn editor_save_with_an_invalid_part_changes_nothing() {
+    let mut manager = ready_manager();
+    assert!(capture(&mut manager, "old", None, Utc::now()));
+    let item_id = manager.items[0].id().to_string();
+    let before = manager.items.clone();
+
+    assert_eq!(
+      manager.save_editor_item(
+        &item_id,
+        ClipboardEditorNameUpdate::Set {
+          value: "界".repeat(MAX_ITEM_NAME_CHARACTERS + 1)
+        },
+        None,
+        Some(("new", None)),
+      ),
+      Err("clipboard item name is invalid".to_string())
+    );
+    assert_eq!(
+      manager.save_editor_item(
+        &item_id,
+        ClipboardEditorNameUpdate::Set {
+          value: "Name".to_string()
+        },
+        None,
+        None
+      ),
+      Err("clipboard item text is invalid".to_string())
+    );
+    assert_eq!(
+      manager.save_editor_item(
+        &item_id,
+        ClipboardEditorNameUpdate::Set {
+          value: "Name".to_string()
+        },
+        Some("missing".to_string()),
+        Some(("new", None)),
+      ),
+      Err("clipboard group does not exist".to_string())
+    );
+    assert_eq!(manager.items, before);
+  }
+
+  #[test]
+  fn unrelated_editor_saves_preserve_names_changed_after_the_editor_loaded() {
+    for item in [
+      text_item(Utc::now(), "old"),
+      image_item("image", "image-blob", "image-checksum", 4),
+    ] {
+      for external_name in ["Timeline rename", ""] {
+        let mut manager = ready_manager();
+        let item_id = item.id().to_string();
+        manager.items.push(item.clone());
+        assert!(
+          manager
+            .set_item_name(&item_id, "Editor initial name")
+            .unwrap()
+        );
+        let group_id = manager
+          .create_group(
+            "Research",
+            ClipboardGroupColor::parse("#34d399").unwrap(),
+            None,
+          )
+          .unwrap();
+
+        // A timeline rename wins even when its refresh has not reached the editor.
+        assert!(manager.set_item_name(&item_id, external_name).unwrap());
+        let text = match &item {
+          ClipboardItem::Image { .. } => None,
+          _ => Some(("Edited text", None)),
+        };
+        assert!(
+          manager
+            .save_editor_item(
+              &item_id,
+              ClipboardEditorNameUpdate::Preserve,
+              Some(group_id.clone()),
+              text
+            )
+            .unwrap()
+        );
+        let saved = manager
+          .items
+          .iter()
+          .find(|saved| saved.id() == item_id)
+          .unwrap();
+        assert_eq!(
+          saved.name(),
+          (!external_name.is_empty()).then_some(external_name)
+        );
+        assert_eq!(saved.group_id(), Some(group_id.as_str()));
+        if text.is_some() {
+          assert_eq!(saved.plain_text(), Some("Edited text"));
+        }
+      }
+    }
   }
 
   #[test]

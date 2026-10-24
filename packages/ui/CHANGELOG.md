@@ -1,5 +1,45 @@
 # @stll/ui
 
+## 0.50.1
+
+### Patch Changes
+
+- [#6447](https://github.com/stella/stella/pull/6447) [`c2289c3`](https://github.com/stella/stella/commit/c2289c387f5e59f6b5248a99325d69e5fd84b2cc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow landing row icons to grow to fit court abbreviations.
+
+## 0.50.0
+
+### Minor Changes
+
+- [#5903](https://github.com/stella/stella/pull/5903) [`8cb7fd4`](https://github.com/stella/stella/commit/8cb7fd43886be0ef8dc9be107eafac32613d504a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Name the copy glyph by meaning: `CopyToClipboardIcon` (drawn only by `CopyButton`), `CopyFromMenuIcon` and `DuplicateIcon` replace the plain `CopyIcon` export. `CopyButton` takes a `labelClassName` for its visible label, and `useCopyConfirmation` exposes its in-place confirmation for copy controls that cannot be a glyph button.
+
+- [#6664](https://github.com/stella/stella/pull/6664) [`ae6605a`](https://github.com/stella/stella/commit/ae6605a93f22d05aab53205059032237f0e1cbd8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add start alignment to select triggers and remove inner horizontal padding from unstyled inputs.
+
+- [#6572](https://github.com/stella/stella/pull/6572) [`c48136a`](https://github.com/stella/stella/commit/c48136ad775ad38e1e7f4a9ca91caa485e827952) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` no longer exports `BotIcon`. Use `AiActionIcon` for something the AI does and `CpuIcon` for models and providers.
+
+### Patch Changes
+
+- [#6203](https://github.com/stella/stella/pull/6203) [`ab74b25`](https://github.com/stella/stella/commit/ab74b2560766d05d67c302c4b81639351ef33a64) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A host can trigger the copy button confirmation from outside its own click with `useCopiedFeedback` and `CopyFeedback`.
+
+## 0.49.4
+
+### Patch Changes
+
+- [#6589](https://github.com/stella/stella/pull/6589) [`2a2225a`](https://github.com/stella/stella/commit/2a2225ad2fe786c32d74335505b64a26560a2e89) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Scroll areas capped with a max height now scroll inside the cap instead of growing past it.
+
+- [#6507](https://github.com/stella/stella/pull/6507) [`da8acf8`](https://github.com/stella/stella/commit/da8acf8bb696689ab5f17f50a000ff647b17cdda) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Loader` draws a plain spinner for busy controls and rows; `LoaderState` keeps the Stella mark for empty regions.
+
+## 0.49.3
+
+### Patch Changes
+
+- [#6583](https://github.com/stella/stella/pull/6583) [`85cae51`](https://github.com/stella/stella/commit/85cae51c030a8fbb6421dd13456001dd5a9dcdde) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The outline rail opens its panel when the pointer rests on the tick strip, not the moment it crosses it.
+
+## 0.49.2
+
+### Patch Changes
+
+- [#6512](https://github.com/stella/stella/pull/6512) [`0bf6d20`](https://github.com/stella/stella/commit/0bf6d20b7a8225cc3cc27a933d2e09608b31dc8c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A toast that closes on its own shows a faint countdown line that holds while the toast is hovered, focused or the window is in the background; the same plain message raised again refreshes the toast on screen instead of stacking a copy.
+
 ## 0.49.1
 
 ### Patch Changes

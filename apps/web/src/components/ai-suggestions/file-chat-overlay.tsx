@@ -110,10 +110,14 @@ import {
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
 import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
 import {
-  ChatSubmitPreservedError,
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
   useChatEditor,
 } from "@/components/chat-editor-provider";
-import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import type {
+  ChatDraftAttachment,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
 import {
   composerStoredMarkdown,
   composerText,
@@ -140,8 +144,8 @@ import type {
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import {
-  getCreateDocumentDraftPersistence,
   type CreateDocumentDraftPersistence,
+  getCreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
@@ -177,8 +181,8 @@ import {
 } from "@/lib/chat-anonymized-store";
 import {
   CHAT_EDIT_MODE_OPTION_ID,
-  type DocxEditSafety,
   docxEditRepresentationForSelection,
+  type DocxEditSafety,
   resolveActiveDocxEditModeState,
 } from "@/lib/chat-edit-mode";
 import {
@@ -186,10 +190,10 @@ import {
   useChatEditModeStore,
 } from "@/lib/chat-edit-mode-store";
 import {
-  createChatThreadId,
-  getChatThreadKey,
   type ChatThreadId,
   type ChatThreadRef,
+  createChatThreadId,
+  getChatThreadKey,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -1182,9 +1186,6 @@ const FileChatOverlayInner = ({
   const queryClient = useQueryClient();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
-      if (ChatSubmitPreservedError.is(error)) {
-        return;
-      }
       getAnalytics().captureError(error);
       notifyUserError(error, t("common.somethingWentWrong"));
     },
@@ -1599,18 +1600,18 @@ const FileChatOverlayInner = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<ChatSendOutcome> => {
       if (isDraftChatFrozen()) {
-        return;
+        return CHAT_SEND_KEPT;
       }
       if (!(await ensureAIAvailable())) {
-        return;
+        return CHAT_SEND_KEPT;
       }
       // Don't let a model just chosen from the (+) Models submenu race the
       // send: wait for its PATCH to settle (already toasted on failure) and
       // abort so the request can't run against the previous thread model.
       if (Result.isError(await modelSelection.awaitPendingSelection())) {
-        return;
+        return CHAT_SEND_KEPT;
       }
 
       // A workspace-file overlay mounts on a lookup that deliberately
@@ -1618,7 +1619,7 @@ const FileChatOverlayInner = ({
       // on the first real message. The persisted id normally IS the
       // mounted draft id; a different id means another session
       // materialized this file's thread first, the caches have been
-      // rebound to it, and the preserved throw keeps the typed draft in
+      // rebound to it, and the kept outcome returns the typed draft to
       // the composer for a retry against the rebound thread.
       if (ensureFileThreadPersisted !== undefined) {
         const persistedThreadId = await ensureFileThreadPersisted();
@@ -1627,9 +1628,8 @@ const FileChatOverlayInner = ({
             title: t("chat.fileThreadRebound"),
             type: "info",
           });
-          throw new ChatSubmitPreservedError({
-            message:
-              "File thread rebound to a concurrently created thread; draft preserved for retry",
+          return {
+            kind: "kept",
             restoreThreadKey: getChatThreadKey(
               threadRef.scope === "workspace"
                 ? {
@@ -1639,7 +1639,7 @@ const FileChatOverlayInner = ({
                   }
                 : { scope: "global", threadId: persistedThreadId },
             ),
-          });
+          };
         }
       }
 
@@ -1648,6 +1648,7 @@ const FileChatOverlayInner = ({
       // and want to see the response stream in.
       setPanelOpen(true);
       await sendMessage(await buildChatRequestMessage({ files, html: prompt }));
+      return CHAT_SEND_SENT;
     },
   );
 
@@ -2158,7 +2159,7 @@ const FileChatOverlayInner = ({
   };
   // `/new <message>`: start the message on a fresh thread before its surface
   // mounts. Runs inside the composer's submit, which restores the draft when
-  // this throws.
+  // this keeps it or throws.
   const sendNewThreadCommand = async ({
     message,
     files,
@@ -2167,14 +2168,12 @@ const FileChatOverlayInner = ({
     message: string;
     files: ChatDraftAttachment[];
     pendingReview: PendingReviewChoice;
-  }) => {
+  }): Promise<ChatSendOutcome> => {
     if (!(await ensureAIAvailable())) {
-      throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      return CHAT_SEND_KEPT;
     }
     if (Result.isError(await modelSelection.awaitPendingSelection())) {
-      throw new ChatSubmitPreservedError({
-        message: "Model selection failed",
-      });
+      return CHAT_SEND_KEPT;
     }
     const newThreadRef: ChatThreadRef =
       workspaceId === undefined
@@ -2196,6 +2195,7 @@ const FileChatOverlayInner = ({
       threadRef: newThreadRef,
     });
     await commitNewThread(newThreadRef.threadId, pendingReview);
+    return CHAT_SEND_SENT;
   };
   const readComposerHtml = (): string => {
     const editor = getLiveEditor(editorController.editor);
@@ -2246,9 +2246,15 @@ const FileChatOverlayInner = ({
             try: async () => {
               await editorController.submit(async ({ html, files }) => {
                 const message = readNewThreadCommandMessage(html);
-                if (message !== null) {
-                  await sendNewThreadCommand({ message, files, pendingReview });
-                }
+                // The draft stopped being a `/new <message>` meanwhile:
+                // nothing was sent, so it goes back to the user.
+                return message === null
+                  ? CHAT_SEND_KEPT
+                  : await sendNewThreadCommand({
+                      message,
+                      files,
+                      pendingReview,
+                    });
               });
             },
             catch: (cause) => cause,
@@ -2373,7 +2379,7 @@ const FileChatOverlayInner = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<ChatSendOutcome> => {
       const newThreadMessages: string[] = [];
       const handledReserved = runReservedChatCommand(prompt, {
         new: (args) => {
@@ -2404,18 +2410,17 @@ const FileChatOverlayInner = ({
         },
       });
       if (!handledReserved) {
-        await handlePromptSubmit({ prompt, files });
-        return;
+        return await handlePromptSubmit({ prompt, files });
       }
 
       const newThreadMessage = newThreadMessages.at(0);
       if (newThreadMessage === undefined) {
-        return;
+        return CHAT_SEND_SENT;
       }
       // The submit guard opens the choice instead while suggestions are
       // pending, and holds `/new` while another new thread is starting.
       if (!beginNewThreadCommit()) {
-        return;
+        return CHAT_SEND_KEPT;
       }
       setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.committing });
       await settleReviewWrites();
@@ -2425,7 +2430,7 @@ const FileChatOverlayInner = ({
         readPendingReviewCount() > 0
           ? PENDING_REVIEW_CHOICE.keep
           : PENDING_REVIEW_CHOICE.none;
-      await sendNewThreadCommand({
+      return await sendNewThreadCommand({
         message: newThreadMessage,
         files,
         pendingReview,
@@ -2597,7 +2602,7 @@ const FileChatOverlayInner = ({
                 detached(
                   editorController.submit(async (draft) => {
                     if (!(await ensureAIAvailable())) {
-                      return;
+                      return CHAT_SEND_KEPT;
                     }
                     // Same model-race guard as the composer send path.
                     if (
@@ -2605,9 +2610,10 @@ const FileChatOverlayInner = ({
                         await modelSelection.awaitPendingSelection(),
                       )
                     ) {
-                      return;
+                      return CHAT_SEND_KEPT;
                     }
                     await sendMessage(await buildChatRequestMessage(draft));
+                    return CHAT_SEND_SENT;
                   }),
                   "file-chat-overlay.submit",
                 );

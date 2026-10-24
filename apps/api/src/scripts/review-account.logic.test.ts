@@ -57,6 +57,7 @@ const createFakeStore = (
   // Membership roles by `<organization>:<user>`; owner unless set.
   const roles = new Map<string, string>();
   const writes: string[] = [];
+  const acceptances = new Set<string>();
   const store: ReviewAccountStore = {
     ...accounts,
     createUser: async (email) => {
@@ -86,8 +87,11 @@ const createFakeStore = (
       writes.push("promotion");
       roles.set(`${id}:${userId}`, "owner");
     },
+    acceptProfessionalUse: async (userId) => {
+      acceptances.add(userId);
+    },
   };
-  return { organizations, roles, store, writes };
+  return { acceptances, organizations, roles, store, writes };
 };
 
 const createMemoryAccounts = () => {
@@ -112,7 +116,8 @@ const createMemoryAccounts = () => {
 describe("review account provisioning", () => {
   test("creates the account, organization and owner once", async () => {
     const { accounts } = createMemoryAccounts();
-    const { organizations, store, writes } = createFakeStore(accounts);
+    const { acceptances, organizations, store, writes } =
+      createFakeStore(accounts);
     const first = await provisionReviewAccount({
       config,
       demoEmail: "limited@example.test",
@@ -145,6 +150,7 @@ describe("review account provisioning", () => {
     );
     expect(writes).toEqual(["user", "organization"]);
     expect(organizations.get(organizationId)).toEqual(["user_1"]);
+    expect(acceptances).toEqual(new Set(["user_1"]));
   });
 
   test("adds the owner to an existing empty organization", async () => {

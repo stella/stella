@@ -9,13 +9,12 @@
       "noOtherSessions": "Aucune autre session active",
       "revokeOtherSessions": "Déconnecter les autres appareils",
       "revokeOtherSessionsConfirm": "Toutes les sessions seront fermées, sauf la session en cours.",
+      "signedInFrom": "Connexion via {clientName}",
       "unknownDevice": "Appareil inconnu"
     }
   },
   "admin": {
     "ai": "IA",
-    "backToApp": "Retour à l’application",
-    "billingAndUsage": "Facturation et utilisation",
     "billingProfiles": "Profils de facturation",
     "deleteDescription": "Supprimez définitivement cette organisation et ses données. Cette action est irréversible.",
     "deleteOrganization": "Supprimer l’organisation",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Quitter l’organisation",
     "leaveRefusedOnlyOwner": "Vous êtes le seul propriétaire. Désignez un autre membre comme propriétaire avant de partir.",
     "modelsAndProviders": "Modèles et fournisseurs",
-    "noPlan": "Aucune offre active",
     "organizationDeleted": "L’organisation a été supprimée.",
     "organizationId": "ID de l’organisation",
     "organizationLeft": "Vous avez quitté l’organisation.",
-    "overviewDescription": "Gérez votre organisation, les personnes et les outils.",
-    "people": "Personnes",
     "planAndUsage": "Offre et utilisation",
     "title": "Administration de l’organisation",
     "toolsDescription": "Activez ou désactivez les outils intégrés pour toutes les personnes de cette organisation."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Votre assistant vous demandera cette adresse",
-    "copiedToast": "Instructions copiées. Collez-les dans une conversation avec votre assistant.",
     "copy": "Copiez-lui les instructions",
     "description": "Interrogez Claude ou ChatGPT sur vos dossiers et documents. Choisissez votre assistant pour un guide court ; cela prend environ une minute.",
     "instructions": "Connecte-moi à stella, mon espace de travail juridique. Suis les « Instructions for AI agents » sur {guideUrl} et utilise cette adresse de serveur : {mcpUrl}",
     "openGuide": "Ouvrir le guide pour {assistant}",
+    "pasteHint": "Collez-les dans une conversation avec votre assistant.",
     "selfSetupHint": "Vous utilisez Claude Code ou Codex ?",
     "title": "Utilisez stella dans votre assistant IA"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Options de réécriture",
     "editWithAI": "Modifier avec l’IA",
     "keyRequired": {
+      "accountRestricted": "Les paramètres du fournisseur d’IA ne sont pas disponibles pour ce compte.",
+      "configUnreadable": "La configuration du fournisseur d’IA ne peut pas être lue. Demandez à un administrateur de l’organisation de le reconnecter.",
       "cta": "Ouvrir les paramètres IA",
       "description": "Ajoutez les identifiants d’un fournisseur pour commencer à utiliser les fonctions IA.",
+      "permissionRequired": "Seul un administrateur de l’organisation peut connecter un fournisseur d’IA.",
+      "seatRequired": "Demandez à un administrateur de l’organisation de vous attribuer une place.",
       "title": "Connecter un fournisseur IA"
     },
     "refinePlaceholder": "Comment l’IA doit-elle ajuster la formulation ?",
@@ -142,6 +142,8 @@
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",
       "title": "Nous n'avons pas pu vous connecter"
     },
+    "handoffAccount": "Continuer en tant que <account>{email}</account> dans <organization>{organizationName}</organization> ?",
+    "handoffTitle": "Continuer vers stella",
     "headline": "La clarté pour chaque affaire.",
     "invitation": {
       "declined": "Invitation refusée",
@@ -157,11 +159,11 @@
     "organizationNamePlaceholder": "Mon organisation",
     "password": "Mot de passe",
     "professionalUse": {
-      "description": "Votre compte a été créé sans que cette déclaration vous soit présentée. Acceptez-la pour continuer.",
       "title": "Confirmer l’usage professionnel"
     },
     "professionalUseStatement": "En créant un compte, vous confirmez utiliser stella à des fins professionnelles et reconnaissez que stella est un outil destiné aux professionnels du droit et ne remplace pas un conseil juridique.",
     "rateLimitExceeded": "Trop de tentatives. Veuillez réessayer plus tard.",
+    "reauthenticationRequired": "Reconnectez-vous pour poursuivre cette action.",
     "resendCode": "Renvoyer le code à <email>{emailAddress}</email>",
     "selectOrganization": "Sélectionner une organisation",
     "signIn": "Se connecter",
@@ -755,7 +757,7 @@
     "sellerProfiles": {
       "add": "Ajouter un profil de vendeur",
       "archiveConfirm": "Archiver ce profil de vendeur ? Il ne sera plus disponible pour les nouvelles factures.",
-      "barRegistration": "Bar registration",
+      "barRegistration": "Inscription au barreau",
       "bic": "Code BIC / SWIFT",
       "default": "Vendeur par défaut",
       "defaultCurrency": "Devise par défaut",
@@ -767,10 +769,10 @@
       "invalidCurrency": "Saisissez un code de devise à trois lettres.",
       "invalidIban": "Saisissez un IBAN valide.",
       "legalName": "Dénomination légale",
-      "registerEntry": "Register entry",
+      "registerEntry": "Inscription au registre",
       "registrationId": "Numéro d’immatriculation",
       "setDefault": "Définir par défaut",
-      "taxId": "Tax ID",
+      "taxId": "Identifiant fiscal",
       "title": "Profils de vendeur",
       "vatId": "Numéro de TVA",
       "vatPayer": "Assujetti à la TVA",
@@ -937,13 +939,10 @@
     },
     "coverage": {
       "completeness": "Exhaustivité",
-      "countedOn": "Décompté le {date}",
       "courtsHeading": "Par juridiction",
       "courtsUnavailable": "La répartition par juridiction est indisponible pour le moment.",
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
-      "exceedsReportedTotal": "Contient plus que le dernier total annoncé par le diffuseur le {date}",
-      "gapStatusUnknown": "État des lacunes inconnu",
       "generatedAt": "Chiffres au {date}",
       "globeLabel": "Pays dont la jurisprudence figure dans le corpus, sur un globe",
       "healthCurrent": "À jour",
@@ -964,7 +963,8 @@
       "searchable": "Interrogeables",
       "title": "Couverture de la jurisprudence",
       "totalFrom": "Total au {date}",
-      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment."
+      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment.",
+      "unreadListingPeriods": "Périodes de la liste non lues"
     },
     "decisionNotFound": "Décision introuvable",
     "decisionTypes": {
@@ -2436,8 +2436,8 @@
       "registrationNumber": "Numéro d'enregistrement",
       "suffix": "Suffixe",
       "taxId": "Numéro fiscal",
-      "vatId": "VAT ID",
-      "vatPayer": "VAT-payer status",
+      "vatId": "Numéro de TVA",
+      "vatPayer": "Statut d’assujettissement à la TVA",
       "vatPayerNo": "Non assujetti à la TVA",
       "vatPayerUnknown": "Inconnu",
       "vatPayerYes": "Assujetti à la TVA",
@@ -3540,6 +3540,12 @@
       "unsupportedVisualContent": "Ce fichier contient des images ou des graphiques vectoriels qui ne peuvent pas être vérifiés pour détecter du texte sensible. L’exportation n’est pas disponible.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Il s’agit d’un ancien fichier {format}. Enregistrez-le au format {replacementExtension} pour le convertir.",
+      "unsupportedEncoding": "Ce document utilise l’encodage {encoding}, qui n’est pas pris en charge, et ne peut donc pas être converti.",
+      "unsupportedField": "Ce document contient un champ {fieldType} qui ne peut pas être converti.",
+      "unsupportedReference": "Ce document fait référence à une ressource externe dans {element} {attribute} et ne peut donc pas être converti."
+    },
     "external": {
       "confirmDescription": "Vous allez consulter un site web externe.",
       "confirmTitle": "Ouvrir le lien externe ?",
@@ -4210,7 +4216,9 @@
     "prompt": "Que cherchez-vous ?",
     "recent": "Récents",
     "recentCasesFilter": "Décisions",
+    "recentLoadFailed": "L’activité récente n’a pas pu être chargée.",
     "recentSearchFilter": "Recherches",
+    "recentUpdateFailed": "L’activité récente n’a pas pu être mise à jour.",
     "recentlyInForce": "Entrée en vigueur récente",
     "searchLabel": "Rechercher dans la base juridique",
     "searchPlaceholder": "Numéro d'affaire, numéro de texte, ECLI ou mots-clés",
@@ -4237,6 +4245,22 @@
       "guestStorageUnavailable": "Les surlignages et notes n’ont pas pu être enregistrés dans cet onglet.",
       "highlight": "Surligner",
       "highlightedPassage": "Passage surligné",
+      "history": {
+        "colorRestored": "Couleur rétablie",
+        "commentRemoved": "Commentaire supprimé",
+        "commentRestored": "Commentaire rétabli",
+        "highlightRemoved": "Surlignage retiré",
+        "highlightRestored": "Surlignage rétabli",
+        "markChanged": "Ce surlignage ou ce commentaire a été modifié ailleurs entre-temps et reste donc inchangé.",
+        "markGone": "Ce surlignage ou ce commentaire n’existe plus.",
+        "nothingToRedo": "Rien à rétablir",
+        "nothingToUndo": "Rien à annuler",
+        "redoShortcut": "Rétablir une modification de surlignage ou de commentaire",
+        "styleRestored": "Style rétabli",
+        "textRestored": "Texte du commentaire rétabli",
+        "undoShortcut": "Annuler une modification de surlignage ou de commentaire",
+        "visibilityRestored": "Partage rétabli"
+      },
       "removeHighlight": "Retirer le surlignage",
       "sharedBadge": "Partagé",
       "styleHighlight": "Surlignage",
@@ -4748,6 +4772,7 @@
   },
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
+    "caseLawEmptyState": "Commencez à saisir pour rechercher des décisions de justice.",
     "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes}}",
     "continueInChat": "Continuer dans une conversation",
@@ -4805,6 +4830,7 @@
     "savedSearchesEmpty": "Enregistrez une recherche pour la réutiliser.",
     "scopeFilter": "Portée de la recherche",
     "scopePlaceholderAll": "Rechercher dans toutes les <scope>sources</scope>…",
+    "scopePlaceholderCaseLaw": "Rechercher dans la <scope>jurisprudence</scope>…",
     "scopePlaceholderMatters": "Rechercher dans tous les <scope>dossiers</scope>…",
     "scopePlaceholderRegistries": "Rechercher dans les <scope>registres</scope>…",
     "scopeRegistries": "Registres",
@@ -4954,7 +4980,7 @@
       "description": "Utilisez stella depuis votre assistant IA et voyez ce qui a accès à votre compte.",
       "developerDescription": "Adresses du serveur et outil en ligne de commande, pour les configurations techniques.",
       "developerTitle": "Accès développeur",
-      "disconnectConfirmDescription": "Cela révoque l’accès de {clientName} à votre compte, ainsi que tous les jetons qu’il a émis. Vous pouvez vous reconnecter à tout moment.",
+      "disconnectConfirmDescription": "Cela révoque l’accès de {clientName} à votre compte, ainsi que tous les jetons qu’il a émis. Vous pouvez vous reconnecter à tout moment. Les sessions de navigateur créées via cette connexion seront également déconnectées.",
       "disconnectConfirmTitle": "Déconnecter {clientName} ?",
       "disconnectSuccess": "{clientName} a été déconnecté",
       "integrationsDescription": "Services externes que l’IA peut utiliser pour vous, comme votre espace de documents.",
@@ -6007,6 +6033,7 @@
       "downloadFailed": "Échec du téléchargement",
       "downloadPdf": "Télécharger en PDF",
       "downloadSearchablePdf": "PDF avec texte recherchable",
+      "emptyFile": "Le fichier est vide.",
       "includeReferenceNumber": "Inclure le numéro de référence",
       "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",
       "maxEntitiesReached": "Nombre maximal d’éléments atteint",

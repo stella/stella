@@ -82,9 +82,9 @@ export const buildInvoicePaymentPayload = ({
   seller,
   totals,
 }: RenderInvoicePdfOptions): InvoicingResult<
-  | (CzechQrPaymentResult & { errorCorrection: "M" })
-  | (PayBySquareResult & { errorCorrection: "M" })
-  | (PolishQrPaymentResult & { errorCorrection: "L" })
+  | (CzechQrPaymentResult & { errorCorrection: "M"; scheme: "spayd" })
+  | (PayBySquareResult & { errorCorrection: "M"; scheme: "pay_by_square" })
+  | (PolishQrPaymentResult & { errorCorrection: "L"; scheme: "zbp" })
 > | null => {
   if (
     invoice.documentType === "credit_note" ||
@@ -114,7 +114,11 @@ export const buildInvoicePaymentPayload = ({
       ...payment,
       ...(seller.bic === null ? {} : { bic: seller.bic }),
       beneficiaryName: seller.legalName,
-    }).map((result) => ({ ...result, errorCorrection: "M" as const }));
+    }).map((result) => ({
+      ...result,
+      errorCorrection: "M" as const,
+      scheme: "pay_by_square" as const,
+    }));
   }
   if (country === "PL") {
     const nip = seller.vatId === null ? null : parseNip(seller.vatId);
@@ -129,11 +133,16 @@ export const buildInvoicePaymentPayload = ({
       recipientNip: nip,
       recipientName: seller.legalName,
       title: payment.message ?? invoice.reference ?? "Faktura",
-    }).map((result) => ({ ...result, errorCorrection: "L" as const }));
+    }).map((result) => ({
+      ...result,
+      errorCorrection: "L" as const,
+      scheme: "zbp" as const,
+    }));
   }
   return buildCzechQrPaymentPayload(payment).map((result) => ({
     ...result,
     errorCorrection: "M" as const,
+    scheme: "spayd" as const,
   }));
 };
 

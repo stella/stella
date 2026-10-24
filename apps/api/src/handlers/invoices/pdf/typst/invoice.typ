@@ -144,7 +144,7 @@
 // Payment block with the payment QR code (SPAYD, PAY by square or ZBP).
 #if data.payment != none {
   block(breakable: false, grid(
-    columns: if data.payment.qrSvg != none { (1fr, 32mm) } else { (1fr,) },
+    columns: if data.payment.qrSvg != none { (1fr, data.payment.qrWidthMm * 1mm) } else { (1fr,) },
     gutter: 16pt,
     {
       label-text(data.labels.payment)
@@ -153,7 +153,7 @@
       if data.payment.accountNumber != none [#data.payment.accountNumber]
     },
     ..if data.payment.qrSvg != none {
-      (image(bytes(data.payment.qrSvg), format: "svg", width: 32mm),)
+      (image(bytes(data.payment.qrSvg), format: "svg", width: data.payment.qrWidthMm * 1mm),)
     } else { () },
   ))
 }

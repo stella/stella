@@ -4,9 +4,9 @@ import { sha256Hex } from "@stll/sha256/node";
 
 import type { Block, DocumentAst } from "./document-ast.js";
 import {
-  PROVISION_SPAN_PROJECTION_REVISION,
   projectionDigest,
   projectionPieces,
+  PROVISION_SPAN_PROJECTION_REVISION,
 } from "./projection-digest.js";
 
 const blankAst = (blocks: Block[]): DocumentAst => ({

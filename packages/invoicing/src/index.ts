@@ -15,12 +15,8 @@ export {
 } from "./polish-qr-payment";
 export {
   buildCzechQrPaymentPayload,
-  buildPayBySquarePayload,
-  paymentQrSchemeFor,
   type CzechQrPaymentInput,
   type CzechQrPaymentResult,
-  type PayBySquareInput,
-  type PaymentQrScheme,
 } from "./qr-payment";
 export { standardVatRateOn, type VatRatePeriod } from "./vat-rate-period";
 export {

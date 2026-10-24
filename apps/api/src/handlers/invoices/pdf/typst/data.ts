@@ -5,9 +5,9 @@ import {
   INVOICE_COUNTRY_PROFILES,
   INVOICE_PDF_LABELS,
   invoiceCountryOf,
-  legalNotesFor,
   type InvoiceDocumentType,
   type InvoicePartyId,
+  legalNotesFor,
   type VatTreatment,
 } from "@stll/invoicing";
 
@@ -16,6 +16,7 @@ import {
   createInvoiceFormatters,
 } from "../render-helpers";
 import type { RenderInvoicePdfOptions } from "../render-helpers";
+import payBySquareLogo from "./pay-by-square.svg" with { type: "text" };
 
 type Labels = (typeof INVOICE_PDF_LABELS)[keyof typeof INVOICE_PDF_LABELS];
 
@@ -74,6 +75,7 @@ type InvoiceTemplateData = {
     accountNumber: string | null;
     /** SVG markup of the supported domestic payment QR code, or null when nothing is payable. */
     qrSvg: string | null;
+    qrWidthMm: number;
   } | null;
   legalNotes: string[];
   notes: string | null;
@@ -175,6 +177,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
   } satisfies Record<VatTreatment, string>;
 
   let qr: string | null = null;
+  let qrWidthMm = 32;
   const payment = buildInvoicePaymentPayload(options);
   if (payment !== null) {
     if (payment.isErr()) {
@@ -182,6 +185,15 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     }
     if (payment.value.status === "payable") {
       qr = qrSvg(payment.value.payload, payment.value.errorCorrection);
+      if (payment.value.scheme === "pay_by_square") {
+        // Official print frame: the 62-unit QR box stays inside its 64-unit
+        // width with four quiet modules; 37.254 mm is the recommended size.
+        qr = payBySquareLogo.replace(
+          "</svg>",
+          `${qr.replace("<svg ", '<svg x="1" y="1" width="62" height="62" ')}</svg>`,
+        );
+        qrWidthMm = 37.254;
+      }
     }
   }
 
@@ -278,6 +290,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
             ]),
             accountNumber: seller.accountNumber,
             qrSvg: qr,
+            qrWidthMm,
           },
     legalNotes: legalNotesFor({
       profile,

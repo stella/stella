@@ -5,8 +5,8 @@ import type { RlsDatabase } from "@/api/db/scoped";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import {
-  REVIEW_RESET_REFUSAL,
   resetReviewOrganization,
+  REVIEW_RESET_REFUSAL,
 } from "@/api/lib/review-organization/reset";
 import type {
   ReviewResetDependencies,
@@ -16,11 +16,6 @@ import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
-
-export const featureAccess = {
-  featureId: "time-billing",
-  type: "required",
-} as const;
 
 export const RESET_REVIEW_ORGANIZATION_TASK =
   "reviewOrganization.reset" as const;

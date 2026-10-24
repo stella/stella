@@ -8,6 +8,7 @@ import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail
 import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
 import { renderInvoiceWithTypst } from "@/api/handlers/invoices/pdf/typst/render-typst";
 import { openTypstSession } from "@/api/handlers/invoices/pdf/typst/session";
+import type { TypstRenderOutcome } from "@/api/handlers/invoices/pdf/typst/session";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
@@ -37,7 +38,7 @@ const invoiceRenderError = (cause: unknown) => {
 };
 
 type InvoiceRenderRejection = Extract<
-  Awaited<ReturnType<typeof renderInvoiceWithTypst>>,
+  TypstRenderOutcome,
   { status: "rejected" }
 >;
 
