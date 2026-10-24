@@ -1714,7 +1714,11 @@ const sourceMutation = ({
 const isPackagedArtifact = (stage: Stage, file: string) =>
   !stage.files.has(file) &&
   [...stage.packaged].some(
-    (destination) => file === destination || file.startsWith(`${destination}/`),
+    (destination) =>
+      file === destination ||
+      file.startsWith(
+        destination.endsWith("/") ? destination : `${destination}/`,
+      ),
   );
 
 const createStage = (parent?: Stage) =>
