@@ -1,6 +1,6 @@
 import "./register-schema-formats";
 import cors from "@elysia/cors";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Elysia } from "elysia";
 
 import {
@@ -137,6 +137,7 @@ import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
 import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/auth/discovery-metadata-cache";
@@ -178,6 +179,7 @@ import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
+import { flushLogExport } from "@/api/lib/observability/otel";
 import {
   enrichRequestContext,
   getRequestId,
@@ -940,6 +942,24 @@ const startServer = async (): Promise<void> => {
     });
     await Promise.race([
       flushActionCostRecords(),
+      Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
+    ]);
+    // Telemetry queued in memory leaves before the process does. Analytics
+    // goes first: a failed analytics flush logs a record of its own.
+    const flushTelemetry = async (): Promise<void> => {
+      const analyticsFlush = await Result.tryPromise({
+        try: async () => await getServerAnalytics().flush(),
+        catch: (error: unknown) => error,
+      });
+      if (analyticsFlush.isErr()) {
+        logger.error("analytics.flush.failed", {
+          "error.type": errorTag(analyticsFlush.error),
+        });
+      }
+      await flushLogExport();
+    };
+    await Promise.race([
+      flushTelemetry(),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
     closeActionAdmissionRedis();
