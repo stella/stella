@@ -92,6 +92,7 @@ for arg in "$@"; do
     *) endpoint=$arg ;;
   esac
 done
+printf '%s\\n' "$endpoint" >> "$FIXTURES.requests"
 jq -ce --arg key "$endpoint" '.[$key]' "$FIXTURES" || {
   echo "unexpected request: $endpoint" >&2
   exit 1
@@ -513,4 +514,135 @@ test("every pass-through reason the step writes is one merge-bar reads", () => {
     ),
   ].toSorted();
   expect(written).toEqual(MERGE_BAR_PASS_THROUGH_REASONS);
+});
+
+// A metadata run's ci-result copies one attempt of a code run; a re-run
+// attempt of that code run re-runs each copy that reports another verdict.
+const rerunStep = result.steps?.find(
+  ({ name }) => name === "Re-run metadata mirrors of an earlier attempt",
+);
+if (!rerunStep?.run) {
+  panic("Missing ci-result/Re-run metadata mirrors of an earlier attempt");
+}
+const rerunScript = rerunStep.run;
+
+type LaterRun = {
+  id: number;
+  plan?: string;
+  status?: string;
+  // The conclusion of its ci-result; null when it has no ci-result job.
+  conclusion?: string | null;
+  pr?: number;
+};
+const rerunMirrors = (
+  verdict: string,
+  later: LaterRun[],
+  { rerunFails = false } = {},
+) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-result-rerun-"));
+  directories.push(directory);
+  const gh = path.join(directory, "gh-retry.sh");
+  writeFileSync(gh, FAKE_GH);
+  chmodSync(gh, 0o755);
+  const fixtures: Fixtures = {
+    [`repos/${REPO}/actions/workflows/ci.yml/runs?event=pull_request&head_sha=${HEAD}&per_page=100`]:
+      [
+        {
+          workflow_runs: [
+            // An older metadata run never mirrors this run.
+            { id: RUN - 5 },
+            ...later,
+          ].map(({ id, status = "completed", pr = PR }: LaterRun) => ({
+            id,
+            head_sha: HEAD,
+            status,
+            pull_requests: [{ number: pr }],
+          })),
+        },
+      ],
+  };
+  for (const {
+    id,
+    plan = "ci-metadata-plan",
+    conclusion = "failure",
+  } of later) {
+    fixtures[`repos/${REPO}/actions/runs/${id}/jobs?per_page=100`] = [
+      {
+        jobs: [
+          { name: plan, id: id * 10 },
+          ...(conclusion === null
+            ? []
+            : [{ name: "ci-result", id: id * 10 + 1, conclusion }]),
+        ],
+      },
+    ];
+    if (!rerunFails) {
+      fixtures[`repos/${REPO}/actions/jobs/${id * 10 + 1}/rerun`] = {};
+    }
+  }
+  const fixtureFile = path.join(directory, "fixtures.json");
+  writeFileSync(fixtureFile, JSON.stringify(fixtures));
+  const child = Bun.spawnSync(
+    ["bash", "-e", "-o", "pipefail", "-c", rerunScript],
+    {
+      timeout: 60_000,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: directory,
+        TMPDIR: directory,
+        GH_RETRY_SCRIPT: gh,
+        FIXTURES: fixtureFile,
+        REPO,
+        PR_NUMBER: String(PR),
+        HEAD_SHA: HEAD,
+        GITHUB_RUN_ID: String(RUN),
+        VERDICT: verdict,
+      },
+    },
+  );
+  const reruns = readFileSync(`${fixtureFile}.requests`, "utf-8")
+    .split("\n")
+    .filter((entry) => entry.endsWith("/rerun"));
+  return {
+    exitCode: child.exitCode,
+    log: child.stdout.toString() + child.stderr.toString(),
+    reran: reruns.map((entry) => Number(entry.split("/").at(-2))),
+  };
+};
+
+test("a re-run attempt re-runs only the metadata runs that copied another verdict", () => {
+  const run = rerunMirrors("success", [
+    // Copied the failure of an earlier attempt.
+    { id: RUN + 1 },
+    // Already reports this verdict.
+    { id: RUN + 2, conclusion: "success" },
+    // A newer code run reports its own verdict.
+    { id: RUN + 3, plan: "ci-plan" },
+    // Still running, so it reads the latest attempt itself.
+    { id: RUN + 4, status: "in_progress" },
+    // Another pull request at the same head.
+    { id: RUN + 5, pr: PR + 1 },
+    // A metadata run without a ci-result job.
+    { id: RUN + 6, conclusion: null },
+  ]);
+  expect(run.exitCode, run.log).toBe(0);
+  expect(run.reran).toEqual([(RUN + 1) * 10 + 1]);
+});
+
+test("a failed re-run attempt re-runs a metadata run that copied a success", () => {
+  const run = rerunMirrors("failure", [
+    { id: RUN + 1, conclusion: "success" },
+    { id: RUN + 2 },
+  ]);
+  expect(run.exitCode, run.log).toBe(0);
+  expect(run.reran).toEqual([(RUN + 1) * 10 + 1]);
+});
+
+test("a refused re-run names every metadata run that still reports the old verdict", () => {
+  const run = rerunMirrors("success", [{ id: RUN + 1 }, { id: RUN + 2 }], {
+    rerunFails: true,
+  });
+  expect(run.exitCode, run.log).toBe(1);
+  expect(run.log).toContain(`metadata run ${RUN + 1};`);
+  expect(run.log).toContain(`metadata run ${RUN + 2};`);
 });

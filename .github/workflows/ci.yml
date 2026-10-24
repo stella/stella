@@ -7143,6 +7143,48 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      # A metadata run's ci-result copies the verdict of one attempt of this
+      # run and never changes on its own. A re-run attempt that reaches another
+      # verdict re-runs the ci-result of each completed metadata run of this
+      # head, which then waits for this run to complete and reads its latest
+      # attempt. Reporting only: the verdict above is unchanged.
+      - name: Re-run metadata mirrors of an earlier attempt
+        if: >-
+          always() && github.event_name == 'pull_request' && github.run_attempt != '1'
+          && needs.ci-plan.outputs.metadata_only != 'true'
+          && (steps.outcome.outcome == 'success' || steps.outcome.outcome == 'failure')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          VERDICT: ${{ steps.outcome.outcome }}
+        run: |
+          runs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100")
+          mirrors=$(jq -r --argjson current "$GITHUB_RUN_ID" --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" '
+            .[].workflow_runs[]
+            | select(.id > $current and .head_sha == $head and .status == "completed")
+            | select(any(.pull_requests[]?; .number == $pr))
+            | .id' <<< "$runs")
+          failed=0
+          for run in $mirrors; do
+            jobs=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$run/jobs?per_page=100")
+            jq -e 'any(.[].jobs[]; .name == "ci-metadata-plan")' <<< "$jobs" > /dev/null || continue
+            result=$(jq -r '[.[].jobs[] | select(.name == "ci-result")] | sort_by(.id) | last
+              | select(. != null) | "\(.id) \(.conclusion)"' <<< "$jobs")
+            [[ -n "$result" ]] || continue
+            read -r job conclusion <<< "$result"
+            [[ "$conclusion" != "$VERDICT" ]] || continue
+            if bash "$GH_RETRY_SCRIPT" api -X POST "repos/$REPO/actions/jobs/$job/rerun" > /dev/null; then
+              echo "Re-ran ci-result of metadata run $run ($conclusion), which mirrored an earlier attempt of this $VERDICT run."
+            else
+              echo "::warning::Could not re-run ci-result of metadata run $run; it still reports the $conclusion of an earlier attempt of this run. Re-run its ci-result job."
+              failed=1
+            fi
+          done
+          exit "$failed"
+
       # Failure digest: one record per failed step (job, step, kind, first
       # error lines with file:line) as annotations on this check run, a job
       # summary and the `ci-failures` artifact. Failed steps come from the
