@@ -50,7 +50,7 @@ test("catalog confirmation requirements survive generated leaf projection", () =
     parsed?.filter((candidate) => candidate.confirmation === "required") ?? [];
   expect(guarded.length).toBeGreaterThan(0);
   for (const item of guarded) {
-    expect(deriveCapabilityLeaf(item).spec?.confirmation, item.id).toBe(
+    expect(deriveCapabilityLeaf(item).spec.confirmation, item.id).toBe(
       "required",
     );
   }
