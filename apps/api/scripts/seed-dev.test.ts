@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { MARKETING_LOCALES } from "@stll/playwright-tools/marketing-locales";
+
+import { SEED_CONTENT_BY_LOCALE } from "./seed-content/locales";
 import {
   createMockDocx,
   createSeedEmail,
-  SEED_EMAIL_FILE_NAMES,
   userFileCleanupKeys,
 } from "./seed-dev";
 import {
@@ -44,38 +46,44 @@ const paragraphTextsFromDocx = async (docx: Buffer): Promise<string[]> => {
   });
 };
 
-describe("Export Review citation seeds", () => {
-  test("every docx-folio citation's blockIndex points at the paragraph containing its quote", async () => {
-    const index = 0;
-    const metadata = buildExportReviewMetadata(index);
-    const fileName = "Sample_Export_Review_Contract.docx";
-    const title = fileName.replace(/\.\w+$/u, "").replaceAll("_", " ");
-    const bodyText = buildExportReviewDocumentText(fileName, index);
+describe.each(MARKETING_LOCALES)(
+  "Export Review citation seeds (%s)",
+  (locale) => {
+    test("every docx-folio citation's blockIndex points at the paragraph containing its quote", async () => {
+      const copy = SEED_CONTENT_BY_LOCALE[locale].exportReview;
+      const index = 0;
+      const metadata = buildExportReviewMetadata(copy, index);
+      const fileName = "Sample_Export_Review_Contract.docx";
+      const title = fileName.replace(/\.\w+$/u, "").replaceAll("_", " ");
+      const bodyText = buildExportReviewDocumentText(copy, fileName, index);
 
-    const docx = await createMockDocx(title, bodyText);
-    const paragraphs = await paragraphTextsFromDocx(docx);
-    const nonEmptyParagraphs = paragraphs.filter(
-      (text) => text.trim().length > 0,
-    );
+      const docx = await createMockDocx(title, bodyText);
+      const paragraphs = await paragraphTextsFromDocx(docx);
+      const nonEmptyParagraphs = paragraphs.filter(
+        (text) => text.trim().length > 0,
+      );
 
-    // Sanity-check the DOCX parsing itself against a plain-text
-    // reconstruction of the same title + body before trusting it below.
-    expect(nonEmptyParagraphs).toEqual(nonEmptyBlockTexts(title, bodyText));
+      // Sanity-check the DOCX parsing itself against a plain-text
+      // reconstruction of the same title + body before trusting it below.
+      expect(nonEmptyParagraphs).toEqual(nonEmptyBlockTexts(title, bodyText));
 
-    const citationSeeds = buildExportReviewCitationSeeds(metadata);
-    expect(citationSeeds.length).toBeGreaterThan(0);
+      const citationSeeds = buildExportReviewCitationSeeds(copy, metadata);
+      expect(citationSeeds.length).toBeGreaterThan(0);
 
-    for (const seed of citationSeeds) {
-      const paragraphText = nonEmptyParagraphs.at(seed.blockIndex - 1);
-      expect(paragraphText).toContain(seed.quote);
-    }
-  });
-});
+      for (const seed of citationSeeds) {
+        const paragraphText = nonEmptyParagraphs.at(seed.blockIndex - 1);
+        expect(paragraphText).toContain(seed.quote);
+      }
+    });
+  },
+);
 
-describe("email viewer seeds", () => {
+describe.each(MARKETING_LOCALES)("email viewer seeds (%s)", (locale) => {
   test("nested MIME boundaries cannot prefix one another", () => {
-    for (const fileName of SEED_EMAIL_FILE_NAMES) {
-      const source = createSeedEmail(fileName).toString("utf-8");
+    for (const [fileName, email] of Object.entries(
+      SEED_CONTENT_BY_LOCALE[locale].emails,
+    )) {
+      const source = createSeedEmail(fileName, email).toString("utf-8");
       const boundaries = Array.from(
         source.matchAll(/boundary="(?<value>[^"]+)"/gu),
         (match) => match.groups?.["value"] ?? "",
