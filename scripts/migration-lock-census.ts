@@ -701,6 +701,18 @@ export type MigrationLockAllowance = {
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
     migration: "20261020013635_case_law_source_hash_version",
+    form: "add-column",
+    reason:
+      "The non-volatile constant smallint default uses PostgreSQL's fast-default catalog path without rewriting decision rows; lock acquisition is bounded by 5s and the statement by 30s.",
+  },
+  {
+    migration: "20261024090100_reader_answer_feature_refusal",
+    form: "add-constraint",
+    reason:
+      "The widened diagnostic CHECK is added NOT VALID without scanning existing messages, under 1s lock_timeout and 5s statement_timeout; its later validation runs only after releasing the schema lock.",
+  },
+  {
+    migration: "20261020013635_case_law_source_hash_version",
     form: "replace-view",
     reason:
       "The two decision views re-expand their existing SELECT * definitions to include source_hash_version while preserving the redaction and listing filters; replacement updates view metadata without scanning corpus rows, under 5s lock_timeout and 30s statement_timeout.",

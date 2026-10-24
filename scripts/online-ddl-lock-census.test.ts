@@ -150,7 +150,7 @@ describe("online DDL lock census", () => {
   });
 
   test("table sessions cannot be constructed outside the approved gates", () => {
-    const source = `${ownerSource}\nconst fixture = sessionOn(connection, target, lockRetry).run(async () => {});`;
+    const source = `${ownerSource}\nconst fixture = sessionOn({ connection, target, lockRetry, onRetry: () => undefined }).run(async () => {});`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /sessionOn .* is outside runGatedTableWork or createUngatedTableGateForTests/iu,
     );
@@ -158,14 +158,30 @@ describe("online DDL lock census", () => {
 
   test("gated table work must use the connection passed to runtime.attempt", () => {
     const source = ownerSource.replace(
-      "sessionOn(guardedConnection, target, lockRetry)",
-      "sessionOn(connection, target, lockRetry)",
+      "connection: guardedConnection,",
+      "connection,",
     );
     expect(source).not.toBe(ownerSource);
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /sessionOn .* must use the guarded runtime\.attempt connection/iu,
     );
   });
+  test.each([
+    "connection: guardedConnection, ...supplied,",
+    "connection: guardedConnection, connection,",
+  ])(
+    "table session options cannot replace the guarded connection: %s",
+    (replacement) => {
+      const source = ownerSource.replace(
+        "connection: guardedConnection,",
+        replacement,
+      );
+      expect(source).not.toBe(ownerSource);
+      expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+        /sessionOn .* must use the guarded runtime\.attempt connection/iu,
+      );
+    },
+  );
   test("writer-blocking SQL cannot use the beside-writers queue", () => {
     const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", text: "ALTER TABLE probe ADD COLUMN added text", lockQueue: "beside_writers" });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(

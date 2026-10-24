@@ -1080,11 +1080,41 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
 
   for (const call of sessionCalls) {
     const owner = enclosingVariableName(call);
-    const connection = call.arguments.at(0);
+    const options = call.arguments.at(0);
+    const properties = new Map(
+      options && ts.isObjectLiteralExpression(options)
+        ? options.properties.map((property) => [
+            "name" in property ? property.name.getText(source) : undefined,
+            property,
+          ])
+        : [],
+    );
+    const closedOptions =
+      call.arguments.length === 1 &&
+      options !== undefined &&
+      ts.isObjectLiteralExpression(options) &&
+      options.properties.length === 4 &&
+      properties.size === 4 &&
+      ["connection", "target", "lockRetry", "onRetry"].every((name) =>
+        properties.has(name),
+      ) &&
+      options.properties.every(
+        (property) =>
+          ts.isPropertyAssignment(property) ||
+          ts.isShorthandPropertyAssignment(property),
+      );
+    const property = properties.get("connection");
+    const connection =
+      property && ts.isPropertyAssignment(property)
+        ? property.initializer
+        : property && ts.isShorthandPropertyAssignment(property)
+          ? property.name
+          : undefined;
     const line =
       source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
     if (owner === "runGatedTableWork") {
       if (
+        !closedOptions ||
         !connection ||
         !ts.isIdentifier(connection) ||
         connection.text !== "guardedConnection" ||
@@ -1098,6 +1128,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
     }
     if (owner === "createUngatedTableGateForTests") {
       if (
+        !closedOptions ||
         !connection ||
         !ts.isIdentifier(connection) ||
         connection.text !== "connection"
