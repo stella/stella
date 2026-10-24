@@ -145,7 +145,7 @@ jobs:
             > release-source-receipt.json
 
       - name: Upload trusted release receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-source-receipt
           path: release-source-receipt.json
@@ -207,7 +207,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -793,7 +793,7 @@ jobs:
             > release-manifest.json
 
       - name: Upload manifest artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-manifest-${{ needs.resolve.outputs.release_ref }}
           path: release-manifest.json
