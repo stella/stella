@@ -1,4 +1,4 @@
-import type { TSchema } from "@sinclair/typebox";
+import { type TSchema, Type } from "@sinclair/typebox";
 import { panic } from "better-result";
 import { t } from "elysia";
 
@@ -193,7 +193,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
         index: t.Number(),
         type: t.UnionEnum([...DECISION_SECTION_TYPES]),
         title: nullableBoundedString(LABEL_BYTES),
-        blockIndices: t.Array(t.Integer({ minimum: 0 })),
+        blockIndices: t.Array(Type.Integer({ minimum: 0 })),
       }),
     ),
   ),

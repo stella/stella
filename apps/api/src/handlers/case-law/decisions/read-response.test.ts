@@ -206,3 +206,25 @@ test("decision readers preserve section block references so citation section ind
     ...Value.Errors(readDecisionSuccessResponseSchema, response),
   ]).toEqual([]);
 });
+
+test.each([
+  { indices: [0, 1, 300], valid: true },
+  { indices: ["0"], valid: false },
+  { indices: [-1], valid: false },
+  { indices: [1.5], valid: false },
+  { indices: [null], valid: false },
+  { indices: [true], valid: false },
+])(
+  "decision section block references validate $indices",
+  ({ indices, valid }) => {
+    const response = projectDecisionReader(decisionWithText("text"));
+    expect(
+      Value.Check(readDecisionSuccessResponseSchema, {
+        ...response,
+        sections: [
+          { index: 0, type: "header", title: null, blockIndices: indices },
+        ],
+      }),
+    ).toBe(valid);
+  },
+);

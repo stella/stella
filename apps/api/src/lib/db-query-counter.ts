@@ -16,6 +16,7 @@ import type { Logger } from "drizzle-orm";
 // jobs, boot-time queries), so wiring it in costs nothing beyond an ALS lookup
 // on those paths. Deployed environments wire no logger at all.
 import { AsyncLocalStorage } from "node:async_hooks";
+import { TransformStream } from "node:stream/web";
 
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
