@@ -27,12 +27,12 @@ import type { CommandAction, CommandActionContext } from "../lib/types";
 
 export type ResolvedCommandAction = CommandAction & {
   title: string;
-  keywordLabels: readonly string[];
   hotkey?: Hotkey;
 };
 
 type UploadRequest =
-  { type: "closed" } | { type: "open"; workspaceId: string | undefined };
+  | { type: "closed" }
+  | { type: "open"; workspaceId: string | undefined };
 
 type UseCommandActionsResult = {
   uploadRequest: UploadRequest;
@@ -160,13 +160,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
           isAvailable: action.isAvailable,
           run: action.run,
           title: t(action.titleKey),
-          keywordLabels: action.keywords
-            ? action.keywords.map((keyword) => t(keyword))
-            : [],
         };
-        if (action.keywords) {
-          resolved.keywords = action.keywords;
-        }
         if (action.shortcutId === undefined) {
           return resolved;
         }
