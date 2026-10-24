@@ -7,6 +7,7 @@ import {
   bindDeploymentFlagReader,
   envFeatureAccess,
 } from "@/api/env-feature-access";
+import { envKillSwitches } from "@/api/env-kill-switches";
 import {
   envApiInvariantViolation,
   envApiServerSchema,
@@ -70,6 +71,12 @@ const validatedEnv = {
   },
   set API_FEATURE_ACCESS_GRANTS(grants) {
     envFeatureAccess.API_FEATURE_ACCESS_GRANTS = grants;
+  },
+  get KILL_SWITCHES() {
+    return envKillSwitches.KILL_SWITCHES;
+  },
+  set KILL_SWITCHES(overrides) {
+    envKillSwitches.KILL_SWITCHES = overrides;
   },
 };
 

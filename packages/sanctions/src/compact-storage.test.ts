@@ -2,11 +2,11 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
-  SpellingColumn,
-  stringIdsSteps,
   NumberColumn,
   ObjectColumn,
   PostingColumn,
+  SpellingColumn,
+  stringIdsSteps,
   StringMap,
 } from "./compact-storage";
 

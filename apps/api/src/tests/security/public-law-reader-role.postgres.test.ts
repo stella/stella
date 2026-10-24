@@ -20,8 +20,8 @@ import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-ca
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { readPendingContractSources } from "@/api/lib/db/pending-contract-migrations/registry";
 import {
-  publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
+  publicLawDatabaseRolePermissionsSql,
 } from "@/api/lib/public-law-read-db";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,

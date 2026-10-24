@@ -10,17 +10,309 @@ const UNKNOWN = Symbol("unknown service condition");
 // The runner requires a nonempty value, but does not pin its contents.
 const PRESENT = Symbol("required service environment");
 type ConditionValue =
-  | string
-  | boolean
-  | number
-  | undefined
-  | typeof UNKNOWN
-  | typeof PRESENT;
+  string | boolean | number | undefined | typeof UNKNOWN | typeof PRESENT;
 
 const truth = (value: ConditionValue) =>
   value === UNKNOWN ? UNKNOWN : Boolean(value);
 
-const environmentName = (input: ts.Expression): string | undefined => {
+type ServiceBinding =
+  | { readonly type: "constant"; readonly initializer: ts.Expression }
+  | { readonly type: "import" }
+  | { readonly type: "shadow" };
+
+type DeclareServiceBindingOptions = {
+  readonly scope: ts.Node;
+  readonly name: ts.BindingName;
+  readonly binding: ServiceBinding;
+};
+
+const serviceBindings = (source: ts.SourceFile) => {
+  const scopes = new Map<ts.Node, Map<string, ServiceBinding>>();
+  const scopeFor = (input: ts.Node, functionScoped = false): ts.Node => {
+    let node = input;
+    while (
+      !ts.isSourceFile(node) &&
+      !ts.isFunctionLike(node) &&
+      !ts.isModuleBlock(node) &&
+      !ts.isClassStaticBlockDeclaration(node)
+    ) {
+      if (
+        !functionScoped &&
+        (ts.isBlock(node) ||
+          ts.isCaseBlock(node) ||
+          ts.isCatchClause(node) ||
+          ts.isForStatement(node) ||
+          ts.isForOfStatement(node) ||
+          ts.isForInStatement(node) ||
+          ts.isClassExpression(node))
+      ) {
+        return node;
+      }
+      node = node.parent;
+    }
+    return node;
+  };
+  const declare = ({
+    scope,
+    name,
+    binding,
+  }: DeclareServiceBindingOptions): void => {
+    if (!ts.isIdentifier(name)) {
+      for (const element of name.elements) {
+        if (ts.isBindingElement(element)) {
+          declare({ scope, name: element.name, binding: { type: "shadow" } });
+        }
+      }
+      return;
+    }
+    const entries = scopes.get(scope) ?? new Map<string, ServiceBinding>();
+    entries.set(
+      name.text,
+      entries.has(name.text) ? { type: "shadow" } : binding,
+    );
+    scopes.set(scope, entries);
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node)) {
+      const list = node.parent;
+      const keyword = ts.isVariableDeclarationList(list)
+        ? list.getFirstToken(source)?.kind
+        : undefined;
+      declare({
+        scope: scopeFor(list, keyword === ts.SyntaxKind.VarKeyword),
+        name: node.name,
+        binding:
+          keyword === ts.SyntaxKind.ConstKeyword &&
+          node.initializer !== undefined
+            ? { type: "constant", initializer: node.initializer }
+            : { type: "shadow" },
+      });
+    }
+    if (ts.isParameter(node)) {
+      declare({
+        scope: node.parent,
+        name: node.name,
+        binding: { type: "shadow" },
+      });
+    }
+    if (
+      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+      node.name !== undefined
+    ) {
+      declare({
+        scope: scopeFor(node.parent),
+        name: node.name,
+        binding: { type: "shadow" },
+      });
+    }
+    if (
+      (ts.isFunctionExpression(node) || ts.isClassExpression(node)) &&
+      node.name !== undefined
+    ) {
+      declare({ scope: node, name: node.name, binding: { type: "shadow" } });
+    }
+    if (
+      ts.isImportDeclaration(node) &&
+      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
+    ) {
+      const clause = node.importClause;
+      if (clause?.name !== undefined) {
+        declare({
+          scope: source,
+          name: clause.name,
+          binding: { type: "import" },
+        });
+      }
+      const bindings = clause?.namedBindings;
+      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        declare({
+          scope: source,
+          name: bindings.name,
+          binding: { type: "import" },
+        });
+      } else if (bindings !== undefined) {
+        for (const binding of bindings.elements) {
+          if (!binding.isTypeOnly) {
+            declare({
+              scope: source,
+              name: binding.name,
+              binding: { type: "import" },
+            });
+          }
+        }
+      }
+    }
+    if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly) {
+      declare({
+        scope: scopeFor(node.parent),
+        name: node.name,
+        binding: { type: "import" },
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return (identifier: ts.Identifier): ServiceBinding | undefined => {
+    let node: ts.Node = identifier;
+    while (true) {
+      const binding = scopes.get(node)?.get(identifier.text);
+      if (binding !== undefined || ts.isSourceFile(node)) {
+        return binding;
+      }
+      node = node.parent;
+    }
+  };
+};
+
+type ServiceBindingResolver = ReturnType<typeof serviceBindings>;
+
+const globalReferenceName = (
+  input: ts.Expression,
+  bindingFor: ServiceBindingResolver,
+): string | undefined => {
+  const node = unwrapTransparentExpression(input);
+  if (ts.isIdentifier(node)) {
+    return bindingFor(node) === undefined ? node.text : undefined;
+  }
+  if (
+    !ts.isPropertyAccessExpression(node) &&
+    !ts.isElementAccessExpression(node)
+  ) {
+    return undefined;
+  }
+  const owner = unwrapTransparentExpression(node.expression);
+  return ts.isIdentifier(owner) &&
+    owner.text === "globalThis" &&
+    bindingFor(owner) === undefined
+    ? literalMemberName(node)
+    : undefined;
+};
+
+const processEnvironmentMember = (
+  input: ts.Expression,
+  bindingFor: ServiceBindingResolver,
+): "environment" | { readonly name: string | undefined } | undefined => {
+  const node = unwrapTransparentExpression(input);
+  if (
+    !ts.isPropertyAccessExpression(node) &&
+    !ts.isElementAccessExpression(node)
+  ) {
+    return undefined;
+  }
+  if (
+    globalReferenceName(node.expression, bindingFor) === "process" &&
+    literalMemberName(node) === "env"
+  ) {
+    return "environment";
+  }
+  const owner = unwrapTransparentExpression(node.expression);
+  return (ts.isPropertyAccessExpression(owner) ||
+    ts.isElementAccessExpression(owner)) &&
+    globalReferenceName(owner.expression, bindingFor) === "process" &&
+    literalMemberName(owner) === "env"
+    ? { name: literalMemberName(node) }
+    : undefined;
+};
+
+const assignedGlobalNames = (
+  source: ts.SourceFile,
+  bindingFor: ServiceBindingResolver,
+): ReadonlySet<string> => {
+  const names = new Set<string>();
+  const assigned = (input: ts.Expression): void => {
+    const node = unwrapTransparentExpression(input);
+    const global = globalReferenceName(node, bindingFor);
+    if (global !== undefined) {
+      names.add(global);
+      return;
+    }
+    if (
+      (ts.isPropertyAccessExpression(node) ||
+        ts.isElementAccessExpression(node)) &&
+      globalReferenceName(node.expression, bindingFor) === "globalThis"
+    ) {
+      names.add("globalThis");
+      return;
+    }
+    const environment = processEnvironmentMember(node, bindingFor);
+    if (environment !== undefined) {
+      names.add(
+        environment === "environment" || environment.name === undefined
+          ? "process.env"
+          : `process.env.${environment.name}`,
+      );
+      return;
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      for (const element of node.elements) {
+        if (!ts.isOmittedExpression(element)) {
+          assigned(ts.isSpreadElement(element) ? element.expression : element);
+        }
+      }
+      return;
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      for (const property of node.properties) {
+        if (ts.isShorthandPropertyAssignment(property)) {
+          assigned(property.name);
+        } else if (ts.isPropertyAssignment(property)) {
+          assigned(property.initializer);
+        } else if (ts.isSpreadAssignment(property)) {
+          assigned(property.expression);
+        }
+      }
+      return;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    ) {
+      assigned(node.left);
+    }
+  };
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      assigned(node.left);
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      assigned(node.operand);
+    }
+    if (
+      (ts.isForInStatement(node) || ts.isForOfStatement(node)) &&
+      !ts.isVariableDeclarationList(node.initializer)
+    ) {
+      assigned(node.initializer);
+    }
+    if (ts.isDeleteExpression(node)) {
+      assigned(node.expression);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return names;
+};
+
+type GlobalServiceOwner = (identifier: ts.Identifier) => boolean;
+
+type EnvironmentNameOptions = {
+  readonly input: ts.Expression;
+  readonly isGlobal: GlobalServiceOwner;
+  readonly assignedGlobals: ReadonlySet<string>;
+};
+
+const environmentName = ({
+  input,
+  isGlobal,
+  assignedGlobals,
+}: EnvironmentNameOptions): string | undefined => {
   const node = unwrapTransparentExpression(input);
   if (
     !ts.isPropertyAccessExpression(node) &&
@@ -36,10 +328,14 @@ const environmentName = (input: ts.Expression): string | undefined => {
     return undefined;
   }
   const process = unwrapTransparentExpression(environment.expression);
+  const name = literalMemberName(node);
   return ts.isIdentifier(process) &&
     process.text === "process" &&
-    literalMemberName(environment) === "env"
-    ? literalMemberName(node)
+    isGlobal(process) &&
+    literalMemberName(environment) === "env" &&
+    !assignedGlobals.has("process.env") &&
+    !assignedGlobals.has(`process.env.${name}`)
+    ? name
     : undefined;
 };
 
@@ -121,27 +417,21 @@ export const serviceConditionEvaluator = ({
   gate,
   requiredEnvironment,
 }: ServiceConditionOptions) => {
-  const bindings = new Map<string, ts.Expression | undefined>();
-  const discover = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const constant =
-        ts.isVariableDeclarationList(node.parent) &&
-        node.parent.getFirstToken()?.kind === ts.SyntaxKind.ConstKeyword;
-      bindings.set(
-        node.name.text,
-        !constant || bindings.has(node.name.text)
-          ? undefined
-          : node.initializer,
-      );
-    }
-    ts.forEachChild(node, discover);
-  };
-  discover(source);
+  const bindingFor = serviceBindings(source);
+  const assignedGlobals = assignedGlobalNames(source, bindingFor);
+  const isGlobal: GlobalServiceOwner = (identifier) =>
+    bindingFor(identifier) === undefined &&
+    !assignedGlobals.has("globalThis") &&
+    !assignedGlobals.has(identifier.text);
 
-  const evaluating = new Set<string>();
+  const evaluating = new Set<ts.Expression>();
   const valueOf = (input: ts.Expression): ConditionValue => {
     const node = unwrapTransparentExpression(input);
-    const environment = environmentName(node);
+    const environment = environmentName({
+      input: node,
+      isGlobal,
+      assignedGlobals,
+    });
     if (environment === gate) {
       return "true";
     }
@@ -161,16 +451,16 @@ export const serviceConditionEvaluator = ({
       return false;
     }
     if (ts.isIdentifier(node)) {
-      if (node.text === "undefined") {
+      const binding = bindingFor(node);
+      if (node.text === "undefined" && isGlobal(node)) {
         return undefined;
       }
-      const initializer = bindings.get(node.text);
-      if (initializer === undefined || evaluating.has(node.text)) {
+      if (binding?.type !== "constant" || evaluating.has(binding.initializer)) {
         return UNKNOWN;
       }
-      evaluating.add(node.text);
-      const value = valueOf(initializer);
-      evaluating.delete(node.text);
+      evaluating.add(binding.initializer);
+      const value = valueOf(binding.initializer);
+      evaluating.delete(binding.initializer);
       return value;
     }
     if (
@@ -183,7 +473,8 @@ export const serviceConditionEvaluator = ({
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      node.expression.text === "Boolean"
+      node.expression.text === "Boolean" &&
+      isGlobal(node.expression)
     ) {
       const argument = node.arguments.at(0);
       return argument === undefined ? false : truth(valueOf(argument));
@@ -202,25 +493,31 @@ export const serviceConditionEvaluator = ({
 
   return {
     evaluate: (expression: ts.Expression) => truth(valueOf(expression)),
-    bindings,
+    bindingFor,
   };
 };
 
 export const registrationRunsWithService = (
   node: ts.CallExpression,
-  { evaluate, bindings }: ReturnType<typeof serviceConditionEvaluator>,
+  { evaluate, bindingFor }: ReturnType<typeof serviceConditionEvaluator>,
 ): boolean => {
-  const resolving = new Set<string>();
+  const resolving = new Set<ts.Expression>();
   const helpersActive = (input: ts.Expression): boolean => {
     const expression = unwrapTransparentExpression(input);
-    if (ts.isIdentifier(expression) && bindings.has(expression.text)) {
-      const initializer = bindings.get(expression.text);
-      if (initializer === undefined || resolving.has(expression.text)) {
+    const binding = ts.isIdentifier(expression)
+      ? bindingFor(expression)
+      : undefined;
+    if (binding?.type === "shadow") {
+      return false;
+    }
+    if (binding?.type === "constant") {
+      const { initializer } = binding;
+      if (resolving.has(initializer)) {
         return false;
       }
-      resolving.add(expression.text);
+      resolving.add(initializer);
       const active = helpersActive(initializer);
-      resolving.delete(expression.text);
+      resolving.delete(initializer);
       return active;
     }
     if (ts.isConditionalExpression(expression)) {

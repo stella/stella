@@ -57,23 +57,23 @@ import {
 } from "../src/lib/capability-transport";
 import { FEATURE_REGISTRY } from "../src/lib/feature-access/registry";
 import {
-  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   type CatalogServiceClassification,
   type ServiceClassification,
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "../src/lib/rate-limit/service-classification";
 import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import {
-  generateCapabilityRuntime,
   generateCapabilityCatalogRuntime,
+  generateCapabilityRuntime,
 } from "./generate-capability-runtime";
 import {
-  type CapabilityDispatchRecord,
   type AccessResolution,
   CANONICAL_ACTION_VERBS,
   CAPABILITY_ID_SEGMENT_PATTERN,
+  type CapabilityDispatchRecord,
   type CapabilityInputSchema,
   checkTransportAgainstDerived,
   compareCapabilityIds,
@@ -131,6 +131,8 @@ const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 // artifacts above (see `serializeCoverageDoc`).
 const COVERAGE_DOC_INPUT = "docs/capability-coverage.md";
 export const CI_MARKDOWN_READER_INPUTS = [COVERAGE_DOC_INPUT];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun apps/api/scripts/export-capability-catalog.ts --check";
 const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
 
 /**
@@ -164,6 +166,9 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // they require their own consent instead of borrowing a workspace write.
   contacts: "stella:contacts_write",
   "document-types": "stella:matters_write",
+  // Redline suggestions queued on a document: deciding or reopening one is a
+  // document review act, so it takes the document write consent.
+  "docx-suggestions": "stella:documents_write",
   // A translation run reads a matter document and writes the translated one
   // back as a new document, so it takes the workspace write bucket.
   "document-translations": "stella:matters_write",
@@ -184,7 +189,14 @@ const DOMAIN_SCOPE: Record<string, string> = {
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
   lists: "stella:matters_write",
+  // Assistant memory is replayed into future chat prompts, so it shares the
+  // assistant's own consent rather than a workspace write.
+  memories: "stella:chat",
   "number-series": "stella:billing_write",
+  // The caller's own inbox. Marking one read is per-user bookkeeping, but it
+  // is still a write, so it takes the workspace write bucket while listing
+  // reads under stella:read.
+  notifications: "stella:matters_write",
   "vat-rates": "stella:billing_write",
   "organization-settings": "stella:admin_write",
   playbooks: "stella:knowledge_write",
@@ -254,6 +266,7 @@ const SCOPE_STRICTNESS: Record<string, number> = {
   "stella:documents_write": 2,
   "stella:matters_write": 2,
   "stella:chat": 2,
+  "stella:memory_write": 3,
   "stella:knowledge_write": 2,
   "stella:billing_write": 2,
   "stella:skills": 2,
@@ -276,6 +289,8 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  "memories.create": "stella:memory_write",
+  "memories.update": "stella:memory_write",
   // Document writes that reach storage through helpers shared with other
   // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
   // imports; the direct callers of document primitives need no pin.
@@ -468,6 +483,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
+  memories: "FEATURE_AI_MEMORY",
   "number-series": "FEATURE_TIME_BILLING",
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
@@ -500,6 +516,7 @@ type CapabilityEntry = {
   access: "read" | "write";
   readClass?: McpReadClass;
   destructive: boolean;
+  confirmation?: "required";
   consumesServices: CatalogServiceClassification;
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
@@ -591,8 +608,7 @@ const readDescription = (
 };
 
 type EntryScopeResult =
-  | { status: "resolved"; scope: string }
-  | { status: "error"; message: string };
+  { status: "resolved"; scope: string } | { status: "error"; message: string };
 
 /**
  * Final scope for a `tool`/`covered` entry: the entry must never advertise a
@@ -797,8 +813,7 @@ type BuildCatalogEntryOptions = {
   exposure: ParsedExposure;
   feature: string | undefined;
   featureAccess:
-    | { featureId: string; type: "required" | "conditional" }
-    | undefined;
+    { featureId: string; type: "required" | "conditional" } | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
 };
@@ -834,6 +849,9 @@ const buildCatalogEntry = ({
   access: access.access,
   ...(readClass === undefined ? {} : { readClass }),
   destructive: access.destructive,
+  ...(exposure.type === "capability" && exposure.confirmation === "required"
+    ? { confirmation: exposure.confirmation }
+    : {}),
   consumesServices:
     typeof consumesServices === "function"
       ? VALIDATED_INPUT_SERVICE_CLASSIFICATION

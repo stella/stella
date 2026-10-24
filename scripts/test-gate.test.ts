@@ -2,6 +2,7 @@ import { describe as context, expect, test as check } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import { sha256Hex } from "../packages/sha256/src/bun";
+import { allE2eShards } from "./e2e-spec-shards-core";
 import {
   analyzeGatingWorkflow,
   firstCollectionFailure,
@@ -10,16 +11,16 @@ import {
   managedServiceRunnerFailure,
   packageTestCollectionFailure,
   packageTestExecutionFailure,
-  parseScenarioLedger,
   parseDisabledLedger,
-  platformConditionalFailure,
+  parseScenarioLedger,
   parseTestRegistrations,
-  rootCommandExecutionFailure,
-  scenarioLedgerGrowth,
-  scenarioBlockerFailure,
-  validateTrustedOutputProducers,
-  validateGatingEventFacts,
+  platformConditionalFailure,
   repositoryTestExecutionTopology,
+  rootCommandExecutionFailure,
+  scenarioBlockerFailure,
+  scenarioLedgerGrowth,
+  validateGatingEventFacts,
+  validateTrustedOutputProducers,
 } from "./test-gate";
 import type { ScenarioBlocker, TestScenario } from "./test-gate";
 import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
@@ -405,6 +406,112 @@ context("test registration census", () => {
       ]);
     },
   );
+
+  check.each([
+    'const process = { env: { STELLA_RUN_POSTGRES_TESTS: "false" } }; REGISTRATION',
+    '{ const process = { env: { STELLA_RUN_POSTGRES_TESTS: "false" } }; REGISTRATION }',
+    "function register(process) { REGISTRATION }",
+    'import process from "./other-process"; REGISTRATION',
+    'import * as process from "./other-process"; REGISTRATION',
+    'import { process } from "./other-process"; REGISTRATION',
+    "function register() { REGISTRATION; if (true) { var process = other; } }",
+    "try {} catch (process) { REGISTRATION }",
+    "for (const process of processes) { REGISTRATION }",
+    "const register = function process() { REGISTRATION };",
+    "class Example { static { REGISTRATION; var process = other; } }",
+  ])("shadowed process cannot earn managed execution credit: %s", (layout) => {
+    const source = `import { test } from "bun:test"; ${layout.replace(
+      "REGISTRATION",
+      'test.skipIf(process.env.STELLA_RUN_POSTGRES_TESTS !== "true")("shadowed", () => {});',
+    )}`;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::shadowed", type: "disabled" },
+    ]);
+  });
+
+  check.each([
+    "const Boolean = () => false; REGISTRATION",
+    "{ const Boolean = () => false; REGISTRATION }",
+    "function register(Boolean) { REGISTRATION }",
+    'import { Boolean } from "./other-boolean"; REGISTRATION',
+    "function Boolean() { return false; } REGISTRATION",
+  ])("shadowed Boolean cannot earn managed execution credit: %s", (layout) => {
+    const source = `import { test } from "bun:test"; ${layout.replace(
+      "REGISTRATION",
+      'test.skipIf(!Boolean(process.env.STELLA_RUN_POSTGRES_TESTS === "true"))("shadowed", () => {});',
+    )}`;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::shadowed", type: "disabled" },
+    ]);
+  });
+
+  check("shadowed undefined cannot substitute for a runtime literal", () => {
+    const source = `import { test } from "bun:test";
+      { const undefined = "true";
+        test.skipIf(process.env.STELLA_RUN_POSTGRES_TESTS === undefined)("shadowed", () => {});
+      }`;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::shadowed", type: "disabled" },
+    ]);
+  });
+
+  check.each([
+    "Boolean = () => false;",
+    "({ Boolean } = other);",
+    "[Boolean] = other;",
+    "Boolean++;",
+    "Boolean ||= other;",
+    "for (Boolean of values) {}",
+    'process = { env: { STELLA_RUN_POSTGRES_TESTS: "false" } };',
+    "globalThis.Boolean = () => false;",
+    "globalThis[key] = other;",
+    'globalThis["process"] = { env: { STELLA_RUN_POSTGRES_TESTS: "false" } };',
+    'process.env.STELLA_RUN_POSTGRES_TESTS = "false";',
+    'process.env["STELLA_RUN_POSTGRES_TESTS"] = "false";',
+    'globalThis.process.env.STELLA_RUN_POSTGRES_TESTS = "false";',
+    "delete process.env.STELLA_RUN_POSTGRES_TESTS;",
+    "process.env = other;",
+    'process.env[key] = "false";',
+  ])(
+    "reassigned runtime owners cannot earn managed execution credit: %s",
+    (assignment) => {
+      const source = `import { test } from "bun:test";
+      ${assignment}
+      test.skipIf(!Boolean(process.env.STELLA_RUN_POSTGRES_TESTS === "true"))("reassigned", () => {});`;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        { identity: "fixture.test.ts::reassigned", type: "disabled" },
+      ]);
+    },
+  );
+
+  check.each([
+    "function unrelated(process, Boolean) {} REGISTRATION",
+    "{ const process = other; const Boolean = other; } REGISTRATION",
+    'const enabled = process.env.STELLA_RUN_POSTGRES_TESTS === "true"; { const process = other; REGISTRATION_ALIAS }',
+    'function unrelated() { const enabled = false; } const enabled = process.env.STELLA_RUN_POSTGRES_TESTS === "true"; REGISTRATION_ALIAS',
+    "function unrelated(process, Boolean) { process = other; Boolean = other; } REGISTRATION",
+    'function unrelated(globalThis) { globalThis.Boolean = other; globalThis.process.env.STELLA_RUN_POSTGRES_TESTS = "false"; } REGISTRATION',
+    'process.env.UNRELATED_FIXTURE = "false"; REGISTRATION',
+    "class Example { static { var process = other; var Boolean = other; } } REGISTRATION",
+    "namespace Unrelated { var process = other; var Boolean = other; } REGISTRATION",
+  ])("service condition bindings retain their lexical owner: %s", (layout) => {
+    const source = `import { test } from "bun:test"; ${layout
+      .replace(
+        "REGISTRATION_ALIAS",
+        'test.skipIf(!enabled)("managed", () => {});',
+      )
+      .replace(
+        "REGISTRATION",
+        'test.skipIf(!Boolean(process.env.STELLA_RUN_POSTGRES_TESTS === "true"))("managed", () => {});',
+      )}`;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      {
+        identity: "fixture.test.ts::managed",
+        managedServiceGate: "STELLA_RUN_POSTGRES_TESTS",
+        type: "disabled",
+      },
+    ]);
+  });
 
   check("fails closed for unresolved titles on disabled registrations", () => {
     const source = `
@@ -3629,10 +3736,11 @@ context("root test runner coverage", () => {
         });
 
       expect(failureFor(workflow)).toContain("pinned collector:");
+      const completeShards = `shard: ${JSON.stringify(allE2eShards())}`;
       const unconditionalWorkflow = editJob(
         workflow.replace(
           `shard: \${{ fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard }}`,
-          "shard: [1, 2]",
+          () => completeShards,
         ),
         "e2e-production-shard",
         (job) => job,
@@ -3668,14 +3776,17 @@ context("root test runner coverage", () => {
           "baseline-only collector matrix",
           (source) =>
             editJob(source, "e2e-production-shard", (job) =>
-              job.replace("shard: [1, 2]", "shard: [network-baseline]"),
+              job.replace(completeShards, () => "shard: [network-baseline]"),
             ),
         ],
         [
           "incomplete production shard matrix",
           (source) =>
             editJob(source, "e2e-production-shard", (job) =>
-              job.replace("shard: [1, 2]", "shard: [1]"),
+              job.replace(
+                completeShards,
+                () => `shard: ${JSON.stringify(allE2eShards().slice(0, -1))}`,
+              ),
             ),
         ],
         [

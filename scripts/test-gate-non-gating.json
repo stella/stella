@@ -56,9 +56,9 @@
     "owningWorkflow": ".github/workflows/ci.yml",
     "type": "non-gating",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     }
   },
   {
@@ -66,9 +66,9 @@
     "owningWorkflow": ".github/workflows/ci.yml",
     "type": "non-gating",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     }
   },
   {
@@ -174,24 +174,22 @@
     "type": "non-gating"
   },
   {
-    "file": "apps/web/e2e/anonymized-export/anonymized-export.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
+    "file": "apps/web/e2e/journeys/chat-compaction.spec.ts",
+    "owningWorkflow": ".github/workflows/user-journeys.yml",
     "type": "non-gating",
-    "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
-    }
+    "reason": "deployed-environment journeys run on schedule or explicit dispatch outside the merge CI aggregate"
   },
   {
-    "file": "apps/web/e2e/collab/folio-collaboration.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
+    "file": "apps/web/e2e/journeys/inspector-layout.spec.ts",
+    "owningWorkflow": ".github/workflows/user-journeys.yml",
     "type": "non-gating",
-    "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
-    }
+    "reason": "deployed-environment journeys run on schedule or explicit dispatch outside the merge CI aggregate"
+  },
+  {
+    "file": "apps/web/e2e/journeys/sanctions-screening.spec.ts",
+    "owningWorkflow": ".github/workflows/user-journeys.yml",
+    "type": "non-gating",
+    "reason": "deployed-environment journeys run on schedule or explicit dispatch outside the merge CI aggregate"
   },
   {
     "file": "apps/web/e2e/marketing/product-screenshots.spec.ts",
@@ -208,9 +206,9 @@
   {
     "file": "apps/web/e2e/specs/agent-skills.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -218,9 +216,9 @@
   {
     "file": "apps/web/e2e/specs/app-shell-readiness.unit.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -228,9 +226,9 @@
   {
     "file": "apps/web/e2e/specs/chat-anonymized-composer.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -238,9 +236,9 @@
   {
     "file": "apps/web/e2e/specs/chat-bottom-fade.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -248,9 +246,9 @@
   {
     "file": "apps/web/e2e/specs/chat-clipboard.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -258,9 +256,9 @@
   {
     "file": "apps/web/e2e/specs/chat-composer-during-stream.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -268,9 +266,9 @@
   {
     "file": "apps/web/e2e/specs/chat-composer-menu-shortcut.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -278,9 +276,9 @@
   {
     "file": "apps/web/e2e/specs/chat-long-paste-chip.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -288,9 +286,9 @@
   {
     "file": "apps/web/e2e/specs/chat-reattach.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -298,9 +296,9 @@
   {
     "file": "apps/web/e2e/specs/chat-rename.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -308,9 +306,9 @@
   {
     "file": "apps/web/e2e/specs/chat-stream-commit-budget.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -318,9 +316,9 @@
   {
     "file": "apps/web/e2e/specs/chat-stream-error.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -328,9 +326,9 @@
   {
     "file": "apps/web/e2e/specs/chat.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -338,9 +336,9 @@
   {
     "file": "apps/web/e2e/specs/chrome-divider.unit.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -348,9 +346,9 @@
   {
     "file": "apps/web/e2e/specs/decision-narrow-reader.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -358,9 +356,9 @@
   {
     "file": "apps/web/e2e/specs/decision-paragraph-range.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -368,9 +366,9 @@
   {
     "file": "apps/web/e2e/specs/dev-autocomplete.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -378,19 +376,29 @@
   {
     "file": "apps/web/e2e/specs/docked-chat-geometry.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
+    "file": "apps/web/e2e/specs/email-otp-reauth.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
+    }
+  },
+  {
     "file": "apps/web/e2e/specs/evidence-references.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -398,9 +406,9 @@
   {
     "file": "apps/web/e2e/specs/filesystem-rename.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -408,9 +416,9 @@
   {
     "file": "apps/web/e2e/specs/generated-visual-polish.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -418,9 +426,9 @@
   {
     "file": "apps/web/e2e/specs/generated-visual.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -428,9 +436,9 @@
   {
     "file": "apps/web/e2e/specs/guides.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -438,9 +446,9 @@
   {
     "file": "apps/web/e2e/specs/heap-growth-canary.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -448,9 +456,9 @@
   {
     "file": "apps/web/e2e/specs/i18n-bootstrap.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -458,9 +466,9 @@
   {
     "file": "apps/web/e2e/specs/kanban-card-drag.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -468,9 +476,9 @@
   {
     "file": "apps/web/e2e/specs/law-authenticated-sidebar.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -478,9 +486,9 @@
   {
     "file": "apps/web/e2e/specs/law-cases-ssr.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -488,9 +496,9 @@
   {
     "file": "apps/web/e2e/specs/lists-granted.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -498,9 +506,9 @@
   {
     "file": "apps/web/e2e/specs/matter-color-picker.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -508,19 +516,29 @@
   {
     "file": "apps/web/e2e/specs/mcp-case-law-results.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
+    "file": "apps/web/e2e/specs/mcp-handoff.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
+    }
+  },
+  {
     "file": "apps/web/e2e/specs/navigation-policy.unit.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -528,9 +546,9 @@
   {
     "file": "apps/web/e2e/specs/oauth-consent.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -538,9 +556,9 @@
   {
     "file": "apps/web/e2e/specs/oauth-ui-redirect.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -548,19 +566,39 @@
   {
     "file": "apps/web/e2e/specs/organization-login.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
+    "file": "apps/web/e2e/specs/overview-task-create.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
+    }
+  },
+  {
+    "file": "apps/web/e2e/specs/professional-use-confirmation.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
+    }
+  },
+  {
     "file": "apps/web/e2e/specs/provision-inspector-layout.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -568,9 +606,9 @@
   {
     "file": "apps/web/e2e/specs/public-tools.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -578,9 +616,9 @@
   {
     "file": "apps/web/e2e/specs/reader-chat-first-send.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -588,9 +626,9 @@
   {
     "file": "apps/web/e2e/specs/reader-chat-first-turn.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -598,9 +636,9 @@
   {
     "file": "apps/web/e2e/specs/route-pending-shell.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -608,9 +646,9 @@
   {
     "file": "apps/web/e2e/specs/search-actions.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -618,9 +656,9 @@
   {
     "file": "apps/web/e2e/specs/selection-toolbar-geometry.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -628,9 +666,9 @@
   {
     "file": "apps/web/e2e/specs/smoke.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -638,9 +676,9 @@
   {
     "file": "apps/web/e2e/specs/table-search.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -648,9 +686,9 @@
   {
     "file": "apps/web/e2e/specs/table-view-state-reconcile.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -658,9 +696,9 @@
   {
     "file": "apps/web/e2e/specs/template-studio.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -668,9 +706,9 @@
   {
     "file": "apps/web/e2e/specs/upload-docx.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
@@ -678,29 +716,19 @@
   {
     "file": "apps/web/e2e/specs/verification-review.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
-    "file": "apps/web/e2e/specs/vite-dependency-canary.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "type": "non-gating",
-    "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
-    }
-  },
-  {
     "file": "apps/web/e2e/specs/workspace-file-drop.spec.ts",
     "reason": {
-      "blocker": "stack-status-gate",
-      "producer": "setup-e2e-stack status",
-      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-plan/e2e-pr-plan.outputs.matrix",
+      "producerSha256": "864066820df32ed26682d641f984b5edfe3ed2706358006857934ef85537f0d8"
     },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"

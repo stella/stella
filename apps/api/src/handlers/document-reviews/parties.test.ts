@@ -11,8 +11,8 @@ import { describe, expect, test } from "bun:test";
 import {
   documentReviewParties,
   entities,
-  fields,
   entityVersions,
+  fields,
   workspaces,
 } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -22,8 +22,8 @@ import type { detectReviewParties } from "@/api/lib/document-review/parties";
 import type { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import {
   modelStepFailure,

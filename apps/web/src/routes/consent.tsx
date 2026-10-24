@@ -35,11 +35,11 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  oauthConsentInfoSchema,
-  getOauthHashFragment,
   getOauthClientDisplayName,
+  getOauthHashFragment,
   getOauthRedirectUrl,
   getSignedOauthQueryFromHash,
+  oauthConsentInfoSchema,
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";

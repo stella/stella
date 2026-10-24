@@ -24,9 +24,9 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
-  CopyIcon,
   CropIcon,
   DownloadIcon,
+  DuplicateIcon,
   GripVerticalIcon,
   PlusIcon,
   Redo2Icon,
@@ -66,7 +66,7 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { filesKeys, fileOptions } from "@/lib/files/queries";
+import { fileOptions, filesKeys } from "@/lib/files/queries";
 import {
   ENTITY_VERSION_UPLOAD_RESULT,
   uploadEntityVersion,
@@ -95,11 +95,11 @@ import {
   createPageOrganizerState,
   getPageMoveDestination,
   isPageOrganizerDirty,
-  reducePageOrganizer,
   type OrganizerPage,
   type PageDropEdge,
   type PageOrganizerState,
   type PageRotation,
+  reducePageOrganizer,
 } from "./page-organizer.logic";
 
 const ORIGINAL_SOURCE_ID = "original";
@@ -117,9 +117,7 @@ type AddedSource = {
 };
 
 type EditorOperation =
-  | { type: "idle" }
-  | { type: "transforming" }
-  | { type: "uploading" };
+  { type: "idle" } | { type: "transforming" } | { type: "uploading" };
 
 type PDFPageOrganizerProps = {
   canSaveVersion: boolean;
@@ -237,7 +235,11 @@ const loadAddedSources = async ({
 
   const bytes = await file.arrayBuffer();
   const sourceId = createUuid();
-  const result = await loadPDF({ fileId: sourceId, buffer: bytes });
+  const result = await loadPDF({
+    fileId: sourceId,
+    buffer: bytes,
+    pageSource: "portfolio",
+  });
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -1040,7 +1042,7 @@ const LoadedPDFPageOrganizer = ({
             tooltip={tPageEditor("duplicate")}
             variant="ghost"
           >
-            <CopyIcon />
+            <DuplicateIcon />
           </Button>
           <Button
             aria-label={tPageEditor("delete")}
@@ -1284,7 +1286,7 @@ export const PDFPageOrganizer = ({
   );
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const { data: sourceDocumentResult } = usePDFDocument({
-    key: { fileId: fieldId },
+    key: { fileId: fieldId, pageSource: "portfolio" },
     context: { buffer: originalFile.buffer },
   });
   const sourceDocument = resolveOrganizerSourceDocument({

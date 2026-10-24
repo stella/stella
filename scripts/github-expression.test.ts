@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  UNKNOWN,
-  contextFromNested,
-  conjunctiveOutputConditions,
   compileOutputAliases,
+  conjunctiveOutputConditions,
+  contextFromNested,
   contextWithPlanOutputs,
   definitelyFalse,
   evaluate,
+  UNKNOWN,
 } from "./github-expression";
 
 const none = { values: {} };

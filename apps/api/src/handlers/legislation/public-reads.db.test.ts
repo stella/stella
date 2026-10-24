@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
