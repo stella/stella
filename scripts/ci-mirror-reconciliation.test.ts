@@ -84,7 +84,10 @@ const reconcile = async (
   });
   await executable.runInNewContext({
     github: {
-      paginate: async (route: string, { run_id }: { run_id?: number }) => {
+      paginate: async (
+        route: string,
+        { run_id, filter }: { run_id?: number; filter?: string },
+      ) => {
         if (route.includes("/workflows/")) {
           return runs.map(record);
         }
@@ -92,7 +95,7 @@ const reconcile = async (
           panic("Job lookup requires a run id");
         }
         const run = requested(run_id);
-        return [
+        const jobs = [
           {
             id: run.id * 10,
             name: "ci-plan",
@@ -114,6 +117,22 @@ const reconcile = async (
             completed_at: run.completed,
           },
         ];
+        if (run.run_attempt === 1) {
+          return jobs;
+        }
+        const earlierResult = {
+          id: run.id * 10 - 2,
+          name: "ci-result",
+          status: "completed",
+          conclusion: "failure",
+          started_at: BEFORE,
+          completed_at: BEFORE,
+        };
+        // Partial reruns need not execute their successful planning jobs.
+        // Their classification survives in the earlier attempt's evidence.
+        return filter === "all"
+          ? [...jobs, earlierResult]
+          : jobs.filter((job) => job.name === "ci-result");
       },
       rest: {
         actions: {
