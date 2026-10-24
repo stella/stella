@@ -54,6 +54,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@stll/fetch": "workspace:^",
     "better-result": "catalog:"
   },
   "devDependencies": {

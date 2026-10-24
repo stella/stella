@@ -1848,6 +1848,7 @@ jobs:
           bun scripts/check-published-exports.ts packages/stable-stringify
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
+          bun scripts/check-published-exports.ts packages/fetch
           bun scripts/check-published-exports.ts packages/scan-engine
 
       - name: MCP kit published export map guard

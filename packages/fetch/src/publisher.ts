@@ -1156,7 +1156,12 @@ export const createPolitePublisherFetch = <Target extends PublisherTarget>({
     now: () => performance.now(),
     sleep: async (ms, signal) => {
       signal?.throwIfAborted();
-      await raceAbort(Bun.sleep(ms), signal);
+      await raceAbort(
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
+        signal,
+      );
       signal?.throwIfAborted();
     },
   },

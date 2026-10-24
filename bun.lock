@@ -1008,6 +1008,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/infosoud": {
@@ -1277,6 +1278,7 @@
       "name": "@stll/scan-engine",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/fetch": "workspace:^",
         "better-result": "catalog:",
       },
       "devDependencies": {
