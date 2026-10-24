@@ -38,8 +38,25 @@ export const unclassifiedDependency = docSourcePolicyCase({
   exclusions: [],
 });
 
-// oxlint-disable-next-line docs-source-policy/docs-source-policy -- a quarantine longer than 31 days
-export const unboundedQuarantine = docSourcePolicyCase({
+// The rule never reads the clock, so an elapsed quarantine is clean here;
+// scripts/dated-waivers.ts owns its expiry.
+// expect-clean: docs-source-policy/docs-source-policy
+export const elapsedQuarantine = docSourcePolicyCase({
+  dependencies: ["undocumented-package"],
+  sources: {},
+  exclusions: [
+    {
+      dependency: "undocumented-package",
+      reason: "no-llms-txt",
+      explanation: "The canonical documentation had no llms.txt endpoint.",
+      checkedAt: "2026-08-26T00:00:00.000Z",
+      expiresAt: "2026-08-27T00:00:00.000Z",
+    },
+  ],
+});
+
+// oxlint-disable-next-line docs-source-policy/docs-source-policy -- a quarantine longer than 31 days after its check
+export const overlongQuarantine = docSourcePolicyCase({
   dependencies: ["undocumented-package"],
   sources: {},
   exclusions: [

@@ -4,13 +4,13 @@
 // removing a dependency cannot silently drift from the documentation MCP.
 //
 // A no-llms-txt classification is evidence about mutable upstream state, not
-// a permanent exemption, so its quarantine is bounded to 31 days. The rule
-// checks only that shape, never the clock: a lint verdict is a function of the
-// tree. scripts/dated-waivers.ts owns the expiry, failing a change that touches
-// this policy and the scheduled default-branch check, never an unrelated change.
+// a permanent exemption. Its quarantine must expire within 31 days of its
+// check. The rule never reads the clock: scripts/dated-waivers.ts owns the
+// expiry, failing only changes that touch this policy, and the scheduled
+// dated-waiver-healing run rechecks it before the date.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {

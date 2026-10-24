@@ -70,23 +70,16 @@ describe("documentation source policy rule", () => {
     );
   });
 
-  // The verdict is a function of the policy alone: a quarantine whose expiry
-  // has long passed is still well formed, and its expiry belongs to
-  // scripts/dated-waivers.ts, which scopes it to changes touching the policy.
-  test("accepts a lapsed quarantine, whose expiry the dated waiver check owns", () => {
+  test("never fails on time alone and rejects quarantines longer than one month", () => {
+    // An elapsed quarantine is the dated waiver check's to enforce.
     expect(
       checkDocumentationSourcePolicy({
         dependencies: new Set(["documented-package", "undocumented-package"]),
-        exclusions: quarantine("2000-01-02T00:00:00.000Z").map((entry) => ({
-          ...entry,
-          checkedAt: "2000-01-01T00:00:00.000Z",
-        })),
+        exclusions: quarantine("2026-08-27T00:00:00.000Z"),
         sources: SOURCE,
       }),
     ).toEqual([]);
-  });
 
-  test("rejects quarantines longer than one month", () => {
     expect(
       checkDocumentationSourcePolicy({
         dependencies: new Set(["documented-package", "undocumented-package"]),

@@ -7,21 +7,12 @@
 # entries as steps of the job (scripts/workflow-steps.ts).
 checks:
   - name: Format
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && steps.affected.outcome == 'success' }}
-    # Call turbo directly: the `format:check` script already
-    # contains `-- --check`, so appending `--affected` via
-    # `bun run` would land it after turbo's `--` and forward it
-    # to oxfmt instead of filtering packages.
     env:
-      CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-      STELLA_VERIFY: check
-      AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-    run: |
-      bun run format:guard
-      args=()
-      [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-      bun --bun turbo run format "${args[@]}" -- --check
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_122
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_122 != 'true') }}
+    run: bun fmt --check
 
   - name: Test unsignalled skip detection
     env:

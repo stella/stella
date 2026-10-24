@@ -15,14 +15,15 @@ import {
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
+  PENDING_CONTRACT_MIGRATIONS_SOURCE,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
 } from "./dated-waivers";
 import {
+  type QuarantineEntry,
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   serializeRegistry,
-  type QuarantineEntry,
 } from "./flaky-test-quarantine";
 
 const doc = {
@@ -61,6 +62,8 @@ const sources = {
       },
     ],
   }),
+  [PENDING_CONTRACT_MIGRATIONS_SOURCE]:
+    'const migrations = [{ name: "pending-contract", expiresAt: "2026-10-01" }];',
 };
 const read = (file: string) => new Map(Object.entries(sources)).get(file) ?? "";
 const inventory = () =>
@@ -265,6 +268,32 @@ test("an expired waiver fails a change only when the change touches its source",
   ).toBe(true);
 });
 
+test("an expired pending contract fails its registry change and the full check only", () => {
+  const entries = collectWaivers({
+    read,
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    pendingContractMigrations: [
+      { name: "pending-contract", expiresAt: "2026-10-01" },
+    ],
+  });
+  const now = new Date("2026-10-03T00:00:00.000Z");
+  const expected = `${PENDING_CONTRACT_MIGRATIONS_SOURCE}:1 dated waiver expired: pending-contract`;
+  expect(expiredWaiverFailures(entries, now)).toEqual([expected]);
+  expect(
+    expiredWaiverFailures(
+      entries,
+      now,
+      new Set([PENDING_CONTRACT_MIGRATIONS_SOURCE]),
+    ),
+  ).toEqual([expected]);
+  expect(
+    expiredWaiverFailures(entries, now, new Set(["apps/web/src/unrelated.ts"])),
+  ).toEqual([]);
+});
+
 test("impossible dates, missing anchors and new expiry-bearing owners fail closed", () => {
   for (const value of ["2026-02-30", "2026-02-30T00:00:00.000Z", "tomorrow"]) {
     expect(() => expiryInstant(value)).toThrow("Invalid dated waiver expiry");
@@ -281,13 +310,14 @@ test("impossible dates, missing anchors and new expiry-bearing owners fail close
   expect(
     uncoveredExpirySources(
       {
+        "apps/example/src/deadline.ts": 'expiresAt: "2026-10-03"',
         "new.json": '{"expiresOn":"2026-10-02"}',
         "known.ts": 'expiresAt: "2026-10-02"',
         "history.json": '{"recordedAt":"2026-10-02"}',
       },
       new Set(["known.ts"]),
     ),
-  ).toEqual(["new.json"]);
+  ).toEqual(["apps/example/src/deadline.ts", "new.json"]);
 });
 test("documentation inventory derives from injected typed owners including none", () => {
   for (const docs of [
@@ -412,6 +442,9 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
         "a.test.ts": `${prefix}${quarantined}`,
       },
       flakyTestQuarantines: [flaky],
+      pendingContractMigrations: [
+        { name: "pending-contract", expiresAt: "2026-10-01" },
+      ],
     });
   const original = entriesAt("");
   expect(Object.keys(RECHECK_INSTRUCTIONS).toSorted()).toEqual(
@@ -458,9 +491,8 @@ test("exception identity survives sibling removal and rejects ambiguous covered 
   );
 });
 
-// The tracked tree proves its owners parse offline. The empty change scope is
-// a pull request that touches no waiver, so the verdict cannot depend on
-// today's date; expiry itself is covered above against fixed instants.
+// Scoped like an unrelated pull request: the real inventory must load and
+// validate, but no waiver's date can fail this test on the day it elapses.
 test("check consumes validated tracked files without spawning under the offline preload", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
   const trackedFiles = path.join(directory, "tracked-files");
@@ -471,7 +503,7 @@ test("check consumes validated tracked files without spawning under the offline 
     });
     expect(git.exitCode).toBe(0);
     writeFileSync(trackedFiles, git.stdout);
-    writeFileSync(changedFiles, "");
+    writeFileSync(changedFiles, "apps/web/src/unrelated.ts\0");
 
     const checked = Bun.spawnSync(
       [

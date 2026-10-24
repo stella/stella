@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/db/online-migrations.ts",
+    "from": "ff127071eb5e8c0ddc9806412080078a422178f9d0591fbecc8f2080429949f4",
+    "to": "71f257696dfea511892314a551b1062a430e69327915e45ca2df2310250b2ba1",
+    "reason": "The online migration lock is tried instead of awaited in the database, so neither startup nor a waiting migrate run holds a statement on it past the statement timeout. Same lock, same single acquisition."
+  }
+]

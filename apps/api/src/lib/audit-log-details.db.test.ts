@@ -9,8 +9,8 @@ import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import {
-  auditChangesForResource,
   AUDIT_DETAIL_POLICY,
+  auditChangesForResource,
   auditReadChangesSql,
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";

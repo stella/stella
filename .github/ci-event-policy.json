@@ -181,7 +181,8 @@
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
-    "queue-admission.yml/admission": "dispatch-only"
+    "queue-admission.yml/admission": "dispatch-only",
+    "ci-runner-loss-retry.yml/retry": "pr-fast"
   },
   "pushMain": {
     "typecheck-base.yml": {

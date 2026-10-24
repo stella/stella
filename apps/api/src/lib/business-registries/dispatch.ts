@@ -11,8 +11,8 @@ import type {
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
 import {
-  AresAPIError,
   type AresAddress,
+  AresAPIError,
   type AresCompany,
   AresRequestError,
   type AresSearchResult,
@@ -82,26 +82,26 @@ import {
   normalizeKrsNumber,
 } from "@stll/business-registries/krs";
 import {
-  OrsrAPIError,
+  lookupByIco as lookupOrsrByIco,
+  lookupFullRecordByIco as lookupOrsrFullRecordByIco,
+  normalizeIco as normalizeOrsrIco,
   type OrsrAddress,
+  OrsrAPIError,
   type OrsrCompany,
   type OrsrFullRecord,
   OrsrRequestError,
   type OrsrSearchResult,
   OrsrValidationError,
-  lookupByIco as lookupOrsrByIco,
-  lookupFullRecordByIco as lookupOrsrFullRecordByIco,
-  normalizeIco as normalizeOrsrIco,
   searchByName as searchOrsrByName,
 } from "@stll/business-registries/orsr";
 import {
+  lookupByBusinessId,
+  normalizeBusinessId,
   PrhAPIError,
   type PrhCompany,
   PrhRequestError,
   type PrhSearchResult,
   PrhValidationError,
-  lookupByBusinessId,
-  normalizeBusinessId,
   searchByName as searchPrhByName,
 } from "@stll/business-registries/prh";
 import {
@@ -133,9 +133,9 @@ import {
   isKnownVatCountry,
   parseVatNumber,
   validateVat,
-  type ViesValidation,
   ViesAPIError,
   ViesRequestError,
+  type ViesValidation,
   ViesValidationError,
 } from "@stll/business-registries/vies";
 import type { CountryCode } from "@stll/country-codes";
@@ -158,8 +158,7 @@ export type { BusinessRegistrySlug } from "@stll/api-contract";
 
 const EU_PSEUDO_JURISDICTION = "EU" as const;
 export type RegistryJurisdictionCode =
-  | CountryCode
-  | typeof EU_PSEUDO_JURISDICTION;
+  CountryCode | typeof EU_PSEUDO_JURISDICTION;
 
 // ---------------------------------------------------------------------------
 // Normalised cross-registry shapes

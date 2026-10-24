@@ -12,9 +12,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
-  type CorpusIndexHit,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
+  type CorpusIndexHit,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";

@@ -1,3 +1,5 @@
+import { MCP_HANDOFF_REDEEM_PATH } from "@/api/lib/auth/mcp-web-handoff-paths";
+
 const AUTH_SESSION_PATH_DISPOSITION = {
   secondFactor: "second_factor",
   secondFactorCompletion: "second_factor_completion",
@@ -46,6 +48,10 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/sign-in/email", noSecondFactor("self-hosted password sign-in")],
     ["/email-otp/verify-email", noSecondFactor("first email verification")],
     ["/sign-up/email", noSecondFactor("self-hosted password registration")],
+    [
+      MCP_HANDOFF_REDEEM_PATH,
+      noSecondFactor("web session handed off from an authorized MCP session"),
+    ],
     ["/verify-email", noSession("email verification")],
     ["/get-session", existingSession("authenticated session refresh")],
     ["/update-session", existingSession("authenticated session update")],
@@ -97,6 +103,7 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/link-social", noSession("authenticated account linking")],
     ["/list-accounts", noSession("authenticated account listing")],
     ["/list-sessions", noSession("authenticated session listing")],
+    ["/mcp-handoff/sessions", noSession("handed-off session client listing")],
     ["/ok", noSession("authentication status response")],
     ["/refresh-token", noSession("access-token refresh")],
     ["/request-password-reset", noSession("password reset request")],
