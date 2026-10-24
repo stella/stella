@@ -593,6 +593,7 @@
         "@stll/playwright-tools": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/render-probe": "workspace:*",
+        "@stll/sanctions": "workspace:*",
         "@stll/scripts": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
         "@stll/typescript-config": "workspace:*",
