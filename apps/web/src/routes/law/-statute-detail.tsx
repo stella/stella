@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useId, useRef, useState } from "react";
+import { lazy, Suspense, useId, useRef, useState } from "react";
 import type { ReactElement } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -227,93 +227,78 @@ export const PublicStatuteViewer = ({
   // for keeps the version menu, which switches by id.
   const canPickDate = normalizeStatuteStoredSlug(work.slug) !== null;
 
-  const goTo = useCallback(
-    (params: StatuteRouteParams, nextAsOf: string | undefined) => {
-      const search = { asOf: nextAsOf, q: find.findQuery || undefined };
+  const goTo = (params: StatuteRouteParams, nextAsOf: string | undefined) => {
+    const search = { asOf: nextAsOf, q: find.findQuery || undefined };
 
-      detached(
-        params.version === undefined
-          ? navigate({
-              params: { country: params.country, slug: params.slug },
-              search,
-              to: "/law/$country/statutes/$slug",
-            })
-          : navigate({
-              params: {
-                country: params.country,
-                slug: params.slug,
-                version: params.version,
-              },
-              search,
-              to: "/law/$country/statutes/$slug/v/$version",
-            }),
-        "statutes.reader-navigate",
-      );
-    },
-    [find.findQuery, navigate],
-  );
+    detached(
+      params.version === undefined
+        ? navigate({
+            params: { country: params.country, slug: params.slug },
+            search,
+            to: "/law/$country/statutes/$slug",
+          })
+        : navigate({
+            params: {
+              country: params.country,
+              slug: params.slug,
+              version: params.version,
+            },
+            search,
+            to: "/law/$country/statutes/$slug/v/$version",
+          }),
+      "statutes.reader-navigate",
+    );
+  };
 
-  const handleVersionChange = useCallback(
-    (nextDocumentId: string) => {
-      const next = versions.find((version) => version.id === nextDocumentId);
+  const handleVersionChange = (nextDocumentId: string) => {
+    const next = versions.find((version) => version.id === nextDocumentId);
 
-      if (next === undefined) {
-        return;
-      }
+    if (next === undefined) {
+      return;
+    }
 
-      // A version that cannot apply opens at its id: no day names it.
-      goTo(
-        statuteVersionRouteParams({ isDefault: next.isDefault, version: next }),
-        undefined,
-      );
-    },
-    [goTo, versions],
-  );
+    // A version that cannot apply opens at its id: no day names it.
+    goTo(
+      statuteVersionRouteParams({ isDefault: next.isDefault, version: next }),
+      undefined,
+    );
+  };
 
   // A comparison is a view of the text on screen, not another address: it
   // lives in the search params, beside the path that names the text.
-  const navigateComparison = useCallback(
-    (next: StatuteCompareSearch) => {
-      detached(
-        navigate({
-          search: (previous) => ({
-            ...previous,
-            compare: next.compare,
-            provision: next.provision,
-            show: next.show,
-          }),
-          to: ".",
+  const navigateComparison = (next: StatuteCompareSearch) => {
+    detached(
+      navigate({
+        search: (previous) => ({
+          ...previous,
+          compare: next.compare,
+          provision: next.provision,
+          show: next.show,
         }),
-        "statutes.reader-compare",
-      );
-    },
-    [navigate],
-  );
+        to: ".",
+      }),
+      "statutes.reader-compare",
+    );
+  };
 
-  const handleCompare = useCallback(
-    (versionValidFrom: string) => {
-      navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
-    },
-    [navigateComparison],
-  );
+  const handleCompare = (versionValidFrom: string) => {
+    navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
+  };
 
-  const handleAsOfChange = useCallback(
-    (value: string | null) => {
-      // A day is a lookup, not an address: it is asked on the act's own page
-      // and the loader forwards to the consolidation that applied.
-      goTo(
-        createStatuteRouteParams({
-          country: header.country,
-          documentId: work.id,
-          eli: work.eli,
-          slug: work.slug,
-          version: null,
-        }),
-        value === null || value === "" ? undefined : value,
-      );
-    },
-    [goTo, header.country, work.eli, work.id, work.slug],
-  );
+  const handleAsOfChange = (value: string | null) => {
+    // A day is a lookup, not an address: it is asked on the act's own page
+    // and the loader forwards to the consolidation that applied.
+    goTo(
+      createStatuteRouteParams({
+        country: header.country,
+        documentId: work.id,
+        eli: work.eli,
+        slug: work.slug,
+        version: null,
+      }),
+      value === null || value === "" ? undefined : value,
+    );
+  };
 
   // The query and its selection move together: typing puts the selection
   // back on the best match, which is what Enter is expected to go to.
