@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  importMetaUrlTargets,
   isExpectedPublishedExportResolution,
   isOwnDistLoadFailure,
   isPublishedTestArtifact,
+  isShippedUrlTarget,
   resolvePublishedExport,
 } from "./published-export-guards";
 
@@ -165,5 +167,60 @@ describe("published export resolution precedence", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("import.meta.url targets", () => {
+  // Shaped like tsdown output for a package that spawns a worker and loads a
+  // WebAssembly binary from a sibling directory.
+  const engine = {
+    file: "dist/scan-engine.js",
+    contents: [
+      'const response = await fetchWithTimeout(new URL("../generated/scan_engine_bg.wasm", import.meta.url), { timeout: { type: "idle", ms: WASM_LOAD_TIMEOUT_MS } });',
+      'const createWorker = () => new Worker(new URL("scan-engine.worker.js", import.meta.url), { type: "module" });',
+      "const icons = new URL('./icons/', import.meta.url);",
+      'const remote = new URL("https://example.com/a.wasm", import.meta.url);',
+      'const rooted = new URL("/assets/a.wasm", import.meta.url);',
+      // A computed target names no file the check could list.
+      ["const dynamic = new URL(`./$", "{name}.js`, import.meta.url);"].join(
+        "",
+      ),
+    ].join("\n"),
+  };
+
+  test("resolves relative literals against the module's directory", () => {
+    expect(importMetaUrlTargets(engine)).toEqual([
+      "generated/scan_engine_bg.wasm",
+      "dist/scan-engine.worker.js",
+      "dist/icons/",
+    ]);
+  });
+
+  test("fails a worker the tarball does not ship", () => {
+    const packed = new Set([
+      "dist/scan-engine.js",
+      "dist/icons/check.svg",
+      "generated/scan_engine_bg.wasm",
+    ]);
+    expect(
+      importMetaUrlTargets(engine).filter(
+        (target) => !isShippedUrlTarget({ target, packed }),
+      ),
+    ).toEqual(["dist/scan-engine.worker.js"]);
+    expect(
+      isShippedUrlTarget({
+        target: "dist/scan-engine.worker.js",
+        packed: new Set([...packed, "dist/scan-engine.worker.js"]),
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps a target that climbs out of the package, so it cannot ship", () => {
+    expect(
+      importMetaUrlTargets({
+        file: "dist/index.js",
+        contents: 'new URL("../../shared/a.wasm", import.meta.url)',
+      }),
+    ).toEqual(["../shared/a.wasm"]);
   });
 });
