@@ -20,6 +20,7 @@ import {
   INVOICE_STATUS,
   invoiceLines,
   invoices,
+  sellerProfiles,
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -65,6 +66,7 @@ let ids: TestIds;
 const seededInvoiceIds: SafeId<"invoice">[] = [];
 const seededTimeEntryIds: SafeId<"timeEntry">[] = [];
 const seededExpenseIds: SafeId<"expense">[] = [];
+const seededSellerProfileIds: SafeId<"sellerProfile">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -108,6 +110,11 @@ afterAll(async () => {
       await testDb
         .delete(invoices)
         .where(inArray(invoices.id, seededInvoiceIds));
+    }
+    if (seededSellerProfileIds.length > 0) {
+      await testDb
+        .delete(sellerProfiles)
+        .where(inArray(sellerProfiles.id, seededSellerProfileIds));
     }
   } finally {
     await releaseRlsFixture();
@@ -834,6 +841,53 @@ describe("invoice lines", () => {
     ]);
   });
 
+  test("an exempt line keeps its stated basis through create and update, and the invoice finalizes", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    seededSellerProfileIds.push(sellerProfileId);
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Kancelaria Wisła",
+      vatId: "PL5260001246",
+      vatPayer: true,
+      country: "PL",
+      defaultCurrency: "PLN",
+    });
+    const invoiceId = await seedInvoice();
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId, currency: "PLN" })
+      .where(eq(invoices.id, invoiceId));
+
+    const lineId = await expectCreated(invoiceId, {
+      ...manual({ quantity: "1", unitPriceMinor: 10_000 }, 0),
+      vatTreatment: "exempt",
+      exemptionReason: "art. 43 ust. 1 pkt 37",
+    });
+    expect(readLines(await runGet(invoiceId))).toMatchObject([
+      { id: lineId, exemptionReason: "art. 43 ust. 1 pkt 37" },
+    ]);
+
+    await runUpdate(
+      invoiceId,
+      lineId,
+      await parseUpdateBody({
+        exemptionReason: "art. 43 ust. 1 pkt 37 ustawy o VAT",
+      }),
+    );
+    expect(readLines(await runGet(invoiceId))).toMatchObject([
+      {
+        id: lineId,
+        vatTreatment: "exempt",
+        exemptionReason: "art. 43 ust. 1 pkt 37 ustawy o VAT",
+      },
+    ]);
+
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      id: invoiceId,
+    });
+  });
+
   test("attaching entries cannot take an invoice past its line limit", async () => {
     const invoiceId = await seedInvoice();
     await testDb.insert(invoiceLines).values(
@@ -1060,6 +1114,7 @@ type ReadLine = {
   position: number;
   description: string;
   vatTreatment: string;
+  exemptionReason: string | null;
   source: string;
   quantity: string;
   netAmount: number;

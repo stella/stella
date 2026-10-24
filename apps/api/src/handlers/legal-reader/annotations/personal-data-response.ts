@@ -7,8 +7,12 @@ import type {
 type PrivateAnnotationExportRow = Pick<
   typeof legalReaderAnnotations.$inferSelect,
   | "id"
+  | "userId"
   | "targetType"
   | "targetId"
+  | "workspaceId"
+  | "verificationRunId"
+  | "verificationClaimId"
   | "groupId"
   | "kind"
   | "visibility"
@@ -23,17 +27,25 @@ type PrivateAnnotationExportRow = Pick<
   | "updatedAt"
 >;
 
-/** A user's private notes only; shared annotations remain organization data. */
+/**
+ * A user's private document notes and all of their verification-claim comments.
+ * Shared document annotations remain organization data, while a claim comment's
+ * authored words remain part of the author's personal-data export.
+ */
 export const projectPrivateAnnotationForAccountExport = (
   row: PrivateAnnotationExportRow,
 ) => {
-  if (row.visibility !== "private") {
+  if (row.visibility !== "private" && row.targetType !== "verification-claim") {
     return undefined;
   }
   return {
     id: row.id,
+    userId: row.userId,
     targetType: row.targetType,
     targetId: row.targetId,
+    workspaceId: row.workspaceId,
+    verificationRunId: row.verificationRunId,
+    verificationClaimId: row.verificationClaimId,
     groupId: row.groupId,
     kind: row.kind,
     visibility: row.visibility,
@@ -58,8 +70,6 @@ type PrivateAnnotationAccountExport = NonNullable<
 const UNEXPORTED_LEGAL_READER_ANNOTATION_COLUMNS = [
   // Tenant id: internal routing, not data the user provided.
   "organizationId",
-  // The exporting account itself; every exported note is its own.
-  "userId",
 ] as const satisfies readonly (keyof LegalReaderAnnotationRow)[];
 
 // Totality guard, bidirectional: every schema column must be exported or
