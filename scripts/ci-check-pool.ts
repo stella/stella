@@ -12,12 +12,15 @@
 //
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
+import { Buffer } from "node:buffer";
 import {
   appendFileSync,
   closeSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -356,7 +359,28 @@ const POOL_ENV = [
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
 ];
-const active = new Set<number>();
+const active = new Map<number, { name: string; log: number }>();
+
+export const activeCheckOutput = (name: string, log: number): string => {
+  const limit = 16_384;
+  let output: string;
+  try {
+    const size = fstatSync(log).size;
+    const tail = Buffer.alloc(Math.min(size, limit));
+    const bytes = readSync(
+      log,
+      tail,
+      0,
+      tail.length,
+      Math.max(0, size - limit),
+    );
+    output = tail.toString("utf-8", 0, bytes);
+  } catch {
+    output = "Partial check output is unavailable.";
+  }
+  // An unfinished check may be exercising workflow-command fixtures.
+  return `Active check at interruption: ${name.replaceAll(/\r?\n/gu, " ")}\n${checkLogText(output, "success")}\n`;
+};
 const killGroup = (pid: number) => {
   try {
     process.kill(-pid, "SIGKILL");
@@ -376,7 +400,7 @@ export const processLauncher =
   ): Promise<Launched> => {
     const script = path.join(directory, `${String(index).padStart(3, "0")}.sh`);
     writeFileSync(script, check.run);
-    const log = openSync(logPath(directory, index), "w");
+    const log = openSync(logPath(directory, index), "w+");
     const inherited = Object.fromEntries(
       Object.entries(process.env).filter(([key]) => !POOL_ENV.includes(key)),
     );
@@ -391,7 +415,7 @@ export const processLauncher =
         detached: true,
       },
     );
-    active.add(child.pid);
+    active.set(child.pid, { name: check.name, log });
     let timedOut = false;
     const timer =
       check.timeoutMinutes === undefined
@@ -699,7 +723,8 @@ const main = async () => {
     `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time`,
   );
   const stop = () => {
-    for (const pid of active) {
+    for (const [pid, check] of active) {
+      writeOut(activeCheckOutput(check.name, check.log));
       killGroup(pid);
     }
     process.exit(130);

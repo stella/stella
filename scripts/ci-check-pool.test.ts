@@ -1,12 +1,20 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  closeSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  activeCheckOutput,
   blockingFailures,
   checkLogText,
   type CheckResult,
@@ -53,6 +61,34 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   continueOnError: undefined,
   step: { name },
   ...extra,
+});
+
+test("interruption diagnostics bound the active log tail without moving its write position", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-active-output-"));
+  const file = path.join(directory, "active.log");
+  const log = openSync(file, "w+");
+  try {
+    const phase = "test-gate +12ms: analyze execution topology";
+    writeSync(log, `${"x".repeat(32_768)}\n::error::fixture\n${phase}`);
+    const output = activeCheckOutput("collector\nname", log);
+    expect(output).toStartWith(
+      "Active check at interruption: collector name\n",
+    );
+    expect(output).toContain("\n ::error::fixture\n");
+    expect(output).toEndWith(`${phase}\n`);
+    expect(output.length).toBeLessThan(16_512);
+    writeSync(log, "\ncontinued");
+    expect(readFileSync(file, "utf-8")).toEndWith(`${phase}\ncontinued`);
+  } finally {
+    closeSync(log);
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("an unavailable active log cannot prevent interruption diagnostics", () => {
+  expect(activeCheckOutput("collector", -1)).toBe(
+    "Active check at interruption: collector\nPartial check output is unavailable.\n",
+  );
 });
 
 test("an exact named subset retains manifest order", () => {

@@ -6385,11 +6385,21 @@ const validateExecutionTopology = (errors: string[]): void => {
 };
 
 const run = (): void => {
+  const started = performance.now();
+  const progress = (phase: string) => {
+    console.error(
+      `test-gate +${Math.round(performance.now() - started)}ms: ${phase}`,
+    );
+  };
+  progress("read tracked tests and ledgers");
   const files = trackedFiles().filter(isTypeScriptTest);
   const disabledLedger = readDisabledLedger();
   const nonGating = readNonGatingLedger();
+  progress(`analyze execution topology for ${files.length} test files`);
   const errors: string[] = [...repositoryTestExecutionTopology().findings];
+  progress("validate execution topology");
   validateExecutionTopology(errors);
+  progress("validate scenario ledgers");
   validateCanonicalOrder(disabledLedger.identities, DISABLED_LEDGER, errors);
   validateCanonicalOrder(
     disabledLedger.managedServiceGates,
@@ -6418,13 +6428,18 @@ const run = (): void => {
       errors.push(`non-gating file is not tracked: ${scenario.file}`);
     }
   }
-  for (const file of files) {
+  const progressInterval = 100;
+  for (const [index, file] of files.entries()) {
+    if (index % progressInterval === 0) {
+      progress(`collection ${index}/${files.length}: ${file}`);
+    }
     const brokenEdge = firstCollectionFailure({ file, scenarios });
     if (brokenEdge !== undefined) {
       errors.push(`${file}: ${brokenEdge}`);
     }
   }
 
+  progress("validate platform-conditional collectors");
   for (const entry of disabledLedger.platformConditionals) {
     const file = entry.identity.split("::").at(0);
     if (file === undefined || !files.includes(file)) {
@@ -6443,7 +6458,10 @@ const run = (): void => {
   }
   const managedGates = new Set(disabledLedger.managedServiceGates);
   const actualDisabled: string[] = [];
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
+    if (index % progressInterval === 0) {
+      progress(`registrations ${index}/${files.length}: ${file}`);
+    }
     const source = readFileSync(path.join(ROOT, file), "utf-8");
     for (const finding of parseTestRegistrations(file, source)) {
       switch (finding.type) {
@@ -6466,6 +6484,7 @@ const run = (): void => {
       }
     }
   }
+  progress("validate disabled-state ledger");
   const actual = [...new Set(actualDisabled)].toSorted(compareCodeUnit);
   const expected = disabledLedger.identities;
   for (const identity of actual) {
