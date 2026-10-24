@@ -1,8 +1,9 @@
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
+
 import {
   SIDEBAR_STATE_COOKIE,
   SIDEBAR_STATE_VALUES,
 } from "../../src/components/sidebar/sidebar-state-cookie";
-import { setFixedBrowserTime } from "../helpers/clock";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
