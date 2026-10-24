@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "My organization",
     "password": "Password",
     "professionalUse": {
-      "description": "Your account was set up without showing you this statement. Accept it to continue.",
       "title": "Confirm professional use"
     },
     "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.",
@@ -4235,6 +4234,22 @@
       "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.",
       "highlight": "Highlight",
       "highlightedPassage": "Highlighted passage",
+      "history": {
+        "colorRestored": "Color restored",
+        "commentRemoved": "Comment removed",
+        "commentRestored": "Comment restored",
+        "highlightRemoved": "Highlight removed",
+        "highlightRestored": "Highlight restored",
+        "markChanged": "This highlight or comment was changed elsewhere, so it was left as it is.",
+        "markGone": "This highlight or comment no longer exists.",
+        "nothingToRedo": "Nothing to redo",
+        "nothingToUndo": "Nothing to undo",
+        "redoShortcut": "Redo highlight or comment change",
+        "styleRestored": "Style restored",
+        "textRestored": "Comment text restored",
+        "undoShortcut": "Undo highlight or comment change",
+        "visibilityRestored": "Sharing restored"
+      },
       "removeHighlight": "Remove highlight",
       "sharedBadge": "Shared",
       "styleHighlight": "Highlight",
@@ -4746,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Improve query with AI",
+    "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
     "continueInChat": "Continue in chat",
@@ -4803,6 +4819,7 @@
     "savedSearchesEmpty": "Save a search to reuse it.",
     "scopeFilter": "Search scope",
     "scopePlaceholderAll": "Search across all <scope>sources</scope>…",
+    "scopePlaceholderCaseLaw": "Search in <scope>case law</scope>…",
     "scopePlaceholderMatters": "Search across all <scope>matters</scope>…",
     "scopePlaceholderRegistries": "Search in <scope>registries</scope>…",
     "scopeRegistries": "Registries",

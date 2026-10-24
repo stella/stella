@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
     "professionalUse": {
-      "description": "Kuriant jūsų paskyrą šis pareiškimas jums nebuvo parodytas. Norėdami tęsti, jį priimkite.",
       "title": "Patvirtinkite profesinį naudojimą"
     },
     "professionalUseStatement": "Sukurdami paskyrą patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
@@ -4235,6 +4234,22 @@
       "guestStorageUnavailable": "Paryškinimų ir pastabų nepavyko išsaugoti šiame skirtuke.",
       "highlight": "Paryškinti",
       "highlightedPassage": "Paryškinta ištrauka",
+      "history": {
+        "colorRestored": "Spalva atkurta",
+        "commentRemoved": "Komentaras pašalintas",
+        "commentRestored": "Komentaras atkurtas",
+        "highlightRemoved": "Paryškinimas pašalintas",
+        "highlightRestored": "Paryškinimas atkurtas",
+        "markChanged": "Šis paryškinimas ar komentaras tuo metu buvo pakeistas kitur, todėl paliktas nepakeistas.",
+        "markGone": "Šio paryškinimo ar komentaro nebėra.",
+        "nothingToRedo": "Nėra ką grąžinti",
+        "nothingToUndo": "Nėra ką anuliuoti",
+        "redoShortcut": "Grąžinti paryškinimo ar komentaro pakeitimą",
+        "styleRestored": "Stilius atkurtas",
+        "textRestored": "Komentaro tekstas atkurtas",
+        "undoShortcut": "Anuliuoti paryškinimo ar komentaro pakeitimą",
+        "visibilityRestored": "Bendrinimas atkurtas"
+      },
       "removeHighlight": "Pašalinti paryškinimą",
       "sharedBadge": "Bendrinama",
       "styleHighlight": "Paryškinimas",
@@ -4746,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
+    "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
     "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "continueInChat": "Tęsti pokalbyje",
@@ -4803,6 +4819,7 @@
     "savedSearchesEmpty": "Išsaugokite paiešką, kad galėtumėte ją naudoti vėl.",
     "scopeFilter": "Paieškos sritis",
     "scopePlaceholderAll": "Ieškoti visuose <scope>šaltiniuose</scope>…",
+    "scopePlaceholderCaseLaw": "Ieškoti <scope>teismų praktikoje</scope>…",
     "scopePlaceholderMatters": "Ieškoti visose <scope>bylose</scope>…",
     "scopePlaceholderRegistries": "Ieškoti <scope>registruose</scope>…",
     "scopeRegistries": "Registrai",
