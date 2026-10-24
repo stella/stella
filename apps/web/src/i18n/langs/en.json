@@ -3529,6 +3529,12 @@
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
+      "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
+      "unsupportedField": "This document contains {fieldType}, which can't be converted.",
+      "unsupportedReference": "This document refers to an external resource in {element} {attribute}, so it can't be converted."
+    },
     "external": {
       "confirmDescription": "You're about to visit an external website.",
       "confirmTitle": "Open external link?",

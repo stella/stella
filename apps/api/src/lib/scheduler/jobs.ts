@@ -50,6 +50,7 @@ import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import { DISPATCH_NATIVE_EXTRACTION_TASK } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
@@ -288,6 +289,13 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: envBase.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES * 60_000,
     },
     task: DISPATCH_DOCUMENT_OCR_TASK,
+  },
+  {
+    description: "Release queued native extraction runs to their worker",
+    id: "documentProcessing.dispatchNativeExtraction.twoMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
+    task: DISPATCH_NATIVE_EXTRACTION_TASK,
   },
   {
     description: "Dispatch document deadline scouts nothing has picked up",

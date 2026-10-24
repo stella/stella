@@ -487,11 +487,25 @@ const OPERATOR_PROVISIONING_PROVENANCE: AcceptanceProvenance = {
   },
 };
 
-/** Account acceptance in its own transaction under the aggregate lock. */
-const recordAccountAcceptance = async (
-  userId: SafeId<"user">,
-  provenance: AcceptanceProvenance,
-): Promise<Result<UserProfessionalUseState, HandlerError>> =>
+const ACCOUNT_ACCEPTANCE_PROVENANCE = {
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive]: interactiveProvenance,
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning]: (
+    _userId: SafeId<"user">,
+  ) => OPERATOR_PROVISIONING_PROVENANCE,
+} as const;
+
+type RecordAccountProfessionalUseOptions = {
+  userId: SafeId<"user">;
+  source: keyof typeof ACCOUNT_ACCEPTANCE_PROVENANCE;
+};
+
+/** Records the caller's explicit provenance under the account aggregate lock. */
+export const recordAccountProfessionalUse = async ({
+  userId,
+  source,
+}: RecordAccountProfessionalUseOptions): Promise<
+  Result<UserProfessionalUseState, HandlerError>
+> =>
   await Result.tryPromise({
     try: async () => {
       await withAggregateTransaction(rootDb, async (tx) => {
@@ -500,7 +514,11 @@ const recordAccountAcceptance = async (
           aggregate: "professionalUseAcceptance",
           id: { userId },
         });
-        await recordProfessionalUseAcceptance({ tx, userId, provenance });
+        await recordProfessionalUseAcceptance({
+          tx,
+          userId,
+          provenance: ACCOUNT_ACCEPTANCE_PROVENANCE[source](userId),
+        });
       });
       return await readUserProfessionalUse(rootDb, userId);
     },
@@ -511,23 +529,6 @@ const recordAccountAcceptance = async (
         cause,
       }),
   });
-
-/** The account acceptance operation owns its transaction and aggregate lock. */
-export const acceptAccountProfessionalUse = async (
-  userId: SafeId<"user">,
-): Promise<Result<UserProfessionalUseState, HandlerError>> =>
-  await recordAccountAcceptance(userId, interactiveProvenance(userId));
-
-/**
- * The review account's acceptance, recorded by the operator command that
- * provisions it rather than by the account itself: the same statement and
- * insert-once rows, with the operator's provenance on the account row and on
- * each organization audit row.
- */
-export const provisionAccountProfessionalUse = async (
-  userId: SafeId<"user">,
-): Promise<Result<UserProfessionalUseState, HandlerError>> =>
-  await recordAccountAcceptance(userId, OPERATOR_PROVISIONING_PROVENANCE);
 
 type RecordProfessionalUseAcceptanceOptions = AcceptProfessionalUseOptions & {
   provenance: AcceptanceProvenance;
