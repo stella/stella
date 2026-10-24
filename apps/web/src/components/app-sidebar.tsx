@@ -3,7 +3,6 @@ import {
   Fragment,
   lazy,
   Suspense,
-  useCallback,
   useMemo,
   useRef,
   useState,
@@ -216,11 +215,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
     SEARCH_DIALOG_STATES.idle,
   );
   useFindModalBoundary(searchState === SEARCH_DIALOG_STATES.open);
-  const setSearchOpen = useCallback((open: boolean) => {
+  const setSearchOpen = (open: boolean) => {
     setSearchState(
       open ? SEARCH_DIALOG_STATES.open : SEARCH_DIALOG_STATES.closed,
     );
-  }, []);
+  };
   const guideDrawerAttentionSequence = useGuideDrawerStore(
     (store) => store.attentionSequence,
   );
@@ -351,6 +350,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     handleCreateWorkspace();
   });
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const pinned = useMemo(() => {
     if (!workspaces) {
       return [];
@@ -879,7 +879,8 @@ const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
 type MatterExpansion =
-  { type: "automatic" } | { type: "selected"; workspaceId: string | null };
+  | { type: "automatic" }
+  | { type: "selected"; workspaceId: string | null };
 
 // Pinned workspaces are local UI state until backend user preferences or a
 // workspace-member `pinned` flag exists.
@@ -1169,15 +1170,12 @@ const MatterItem = ({
   });
   const activityQueryHash = hashKey(activityQueryKey);
   const activityIsInvalidated = useSyncExternalStore(
-    useCallback(
-      (onStoreChange: () => void) =>
-        queryClient.getQueryCache().subscribe((event) => {
-          if (event.query.queryHash === activityQueryHash) {
-            onStoreChange();
-          }
-        }),
-      [activityQueryHash, queryClient],
-    ),
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.query.queryHash === activityQueryHash) {
+          onStoreChange();
+        }
+      }),
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,
   );

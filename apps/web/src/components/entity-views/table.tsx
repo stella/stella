@@ -1,4 +1,4 @@
-import { createContext, use, useMemo, useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
 import type { ComponentType, ReactNode, RefObject } from "react";
 
 import { flexRender, useTable } from "@tanstack/react-table";
@@ -230,40 +230,36 @@ export const EntityViewTable = ({
     },
   });
   // TanStack's controlled table requires stable definitions between state updates.
-  const columns = useMemo(
-    () =>
-      Object.entries(COLUMN_MODEL).map(
-        ([column, model]): TableColumnDef<EntityViewRow> => {
-          if (!isCollectionColumn(column)) {
-            return panic(`Unknown collection column: ${column}`);
-          }
-          const columnId = column;
-          return {
-            id: columnId,
-            size: model.size,
-            minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
-            enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
-            accessorFn: ({ entry }) =>
-              isEntityViewSortColumn(columnId)
-                ? entityViewSortValues[columnId](entry)
-                : null,
-            enableHiding: true,
-            enablePinning: true,
-            enableResizing: true,
-            header: ({ header }) => (
-              <MetadataPopover
-                column={header.column}
-                icon={model.icon}
-                label={t(model.label)}
-              />
-            ),
-            cell: ({ row }) => (
-              <CollectionCell column={columnId} entry={row.original.entry} />
-            ),
-          };
-        },
-      ),
-    [t],
+  const columns = Object.entries(COLUMN_MODEL).map(
+    ([column, model]): TableColumnDef<EntityViewRow> => {
+      if (!isCollectionColumn(column)) {
+        return panic(`Unknown collection column: ${column}`);
+      }
+      const columnId = column;
+      return {
+        id: columnId,
+        size: model.size,
+        minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
+        enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
+        accessorFn: ({ entry }) =>
+          isEntityViewSortColumn(columnId)
+            ? entityViewSortValues[columnId](entry)
+            : null,
+        enableHiding: true,
+        enablePinning: true,
+        enableResizing: true,
+        header: ({ header }) => (
+          <MetadataPopover
+            column={header.column}
+            icon={model.icon}
+            label={t(model.label)}
+          />
+        ),
+        cell: ({ row }) => (
+          <CollectionCell column={columnId} entry={row.original.entry} />
+        ),
+      };
+    },
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const groups = useEntityTableGroups(rows, layout.groupByPropertyId);
