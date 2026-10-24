@@ -256,7 +256,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming extraction-worker.js apps/api/src/lib/search/extraction-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming extraction-worker.js --external @firecrawl/anydoc-linux-arm64-musl --external @firecrawl/anydoc-linux-x64-musl apps/api/src/lib/search/extraction-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -591,7 +591,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/legal-atlas-runner/package.json",
     command:
-      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=inline --outfile dist/eu-ecj-refetch.js ../api/src/scripts/eu-ecj-refetch.ts",
+      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=external --outdir dist --entry-naming eu-ecj-refetch.js ../api/src/scripts/eu-ecj-refetch.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -601,7 +601,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/legal-atlas-runner/package.json",
     command:
-      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=inline --outfile dist/index.js src/index.ts",
+      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=external --outdir dist --entry-naming index.js src/index.ts",
     bootCheck: {
       type: "docker-run",
       dockerfile: "apps/legal-atlas-runner/Dockerfile",

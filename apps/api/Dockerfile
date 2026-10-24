@@ -396,6 +396,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
       --entry-naming extraction-worker.js \
+      --external @firecrawl/anydoc-linux-arm64-musl \
+      --external @firecrawl/anydoc-linux-x64-musl \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
@@ -495,7 +497,9 @@ COPY --chown=stella:stella --from=install-inputs /app/apps/api/docker/collab /ap
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js.map /app/legal-atlas.js.map
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js.map /app/eu-ecj-refetch.js.map
 # The bundled entrypoint reads migration SQL from this external folder.
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 # ONNX Runtime is the one native exception: its binding dynamically links a

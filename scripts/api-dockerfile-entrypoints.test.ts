@@ -241,10 +241,41 @@ test("no builder bundle embeds an inline source map", () => {
 // the bundle: they name no source position, and they move whenever a rebuild
 // shifts the layout, so one recurring failure splits across as many issues as
 // it sees builds. Both image stages and the CI production smoke bundle the
-// runner through its own package script, so the flag is asserted there rather
-// than at each `bun --filter` call site.
+// runner through its own package script, so the flags are asserted there rather
+// than at each `bun --filter` call site. The images rename each bundle, so the
+// map is external (Bun finds `<bundle>.map` beside it, with no URL comment
+// naming the old file) and each image copies it beside the renamed bundle.
+const RUNNER_BUNDLES = [
+  { dist: "dist/index.js", runner: "/app/legal-atlas.js" },
+  { dist: "dist/eu-ecj-refetch.js", runner: "/app/eu-ecj-refetch.js" },
+] as const;
+const RUNNER_DOCKERFILES = [
+  "apps/api/Dockerfile",
+  "apps/legal-atlas-runner/Dockerfile",
+];
+
 test("the long-running case-law runner build maps frames to source", () => {
-  expect(runnerPackage.scripts.build).toContain("--sourcemap=inline");
+  const build = runnerPackage.scripts.build;
+  expect(build).not.toMatch(/--sourcemap(?:=inline)?(?:\s|$)/u);
+  expect(build.match(/--sourcemap=external/gu)).toHaveLength(
+    RUNNER_BUNDLES.length,
+  );
+  expect(build).toContain(
+    `&& bun ../api/scripts/strip-source-map-content.ts ${RUNNER_BUNDLES.map(
+      ({ dist }) => `${dist}.map`,
+    ).join(" ")}`,
+  );
+  for (const file of RUNNER_DOCKERFILES) {
+    const source = readFileSync(
+      nodePath.resolve(import.meta.dirname, "..", file),
+      "utf-8",
+    );
+    for (const { dist, runner } of RUNNER_BUNDLES) {
+      expect(source, file).toContain(
+        `--from=builder /app/apps/legal-atlas-runner/${dist}.map ${runner}.map\n`,
+      );
+    }
+  }
 });
 
 // Bun inlines direct `process.env.NODE_ENV` reads at bundle time, and inlines
