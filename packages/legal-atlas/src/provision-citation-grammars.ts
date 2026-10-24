@@ -695,6 +695,7 @@ export const PROVISION_CITATION_GRAMMARS = {
         }),
       ),
   },
+  GBR: unsupported("GBR"),
   HUN: unsupported("HUN"),
   POL: unsupported("POL"),
   SVK: unsupported("SVK"),

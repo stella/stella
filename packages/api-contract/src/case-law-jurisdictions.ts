@@ -48,6 +48,7 @@ export const CASE_LAW_REGION_BY_JURISDICTION = {
   AUT: "AT",
   CZE: "CZ",
   EU: "EU",
+  GBR: "GB",
   HUN: "HU",
   POL: "PL",
   SVK: "SK",

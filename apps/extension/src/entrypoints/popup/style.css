@@ -20,11 +20,13 @@ main {
   border-radius: 9px;
   color: #fff;
   display: flex;
-  font-size: 18px;
-  font-weight: 700;
   height: 36px;
   justify-content: center;
   width: 36px;
+}
+
+.mark img {
+  filter: invert(1);
 }
 
 h1 {
