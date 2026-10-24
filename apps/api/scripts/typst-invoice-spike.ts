@@ -287,5 +287,4 @@ if (mode === undefined) {
   }
 } else {
   await runners[mode]();
-  process.exit(0);
 }

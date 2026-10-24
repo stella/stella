@@ -1602,6 +1602,7 @@
     "sendError": "There was an issue sending your message. Contact support if the error persists.",
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.",
     "sendErrorConnectionFailed": "The connection to chat failed. Check your connection and try again.",
+    "sendErrorContinuationRejected": "The chat could not continue. Send a new message to start again.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",

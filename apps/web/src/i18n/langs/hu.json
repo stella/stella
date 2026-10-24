@@ -1602,6 +1602,7 @@
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, lépjen kapcsolatba az ügyfélszolgálattal.",
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsa el a fájlt, vagy küldje el az üzenetet anonimizálás nélkül.",
     "sendErrorConnectionFailed": "Nem sikerült kapcsolódni a csevegéshez. Ellenőrizze a kapcsolatot, és próbálja újra.",
+    "sendErrorContinuationRejected": "A csevegést nem sikerült folytatni. Az újrakezdéshez küldjön új üzenetet.",
     "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
     "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbálja újra szűkebb kéréssel.",
     "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérje meg a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",

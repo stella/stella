@@ -187,6 +187,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
+  fixtureRuleOverride("require-stable-geometry.fixture.ts", [
+    "require-stable-geometry/require-stable-geometry",
+  ]),
   fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
     "no-raw-eden-telemetry/no-raw-eden-telemetry",
   ]),
@@ -343,6 +346,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
+  ]),
+  fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
+    "no-raw-mcp-error-result/no-raw-mcp-error-result",
   ]),
   fixtureRuleOverride("failure-sink-handle.fixture.ts", [
     "failure-sink-handle/failure-sink-handle",
@@ -1516,6 +1522,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
     "./.oxlint-plugins/no-raw-error-output.ts",
+    "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
@@ -1681,6 +1688,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/require-json-import-attribute.ts",
+    "./.oxlint-plugins/require-stable-geometry.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
@@ -1851,6 +1859,15 @@ const config = defineConfig({
       files: ["apps/web/e2e/**", "scripts/**"],
       rules: {
         "require-json-import-attribute/require-json-import-attribute": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/e2e/**/*.geometry.spec.ts",
+        "apps/web/e2e/**/*-geometry.spec.ts",
+      ],
+      rules: {
+        "require-stable-geometry/require-stable-geometry": "error",
       },
     },
     {
@@ -4864,6 +4881,12 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: {
+        "no-raw-mcp-error-result/no-raw-mcp-error-result": "error",
+      },
+    },
+    {
       // This sink contract deliberately injects unsafe records and verifies redaction.
       files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
       rules: {
@@ -5933,13 +5956,16 @@ const config = defineConfig({
       // test asserts on class strings rather than rendering chrome.
       files: [
         "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
         "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
         ".oxlint-plugins/__fixtures__/no-raw-overflow-scroll.fixture.tsx",
       ],
       excludeFiles: [
         "**/*.{test,spec}.tsx",
         "**/__tests__/**",
         "packages/ui/src/components/scroll-area.tsx",
+        "packages/ui/src/components/horizontal-scroller.tsx",
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",

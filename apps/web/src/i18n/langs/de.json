@@ -1602,6 +1602,7 @@
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
     "sendErrorConnectionFailed": "Die Verbindung zum Chat ist fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "sendErrorContinuationRejected": "Der Chat konnte nicht fortgesetzt werden. Senden Sie eine neue Nachricht, um neu zu beginnen.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuchen Sie es mit einer enger gefassten Anfrage erneut.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitten Sie Ihren Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
