@@ -4,7 +4,10 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
-import { queryCountLogger } from "@/api/lib/db-query-counter";
+import {
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
@@ -78,12 +81,14 @@ export const readRootPoolReport = async () => {
   );
 };
 const rlsClient = runTransactionsInCallerContext(
-  createSqlClient({
-    url: envBase.DATABASE_URL,
-    max: envBase.DATABASE_RLS_POOL_MAX,
-    ...poolRecycling,
-    ...sharedPoolConnectionSettings("raw_rls"),
-  }),
+  instrumentSqlTransactionCounts(
+    createSqlClient({
+      url: envBase.DATABASE_URL,
+      max: envBase.DATABASE_RLS_POOL_MAX,
+      ...poolRecycling,
+      ...sharedPoolConnectionSettings("raw_rls"),
+    }),
+  ),
 );
 
 /**

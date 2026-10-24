@@ -64,6 +64,23 @@ const MODEL_CATALOG_INPUTS = [
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "migration-lock-baseline",
+    outputKind: "committed",
+    outputs: ["scripts/migration-lock-baseline.ts"],
+    inputs: [
+      "scripts/check-migration-locks.ts",
+      "scripts/check-migration-safety.ts",
+      "scripts/migration-lock-census.ts",
+      "scripts/online-ddl-lock-census.ts",
+      "apps/api/src/db/online-ddl.ts",
+      "apps/api/drizzle/**/*.sql",
+    ],
+    write: ["bun", "scripts/check-migration-locks.ts", "--write-baseline"],
+    check: ["bun", "scripts/check-migration-locks.ts"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "cloud-setup",
     outputKind: "committed",
     outputs: [".agents/cloud-setup.sh"],
