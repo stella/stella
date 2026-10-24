@@ -289,9 +289,9 @@ test("an edit made while detection runs is detected before results are shown", a
   harness.detection.stop();
 });
 
-test.each(["success", "failure"] as const)(
-  "an edit whose settle timer expires during a failed request reaches a replacement detection (%s)",
-  async (replacementOutcome) => {
+test.each([true, false])(
+  "an edit whose settle timer expires during a failed request reaches a replacement detection (replacement succeeds: %s)",
+  async (replacementSucceeds) => {
     const harness = createHarness({
       paragraphCount: PARAGRAPHS,
       holdRequests: true,
@@ -312,7 +312,7 @@ test.each(["success", "failure"] as const)(
     expect(harness.pending.at(1)?.text).toContain(paragraphText(7, 1));
     expect(harness.status()).toBe("running");
 
-    if (replacementOutcome === "success") {
+    if (replacementSucceeds) {
       harness.pending.at(1)?.resolve();
     } else {
       harness.pending.at(1)?.reject(new Error("The current detection failed"));
@@ -321,14 +321,10 @@ test.each(["success", "failure"] as const)(
     await harness.advance(5000);
     expect(harness.pending).toHaveLength(2);
     expect(jest.getTimerCount()).toBe(0);
-    expect(harness.status()).toBe(
-      replacementOutcome === "success" ? "ready" : "error",
-    );
-    expect(harness.work.deliveries).toBe(
-      replacementOutcome === "success" ? 1 : 0,
-    );
+    expect(harness.status()).toBe(replacementSucceeds ? "ready" : "error");
+    expect(harness.work.deliveries).toBe(replacementSucceeds ? 1 : 0);
     expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(
-      replacementOutcome === "success",
+      replacementSucceeds,
     );
     expect(harness.pending).toHaveLength(2);
     harness.detection.stop();

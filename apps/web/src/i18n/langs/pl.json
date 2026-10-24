@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
+      "accountRestricted": "Ustawienia dostawcy AI są niedostępne dla tego konta.",
+      "configUnreadable": "Nie można odczytać konfiguracji dostawcy AI. Poproś administratora organizacji o ponowne połączenie.",
       "cta": "Otwórz ustawienia AI",
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
+      "permissionRequired": "Tylko administrator organizacji może połączyć dostawcę AI.",
+      "seatRequired": "Poproś administratora organizacji o przydzielenie Ci miejsca.",
       "title": "Połącz dostawcę AI"
     },
     "refinePlaceholder": "Jak AI ma dostosować sformułowanie?",
@@ -155,7 +159,6 @@
     "organizationNamePlaceholder": "Moja organizacja",
     "password": "Hasło",
     "professionalUse": {
-      "description": "Podczas zakładania konta nie wyświetliliśmy Ci tego oświadczenia. Zaakceptuj je, aby kontynuować.",
       "title": "Potwierdź korzystanie w celach zawodowych"
     },
     "professionalUseStatement": "Tworząc konto, potwierdzasz, że korzystasz ze stelli w celach zawodowych, i przyjmujesz do wiadomości, że stella jest narzędziem dla profesjonalistów z branży prawnej i nie zastępuje porady prawnej.",
@@ -3526,6 +3529,12 @@
       "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "To jest plik {format} w starszym formacie. Zapisz go ponownie jako {replacementExtension}, aby go przekonwertować.",
+      "unsupportedEncoding": "Ten dokument używa nieobsługiwanego kodowania {encoding}, dlatego nie można go przekonwertować.",
+      "unsupportedField": "Ten dokument zawiera pole {fieldType}, którego nie można przekonwertować.",
+      "unsupportedReference": "Ten dokument odwołuje się do zasobu zewnętrznego w {element} {attribute}, dlatego nie można go przekonwertować."
+    },
     "external": {
       "confirmDescription": "Za chwilę przejdziesz do zewnętrznej strony internetowej.",
       "confirmTitle": "Otworzyć link zewnętrzny?",
@@ -4225,6 +4234,22 @@
       "guestStorageUnavailable": "Nie udało się zapisać wyróżnień i notatek na tej karcie.",
       "highlight": "Wyróżnij",
       "highlightedPassage": "Wyróżniony fragment",
+      "history": {
+        "colorRestored": "Przywrócono kolor",
+        "commentRemoved": "Usunięto komentarz",
+        "commentRestored": "Przywrócono komentarz",
+        "highlightRemoved": "Usunięto wyróżnienie",
+        "highlightRestored": "Przywrócono wyróżnienie",
+        "markChanged": "To wyróżnienie lub komentarz zmieniono w międzyczasie w innym miejscu, więc pozostawiono je bez zmian.",
+        "markGone": "To wyróżnienie lub komentarz już nie istnieje.",
+        "nothingToRedo": "Nie ma czego ponowić",
+        "nothingToUndo": "Nie ma czego cofnąć",
+        "redoShortcut": "Ponów zmianę wyróżnienia lub komentarza",
+        "styleRestored": "Przywrócono styl",
+        "textRestored": "Przywrócono treść komentarza",
+        "undoShortcut": "Cofnij zmianę wyróżnienia lub komentarza",
+        "visibilityRestored": "Przywrócono udostępnianie"
+      },
       "removeHighlight": "Usuń wyróżnienie",
       "sharedBadge": "Udostępnione",
       "styleHighlight": "Wyróżnienie",
@@ -4736,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
+    "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
     "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
     "continueInChat": "Kontynuuj na czacie",
@@ -4793,6 +4819,7 @@
     "savedSearchesEmpty": "Zapisz wyszukiwanie, aby użyć go ponownie.",
     "scopeFilter": "Zakres wyszukiwania",
     "scopePlaceholderAll": "Przeszukaj wszystkie <scope>źródła</scope>…",
+    "scopePlaceholderCaseLaw": "Przeszukaj <scope>orzecznictwo</scope>…",
     "scopePlaceholderMatters": "Przeszukaj wszystkie <scope>sprawy</scope>…",
     "scopePlaceholderRegistries": "Przeszukaj <scope>rejestry</scope>…",
     "scopeRegistries": "Rejestry",
