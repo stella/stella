@@ -24,11 +24,11 @@ const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 // Pin the current scan so missing or newly added entry points need review.
 const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
+  "ci-runner-loss-retry.yml",
   "cla.yml",
   "publish-npm.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",
-  "user-journeys.yml",
 ] as const;
 
 // A source check holds when the job's condition is false, whatever every
@@ -207,6 +207,8 @@ const UNATTENDED_EVENTS = new Set([
 const UNALERTED_UNATTENDED_WORKFLOWS: Record<string, string> = {
   "bot-refresh-auto-merge.yml":
     "Runs after each pull request's checks; a failure affects one bot pull request and shows on it.",
+  "ci-runner-loss-retry.yml":
+    "Runs after a failed pull request run; if the retry fails, that pull request's own red CI still shows on it.",
   "cla.yml":
     "Its workflow_run leg posts the signature status on the contributor's pull request, where a failure shows.",
   "scheduled-run-alerts.yml":

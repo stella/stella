@@ -507,6 +507,7 @@
     "windowsKeyReserved": "Sparčiuosius klavišus su „Windows“ klavišu „Windows“ pasilieka sau. Naudokite Ctrl arba Alt.",
     "taken": "Kita programa jau naudoja {shortcut}. Pasirinkite kitą.",
     "unavailable": "Kita programa naudoja {shortcut}, todėl jis neatidaro iškarpinės. Pasirinkite kitą spartųjį klavišą.",
+    "managed": "Jūsų organizacija išjungė iškarpinės istoriją.",
     "action": {
       "copy": "Kopijuoti",
       "paste": "Įklijuoti",

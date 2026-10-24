@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { sql, TransactionRollbackError, type SQLChunk } from "drizzle-orm";
+import { sql, type SQLChunk, TransactionRollbackError } from "drizzle-orm";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";

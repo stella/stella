@@ -4,6 +4,8 @@ import path from "node:path";
 import { readJourneyEdgeHeaders, readJourneyWebUrl } from "./journeys/env";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
+const OUTPUT_DIR =
+  process.env["E2E_OUTPUT_DIR"] ?? "test-results/user-journeys";
 
 export const JOURNEY_SEEDED_STORAGE_STATE = path.resolve(
   REPO_ROOT,
@@ -26,7 +28,12 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [["github"], ["list"], ["html", { open: "never" }]],
+  outputDir: OUTPUT_DIR,
+  reporter: [
+    ["github"],
+    ["list"],
+    ["html", { open: "never", outputFolder: `${OUTPUT_DIR}-report` }],
+  ],
   timeout: 180_000,
   expect: { timeout: 30_000 },
 

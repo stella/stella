@@ -10,10 +10,10 @@ import {
 } from "../playwright.journeys.config";
 import {
   JOURNEY_SIGN_IN,
+  type JourneySignIn,
   readJourneyEdgeHeaders,
   readJourneySignIn,
   readJourneyWebUrl,
-  type JourneySignIn,
 } from "./env";
 
 const signInWithReviewAccount = async ({

@@ -18,22 +18,27 @@ export const flowRunsRoute = new Elysia({
     params: startFlowRun.config.params,
     body: startFlowRun.config.body,
     permissions: startFlowRun.config.permissions,
+    accountAccess: startFlowRun.config.accountAccess,
   })
   .get("/", listFlowRuns.handler, {
     params: listFlowRuns.config.params,
     query: listFlowRuns.config.query,
     permissions: listFlowRuns.config.permissions,
+    accountAccess: listFlowRuns.config.accountAccess,
   })
   .get("/:runId", getFlowRun.handler, {
     params: getFlowRun.config.params,
     permissions: getFlowRun.config.permissions,
+    accountAccess: getFlowRun.config.accountAccess,
   })
   .post("/:runId/review", reviewFlowRun.handler, {
     params: reviewFlowRun.config.params,
     body: reviewFlowRun.config.body,
     permissions: reviewFlowRun.config.permissions,
+    accountAccess: reviewFlowRun.config.accountAccess,
   })
   .post("/:runId/cancel", cancelFlowRun.handler, {
     params: cancelFlowRun.config.params,
     permissions: cancelFlowRun.config.permissions,
+    accountAccess: cancelFlowRun.config.accountAccess,
   });

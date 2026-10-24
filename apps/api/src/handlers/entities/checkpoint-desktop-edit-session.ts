@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 

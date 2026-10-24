@@ -10,7 +10,7 @@ import {
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import type { ActiveDocxEditModeState } from "@/lib/chat-edit-mode";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { toSafeId, type SafeId } from "@/lib/safe-id";
+import { type SafeId, toSafeId } from "@/lib/safe-id";
 
 /** The document a composer has open, as its next send carries it. */
 type ComposerSkillDocument =
@@ -52,8 +52,7 @@ export const fileOverlaySkillDocument = ({
   hasActiveDraft,
 }: {
   activeFile:
-    | { entityId: string; fileFieldId?: string | undefined }
-    | undefined;
+    { entityId: string; fileFieldId?: string | undefined } | undefined;
   editMode: ActiveDocxEditModeState;
   hasActiveDraft: boolean;
 }): Pick<ComposerSkillChatContext, "document" | "editApplyMode"> => {

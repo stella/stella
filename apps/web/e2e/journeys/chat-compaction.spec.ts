@@ -1,8 +1,8 @@
 import {
-  expect,
-  test,
   type APIRequestContext,
+  expect,
   type Page,
+  test,
 } from "@playwright/test";
 import { panic } from "better-result";
 import { setTimeout as delay } from "node:timers/promises";

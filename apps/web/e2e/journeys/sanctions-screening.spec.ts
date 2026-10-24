@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { type APIRequestContext, expect, test } from "@playwright/test";
 import { panic } from "better-result";
 import { createReadStream } from "node:fs";
 import path from "node:path";

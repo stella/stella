@@ -1,8 +1,8 @@
 import {
-  test as base,
   expect,
   type Locator,
   type Page,
+  test as base,
 } from "@playwright/test";
 import { panic } from "better-result";
 import { setTimeout as delay } from "node:timers/promises";

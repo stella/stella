@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -14,17 +14,17 @@ import * as v from "valibot";
 
 import {
   BUN_FLAGS,
+  checkDockerSource,
   checkRepositoryDockerSources,
   commandEntries,
-  checkDockerSource,
   copySource,
   dockerInstructions,
   dockerPruneScopes,
   inDockerContext,
   installToolingCopies,
   sourceClosureProblems,
-  updateInstallToolingCopies,
   type SourceTree,
+  updateInstallToolingCopies,
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
 import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
@@ -1412,11 +1412,12 @@ describe("Docker source closure", () => {
     );
   });
 
+  // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
   test("every tracked Dockerfile passes the full hydrated repository check", () => {
     expect(
       checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
-  }, 30_000);
+  }, 40_000);
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
     // Pooled checks are steps of their job; see scripts/workflow-steps.ts.

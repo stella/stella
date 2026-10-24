@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { verifyPublicMetadata } from "./public-metadata";
-import type { PublicMetadata, MetadataReader } from "./public-metadata";
+import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
   GIT_ORIGIN,
   parseRemoteReference,

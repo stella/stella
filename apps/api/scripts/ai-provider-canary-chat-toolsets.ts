@@ -4,8 +4,8 @@ import { panic } from "better-result";
 
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  BUSINESS_REGISTRY_SLUGS,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  BUSINESS_REGISTRY_SLUGS,
   CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
 import type { ChatEditApplyMode } from "@stll/api-contract";

@@ -14,8 +14,8 @@ import {
   CACHE_SCHEMA_VERSION,
   cachePathFor,
   readCacheFile,
-  writeCacheFile,
   type RegistryCacheFile,
+  writeCacheFile,
 } from "./registry-cache.js";
 import {
   type CurrentRegistry,

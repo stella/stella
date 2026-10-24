@@ -12,11 +12,13 @@ import { assertProperty } from "@stll/property-testing";
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
+  CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolRegistryPath,
+  checkPoolStepRun,
+  type ReadCheckPool,
   readCheckPool,
   readWorkingTreeCheckPool,
-  type ReadCheckPool,
 } from "./ci-check-pool-registry";
 import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
@@ -50,6 +52,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // Matrix metadata selects a disjoint slice of the same pool;
+                // it does not change the check represented by this step.
+                "CI_CHECK_POOL_PARTITION",
               ].includes(key),
           ),
         );
@@ -345,7 +350,11 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
       return `${prefix} \\\n${kept.map((line) => line.replace(/[ \t]*\\$/u, "")).join(" \\\n")}`;
     },
   );
-const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
+// A migration test must also hold once its migration is on the base:
+// CI_CHECKS_PARTITION_BASE=HEAD compares the head with itself.
+const mergeBase =
+  process.env["CI_CHECKS_PARTITION_BASE"] ??
+  git(["merge-base", "origin/main", "HEAD"]);
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
 }).transformSync(
@@ -370,8 +379,42 @@ const jobs = v.parse(
     readFileSync(new URL(`../${workflowPath}`, import.meta.url), "utf-8"),
   ),
 ).jobs;
-const baseWorkflow: unknown = Bun.YAML.parse(
-  git(["show", `${mergeBase}:${workflowPath}`]),
+// Pool steps once ran `bun scripts/ci-check-pool.ts run <job>` with `needs`
+// in the environment; a merge base from before the file hand-over reads in
+// today's form, so its pooled checks still expand and compare. Matches only
+// the old form, so it is inert once the merge base carries the new one.
+const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+const withCurrentPoolSteps = (workflow: unknown): unknown => {
+  const parsed = v.parse(
+    v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
+    workflow,
+  );
+  for (const job of CHECK_POOL_JOBS) {
+    const body = parsed.jobs[job];
+    if (!v.is(v.looseObject({ steps: v.array(v.unknown()) }), body)) {
+      continue;
+    }
+    body.steps = body.steps.map((step) => {
+      if (
+        !v.is(
+          v.looseObject({
+            run: v.string(),
+            env: v.record(v.string(), v.unknown()),
+          }),
+          step,
+        ) ||
+        LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job
+      ) {
+        return step;
+      }
+      const { CI_CHECK_POOL_NEEDS: _needs, ...env } = step.env;
+      return { ...step, env, run: checkPoolStepRun(job) };
+    });
+  }
+  return parsed;
+};
+const baseWorkflow: unknown = withCurrentPoolSteps(
+  Bun.YAML.parse(git(["show", `${mergeBase}:${workflowPath}`])),
 );
 const baseJobs = v.parse(workflowSchema, baseWorkflow).jobs;
 const removedChecks = v.parse(
@@ -450,7 +493,6 @@ const CONTINUATION_PREFIXES = {
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
-  Format: "affected",
   "Changeset present for published package changes": "policy",
 };
 const preInstallGuards = new Map([
@@ -971,6 +1013,20 @@ const expectScope = ({
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     });
   const migrated = { ...scope };
+  // A check-pool matrix changes scheduling, not the inherited job scope.
+  // Accept only the exact exhaustive two-way partition used by the runner;
+  // arbitrary strategy changes remain visible to this comparison. Normalize
+  // only an added partition: a baseline that owns it must retain it.
+  if (
+    job === "ci-checks-rest" &&
+    originalScope["strategy"] === undefined &&
+    isDeepStrictEqual(migrated["strategy"], {
+      "fail-fast": false,
+      matrix: { partition: [1, 2] },
+    })
+  ) {
+    delete migrated["strategy"];
+  }
   // The retired changeset hold was the check legs' only pull-request reader.
   if (
     job !== undefined &&
@@ -1098,153 +1154,143 @@ const stepFieldsSchema = v.looseObject({
 });
 const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
-const baseSteps = legSteps(baseline, baselineIds)
-  .map((step) => {
-    const fields = stepFields(step);
-    // The classification check derives its manifest instead of reading a
-    // committed one, and exposes its sensitive-change output by step id.
-    if (
-      step.name === "Check workflow job classifications" &&
-      step["id"] === undefined
-    ) {
-      return { ...step, id: "job-classification" };
-    }
-    if (step.name === "Checkout workflow classification tooling") {
-      const checkout = v.parse(
-        v.looseObject({ "sparse-checkout": v.string() }),
-        step["with"],
-      );
-      return {
-        ...step,
-        with: {
-          ...checkout,
-          "fetch-depth": 0,
-          "sparse-checkout": checkout["sparse-checkout"].replace(
-            ".github/ci-job-classification.json\n",
-            "",
-          ),
-        },
-      };
-    }
-    if (
-      step.name === "Test release policy scripts" &&
-      fields.run?.includes(
-        "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
-      )
-    ) {
-      return {
-        ...step,
-        run: fields.run
-          .replace(
-            "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
-            "bun test scripts/release-version-dispatch.test.ts\n",
-          )
-          .replace("bash scripts/release-pending.test.sh\n", ""),
-      };
-    }
-    if (
-      step.name === "Property-test convention guard" &&
-      fields.run ===
-        "bun test packages/property-testing/src/convention.test.ts\nbun test packages/property-testing/src/ci-gate-coverage.test.ts\n"
-    ) {
-      return {
-        ...step,
-        run: `${fields.run}bun test scripts/db-property-budget-guard.test.ts\nbun scripts/db-property-budget-guard.ts\n`,
-      };
-    }
-    if (
-      step.name === "Release queue history guard" &&
-      fields.run?.includes(
-        'previous_tag="v$(git show "$BASE_SHA:VERSION" | tr -d \'[:space:]\')"\nbun scripts/check-release-queue-history.ts --from "$previous_tag" --base "$BASE_SHA"',
-      )
-    ) {
-      return {
-        ...step,
-        run: fields.run.replace(
-          'previous_tag="v$(git show "$BASE_SHA:VERSION" | tr -d \'[:space:]\')"\nbun scripts/check-release-queue-history.ts --from "$previous_tag" --base "$BASE_SHA"',
-          'bun scripts/check-release-queue-history.ts --base "$BASE_SHA"',
+const baseSteps = legSteps(baseline, baselineIds).map((step) => {
+  const fields = stepFields(step);
+  // These structural guards no longer own expiry, so their failures block
+  // merge groups as well. Normalize only their former clock-based lenience.
+  if (
+    (step.name === "Dated waiver lifecycle guards" ||
+      step.name === "Quarantine-exclude guards") &&
+    step["continue-on-error"] === `\${{ github.event_name == 'merge_group' }}`
+  ) {
+    const original = { ...step };
+    delete original["continue-on-error"];
+    return original;
+  }
+  // Format checks the tracked tree with `bun fmt --check`; it no longer
+  // filters by affected packages, so it no longer waits on that step.
+  if (step.name === "Format" && fields.run?.includes("turbo run format")) {
+    const { AFFECTED_FLAG: _flag, ...env } = v.parse(
+      v.record(v.string(), v.unknown()),
+      step["env"] ?? {},
+    );
+    return {
+      ...step,
+      env,
+      if: fields.if?.replace(" && steps.affected.outcome == 'success'", ""),
+      run: "bun fmt --check",
+    };
+  }
+  // The classification check derives its manifest instead of reading a
+  // committed one, and exposes its sensitive-change output by step id.
+  if (
+    step.name === "Check workflow job classifications" &&
+    step["id"] === undefined
+  ) {
+    return { ...step, id: "job-classification" };
+  }
+  if (step.name === "Checkout workflow classification tooling") {
+    const checkout = v.parse(
+      v.looseObject({ "sparse-checkout": v.string() }),
+      step["with"],
+    );
+    return {
+      ...step,
+      with: {
+        ...checkout,
+        "fetch-depth": 0,
+        "sparse-checkout": checkout["sparse-checkout"].replace(
+          ".github/ci-job-classification.json\n",
+          "",
         ),
-      };
-    }
-    if (
-      step.name === "Test oxlint plugins" &&
-      fields.run ===
-        "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n"
-    ) {
-      const coverage = stepFields(
-        actualSteps.find(({ name }) => name === "Custom lint rule coverage"),
-      );
-      expect(coverage.run).toBe(
-        "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
-      );
-      expect(coverage.if).toBe(fields.if);
-      return Object.assign(step, {
-        run: "bun test scripts/oxlint-plugin-test-coverage.test.ts\n",
-      });
-    }
-    const runnerMigrations = {
-      "Typecheck-cost baseline guard": {
-        before:
-          'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
-        after:
-          'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts scripts/pre-push-policy.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
-      },
-      "Test oxlint plugins": {
-        before:
-          "bun test scripts/oxlint-plugin-test-coverage.test.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test\n",
-        after:
-          "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n",
-      },
-      "Test aggregate inventories": {
-        before:
-          "bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
-        after:
-          "bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
-      },
-      "Test write contract inventories": {
-        before:
-          "bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
-        after:
-          "bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
       },
     };
-    const migration = Object.entries(runnerMigrations).find(
-      ([name]) => name === step.name,
-    )?.[1];
-    if (migration !== undefined && fields.run === migration.before) {
-      return Object.assign(step, { run: migration.after });
-    }
-    if (
-      step.name !== "Documentation source policy rule" ||
-      fields.run !== `${lintFixtureCommand}\nbun run check:docs-sources\n`
-    ) {
-      return step;
-    }
-    // The coverage owner now runs these fixtures and records their outcomes.
+  }
+  if (
+    step.name === "Test release policy scripts" &&
+    fields.run?.includes(
+      "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+    )
+  ) {
+    return {
+      ...step,
+      run: fields.run
+        .replace(
+          "bun test scripts/check-release-cli-changeset-hold.test.ts\n",
+          "bun test scripts/release-version-dispatch.test.ts\n",
+        )
+        .replace("bash scripts/release-pending.test.sh\n", ""),
+    };
+  }
+  if (
+    step.name === "Test oxlint plugins" &&
+    fields.run ===
+      "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n"
+  ) {
     const coverage = stepFields(
-      actualSteps
-        .map(withoutContinuation)
-        .find(({ name }) => name === "Custom lint rule coverage"),
+      actualSteps.find(({ name }) => name === "Custom lint rule coverage"),
     );
-    expect(coverage.if).toBe(fields.if);
     expect(coverage.run).toBe(
       "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
     );
-    expect(coverage.env).toEqual({
-      BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+    expect(coverage.if).toBe(fields.if);
+    return Object.assign(step, {
+      run: "bun test scripts/oxlint-plugin-test-coverage.test.ts\n",
     });
-    return Object.assign(step, { run: "bun run check:docs-sources" });
-  })
-  .filter(
-    ({ name }) =>
-      name !== "Checkout workflow classification tooling" ||
-      !v
-        .parse(headJobSchema, jobs["ci-quick-checks"])
-        .steps.some((step) => step.name === name),
+  }
+  const runnerMigrations = {
+    "Typecheck-cost baseline guard": {
+      before:
+        'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
+      after:
+        'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts scripts/pre-push-policy.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
+    },
+    "Test oxlint plugins": {
+      before:
+        "bun test scripts/oxlint-plugin-test-coverage.test.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test\n",
+      after:
+        "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n",
+    },
+    "Test aggregate inventories": {
+      before:
+        "bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
+      after:
+        "bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
+    },
+    "Test write contract inventories": {
+      before:
+        "bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+      after:
+        "bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+    },
+  };
+  const migration = Object.entries(runnerMigrations).find(
+    ([name]) => name === step.name,
+  )?.[1];
+  if (migration !== undefined && fields.run === migration.before) {
+    return Object.assign(step, { run: migration.after });
+  }
+  if (
+    step.name !== "Documentation source policy rule" ||
+    fields.run !== `${lintFixtureCommand}\nbun run check:docs-sources\n`
+  ) {
+    return step;
+  }
+  // The coverage owner now runs these fixtures and records their outcomes.
+  const coverage = stepFields(
+    actualSteps
+      .map(withoutContinuation)
+      .find(({ name }) => name === "Custom lint rule coverage"),
   );
-const coverageRemovals = newRemovals.filter(({ name }) =>
-  baseSteps.some((step) => step.name === name),
-);
+  expect(coverage.if).toBe(fields.if);
+  expect(coverage.run).toBe(
+    "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
+  );
+  expect(coverage.env).toEqual({
+    BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+  });
+  return Object.assign(step, { run: "bun run check:docs-sources" });
+});
 
 test("CI legs normalize only the complete canonical cancellation tail and its permission", () => {
   const guard = { name: "Guard", run: "bun check" };
@@ -1312,9 +1358,88 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
   expectCoverage({
     current: actualSteps,
     base: baseSteps,
-    removed: coverageRemovals.map(({ name }) => name),
+    removed: newRemovals.map(({ name }) => name),
   });
 });
+
+test("code-quality pool preserves every moved check exactly once", () => {
+  const movedNames = [
+    "Code quality (web)",
+    "Result consumption (web)",
+    "Code quality (rest)",
+    "Query cache types",
+    "Dead columns",
+    "Projection totality",
+    "Aggregate ownership",
+    "Split-button census",
+    "Database awaits in loops",
+    "API timeout mutation guard",
+    "Result consumption (rest)",
+  ];
+  const withoutPoolMetadata = (step: Record<string, unknown>) => {
+    const normalized = { ...step };
+    // An ordinary step's implicit success() is `!cancelled()` in the pool.
+    if (normalized["if"] === ["$", "{{ !cancelled() }}"].join("")) {
+      delete normalized["if"];
+    } else if (typeof normalized["if"] === "string") {
+      normalized["if"] = normalized["if"].replace(
+        /^\$\{\{\s*([\s\S]*?)\s*\}\}$/u,
+        "$1",
+      );
+    }
+    const env = normalized["env"];
+    if (typeof env === "object" && env !== null && !Array.isArray(env)) {
+      const originalEnv = Object.fromEntries(
+        Object.entries(env).filter(
+          ([key]) =>
+            !["CI_CHECK_KIND", "CI_CHECK_INPUTS", "CI_CHECK_CONTEXT"].includes(
+              key,
+            ),
+        ),
+      );
+      if (Object.keys(originalEnv).length === 0) {
+        delete normalized["env"];
+      } else {
+        normalized["env"] = originalEnv;
+      }
+    }
+    return normalized;
+  };
+
+  // Before the move the merge base runs these checks inline; once it lands,
+  // the base schema expands the base pool. Either way the head's pool
+  // preserves the base's checks.
+  const originals = v
+    .parse(headJobSchema, baseJobs["code-quality-web-rest"])
+    .steps.filter(({ name }) => movedNames.includes(name))
+    .map(withoutPoolMetadata);
+  const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
+
+  expect(pooled.map(({ name }) => name)).toEqual(movedNames);
+  // A merge base may already carry the pool; normalize both sides alike.
+  expect(pooled.map(withoutPoolMetadata)).toEqual(
+    originals.map(withoutPoolMetadata),
+  );
+});
+
+// A migration-shape test that reads the old shape from the merge base fails
+// main once its own migration lands there. Every test here must also pass
+// with the head as its own base.
+test.skipIf(process.env["CI_CHECKS_PARTITION_BASE"] !== undefined)(
+  "every partition test also holds once its migration is on the base",
+  () => {
+    const run = Bun.spawnSync(
+      ["bun", "test", "./scripts/ci-checks-partition.test.ts"],
+      {
+        cwd: repository,
+        env: { ...process.env, CI_CHECKS_PARTITION_BASE: "HEAD" },
+      },
+    );
+    expect(run.stderr.toString()).toContain(" 0 fail");
+    expect(run.exitCode).toBe(0);
+  },
+  60_000,
+);
 
 test("task result cache checks belong exactly once to the rest leg", () => {
   const checks = partitions.flatMap(({ steps }, index) =>
@@ -1394,14 +1519,6 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       });
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
-      const movedOutsidePartitions = new Set(
-        v
-          .parse(headJobSchema, jobs["ci-quick-checks"])
-          .steps.filter(
-            ({ name }) => name === "Checkout workflow classification tooling",
-          )
-          .map(({ name }) => name),
-      );
       // Pooled checks run concurrently; their registry order is not a schedule.
       const leg = partitionIds.at(index);
       const reordered = new Set(
@@ -1422,7 +1539,6 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
             ({ name }) =>
               baseNames.has(name) &&
               !preparationSteps.has(name) &&
-              !movedOutsidePartitions.has(name) &&
               !reordered.has(name),
           )
           .map(({ name }) => name),
@@ -1431,7 +1547,6 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
           .filter(
             ({ name }) =>
               !preparationSteps.has(name) &&
-              !movedOutsidePartitions.has(name) &&
               !reordered.has(name) &&
               !newRemovals.some((removed) => removed.name === name),
           )
