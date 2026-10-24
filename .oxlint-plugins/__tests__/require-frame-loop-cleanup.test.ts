@@ -551,6 +551,19 @@ test("member handles retain one stable root and an unambiguous pending timer", a
   );
 });
 
+test("external shared-ref helpers keep the same resolved cancellation owner", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      `
+    const ref = { current: 0 };
+    export const schedule = () => { ref.current = setInterval(tick, 10); };
+    export const stop = () => { clearInterval(ref.current); };
+  `,
+    ),
+  ).toEqual([]);
+});
+
 test("a recursive helper hands each frame to its caller on the executed path", async () => {
   const cases = [
     ["onFrame(frame);", true],

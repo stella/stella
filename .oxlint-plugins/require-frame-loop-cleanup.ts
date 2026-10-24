@@ -1099,7 +1099,25 @@ const isOwned = (
     completed: new Map(),
   };
   const effect = enclosingEffect(effectAnchor);
-  const owner = effect ?? enclosingFunctions(start).at(0);
+  const declaration =
+    handle.kind === "binding" ? handle.variable.defs.at(0)?.node : null;
+  const bindingOwner = isAstNode(declaration)
+    ? enclosingFunctions(declaration).at(0)
+    : undefined;
+  const owner = effect ?? bindingOwner ?? enclosingFunctions(start).at(0);
+  // A shared ref is an explicit external owner: separate schedule/clear
+  // helpers operate on the same resolved root, after overwrite checks above.
+  if (
+    effect === null &&
+    handle.kind === "member" &&
+    owner !== undefined &&
+    matching.length > 0 &&
+    handle.rootVariable.defs.every(
+      (definition) => !isWithin(definition.node, owner),
+    )
+  ) {
+    return true;
+  }
   if (owner === undefined) {
     return false;
   }
