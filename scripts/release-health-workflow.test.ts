@@ -39,7 +39,12 @@ describe("release health workflows", () => {
     const gate = job(jobs, "release-health-gate");
 
     expect(job(jobs, "promote")["needs"]).toContain("release-health-gate");
-    expect(gate["if"]).toBe(job(jobs, "promote")["if"]);
+    // The gate and the promotion share the stable-release condition; the
+    // promotion also requires every job above it, the gate included, to have
+    // succeeded.
+    const stable = "!contains(needs.resolve.outputs.release_ref, '-')";
+    expect(gate["if"]).toBe(`\${{ ${stable} }}`);
+    expect(job(jobs, "promote")["if"]).toBe(`\${{ success() && ${stable} }}`);
     expect(runs(gate)).toContain("scripts/release-health.ts gate");
     expect(runs(gate)).toContain(`--pattern ${RELEASE_HEALTH_ASSET}`);
   });

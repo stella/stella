@@ -984,7 +984,9 @@ jobs:
     # cannot time out first and lose observation of an active promotion.
     timeout-minutes: 360
     needs: [resolve, manifest, prepare-web-image, smoke, release-health-gate]
-    if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+    # success(): production promotes only after every job above it succeeded,
+    # the release health gate included; a skipped gate skips the promotion.
+    if: ${{ success() && !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: write # publish the draft release
       packages: write # advance the mutable image aliases
@@ -1121,6 +1123,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [resolve, promote]
+    # Only after a production promotion: a prerelease skips both.
+    if: ${{ success() }}
     permissions:
       actions: write # dispatch release-health.yml
     steps:
