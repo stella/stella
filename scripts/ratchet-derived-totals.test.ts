@@ -175,6 +175,14 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
     if (branch !== undefined) {
       git(seed, "branch", branch);
     }
+    // Keep an unreachable object-store entry so the fixture proves cloning uses
+    // Git's transport instead of racing a filesystem copy of the live store.
+    const objectFanout = path.join(seed, ".git/objects/ff");
+    mkdirSync(objectFanout, { recursive: true });
+    symlinkSync(
+      "missing",
+      path.join(objectFanout, "00000000000000000000000000000000000000"),
+    );
     git(
       temporary,
       "clone",
