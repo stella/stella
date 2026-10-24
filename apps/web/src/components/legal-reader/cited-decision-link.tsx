@@ -72,9 +72,14 @@ type CitedDecisionChipProps = CitedDecisionPreviewProps & {
    * place of a court badge that would repeat it.
    */
   label?: ReactNode;
+  /** The citing text's own words, opened together with the court badge. */
+  citingText?: ReactNode;
 };
 
-type CitedDecisionLinkProps = Omit<CitedDecisionChipProps, "label"> & {
+type CitedDecisionLinkProps = Omit<
+  CitedDecisionChipProps,
+  "label" | "citingText"
+> & {
   children: ReactNode;
   className?: string | undefined;
 };
@@ -140,18 +145,20 @@ const CitingPassage = ({
 };
 
 /**
- * The source wording stays in the document; its court chip opens the shared
- * preview and keeps the inspector navigation action beside the source text.
+ * The source wording stays in the document and, together with its court
+ * chip, opens the shared preview: the reader points at the reference they
+ * are reading, not at a badge beside it.
  */
 export const CitedDecisionLink = ({
   children,
   className,
   ...chip
 }: CitedDecisionLinkProps) => (
-  <>
-    <span className={className}>{children}</span>{" "}
-    <CitedDecisionChip {...chip} label={undefined} />
-  </>
+  <CitedDecisionChip
+    {...chip}
+    citingText={<span className={className}>{children}</span>}
+    label={undefined}
+  />
 );
 
 /**
@@ -161,6 +168,7 @@ export const CitedDecisionLink = ({
 export const CitedDecisionChip = ({
   decision,
   label,
+  citingText,
   passage,
   treatment,
   presentation,
@@ -219,6 +227,7 @@ export const CitedDecisionChip = ({
         originalUrl: decision.sourceUrl ?? null,
       }}
       label={label}
+      citingText={citingText}
       onOpen={openDecision}
       passage={
         passage !== undefined || treatment !== undefined ? (

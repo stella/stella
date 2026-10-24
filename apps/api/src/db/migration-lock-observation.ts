@@ -150,15 +150,23 @@ export const createMigrationLockTelemetry = (): MigrationLockTelemetry => ({
 });
 
 // Raw activity text stays inside this boundary; only its fingerprint leaves it.
-const WAIT_SQL = `SELECT l.mode, c.relname AS "tableName", a.query AS statement,
+const WAIT_SQL = `WITH waiting AS MATERIALIZED (
+  SELECT l.mode, c.relname AS "tableName", a.query AS statement
+  FROM pg_stat_activity a
+  JOIN pg_locks l ON l.pid = a.pid AND NOT l.granted
+  LEFT JOIN pg_class c ON c.oid = l.relation
+  WHERE a.pid = $1
+), blocking AS MATERIALIZED (
+  SELECT unnest(pg_blocking_pids($1)) AS pid
+  WHERE EXISTS (SELECT 1 FROM waiting)
+)
+SELECT w.mode, w."tableName", w.statement,
   b.pid, b.state,
   (extract(epoch FROM (clock_timestamp() - b.xact_start)) * 1000)::double precision AS "xactAgeMs",
   b.wait_event AS "waitEvent", b.query
-FROM pg_stat_activity a
-JOIN pg_locks l ON l.pid = a.pid AND NOT l.granted
-LEFT JOIN pg_class c ON c.oid = l.relation
-LEFT JOIN pg_stat_activity b ON b.pid = ANY(pg_blocking_pids(a.pid))
-WHERE a.pid = $1`;
+FROM waiting w
+LEFT JOIN blocking bp ON true
+LEFT JOIN pg_stat_activity b ON b.pid = bp.pid`;
 
 const nullableString = (value: unknown) =>
   typeof value === "string" ? value : null;
@@ -174,9 +182,10 @@ type ObserveMigrationLockAttemptOptions<T> = {
   outcome: (result: T) => "done" | "deferred";
   pollMs?: number;
   cancelWork?: (() => Promise<void>) | undefined;
+  additionalRetries?: () => number;
 };
 
-/** One terminal event per attempt, retaining blockers seen before cancellation. */
+/** One terminal work event, retaining blockers and nested statement retries. */
 export const observeMigrationLockAttempt = async <T>({
   observer,
   pid,
@@ -188,6 +197,7 @@ export const observeMigrationLockAttempt = async <T>({
   outcome,
   pollMs = 100,
   cancelWork,
+  additionalRetries,
 }: ObserveMigrationLockAttemptOptions<T>): Promise<T> => {
   const key = `${phase}:${step}`;
   const attempt = (telemetry.attempts.get(key) ?? 0) + 1;
@@ -307,8 +317,13 @@ export const observeMigrationLockAttempt = async <T>({
   }
   const terminalOutcome =
     result.isErr() || observed.isErr() ? "failed" : outcome(result.value);
+  const nestedRetries = additionalRetries?.() ?? 0;
+  const finalAttempt = attempt + nestedRetries;
+  telemetry.retriesSpent += nestedRetries;
   if (terminalOutcome === "done") {
     telemetry.attempts.delete(key);
+  } else {
+    telemetry.attempts.set(key, finalAttempt);
   }
   telemetry.emit({
     event: "migrate.lock_attempt",
@@ -321,8 +336,8 @@ export const observeMigrationLockAttempt = async <T>({
       0,
       Math.round(Math.min(waitMs, performance.now() - startedAt)),
     ),
-    attempt,
-    retriesSpent: attempt - 1,
+    attempt: finalAttempt,
+    retriesSpent: finalAttempt - 1,
     outcome: terminalOutcome,
     blockers: [...blockers.values()],
     waits: [...waits.values()].map((wait) => ({

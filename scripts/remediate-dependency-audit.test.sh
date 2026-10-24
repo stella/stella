@@ -21,9 +21,20 @@ cat > "$fixture/bin/bun" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'bun %s\n' "$*" >> "$TEST_CALLS"
+if [[ "$*" == "--no-env-file scripts/dependency-audit.ts --prune-baseline" ]]; then
+  if [[ "${TEST_STALE:-false}" == true ]]; then
+    echo pruned > scripts/dependency-audit-baseline.json
+  fi
+  exit 0
+fi
 [[ "$*" == "--no-env-file audit fix" ]] || exit 2
 if [[ "${TEST_FIX_AVAILABLE:-false}" == true ]]; then
   echo updated >> bun.lock
+fi
+# Bun rewrites an exact pin in a workspace manifest when it fixes it.
+if [[ "${TEST_PIN_REWRITE:-false}" == true ]]; then
+  echo updated >> bun.lock
+  echo rewritten > apps/web/package.json
 fi
 # Bun exits 1 while advisories remain, including after a partial fix.
 [[ "${TEST_ADVISORIES_REMAIN:-false}" != true ]]
@@ -66,7 +77,12 @@ git config user.name test
 git config user.email test@example.com
 git config commit.gpgsign false
 touch bun.lock
-git add bun.lock
+mkdir scripts
+echo baseline > scripts/dependency-audit-baseline.json
+mkdir -p apps/web
+echo root > package.json
+echo pinned > apps/web/package.json
+git add bun.lock scripts/dependency-audit-baseline.json package.json apps/web/package.json
 git commit -qm initial
 initial_sha="$(git rev-parse HEAD)"
 git init --bare -q "$TEST_REMOTE"
@@ -76,7 +92,7 @@ TEST_OPEN_PRS=1 bash "$subject"
 refute_call '^bun |^git push |^gh pr create '
 : > "$TEST_CALLS"
 TEST_OPEN_PRS=0 bash "$subject"
-[[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 1 ]]
+[[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 2 ]]
 refute_call '^gh issue |^git push |^gh pr create '
 : > "$TEST_CALLS"
 TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true bash "$subject"
@@ -119,4 +135,24 @@ git update-ref -d refs/remotes/origin/automation/dependency-audit-fix
 TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true TEST_ADVISORIES_REMAIN=true bash "$subject"
 [[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
 [[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
-echo 'ok   remediation deduplicates pull requests, authenticates remote operations and leases existing branches safely'
+
+# A stale acceptance alone opens the pull request that removes it.
+git checkout --detach "$initial_sha"
+git --git-dir="$TEST_REMOTE" update-ref -d refs/heads/automation/dependency-audit-fix
+git update-ref -d refs/remotes/origin/automation/dependency-audit-fix
+: > "$TEST_CALLS"
+TEST_OPEN_PRS=0 TEST_STALE=true bash "$subject"
+[[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
+[[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:scripts/dependency-audit-baseline.json)" == pruned ]]
+[[ -z "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" ]]
+
+# A fix that rewrites a pinned manifest carries the manifest with the lockfile.
+git checkout --detach "$initial_sha"
+git --git-dir="$TEST_REMOTE" update-ref -d refs/heads/automation/dependency-audit-fix
+git update-ref -d refs/remotes/origin/automation/dependency-audit-fix
+: > "$TEST_CALLS"
+TEST_OPEN_PRS=0 TEST_PIN_REWRITE=true bash "$subject"
+[[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
+[[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:apps/web/package.json)" == rewritten ]]
+[[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
+echo 'ok  remediation deduplicates pull requests, authenticates remote operations and leases existing branches safely'

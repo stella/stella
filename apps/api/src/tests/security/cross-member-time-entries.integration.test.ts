@@ -16,18 +16,18 @@ import { Temporal } from "@stll/time";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  BILLING_STATUS,
   auditLogs,
+  BILLING_STATUS,
   contacts,
-  organizationSettings,
   entities,
+  featureEnrolments,
+  organizationSettings,
   TIME_ENTRY_SOURCE,
   timeEntries,
-  timeTimers,
   timeTimerConfirmations,
+  timeTimers,
   workspaceMembers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import batchDelete from "@/api/handlers/time-entries/batch/delete";

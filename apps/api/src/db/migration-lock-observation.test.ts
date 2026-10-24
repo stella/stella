@@ -235,3 +235,42 @@ test("observer failure after completed work does not cancel the committed sessio
   expect(records).toHaveLength(1);
   expect(records.at(0)).toMatchObject({ outcome: "failed" });
 });
+
+test("statement retries join deferred attempts and reset after successful work", async () => {
+  const { records, telemetry } = recordingTelemetry();
+  const observer: OnlineMigrationConnection = {
+    execute: async () => undefined,
+    query: async () => [],
+    release: () => undefined,
+  };
+  const rounds = [
+    { retries: 3, outcome: "deferred" },
+    { retries: 1, outcome: "done" },
+    { retries: 0, outcome: "done" },
+  ] as const;
+  for (const round of rounds) {
+    let retries = 0;
+    await observeMigrationLockAttempt({
+      observer,
+      pid: 11,
+      phase: "online",
+      step: "probe",
+      table: "probe",
+      telemetry,
+      additionalRetries: () => retries,
+      work: async () => {
+        retries = round.retries;
+        return round.outcome;
+      },
+      outcome: (result) => result,
+    });
+  }
+  expect(
+    records.map(({ attempt, retriesSpent }) => ({ attempt, retriesSpent })),
+  ).toEqual([
+    { attempt: 4, retriesSpent: 3 },
+    { attempt: 6, retriesSpent: 5 },
+    { attempt: 1, retriesSpent: 0 },
+  ]);
+  expect(telemetry.retriesSpent).toBe(5);
+});

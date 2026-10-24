@@ -16,10 +16,7 @@ export type MigrationTimingRecord =
       durationMs: number;
       retriesSpent: number;
       outcome:
-        | "applied"
-        | "stale_bundle_noop"
-        | "stale_bundle_refused"
-        | "failed";
+        "applied" | "stale_bundle_noop" | "stale_bundle_refused" | "failed";
       /** Waiting for the corpus schema lane, part of the phase; null when it failed first. */
       laneWaitMs: number | null;
       appliedCount: number | null;

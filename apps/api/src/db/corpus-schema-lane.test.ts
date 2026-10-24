@@ -197,16 +197,15 @@ test("the migration runner takes the lane before SQL and releases it in finally"
     "onLaneAcquired: () => {",
     "laneHeld = true;",
     '"schema.pending",',
-    "await pgCoreMigrate(migrations, database",
+    "await pgCoreMigrate(",
   ]);
   expect(source).not.toContain("CORPUS_SCHEMA_LANE_LOCK_SQL");
 
-  const migrationAt = source.indexOf(
-    "await pgCoreMigrate(migrations, database",
-  );
+  const migrationAt = source.indexOf("await pgCoreMigrate(");
   const errorRethrowAt = source.indexOf("throw error;", migrationAt);
   const finallyAt = source.indexOf("} finally {", errorRethrowAt);
   expect(errorRethrowAt).toBeGreaterThan(migrationAt);
+
   expect(finallyAt).toBeGreaterThan(migrationAt);
   expect(finallyAt).toBeGreaterThan(errorRethrowAt);
   expect(source.slice(finallyAt)).toContain(

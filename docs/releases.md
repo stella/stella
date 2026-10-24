@@ -62,9 +62,9 @@ committed steps may remain applied; a rerun reads the migration ledger again.
 Inspect migration task logs and the failed promotion workflow before rerunning.
 The deployment result retains the migration exit status and task diagnostics.
 
-`migrate.lock_attempt` records each attempt's outcome and observed lock waits,
-including requested mode, table, wait duration, and blocker activity with query
-fingerprints. Fingerprints strip literals and quoted identifiers before
+`migrate.lock_attempt` records each observed work step's terminal outcome and
+lock waits, including requested mode, table, wait duration, and blocker activity
+with query fingerprints. Attempt counts include bounded statement retries. Fingerprints strip literals and quoted identifiers before
 truncation. Existing `migrate.phase_duration` and
 `migrate.online_step_duration` records include `retriesSpent`; these fields use
 the existing log pipeline and require no additional metrics. Lock inspection is
@@ -114,8 +114,8 @@ or change deployed feature flags.
 
 1. Ensure CI is green on `main`.
 2. Generate and review any required migration files.
-3. Run `bun run marketing:stale`; if anything is stale, `bun run
-   marketing:reshoot` re-records only the stale captures (see
+3. Run `bun run marketing:stale`; if anything is stale,
+   `bun run marketing:reshoot` re-records only the stale captures (see
    `apps/landing/public/media/products/README.md`, "Reshooting on release").
 4. In one commit, bump `VERSION` and add the matching changelog note. A
    release other than a maintenance release (`bun run release:maintenance`)
@@ -208,7 +208,11 @@ or change deployed feature flags.
    an explicit SHA must name that same commit. Tree-identical release PR
    evidence may satisfy the existing proof checks, but later main commits
    cannot replace the version commit. The workflow also runs the CLI coupling
-   check against that commit. The tag then triggers `release.yml`.
+   check against that commit. The other independent gates continue when one
+   fails, and one final verdict lists each gate that failed or did not run. If
+   dependency installation fails, the dependency-audit gate remains unrun.
+   `-F dry_run=true` evaluates all gates and reports them without pushing the
+   tag. The tag then triggers `release.yml`.
 
 8. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,
