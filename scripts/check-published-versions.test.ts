@@ -281,7 +281,7 @@ const signedBundle = (
   predicateType,
   bundle: {
     dsseEnvelope: {
-      payload: Buffer.from(JSON.stringify(statement)).toString("base64"),
+      payload: Buffer.from(JSON.stringify(statement)).toBase64(),
     },
   },
 });

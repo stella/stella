@@ -164,7 +164,7 @@ describe("contentLookupKey", () => {
     expect(await contentLookupKey(organizationId, `${plaintext} `)).not.toBe(
       key,
     );
-    expect(key).not.toContain(Buffer.from(plaintext).toString("hex"));
+    expect(key).not.toContain(Buffer.from(plaintext).toHex());
   });
 
   test("separates tenants: one value hashes differently per organization", async () => {

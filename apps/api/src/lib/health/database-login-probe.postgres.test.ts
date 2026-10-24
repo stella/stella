@@ -26,7 +26,7 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const SINK_EVENT = "db.fresh_login";
 
 const randomHex = (): string =>
-  Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("hex");
+  Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toHex();
 
 const loginUrl = (base: string, user: string, password: string): string => {
   const url = new URL(base);

@@ -156,8 +156,7 @@ const matchesReferencedReservation = async ({
   }
   if (head.checksumSHA256 !== null) {
     return Result.ok(
-      Buffer.from(head.checksumSHA256, "base64").toString("hex") ===
-        expectedSha256Hex,
+      Buffer.from(head.checksumSHA256, "base64").toHex() === expectedSha256Hex,
     );
   }
   const { hashS3ObjectSha256WithSignal } = await import("@/api/lib/s3");

@@ -65,7 +65,10 @@ export async function* iterateCursorPages<T>(
 }
 
 export const encodePaginationCursor = (parts: readonly CursorPart[]): string =>
-  Buffer.from(JSON.stringify(parts)).toString("base64url");
+  Buffer.from(JSON.stringify(parts)).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 
 export const decodePaginationCursor = (cursor: string): unknown[] | null => {
   try {

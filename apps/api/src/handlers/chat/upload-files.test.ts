@@ -175,7 +175,7 @@ describe("chat attachment hydration", () => {
         metadata: { filename: "scan.pdf" },
         source: {
           type: "data",
-          value: Buffer.from(fileBytes).toString("base64"),
+          value: Buffer.from(fileBytes).toBase64(),
           mimeType: PDF_MIME_TYPE,
         },
         type: "document",

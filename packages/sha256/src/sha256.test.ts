@@ -25,8 +25,10 @@ test("all runtime owners preserve known SHA-256 vectors and encodings", async ()
     const bytes = Buffer.from(hex, "hex");
     for (const owner of [bun, node]) {
       expect(owner.sha256Hex(input)).toBe(hex);
-      expect(owner.sha256Base64(input)).toBe(bytes.toString("base64"));
-      expect(owner.sha256Base64Url(input)).toBe(bytes.toString("base64url"));
+      expect(owner.sha256Base64(input)).toBe(bytes.toBase64());
+      expect(owner.sha256Base64Url(input)).toBe(
+        bytes.toBase64({ alphabet: "base64url", omitPadding: true }),
+      );
       const actual = owner.sha256Bytes(input);
       expect(Buffer.isBuffer(actual)).toBe(true);
       expect(actual).toEqual(bytes);
@@ -36,8 +38,8 @@ test("all runtime owners preserve known SHA-256 vectors and encodings", async ()
     expect(new Uint8Array(await browser.sha256Bytes(input))).toEqual(
       new Uint8Array(bytes),
     );
-    expect(sha256HexToBase64(hex)).toBe(bytes.toString("base64"));
-    expect(sha256Base64ToHex(bytes.toString("base64"))).toBe(hex);
+    expect(sha256HexToBase64(hex)).toBe(bytes.toBase64());
+    expect(sha256Base64ToHex(bytes.toBase64())).toBe(hex);
   }
 });
 

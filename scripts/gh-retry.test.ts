@@ -316,7 +316,7 @@ test("explicit GET replays stdin byte-for-byte for every attempt", async () => {
     expect(result.exit).toBe(0);
     expect(result.calls).toHaveLength(2);
     for (const call of result.calls) {
-      expect(call).toContain(Buffer.from(input).toString("hex"));
+      expect(call).toContain(Buffer.from(input).toHex());
     }
   }
 });

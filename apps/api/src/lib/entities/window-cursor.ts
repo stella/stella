@@ -36,7 +36,7 @@ export const encodeEntitiesWindowCursor = (
       v: ENTITIES_WINDOW_CURSOR_VERSION,
       values,
     }),
-  ).toString("base64url");
+  ).toBase64({ alphabet: "base64url", omitPadding: true });
 
 export const decodeEntitiesWindowCursor = (
   cursor: string | undefined,

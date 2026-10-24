@@ -128,7 +128,7 @@ const cardBackground = async (): Promise<string> => {
     )
       .render()
       .asPng()
-      .toString("base64");
+      .toBase64();
   })();
   return await background;
 };
@@ -144,7 +144,7 @@ const wordmark = (direction: "ltr" | "rtl"): string => {
   }
   const encoded = readFileSync(
     resolveLandingPath("public", "images", file),
-  ).toString("base64");
+  ).toBase64();
   logos.set(file, encoded);
   return encoded;
 };

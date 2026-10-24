@@ -345,7 +345,7 @@ const makeValidDocxBytes = async (
 const makeValidDocxBase64 = async (
   paragraphs: readonly string[] = ["{{name}}"],
 ): Promise<string> =>
-  Buffer.from(await makeValidDocxBytes(paragraphs)).toString("base64");
+  Buffer.from(await makeValidDocxBytes(paragraphs)).toBase64();
 
 /** A well-formed DOCX that links an external Word template, which the upload
  *  scan rejects. */
@@ -1083,7 +1083,7 @@ describe("MCP template tools", () => {
       completionStatus: "partial",
       text: "Lease between ACME and Tenant.",
       truncated: false,
-      docxBase64: docxBytes.toString("base64"),
+      docxBase64: docxBytes.toBase64(),
       unmatchedPlaceholders: [],
       unusedValues: [],
       clauseWarnings: [],
@@ -3468,7 +3468,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: Buffer.from("not a docx").toString("base64"),
+        docx_base64: Buffer.from("not a docx").toBase64(),
       },
       context: createContext(),
       toolName: "create_template",
@@ -3530,7 +3530,7 @@ describe("MCP template tools", () => {
     ).subarray(0, 24);
 
     const result = await handleMcpToolCall({
-      args: { name: "NDA", docx_base64: truncated.toString("base64") },
+      args: { name: "NDA", docx_base64: truncated.toBase64() },
       context: createContext(),
       toolName: "create_template",
     });
@@ -3561,7 +3561,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: withoutDocumentXml.toString("base64"),
+        docx_base64: withoutDocumentXml.toBase64(),
       },
       context: createContext(),
       toolName: "create_template",
@@ -3610,7 +3610,7 @@ describe("MCP template tools", () => {
     );
 
     const result = await handleMcpToolCall({
-      args: { name: "NDA", docx_base64: malformed.toString("base64") },
+      args: { name: "NDA", docx_base64: malformed.toBase64() },
       context: createContext(),
       toolName: "create_template",
     });
@@ -3811,7 +3811,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: Buffer.from("PK").toString("base64"),
+        docx_base64: Buffer.from("PK").toBase64(),
       },
       context: createContext({ memberRole: "intern" }),
       toolName: "create_template",
@@ -4860,7 +4860,7 @@ describe("MCP template tools", () => {
         name: "NDA",
         // Not a DOCX at all: if these bytes were decoded the call would fail
         // structural validation, so passing proves they never were.
-        docx_base64: Buffer.from("not a docx").toString("base64"),
+        docx_base64: Buffer.from("not a docx").toBase64(),
         file: HOST_FILE_REFERENCE,
       },
       context: createOutboundContext(),

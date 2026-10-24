@@ -595,7 +595,7 @@ const publishProductMedia = async (rootDir = ROOT_DIR): Promise<void> => {
   for (const asset of uniqueAssets) {
     const key = assetObjectKey(asset);
     const localPath = nodePath.join(rootDir, "apps/landing/public", asset.path);
-    const digestBase64 = Buffer.from(asset.sha256, "hex").toString("base64");
+    const digestBase64 = Buffer.from(asset.sha256, "hex").toBase64();
     const headArgs = productMediaHeadObjectArgs(bucket, key);
     const existing = runAws(headArgs);
     if (existing.status === 0) {

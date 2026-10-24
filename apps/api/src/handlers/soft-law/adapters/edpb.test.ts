@@ -411,7 +411,7 @@ test("EDPB malformed PDFs retain raw bytes with an explicit extraction failure",
         },
         {
           role: "detail",
-          contentBase64: Buffer.from(html).toString("base64"),
+          contentBase64: Buffer.from(html).toBase64(),
           contentType: "text/html",
         },
       ],

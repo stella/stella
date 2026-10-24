@@ -193,7 +193,7 @@ describe("product media manifest", () => {
   });
 
   test("pins upload checksum, cache policy, and server-side encryption", () => {
-    const digestBase64 = Buffer.from(VIDEO.sha256, "hex").toString("base64");
+    const digestBase64 = Buffer.from(VIDEO.sha256, "hex").toBase64();
     const args = productMediaPutObjectArgs({
       asset: VIDEO,
       bucket: "media-bucket",

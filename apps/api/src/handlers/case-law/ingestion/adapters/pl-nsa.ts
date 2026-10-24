@@ -832,7 +832,7 @@ const verbatim = (value: unknown): unknown => {
     return value.toString();
   }
   if (value instanceof Uint8Array) {
-    return Buffer.from(value).toString("base64");
+    return Buffer.from(value).toBase64();
   }
   if (Array.isArray(value)) {
     return value.map(verbatim);

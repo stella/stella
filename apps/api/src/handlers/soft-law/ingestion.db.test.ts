@@ -390,7 +390,7 @@ if (!databaseUrl || !enabled) {
         const sourceRaw = [
           {
             role: "detail",
-            contentBase64: Buffer.from("malformed detail").toString("base64"),
+            contentBase64: Buffer.from("malformed detail").toBase64(),
             contentType: "text/html",
           },
         ];
@@ -1158,7 +1158,7 @@ if (!databaseUrl || !enabled) {
                   sourceRaw: [
                     {
                       role: "source-page-0",
-                      contentBase64: Buffer.from(html).toString("base64"),
+                      contentBase64: Buffer.from(html).toBase64(),
                       contentType: "text/html",
                     },
                   ],

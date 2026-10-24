@@ -455,7 +455,7 @@ for (const conflict of [false, true]) {
       writeFileSync(path.join(fixture, "target.txt"), "user edit\n");
       const patch =
         "diff --git a/target.txt b/target.txt\n--- a/target.txt\n+++ b/target.txt\n@@ -1 +1 @@\n-user edit\n+fixed user edit\n";
-      const receipt = `STELLA_VERIFY_PATCH=${Buffer.from(patch).toString("base64")}`;
+      const receipt = `STELLA_VERIFY_PATCH=${Buffer.from(patch).toBase64()}`;
       writeFileSync(
         path.join(fixture, "remote.sh"),
         `#!/bin/sh\nif [ "$1" = --probe ]; then exit 0; fi\nprintf '%s\\0' "$@" > remote-argv\n${conflict ? "printf 'concurrent edit\\n' > target.txt\n" : ""}printf '%s\\n' '${receipt}'\n`,

@@ -123,7 +123,7 @@ export const registerOAuthClient = async (
 const toCodeChallenge = async (verifier: string) =>
   Buffer.from(
     await hashSha256Bytes(new TextEncoder().encode(verifier)),
-  ).toString("base64url");
+  ).toBase64({ alphabet: "base64url", omitPadding: true });
 
 const readCode = (redirectUrl: string): string =>
   new URL(redirectUrl).searchParams.get("code") ??

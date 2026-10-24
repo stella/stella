@@ -525,7 +525,7 @@ if (!databaseUrl || !enabled) {
                 role: "index",
                 contentBase64: Buffer.from(
                   "Publisher index snapshot 2",
-                ).toString("base64"),
+                ).toBase64(),
                 contentType: "text/html",
               },
             ],

@@ -1007,7 +1007,7 @@ export const huBhgyRawPartsOf = (
   ...(document === undefined
     ? {}
     : {
-        [RAW_PART.DOCUMENT]: Buffer.from(document.bytes).toString("base64"),
+        [RAW_PART.DOCUMENT]: Buffer.from(document.bytes).toBase64(),
         [RAW_PART.DOCUMENT_CONTENT_TYPE]: document.contentType,
       }),
 });

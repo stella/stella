@@ -17,7 +17,7 @@ beforeEach(() => keyPool.reset());
 
 const pemOf = (der: Uint8Array) =>
   `-----BEGIN CERTIFICATE-----\n${Buffer.from(der)
-    .toString("base64")
+    .toBase64()
     .replaceAll(/(.{64})/gu, "$1\n")}\n-----END CERTIFICATE-----\n`;
 
 describe("timestamp trust anchors", () => {

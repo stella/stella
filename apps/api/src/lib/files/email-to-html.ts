@@ -455,7 +455,7 @@ const parseEml = async (
           attachment.mimeType,
           attachment.filename,
         ),
-        dataBase64: Buffer.from(bytes).toString("base64"),
+        dataBase64: Buffer.from(bytes).toBase64(),
       });
     }
   }
@@ -565,7 +565,7 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
         attachment.mimeType,
         attachment.fileName,
       ),
-      dataBase64: Buffer.from(attachment.bytes).toString("base64"),
+      dataBase64: Buffer.from(attachment.bytes).toBase64(),
     });
   }
 

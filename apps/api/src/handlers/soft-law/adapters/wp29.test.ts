@@ -160,7 +160,7 @@ describe("WP29 official source shapes", () => {
         sourceRaw: [
           {
             role: "source-page-0",
-            contentBase64: Buffer.from(html).toString("base64"),
+            contentBase64: Buffer.from(html).toBase64(),
             contentType: "text/html",
           },
         ],
@@ -203,7 +203,7 @@ describe("WP29 official source shapes", () => {
           sourceRaw: [
             {
               role: "source-page-0",
-              contentBase64: Buffer.from(html).toString("base64"),
+              contentBase64: Buffer.from(html).toBase64(),
               contentType: "text/html",
             },
           ],
@@ -327,7 +327,7 @@ describe("WP29 official source shapes", () => {
           sourceRaw: [
             {
               role: "source-page-0",
-              contentBase64: Buffer.from(html).toString("base64"),
+              contentBase64: Buffer.from(html).toBase64(),
               contentType: "text/html",
             },
           ],

@@ -175,7 +175,7 @@ describe("prepare_file_comparison", () => {
     );
 
     expect(data.base.headers["x-amz-checksum-sha256"]).toBe(
-      Buffer.from(BASE_SHA, "hex").toString("base64"),
+      Buffer.from(BASE_SHA, "hex").toBase64(),
     );
   });
 
