@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
@@ -82,7 +82,7 @@ test("every workflow edit selects the classification digest refresh", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
-    ".github/ci-job-classification-decisions.json",
+    ".github/ci-job-classification-decisions/**",
     "scripts/ci-job-classification/yaml.ts",
   ]) {
     expect(
@@ -348,7 +348,7 @@ describe("changed-file autofix boundary", () => {
       ({ write }) => write.join(" "),
     );
     const sourceFixer =
-      /\boxlint\b[^\n]*--fix\b|\boxfmt\b|scripts\/fix-[\w-]+\.ts|scripts\/typecheck-coverage\.ts[^\n]*--autofix\b/u;
+      /\boxlint\b[^\n]*--fix\b|\bbun fmt\b|scripts\/fix-[\w-]+\.ts|scripts\/typecheck-coverage\.ts[^\n]*--autofix\b/u;
     const isGenerator = (run: string) =>
       /scripts\/autofix-plan\.ts run\b/u.test(run) ||
       generatorCommands.some((command) => run.includes(command));
@@ -590,9 +590,7 @@ describe("changed-file autofix boundary", () => {
     expect(fix.slice(typecheck)).toContain("restore_lint_paths");
     expect(fix.slice(typecheck)).not.toContain('exit "$typecheck_status"');
     expect(fix).toContain("set -euo pipefail");
-    expect(fix).toContain(
-      `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,
-    );
+    expect(fix).toContain(`bun fmt --ignore-unknown "\${format_paths[@]}"`);
     for (const unsafe of ["--fix-suggestions", "--fix-dangerously"]) {
       expect(fix).not.toContain(unsafe);
     }

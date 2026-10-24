@@ -4,22 +4,22 @@ import { panic, Result } from "better-result";
 import {
   SKILL_FILE_NAME,
   SKILL_RESOURCE_FOLDERS,
-  validateSkillPackage,
   type SkillPackageDiagnostic,
   type SkillPackageFile,
+  validateSkillPackage,
 } from "@stll/skills/format";
 
-import { catalogueLicensesMatch, type CatalogueLicense } from "../src/schema";
+import { type CatalogueLicense, catalogueLicensesMatch } from "../src/schema";
 import {
-  PinnedContentError,
   assertCompleteGithubContentsListing,
   collectGithubTargets,
+  type GithubTarget,
+  PinnedContentError,
+  type PinnedSource,
   readPinnedSnapshot,
   recordingPinnedSource,
   syntheticSkillSource,
   writePinnedSnapshot,
-  type GithubTarget,
-  type PinnedSource,
 } from "./pinned-content-facts";
 
 /** Path of `repoRelativePath` relative to the skill directory, or null. */

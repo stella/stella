@@ -4,7 +4,7 @@
  * and when; this handler never rewrites an earlier event.
  */
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { legalListClaimReviewEvents } from "@/api/db/schema";

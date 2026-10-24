@@ -4,7 +4,7 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 
 const SEARCH_INPUT_RULE = "no-decorated-search-input";
 const DIALOG_FOOTER_RULE = "dialog-footer-owns-actions";
-const LEGAL_CLICHE_RULE = "no-legal-cliche-glyph";
+const BANNED_GLYPH_RULE = "no-banned-glyph";
 
 const lint = async (rule: string, source: string) =>
   (await lintSingleRule(rule, source, { sourcePath: "surface.tsx" })).map(
@@ -188,7 +188,7 @@ describe.serial(DIALOG_FOOTER_RULE, () => {
   });
 });
 
-describe.serial(LEGAL_CLICHE_RULE, () => {
+describe.serial(BANNED_GLYPH_RULE, () => {
   test.each([
     ['import { ScaleIcon } from "lucide-react";', 1],
     ['import { LucideGavel } from "lucide-react";', 1],
@@ -208,9 +208,17 @@ describe.serial(LEGAL_CLICHE_RULE, () => {
       'import { ScaleIcon } from "lucide-react";\nexport const ICONS = { court: ScaleIcon };',
       2,
     ],
-  ])("reports the legal cliché: %s", async (source, reports) => {
-    expect(await lint(LEGAL_CLICHE_RULE, `${source}\n`)).toEqual(
-      Array.from({ length: reports }, () => LEGAL_CLICHE_RULE),
+    // A robot personifies the AI, under every lucide alias.
+    ['import { BotIcon } from "lucide-react";', 1],
+    ['import { LucideBotMessageSquare } from "lucide-react";', 1],
+    ['import { BotOff } from "@stll/ui/icons";', 1],
+    [
+      'import { BotIcon as AssistantIcon } from "lucide-react";\nexport const Surface = () => <AssistantIcon />;',
+      2,
+    ],
+  ])("reports the banned glyph: %s", async (source, reports) => {
+    expect(await lint(BANNED_GLYPH_RULE, `${source}\n`)).toEqual(
+      Array.from({ length: reports }, () => BANNED_GLYPH_RULE),
     );
   });
 
@@ -224,11 +232,15 @@ describe.serial(LEGAL_CLICHE_RULE, () => {
     ],
     // The bindings resolve through lucide; a local of the same name does not.
     ["const Scale = () => <span />;\nexport const Surface = () => <Scale />;"],
+    // Exact names: a bottle is not a robot.
+    [
+      'import { BottleWineIcon } from "lucide-react";\nexport const Surface = () => <BottleWineIcon />;',
+    ],
     // A key that spells the glyph is not a reference to it.
     [
       'import { LandmarkIcon } from "lucide-react";\nexport const ICONS = { Gavel: LandmarkIcon };',
     ],
   ])("accepts a glyph that names its concept: %s", async (source) => {
-    expect(await lint(LEGAL_CLICHE_RULE, `${source}\n`)).toEqual([]);
+    expect(await lint(BANNED_GLYPH_RULE, `${source}\n`)).toEqual([]);
   });
 });

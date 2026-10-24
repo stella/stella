@@ -25,9 +25,9 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
-  NO_DB,
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

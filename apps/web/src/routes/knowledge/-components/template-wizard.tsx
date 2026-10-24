@@ -45,8 +45,8 @@ import {
   type TemplateDateFormat,
 } from "@/components/templates/template-date-format";
 import {
-  isInputType,
   type InputType,
+  isInputType,
   type LookupRegistry,
 } from "@/components/templates/template-field-manifest";
 import Tooltip from "@/components/tooltip";

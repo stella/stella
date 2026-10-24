@@ -58,20 +58,25 @@ export const uploadsRoute = new Elysia({
   .post("/presign", presignUpload.handler, {
     body: presignUpload.config.body,
     permissions: presignUpload.config.permissions,
+    accountAccess: presignUpload.config.accountAccess,
   })
   .post("/entity-create/preflight", preflightEntityCreate.handler, {
     body: preflightEntityCreate.config.body,
     permissions: preflightEntityCreate.config.permissions,
+    accountAccess: preflightEntityCreate.config.accountAccess,
   })
   .post("/entity-create/tree", entityCreateTree.handler, {
     body: entityCreateTree.config.body,
     permissions: entityCreateTree.config.permissions,
+    accountAccess: entityCreateTree.config.accountAccess,
   })
   .post("/:uploadId/finalize", finalizeUpload.handler, {
     params: finalizeUpload.config.params,
     permissions: finalizeUpload.config.permissions,
+    accountAccess: finalizeUpload.config.accountAccess,
   })
   .post("/:uploadId/abort", abortUpload.handler, {
     params: abortUpload.config.params,
     permissions: abortUpload.config.permissions,
+    accountAccess: abortUpload.config.accountAccess,
   });

@@ -2,11 +2,11 @@ import type { ComponentType } from "react";
 
 import {
   BlocksIcon,
+  CaseLawIcon,
+  Clock3Icon,
   InboxIcon,
   LibraryBigIcon,
   MessageSquareIcon,
-  CaseLawIcon,
-  Clock3Icon,
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";

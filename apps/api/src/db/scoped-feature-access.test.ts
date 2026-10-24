@@ -5,8 +5,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
-  createMembershipScopedDb,
   createMembershipSafeDb,
+  createMembershipScopedDb,
   markRlsDatabase,
 } from "@/api/db/scoped";
 import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
