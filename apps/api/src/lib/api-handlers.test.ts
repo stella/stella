@@ -1,5 +1,6 @@
 import { Result, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { ElysiaCustomStatusResponse } from "elysia";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
@@ -20,6 +21,7 @@ import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
   createSafeHandler,
+  createSafePublicHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
   resolveMeteringContext,
@@ -35,6 +37,8 @@ import {
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { runWithContentDeliveryScope } from "@/api/lib/files/content-delivery";
+import { WorkRefusal } from "@/api/lib/load/work-admission";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -54,6 +58,173 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const testState = createTestState({ file: import.meta.path, config: env });
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+
+test.each([
+  [
+    "work refusal",
+    () => {
+      const refusal = new WorkRefusal({
+        message: "Work capacity is unavailable",
+        reason: "busy",
+        retryAfterMs: 2000,
+      });
+      return new HandlerError({
+        status: 503,
+        message: refusal.message,
+        retryable: true,
+        retryAfterMs: refusal.retryAfterMs,
+      });
+    },
+  ],
+  [
+    "provider refusal",
+    () =>
+      createProviderCallError({
+        model: { provider: "openai", keySource: "byok" },
+        status: 503,
+        evidence: { status: 503, headers: { "Retry-After": "2" } },
+      }),
+  ],
+])("%s never shortens the advised retry wait", async (_name, createError) => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(createError());
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+  const response = await endpoint.handler(ctx);
+  expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
+  if (!(response instanceof ElysiaCustomStatusResponse)) {
+    throw new Error("Expected a status response");
+  }
+  expect(response.response.retryable).toBe(true);
+  expect(response.response.retryAfterMs).toBeGreaterThanOrEqual(1000);
+});
+
+test("a thrown retryable handler error sets Retry-After", async () => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      throw new HandlerError({
+        status: 503,
+        message: "Work capacity is unavailable",
+        retryable: true,
+        retryAfterMs: 2000,
+      });
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+
+  const response = await endpoint.handler(ctx);
+
+  expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
+  expect(response).toMatchObject({
+    code: 503,
+    response: { retryable: true, retryAfterMs: 2000 },
+  });
+});
+
+test.each([
+  ["Headers", () => new Headers()],
+  ["plain record", () => ({})],
+] as const)(
+  "a retryable handler error sets Retry-After on %s",
+  async (_name, createHeaders) => {
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* () {
+        return Result.err(
+          new HandlerError({
+            status: 503,
+            message: "Work capacity is unavailable",
+            retryable: true,
+            retryAfterMs: 2000,
+          }),
+        );
+      },
+    );
+    const safeDb: SafeDb = async <T>() =>
+      Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+    const ctx = createContext(endpoint, safeDb);
+    const headers = createHeaders();
+    ctx.set.headers = headers;
+
+    await endpoint.handler(ctx);
+
+    const retryAfter =
+      headers instanceof Headers
+        ? headers.get("Retry-After")
+        : Object.entries(headers)
+            .find(([name]) => name === "Retry-After")
+            ?.at(1);
+    expect(retryAfter).toMatch(/^\d+$/u);
+    expect(Number(retryAfter)).toBeGreaterThanOrEqual(2);
+  },
+);
+
+test.each([
+  [
+    "Headers",
+    () =>
+      new Headers({
+        "Content-Disposition": "attachment; filename=fixture.txt",
+      }),
+  ],
+  [
+    "plain record",
+    () => ({ "content-disposition": "attachment; filename=fixture.txt" }),
+  ],
+] as const)(
+  "reads Content-Disposition from %s",
+  async (_name, createHeaders) => {
+    const endpoint = createSafePublicHandler(
+      {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        cache: { kind: "none" },
+        mcp: { type: "internal", reason: "health_infra" },
+        contentDelivery: { type: "audited" },
+      },
+      async function* () {
+        return Result.ok("fixture");
+      },
+    );
+
+    const response = await runWithContentDeliveryScope(
+      { type: "audited" },
+      async () =>
+        await endpoint.handler(
+          asTestRaw({
+            request: new Request("https://example.test/delivery"),
+            route: "/delivery",
+            set: { headers: createHeaders() },
+          }),
+        ),
+    );
+
+    expect(response).toMatchObject({ code: 500 });
+  },
+);
 
 describe("createSafeHandler workspace audit binding", () => {
   test("rebinds audit recording to the validated workspace", async () => {
@@ -357,6 +528,7 @@ const createContext = (
   ({
     request: new Request("https://example.test/usage-preflight"),
     route: "/usage-preflight",
+    set: { headers: {} },
     user: {
       id: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
     },
@@ -416,10 +588,7 @@ describe("createSafeRootHandler member AI access", () => {
     );
     expect(bodyRan).toBe(false);
     if (!("code" in result)) {
-      throw new HandlerError({
-        message: "Expected an AI access response",
-        status: 500,
-      });
+      throw new Error("Expected an AI access response");
     }
     expect(result.code).toBe(403);
     expect(result.response).toMatchObject({
@@ -728,7 +897,7 @@ describe("a mapped status survives the transport wrapper", () => {
         for (const mode of ["return", "throw"] as const) {
           const response = await runEndpoint(async function* () {
             if (mode === "throw") {
-              throw wrapped;
+              throw new Error("Action admission refused", { cause: wrapped });
             }
             return Result.err(wrapped);
           });
@@ -843,8 +1012,16 @@ describe("a mapped status survives the transport wrapper", () => {
   test("a status thrown through Result.tryPromise is answered, not graded 500", async () => {
     const response = await runEndpoint(async function* () {
       const value = yield* Result.await(
-        Result.tryPromise(async () => {
-          throw upstreamRefusal();
+        Result.tryPromise({
+          try: async () => {
+            throw new Error("Upstream request refused", {
+              cause: upstreamRefusal(),
+            });
+          },
+          catch: (cause) =>
+            new UnhandledException({
+              cause: cause instanceof Error ? cause.cause : cause,
+            }),
         }),
       );
 
