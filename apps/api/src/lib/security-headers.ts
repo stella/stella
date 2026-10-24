@@ -20,6 +20,7 @@ export const CORS_EXPOSED_HEADERS = [
   UNDECIDED_CONDITIONS_HEADER,
   REQUEST_ID_HEADER,
   CHAT_TURN_ID_HEADER,
+  "x-db-transactions",
 ];
 
 export const CACHE_CONTROL_HEADER = "Cache-Control";

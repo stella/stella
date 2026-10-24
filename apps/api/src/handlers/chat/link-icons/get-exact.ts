@@ -35,25 +35,26 @@ const readOrigin = createExactIconOrigin();
 
 // This root read uses authenticated identity and fetches only validated public bytes;
 // it neither reads nor writes tenant data.
-const getExactIcon = createSafeRootHandler(
-  config,
-  async function* ({ query: { url }, user, request, set }) {
-    const target = toExactIconUrl(url);
-    if (target === null) {
-      return Result.ok(linkIconBody({ type: "no-icon" }, set));
-    }
-    const outcome = yield* Result.ok(
-      await readLinkIcon({
-        hostname: target,
-        userId: user.id,
-        ip: resolveClientIp(request, null) ?? "unresolved",
-        cache: getLinkIconCache(),
-        readOrigin: async (exact) =>
-          await readOrigin(exact.value, grantThirdPartyOutboundPermit()),
-      }),
-    );
-    return Result.ok(linkIconBody(outcome, set));
-  },
-);
+export const createGetExactIconHandler = (readCache = getLinkIconCache) =>
+  createSafeRootHandler(
+    config,
+    async function* ({ query: { url }, user, request, set }) {
+      const target = toExactIconUrl(url);
+      if (target === null) {
+        return Result.ok(linkIconBody({ type: "no-icon" }, set));
+      }
+      const outcome = yield* Result.ok(
+        await readLinkIcon({
+          hostname: target,
+          userId: user.id,
+          ip: resolveClientIp(request, null) ?? "unresolved",
+          cache: readCache(),
+          readOrigin: async (exact) =>
+            await readOrigin(exact.value, grantThirdPartyOutboundPermit()),
+        }),
+      );
+      return Result.ok(linkIconBody(outcome, set));
+    },
+  );
 
-export default getExactIcon;
+export default createGetExactIconHandler();

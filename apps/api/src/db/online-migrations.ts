@@ -1494,6 +1494,9 @@ export const ensureOnlineIndexValid = async ({
         await session.run(reindexIndexConcurrently(index));
         return;
       }
+      if (!declaresOnlineBuild(index)) {
+        panic(`Required migration index ${index.name} is missing`);
+      }
       await session.run(createIndexConcurrently(index));
     },
   });

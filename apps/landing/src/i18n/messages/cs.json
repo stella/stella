@@ -96,6 +96,19 @@
     "changelog": "Seznam změn",
     "chooseLanguage": "Vyberte jazyk",
     "docxEditor": "Samostatný DOCX editor",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Komentáře"
+      },
+      "matters": {
+        "done": "Hotový",
+        "inProgress": "Rozpracovaný",
+        "open": "Otevřený"
+      },
+      "research": {
+        "caseLaw": "Judikatura"
+      }
+    },
     "github": "stella na GitHubu",
     "openMenu": "Otevřít navigaci",
     "pillars": {

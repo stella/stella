@@ -6,7 +6,11 @@ import path from "node:path";
 
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
-import { checkMigrationSources } from "./check-migration-safety";
+import {
+  checkMigrationSources,
+  parseMigrationStatements,
+  reviewedMigrationStatements,
+} from "./check-migration-safety";
 
 type CheckerResult = {
   exitCode: number | null;
@@ -687,6 +691,54 @@ describe("check-migration-safety", () => {
   });
 
   describe("acknowledgements", () => {
+    it.each([" ", "\n", "\n  "])(
+      "a function header owns its review independently of body layout (%j)",
+      (separator) => {
+        const sql = `-- stella-migration-safety: reviewed security-definer - Reviewed fixed read-only helper privileges
+CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$${separator}SELECT 1;${separator}$$;`;
+        const statements = parseMigrationStatements(sql);
+        const header = statements.findIndex(
+          (statement) =>
+            statement.enclosingLine === undefined &&
+            statement.text.includes("SECURITY DEFINER"),
+        );
+        expect(header).toBeGreaterThanOrEqual(0);
+        expect(
+          statements.some((statement) => statement.enclosingLine !== undefined),
+        ).toBe(true);
+        expect(findingsIn(sql)).toEqual([]);
+        expect(reviewedMigrationStatements(sql).get(header)).toEqual(
+          new Set(["security-definer"]),
+        );
+      },
+    );
+
+    it("a review inside a function body cannot approve its header", () => {
+      const sql = `CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$
+-- stella-migration-safety: reviewed security-definer - This marker belongs only inside the body
+SELECT 1;
+$$;`;
+      expect(findingsIn(sql).map(({ ruleId }) => ruleId)).toContain(
+        "security-definer",
+      );
+    });
+
+    it("a nested statement retains its own preceding review", () => {
+      const sql = `DO $$
+-- stella-migration-safety: reviewed drop-object - Remove the retired table after the contract step
+BEGIN DROP TABLE retired; END
+$$;`;
+      expect(findingsIn(sql)).toEqual([]);
+    });
+
+    it("an enclosing review cannot approve a different nested rule", () => {
+      const sql = `-- stella-migration-safety: reviewed unbounded-update - Reviewed small bounded maintenance operation
+DO $$ BEGIN UPDATE probe SET title = 'updated'; DROP TABLE retired; END $$;`;
+      const rules = findingsIn(sql).map(({ ruleId }) => ruleId);
+      expect(rules).not.toContain("unbounded-update");
+      expect(rules).toContain("drop-object");
+    });
+
     it("clears a finding when the acknowledgement names its rule", () => {
       expectClean(
         runChecker(`

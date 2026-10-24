@@ -1710,6 +1710,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/require-polite-publisher-fetch.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
+    "./.oxlint-plugins/require-frame-loop-cleanup.ts",
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
@@ -2671,6 +2672,23 @@ const config = defineConfig({
       rules: {
         "no-object-url-leak/no-object-url-leak": "error",
         "no-auth-token-in-web-storage/no-auth-token-in-web-storage": "error",
+      },
+    },
+    {
+      // Interval timers and self-scheduling frame loops in the web app and
+      // the React packages stop when their owner goes away, and frame loops
+      // reschedule only while there is work to draw.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/mcp-apps/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-frame-loop-cleanup.fixture.ts",
+      ],
+      rules: {
+        "require-frame-loop-cleanup/require-frame-loop-cleanup": "error",
       },
     },
     {

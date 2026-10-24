@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { Static } from "elysia";
 
 import type {
   AgendaItemWireFields,
@@ -61,11 +62,14 @@ import {
   type EntityQueryScope,
   entityQueryScopeCondition,
 } from "@/api/lib/entities/query-scope";
+import type { entityReadPageBodySchema } from "@/api/lib/entities/query-window-schema";
 import {
   entityWindowUnionSource,
   windowRowKindColumn,
 } from "@/api/lib/entities/signal-window-rows";
 import {
+  decodeEntitiesWindowCursor,
+  encodeEntitiesWindowCursor,
   type EntitiesWindowCursorValue,
   type EntitiesWindowCursorValues,
   ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
@@ -83,12 +87,17 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedSignalId,
 } from "@/api/lib/safe-id-boundaries";
 import type { ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+export const ENTITY_LIST_TEXT_MAX_LENGTH = 512;
 
 export type QueryEntitiesFieldMode = "full" | "visible";
 
@@ -160,7 +169,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
     id: string;
     propertyId: string;
     entityId: string;
-    content: FieldContent;
+    content: FieldContent & { truncated?: true };
     ocrExportStatus?: OcrExportStatus;
   }[];
   cellMetadata: {
@@ -217,6 +226,7 @@ type QueryEntitiesProps = {
   cursor?: EntitiesWindowCursorValues | null | undefined;
   limit: number;
   fieldMode: QueryEntitiesFieldMode;
+  textMode: "full" | "preview";
   fieldIds: SafeId<"property">[];
   excludedKinds?: EntityKind[];
   previewableForAi?: boolean;
@@ -840,6 +850,7 @@ const queryEntitiesGenerator = async function* ({
   cursor,
   limit,
   fieldMode,
+  textMode,
   fieldIds,
   excludedKinds = [],
   previewableForAi = false,
@@ -1062,7 +1073,18 @@ const queryEntitiesGenerator = async function* ({
           entityVersionId: fields.entityVersionId,
           id: fields.id,
           propertyId: fields.propertyId,
-          content: fields.content,
+          content:
+            textMode === "preview"
+              ? sql<FieldContent & { truncated?: true }>`CASE
+            WHEN ${fields.content}->>'type' = 'text'
+              AND length(${fields.content}->>'value') > ${ENTITY_LIST_TEXT_MAX_LENGTH}
+            THEN ${fields.content} || jsonb_build_object(
+              'value', left(${fields.content}->>'value', ${ENTITY_LIST_TEXT_MAX_LENGTH}),
+              'truncated', true
+            )
+            ELSE ${fields.content}
+          END`
+              : fields.content,
           // The run that produced the projection also wrote the searchable
           // PDF before it succeeded, so its terminal state is the derivative's
           // readiness: a retrying or failed run still serves text only.
@@ -1377,3 +1399,88 @@ const buildAIPreviewableEntityCondition = (): SQL => sql`EXISTS (
 
 export const queryEntities = async (props: QueryEntitiesProps) =>
   await Result.gen(() => queryEntitiesGenerator(props));
+
+type QueryEntityCursorPageOptions = {
+  cursor: string | undefined;
+  limit: number | undefined;
+  query: Omit<QueryEntitiesProps, "cursor" | "limit">;
+  queryEntitiesImpl: typeof queryEntities;
+};
+
+const queryEntityCursorPage = async ({
+  cursor,
+  limit: requestedLimit,
+  query,
+  queryEntitiesImpl,
+}: QueryEntityCursorPageOptions) =>
+  await Result.gen(async function* () {
+    const cursorResult = decodeEntitiesWindowCursor(cursor);
+    if (Result.isError(cursorResult)) {
+      return Result.err(cursorResult.error);
+    }
+    const limit = normalizeTenantPageLimit(
+      requestedLimit ?? LIMITS.entitiesPageSizeDefault,
+    );
+    const result = yield* Result.await(
+      queryEntitiesImpl({
+        ...query,
+        cursor: cursorResult.value,
+        limit: limit + 1,
+      }),
+    );
+    return Result.ok(
+      createCursorPage({
+        rows: result.entities,
+        limit,
+        cursorForItem: (item) =>
+          encodeEntitiesWindowCursor(
+            result.cursorValuesByEntityId.get(item.entityId) ??
+              panic("Missing cursor values for entity page item"),
+          ),
+      }),
+    );
+  });
+
+type QueryMatterEntityCursorPageOptions = Pick<
+  QueryEntitiesProps,
+  | "safeDb"
+  | "currentUserId"
+  | "currentOrganizationId"
+  | "excludedKinds"
+  | "previewableForAi"
+> & {
+  workspaceId: SafeId<"workspace">;
+  body: Static<typeof entityReadPageBodySchema>;
+  queryEntitiesImpl: typeof queryEntities;
+};
+
+/** The shared read-page contract for matter listings and filesystem pages. */
+export const queryMatterEntityCursorPage = async ({
+  body,
+  workspaceId,
+  safeDb,
+  currentUserId,
+  currentOrganizationId,
+  excludedKinds,
+  previewableForAi,
+  queryEntitiesImpl,
+}: QueryMatterEntityCursorPageOptions) =>
+  await queryEntityCursorPage({
+    cursor: body.cursor,
+    limit: body.limit,
+    queryEntitiesImpl,
+    query: {
+      textMode: "preview",
+      safeDb,
+      scope: { type: "matter", workspaceId },
+      currentUserId,
+      currentOrganizationId,
+      filters: arrayOrEmpty(body.filters),
+      sorts: arrayOrEmpty(body.sorts),
+      ...(body.search !== undefined && { search: body.search }),
+      fieldMode: body.fieldMode ?? "visible",
+      fieldIds: arrayOrEmpty(body.fieldIds),
+      ...(excludedKinds === undefined ? {} : { excludedKinds }),
+      ...(previewableForAi === undefined ? {} : { previewableForAi }),
+    },
+  });

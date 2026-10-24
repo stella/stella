@@ -17,15 +17,33 @@ const EXCLUDED_CREATORS = new Map([
     "version transaction primitive; callers own extraction",
   ],
   ["lib/tasks/create-task-entity.ts", "creates a task, not a document"],
-  ["tests/security/rls-helpers.ts", "test fixture only"],
 ]);
 
+const isProductionSource = (relativePath: string): boolean =>
+  !relativePath.endsWith(".test.ts") &&
+  !relativePath.startsWith("tests/") &&
+  !relativePath.startsWith("__fixtures__/") &&
+  !relativePath.includes("/__fixtures__/");
+
 describe("document extraction source census", () => {
+  test.each([
+    ["tests/read-scaling/entity-fixture.ts", false],
+    ["tests/security/rls-helpers.ts", false],
+    ["lib/example.test.ts", false],
+    ["handlers/example/__fixtures__/creator.ts", false],
+    ["__fixtures__/creator.ts", false],
+    ["handlers/entities/upload.ts", true],
+    ["lib/contests/creator.ts", true],
+    ["handlers/tests-controller.ts", true],
+  ] as const)("classifies source boundary %s", (file, production) => {
+    expect(isProductionSource(file)).toBe(production);
+  });
+
   test("every production entity-version creator reaches the extraction owner", async () => {
     const uncovered: string[] = [];
     const glob = new Glob("**/*.ts");
     for await (const relativePath of glob.scan({ cwd: SOURCE_ROOT })) {
-      if (relativePath.endsWith(".test.ts")) {
+      if (!isProductionSource(relativePath)) {
         continue;
       }
       const source = await Bun.file(`${SOURCE_ROOT}/${relativePath}`).text();

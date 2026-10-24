@@ -15,7 +15,9 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   currentQueryCount,
+  currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
+  DB_TRANSACTION_COUNT_HEADER,
 } from "@/api/lib/db-query-counter";
 import {
   elysiaErrorAnswer,
@@ -64,6 +66,10 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
     return;
   }
   set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
+  const transactionCount = currentTransactionCount();
+  if (transactionCount !== undefined) {
+    set.headers[DB_TRANSACTION_COUNT_HEADER] = String(transactionCount);
+  }
 };
 
 const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);

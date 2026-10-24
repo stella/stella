@@ -193,7 +193,7 @@ import {
   emitEventLoopDelayMetric,
   emitProcessMemoryLog,
 } from "@/api/lib/observability/request-metrics";
-import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { runWithHttpRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
@@ -755,7 +755,7 @@ const scopeRequestAsyncStores = (): void => {
   });
   api.wrap((handleRequest) => async (request: Request) => {
     const route = classifyRoute(request);
-    return runWithRequestScope(async () =>
+    return runWithHttpRequestScope(async () =>
       withExceptionScope(
         {
           type: "request",
