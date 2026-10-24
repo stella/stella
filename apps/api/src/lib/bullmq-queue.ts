@@ -98,9 +98,7 @@ export const BULLMQ_QUEUE_HOSTS = {
 } as const satisfies Record<string, BullMqWorkerHost>;
 
 export type BullMqWorkerHost =
-  | "api"
-  | "document-processing-worker"
-  | "file-derivative-worker";
+  "api" | "document-processing-worker" | "file-derivative-worker";
 
 export type BullMqQueueName = keyof typeof BULLMQ_QUEUE_HOSTS;
 
