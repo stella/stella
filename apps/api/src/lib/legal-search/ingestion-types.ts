@@ -7,6 +7,7 @@
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 // parser-output-unchanged: a page may also report listed items whose read did not produce them; built decisions are unchanged.
+// parser-output-unchanged: adapter definitions keep their declared reconciliation types; parsed output is unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -877,6 +878,8 @@ export type StoredRawListing =
       parts: SourceRawParts;
       /** The listing row, verified to name the decision the database holds. */
       listing: Record<string, unknown>;
+      /** The decoded envelope, reusable when replay preserves it verbatim. */
+      sourceRaw: string;
     }
   | StoredRawReparseRejected;
 
@@ -912,7 +915,8 @@ export const readStoredRawListing = ({
     };
   }
 
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  const sourceRaw = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(sourceRaw);
   const listingRaw = parts?.[part];
   if (parts === null || listingRaw === undefined) {
     return {
@@ -943,7 +947,7 @@ export const readStoredRawListing = ({
     };
   }
 
-  return { type: "listing", parts, listing };
+  return { type: "listing", parts, listing, sourceRaw };
 };
 
 /**
@@ -1612,9 +1616,17 @@ type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
 };
 
 /** Build an adapter from the source facts declared for its registry key. */
-export const defineSourceAdapter = <const TKey extends AdapterKey>(
-  adapter: SourceAdapterDefinition<TKey>,
-): SourceAdapter & { readonly key: TKey } => {
+export const defineSourceAdapter = <
+  const TKey extends AdapterKey,
+  const TAdapter extends SourceAdapterDefinition<TKey>,
+>(
+  // `key` names TKey for inference; the constraint then binds documentStage to
+  // that key's manifest instead of the union of every manifest's stage.
+  adapter: TAdapter & { readonly key: TKey },
+): SourceAdapter & {
+  readonly key: TAdapter["key"];
+  readonly reconciliation: TAdapter["reconciliation"];
+} => {
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
   ) => await withDocumentStageWindow({ ...options, source: adapter.key });
