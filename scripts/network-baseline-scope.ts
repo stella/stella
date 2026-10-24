@@ -215,15 +215,10 @@ const raiseRecorded = (
   }
   // Like the main recorder (mergeNetworkBaseline), overlapping values keep the
   // higher one, so a budget written against older main never lowers a value.
-  const raised: BaselineEntry = {
-    ...recorded,
-    ...budget,
-    depth:
-      recorded.depthMethod === budget.depthMethod
-        ? Math.max(recorded.depth, budget.depth)
-        : budget.depth,
-    requests: [...new Set([...recorded.requests, ...budget.requests])],
-  };
+  const perRequest = new Map<
+    (typeof PER_REQUEST_KEYS)[number],
+    Record<string, number>
+  >();
   for (const key of PER_REQUEST_KEYS) {
     const values = [recorded[key], budget[key]].filter(
       (value) => value !== undefined,
@@ -231,15 +226,24 @@ const raiseRecorded = (
     if (values.length === 0) {
       continue;
     }
-    const merged: Record<string, number> = {};
+    const merged = new Map<string, number>();
     for (const source of values) {
       for (const [request, value] of Object.entries(source)) {
-        merged[request] = Math.max(merged[request] ?? 0, value);
+        merged.set(request, Math.max(merged.get(request) ?? 0, value));
       }
     }
-    raised[key] = merged;
+    perRequest.set(key, Object.fromEntries(merged));
   }
-  return raised;
+  return {
+    ...recorded,
+    ...budget,
+    ...Object.fromEntries(perRequest),
+    depth:
+      recorded.depthMethod === budget.depthMethod
+        ? Math.max(recorded.depth, budget.depth)
+        : budget.depth,
+    requests: [...new Set([...recorded.requests, ...budget.requests])],
+  };
 };
 
 const applyNetworkBudgetDeclarations = (
