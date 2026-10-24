@@ -64,8 +64,7 @@ type AlternativeGroup = {
 const MAX_COMPOSED_EXAMPLE_CANDIDATES = 64;
 
 type ExampleSearchResult =
-  | { status: "found"; example: unknown }
-  | { status: "not-found" };
+  { status: "found"; example: unknown } | { status: "not-found" };
 
 const exampleNotFound: ExampleSearchResult = { status: "not-found" };
 

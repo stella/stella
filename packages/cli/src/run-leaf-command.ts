@@ -314,8 +314,7 @@ const coerceFlagValue = async (
 };
 
 type ArgsResult =
-  | { ok: true; args: Record<string, unknown> }
-  | { ok: false; message: string };
+  { ok: true; args: Record<string, unknown> } | { ok: false; message: string };
 
 type ComposeInputFromFlagsOptions<T extends FlagSpec> = {
   base: Record<string, unknown>;

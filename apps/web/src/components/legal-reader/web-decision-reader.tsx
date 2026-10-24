@@ -42,8 +42,7 @@ export type WebDecisionReaderProps = Omit<
   landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
   externalProvisionAnchors?:
-    | readonly ExternalDecisionProvisionAnchor[]
-    | undefined;
+    readonly ExternalDecisionProvisionAnchor[] | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };

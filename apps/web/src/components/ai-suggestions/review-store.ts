@@ -27,11 +27,7 @@ export const REVIEW_UNSPECIFIED_AREA = "Unspecified";
 export type ReviewSeverityKey = FolioAIEditSeverity | "unspecified";
 
 export type ReviewSuggestionStatus =
-  | "pending"
-  | "applying"
-  | "accepted"
-  | "rejected"
-  | "skipped";
+  "pending" | "applying" | "accepted" | "rejected" | "skipped";
 
 /**
  * Redline preview captured at queue time so the review card

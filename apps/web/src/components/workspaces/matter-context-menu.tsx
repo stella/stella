@@ -462,8 +462,7 @@ type MatterContextMenuProps = {
   target: MatterTarget;
   className?: string;
   children:
-    | React.ReactNode
-    | ((args: MatterContextMenuChildArgs) => React.ReactNode);
+    React.ReactNode | ((args: MatterContextMenuChildArgs) => React.ReactNode);
 };
 
 export const MatterContextMenu = ({

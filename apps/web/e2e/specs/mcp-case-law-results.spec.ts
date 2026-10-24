@@ -379,10 +379,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     "Case Law",
   );
   await expect(
-    app
-      .locator("td")
-      .filter({ hasText: /[٠-٩]/u })
-      .first(),
+    app.locator("td").filter({ hasText: /[٠-٩]/u }).first(),
   ).toContainText(/[٠-٩]/u);
   expect(errors).toEqual([]);
 });

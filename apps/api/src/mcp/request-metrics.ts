@@ -19,11 +19,7 @@ const MCP_METHODS = [
 
 export type McpMetricMethod = (typeof MCP_METHODS)[number] | "unknown";
 export type McpMetricPhase =
-  | "auth"
-  | "context"
-  | "server_build"
-  | "tool_projection"
-  | "dispatch";
+  "auth" | "context" | "server_build" | "tool_projection" | "dispatch";
 
 const isMcpMetricMethod = (value: string): value is McpMetricMethod =>
   MCP_METHODS.some((method) => method === value);

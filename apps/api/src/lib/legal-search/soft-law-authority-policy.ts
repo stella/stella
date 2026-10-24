@@ -11,14 +11,12 @@ import {
 } from "./soft-law-types";
 
 type KindDisposition =
-  | { type: "eligible" }
-  | { type: "excluded"; reason: string };
+  { type: "eligible" } | { type: "excluded"; reason: string };
 type AuthorityPolicy = {
   expression: "optional" | "required";
   referenceStyle: "literal" | "wp_number";
   identitySeries:
-    | { type: "none" }
-    | { type: "source-kind"; values: readonly string[] };
+    { type: "none" } | { type: "source-kind"; values: readonly string[] };
   kinds: Record<GuidanceKind, KindDisposition>;
 };
 

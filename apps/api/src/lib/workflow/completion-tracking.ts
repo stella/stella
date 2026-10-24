@@ -59,8 +59,7 @@ return {1, completed, total}
 `;
 
 export type EntityCompletionReply =
-  | { matched: false }
-  | { matched: true; completed: number; total: number };
+  { matched: false } | { matched: true; completed: number; total: number };
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
   Array.isArray(value);

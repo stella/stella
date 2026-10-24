@@ -901,8 +901,7 @@ const createDiagnostic = ({
 };
 
 type CliOptions = (
-  | { readonly mode: "all" }
-  | { readonly base: string; readonly mode: "changed" }
+  { readonly mode: "all" } | { readonly base: string; readonly mode: "changed" }
 ) & { readonly leg?: CodeCheckLeg };
 
 export const parseResultConsumptionArgs = (

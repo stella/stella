@@ -109,8 +109,7 @@ type ChatHistoryPageProps = {
 };
 
 type DeleteDialog =
-  | { type: "closed" }
-  | { type: "confirm"; thread: ChatHistoryItem };
+  { type: "closed" } | { type: "confirm"; thread: ChatHistoryItem };
 
 /**
  * Every chat the reader has started, newest first, grouped by when it was

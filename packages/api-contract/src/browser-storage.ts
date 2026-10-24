@@ -1,7 +1,6 @@
 /** Whose entries the browser holds: a signed-in user, or a visitor. */
 export type StorageOwner =
-  | { kind: "user"; userId: string }
-  | { kind: "visitor" };
+  { kind: "user"; userId: string } | { kind: "visitor" };
 
 /** Ends a visitor's key: `<base>:visitor`. */
 export const VISITOR_SUFFIX = ":visitor";

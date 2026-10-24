@@ -1073,8 +1073,7 @@ const fieldRepeatState = (
  *  marker (otherwise removing the `if` would expose the block's other
  *  content unconditionally). */
 type FieldConditionState =
-  | { kind: "none" }
-  | { kind: "conditional"; expr: string; canRemove: boolean };
+  { kind: "none" } | { kind: "conditional"; expr: string; canRemove: boolean };
 
 const fieldConditionState = (
   field: StudioField,

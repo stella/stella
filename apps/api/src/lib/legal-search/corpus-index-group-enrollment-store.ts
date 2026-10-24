@@ -459,8 +459,7 @@ export type ServingCorpusIndexTarget = CorpusIndexReadTarget & {
 
 /** Why a read of the serving generation reaches no index. */
 export type ServingCorpusIndexTargetError =
-  | CorpusServingGenerationAbsentError
-  | CorpusIndexGroupNotReadyError;
+  CorpusServingGenerationAbsentError | CorpusIndexGroupNotReadyError;
 
 /**
  * What a read of one generation reaches for a jurisdiction (`corpusIndexReadTarget`),

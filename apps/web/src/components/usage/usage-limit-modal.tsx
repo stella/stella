@@ -21,9 +21,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 /** Modal shown when the current organisation cannot run more AI work. */
 
 export type UsageLimitExceededReason =
-  | "no_entitlement"
-  | "usage_limit_exceeded"
-  | "entitlement_inactive";
+  "no_entitlement" | "usage_limit_exceeded" | "entitlement_inactive";
 
 export type UsageLimitModalProps = {
   open: boolean;

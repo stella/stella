@@ -27,8 +27,7 @@ import { sql } from "drizzle-orm";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
 type GroupName<J extends CaseLawJurisdiction> =
-  | Lowercase<J>
-  | `${string}_${string}`;
+  Lowercase<J> | `${string}_${string}`;
 
 /**
  * Index group of every declared jurisdiction in the generations that were

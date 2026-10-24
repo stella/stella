@@ -283,8 +283,7 @@ const workspaceActivityCategory = (event: AuditEvent): AuditActivityCategory =>
     : "matter";
 
 type AuditActivityCategoryResolver =
-  | AuditActivityCategory
-  | ((event: AuditEvent) => AuditActivityCategory);
+  AuditActivityCategory | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   service_oauth_client: "team",

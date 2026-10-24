@@ -33,8 +33,7 @@ type BilingualInlineControl = Readonly<{
 }>;
 
 type BilingualInlineToken =
-  | (BilingualTextSpan & Readonly<{ type: "text" }>)
-  | BilingualInlineControl;
+  (BilingualTextSpan & Readonly<{ type: "text" }>) | BilingualInlineControl;
 
 export type FormattedBilingualUnit = BilingualUnit & {
   inline: readonly BilingualInlineToken[];
@@ -47,10 +46,7 @@ export type BilingualFormattedTranslation = Readonly<{
 }>;
 
 type BilingualFormattingErrorReason =
-  | "invalid-spans"
-  | "malformed-xml"
-  | "missing-document"
-  | "missing-paragraph";
+  "invalid-spans" | "malformed-xml" | "missing-document" | "missing-paragraph";
 
 export class BilingualFormattingError extends TaggedError(
   "BilingualFormattingError",

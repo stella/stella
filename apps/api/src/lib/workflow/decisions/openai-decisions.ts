@@ -117,8 +117,7 @@ type OpenAIDecisionsClientOptions = {
   /** Per-attempt deadline; defaults to the shared transport timeout. */
   timeoutMs?: number | undefined;
   sleep?:
-    | ((ms: number, abortSignal?: AbortSignal) => Promise<void>)
-    | undefined;
+    ((ms: number, abortSignal?: AbortSignal) => Promise<void>) | undefined;
 };
 
 const sleepWithSignal = async (

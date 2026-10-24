@@ -1163,10 +1163,7 @@ const collectValidatableFields = (
 /** Every way the user can submit the fill form; the empty-fields gate is
  *  armed per action so confirming one does not confirm the others. */
 type SubmitAction =
-  | "downloadDocx"
-  | "downloadPdf"
-  | "createDocument"
-  | "moveToMatter";
+  "downloadDocx" | "downloadPdf" | "createDocument" | "moveToMatter";
 
 /** Whether the user left this field without a value. Booleans never count
  *  as empty: unchecked is a deliberate "no", not a gap. */

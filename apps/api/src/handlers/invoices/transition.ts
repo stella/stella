@@ -35,11 +35,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 type TransitionAction =
-  | "finalize"
-  | "send"
-  | "mark_paid"
-  | "void"
-  | "revert_to_draft";
+  "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
 
 const TRANSITIONS = {
   finalize: {

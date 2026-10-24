@@ -103,8 +103,7 @@ type StellaOpenRouterTextModelOptions = Omit<
   // The request-level prompt-cache marker OpenRouter forwards to Anthropic
   // models; the adapter spreads it into the SDK request, whose type has it.
   cacheControl?:
-    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
-    | undefined;
+    { ttl?: "5m" | "1h" | undefined; type: "ephemeral" } | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.
@@ -207,8 +206,7 @@ type StellaOpenAITextProviderOptions = Omit<
 };
 
 export type TanStackAIProviderUnsupportedReason =
-  | "provider-not-implemented"
-  | "regional-routing-not-implemented";
+  "provider-not-implemented" | "regional-routing-not-implemented";
 
 export type TanStackAIProviderSupport =
   | { supported: true }
@@ -472,8 +470,7 @@ export const registerTanStackMockTextAdapterFactory = (
  * with the flag still set.
  */
 const activeMockTextAdapterFactory = ():
-  | TanStackTextAdapterFactory
-  | undefined =>
+  TanStackTextAdapterFactory | undefined =>
   env.USE_MOCK_AI === false ? undefined : mockTextAdapterFactory;
 
 /**

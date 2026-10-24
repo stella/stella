@@ -471,8 +471,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
 export const isClassifiedMetadataKey = (
   key: string,
 ): key is
-  | keyof typeof METADATA_TEXT_DISPOSITIONS
-  | typeof META_URL_DIAGNOSTICS =>
+  keyof typeof METADATA_TEXT_DISPOSITIONS | typeof META_URL_DIAGNOSTICS =>
   key === META_URL_DIAGNOSTICS ||
   Object.hasOwn(METADATA_TEXT_DISPOSITIONS, key);
 

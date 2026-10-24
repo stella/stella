@@ -26,8 +26,7 @@ import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 /** Whose AI key the failed run called the provider with. */
 export type AnalysisFailureKey =
-  | { source: "organization"; provider: string }
-  | { source: "platform" };
+  { source: "organization"; provider: string } | { source: "platform" };
 
 /**
  * Why the reader has no analysis: the server will not make one, the last run

@@ -49,13 +49,11 @@ export const readSkUsRawCheckpoint = async ({
       id: brandPersistedCaseLawDecisionId(state.cursor.id),
       createdAt: state.cursor.createdAt,
     };
-  } else if (
-    !(
-      checkpointRead.error instanceof Error &&
-      "code" in checkpointRead.error &&
-      checkpointRead.error.code === "ENOENT"
-    )
-  ) {
+  } else if (!(
+    checkpointRead.error instanceof Error &&
+    "code" in checkpointRead.error &&
+    checkpointRead.error.code === "ENOENT"
+  )) {
     throw checkpointRead.error;
   }
 

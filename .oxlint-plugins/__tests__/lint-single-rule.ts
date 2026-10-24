@@ -65,11 +65,7 @@ type LintSingleRuleOptions = {
   /** Test-only scheduler control for awaits before a shared request is ready. */
   delayBeforeSharedAwaitForTest?: (
     point:
-      | "mkdtemp"
-      | "realpath"
-      | "config-write"
-      | "source-write"
-      | "shared-ready",
+      "mkdtemp" | "realpath" | "config-write" | "source-write" | "shared-ready",
   ) => Promise<void>;
   /** Test-only notification after the request cohort is atomically taken. */
   onSharedBatchTakenForTest?: () => void;
@@ -479,11 +475,7 @@ export const runSingleRule = async (
     ruleOptionsForRoot === undefined ? makeConfig(ruleOptions) : undefined;
   const delay = async (
     point:
-      | "mkdtemp"
-      | "realpath"
-      | "config-write"
-      | "source-write"
-      | "shared-ready",
+      "mkdtemp" | "realpath" | "config-write" | "source-write" | "shared-ready",
   ) => {
     if (!alone) {
       await delayBeforeSharedAwaitForTest?.(point);

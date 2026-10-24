@@ -51,8 +51,7 @@ describe("integration approval", () => {
       "approved",
       "needs_reapproval",
     ] as const satisfies readonly (
-      | IntegrationAuthorizationStatus
-      | undefined
+      IntegrationAuthorizationStatus | undefined
     )[];
     for (const status of statuses) {
       expect(canApproveIntegrationAuthorization(false, status)).toBe(false);

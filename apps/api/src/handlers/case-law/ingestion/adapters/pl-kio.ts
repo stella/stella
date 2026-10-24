@@ -878,10 +878,7 @@ const plKioCourtStorage = ({
   const court = courtTooLong ? "" : (statedCourt ?? "");
   const unavailableCourt = statedCourt === undefined || courtTooLong;
   let quarantineReason:
-    | "no-record-id"
-    | "court-not-stated"
-    | "court-too-long"
-    | undefined;
+    "no-record-id" | "court-not-stated" | "court-too-long" | undefined;
   if (!hasRecordId) {
     quarantineReason = "no-record-id";
   } else if (statedCourt === undefined) {

@@ -133,8 +133,7 @@ type ChatDraftFileAttachment = {
 };
 
 export type ChatDraftAttachment =
-  | ChatDraftFileAttachment
-  | PastedTextAttachment;
+  ChatDraftFileAttachment | PastedTextAttachment;
 
 export type ChatInputDraft = {
   files: ChatDraftAttachment[];

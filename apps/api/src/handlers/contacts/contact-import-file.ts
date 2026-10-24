@@ -214,8 +214,7 @@ const FIELD_ALIASES = {
  * fallback for a header nothing recognizes, never something an alias declares.
  */
 export type ContactImportSuggestedTarget =
-  | ContactImportField
-  | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
+  ContactImportField | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
 
 /**
  * Where each label of a `Label: value` vocabulary lands. The five identity

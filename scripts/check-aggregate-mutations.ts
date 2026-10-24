@@ -800,8 +800,7 @@ type HandlerImplementationOptions = {
   visited?: Set<string>;
 };
 type HandlerImplementation =
-  | { body: ts.Node; source: ts.SourceFile; file: string }
-  | undefined;
+  { body: ts.Node; source: ts.SourceFile; file: string } | undefined;
 /** The handler constructor call a local factory returns, as its arrow body or only statement. */
 const factoryReturn = (
   node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,

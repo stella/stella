@@ -251,10 +251,7 @@ type InspectorCommandState = {
 };
 
 export type AnonymizationPipelineStatus =
-  | "idle"
-  | "running"
-  | "ready"
-  | "error";
+  "idle" | "running" | "ready" | "error";
 
 /**
  * Asks one open editor's live DOCX detection whether its result covers the

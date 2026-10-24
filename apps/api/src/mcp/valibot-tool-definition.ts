@@ -185,8 +185,7 @@ const withConventionalNormalization = (
 const applyInputNormalizationPlan = (
   schema: McpToolInputSchema,
   explicitPlan:
-    | Readonly<Record<string, AgentInputNormalizationAnnotation>>
-    | undefined,
+    Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined,
 ): McpToolInputSchema => {
   const plan = withConventionalNormalization(schema, explicitPlan);
   if (plan === undefined) {

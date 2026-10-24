@@ -1364,12 +1364,10 @@ export const withActionAdmission = async <T>(
             markStarted();
             return await execute({ signal, control });
           };
-          if (
-            !(
-              checkedOptions.enabled ??
-              isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
-            )
-          ) {
+          if (!(
+            checkedOptions.enabled ??
+            isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
+          )) {
             return await Result.tryPromise({
               try: async () =>
                 await startedRun(new AbortController().signal, disabledControl),

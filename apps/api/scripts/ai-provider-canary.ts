@@ -275,9 +275,7 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
 } as const satisfies Record<AIErrorKind, boolean>;
 
 type CanaryRunStage =
-  | "before-tool-call"
-  | "after-tool-call"
-  | "after-tool-result";
+  "before-tool-call" | "after-tool-call" | "after-tool-result";
 
 const PROVIDER_ERROR_NESTED_KEYS = ["rawEvent", "error", "cause"] as const;
 

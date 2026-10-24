@@ -452,10 +452,7 @@ export type PlUodoSkipReason =
   (typeof PL_UODO_SKIP_REASON)[keyof typeof PL_UODO_SKIP_REASON];
 
 export type PlUodoCourtLevel =
-  | "supreme-administrative"
-  | "regional-administrative"
-  | "supreme"
-  | "common";
+  "supreme-administrative" | "regional-administrative" | "supreme" | "common";
 
 export type PlUodoCourt = {
   /** The court's full official name, which is what the row is filed under. */

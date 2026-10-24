@@ -80,8 +80,7 @@ export const clipboardItemLink = (
 export const MAX_CLIPBOARD_ITEM_NAME_CHARACTERS = 80;
 
 export type ClipboardEditorNameDraft =
-  | { type: "unchanged"; value: string }
-  | { type: "edited"; value: string };
+  { type: "unchanged"; value: string } | { type: "edited"; value: string };
 
 /** External history updates own the name until the user edits this field. */
 export const refreshClipboardEditorName = (

@@ -203,8 +203,7 @@ type FailDocumentProcessingAttemptOptions = {
   errorMessage: string;
   now: Date;
   retryable?:
-    | boolean
-    | ((run: typeof documentProcessingRuns.$inferSelect) => boolean);
+    boolean | ((run: typeof documentProcessingRuns.$inferSelect) => boolean);
   staleBefore?: Date;
 };
 

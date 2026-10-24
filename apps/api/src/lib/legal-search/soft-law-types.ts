@@ -381,8 +381,7 @@ export const SOFT_LAW_AUTHORITIES = {
 } as const satisfies Record<string, SoftLawAuthorityDefinition>;
 export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
 export type SoftLawStated<T> =
-  | { state: "stated"; value: T }
-  | { state: "not_stated" };
+  { state: "stated"; value: T } | { state: "not_stated" };
 export type SoftLawEvidence = {
   url: string;
   quote: string;
@@ -459,8 +458,7 @@ export type SoftLawDiscoveryEntry = SoftLawEntry | SoftLawRejectedEntry;
  * no such worker can run.
  */
 export type StoredSoftLawDiscoveryEntry =
-  | SoftLawDiscoveryEntry
-  | (Omit<SoftLawEntry, "type"> & { type?: undefined });
+  SoftLawDiscoveryEntry | (Omit<SoftLawEntry, "type"> & { type?: undefined });
 
 export const storedSoftLawDiscoveryEntry = (
   entry: StoredSoftLawDiscoveryEntry,

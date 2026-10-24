@@ -78,8 +78,7 @@ type WriteStoredTemplateOptions = {
 };
 
 type TemplateWriteAttempt =
-  | ({ type: "published" } & TemplateWriteResult)
-  | { type: "retry" };
+  ({ type: "published" } & TemplateWriteResult) | { type: "retry" };
 
 // One optimistic attempt owns exactly one prepared candidate and intent.
 const writeTemplateAttempt = async function* ({

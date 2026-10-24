@@ -171,8 +171,7 @@ type RowActionsProps = {
   onOpenChange?: ((open: boolean) => void) | undefined;
   onRename?: (() => void) | undefined;
   onSubfolderCreated?:
-    | ((entityId: string, parentId: string) => void)
-    | undefined;
+    ((entityId: string, parentId: string) => void) | undefined;
   triggerClassName?: string | undefined;
   triggerTabIndex?: number | undefined;
   anchor?: VirtualAnchor | null | undefined;
@@ -202,8 +201,7 @@ type GetRowFileTargetOptions = {
 };
 
 type TranslationDialogState =
-  | { type: "closed" }
-  | { target: TranslationTarget; type: "open" };
+  { type: "closed" } | { target: TranslationTarget; type: "open" };
 
 /** What a confirmed deletion removes, captured when it was requested. */
 type DeleteRequest = {

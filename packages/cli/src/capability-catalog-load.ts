@@ -176,8 +176,7 @@ export const parseCapabilityCatalog = (
  * missing/corrupt shards so runtime can fall back to the baked-in route tree.
  */
 export const loadBakedCapabilityCatalog = ():
-  | CapabilityCatalogEntry[]
-  | null => {
+  CapabilityCatalogEntry[] | null => {
   const parsed = Result.try({
     try: () => readCapabilityCatalog(),
     catch: (cause) => cause,

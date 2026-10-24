@@ -225,8 +225,7 @@ type McpToolOutboundBehavior = { type: "outbound"; reason: string };
 
 /** Every behavior the transport confirmation gate reads. */
 type McpToolConfirmationBehavior =
-  | McpToolDestructiveBehavior
-  | McpToolOutboundBehavior;
+  McpToolDestructiveBehavior | McpToolOutboundBehavior;
 
 type McpToolDestructiveBranch =
   | {
@@ -525,8 +524,7 @@ export type InternalToolTextError = {
 };
 
 export type InternalToolError =
-  | InternalToolStructuredError
-  | InternalToolTextError;
+  InternalToolStructuredError | InternalToolTextError;
 
 export type InternalToolErrorResult = {
   status: "error";
@@ -539,8 +537,7 @@ export type InternalToolErrorResult = {
  * this result to `CallToolResult`; internal consumers use it directly.
  */
 export type InternalToolResult<TData = unknown> =
-  | InternalToolSuccess<TData>
-  | InternalToolErrorResult;
+  InternalToolSuccess<TData> | InternalToolErrorResult;
 
 /**
  * A handler either returns a finished internal result, or an egress plan the
@@ -585,8 +582,7 @@ export type McpEgressPlan<TPayload = unknown> =
     };
 
 export type McpToolResponse<TData = unknown> =
-  | InternalToolResult<TData>
-  | McpEgressPlan<TData>;
+  InternalToolResult<TData> | McpEgressPlan<TData>;
 
 export type TypedMcpToolResponse<TData> =
   | InternalToolResult<TData>
@@ -605,8 +601,7 @@ export type McpToolHandler<TData = unknown> = ({
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
 type TypedMcpToolHandlerResult<TData> =
-  | TypedMcpToolResponse<TData>
-  | Promise<TypedMcpToolResponse<TData>>;
+  TypedMcpToolResponse<TData> | Promise<TypedMcpToolResponse<TData>>;
 
 export type TypedMcpToolHandler<TData> = (options: {
   args: Record<string, unknown>;

@@ -79,8 +79,7 @@ export type EmailAttachment = {
 };
 
 type EmailBody =
-  | { type: "html"; html: string }
-  | { type: "text"; text: string };
+  { type: "html"; html: string } | { type: "text"; text: string };
 
 export type ParsedEmail = {
   subject: string | null;
@@ -1000,8 +999,7 @@ type EmailFoldCandidate = {
 };
 
 type EmailBodyToken =
-  | { type: "candidate"; candidate: EmailFoldCandidate }
-  | { type: "content" };
+  { type: "candidate"; candidate: EmailFoldCandidate } | { type: "content" };
 
 type CheerioApi = ReturnType<typeof load>;
 

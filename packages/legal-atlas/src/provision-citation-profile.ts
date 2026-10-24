@@ -48,8 +48,7 @@ export const ANCHORED_SUBDIVISION_LEVELS = [
  * rather than restated, so a new level cannot land without an anchor decision.
  */
 export type AnchorLevel =
-  | SectionUnit
-  | (typeof ANCHORED_SUBDIVISION_LEVELS)[number];
+  SectionUnit | (typeof ANCHORED_SUBDIVISION_LEVELS)[number];
 
 /** An act's identity in a national collection. */
 export type WorkIdentifier = {

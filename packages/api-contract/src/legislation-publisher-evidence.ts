@@ -15,8 +15,7 @@ export type LegislationPublisherDateMeaning =
   | { type: "other"; publisherCode: string };
 
 export type LegislationPublisherDateScope =
-  | { type: "work" }
-  | { type: "provision"; rawLocator: string };
+  { type: "work" } | { type: "provision"; rawLocator: string };
 
 /**
  * The lexical value survives normalization failures and publisher sentinels.

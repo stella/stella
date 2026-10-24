@@ -536,8 +536,7 @@ export type CapabilityDispatchRecord = {
   importPath: string;
   exportName: string | undefined;
   featureAccess?:
-    | { featureId: string; type: "required" | "conditional" }
-    | undefined;
+    { featureId: string; type: "required" | "conditional" } | undefined;
 };
 
 /**
@@ -1525,11 +1524,7 @@ export const scanRouteHookGuards = ({
 };
 
 export type ScopeComparison =
-  | "equal"
-  | "first-stricter"
-  | "second-stricter"
-  | "incomparable"
-  | "unknown";
+  "equal" | "first-stricter" | "second-stricter" | "incomparable" | "unknown";
 
 /**
  * Compare two MCP scopes under an explicit strictness-tier table (the exporter

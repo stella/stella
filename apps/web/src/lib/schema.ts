@@ -112,8 +112,7 @@ type ParsedSchemaFormOptions<TSchema extends v.GenericSchema> =
   };
 
 type SchemaFormOptions<TSchema extends v.GenericSchema> =
-  | RawSchemaFormOptions<TSchema>
-  | ParsedSchemaFormOptions<TSchema>;
+  RawSchemaFormOptions<TSchema> | ParsedSchemaFormOptions<TSchema>;
 
 export const schemaFormOptions = <const TSchema extends v.GenericSchema>(
   options: SchemaFormOptions<TSchema>,

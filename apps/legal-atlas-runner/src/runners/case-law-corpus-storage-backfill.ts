@@ -53,8 +53,7 @@ type BackfillOptions = {
 };
 
 type ParseResult =
-  | { ok: true; options: BackfillOptions }
-  | { ok: false; message: string };
+  { ok: true; options: BackfillOptions } | { ok: false; message: string };
 
 const logInfo = (message: string): void => {
   void Bun.write(Bun.stdout, `${message}\n`);

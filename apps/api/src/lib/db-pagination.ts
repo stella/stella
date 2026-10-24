@@ -27,9 +27,7 @@ const THIRTY_DAY_MONTHS = new Set([4, 6, 9, 11]);
  * timestamp, while the generic fallback skips the ambiguous interval.
  */
 type PgTimestampCursorPrecision =
-  | "microseconds"
-  | "microseconds-naive"
-  | "milliseconds";
+  "microseconds" | "microseconds-naive" | "milliseconds";
 
 export type ParsedPgTimestampCursor = {
   type: "pgTimestampCursor";

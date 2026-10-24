@@ -20,8 +20,7 @@ const E2E_RUNNER_ROOT = "apps/web/e2e/";
 const GEOMETRY_SPEC_PATH = "apps/web/e2e/specs/docked-chat-geometry.spec.ts";
 
 type E2eSpecSelection =
-  | { status: "all" }
-  | { status: "resolved"; specs: string[] };
+  { status: "all" } | { status: "resolved"; specs: string[] };
 
 const selectE2eSpecPlan = (
   changedFiles: readonly string[],

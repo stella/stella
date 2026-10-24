@@ -98,12 +98,7 @@ type CreatePropertyProps = {
    *    column popover's "Edit column…" item).
    */
   triggerVariant?:
-    | "icon"
-    | "labelled"
-    | "panel"
-    | "blank-cell"
-    | "rail"
-    | "none";
+    "icon" | "labelled" | "panel" | "blank-cell" | "rail" | "none";
   extractionContext?: {
     entityId: string;
     filePropertyId: string | null;

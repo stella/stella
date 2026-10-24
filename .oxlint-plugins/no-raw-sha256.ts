@@ -227,8 +227,7 @@ const isExportValue = (node: unknown): boolean => {
 };
 
 type CryptoExportSource =
-  | { type: "expression"; value: unknown }
-  | { type: "path"; value: string };
+  { type: "expression"; value: unknown } | { type: "path"; value: string };
 
 type CryptoSourceOptions = {
   context: ScopeContext;

@@ -502,8 +502,7 @@ export type UpdateTaskHandlerProps = {
 };
 
 type ApplyTaskUpdateOutcome =
-  | { type: "updated" }
-  | { type: "gate"; decision: FlowReviewDecision };
+  { type: "updated" } | { type: "gate"; decision: FlowReviewDecision };
 
 // Keeps both branches typed as the union, so the wrapper reads one `Result`
 // rather than one per branch.

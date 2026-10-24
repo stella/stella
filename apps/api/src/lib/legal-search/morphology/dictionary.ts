@@ -115,8 +115,7 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
  * unexpanded query, so they page against each other consistently.
  */
 export type ExpansionDictionaryIdentity =
-  | { contentHash: string; type: "dictionary" }
-  | { type: "none" };
+  { contentHash: string; type: "dictionary" } | { type: "none" };
 
 /**
  * Serialized `none`. A sha256 hex string is 64 characters, so this can never

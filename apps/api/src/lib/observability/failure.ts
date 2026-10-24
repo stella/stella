@@ -833,10 +833,7 @@ export const providerStatusFieldsOf = ({
 };
 
 export type FingerprintDegradation =
-  | "class_generic"
-  | "frame_absent"
-  | "read_failed"
-  | "truncated";
+  "class_generic" | "frame_absent" | "read_failed" | "truncated";
 
 /**
  * Why a grouping identity is weaker than it should be, if it is. A plain

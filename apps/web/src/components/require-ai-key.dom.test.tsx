@@ -9,9 +9,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 const originalFetch = globalThis.fetch;
 let configStatus = 200;
 let providerConfiguration:
-  | "allowed"
-  | "permission_required"
-  | "account_restricted" = "allowed";
+  "allowed" | "permission_required" | "account_restricted" = "allowed";
 let aiConfigRequests = 0;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL) => {

@@ -1149,9 +1149,7 @@ export type UnparkCorpusProjectionAppendOptions = {
 };
 
 export type CorpusProjectionAppendUnparkResult =
-  | "unparked"
-  | "not_blocked"
-  | "cleanup_pending";
+  "unparked" | "not_blocked" | "cleanup_pending";
 
 /** Unpark one blocked entity after cleanup settles; retain singleton retry. */
 export const unparkCorpusProjectionAppendTx = async (
@@ -1492,10 +1490,7 @@ export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN = 1;
 export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX = 100;
 
 export type CorpusProjectionReservationFailureResult =
-  | "retry_scheduled"
-  | "blocked"
-  | "stale_cancelled"
-  | "lease_lost";
+  "retry_scheduled" | "blocked" | "stale_cancelled" | "lease_lost";
 
 /**
  * Finish one unattempted revision and durably move its exact desired state out

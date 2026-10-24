@@ -229,14 +229,17 @@ if (data !== undefined && seededData !== data) {
   /* oxlint-enable react/refs */
 }
 
-const loadOlder = useCallback(async () => {
-  const requestedData = seededDataRef.current;
-  const older = await fetchOlderVersions(/* ... */);
-  if (seededDataRef.current !== requestedData) {
-    return; // superseded — a refetch or entity switch reseeded the page
-  }
-  setAccumulated((current) => [...current, ...older.versions]);
-}, [/* ... */]);
+const loadOlder = useCallback(
+  async () => {
+    const requestedData = seededDataRef.current;
+    const older = await fetchOlderVersions(/* ... */);
+    if (seededDataRef.current !== requestedData) {
+      return; // superseded — a refetch or entity switch reseeded the page
+    }
+    setAccumulated((current) => [...current, ...older.versions]);
+  },
+  [/* ... */],
+);
 ```
 
 In-repo exemplars: `apps/web/src/components/inspector/versions-facet.tsx`

@@ -358,9 +358,7 @@ const markRunCancelled = async (
   runId: SafeId<"documentProcessingRun">,
   claimToken: string,
   cancellationCode:
-    | "policy_disabled"
-    | "source_superseded"
-    | "workspace_unavailable",
+    "policy_disabled" | "source_superseded" | "workspace_unavailable",
 ): Promise<boolean> => {
   const cancelled = await database
     .update(documentProcessingRuns)
@@ -536,10 +534,7 @@ const readCurrentDocumentSource = async ({
 };
 
 type OcrProjectionPersistenceOutcome =
-  | "persisted"
-  | "preserved"
-  | "source_cancelled"
-  | "stale_claim";
+  "persisted" | "preserved" | "source_cancelled" | "stale_claim";
 
 const lockOcrProjectionSource = async (
   tx: RootTransaction,

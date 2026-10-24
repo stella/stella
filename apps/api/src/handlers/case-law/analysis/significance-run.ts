@@ -189,8 +189,7 @@ export const refreshSignificance = async ({
   const language = current.holding.language;
   // Built once admission states the tier; absent when admission refused.
   let aiAnalytics:
-    | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
-    | undefined;
+    ReturnType<typeof createTanStackAIAnalyticsCallbacks> | undefined;
   const written = await admitModelAction(async ({ admission }) => {
     aiAnalytics = createTanStackAIAnalyticsCallbacks({
       dataClass: "public_corpus",

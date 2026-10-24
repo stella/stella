@@ -407,8 +407,7 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
 let storedTotalMaintenance:
-  | ReturnType<typeof createSourceStoredTotalMaintenanceRuntime>
-  | undefined;
+  ReturnType<typeof createSourceStoredTotalMaintenanceRuntime> | undefined;
 const getStoredTotalMaintenance = () => {
   storedTotalMaintenance ??=
     createSourceStoredTotalMaintenanceRuntime(ingestionDb);

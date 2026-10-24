@@ -156,10 +156,7 @@ export type QueryBirthDate = {
 export type FieldComparison = "match" | "mismatch" | "not-compared";
 
 type BirthDateComparison =
-  | "exact"
-  | "approximate"
-  | "mismatch"
-  | "not-compared";
+  "exact" | "approximate" | "mismatch" | "not-compared";
 
 const birthDateMatch = (
   query: QueryBirthDate,

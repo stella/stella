@@ -68,8 +68,7 @@ export type ValidationResult = {
 
 /** Source text accepted by validation without requiring structured parsers to serialize HTML. */
 export type ValidationSource =
-  | string
-  | { type: "paragraphs"; paragraphs: readonly string[] };
+  string | { type: "paragraphs"; paragraphs: readonly string[] };
 
 /** Explicit publisher policy; other sources keep the shared validation semantics. */
 export type ValidationSourcePolicy = {

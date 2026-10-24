@@ -174,8 +174,7 @@ export const createDedicatedConnectionOwner = <
       promise: Promise<void>;
     };
     let cancellation:
-      | { type: "idle" }
-      | { type: "started"; attempt: CancellationAttempt } = {
+      { type: "idle" } | { type: "started"; attempt: CancellationAttempt } = {
       type: "idle",
     };
     return {

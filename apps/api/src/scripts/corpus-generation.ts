@@ -164,8 +164,7 @@ type RegistryRefusal =
   | CorpusGenerationContractMismatchError;
 
 type IndexRefusal =
-  | CorpusGenerationSearchEndpointMissingError
-  | ProvenIndexRefusal;
+  CorpusGenerationSearchEndpointMissingError | ProvenIndexRefusal;
 
 type LaunchRefusal =
   | CorpusGenerationNotConvergedError

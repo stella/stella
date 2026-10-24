@@ -91,12 +91,7 @@ type RedisRateLimitClient = {
 };
 
 type RedisRateLimitOperation =
-  | "connect"
-  | "decrement"
-  | "increment"
-  | "read"
-  | "reset"
-  | "complete";
+  "connect" | "decrement" | "increment" | "read" | "reset" | "complete";
 
 type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;
@@ -124,8 +119,7 @@ type RedisConnection = {
 };
 
 type RedisConnectOutcome =
-  | { status: "connected" }
-  | { error: unknown; status: "failed" };
+  { status: "connected" } | { error: unknown; status: "failed" };
 
 type RateLimitCounter = {
   count: number;

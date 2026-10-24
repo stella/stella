@@ -122,9 +122,7 @@ type LegislationExpressionIdentity = {
  * earlier) show what it listed then.
  */
 type LegislationObservationOrigin =
-  | "live"
-  | "bulk-snapshot"
-  | "stored-raw-replay";
+  "live" | "bulk-snapshot" | "stored-raw-replay";
 
 export const LEGISLATION_AMENDMENT_CHANGE_KINDS = [
   "changed",
@@ -147,8 +145,7 @@ export type LegislationAmendmentRelation = {
   affectedAnchor: string;
   changeKind: (typeof LEGISLATION_AMENDMENT_CHANGE_KINDS)[number];
   effective:
-    | { type: "date"; on: string }
-    | { type: "not-stated"; text: string | null };
+    { type: "date"; on: string } | { type: "not-stated"; text: string | null };
   /** Original instruction code, retained alongside its normalized kind. */
   publisherInstruction: string | null;
 };
@@ -382,6 +379,5 @@ export type LegislationSourceAdapter = {
    * its reason.
    */
   reconciliation:
-    | LegislationSourceReconciliation
-    | LegislationReconciliationUnsupported;
+    LegislationSourceReconciliation | LegislationReconciliationUnsupported;
 };

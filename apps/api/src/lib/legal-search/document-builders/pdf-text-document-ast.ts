@@ -527,8 +527,7 @@ const openParagraph = (state: SegmentState, line: Line): void => {
 };
 
 type ContentsStep =
-  | { type: "consumed"; open: Draft }
-  | { type: "not-contents" };
+  { type: "consumed"; open: Draft } | { type: "not-contents" };
 
 /** A line read as part of a table of contents, when it is one. */
 const contentsStep = (

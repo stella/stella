@@ -480,9 +480,7 @@ const requiresAccountCheck = (accountAccess: AccountAccess) =>
   accountAccess !== ACCOUNT_ACCESS.sandbox;
 
 export type HandlerConfigurationAdmission =
-  | "allowed"
-  | "permission_required"
-  | "account_restricted";
+  "allowed" | "permission_required" | "account_restricted";
 
 /**
  * Projects the permission and restricted-account checks performed by safe
@@ -858,8 +856,7 @@ type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
 type SafeHandlerPayload = NonNullable<unknown>;
 
 type SafeHandlerResult<TResult> =
-  | TResult
-  | SafeStatusResponse<HandlerErrorStatusCode>;
+  TResult | SafeStatusResponse<HandlerErrorStatusCode>;
 
 /**
  * The async-generator a safe handler runs: it may `yield*` intermediate
@@ -2302,8 +2299,7 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  | ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
-  | Response
+  ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status> | Response
   ? never
   : TResult;
 

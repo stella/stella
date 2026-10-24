@@ -467,8 +467,7 @@ type TurnSignals = {
   runSignal?: AbortSignal;
   teardownAfterSourceChunks?: number;
   getRestorableCheckpoint?: () =>
-    | ReturnType<typeof toPersistableChatMessage>
-    | undefined;
+    ReturnType<typeof toPersistableChatMessage> | undefined;
 };
 
 const uncutTurnSignals = (): TurnSignals => {
@@ -1894,10 +1893,7 @@ describe("a turn cut while the model was thinking", () => {
 
 type AdmissionExit = "drain" | "throw" | "teardown" | "adapter-error";
 type AdmissionCheckpoint =
-  | "approval"
-  | "client-tool"
-  | "ask-user"
-  | "incomplete";
+  "approval" | "client-tool" | "ask-user" | "incomplete";
 
 const persistAdmissionLoss = async ({
   exit,

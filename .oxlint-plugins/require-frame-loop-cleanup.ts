@@ -638,11 +638,7 @@ type CleanupProof = {
 };
 type CleanupTruth = "truthy" | "falsy" | "unknown";
 type UncancelledPath =
-  | "continues"
-  | "returns"
-  | "throws"
-  | "blocks"
-  | "suspends";
+  "continues" | "returns" | "throws" | "blocks" | "suspends";
 
 const handleTruth = (proof: CleanupProof, node: unknown): CleanupTruth => {
   const expression = unwrapExpression(node);
@@ -2195,8 +2191,7 @@ type AsyncFrameOwnerOptions = Pick<
 };
 
 type AsyncFrameOwnership =
-  | LoopOwner
-  | { type: "unowned-startup"; node: AstNode };
+  LoopOwner | { type: "unowned-startup"; node: AstNode };
 
 // An asynchronous frame callback inherits effect ownership only from a
 // retained kickoff on a proven startup path, not lexical nesting alone.

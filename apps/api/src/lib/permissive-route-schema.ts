@@ -135,8 +135,7 @@ export const permissiveBodySchema = <
   );
 
 export type PostAuthValidation<TStrict extends TSchema> =
-  | { ok: true; value: Static<TStrict> }
-  | { ok: false; message: string };
+  { ok: true; value: Static<TStrict> } | { ok: false; message: string };
 
 /**
  * Applies a token route's strict schema to the raw (permissively routed)

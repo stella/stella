@@ -274,9 +274,7 @@ const EMBEDDED_ALIAS_POLICY = {
 } as const satisfies {
   [Country in StatuteQueryCountry]: {
     [Alias in keyof (typeof STATUTE_ALIASES)[Country]]:
-      | "whole-query"
-      | "title"
-      | readonly string[];
+      "whole-query" | "title" | readonly string[];
   };
 };
 

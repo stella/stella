@@ -14,8 +14,7 @@ export type FeatureAccessProof = {
 };
 
 export type FeatureAccessDecision =
-  | { status: "enabled"; proof: FeatureAccessProof }
-  | { status: "hidden" };
+  { status: "enabled"; proof: FeatureAccessProof } | { status: "hidden" };
 
 export type FeatureAccessPrincipal = {
   readonly organizationId: string;

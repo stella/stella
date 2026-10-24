@@ -1256,8 +1256,7 @@ const renderFieldShape = (
 };
 
 type RenderedFieldShape =
-  | { render: false }
-  | { render: true; optional: boolean; shape: string };
+  { render: false } | { render: true; optional: boolean; shape: string };
 
 const renderObjectShape = (
   node: Record<string, unknown>,

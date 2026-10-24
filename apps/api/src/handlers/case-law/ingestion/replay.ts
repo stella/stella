@@ -1492,8 +1492,7 @@ export const acquireReplayLease = async <TLease>({
  * means the first must not read as a very large second.
  */
 export type ReplayVisitBound =
-  | { type: "all" }
-  | { type: "at-most"; limit: number };
+  { type: "all" } | { type: "at-most"; limit: number };
 
 export type ReplayCaseLawSourceOptions = {
   signal?: AbortSignal;

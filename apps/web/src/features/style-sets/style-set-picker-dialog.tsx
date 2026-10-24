@@ -26,8 +26,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 export type StyleSelection =
-  | { type: "stella" }
-  | { type: "custom"; styleSetId: string };
+  { type: "stella" } | { type: "custom"; styleSetId: string };
 
 type StyleSetPickerDialogProps = {
   open: boolean;

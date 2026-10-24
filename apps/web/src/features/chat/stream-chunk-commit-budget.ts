@@ -19,12 +19,7 @@ import type { StreamChunk } from "@tanstack/ai";
 
 /** A kind of chunk that streams repeatedly while a response is written. */
 export type StreamChunkKind =
-  | "reasoning"
-  | "status"
-  | "subagent"
-  | "text"
-  | "tool-input"
-  | "tool-output";
+  "reasoning" | "status" | "subagent" | "text" | "tool-input" | "tool-output";
 
 /** The most the page may commit per second while `kind` streams. */
 const STREAMING_COMMITS_PER_SECOND = 45;

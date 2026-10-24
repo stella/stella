@@ -253,8 +253,7 @@ const presignUpload = createSafeHandler(
     }
 
     type PresignWriteResult =
-      | { status: "ok" }
-      | { status: EntityCreateWriteFailureStatus };
+      { status: "ok" } | { status: EntityCreateWriteFailureStatus };
 
     // Persist intent. RLS pins the row to this workspace, so even
     // a stolen URL can only be finalized by a request that
