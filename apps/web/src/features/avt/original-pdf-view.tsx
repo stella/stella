@@ -196,6 +196,7 @@ export const OriginalPdfView = ({
             fieldId={run.fileFieldId}
             interactionMode="preview-only"
             pdfPageOverlay={renderClaimMarks}
+            pdfPageSource="document"
             scaleOffset={0}
             viewId="all"
             workspaceId={workspaceId}

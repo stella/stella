@@ -2,6 +2,8 @@ import type { PDF, PDFPage } from "@libpdf/core";
 
 import { findSearchMatchRanges } from "@stll/text-normalize";
 
+import { resolvePDFPageSource } from "@/lib/pdf/pdf-page-source";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 import {
@@ -39,6 +41,7 @@ export type PDFSearchViewportBox = {
 type FindPDFSearchResultsOptions = {
   bytes: Uint8Array;
   password?: string | undefined;
+  pageSource: PDFPageSource;
   searchText: SearchTextQuery;
   signal: AbortSignal;
 };
@@ -221,14 +224,23 @@ const findPageMatches = ({
     pageIndex,
   });
 
-const getViewerSearchPages = async (
-  pdf: PDF,
-  signal: AbortSignal,
-): Promise<ViewerSearchPage[]> => {
+type GetViewerSearchPagesOptions = {
+  pdf: PDF;
+  signal: AbortSignal;
+  pageSource: PDFPageSource;
+};
+
+const getViewerSearchPages = async ({
+  pdf,
+  signal,
+  pageSource,
+}: GetViewerSearchPagesOptions): Promise<ViewerSearchPage[]> => {
   const rootPages = pdf.getPages();
   const pdfAttachments: Uint8Array[] = [];
 
-  for (const [name, attachment] of pdf.getAttachments()) {
+  const attachmentEntries =
+    pageSource === "portfolio" ? pdf.getAttachments() : [];
+  for (const [name, attachment] of attachmentEntries) {
     signal.throwIfAborted();
     if (!attachment.filename.trim().toLowerCase().endsWith(".pdf")) {
       continue;
@@ -239,7 +251,13 @@ const getViewerSearchPages = async (
     }
   }
 
-  if (rootPages.length > 1 || pdfAttachments.length === 0) {
+  if (
+    resolvePDFPageSource({
+      pageSource,
+      documentPageCount: rootPages.length,
+      attachmentCount: pdfAttachments.length,
+    }) === "document"
+  ) {
     return rootPages.map((page, pageIndex) => ({ page, pageIndex }));
   }
 
@@ -267,6 +285,7 @@ const getViewerSearchPages = async (
 export const findPDFSearchResults = async ({
   bytes,
   password,
+  pageSource,
   searchText,
   signal,
 }: FindPDFSearchResultsOptions): Promise<PDFSearchResult | null> => {
@@ -279,7 +298,7 @@ export const findPDFSearchResults = async ({
   );
   signal.throwIfAborted();
 
-  const pages = await getViewerSearchPages(pdf, signal);
+  const pages = await getViewerSearchPages({ pdf, signal, pageSource });
   signal.throwIfAborted();
   const candidates = getSearchTextCandidates(searchText);
   const pageSearchTextCache = new WeakMap<PDFPage, PageSearchText>();

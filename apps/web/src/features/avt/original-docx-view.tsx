@@ -246,6 +246,7 @@ export const OriginalDocxView = ({
           fieldId: run.fileFieldId,
           filePurpose: "native-display",
           interactionMode: "preview-only",
+          pdfPageSource: "document",
           scaleOffset: 0,
           viewId: "all",
           workspaceId,

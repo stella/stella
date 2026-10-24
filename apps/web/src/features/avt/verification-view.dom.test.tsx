@@ -937,6 +937,14 @@ test("the original PDF mounts its viewer and claim boxes inside the PDF store", 
     await nextFrame();
     await nextFrame();
     expect(document.querySelector("[data-avt-original-pdf]")).not.toBeNull();
+    await waitFor(() => {
+      expect(
+        client
+          .getQueryCache()
+          .findAll({ queryKey: ["pdf-document"] })
+          .map((query) => query.queryKey.at(-1)),
+      ).toContain("document");
+    });
     expect(
       caught.filter(
         (error) =>

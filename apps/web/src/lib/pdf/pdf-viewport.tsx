@@ -25,6 +25,7 @@ import { useTextSelection } from "@/lib/pdf/hooks/use-text-selection";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
 import {
@@ -38,6 +39,7 @@ const [, roundY] = approximateFraction(getDevicePixelRatio());
 
 type PDFViewportProps = {
   fileId: string;
+  pageSource: PDFPageSource;
   buffer: ArrayBuffer;
   page?: number | undefined;
   onPageChanged?: ((page: number) => void) | undefined;
@@ -57,7 +59,7 @@ type PDFViewportProps = {
 
 type PDFViewerContentProps = Omit<
   PDFViewportProps,
-  "fileId" | "password" | "buffer"
+  "fileId" | "password" | "buffer" | "pageSource"
 > & {
   buffer: ArrayBuffer;
   document: PDFDocument;
@@ -73,6 +75,7 @@ type PDFViewportStyle = CSSProperties & {
 
 export const PDFViewport = ({
   fileId,
+  pageSource,
   buffer,
   password: initialPassword,
   ...contentProps
@@ -91,7 +94,7 @@ export const PDFViewport = ({
   }
 
   const { data: result, refetch } = usePDFDocument({
-    key: { fileId },
+    key: { fileId, pageSource },
     context: { buffer, password },
   });
 
@@ -162,6 +165,7 @@ const PDFViewerContent = ({
       return await findPDFSearchResultsInWorker({
         bytes: buffer.slice(0),
         password,
+        pageSource: document.pageSource,
         searchText,
         signal,
       });
@@ -169,6 +173,7 @@ const PDFViewerContent = ({
     queryKey: [
       "pdf-search-page",
       document.document.fingerprints,
+      document.pageSource,
       searchText,
       password === undefined ? "unprotected" : "password-protected",
     ],
