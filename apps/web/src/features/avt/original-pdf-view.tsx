@@ -20,10 +20,8 @@ import { cn } from "@stll/ui/utils";
 
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
-import {
-  PeekPdfViewer,
-  PeekSuspenseFallback,
-} from "@/components/pdf/peek/peek-pdf-viewer";
+import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { UnlocatedClaims } from "@/features/avt/original-claims";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import { PDF_CLAIM_BOX_ATTRIBUTE } from "@/features/avt/original-pdf-claim-box";
@@ -183,7 +181,7 @@ export const OriginalPdfView = ({
         <MeasuredPdfProvider
           active
           fallback={{
-            suspense: <PeekSuspenseFallback />,
+            suspense: <DefaultPendingComponent />,
             error: <InspectorPdfErrorFallback />,
           }}
           fieldId={run.fileFieldId}
