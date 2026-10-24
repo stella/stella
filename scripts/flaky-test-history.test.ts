@@ -801,6 +801,74 @@ describe("evidence collection", () => {
     }
   });
 
+  test.each([1001, 2, 1000, 1002])(
+    "checks the combined count after splitting a capped listing: %s",
+    async (combinedCount) => {
+      const listed: string[] = [];
+      const gh: Gh = async (args) => {
+        const url = args.at(-1) ?? "";
+        if (url.includes("/workflows/ci.yml/runs?created=2026-10-10")) {
+          listed.push(url);
+          const isWholeDay = url.includes(
+            "created=2026-10-10T00:00:00Z..2026-10-10T23:59:59Z",
+          );
+          const firstHalf = listed.length === 2;
+          const halfCount = firstHalf
+            ? Math.ceil(combinedCount / 2)
+            : Math.floor(combinedCount / 2);
+          const count = isWholeDay ? 1 : halfCount;
+          const runs = Array.from({ length: count }, (_, index) => ({
+            id: firstHalf
+              ? index + 1
+              : Math.ceil(combinedCount / 2) + index + 1,
+            head_sha: "abc",
+            head_branch: "feature",
+            conclusion: "success",
+            run_started_at: firstHalf
+              ? "2026-10-10T08:00:00Z"
+              : "2026-10-10T20:00:00Z",
+          }));
+          return Result.ok(
+            JSON.stringify([
+              { total_count: isWholeDay ? 1001 : count, workflow_runs: runs },
+            ]),
+          );
+        }
+        if (url.includes("/runs?")) {
+          return Result.ok(
+            JSON.stringify([{ total_count: 0, workflow_runs: [] }]),
+          );
+        }
+        return Result.ok(artifacts([]));
+      };
+      const collected = await collectEvidence({
+        gh,
+        repository: "stella/stella",
+        now: NOW,
+        workdir: tmpdir(),
+      });
+      expect(collected.isOk()).toBe(combinedCount === 1001);
+      if (collected.isErr()) {
+        expect(collected.error.message).toContain(
+          `GitHub reported 1001, but returned ${combinedCount}`,
+        );
+      } else {
+        expect(collected.value.evidence.runs).toHaveLength(1001);
+      }
+      expect(listed).toEqual([
+        expect.stringContaining(
+          "created=2026-10-10T00:00:00Z..2026-10-10T23:59:59Z",
+        ),
+        expect.stringContaining(
+          "created=2026-10-10T00:00:00Z..2026-10-10T11:59:59Z",
+        ),
+        expect.stringContaining(
+          "created=2026-10-10T12:00:00Z..2026-10-10T23:59:59Z",
+        ),
+      ]);
+    },
+  );
+
   test("refuses a truncated artifact listing", async () => {
     const gh: Gh = async (args) => {
       const url = args.at(-1) ?? "";
