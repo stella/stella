@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
-import { readFileSync, readdirSync } from "node:fs";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";

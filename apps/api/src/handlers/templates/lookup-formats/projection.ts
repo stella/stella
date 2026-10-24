@@ -1,6 +1,6 @@
 import type {
-  templateLookupFormatUserDefaults,
   templateLookupFormats,
+  templateLookupFormatUserDefaults,
 } from "@/api/db/schema";
 import type {
   UnbackedProjectionKeys,

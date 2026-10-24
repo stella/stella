@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@stll/api-contract";
+import {
+  CHAT_TOOL_GRANT_POLICY_KIND,
+  getChatToolGrantPolicy,
+} from "@stll/api-contract/chat-tool-grants";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
   MCP_TOOL_NAME_MAX_LENGTH,
@@ -506,6 +510,28 @@ describe("projected chat write approvals", () => {
     for (const [name, policy] of accountControlPolicies) {
       expect(policy, name).toBe("approve-once");
     }
+  });
+
+  test("no confirmation-gated or account-control tool is covered by a stored grant", () => {
+    const freshApprovalTools = defaultTools.filter(
+      (tool) =>
+        tool.destructiveBehavior !== undefined ||
+        (tool.access === "write" &&
+          tool.accountAccess === ACCOUNT_ACCESS.accountControl),
+    );
+    expect(
+      freshApprovalTools.some((tool) => tool.destructiveBehavior !== undefined),
+    ).toBe(true);
+    const grantable = freshApprovalTools
+      .filter(
+        (tool) =>
+          getChatToolGrantPolicy(tool.name) !==
+            CHAT_TOOL_GRANT_POLICY_KIND.approveOnce &&
+          getChatToolGrantPolicy(tool.name) !==
+            CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
+      )
+      .map((tool) => tool.name);
+    expect(grantable).toEqual([]);
   });
 });
 

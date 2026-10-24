@@ -6,11 +6,11 @@ import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff
 import { getSafeHandlerAccessMetadata } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import {
-  HANDOFF_ACCESS_DETAIL,
   createHandoffStepUpGuard,
+  HANDOFF_ACCESS_DETAIL,
+  isHandoffStepUpGuard,
   requiresHandoffStepUpForAuthPath,
   requiresHandoffStepUpForRequest,
-  isHandoffStepUpGuard,
 } from "@/api/lib/auth/handoff-step-up-policy";
 import api from "@/api/server";
 

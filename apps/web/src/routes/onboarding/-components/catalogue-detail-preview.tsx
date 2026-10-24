@@ -9,10 +9,10 @@ import {
   CogIcon,
   ExternalLinkIcon,
   FileBadgeIcon,
+  type LucideIcon,
   TagIcon,
   UserIcon,
   XIcon,
-  type LucideIcon,
 } from "@stll/ui/icons";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";

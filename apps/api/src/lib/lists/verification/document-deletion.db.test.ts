@@ -282,7 +282,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         const remaining = await client<
           { entity_id: string }[]
         >`SELECT entity_id FROM legal_list_verification_runs`;
-        expect(remaining).toEqual([{ entity_id: retainedDocumentId }]);
+        expect([...remaining]).toEqual([{ entity_id: retainedDocumentId }]);
       } finally {
         await client.unsafe(`RESET search_path`);
         await client.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);

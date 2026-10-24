@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { DecisionAnalysisV3 } from "@stll/legal-ast/analysis";
+import type { DecisionAnalysisV4 } from "@stll/legal-ast/analysis";
 import { isSignificanceCurrent } from "@stll/legal-ast/analysis";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -20,15 +20,15 @@ import { refreshSignificance } from "./significance-run";
 // A finished current-format analysis with no significance yet: exactly what a
 // refresh would otherwise go on to write.
 const analysis = {
-  version: 3,
+  version: 4,
   generatedAt: "2026-10-12T09:00:00.000Z",
   model: "test-model",
   inputFingerprint: "fingerprint",
   tree: [],
-  holding: { text: "Pravidlo.", language: "cs", anchors: [] },
-  abstract: { text: "Abstrakt.", language: "cs" },
+  holding: { spans: [{ text: "Pravidlo.", anchors: [] }], language: "cs" },
+  abstract: { spans: [{ text: "Abstrakt.", anchors: [] }], language: "cs" },
   topics: [],
-} satisfies DecisionAnalysisV3;
+} satisfies DecisionAnalysisV4;
 
 // A fast-role key, so nothing but the deployment's own setting stands
 // between this refresh and a model.
@@ -81,8 +81,8 @@ describe("refreshing a decision's significance", () => {
     citingDecisionIds: [],
   };
   const uncitedFingerprint = graphFingerprintOf(uncited);
-  const refreshUncited = async (stored: DecisionAnalysisV3) => {
-    const saved: DecisionAnalysisV3[] = [];
+  const refreshUncited = async (stored: DecisionAnalysisV4) => {
+    const saved: DecisionAnalysisV4[] = [];
     await refreshSignificance({
       admitModelAction: async () =>
         panic("An uncited decision must not admit a model"),
@@ -99,7 +99,7 @@ describe("refreshing a decision's significance", () => {
         save: async ({
           analysis: written,
         }: {
-          analysis: DecisionAnalysisV3;
+          analysis: DecisionAnalysisV4;
         }) => {
           saved.push(written);
           return true;
@@ -131,7 +131,7 @@ describe("refreshing a decision's significance", () => {
         model: "test-model",
         promptVersion: SIGNIFICANCE_PROMPT_VERSION,
       },
-    } satisfies DecisionAnalysisV3;
+    } satisfies DecisionAnalysisV4;
 
     const saved = await refreshUncited(filler);
 
@@ -151,8 +151,8 @@ describe("refreshing a decision's significance", () => {
         model: "test-model",
         promptVersion: SIGNIFICANCE_PROMPT_VERSION,
       },
-    } satisfies DecisionAnalysisV3;
-    const saved: DecisionAnalysisV3[] = [];
+    } satisfies DecisionAnalysisV4;
+    const saved: DecisionAnalysisV4[] = [];
 
     await refreshSignificance({
       admitModelAction: async () =>
@@ -170,7 +170,7 @@ describe("refreshing a decision's significance", () => {
         save: async ({
           analysis: written,
         }: {
-          analysis: DecisionAnalysisV3;
+          analysis: DecisionAnalysisV4;
         }) => {
           saved.push(written);
           return true;
@@ -191,7 +191,7 @@ describe("refreshing a decision's significance", () => {
         graphFingerprint: uncitedFingerprint,
         generatedAt: "2026-10-12T09:00:00.000Z",
       },
-    } satisfies DecisionAnalysisV3;
+    } satisfies DecisionAnalysisV4;
 
     expect(await refreshUncited(none)).toEqual([]);
     expect(

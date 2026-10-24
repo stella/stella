@@ -10,10 +10,10 @@ import type { Transaction } from "@/api/db/root";
 import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   decisionCitationPageQuery,
-  decisionCitationSummaryQuery,
   decisionCitationStatsStateQuery,
-  exactDecisionCitationSummaryQuery,
+  decisionCitationSummaryQuery,
   EXACT_CITATION_SUMMARY_MAX_ROWS,
+  exactDecisionCitationSummaryQuery,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import { caseLawArrivalsSnapshotQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
@@ -626,8 +626,7 @@ export const QUERY_PLAN_REGISTRY = [
 ] as const satisfies readonly QueryPlanEntry[];
 
 type SharedQueryDisposition =
-  | { type: "registered"; id: string }
-  | { type: "excluded"; reason: string };
+  { type: "registered"; id: string } | { type: "excluded"; reason: string };
 
 /** Explicit disposition for every shared query id; adding one requires a choice. */
 export const PUBLIC_LAW_PLAN_DISPOSITION = {

@@ -28,10 +28,10 @@ import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
 import {
   EU_PROVISION_ANCHOR_SEPARATOR,
   euProvisionAnchor,
-  parseEuProvisionReference,
-  parseEuProvisionAnchor,
-  normalizeEuProvisionReference,
   locateEuProvisionCitations,
+  normalizeEuProvisionReference,
+  parseEuProvisionAnchor,
+  parseEuProvisionReference,
   parseEuWorkIdentifier,
 } from "./eu-provision-citations";
 import { formatWorkIdentifier } from "./provision-citation-profile";

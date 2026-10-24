@@ -1,6 +1,6 @@
 import type {
-  HANDOFF_ACCESS_DETAIL,
   createHandoffStepUpGuard,
+  HANDOFF_ACCESS_DETAIL,
 } from "./handoff-step-up-policy";
 
 type HandoffAccessMetadata = Parameters<typeof createHandoffStepUpGuard>[0];

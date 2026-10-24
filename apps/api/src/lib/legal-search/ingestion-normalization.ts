@@ -4,9 +4,9 @@ import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-gramm
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
-  isDecisionIdentifier,
   type DecisionIdentifier,
   type DecisionIdentifiers,
+  isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import {
   isDocumentAst,
@@ -16,13 +16,13 @@ import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  DECISION_TEXT_FIELD,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
   absentTextField,
+  DECISION_TEXT_FIELD,
+  type DecisionTextFields,
   presentTextField,
   storeDecisionTextFields,
-  type DecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
@@ -47,8 +47,8 @@ import {
 } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   EMPTY_AST,
-  isPersistableSourceDocumentId,
   type IngestionResult,
+  isPersistableSourceDocumentId,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import {

@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
-import { spawn, type ChildProcess } from "node:child_process";
-import { readFile, readdir, realpath } from "node:fs/promises";
+import { type ChildProcess, spawn } from "node:child_process";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 

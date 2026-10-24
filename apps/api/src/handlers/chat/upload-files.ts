@@ -99,8 +99,7 @@ type UploadMessageFilesProps = {
 };
 
 export type UploadMessageFilesError =
-  | HandlerError<400 | 409 | 413 | 422 | 500 | 503>
-  | SafeDbError;
+  HandlerError<400 | 409 | 413 | 422 | 500 | 503> | SafeDbError;
 
 type UploadMessageFilesReturn = Result<
   UploadedChatMessage,
@@ -305,9 +304,7 @@ const DIRECT_TEXT_MIME_TYPES = [
 
 type DirectTextMimeType = (typeof DIRECT_TEXT_MIME_TYPES)[number];
 type PlainTextHydratableMimeType =
-  | DirectTextMimeType
-  | typeof DOCX_MIME_TYPE
-  | typeof XLSX_MIME_TYPE;
+  DirectTextMimeType | typeof DOCX_MIME_TYPE | typeof XLSX_MIME_TYPE;
 
 const isDirectTextMimeType = (
   mimeType: string,

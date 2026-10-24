@@ -1,8 +1,8 @@
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import {
-  fileMetadataQueryKey,
   type FileMetadataQueryKey,
+  fileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
 
 type FileMetadataOptions = FileMetadataQueryKey & { enabled?: boolean };

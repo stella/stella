@@ -7,9 +7,9 @@ import {
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import {
   CS_DECISION_ANCHOR,
+  SEED_RULES,
   SK_DECISION_ANCHOR,
   WORDS_BETWEEN,
-  SEED_RULES,
 } from "@/api/handlers/case-law/polarity/seed-rules";
 import { toSafeId } from "@/api/lib/branded-types";
 
