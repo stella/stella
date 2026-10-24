@@ -295,6 +295,7 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
   // imports; the direct callers of document primitives need no pin.
   "entities.create": "stella:documents_write",
+  "entities.folder-from-selection.create": "stella:documents_write",
   "entities.blank-document.create": "stella:documents_write",
   "entities.delete": "stella:documents_write",
   "entities.versions.delete": "stella:documents_write",

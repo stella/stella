@@ -558,6 +558,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/summarize":
     "crud",
   "POST /v1/entities/:workspaceId/filesystem-tree": "crud",
+  "POST /v1/entities/:workspaceId/folder-from-selection": "crud",
   "POST /v1/entities/:workspaceId/folio-collab-rooms/checkpoint": "crud",
   "POST /v1/entities/:workspaceId/folio-collab-rooms/join": "crud",
   "POST /v1/entities/:workspaceId/folio-collab-rooms/publish-version": "crud",

@@ -13,6 +13,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -109,6 +110,48 @@ export const useMoveEntity = () => {
 
       return unwrapEden(response);
     },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
+type CreateFolderFromSelectionVars = {
+  workspaceId: string;
+  name: string;
+  parentId: string | null;
+  entityIds: readonly string[];
+};
+
+export const useCreateFolderFromSelection = () => {
+  const analytics = useAnalytics();
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      name,
+      parentId,
+      entityIds,
+    }: CreateFolderFromSelectionVars) =>
+      await invokeCapability(
+        "entities.folder-from-selection.create",
+        async (request) => {
+          const entitiesRoute = api.entities({
+            workspaceId: toSafeId<"workspace">(workspaceId),
+          });
+          const response = await entitiesRoute["folder-from-selection"].post(
+            {
+              name,
+              parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+              entityIds: entityIds.map((entityId) =>
+                toSafeId<"entity">(entityId),
+              ),
+            },
+            request,
+          );
+          return unwrapEden(response);
+        },
+      ),
     onError: (error) => {
       analytics.captureError(error);
     },

@@ -158,6 +158,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.duplicate` | write | stella:matters_write, stella:documents_write | — | generic invoke → `stella capability entities duplicate` |
 | `entities.files.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.filesystem-tree.get` | read | stella:read | — | covered by `list_documents` |
+| `entities.folder-from-selection.create` | write | stella:documents_write | — | generic invoke → `stella capability entities folder-from-selection-create` |
 | `entities.folders.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.from-legal-source.create` | write | stella:documents_write | — | generic invoke → `stella capability entities from-legal-source-create` |
 | `entities.get` | read | stella:read | — | curated tool `read_document` |

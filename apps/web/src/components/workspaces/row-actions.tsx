@@ -102,6 +102,7 @@ import {
   hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
+  planFolderFromSelection,
   requestDesktopEditTakeover,
   type RowActionContext,
 } from "@/components/workspaces/row-actions.logic";
@@ -149,6 +150,7 @@ import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
   useCreateEntities,
+  useCreateFolderFromSelection,
   useDeleteEntities,
 } from "@/lib/workspaces/mutations/entities";
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
@@ -170,8 +172,10 @@ type RowActionsProps = {
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
   onRename?: (() => void) | undefined;
+  /** A folder was created from this menu under `parentId` (null: the matter
+   *  root); the caller reveals it and starts renaming it. */
   onSubfolderCreated?:
-    ((entityId: string, parentId: string) => void) | undefined;
+    ((entityId: string, parentId: string | null) => void) | undefined;
   triggerClassName?: string | undefined;
   triggerTabIndex?: number | undefined;
   anchor?: VirtualAnchor | null | undefined;
@@ -1054,6 +1058,14 @@ export const RowActions = ({
         <EllipsisVerticalIcon />
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
+        {isBulk && !isCellContext && (
+          <CreateFolderFromSelectionMenuItem
+            getAncestorIds={getAncestorIds}
+            onFolderCreated={onSubfolderCreated}
+            targets={bulkTargets}
+            workspaceId={workspaceId}
+          />
+        )}
         {/* --- View / Edit --- */}
         <RowOpenMenuActions
           canUploadVersion={canUploadVersion}
@@ -1787,7 +1799,7 @@ const RowDeleteDialog = ({
 type CreateSubfolderMenuItemProps = {
   entity: WorkspaceEntity;
   workspaceId: string;
-  onSubfolderCreated: (entityId: string, parentId: string) => void;
+  onSubfolderCreated: NonNullable<RowActionsProps["onSubfolderCreated"]>;
 };
 
 const CreateSubfolderMenuItem = ({
@@ -1839,6 +1851,75 @@ const CreateSubfolderMenuItem = ({
         <FolderPlusIcon />
         {t("workspaces.filesystem.newSubfolder")}
       </MenuItem>
+    </>
+  );
+};
+
+type CreateFolderFromSelectionMenuItemProps = {
+  getAncestorIds: RowActionsProps["getAncestorIds"];
+  onFolderCreated: RowActionsProps["onSubfolderCreated"];
+  targets: readonly WorkspaceEntity[];
+  workspaceId: string;
+};
+
+const CreateFolderFromSelectionMenuItem = ({
+  getAncestorIds,
+  onFolderCreated,
+  targets,
+  workspaceId,
+}: CreateFolderFromSelectionMenuItemProps) => {
+  const t = useTranslations();
+  const createFolder = useCreateFolderFromSelection();
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
+  const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
+  const canCreateAndMove = usePermissions({ entity: ["create", "update"] });
+  const plan = planFolderFromSelection(
+    toCopyToMatterEntities(targets, getAncestorIds),
+  );
+  const movedIds = new Set(plan.entityIds);
+  const movesReadOnly = targets.some(
+    (target) => target.readOnly && movedIds.has(target.entityId),
+  );
+
+  if (isEntitiesLimitReached || !canCreateAndMove || movesReadOnly) {
+    return null;
+  }
+
+  // The menu closes, and the selection with it, before the request settles,
+  // so the outcome is read from the request itself rather than from
+  // per-call mutation callbacks bound to this item.
+  const handleCreate = async () => {
+    const created = await Result.tryPromise(
+      async () =>
+        await createFolder.mutateAsync({
+          workspaceId,
+          name: t("workspaces.newFolder"),
+          parentId: plan.parentId,
+          entityIds: plan.entityIds,
+        }),
+    );
+    if (Result.isError(created)) {
+      notifyUserError(created.error, t("errors.actionFailed"));
+      return;
+    }
+    stellaToast.add({ title: t("success.folderCreated"), type: "success" });
+    onFolderCreated?.(created.value.entityId, plan.parentId);
+  };
+
+  return (
+    <>
+      <WorkflowQueryFeedback display="menu" view={workflowView} />
+      <MenuItem
+        disabled={workflowDisabled || createFolder.isPending}
+        onClick={() =>
+          detached(handleCreate(), "row-actions.create-folder-from-selection")
+        }
+      >
+        <FolderPlusIcon />
+        {t("workspaces.newFolder")}
+      </MenuItem>
+      <MenuSeparator />
     </>
   );
 };

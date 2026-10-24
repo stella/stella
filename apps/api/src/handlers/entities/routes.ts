@@ -14,6 +14,7 @@ import createDesktopEditHandoff, {
 import duplicateEntity from "@/api/handlers/entities/duplicate";
 import listFiles from "@/api/handlers/entities/files/list";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
+import createFolderFromSelection from "@/api/handlers/entities/folder-from-selection/create";
 import listFolders from "@/api/handlers/entities/folders/list";
 import createFromLegalSource from "@/api/handlers/entities/from-legal-source/create";
 import readEntityById from "@/api/handlers/entities/get";
@@ -261,6 +262,11 @@ export const entitiesRoute = new Elysia({
     body: moveEntity.config.body,
     permissions: moveEntity.config.permissions,
     accountAccess: moveEntity.config.accountAccess,
+  })
+  .post("/folder-from-selection", createFolderFromSelection.handler, {
+    body: createFolderFromSelection.config.body,
+    permissions: createFolderFromSelection.config.permissions,
+    accountAccess: createFolderFromSelection.config.accountAccess,
   })
   .patch("/rename", renameEntity.handler, {
     body: renameEntity.config.body,
