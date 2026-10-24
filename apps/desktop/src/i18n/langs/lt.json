@@ -241,6 +241,7 @@
     "strikethrough": "Perbrauktas",
     "underline": "Pabrauktas",
     "unnamedClip": "Tekstas",
+    "clipName": "Pavadinimas",
     "allClips": "Visos iškarpos",
     "clips": "Iškarpos",
     "externalRegistry": "Išorinis registras",
