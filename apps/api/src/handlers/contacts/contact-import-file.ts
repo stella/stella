@@ -19,6 +19,7 @@ import {
   type ContactType,
   parseContactImportMapping,
 } from "@stll/api-contract";
+import { validateVatFormat } from "@stll/business-registries/vies/validation";
 import { isCountryCode } from "@stll/country-codes";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -1161,3 +1162,22 @@ export const previewContactImport = ({
     validCount: rows.filter(({ issues }) => issues.length === 0).length,
   });
 };
+
+type ImportedTaxIdentifiers = {
+  taxId: string | undefined;
+  vatId: string | undefined;
+};
+
+/**
+ * An import's single tax column holds a national tax number or an EU VAT
+ * number. A value in EU VAT format is stored as the VAT number, the same rule
+ * the invoice party ID migration applied to existing contacts; Brazilian tax
+ * ids stay tax ids.
+ */
+export const importedTaxIdentifiers = (
+  taxId: string | undefined,
+  taxIdScheme: ContactImportTaxIdScheme,
+): ImportedTaxIdentifiers =>
+  taxIdScheme === "none" && taxId !== undefined && validateVatFormat(taxId)
+    ? { taxId: undefined, vatId: taxId }
+    : { taxId, vatId: undefined };
