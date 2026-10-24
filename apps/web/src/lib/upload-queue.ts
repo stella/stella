@@ -5,6 +5,7 @@ import { transformUnknownError } from "@/lib/errors/client";
 
 const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_REQUEST_TIMEOUT = 408;
+const HTTP_CONFLICT = 409;
 const HTTP_SERVER_ERROR_MIN = 500;
 const DEFAULT_RETRY_AFTER_S = 60;
 const MAX_RETRIES = 3;
@@ -221,11 +222,15 @@ export class UploadQueue<T> {
     if (this.state !== "done" && this.state !== "cancelled") {
       return;
     }
+    const retryable = this.failed.filter(
+      ({ disposition }) => disposition === "retryable",
+    );
+    if (retryable.length === 0 && this.state === "done") {
+      return;
+    }
     this.runId++;
     this.fileRunIds.clear();
-    this.pending = this.failed
-      .filter(({ disposition }) => disposition === "retryable")
-      .map(({ file }) => ({ file, attempt: 0 }));
+    this.pending = retryable.map(({ file }) => ({ file, attempt: 0 }));
     this.total = this.pending.length;
     this.failed = [];
     this.completed = [];
@@ -311,7 +316,7 @@ export class UploadQueue<T> {
         return;
       }
 
-      const status = getErrorStatus(error);
+      const status = uploadErrorStatus(error);
 
       if (status === HTTP_TOO_MANY_REQUESTS) {
         // Put the file back at the front of the queue
@@ -321,7 +326,7 @@ export class UploadQueue<T> {
       }
 
       const isRetryable = uploadFailureDisposition(error) === "retryable";
-      if (isRetryable && attempt < MAX_RETRIES) {
+      if (isRetryable && status !== HTTP_CONFLICT && attempt < MAX_RETRIES) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 4000;
         this.retrying++;
 
@@ -413,9 +418,11 @@ export class UploadQueue<T> {
 
 /**
  * Extract HTTP status from an error. Works with APIError
- * (which has a `status` field) and plain Error objects.
+ * (which has a `status` field) and plain Error objects; `0` means the
+ * request got no HTTP answer. The queue's retry decision and an upload's
+ * own resume decision both read it from here.
  */
-const getErrorStatus = (error: unknown): number => {
+export const uploadErrorStatus = (error: unknown): number => {
   if (
     error !== null &&
     typeof error === "object" &&
@@ -443,9 +450,10 @@ const getErrorStatus = (error: unknown): number => {
 export const uploadFailureDisposition = (
   error: unknown,
 ): UploadFailureDisposition => {
-  const status = getErrorStatus(error);
+  const status = uploadErrorStatus(error);
   if (status !== 0) {
     return status === HTTP_REQUEST_TIMEOUT ||
+      status === HTTP_CONFLICT ||
       status === HTTP_TOO_MANY_REQUESTS ||
       status >= HTTP_SERVER_ERROR_MIN
       ? "retryable"
