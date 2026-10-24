@@ -78,6 +78,7 @@ const definitionWithSchema = (
   inputSchema: McpToolDefinition["inputSchema"],
 ): McpToolDefinition => ({
   access: "read",
+  permissions: { type: "open-read", reason: "reads only fixture data" },
   readClass: "tenant",
   annotations: {
     title: "Test tool",

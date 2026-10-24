@@ -70,6 +70,23 @@ export type McpWriteToolPermissions =
     }
   | { type: "delegated"; reason: string };
 
+/** An intentional read that needs no member grant beyond its existing scope. */
+export type McpOpenRead = { type: "open-read"; reason: string };
+
+/**
+ * Declares why a read is intentionally open to every caller admitted by its
+ * scope. This owner alone interprets the marker; rejecting an empty reason
+ * keeps the registry census useful in review.
+ */
+export const openMcpRead = (reason: string): McpOpenRead => {
+  if (reason.trim().length === 0) {
+    return panic("An open MCP read requires a non-empty reason");
+  }
+  return { type: "open-read", reason };
+};
+
+export type McpReadToolPermissions = McpWriteToolPermissions | McpOpenRead;
+
 /** A `presence` selector: `property` set selects `present`, else `absent`. */
 export const selectOperationByPresence = (
   property: string,
@@ -127,7 +144,7 @@ const selectWriteToolOperation = (
  * `sandbox` admits it.
  */
 export type McpToolAuthorityDeclaration =
-  | { access: "read" }
+  | { access: "read"; permissions: McpReadToolPermissions }
   | {
       access: "write";
       permissions: McpWriteToolPermissions;
@@ -136,7 +153,7 @@ export type McpToolAuthorityDeclaration =
 
 /**
  * Whether a member may be offered this tool and reach its dispatch. Reads
- * carry no tool-level grant (their scope and per-row checks govern them). A
+ * without a tool-level grant rely on their scope and per-row checks. A
  * tool whose input selects its operation is offered when any operation is
  * held; `isMemberAuthorizedForMcpToolInput` decides the call.
  *
@@ -149,11 +166,10 @@ export const isMemberAuthorizedForMcpTool = (
   authority: AuthorizedMemberRole,
   definition: McpToolAuthorityDeclaration,
 ): boolean => {
-  if (definition.access === "read") {
-    return true;
-  }
   const { permissions } = definition;
   switch (permissions.type) {
+    case "open-read":
+      return true;
     case "all":
       return hasMemberPermission(authority, permissions.permissions);
     case "input":
@@ -182,7 +198,7 @@ export const isMemberAuthorizedForMcpToolInput = (
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
 ): boolean => {
-  if (definition.access === "read" || definition.permissions.type !== "input") {
+  if (definition.permissions.type !== "input") {
     return isMemberAuthorizedForMcpTool(authority, definition);
   }
   const operation = selectWriteToolOperation(

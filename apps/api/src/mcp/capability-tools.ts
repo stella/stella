@@ -122,6 +122,7 @@ import {
   defineProjectedMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 // --- Catalog + dispatch runtime views ---------------------------------------
 
@@ -2288,6 +2289,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "list_capabilities",
     access: "read",
+    permissions: openMcpRead("reads the static capability catalog metadata"),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
@@ -2312,6 +2314,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "describe_capability",
     access: "read",
+    permissions: openMcpRead("reads the static capability catalog metadata"),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
@@ -2334,6 +2337,10 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: MCP_CAPABILITY_EXECUTORS.read,
     access: "read",
+    permissions: {
+      type: "delegated",
+      reason: "The resolved capability enforces its own declared authority",
+    },
     readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",

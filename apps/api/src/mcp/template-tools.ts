@@ -688,6 +688,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   access: "read",
+  permissions: { type: "all", permissions: { template: ["use"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
@@ -779,6 +780,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
+  permissions: { type: "all", permissions: { workspace: ["read"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",

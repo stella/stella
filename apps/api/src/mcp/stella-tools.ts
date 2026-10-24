@@ -236,6 +236,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
@@ -1055,6 +1056,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       "overview instead: counts, recent entities, linked contacts, and members.",
     inputSchema: listMattersArgsSchema,
     access: "read",
+    permissions: openMcpRead(
+      "reads only matters admitted by the caller scoped database",
+    ),
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1079,6 +1083,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       "asks to search outside a single matter or you do not yet know the right matter.",
     inputSchema: searchAcrossMattersArgsSchema,
     access: "read",
+    permissions: openMcpRead(
+      "searches only matters admitted by the caller search allowlist",
+    ),
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1110,6 +1117,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       decision_type: FILTER_NORMALIZATION,
     },
     access: "read",
+    permissions: openMcpRead("public case-law corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -1143,6 +1151,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    permissions: openMcpRead("public case-law coverage metadata"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -1165,6 +1174,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       "windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: readContentAcrossMattersArgsSchema,
     access: "read",
+    permissions: openMcpRead(
+      "reads only documents admitted by the caller scoped database",
+    ),
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1207,6 +1219,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       include: { kind: "string-list" },
     },
     access: "read",
+    permissions: openMcpRead("public case-law corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -1242,6 +1255,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "`url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
+    permissions: openMcpRead("public case-law corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -1269,6 +1283,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       "surfaces a contact the user wants to inspect more closely.",
     inputSchema: readContactArgsSchema,
     access: "read",
+    permissions: openMcpRead(
+      "reads only contacts in matters admitted by the caller scoped database",
+    ),
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

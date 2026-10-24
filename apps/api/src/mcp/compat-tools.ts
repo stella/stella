@@ -72,6 +72,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type CompatToolName = "fetch" | "search";
 
@@ -346,6 +347,9 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "searches only public law and caller-accessible matter records",
+    ),
     readClass: "both",
     anonymized: {
       exposure: "anonymize",
@@ -375,6 +379,9 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "fetches only public law or caller-accessible matter records",
+    ),
     readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",

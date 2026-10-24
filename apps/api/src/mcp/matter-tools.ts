@@ -2451,6 +2451,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "people or organizations.",
     inputSchema: listContactsArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "excluded",
@@ -2540,6 +2541,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
@@ -2582,6 +2584,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
@@ -2604,6 +2607,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

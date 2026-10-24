@@ -27,6 +27,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
+import { openMcpRead } from "./write-tool-authority";
 
 type AdmissionFailure = Extract<
   ReturnType<typeof admitLawRead>,
@@ -131,6 +132,7 @@ const resolveLawArgsSchema = nullAsAbsent(
 const common = {
   consumesServices: false,
   access: "read",
+  permissions: openMcpRead("public law corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",

@@ -1569,7 +1569,9 @@ describe("MCP template tools", () => {
       toolName: "preview_template_conditions",
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: { code: "permission_denied" },
+    });
     expect(templateDecideConditionsLogicMock).not.toHaveBeenCalled();
     expect(loadOrgAIConfigMock).not.toHaveBeenCalled();
   });
