@@ -885,8 +885,7 @@ const provisionRequestKey = (item: ProvisionRequest): string =>
   ]);
 
 type ProvisionItemBuildResult =
-  | { type: "item"; item: ProvisionItemResult }
-  | { type: "invalid-cursor" };
+  { type: "item"; item: ProvisionItemResult } | { type: "invalid-cursor" };
 
 /**
  * The provision's printed citation (`§ 1729 89/2012 Sb.`), beside its reader
