@@ -1156,6 +1156,17 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  // These structural guards no longer own expiry, so their failures block
+  // merge groups as well. Normalize only their former clock-based lenience.
+  if (
+    (step.name === "Dated waiver lifecycle guards" ||
+      step.name === "Quarantine-exclude guards") &&
+    step["continue-on-error"] === `\${{ github.event_name == 'merge_group' }}`
+  ) {
+    const original = { ...step };
+    delete original["continue-on-error"];
+    return original;
+  }
   // Format checks the tracked tree with `bun fmt --check`; it no longer
   // filters by affected packages, so it no longer waits on that step.
   if (step.name === "Format" && fields.run?.includes("turbo run format")) {
@@ -1405,7 +1416,10 @@ test("code-quality pool preserves every moved check exactly once", () => {
   const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
 
   expect(pooled.map(({ name }) => name)).toEqual(movedNames);
-  expect(pooled.map(withoutPoolMetadata)).toEqual(originals);
+  // A merge base may already carry the pool; normalize both sides alike.
+  expect(pooled.map(withoutPoolMetadata)).toEqual(
+    originals.map(withoutPoolMetadata),
+  );
 });
 
 // A migration-shape test that reads the old shape from the merge base fails
