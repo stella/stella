@@ -29,10 +29,12 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   ...readScalingScenarios,
+  ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
 ];
