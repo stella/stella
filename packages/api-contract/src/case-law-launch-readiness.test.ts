@@ -18,18 +18,28 @@ const readyRow = {
 } as const;
 
 describe("explicit case-law launches", () => {
-  test("the explicit launch set is exactly Poland", () => {
-    expect(CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES).toEqual(["POL"]);
-    expect(CASE_LAW_EXPLICIT_LAUNCHES.POL.decidedOn).toMatch(
-      /^\d{4}-\d{2}-\d{2}$/u,
-    );
+  test("the explicit launch set is EU, Hungary, Poland and Slovakia", () => {
+    expect(CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES).toEqual([
+      "EU",
+      "HUN",
+      "POL",
+      "SVK",
+    ]);
+    for (const country of CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES) {
+      expect(CASE_LAW_EXPLICIT_LAUNCHES[country]?.decidedOn).toMatch(
+        /^\d{4}-\d{2}-\d{2}$/u,
+      );
+    }
   });
 
-  test("an explicitly launched country is admitted to search", () => {
-    expect(PUBLIC_CASE_LAW_COUNTRIES.some((country) => country === "POL")).toBe(
-      true,
-    );
-  });
+  test.each(CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES)(
+    "explicitly launched %s is admitted to search",
+    (launched) => {
+      expect(
+        PUBLIC_CASE_LAW_COUNTRIES.some((country) => country === launched),
+      ).toBe(true);
+    },
+  );
 });
 
 describe("case-law launch readiness", () => {
