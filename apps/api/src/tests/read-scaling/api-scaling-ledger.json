@@ -1919,10 +1919,6 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
-      "id": "POST /v1/entities/:workspaceId/filesystem-tree",
-      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
-    },
-    {
       "id": "POST /v1/entities/:workspaceId/folio-collab-rooms/checkpoint",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1956,10 +1952,6 @@
     },
     {
       "id": "POST /v1/entities/:workspaceId/property-facets",
-      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
-    },
-    {
-      "id": "POST /v1/entities/:workspaceId/query",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

@@ -1,57 +1,23 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { t } from "elysia";
-
-import { ENTITY_KINDS } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import {
   ENTITY_LIST_TEXT_MAX_LENGTH,
   queryEntities,
+  queryEntityCursorPage,
 } from "@/api/lib/entities/query-entities";
 import {
-  decodeEntitiesWindowCursor,
-  encodeEntitiesWindowCursor,
-  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
-} from "@/api/lib/entities/window-cursor";
-import { LIMITS } from "@/api/lib/limits";
-import { createCursorPage } from "@/api/lib/pagination";
-import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { tViewSortSchema } from "@/api/lib/views-schema";
+  entityQueryWindowBodySchema,
+  entityReadPageBodySchema,
+} from "@/api/lib/entities/query-window-schema";
 
 const readEntitiesBodySchema = t.Object({
-  filters: t.Optional(
-    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
-  ),
-  sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
-  ),
-  cursor: t.Optional(
-    tPaginationCursor({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
-  ),
-  search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.entitiesPageSizeMax,
-      description: "Max entities to return",
-    }),
-  ),
-  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
-  fieldIds: t.Optional(
-    t.Array(tSafeId("property"), {
-      maxItems: LIMITS.propertiesCount,
-    }),
-  ),
-  excludedKinds: t.Optional(
-    t.Array(t.UnionEnum([...ENTITY_KINDS]), {
-      maxItems: ENTITY_KINDS.length,
-    }),
-  ),
-  previewableForAi: t.Optional(t.Boolean()),
+  ...entityReadPageBodySchema.properties,
+  ...t.Pick(entityQueryWindowBodySchema, ["excludedKinds", "previewableForAi"])
+    .properties,
 });
 
 const config = {
@@ -85,43 +51,28 @@ export const createReadEntitiesHandler = (
       body,
       user: currentUser,
     }) {
-      const cursorResult = decodeEntitiesWindowCursor(body.cursor);
-      if (Result.isError(cursorResult)) {
-        return Result.err(cursorResult.error);
-      }
-
-      const limit = normalizeTenantPageLimit(
-        body.limit ?? LIMITS.entitiesPageSizeDefault,
-      );
-      const result = yield* Result.await(
-        queryEntitiesImpl({
-          safeDb,
-          scope: { type: "matter", workspaceId },
-          currentUserId: currentUser.id,
-          currentOrganizationId: session.activeOrganizationId,
-          filters: arrayOrEmpty(body.filters),
-          sorts: arrayOrEmpty(body.sorts),
-          ...(body.search !== undefined && { search: body.search }),
-          cursor: cursorResult.value,
-          limit: limit + 1,
-          fieldMode: body.fieldMode ?? "visible",
-          fieldIds: arrayOrEmpty(body.fieldIds),
-          excludedKinds: arrayOrEmpty(body.excludedKinds),
-          previewableForAi: body.previewableForAi ?? false,
+      const page = yield* Result.await(
+        queryEntityCursorPage({
+          cursor: body.cursor,
+          limit: body.limit,
+          queryEntitiesImpl,
+          query: {
+            safeDb,
+            scope: { type: "matter", workspaceId },
+            currentUserId: currentUser.id,
+            currentOrganizationId: session.activeOrganizationId,
+            filters: arrayOrEmpty(body.filters),
+            sorts: arrayOrEmpty(body.sorts),
+            ...(body.search !== undefined && { search: body.search }),
+            fieldMode: body.fieldMode ?? "visible",
+            fieldIds: arrayOrEmpty(body.fieldIds),
+            excludedKinds: arrayOrEmpty(body.excludedKinds),
+            previewableForAi: body.previewableForAi ?? false,
+          },
         }),
       );
 
-      return Result.ok(
-        createCursorPage({
-          rows: result.entities,
-          limit,
-          cursorForItem: (item) =>
-            encodeEntitiesWindowCursor(
-              result.cursorValuesByEntityId.get(item.entityId) ??
-                panic("Missing cursor values for entity page item"),
-            ),
-        }),
-      );
+      return Result.ok(page);
     },
   );
 

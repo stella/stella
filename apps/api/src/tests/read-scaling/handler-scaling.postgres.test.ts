@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import api from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   prepareEntityReadScalingTables,
@@ -16,12 +17,15 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const { db } = openClient();
+        const { db } = openClient({ max: 1 });
         await prepareEntityReadScalingTables(db);
         const small = await seedEntityReadScaling(db, 10);
         const large = await seedEntityReadScaling(db, 200);
         try {
           for (const scenario of readScalingScenarios) {
+            expect(
+              api.routes.some(({ handler }) => handler === scenario.handler),
+            ).toBe(true);
             const at10 = await scenario.measure(small);
             const at200 = await scenario.measure(large);
             console.info(

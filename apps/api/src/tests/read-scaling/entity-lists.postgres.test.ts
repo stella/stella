@@ -1,7 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
+import { ElysiaCustomStatusResponse } from "elysia";
 
+import { entities } from "@/api/db/schema";
+import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
+import { createSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   prepareEntityReadScalingTables,
   seedEntityReadScaling,
@@ -15,6 +22,109 @@ import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "entity list payload scaling",
   () => {
+    test("filesystem cursors retain filtered ancestors on every page", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        await prepareEntityReadScalingTables(db);
+        const fixture = await seedEntityReadScaling(db, 3);
+        try {
+          const documents = await db
+            .select({ id: entities.id })
+            .from(entities)
+            .where(eq(entities.workspaceId, fixture.workspaceId));
+          const root = createSafeId<"entity">();
+          const folder = createSafeId<"entity">();
+          await db.insert(entities).values([
+            {
+              id: root,
+              workspaceId: fixture.workspaceId,
+              kind: "folder",
+              name: "Root folder",
+            },
+            {
+              id: folder,
+              workspaceId: fixture.workspaceId,
+              kind: "folder",
+              name: "Nested folder",
+              parentId: root,
+            },
+          ]);
+          await db
+            .update(entities)
+            .set({ parentId: folder })
+            .where(
+              inArray(
+                entities.id,
+                documents.map(({ id }) => id),
+              ),
+            );
+          const propertyId =
+            fixture.propertyIds.at(0) ?? panic("Fixture property required");
+          const seen = new Set<string>();
+          let cursor: string | undefined;
+          let pages = 0;
+          do {
+            const response = await readFilesystemTree.handler(
+              asTestRaw<Parameters<typeof readFilesystemTree.handler>[0]>({
+                workspaceId: fixture.workspaceId,
+                user: { id: fixture.userId },
+                session: { activeOrganizationId: fixture.organizationId },
+                memberRole: sessionMemberRole("owner"),
+                body: {
+                  limit: 1,
+                  cursor,
+                  filters: [
+                    {
+                      type: "predicate",
+                      operand: { type: "property", propertyId },
+                      op: "contains",
+                      value: "x",
+                    },
+                  ],
+                },
+                safeDb: fixture.safeDb,
+                request: new Request(
+                  "https://example.test/v1/entities/filesystem-tree",
+                ),
+                route: "/v1/entities/:workspaceId/filesystem-tree",
+              }),
+            );
+            if (response instanceof ElysiaCustomStatusResponse) {
+              panic("Filesystem cursor fixture requires a successful page");
+            }
+            expect(response.items).toHaveLength(1);
+            for (const item of response.items) {
+              expect(seen.has(item.entityId)).toBe(false);
+              seen.add(item.entityId);
+              expect(item.parentId).toBe(folder);
+            }
+            expect(
+              new Map(
+                response.ancestorLinks.map(({ entityId, parentId }) => [
+                  entityId,
+                  parentId,
+                ]),
+              ),
+            ).toEqual(
+              new Map([
+                [root, null],
+                [folder, root],
+              ]),
+            );
+            cursor = response.nextCursor ?? undefined;
+            pages += 1;
+            expect(pages).toBeLessThanOrEqual(documents.length);
+          } while (cursor !== undefined);
+          expect(pages).toBe(documents.length);
+          expect(seen).toEqual(new Set(documents.map(({ id }) => id)));
+        } finally {
+          await fixture.cleanup();
+        }
+      });
+    });
+
     test("keeps selected text payloads bounded as rows, properties and values grow", async () => {
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");

@@ -6,6 +6,7 @@ import api from "@/api/server";
 
 import { runLedgerMembershipGuard } from "../../../../../scripts/ledger-membership";
 import apiLedger from "./api-scaling-ledger.json";
+import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
 import { readScalingScenarios } from "./scenarios";
@@ -17,19 +18,50 @@ import {
 } from "./surface";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
+const measuredApiScenarios = [
+  ...readScalingScenarios,
+  exactIconScalingScenario,
+];
 const measuredApiReads = api.routes
-  .filter(
-    ({ method, handler }) =>
-      method === "GET" &&
-      readScalingScenarios.some((scenario) => scenario.handler === handler),
+  .filter(({ handler }) =>
+    measuredApiScenarios.some((scenario) => scenario.handler === handler),
   )
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
 test("every scaling scenario exercises a mounted API handler", () => {
-  for (const scenario of readScalingScenarios) {
+  for (const scenario of measuredApiScenarios) {
     expect(api.routes.some(({ handler }) => handler === scenario.handler)).toBe(
       true,
     );
+  }
+});
+
+test("removing any mounted read scenario makes its coverage fail", () => {
+  const surface = apiScalingSurface(api.routes);
+  for (const scenario of measuredApiScenarios) {
+    const mounted = api.routes.filter(
+      ({ handler }) => handler === scenario.handler,
+    );
+    expect(mounted.length, scenario.name).toBeGreaterThan(0);
+    for (const { method, path: routePath } of mounted) {
+      const id = `${method} ${routePath}`;
+      const reads = surface.reads.includes(id);
+      const members = reads ? surface.reads : surface.writes;
+      const exemptions = reads
+        ? apiLedger.unmeasuredReads
+        : apiLedger.pendingWriteHarness;
+      expect(measuredApiReads, scenario.name).toContain(id);
+      expect(
+        scalingCoverageViolations({
+          surface: members,
+          measured: measuredApiReads.filter(
+            (measured) => measured !== id && members.includes(measured),
+          ),
+          exemptions,
+        }),
+        scenario.name,
+      ).toContain(`unmeasured: ${id}`);
+    }
   }
 });
 
@@ -61,18 +93,18 @@ for (const { kind, surface, ledger, measured } of [
       expect(
         scalingCoverageViolations({
           surface: surface.reads,
-          measured,
+          measured: measured.filter((id) => surface.reads.includes(id)),
           exemptions: ledger.unmeasuredReads,
         }),
       ).toEqual([]);
     });
 
-    test("pending write harness ledger equals the current mutating surface", () => {
+    test("pending write harness entries cover unmeasured non-GET routes", () => {
       expect(surface.writes.length).toBeGreaterThan(0);
       expect(
         scalingCoverageViolations({
           surface: surface.writes,
-          measured: [],
+          measured: measured.filter((id) => surface.writes.includes(id)),
           exemptions: ledger.pendingWriteHarness,
         }),
       ).toEqual([]);

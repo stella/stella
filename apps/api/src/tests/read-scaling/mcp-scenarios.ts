@@ -7,12 +7,17 @@ import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import type { McpToolName } from "@/api/mcp/static-tool-names";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
+import {
+  measurePlainWebHandoff,
+  measureWebHandoff,
+} from "@/api/tests/read-scaling/handoff";
 
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
 export const mcpScalingScenarios = [
   {
     name: "list_documents" satisfies McpToolName,
+    kind: "database-page" as const,
     measure: async (fixture: ReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const scopedDb: ScopedDb = async (work) =>
@@ -48,5 +53,11 @@ export const mcpScalingScenarios = [
           rows: response.payload["documents"].length,
         };
       }),
+  },
+  {
+    name: "mint_web_handoff" satisfies McpToolName,
+    kind: "credential-mint" as const,
+    measure: measureWebHandoff,
+    measurePlain: measurePlainWebHandoff,
   },
 ];

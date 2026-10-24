@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-export type ReadScalingMeasurement = {
+type ReadScalingMeasurement = {
   statements: number;
   transactionRoundTrips: number;
   responseBytes: number;

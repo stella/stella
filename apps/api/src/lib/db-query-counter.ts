@@ -105,7 +105,7 @@ export const currentQueryCount = (): number | undefined =>
 export const currentTransactionCount = (): number | undefined =>
   queryCounterStore.getStore()?.transactions;
 
-export const recordTransactionRoundTrip = (): void => {
+const recordTransactionRoundTrip = (): void => {
   const counter = queryCounterStore.getStore();
   if (counter?.countTransactions) {
     counter.transactions += 1;
@@ -157,19 +157,6 @@ export const currentRepeatedQueryFingerprints = (): readonly string[] => {
   return [...counter.fingerprints]
     .filter(([, count]) => count > 1)
     .map(([key]) => key);
-};
-
-export const currentRepeatedQueryFingerprintCounts = (): readonly {
-  fingerprint: string;
-  count: number;
-}[] => {
-  const counter = queryCounterStore.getStore();
-  if (!counter) {
-    return [];
-  }
-  return [...counter.fingerprints]
-    .filter(([, count]) => count > 1)
-    .map(([fingerprint, count]) => ({ fingerprint, count }));
 };
 
 const normalizeSql = (query: string): string =>

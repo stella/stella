@@ -50,3 +50,17 @@ export const entityQueryWindowBodySchema = t.Object({
   // Opt in when a view renders or groups by task assignees.
   includeAssignees: t.Optional(t.Boolean()),
 });
+
+export const entityReadPageBodySchema = t.Object({
+  ...t.Pick(entityQueryWindowBodySchema, [
+    "filters",
+    "sorts",
+    "search",
+    "cursor",
+    "fieldMode",
+    "fieldIds",
+  ]).properties,
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.entitiesPageSizeMax }),
+  ),
+});

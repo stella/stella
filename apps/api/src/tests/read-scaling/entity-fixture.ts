@@ -1,10 +1,17 @@
 import { panic, Result } from "better-result";
 import { eq, getTableName, inArray, SQL, sql } from "drizzle-orm";
-import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import { getTableConfig, makePgArray, PgDialect } from "drizzle-orm/pg-core";
 
-import { member, organization, user } from "@/api/db/auth-schema";
+import {
+  member,
+  oauthClient,
+  oauthConsent,
+  organization,
+  user,
+} from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  auditLogs,
   cellMetadata,
   desktopEditSessions,
   documentProcessingRuns,
@@ -15,6 +22,7 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
+import { mcpWebHandoff } from "@/api/db/schema/mcp-web-handoff";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { queryEntities } from "@/api/lib/entities/query-entities";
@@ -37,6 +45,10 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) => {
     desktopEditSessions,
     extractedContent,
     documentProcessingRuns,
+    oauthClient,
+    oauthConsent,
+    mcpWebHandoff,
+    auditLogs,
   ]) {
     const columns = getTableConfig(table).columns.map((column) => {
       let fallback = "";
@@ -47,12 +59,14 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) => {
         typeof column.default !== "function"
       ) {
         const value =
-          typeof column.default === "object"
-            ? JSON.stringify(column.default)
-            : String(column.default);
+          column.dimensions > 0 && Array.isArray(column.default)
+            ? makePgArray(column.default)
+            : typeof column.default === "object"
+              ? JSON.stringify(column.default)
+              : String(column.default);
         fallback = ` DEFAULT '${value.replaceAll("'", "''")}'`;
       }
-      return `"${column.name}" ${column.getSQLType()}${fallback}`;
+      return `"${column.name}" ${column.getSQLType()}${"[]".repeat(column.dimensions)}${fallback}`;
     });
     await db.execute(
       sql.raw(
@@ -175,6 +189,8 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
   const safeDb: SafeDb = async (work) =>
     await Result.tryPromise(async () => await db.transaction(work));
   return {
+    db,
+    size,
     organizationId,
     userId,
     workspaceId,

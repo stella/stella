@@ -5,7 +5,8 @@ import path from "node:path";
 import { parseRepeatedSqlFingerprintLedger } from "./check-repeated-sql-fingerprints-ledger.ts";
 import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
 
-const ledgerPath = "apps/api/src/lib/repeated-sql-fingerprints.json";
+const ledgerPath =
+  "apps/api/src/lib/observability/repeated-sql-fingerprints.json";
 const repoRoot = path.resolve(import.meta.dir, "..");
 
 test("repeated SQL callsite ledger starts empty and can only shrink", () => {

@@ -66,6 +66,8 @@ import {
   windowRowKindColumn,
 } from "@/api/lib/entities/signal-window-rows";
 import {
+  decodeEntitiesWindowCursor,
+  encodeEntitiesWindowCursor,
   type EntitiesWindowCursorValue,
   type EntitiesWindowCursorValues,
   ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
@@ -83,6 +85,9 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedSignalId,
@@ -1387,3 +1392,44 @@ const buildAIPreviewableEntityCondition = (): SQL => sql`EXISTS (
 
 export const queryEntities = async (props: QueryEntitiesProps) =>
   await Result.gen(() => queryEntitiesGenerator(props));
+
+type QueryEntityCursorPageOptions = {
+  cursor: string | undefined;
+  limit: number | undefined;
+  query: Omit<QueryEntitiesProps, "cursor" | "limit">;
+  queryEntitiesImpl: typeof queryEntities;
+};
+
+export const queryEntityCursorPage = async ({
+  cursor,
+  limit: requestedLimit,
+  query,
+  queryEntitiesImpl,
+}: QueryEntityCursorPageOptions) =>
+  await Result.gen(async function* () {
+    const cursorResult = decodeEntitiesWindowCursor(cursor);
+    if (Result.isError(cursorResult)) {
+      return Result.err(cursorResult.error);
+    }
+    const limit = normalizeTenantPageLimit(
+      requestedLimit ?? LIMITS.entitiesPageSizeDefault,
+    );
+    const result = yield* Result.await(
+      queryEntitiesImpl({
+        ...query,
+        cursor: cursorResult.value,
+        limit: limit + 1,
+      }),
+    );
+    return Result.ok(
+      createCursorPage({
+        rows: result.entities,
+        limit,
+        cursorForItem: (item) =>
+          encodeEntitiesWindowCursor(
+            result.cursorValuesByEntityId.get(item.entityId) ??
+              panic("Missing cursor values for entity page item"),
+          ),
+      }),
+    );
+  });

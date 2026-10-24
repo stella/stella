@@ -10,8 +10,8 @@ import {
   runWithMeasuredQueryCounter,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import repeatedSqlFingerprintLedger from "@/api/lib/observability/repeated-sql-fingerprints.json";
 import { runWithRequestIdScope } from "@/api/lib/observability/request-context";
-import repeatedSqlFingerprintLedger from "@/api/lib/repeated-sql-fingerprints.json";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
 export const runWithRequestScope = <TResult>(fn: () => TResult): TResult =>

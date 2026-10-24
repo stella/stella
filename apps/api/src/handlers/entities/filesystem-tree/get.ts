@@ -1,47 +1,18 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { sql } from "drizzle-orm";
-import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { toSafeId } from "@/api/lib/branded-types";
-import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
-import { queryEntities } from "@/api/lib/entities/query-entities";
 import {
-  decodeEntitiesWindowCursor,
-  encodeEntitiesWindowCursor,
-  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
-} from "@/api/lib/entities/window-cursor";
+  queryEntities,
+  queryEntityCursorPage,
+} from "@/api/lib/entities/query-entities";
+import { entityReadPageBodySchema } from "@/api/lib/entities/query-window-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { createCursorPage } from "@/api/lib/pagination";
-import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { tViewSortSchema } from "@/api/lib/views-schema";
-
-const readFilesystemTreeBodySchema = t.Object({
-  cursor: t.Optional(
-    tPaginationCursor({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
-  ),
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.entitiesPageSizeMax }),
-  ),
-  filters: t.Optional(
-    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
-  ),
-  sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
-  ),
-  search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
-  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
-  fieldIds: t.Optional(
-    t.Array(tSafeId("property"), {
-      maxItems: LIMITS.propertiesCount,
-    }),
-  ),
-});
 
 const config = {
   contract: "patch",
@@ -56,7 +27,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
-  body: readFilesystemTreeBodySchema,
+  body: entityReadPageBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
 type QueryEntities = typeof queryEntities;
@@ -73,40 +44,27 @@ export const createReadFilesystemTreeHandler = (
       body,
       user: currentUser,
     }) {
-      const cursorResult = decodeEntitiesWindowCursor(body.cursor);
-      if (Result.isError(cursorResult)) {
-        return Result.err(cursorResult.error);
-      }
-      const limit = normalizeTenantPageLimit(
-        body.limit ?? LIMITS.entitiesPageSizeDefault,
-      );
-      const result = yield* Result.await(
-        queryEntitiesImpl({
-          safeDb,
-          scope: { type: "matter", workspaceId },
-          currentUserId: currentUser.id,
-          currentOrganizationId: session.activeOrganizationId,
-          filters: arrayOrEmpty(body.filters),
-          sorts: arrayOrEmpty(body.sorts),
-          ...(body.search !== undefined && { search: body.search }),
-          cursor: cursorResult.value,
-          limit: limit + 1,
-          fieldMode: body.fieldMode ?? "visible",
-          fieldIds: arrayOrEmpty(body.fieldIds),
-          excludedKinds: ["task"],
-          previewableForAi: false,
+      const page = yield* Result.await(
+        queryEntityCursorPage({
+          cursor: body.cursor,
+          limit: body.limit,
+          queryEntitiesImpl,
+          query: {
+            safeDb,
+            scope: { type: "matter", workspaceId },
+            currentUserId: currentUser.id,
+            currentOrganizationId: session.activeOrganizationId,
+            filters: arrayOrEmpty(body.filters),
+            sorts: arrayOrEmpty(body.sorts),
+            ...(body.search !== undefined && { search: body.search }),
+            fieldMode: body.fieldMode ?? "visible",
+            fieldIds: arrayOrEmpty(body.fieldIds),
+            excludedKinds: ["task"],
+            previewableForAi: false,
+          },
         }),
       );
 
-      const page = createCursorPage({
-        rows: result.entities,
-        limit,
-        cursorForItem: (item) =>
-          encodeEntitiesWindowCursor(
-            result.cursorValuesByEntityId.get(item.entityId) ??
-              panic("Missing cursor values for filesystem page item"),
-          ),
-      });
       const parentIds = [
         ...new Set(
           page.items.flatMap((item) =>

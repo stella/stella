@@ -8,7 +8,7 @@ import { isListItemType } from "@stll/api-contract/entity-options";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
-import { stringCursorSeed } from "@/lib/infinite-query";
+import { stringCursorSeed, visitCursorPages } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -244,39 +244,46 @@ export const filesystemEntitiesOptions = (
       const fieldMode = key.fieldMode ?? "visible";
       const entities: WorkspaceEntity[] = [];
       const ancestorLinksById = new Map<
-        string,
-        { entityId: string; parentId: string | null }
+        WorkspaceEntity["entityId"],
+        Pick<WorkspaceEntity, "entityId" | "parentId">
       >();
-      let cursor: string | undefined;
-      do {
-        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- Each bounded tree page requires the preceding page's cursor.
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-          ["filesystem-tree"].post(
-            {
-              ...(cursor !== undefined && { cursor }),
-              filters: key.filters,
-              sorts: key.sorts,
-              ...(key.search?.trim() && { search: key.search.trim() }),
-              fieldMode,
-              fieldIds:
-                fieldMode === "visible"
-                  ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
-                      toSafeId<"property">(fieldId),
-                    )
-                  : [],
-            },
-            { fetch: { signal } },
-          );
+      await visitCursorPages({
+        getPage: async (cursor) => {
+          const response = await api
+            .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+            ["filesystem-tree"].post(
+              {
+                ...(cursor !== undefined && { cursor }),
+                filters: key.filters,
+                sorts: key.sorts,
+                ...(key.search?.trim() && { search: key.search.trim() }),
+                fieldMode,
+                fieldIds:
+                  fieldMode === "visible"
+                    ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                        toSafeId<"property">(fieldId),
+                      )
+                    : [],
+              },
+              { fetch: { signal } },
+            );
 
-        const data = unwrapEden(response);
-
-        entities.push(...data.items.map(toWorkspaceEntity));
-        for (const link of data.ancestorLinks) {
-          ancestorLinksById.set(link.entityId, link);
-        }
-        cursor = data.nextCursor ?? undefined;
-      } while (cursor !== undefined);
+          return unwrapEden(response);
+        },
+        visit: (data) => {
+          entities.push(...data.items.map(toWorkspaceEntity));
+          for (const link of data.ancestorLinks) {
+            const entityId = toSafeId<"entity">(link.entityId);
+            ancestorLinksById.set(entityId, {
+              entityId,
+              parentId:
+                link.parentId === null
+                  ? null
+                  : toSafeId<"entity">(link.parentId),
+            });
+          }
+        },
+      });
 
       // Parent links of ancestor folders a filter/search hid. Used only to
       // complete the ancestor chain for cross-matter copy/move dedup; never
@@ -403,24 +410,24 @@ export const entitySummariesOptions = (workspaceId: string) =>
     queryKey: entitiesKeys.summaries(workspaceId),
     queryFn: async ({ signal }) => {
       const summaries: { id: string; name: string | null }[] = [];
-      let cursor: string | undefined;
-      do {
-        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .summaries.get({
-            fetch: { signal },
-            query: {
-              limit: DEFAULT_ENTITY_WINDOW_SIZE,
-              ...(cursor !== undefined && { cursor }),
-            },
-          });
+      await visitCursorPages({
+        getPage: async (cursor) => {
+          const response = await api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .summaries.get({
+              fetch: { signal },
+              query: {
+                limit: DEFAULT_ENTITY_WINDOW_SIZE,
+                ...(cursor !== undefined && { cursor }),
+              },
+            });
 
-        const data = unwrapEden(response);
-
-        summaries.push(...data.items.map(({ id, name }) => ({ id, name })));
-        cursor = data.nextCursor ?? undefined;
-      } while (cursor !== undefined);
+          return unwrapEden(response);
+        },
+        visit: (data) => {
+          summaries.push(...data.items.map(({ id, name }) => ({ id, name })));
+        },
+      });
 
       return summaries;
     },
@@ -452,30 +459,30 @@ const fetchAllWorkspaceFolders = async ({
   workspaceId: string;
 }): Promise<WorkspaceFolder[]> => {
   const folders: WorkspaceFolder[] = [];
-  let cursor: string | undefined;
-  do {
-    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .folders.get({
-        fetch: { signal },
-        query: {
-          limit: DEFAULT_ENTITY_WINDOW_SIZE,
-          ...(cursor !== undefined && { cursor }),
-        },
-      });
+  await visitCursorPages({
+    getPage: async (cursor) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .folders.get({
+          fetch: { signal },
+          query: {
+            limit: DEFAULT_ENTITY_WINDOW_SIZE,
+            ...(cursor !== undefined && { cursor }),
+          },
+        });
 
-    const data = unwrapEden(response);
-
-    folders.push(
-      ...data.items.map((folder) => ({
-        entityId: folder.id,
-        name: folder.name,
-        parentId: folder.parentId,
-      })),
-    );
-    cursor = data.nextCursor ?? undefined;
-  } while (cursor !== undefined);
+      return unwrapEden(response);
+    },
+    visit: (data) => {
+      folders.push(
+        ...data.items.map((folder) => ({
+          entityId: folder.id,
+          name: folder.name,
+          parentId: folder.parentId,
+        })),
+      );
+    },
+  });
 
   return folders;
 };
@@ -507,33 +514,33 @@ const fetchAllWorkspaceFiles = async ({
   workspaceId: string;
 }): Promise<WorkspaceFile[]> => {
   const files: WorkspaceFile[] = [];
-  let cursor: string | undefined;
-  do {
-    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .files.get({
-        fetch: { signal },
-        query: {
-          limit: DEFAULT_ENTITY_WINDOW_SIZE,
-          ...(cursor !== undefined && { cursor }),
-        },
-      });
+  await visitCursorPages({
+    getPage: async (cursor) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .files.get({
+          fetch: { signal },
+          query: {
+            limit: DEFAULT_ENTITY_WINDOW_SIZE,
+            ...(cursor !== undefined && { cursor }),
+          },
+        });
 
-    const data = unwrapEden(response);
-
-    files.push(
-      ...data.items.map((file) => ({
-        entityId: file.entityId,
-        fieldId: file.fieldId,
-        name: file.name,
-        parentId: file.parentId,
-        fileName: file.fileName,
-        mimeType: file.mimeType,
-      })),
-    );
-    cursor = data.nextCursor ?? undefined;
-  } while (cursor !== undefined);
+      return unwrapEden(response);
+    },
+    visit: (data) => {
+      files.push(
+        ...data.items.map((file) => ({
+          entityId: file.entityId,
+          fieldId: file.fieldId,
+          name: file.name,
+          parentId: file.parentId,
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+        })),
+      );
+    },
+  });
 
   return files;
 };
