@@ -2087,7 +2087,14 @@ const createAcknowledgementLookup = ({
 }: AcknowledgementLookupOptions): StatementAcknowledgementLookup => {
   const firstStatementByLine = new Map<number, Statement>();
   for (const statement of statements) {
-    if (!firstStatementByLine.has(statement.line)) {
+    const first = firstStatementByLine.get(statement.line);
+    // Quoted bodies surface before their header; they must not take its
+    // acknowledgement when both start on the same physical line.
+    if (
+      first === undefined ||
+      (first.enclosingLine !== undefined &&
+        statement.enclosingLine === undefined)
+    ) {
       firstStatementByLine.set(statement.line, statement);
     }
   }

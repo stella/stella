@@ -517,6 +517,31 @@ DROP TABLE a; DROP TABLE b;`;
     ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE drop-table needs")]);
   });
 
+  test.each([" ", "\n"])(
+    "function header reviews preserve lock review boundaries (%j)",
+    (separator) => {
+      const sql = `-- stella-migration-safety: reviewed security-definer - Reviewed fixed read-only helper privileges
+CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$${separator}SELECT 1;${separator}$$;`;
+      expect(
+        checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+      ).toEqual([]);
+      expect(
+        checkMigrationLocks({
+          sources: source(`${sql}\nDROP TABLE retired;`),
+          baseline: [],
+        }).errors,
+      ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE drop-table needs")]);
+    },
+  );
+
+  test("an enclosing review cannot approve a different nested lock form", () => {
+    const sql = `-- stella-migration-safety: reviewed unbounded-update - Reviewed small bounded maintenance operation
+DO $$ BEGIN UPDATE probe SET title = 'updated'; DROP TABLE retired; END $$;`;
+    expect(
+      checkMigrationLocks({ sources: source(sql), baseline: [] }).errors,
+    ).toEqual([expect.stringContaining("ACCESS EXCLUSIVE drop-table needs")]);
+  });
+
   test("mixed ALTER TABLE actions retain their individual lock classifications", () => {
     const result = censusSql(
       'ALTER TABLE "probe" VALIDATE CONSTRAINT "check", ADD COLUMN "title" text;',
