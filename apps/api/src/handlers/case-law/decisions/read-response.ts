@@ -140,6 +140,27 @@ const languageAlternateSchema = t.Object({
   TSchema
 >);
 
+const caseFileDocumentSchema = t.Object({
+  id: tSafeId("caseLawDecision"),
+  caseNumber: boundedString(DECISION_READER_TEXT_BYTES.caseNumber),
+  country: boundedString(DECISION_READER_TEXT_BYTES.country),
+  court: boundedString(DECISION_READER_TEXT_BYTES.court),
+  decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
+  decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
+  ecli: nullableBoundedString(DECISION_READER_TEXT_BYTES.ecli),
+  language: boundedString(DECISION_READER_TEXT_BYTES.language),
+  languageGroupKey: nullableBoundedString(
+    DECISION_READER_TEXT_BYTES.languageGroupKey,
+  ),
+  slug: nullableBoundedString(DECISION_READER_TEXT_BYTES.slug),
+  languageAlternates: t.Array(t.Pick(languageAlternateSchema, ["language"]), {
+    maxItems: LIMITS.caseLawLanguageAlternatesPerGroupMax,
+  }),
+} satisfies Record<
+  keyof ReadableDecision["caseFile"]["items"][number],
+  TSchema
+>);
+
 export const readDecisionSuccessResponseSchema = t.Object({
   documentPending: t.Boolean(),
   hasDocument: t.Boolean(),
@@ -254,6 +275,13 @@ export const readDecisionSuccessResponseSchema = t.Object({
     { maxItems: LIMITS.caseLawDecisionCitationPageSize },
   ),
   citationsNextCursor: nullableBoundedString(CURSOR_BYTES),
+  caseFile: t.Object({
+    items: t.Array(caseFileDocumentSchema, {
+      maxItems: LIMITS.caseLawCaseFilePageSize,
+    }),
+    nextCursor: nullableBoundedString(CURSOR_BYTES),
+    limit: t.Number({ maximum: LIMITS.caseLawCaseFilePageSize }),
+  }),
   languageAlternates: t.Array(languageAlternateSchema, {
     maxItems: LIMITS.caseLawLanguageAlternatesPerGroupMax,
   }),
@@ -449,6 +477,27 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
       ...citation,
       citationText: truncateTextBytes(citation.citationText, PROSE_BYTES),
     })),
+    caseFile: {
+      ...decision.caseFile,
+      items: decision.caseFile.items.map((item) => ({
+        ...item,
+        caseNumber: truncateTextBytes(item.caseNumber, text.caseNumber),
+        country: truncateTextBytes(item.country, text.country),
+        court: truncateTextBytes(item.court, text.court),
+        decisionDate: nullableText(item.decisionDate, text.decisionDate),
+        decisionType: nullableText(item.decisionType, text.decisionType),
+        ecli: nullableText(item.ecli, text.ecli),
+        language: truncateTextBytes(item.language, text.language),
+        languageGroupKey: nullableText(
+          item.languageGroupKey,
+          text.languageGroupKey,
+        ),
+        slug: nullableText(item.slug, text.slug),
+        languageAlternates: item.languageAlternates.map(({ language }) => ({
+          language: truncateTextBytes(language, text.language),
+        })),
+      })),
+    },
     languageAlternates: decision.languageAlternates.map((alternate) => ({
       id: truncateTextBytes(alternate.id, 36),
       caseNumber: truncateTextBytes(alternate.caseNumber, text.caseNumber),

@@ -250,8 +250,8 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   },
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
-  read: async (subject, { query: { citationsCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor }),
+  read: async (subject, { query: { citationsCursor, caseFileCursor } }) =>
+    await readDecisionHandler({ subject, citationsCursor, caseFileCursor }),
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
   followUp: async (read) => {
@@ -292,8 +292,8 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
       ? countryRead
       : { kind: "slug", country: countryRead.country, slug, language };
   },
-  read: async (subject, { query: { citationsCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor }),
+  read: async (subject, { query: { citationsCursor, caseFileCursor } }) =>
+    await readDecisionHandler({ subject, citationsCursor, caseFileCursor }),
   followUp: async (read) => {
     const hydrated = await hydrateDeferredDocument(read, false, {
       type: "on-demand",

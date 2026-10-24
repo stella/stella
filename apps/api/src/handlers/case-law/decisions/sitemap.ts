@@ -26,6 +26,7 @@ import {
   SITEMAP_ALL_BUCKET,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
+  sitemapDocumentRepresentativeFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
@@ -189,7 +190,13 @@ export const sitemapShardDecisionsQuery = (
       caseLawSources,
       eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
-    .where(and(redistributableCaseLawSource, ...conditions))
+    .where(
+      and(
+        redistributableCaseLawSource,
+        ...conditions,
+        sitemapDocumentRepresentativeFor(publishedCaseLawDecisions),
+      ),
+    )
     .orderBy(
       desc(publishedCaseLawDecisions.updatedAt),
       desc(publishedCaseLawDecisions.id),
