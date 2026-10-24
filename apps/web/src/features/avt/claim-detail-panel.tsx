@@ -38,6 +38,7 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import { ClaimComments } from "@/features/avt/claim-comments";
 import { FactDate } from "@/features/avt/fact-date";
 import { EvidenceFactSource } from "@/features/avt/fact-source";
 import { evidenceQuoteSource } from "@/features/avt/fact-source.logic";
@@ -322,6 +323,15 @@ export const ClaimDetailPanel = ({
               review={review}
             />
           </section>
+
+          {/* Keyed by the claim, so a comment being written on one claim is
+              discarded rather than saved onto the next one selected. */}
+          <ClaimComments
+            claim={claim}
+            key={`${runId}:${claim.id}`}
+            runId={runId}
+            workspaceId={workspaceId}
+          />
         </div>
       </ScrollArea>
     </div>

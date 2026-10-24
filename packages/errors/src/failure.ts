@@ -108,6 +108,9 @@ export const FAILURE_REASON_GRADE = {
   pg_lock_unavailable: "defect",
   pg_query_canceled: "defect",
   pg_auth_failed: "defect",
+  // 22007, 22008, 22P02: Postgres could not read a value as its column type.
+  // A value that fails there passed input validation, so the gap is a defect.
+  pg_invalid_input: "defect",
   connection_refused: "defect",
   socket_open_failed: "defect",
   timeout_unbounded: "defect",
