@@ -48,6 +48,7 @@ const emptyWork = (): Work => ({
 type PendingDetection = {
   text: string;
   resolve: () => void;
+  reject: (error: Error) => void;
 };
 
 /**
@@ -110,8 +111,8 @@ const createHarness = ({
       if (!holdRequests) {
         return Promise.resolve({ pairs });
       }
-      return new Promise((resolve) => {
-        pending.push({ text, resolve: () => resolve({ pairs }) });
+      return new Promise((resolve, reject) => {
+        pending.push({ text, resolve: () => resolve({ pairs }), reject });
       });
     },
     fieldId,
@@ -287,6 +288,52 @@ test("an edit made while detection runs is detected before results are shown", a
   expect(harness.delivered).toEqual([{ canonical: PERSON, label: "person" }]);
   harness.detection.stop();
 });
+
+test.each(["success", "failure"] as const)(
+  "an edit whose settle timer expires during a failed request reaches a replacement detection (%s)",
+  async (replacementOutcome) => {
+    const harness = createHarness({
+      paragraphCount: PARAGRAPHS,
+      holdRequests: true,
+    });
+    await harness.advance(1000);
+    expect(harness.pending).toHaveLength(1);
+    expect(harness.pending.at(0)?.text).not.toContain(paragraphText(7, 1));
+
+    harness.editParagraph(7, 1);
+    await harness.advance(5000);
+    expect(harness.pending).toHaveLength(1);
+    expect(jest.getTimerCount()).toBe(0);
+
+    harness.pending.at(0)?.reject(new Error("The original detection failed"));
+    await harness.flush();
+    expect(harness.work.deliveries).toBe(0);
+    expect(harness.pending).toHaveLength(2);
+    expect(harness.pending.at(1)?.text).toContain(paragraphText(7, 1));
+    expect(harness.status()).toBe("running");
+
+    if (replacementOutcome === "success") {
+      harness.pending.at(1)?.resolve();
+    } else {
+      harness.pending.at(1)?.reject(new Error("The current detection failed"));
+    }
+    await harness.flush();
+    await harness.advance(5000);
+    expect(harness.pending).toHaveLength(2);
+    expect(jest.getTimerCount()).toBe(0);
+    expect(harness.status()).toBe(
+      replacementOutcome === "success" ? "ready" : "error",
+    );
+    expect(harness.work.deliveries).toBe(
+      replacementOutcome === "success" ? 1 : 0,
+    );
+    expect(confirmAnonymizationDetectionCurrent(harness.fieldId)).toBe(
+      replacementOutcome === "success",
+    );
+    expect(harness.pending).toHaveLength(2);
+    harness.detection.stop();
+  },
+);
 
 test("an edit Folio never reports is detected before the anonymized download proceeds", async () => {
   const harness = createHarness({ paragraphCount: PARAGRAPHS });
