@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { generateBunToolchain } from "./generate-bun-toolchain";
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 import {
   DELEGATED_CHECKS_ENV,
   delegatedGeneratorIds,
   runGeneratorChecks,
 } from "./generated-files-guard";
-import { evaluate, type Context } from "./github-expression";
+import { type Context, evaluate } from "./github-expression";
 import { workflowJobSteps } from "./workflow-steps";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

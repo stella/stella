@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  type AppMessageDescriptor,
   formatAppError,
   LocalizedAppError,
-  type AppMessageDescriptor,
 } from "./app-error";
 import { appLocale, setAppDocumentLocale } from "./locale";
 

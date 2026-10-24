@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { api } from "@/lib/api";
 import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";

@@ -22,6 +22,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 import { seedLegalLists } from "./seed-legal-lists";
 import { seedId } from "./seed-utils";
 
+// Measured p95: 15.5 s; this must run and replay the real Postgres seed.
 test("legal list fixtures keep live in-matter provenance and converge on replay", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
@@ -191,4 +192,4 @@ test("legal list fixtures keep live in-matter provenance and converge on replay"
   } finally {
     await client.close();
   }
-}, 120_000);
+}, 35_000);

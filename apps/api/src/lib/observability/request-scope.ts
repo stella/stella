@@ -6,8 +6,28 @@
 // handler (see `scopeRequestAsyncStores` in `server.ts`); nothing else should
 // open either store for a request.
 
-import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import {
+  runWithMeasuredQueryCounter,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
+import repeatedSqlFingerprintLedger from "@/api/lib/observability/repeated-sql-fingerprints.json";
 import { runWithRequestIdScope } from "@/api/lib/observability/request-context";
+import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
 export const runWithRequestScope = <TResult>(fn: () => TResult): TResult =>
-  runWithRequestIdScope(() => runWithQueryCounter(() => fn()));
+  runWithRequestIdScope(() =>
+    runWithQueryCounter(() => fn(), {
+      countTransactions: isLocalDevOpen(),
+    }),
+  );
+
+/** Integration requests enforce fingerprints even without a Postgres fixture. */
+export const runWithHttpRequestScope = async <TResult>(
+  fn: () => Promise<TResult>,
+): Promise<TResult> =>
+  isLocalTestRun()
+    ? await runWithRequestIdScope(
+        async () =>
+          await runWithMeasuredQueryCounter(fn, repeatedSqlFingerprintLedger),
+      )
+    : await runWithRequestScope(fn);

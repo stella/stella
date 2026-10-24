@@ -45,9 +45,9 @@ import {
   plUokikListingIdentity,
   plUokikNextSlice,
   plUokikPreviousSlice,
+  plUokikQuarantineId,
   plUokikRawPartsOf,
   plUokikRulingId,
-  plUokikQuarantineId,
   plUokikSortKey,
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";

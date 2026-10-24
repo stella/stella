@@ -26,8 +26,8 @@ import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
