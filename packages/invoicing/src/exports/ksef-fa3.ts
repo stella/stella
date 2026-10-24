@@ -28,7 +28,6 @@ const NAMESPACE = "http://crd.gov.pl/wzor/2025/06/25/13775/";
 
 /** The pattern the schema's TNrNIP adds on top of the NIP checksum. */
 const NIP_PATTERN = /^[1-9](?:\d[1-9]|[1-9]\d)\d{7}$/u;
-const EU_VAT_NUMBER_PATTERN = /^[\dA-Z+*]{1,12}$/u;
 const SWIFT_PATTERN = /^[A-Z]{6}[A-Z\d]{2}(?:[A-Z\d]{3})?$/u;
 
 /** EU member states by ISO code; Greece's VAT prefix is EL. */
@@ -61,6 +60,106 @@ const EU_COUNTRIES = new Set([
   "SI",
   "SK",
 ]);
+
+type EuCountry =
+  | "AT"
+  | "BE"
+  | "BG"
+  | "CY"
+  | "CZ"
+  | "DE"
+  | "DK"
+  | "EE"
+  | "ES"
+  | "FI"
+  | "FR"
+  | "GR"
+  | "HR"
+  | "HU"
+  | "IE"
+  | "IT"
+  | "LT"
+  | "LU"
+  | "LV"
+  | "MT"
+  | "NL"
+  | "PL"
+  | "PT"
+  | "RO"
+  | "SE"
+  | "SI"
+  | "SK";
+
+/** VAT-number shapes after removing the registration country's prefix. */
+const EU_VAT_NUMBER_PATTERNS = {
+  AT: /^U\d{8}$/u,
+  BE: /^\d{10}$/u,
+  BG: /^\d{9,10}$/u,
+  CY: /^\d{8}[A-Z]$/u,
+  CZ: /^\d{8,10}$/u,
+  DE: /^\d{9}$/u,
+  DK: /^\d{8}$/u,
+  EE: /^\d{9}$/u,
+  ES: /^[A-Z\d]\d{7}[A-Z\d]$/u,
+  FI: /^\d{8}$/u,
+  FR: /^[A-Z\d]{2}\d{9}$/u,
+  GR: /^\d{9}$/u,
+  HR: /^\d{11}$/u,
+  HU: /^\d{8}$/u,
+  IE: /^(?:\d{7}[A-Z]{1,2}|\d[A-Z\d+*]\d{5}[A-Z])$/u,
+  IT: /^\d{11}$/u,
+  LT: /^(?:\d{9}|\d{12})$/u,
+  LU: /^\d{8}$/u,
+  LV: /^\d{11}$/u,
+  MT: /^\d{8}$/u,
+  NL: /^\d{9}B\d{2}$/u,
+  PL: /^\d{10}$/u,
+  PT: /^\d{9}$/u,
+  RO: /^\d{2,10}$/u,
+  SE: /^\d{12}$/u,
+  SI: /^\d{8}$/u,
+  SK: /^\d{10}$/u,
+} as const satisfies Record<EuCountry, RegExp>;
+
+const EU_VAT_NUMBER_PATTERN = new RegExp(
+  `^(?:${Object.values(EU_VAT_NUMBER_PATTERNS)
+    .map((pattern) => pattern.source.replace(/^\^|\$$/gu, ""))
+    .join("|")})$`,
+  "u",
+);
+
+const EU_COUNTRY_NAMES = {
+  AT: "Austrian",
+  BE: "Belgian",
+  BG: "Bulgarian",
+  CY: "Cypriot",
+  CZ: "Czech",
+  DE: "German",
+  DK: "Danish",
+  EE: "Estonian",
+  ES: "Spanish",
+  FI: "Finnish",
+  FR: "French",
+  GR: "Greek",
+  HR: "Croatian",
+  HU: "Hungarian",
+  IE: "Irish",
+  IT: "Italian",
+  LT: "Lithuanian",
+  LU: "Luxembourgish",
+  LV: "Latvian",
+  MT: "Maltese",
+  NL: "Dutch",
+  PL: "Polish",
+  PT: "Portuguese",
+  RO: "Romanian",
+  SE: "Swedish",
+  SI: "Slovenian",
+  SK: "Slovak",
+} as const satisfies Record<EuCountry, string>;
+
+const isEuCountry = (country: string): country is EuCountry =>
+  EU_COUNTRIES.has(country);
 
 const vatPrefixOf = (country: string): string =>
   country === "GR" ? "EL" : country;
@@ -236,6 +335,17 @@ const buyerTaxIdentity = (
       ? { zone: "eu", prefix, number }
       : { error: `the buyer's EU VAT number ${vatId ?? ""} is not valid` };
   if (vatId && ownPrefix !== undefined && ownPrefix !== "PL") {
+    const prefixCountry = ownPrefix === "EL" ? "GR" : ownPrefix;
+    if (
+      isEuCountry(prefixCountry) &&
+      isEuCountry(country) &&
+      prefixCountry !== country &&
+      EU_VAT_NUMBER_PATTERNS[country].test(vatId)
+    ) {
+      return {
+        error: `the buyer's VAT number ${vatId} reads both as a ${EU_COUNTRY_NAMES[prefixCountry]} number and as a ${EU_COUNTRY_NAMES[country]} number without its prefix; store it with its country prefix (${vatPrefixOf(country)}… for a ${EU_COUNTRY_NAMES[country]} registration)`,
+      };
+    }
     return euVat(ownPrefix, vatId.slice(2));
   }
   if (country === "PL" || ownPrefix === "PL") {
@@ -332,11 +442,7 @@ const document = (
   const reverseCharge = lines.some(
     ({ line }) => line.vatTreatment === "reverse_charge",
   );
-  const advance = record.documentType === "advance";
-  // The tax point: the supply date, or for an advance the day it was paid.
-  const supplyDate = advance
-    ? (record.paidDate ?? record.taxableSupplyDate)
-    : record.taxableSupplyDate;
+  const supplyDate = record.taxableSupplyDate;
   const seller = record.seller;
   const swift = seller.bic?.replaceAll(/\s/gu, "").toUpperCase() ?? "";
   // Zaplacono/DataZaplaty state a payment made by the time the invoice is
@@ -358,47 +464,21 @@ const document = (
   ]);
   const unitPrice = (line: InvoiceExportLine) =>
     amount(line.unitPriceMinor ?? line.netAmountMinor);
-  const invoiceLines = advance
-    ? ""
-    : lines.map(({ line, tax }, index) =>
-        el("FaWiersz", [
-          text("NrWierszaFa", String(index + 1)),
-          text("P_7", clip(line.description.trim(), 512)),
-          text("P_8A", line.unit === null ? null : clip(line.unit.trim(), 256)),
-          text("P_8B", quantityText(line.quantity)),
-          text("P_9A", unitPrice(line)),
-          text("P_11", amount(line.netAmountMinor)),
-          // stella rounds VAT per line (art. 106e ust. 10 of the VAT Act).
-          line.vatTreatment === "domestic_vat"
-            ? text("P_11Vat", amount(line.vatAmountMinor))
-            : "",
-          text("P_12", tax.rate),
-        ]),
-      );
-  // An advance invoice states the order it is paid towards (art. 106f
-  // ust. 1 pkt 4); stella knows the order as the advance's own lines.
-  const order = advance
-    ? el("Zamowienie", [
-        text("WartoscZamowienia", amount(record.totals.grossAmountMinor)),
-        lines.map(({ line, tax }, index) =>
-          el("ZamowienieWiersz", [
-            text("NrWierszaZam", String(index + 1)),
-            text("P_7Z", clip(line.description.trim(), 512)),
-            text(
-              "P_8AZ",
-              line.unit === null ? null : clip(line.unit.trim(), 256),
-            ),
-            text("P_8BZ", quantityText(line.quantity)),
-            text("P_9AZ", unitPrice(line)),
-            text("P_11NettoZ", amount(line.netAmountMinor)),
-            line.vatTreatment === "domestic_vat"
-              ? text("P_11VatZ", amount(line.vatAmountMinor))
-              : "",
-            text("P_12Z", tax.rate),
-          ]),
-        ),
-      ])
-    : "";
+  const invoiceLines = lines.map(({ line, tax }, index) =>
+    el("FaWiersz", [
+      text("NrWierszaFa", String(index + 1)),
+      text("P_7", clip(line.description.trim(), 512)),
+      text("P_8A", line.unit === null ? null : clip(line.unit.trim(), 256)),
+      text("P_8B", quantityText(line.quantity)),
+      text("P_9A", unitPrice(line)),
+      text("P_11", amount(line.netAmountMinor)),
+      // stella rounds VAT per line (art. 106e ust. 10 of the VAT Act).
+      line.vatTreatment === "domestic_vat"
+        ? text("P_11Vat", amount(line.vatAmountMinor))
+        : "",
+      text("P_12", tax.rate),
+    ]),
+  );
   const description = invoiceDescriptionOf(record);
   const body = [
     el("Naglowek", [
@@ -449,10 +529,9 @@ const document = (
         text("P_23", "2"),
         el("PMarzy", text("P_PMarzyN", "1")),
       ]),
-      text("RodzajFaktury", advance ? "ZAL" : "VAT"),
+      text("RodzajFaktury", "VAT"),
       invoiceLines,
       payment,
-      order,
     ]),
     description === null
       ? ""
@@ -476,6 +555,12 @@ const prepare = (
     // its KSeF number, or state that it was issued outside KSeF.
     return refuse(
       "a KSeF corrective invoice needs the corrected invoice's issue date and KSeF number, which stella does not store",
+    );
+  }
+  if (record.documentType === "advance") {
+    // ZAL must state the whole order or contract under art. 106f ust. 1 pkt 4.
+    return refuse(
+      "an advance invoice needs the value and lines of the order it is paid towards, which stella does not store",
     );
   }
   const digits = currencyMinorUnitDigits(record.currency);
@@ -555,8 +640,8 @@ const prepare = (
 
 /**
  * One FA(3) invoice per record, keyed by file name, for the seller to send
- * to KSeF. Invoices and advance invoices are written; a credit note, an
- * exempt line or VAT in a foreign currency need data stella does not keep,
+ * to KSeF. Advance invoices, credit notes, exempt lines and VAT in a foreign
+ * currency need data stella does not keep,
  * and an invoice without a valid Polish NIP for the seller cannot be
  * issued in KSeF, so those are refused.
  */

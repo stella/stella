@@ -201,54 +201,42 @@ describe("KSeF FA(3)", () => {
     expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("writes a paid advance invoice with the order it is paid towards", async () => {
-    const xml = fa3(
-      polish({
-        number: "FZ/2026/7",
-        documentType: "advance",
-        taxableSupplyDate: null,
-        status: "paid",
-        paidDate: "2026-10-10",
-        lines: [
-          {
-            description: "Zaliczka na obsługę transakcji",
-            netAmountMinor: cents(500_000),
-            vatRateBps: 2300,
-          },
-        ],
-      }),
+  test("refuses a paid advance invoice because its order is not stored", () => {
+    const record = polish({
+      number: "FZ/2026/7",
+      documentType: "advance",
+      taxableSupplyDate: null,
+      status: "paid",
+      paidDate: "2026-10-10",
+      lines: [
+        {
+          description: "Zaliczka na obsługę transakcji",
+          netAmountMinor: cents(500_000),
+          vatRateBps: 2300,
+        },
+      ],
+    });
+    expect(refusal(record)).toContain(
+      "an advance invoice needs the value and lines of the order it is paid towards, which stella does not store",
     );
-    expect(between(xml, "RodzajFaktury")).toEqual(["ZAL"]);
-    expect(between(xml, "P_6")).toEqual(["2026-10-10"]);
-    expect(between(xml, "P_13_1")).toEqual(["5000.00"]);
-    expect(between(xml, "P_14_1")).toEqual(["1150.00"]);
-    expect(between(xml, "P_15")).toEqual(["6150.00"]);
-    expect(xml).not.toContain("<FaWiersz>");
-    expect(between(xml, "WartoscZamowienia")).toEqual(["6150.00"]);
-    expect(between(xml, "P_12Z")).toEqual(["23"]);
-    expect(between(xml, "Zaplacono")).toEqual(["1"]);
-    expect(between(xml, "DataZaplaty")).toEqual(["2026-10-10"]);
-    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("writes an unpaid advance invoice without a payment date", async () => {
-    const xml = fa3(
-      polish({
-        number: "FZ/2026/8",
-        documentType: "advance",
-        taxableSupplyDate: null,
-        lines: [
-          {
-            description: "Zaliczka",
-            netAmountMinor: cents(100_000),
-            vatRateBps: 2300,
-          },
-        ],
-      }),
+  test("refuses an unpaid advance invoice because its order is not stored", () => {
+    const record = polish({
+      number: "FZ/2026/8",
+      documentType: "advance",
+      taxableSupplyDate: null,
+      lines: [
+        {
+          description: "Zaliczka",
+          netAmountMinor: cents(100_000),
+          vatRateBps: 2300,
+        },
+      ],
+    });
+    expect(refusal(record)).toContain(
+      "an advance invoice needs the value and lines of the order it is paid towards, which stella does not store",
     );
-    expect(between(xml, "P_6")).toEqual([]);
-    expect(xml).not.toContain("<Zaplacono>");
-    expect(await schemaErrors(xml)).toBe("");
   });
 });
 
@@ -385,39 +373,58 @@ describe("KSeF FA(3) VAT treatments", () => {
 
   test("the VAT number's own EU prefix wins over the address country", async () => {
     const euBuyer = (country: string, vatId: string) =>
-      fa3(
-        polish({
-          number: "5b/2026",
-          buyer: {
-            name: "Buyer",
-            vatId,
-            addressLine1: "Street 1",
-            city: "City",
-            country,
-          },
-          lines: [line("reverse_charge")],
-        }),
-      );
-    // A German registration at a Czech address stays German.
-    const branch = euBuyer("CZ", "DE123456789");
-    expect(between(branch, "KodUE")).toEqual(["DE"]);
-    expect(between(branch, "NrVatUE")).toEqual(["123456789"]);
-    expect(await schemaErrors(branch)).toBe("");
-    // Luxembourg and Malta are in TKodyKrajowUE.
-    for (const [country, vatId, number] of [
-      ["LU", "LU15027442", "15027442"],
-      ["MT", "MT12345678", "12345678"],
-    ] as const) {
-      const xml = euBuyer(country, vatId);
-      expect(between(xml, "KodUE")).toEqual([country]);
-      expect(between(xml, "NrVatUE")).toEqual([number]);
+      polish({
+        number: "5b/2026",
+        buyer: {
+          name: "Buyer",
+          vatId,
+          addressLine1: "Street 1",
+          city: "City",
+          country,
+        },
+        lines: [line("reverse_charge")],
+      });
+    const cases = [
+      {
+        country: "FR",
+        vatId: "DE123456789",
+        refusal: "German number and as a French number",
+      },
+      {
+        country: "FR",
+        vatId: "EL123456789",
+        refusal: "Greek number and as a French number",
+      },
+      {
+        country: "CZ",
+        vatId: "DE123456789",
+        prefix: "DE",
+        number: "123456789",
+      },
+      { country: "LU", vatId: "LU15027442", prefix: "LU", number: "15027442" },
+      { country: "MT", vatId: "MT12345678", prefix: "MT", number: "12345678" },
+      {
+        country: "FR",
+        vatId: "AB123456789",
+        prefix: "FR",
+        number: "AB123456789",
+      },
+    ] as const;
+
+    for (const entry of cases) {
+      const record = euBuyer(entry.country, entry.vatId);
+      if ("refusal" in entry) {
+        expect(refusal(record)).toContain(entry.refusal);
+        expect(refusal(record)).toContain(
+          "store it with its country prefix (FR… for a French registration)",
+        );
+        continue;
+      }
+      const xml = fa3(record);
+      expect(between(xml, "KodUE")).toEqual([entry.prefix]);
+      expect(between(xml, "NrVatUE")).toEqual([entry.number]);
       expect(await schemaErrors(xml)).toBe("");
     }
-    // Leading letters that are not a prefix belong to the number.
-    const french = euBuyer("FR", "AB123456789");
-    expect(between(french, "KodUE")).toEqual(["FR"]);
-    expect(between(french, "NrVatUE")).toEqual(["AB123456789"]);
-    expect(await schemaErrors(french)).toBe("");
   });
 
   test("the VAT registration decides before the address", async () => {
