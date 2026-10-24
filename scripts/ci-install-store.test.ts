@@ -14,8 +14,8 @@ import * as v from "valibot";
 import {
   completeInstallStoreKey,
   installStorePath,
-  parseInstallFlags,
   parseGlobalStoreMode,
+  parseInstallFlags,
   sealInstallStore,
   verifyInstallStore,
 } from "./ci-install-store";

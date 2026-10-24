@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -53,7 +53,7 @@ export const failureTagsInSource = (source: string, file: string): string[] => {
     if (isFactory) {
       const tag = node.arguments.at(0);
       if (tag === undefined || !ts.isStringLiteral(tag)) {
-        return panic(`Nonliteral TaggedError tag in ${file}`);
+        panic(`Nonliteral TaggedError tag in ${file}`);
       }
       tags.push(tag.text);
     }

@@ -4,11 +4,10 @@
  * The fixture and adapter maps are both total over the registry. Adding an
  * adapter therefore enrolls it here without another hand-maintained list.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 import { rejectionOf } from "@stll/property-testing/rejection";
-import { sha256Hex } from "@stll/sha256/bun";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -17,8 +16,11 @@ import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
-
-const originalFetch = globalThis.fetch;
+import {
+  buildCaseLawFixture,
+  replayParsedOutput as parsedOutput,
+  replayParserFingerprint as fingerprint,
+} from "@/api/tests/helpers/case-law-parity";
 
 const compareCodeUnits = (left: string, right: string): number => {
   if (left === right) {
@@ -26,10 +28,6 @@ const compareCodeUnits = (left: string, right: string): number => {
   }
   return left < right ? -1 : 1;
 };
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
 
 type DurableRow = {
   readonly id: string;
@@ -42,31 +40,6 @@ type State = {
 };
 
 type Transaction = { state: State };
-
-const stableValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map(stableValue);
-  }
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, child]) => child !== undefined)
-        .toSorted(([left], [right]) => compareCodeUnits(left, right))
-        .map(([key, child]) => [key, stableValue(child)]),
-    );
-  }
-  return value;
-};
-
-const parsedOutput = ({
-  sourceRaw: _sourceRaw,
-  sourceRawBytes: _sourceRawBytes,
-  sourceRawObjects: _sourceRawObjects,
-  ...output
-}: IngestionResult): string => JSON.stringify(stableValue(output));
-
-const fingerprint = (decision: IngestionResult): string =>
-  sha256Hex(parsedOutput(decision));
 
 const identityOf = (decision: IngestionResult): string =>
   decision.sourceDocumentId ??
@@ -134,8 +107,10 @@ describe("every case-law adapter is replay safe", () => {
   for (const adapter of listAdapters()) {
     test(`${adapter.key}: fixture output and transactional replay conform`, async () => {
       const fixture = CASE_LAW_CONFORMANCE_FIXTURES[adapter.key];
-      const first = await fixture().buildDecision();
-      const replay = await fixture().buildDecision();
+      const originalFetch = globalThis.fetch;
+      const first = await buildCaseLawFixture(fixture());
+      const replay = await buildCaseLawFixture(fixture());
+      expect(globalThis.fetch).toBe(originalFetch);
 
       expect(identityOf(replay), "replay changed the durable identity").toBe(
         identityOf(first),
@@ -174,8 +149,10 @@ describe("every case-law adapter is replay safe", () => {
       expect(snapshotOf(interrupted)).toEqual(snapshotOf(uninterrupted));
 
       const parserSnapshot = parserFingerprints[adapter.key];
-      expect(parserSnapshot.version).toBe(PARSER_VERSIONS[adapter.key]);
-      expect(fingerprint(first)).toBe(parserSnapshot.fingerprint);
+      expect(parserSnapshot).toEqual({
+        version: PARSER_VERSIONS[adapter.key],
+        fingerprint: fingerprint(first),
+      });
 
       for (const [field, value] of Object.entries(first.textFields)) {
         switch (value.type) {

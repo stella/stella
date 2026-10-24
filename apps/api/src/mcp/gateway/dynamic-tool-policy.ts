@@ -4,8 +4,8 @@ import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  dynamicToolNamespaceOf,
   type DynamicToolNamespace,
+  dynamicToolNamespaceOf,
 } from "@/api/lib/mcp-upstream/namespace";
 import type {
   McpToolAnnotations,

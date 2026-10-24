@@ -7,8 +7,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createCorpusAggregateCache } from "@/api/lib/legal-search/corpus-aggregate-cache";
 import {
-  CorpusIndexError,
   type CorpusIndexAggregations,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusAggregate,

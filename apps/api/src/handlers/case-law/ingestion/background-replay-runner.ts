@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
 } from "@/api/db/schema";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
@@ -19,9 +19,9 @@ import {
   REPLAY_REJECTION_POLICY,
   REPLAY_ROW_OUTCOME,
   replayCaseLawSource,
-  replaySingleRowReport,
-  type ReplayRowReport,
   type ReplayCaseLawSourceOptions,
+  type ReplayRowReport,
+  replaySingleRowReport,
 } from "./replay";
 import { BACKGROUND_REPLAY_LIMITS } from "./replay-enrolment";
 

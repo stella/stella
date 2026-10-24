@@ -29,9 +29,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
+  type DecisionDocketSelector,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
-  type DecisionDocketSelector,
 } from "@stll/api-contract/decision-docket-reference";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
 import {
@@ -42,8 +42,8 @@ import {
 
 import {
   caseLawDecisionIdentifiers,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import {
   bareCitationKey,

@@ -19,9 +19,9 @@ import { describe, expect, test } from "bun:test";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 
 import {
-  classifyAIError,
-  classifyAIBoundaryFailure,
   aiHandlerError,
+  classifyAIBoundaryFailure,
+  classifyAIError,
   isAnticipatedAIFailure,
   isUnanticipatedAIFailure,
   providerStatusCode,
