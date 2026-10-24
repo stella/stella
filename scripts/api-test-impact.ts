@@ -155,7 +155,7 @@ const LOADER_CALL_PATTERN = /\b(?:import|require)\s*(?:\(|\/[*/])|\\u/u;
 type ModuleReach = "all" | ReadonlySet<string>;
 
 const TEXT_REACH_PREFILTER =
-  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/(?!api\/)|["'`]apps["'`]|\.\.\/|["'`]\.\.["'`]/u;
+  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/(?!api\/)|["'`]apps\/?["'`]|\.\.\/|["'`]\.\.["'`]/u;
 
 // Module specifiers are not paths a test reads; strip them cheaply before
 // the prefilter so only modules with other path text are parsed.
@@ -186,7 +186,7 @@ const textReach = (
     /apps\/(?:\*|\*\*|\{[^}/]+\})(?=\/|["'`]|$)/u.test(code) ||
     // A path assembled from segments (`path.join("apps", name)`) can name
     // any app.
-    /["'`]apps["'`]/u.test(code)
+    /["'`]apps\/?["'`]/u.test(code)
   ) {
     return "all";
   }

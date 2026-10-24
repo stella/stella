@@ -304,6 +304,7 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       star: 'new Bun.Glob("apps/*/src/**/*.ts").scanSync();',
       brace: 'new Bun.Glob("apps/{web,api}/src/**/*.ts").scanSync();',
       starstar: 'new Bun.Glob("apps/**").scanSync();',
+      appsdir: 'import { readdirSync } from "node:fs"; readdirSync("apps/");',
       root: 'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(import.meta.dir, "..", "..", ".."));',
       failed:
         'import "./missing"; import { readFileSync } from "node:fs"; readFileSync(target);',
@@ -314,6 +315,7 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
     expect(
       selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
     ).toEqual([
+      "src/appsdir.test.ts",
       "src/brace.test.ts",
       "src/failed.test.ts",
       "src/root.test.ts",
