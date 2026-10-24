@@ -155,6 +155,7 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
   "std",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSArray",
   "NSData",
   "NSGeometry",
   "NSString",
