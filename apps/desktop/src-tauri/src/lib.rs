@@ -378,17 +378,17 @@ pub fn run() {
                 let mut mgr = manager.lock().await;
                 if mgr.finish_session(&id) {
                   mgr.persist_sessions_public().await;
-                  mgr.retry_session(&id).await;
+                  drop(mgr);
+                  crate::session_manager::retry_session(Arc::clone(&manager), &id).await;
                 }
-                drop(mgr);
               }
               tray::MenuAction::RetrySession(id) => {
                 let mut mgr = manager.lock().await;
                 if mgr.retry_session_now(&id) {
                   mgr.persist_sessions_public().await;
-                  mgr.retry_session(&id).await;
+                  drop(mgr);
+                  crate::session_manager::retry_session(Arc::clone(&manager), &id).await;
                 }
-                drop(mgr);
               }
             }
           });
@@ -573,3 +573,8 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
     }
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+pub use clipboard::allocation_harness as clipboard_allocation_harness;
+#[cfg(feature = "allocation-tests")]
+pub use session_manager::allocation_harness as session_allocation_harness;

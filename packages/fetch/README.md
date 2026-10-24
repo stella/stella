@@ -36,6 +36,8 @@ certificate, socket and connect timeouts) across Bun, Node and undici.
 
 ## `@stll/fetch/publisher`
 
+This entry needs Bun: it waits between requests with `Bun.sleep`.
+
 `createPolitePublisherFetch({ validateTarget, fetcher })` fetches from public
 websites politely: it reads and caches each origin's `robots.txt`, honours
 `Disallow` and `Crawl-delay` rules, spaces requests per origin, follows at most
