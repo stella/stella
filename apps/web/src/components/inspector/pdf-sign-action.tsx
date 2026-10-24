@@ -30,13 +30,21 @@ const LazyPdfSignPlacement = lazy(async () => {
   return { default: module.PdfSignPlacement };
 });
 
-type PdfSignFlow = {
+export type PdfSignFlow = {
   /** What the action does in the current desktop presence, or that it runs. */
   label: string;
   isConnecting: boolean;
   /** A signing exchange is open in stella desktop. */
   isSigning: boolean;
   start: () => void;
+  /**
+   * Like `start`, but once stella desktop can sign, first runs `prepare` and
+   * places the stamp on the file it resolves (a version it just saved, say).
+   * `null` stops without signing; `prepare` reports its own failures.
+   */
+  startWith: (prepare: () => Promise<PdfSignTarget | null>) => void;
+  /** The file `startWith` prepared; the dialogs sign it instead of their target. */
+  preparedTarget: PdfSignTarget | null;
   sign: (request: PdfSignRequest) => Promise<void>;
   placementOpen: boolean;
   setPlacementOpen: (open: boolean) => void;
@@ -53,6 +61,16 @@ export const usePdfSignFlow = (): PdfSignFlow => {
   const gate = useDesktopActionGate("sign-pdf");
   const signing = useDesktopPdfSign({ connectDesktop: gate.connect });
   const [placementOpen, setPlacementOpen] = useState(false);
+  const [preparedTarget, setPreparedTarget] = useState<PdfSignTarget | null>(
+    null,
+  );
+  const run = (perform: () => void) => {
+    if (signing.isSigning) {
+      signing.notifyAlreadySigning();
+      return;
+    }
+    gate.run(perform);
+  };
   return {
     label: signing.isSigning
       ? t("workspaces.files.pdfSigning.signingLabel")
@@ -60,12 +78,30 @@ export const usePdfSignFlow = (): PdfSignFlow => {
     isConnecting: gate.isConnecting,
     isSigning: signing.isSigning,
     start: () => {
-      if (signing.isSigning) {
-        signing.notifyAlreadySigning();
-        return;
-      }
-      gate.run(() => setPlacementOpen(true));
+      run(() => {
+        setPreparedTarget(null);
+        setPlacementOpen(true);
+      });
     },
+    startWith: (prepare) => {
+      run(() => {
+        detachedUserAction(
+          (async () => {
+            const target = await prepare();
+            if (target === null) {
+              return;
+            }
+            setPreparedTarget(target);
+            setPlacementOpen(true);
+          })(),
+          {
+            context: "pdf-sign-action.prepare",
+            failureMessage: t("workspaces.files.pdfSigning.startFailedTitle"),
+          },
+        );
+      });
+    },
+    preparedTarget,
     sign: signing.sign,
     placementOpen,
     setPlacementOpen,
@@ -81,6 +117,7 @@ type PdfSignDialogsProps = {
 /** Stamp placement, then the desktop hand-off; or what the desktop needs first. */
 export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
   const t = useTranslations();
+  const signTarget = flow.preparedTarget ?? target;
   return (
     <>
       <Dialog onOpenChange={flow.setPlacementOpen} open={flow.placementOpen}>
@@ -93,17 +130,18 @@ export const PdfSignDialogs = ({ flow, target }: PdfSignDialogsProps) => {
             }
           >
             <LazyPdfSignPlacement
-              fieldId={target.fieldId}
+              fieldId={signTarget.fieldId}
+              key={signTarget.fieldId}
               onConfirm={(stamp) => {
                 flow.setPlacementOpen(false);
-                detachedUserAction(flow.sign({ stamp, target }), {
+                detachedUserAction(flow.sign({ stamp, target: signTarget }), {
                   context: "pdf-sign-action.sign",
                   failureMessage: t(
                     "workspaces.files.pdfSigning.startFailedTitle",
                   ),
                 });
               }}
-              workspaceId={target.workspaceId}
+              workspaceId={signTarget.workspaceId}
             />
           </Suspense>
         </DialogPopup>
