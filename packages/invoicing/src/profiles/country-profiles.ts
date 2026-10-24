@@ -228,6 +228,16 @@ type InvoiceSellerCountryInput = {
   vatId: string | null;
 };
 
+/** VAT uses EL for Greece and XI for Northern Ireland, unlike ISO address codes. */
+export const invoiceCountryForVatPrefix = (prefix: string) => {
+  const country = prefix.toUpperCase();
+  const read = normalizeCountry(
+    country === "EL" ? "GR" : country === "XI" ? "GB" : country,
+    { spelling: "alpha-2" },
+  );
+  return read.ok ? read.value.alpha2 : null;
+};
+
 /** The seller's recognized address wins over a secondary VAT registration. */
 export const invoiceSellerCountryOf = (seller: InvoiceSellerCountryInput) => {
   const address = normalizeCountry(seller.country ?? "", {
@@ -236,11 +246,7 @@ export const invoiceSellerCountryOf = (seller: InvoiceSellerCountryInput) => {
   if (address.ok) {
     return address.value.alpha2;
   }
-  const registration = normalizeCountry(
-    seller.vatId?.trim().slice(0, 2) ?? "",
-    { spelling: "alpha-2" },
-  );
-  return registration.ok ? registration.value.alpha2 : null;
+  return invoiceCountryForVatPrefix(seller.vatId?.trim().slice(0, 2) ?? "");
 };
 
 export const invoiceCountryOf = (

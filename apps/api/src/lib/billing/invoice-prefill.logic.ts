@@ -1,7 +1,10 @@
 import { normalizeCountry } from "@stll/agent-input";
 import { DEFAULT_INVOICE_DUE_DAYS } from "@stll/api-contract";
 import { EU_MEMBER_STATES } from "@stll/catalogue";
-import { invoiceSellerCountryOf } from "@stll/invoicing";
+import {
+  invoiceCountryForVatPrefix,
+  invoiceSellerCountryOf,
+} from "@stll/invoicing";
 import type { VatTreatment } from "@stll/invoicing";
 
 import type {
@@ -135,18 +138,6 @@ export const isWellFormedNonEuTaxId = (vatId: string | null): boolean => {
 };
 
 /**
- * The ISO 3166-1 alpha-2 country a VAT ID prefix stands for. VAT prefixes are
- * ISO codes except Greece, which writes EL, and Northern Ireland, which writes
- * XI under the United Kingdom.
- */
-const VAT_PREFIX_COUNTRY: ReadonlyMap<string, string> = new Map([
-  ["EL", "GR"],
-  ["XI", "GB"],
-]);
-const countryOfVatPrefix = (prefix: string) =>
-  VAT_PREFIX_COUNTRY.get(prefix) ?? prefix;
-
-/**
  * The country an address names, read through the shared country reader
  * ("CZ", "Czechia", "Česká republika"); null when it names none or more than
  * one, so a free-text country is never guessed.
@@ -245,7 +236,10 @@ const crossBorderVat = ({
   ) {
     return domesticVat(standardRateBps);
   }
-  const vatCountry = countryOfVatPrefix(buyerPrefix);
+  const vatCountry = invoiceCountryForVatPrefix(buyerPrefix);
+  if (vatCountry === null) {
+    return domesticVat(standardRateBps, "client_country_unconfirmed");
+  }
   if (vatCountry === sellerCountry) {
     return domesticVat(standardRateBps);
   }

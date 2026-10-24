@@ -49,6 +49,8 @@ describe("invoice country profiles", () => {
     ["Slovensko", "CZ12345678", "SK", "SK"],
     ["Czechia", "SK1234567890", "CZ", "CZ"],
     ["unrecognized", "SK1234567890", "SK", "SK"],
+    [null, "EL123456789", "GR", "EU"],
+    [null, "XI123456789", "GB", "EU"],
   ] as const)(
     "address %s and registration %s share one country decision",
     (country, vatId, resolved, profile) => {

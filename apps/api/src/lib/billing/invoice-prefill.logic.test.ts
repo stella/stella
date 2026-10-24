@@ -29,6 +29,22 @@ type VatCase = {
 
 const VAT_CASES: VatCase[] = [
   {
+    name: "the Greek EL VAT prefix identifies an EU-established seller",
+    seller: { country: null, vatId: "EL123456789", vatPayer: true },
+    buyerVatId: null,
+    buyerVatPayer: null,
+    buyerCountry: "US",
+    expected: ["outside_scope", 0, "outside_scope"],
+  },
+  {
+    name: "the Northern Ireland XI registration does not make a service seller EU-established",
+    seller: { country: null, vatId: "XI123456789", vatPayer: true },
+    buyerVatId: null,
+    buyerVatPayer: null,
+    buyerCountry: "GB",
+    expected: ["domestic_vat", 2100, "domestic_rate"],
+  },
+  {
     name: "a British seller billing a British client retains its configured domestic rate",
     seller: { country: "GB", vatId: "GB123456789", vatPayer: true },
     buyerVatId: "GB987654321",
