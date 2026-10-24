@@ -15,11 +15,14 @@
     "RUNNER_ARCH"
   ],
   // BUN_OPTIONS carries the quarantine preload into each package's Bun test
-  // process; the report directory only locates its output.
+  // process; the report directory only locates its output. The workflows'
+  // GIT_CONFIG_* settings keep Git background maintenance out of package test
+  // fixtures, which strict env mode would otherwise drop.
   "globalPassThroughEnv": [
     "BUN_OPTIONS",
     "CI_GENERATED_SOURCES_MANIFEST",
-    "FLAKY_TEST_QUARANTINE_REPORT_DIR"
+    "FLAKY_TEST_QUARANTINE_REPORT_DIR",
+    "GIT_CONFIG_*"
   ],
   // A patched dependency changes installed code for every task that resolves
   // it, but editing a patch file moves neither bun.lock (which records the
@@ -69,6 +72,7 @@
         "src/routes/**",
         "vite.config.ts",
         "route-tree.config.ts",
+        "scripts/route-template-manifest.ts",
         "scripts/generate-route-tree.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
         "$TURBO_ROOT$/packages/scripts/src/generated-input-identity.ts",
@@ -77,7 +81,7 @@
         "package.json",
         "$TURBO_ROOT$/bun.lock"
       ],
-      "outputs": ["src/routeTree.gen.ts"]
+      "outputs": ["src/routeTree.gen.ts", "src/route-templates.gen.ts"]
     },
     "@stll/web#build": {
       "dependsOn": [
@@ -135,7 +139,8 @@
         "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
         "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
         "!src/generated/api-routes.gen.ts",
-        "!src/routeTree.gen.ts"
+        "!src/routeTree.gen.ts",
+        "!src/route-templates.gen.ts"
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]
     },
