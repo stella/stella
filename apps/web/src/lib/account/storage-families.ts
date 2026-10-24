@@ -335,7 +335,6 @@ export const DEVICE_STORAGE_FAMILIES = [
   { area: "local", prefix: "reader_text_scale", restoration: "layout" },
   { area: "local", prefix: "stella-ui-theme", restoration: "data" },
   { area: "local", prefix: "stella-ui-palette", restoration: "data" },
-  { area: "local", prefix: "sidebar_state", restoration: "layout" },
   {
     area: "local",
     prefix: "document_translation_last_target",

@@ -38,6 +38,12 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "PDF page text worker",
+    pattern: "dist/client/assets/pdf-page-text-worker-????????.js",
+    sourceEntry: "src/workers/pdf-page-text-worker.ts",
+  },
+  {
+    expectedCount: 1,
     label: "PDF page editor worker",
     pattern: "dist/client/assets/pdf-page-editor-worker-????????.js",
     sourceEntry: "src/workers/pdf-page-editor-worker.ts",

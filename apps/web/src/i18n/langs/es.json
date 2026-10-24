@@ -388,6 +388,7 @@
         "reading": "Vista de lectura"
       },
       "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
+      "pdfTextFailed": "No se ha podido leer el texto del PDF, por lo que las afirmaciones no están marcadas en sus páginas.",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Hoja de importación ESO9 (XLSX)",
         "exporting": "Preparando la exportación…",
         "isdoc": "Factura electrónica ISDOC (ABRA Gen y otros)",
+        "ksefFa3": "Factura electrónica KSeF FA(3) (XML)",
         "spreadsheets": "Hojas de cálculo",
         "xlsx": "Facturas (XLSX)",
         "xlsxLines": "Líneas de factura (XLSX)"
