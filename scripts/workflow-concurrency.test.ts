@@ -699,7 +699,7 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
   // Re-run attempts of metadata runs of one head never share a group, so
   // none of them replaces another while pending.
   const reruns = await Promise.all(
-    [2, 3, 4].map((run_id) =>
+    [2, 3, 4].map(async (run_id) =>
       groupFor(file, { ...metadataRun, run_id, run_attempt: "2" }),
     ),
   );
