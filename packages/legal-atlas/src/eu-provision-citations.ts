@@ -490,6 +490,8 @@ export const locateEuProvisionCitations = (
   return citations.toSorted((left, right) => left.start - right.start);
 };
 
+export const EU_PROVISION_ANCHOR_SEPARATOR = "-";
+
 /** Stable citation identity; publisher links deliberately stop at the article. */
 export const euProvisionAnchor = (reference: ProvisionReference): string => {
   const parts = [
@@ -504,7 +506,7 @@ export const euProvisionAnchor = (reference: ProvisionReference): string => {
   if (reference.point !== null) {
     parts.push(`num_${reference.point}`);
   }
-  return parts.join("-");
+  return parts.join(EU_PROVISION_ANCHOR_SEPARATOR);
 };
 
 export const parseEuProvisionAnchor = (
