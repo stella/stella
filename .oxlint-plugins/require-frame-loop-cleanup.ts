@@ -532,6 +532,10 @@ const returnedFunctions = (
     if (isFunctionNode(value)) {
       returned.push(value);
     } else if (isIdentifierReference(value)) {
+      const declared = functionFor(context, value);
+      if (declared !== null) {
+        returned.push(declared);
+      }
       const variable = resolveVariable(context, value);
       for (const reference of variable?.references ?? []) {
         const written = unwrapExpression(reference.writeExpr);
@@ -631,7 +635,7 @@ const precedesOnPath = ({
     }
     if (
       parent === null ||
-      isFunctionNode(parent) ||
+      FUNCTION_TYPES.has(parent.type) ||
       CONDITIONAL_PARENTS.has(parent.type)
     ) {
       return false;

@@ -52,6 +52,19 @@ test("requires the effect cleanup to clear an interval the effect starts", async
   ).toEqual([2]);
 });
 
+test("accepts effect cleanup returned through a function declaration", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "useEffect(() => { const id = setInterval(tick, 10); function cleanup() { clearInterval(id); } return cleanup; }, []);",
+        "useMountEffect(() => { let frame = 0; const tick = () => { if (ready()) frame = requestAnimationFrame(tick); }; frame = requestAnimationFrame(tick); function cleanup() { cancelAnimationFrame(frame); } return cleanup; });",
+        "useEffect(() => { const id = setInterval(tick, 10); function cleanup() { clearInterval(other); } return cleanup; }, []);",
+      ].join("\n"),
+    ),
+  ).toEqual([3]);
+});
+
 test("reports frame loops that reschedule on every frame", async () => {
   expect(
     await lintSingleRule(
