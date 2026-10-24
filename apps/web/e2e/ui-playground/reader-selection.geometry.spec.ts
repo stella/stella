@@ -186,20 +186,15 @@ test("the copy menu's preview stays inside the menu", async ({
   const layout = page.locator('[data-slot="menu-preview-layout"]');
   const options = layout.getByRole("button");
   await expect(options.first()).toBeVisible();
-  const menu = await layout.locator("xpath=..").boundingBox();
-  if (menu === null) {
-    throw new Error("The copy menu has no box");
-  }
+  const menu = await stableBoundingBox(page, layout.locator("xpath=.."));
   for (const option of await options.all()) {
     await option.hover();
     // The toolbar is narrower than options plus pane, so a box here also
     // proves the menu widened instead of dropping the pane.
-    const pane = await layout
-      .locator('[data-slot="preview-pane"]')
-      .boundingBox();
-    if (pane === null) {
-      throw new Error("The copy preview has no box");
-    }
+    const pane = await stableBoundingBox(
+      page,
+      layout.locator('[data-slot="preview-pane"]'),
+    );
     expect(pane.x).toBeGreaterThanOrEqual(menu.x);
     expect(pane.x + pane.width).toBeLessThanOrEqual(menu.x + menu.width);
   }
