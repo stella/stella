@@ -1538,13 +1538,27 @@ describe("describe_capability", () => {
     // The default context leaves conditional features off, the state the
     // catalog is exported in; a capability its caller may not reach is hidden
     // by describe, and only a feature-required one may be.
+    const baseContext = createContext();
+    const context = {
+      ...baseContext,
+      credential: { type: "oauth_client", clientId: "catalog-schema-probe" },
+      grantedScopes: [
+        ...baseContext.grantedScopes,
+        ...Object.values(ACCOUNT_EXPORT_SCOPES),
+      ],
+    } satisfies McpRequestContext;
     const drift: string[] = [];
     for (const entry of capabilityCatalog) {
       if (entry.inputSchema === undefined) {
         continue;
       }
       const described = parseToolPayload<{ inputSchema?: unknown }>(
-        await call("describe_capability", { capability: entry.id }),
+        await handleMcpToolCall({
+          mode: "advanced",
+          toolName: "describe_capability",
+          args: { capability: entry.id },
+          context,
+        }),
       );
       if (described.inputSchema === undefined) {
         if (!("featureAccess" in entry) || entry.featureAccess !== "required") {
