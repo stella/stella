@@ -10,10 +10,11 @@ ALTER TABLE "organization_access_states"
 
 -- Rows that predate this discriminator already represent a completed
 -- creation or rollout decision. Preserve their insert-once behavior.
--- stella-migration-safety: reviewed bulk-backfill - one bounded update of a
--- small system-owned table; the constant value is idempotent.
 SET LOCAL statement_timeout = '30min';
 --> statement-breakpoint
+-- stella-migration-safety: reviewed unbounded-update - one row per
+-- organization in a system-owned table, set to a constant, so the update is
+-- small and idempotent; rollback drops the column.
 UPDATE "organization_access_states" SET "origin" = 'creation';
 --> statement-breakpoint
 SET LOCAL statement_timeout = '5s';

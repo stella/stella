@@ -1,3 +1,6 @@
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '30min';--> statement-breakpoint
+
 -- Validation scans run separately from the additive DDL lock. New writes and
 -- deletes have already obeyed both constraints since the preceding migration.
 ALTER TABLE "bilingual_translation_runs"

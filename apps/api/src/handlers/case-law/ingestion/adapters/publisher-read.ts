@@ -1,3 +1,4 @@
+// parser-output-unchanged: the byte ceiling moved to its own module; a decoded body over it maps to the existing too-large outcome.
 // parser-output-unchanged: readGatedResponse export removed; its implementation and internal calls are unchanged.
 // parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**

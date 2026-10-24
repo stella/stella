@@ -1,3 +1,4 @@
+// parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: Refusal results carry typed read outcomes; successful responses are parsed unchanged.
 import { panic, Result, TaggedError } from "better-result";
 

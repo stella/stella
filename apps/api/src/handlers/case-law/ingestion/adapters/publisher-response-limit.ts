@@ -1,3 +1,4 @@
+// parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 import { TaggedError } from "better-result";
 import { TransformStream } from "node:stream/web";
 

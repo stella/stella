@@ -448,6 +448,8 @@ const ORGANIZATION_ACCESS_STATE_ORIGINS = [
   ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
   ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
 ] as const;
+const ORGANIZATION_ACCESS_STATE_ORIGIN_SQL_VALUES =
+  ORGANIZATION_ACCESS_STATE_ORIGINS.map((origin) => sql.raw(`'${origin}'`));
 
 const ORGANIZATION_ACCESS_STATES = [
   ORGANIZATION_ACCESS_STATE.selfManagedKeys,
@@ -477,7 +479,11 @@ export const organizationAccessStates = p.pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  () => [
+  (table) => [
+    p.check(
+      "organization_access_states_origin_domain",
+      sql`${table.origin} IN (${sql.join(ORGANIZATION_ACCESS_STATE_ORIGIN_SQL_VALUES, sql`, `)})`,
+    ),
     // Each state admits exactly one shape of evaluation columns, so a row
     // cannot claim an evaluation it never started or end one twice.
     p.check(

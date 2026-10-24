@@ -8,6 +8,10 @@ ALTER TABLE "file_comparison_uploads"
   ADD COLUMN "claim_id" uuid,
   ADD COLUMN "claim_expires_at" timestamptz;--> statement-breakpoint
 
+-- stella-migration-safety: reviewed drop-constraint - the next statement
+-- re-adds the status check in the same transaction with one more allowed
+-- value, so no row escapes it; rollback re-adds the old list once no row is
+-- 'processing'.
 ALTER TABLE "file_comparison_uploads"
   DROP CONSTRAINT "file_comparison_uploads_status_check";--> statement-breakpoint
 
