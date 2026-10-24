@@ -2,6 +2,9 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
+
+import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
 import {
@@ -32,6 +35,48 @@ const rejectionOf = (payload: JWTPayload): string => {
 };
 
 describe("extractMcpSession", () => {
+  test.each([
+    { organizationId: "org_review", expectedScopes: ["stella:read"] },
+    {
+      organizationId: "org_regular",
+      expectedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    },
+  ])(
+    "account export verification preserves the organization scope boundary for $organizationId",
+    async ({ organizationId, expectedScopes }) => {
+      const authenticated = await authenticateAccountExportRequest(
+        "oauth-token",
+        {
+          reviewAccount: { organizationId: "org_review" },
+          verifyToken: async () => ({
+            sub: "user_one",
+            org_id: organizationId,
+            client_id: "client",
+            scope: [
+              "stella:read",
+              ...Object.values(ACCOUNT_EXPORT_SCOPES),
+            ].join(" "),
+          }),
+        },
+      );
+      if (authenticated.isErr()) {
+        panic("The valid export token must authenticate", authenticated.error);
+      }
+      expect(authenticated.value.scopes).toEqual(expectedScopes);
+      for (const access of ["read", "write"] as const) {
+        expect(
+          hasAccountExportAuthority(
+            {
+              credential: authenticated.value.credential,
+              grantedScopes: authenticated.value.scopes,
+            },
+            access,
+          ),
+        ).toBe(organizationId !== "org_review");
+      }
+    },
+  );
+
   test("account export verification accepts only audiences offering account consent", async () => {
     let verifications = 0;
     const authenticated = await authenticateAccountExportRequest(

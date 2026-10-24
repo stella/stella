@@ -355,7 +355,11 @@ export const authenticateAccountExportRequest = async (
   bearerToken: string,
   {
     verifyToken,
-  }: { verifyToken?: ReturnType<typeof getVerifyBearerToken> } = {},
+    reviewAccount = getReviewAccountConfig(),
+  }: {
+    verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+    reviewAccount?: Pick<ReviewAccountConfig, "organizationId">;
+  } = {},
 ): Promise<Result<McpSession, McpAuthenticationFailure>> => {
   if (isMachineApiKeyCredential(bearerToken)) {
     return Result.err(
@@ -370,7 +374,7 @@ export const authenticateAccountExportRequest = async (
     ),
   ).map((mode) => getMcpResourceUrl(mode));
   const options = getMcpAccessTokenVerificationOptions();
-  return (
+  const authenticated = (
     await Result.tryPromise({
       try: async () =>
         await (verifyToken ?? getVerifyBearerToken())(bearerToken, {
@@ -380,4 +384,7 @@ export const authenticateAccountExportRequest = async (
       catch: classifyMcpTokenVerificationError,
     })
   ).andThen(extractMcpSession);
+  return authenticated.map((session) =>
+    narrowReviewOrganizationScopes(session, reviewAccount),
+  );
 };

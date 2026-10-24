@@ -16,14 +16,14 @@ const OAUTH_SCOPE_METADATA = {
     summary: "consent.scopeAccountExportRead",
     group: "read",
     summaryGroup: "read",
-    sensitive: true,
+    sensitive: false,
   },
   "stella:account_export_write": {
     label: "consent.scopeAccountExportWrite",
     summary: "consent.scopeAccountExportWrite",
     group: "change",
     summaryGroup: "change",
-    sensitive: true,
+    sensitive: false,
   },
   "stella:search": {
     label: "consent.scopeSearch",
