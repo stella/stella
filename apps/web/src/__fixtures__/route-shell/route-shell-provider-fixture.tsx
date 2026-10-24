@@ -1308,7 +1308,7 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
 
         Object.assign(import.meta.env, { SSR: false });
         fixture.state.audience = audience;
-        await fixture.act(async () => {
+        await fixture.act(() => {
           fixture.render(<fixture.RouterProvider router={router} />, {
             container: document,
           });
