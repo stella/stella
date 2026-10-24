@@ -1485,6 +1485,7 @@
         "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@base-ui/react": "^1.7.0",
+        "@playwright/test": "^1.63.0",
         "@tanstack/react-virtual": "^3.14.13",
         "@types/react": ">=19",
         "@types/react-dom": ">=19",
@@ -1493,6 +1494,7 @@
         "tailwindcss": "^4.3.0",
       },
       "optionalPeers": [
+        "@playwright/test",
         "@types/react",
         "@types/react-dom",
       ],
