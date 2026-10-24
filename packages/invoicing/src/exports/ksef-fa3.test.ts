@@ -386,15 +386,19 @@ describe("KSeF FA(3) VAT treatments", () => {
         lines: [line("reverse_charge")],
       });
     const cases = [
+      // An explicit registration prefix decides even where the rest also fits
+      // the address country's format (a German registration in France).
       {
         country: "FR",
         vatId: "DE123456789",
-        refusal: "German number and as a French number",
+        prefix: "DE",
+        number: "123456789",
       },
       {
         country: "FR",
         vatId: "EL123456789",
-        refusal: "Greek number and as a French number",
+        prefix: "EL",
+        number: "123456789",
       },
       {
         country: "CZ",
@@ -413,15 +417,7 @@ describe("KSeF FA(3) VAT treatments", () => {
     ] as const;
 
     for (const entry of cases) {
-      const record = euBuyer(entry.country, entry.vatId);
-      if ("refusal" in entry) {
-        expect(refusal(record)).toContain(entry.refusal);
-        expect(refusal(record)).toContain(
-          "store it with its country prefix (FR… for a French registration)",
-        );
-        continue;
-      }
-      const xml = fa3(record);
+      const xml = fa3(euBuyer(entry.country, entry.vatId));
       expect(between(xml, "KodUE")).toEqual([entry.prefix]);
       expect(between(xml, "NrVatUE")).toEqual([entry.number]);
       expect(await schemaErrors(xml)).toBe("");

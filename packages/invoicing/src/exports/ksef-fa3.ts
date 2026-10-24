@@ -121,39 +121,6 @@ const EU_VAT_NUMBER_PATTERNS = {
   SK: /^\d{10}$/u,
 } as const satisfies Record<EuCountry, RegExp>;
 
-const EU_COUNTRY_NAMES = {
-  AT: "Austrian",
-  BE: "Belgian",
-  BG: "Bulgarian",
-  CY: "Cypriot",
-  CZ: "Czech",
-  DE: "German",
-  DK: "Danish",
-  EE: "Estonian",
-  ES: "Spanish",
-  FI: "Finnish",
-  FR: "French",
-  GR: "Greek",
-  HR: "Croatian",
-  HU: "Hungarian",
-  IE: "Irish",
-  IT: "Italian",
-  LT: "Lithuanian",
-  LU: "Luxembourgish",
-  LV: "Latvian",
-  MT: "Maltese",
-  NL: "Dutch",
-  PL: "Polish",
-  PT: "Portuguese",
-  RO: "Romanian",
-  SE: "Swedish",
-  SI: "Slovenian",
-  SK: "Slovak",
-} as const satisfies Record<EuCountry, string>;
-
-const isEuCountry = (country: string): country is EuCountry =>
-  EU_COUNTRIES.has(country);
-
 const vatPrefixOf = (country: string): string =>
   country === "GR" ? "EL" : country;
 
@@ -344,17 +311,6 @@ const buyerTaxIdentity = (
       ? { zone: "eu", prefix, number }
       : { error: `the buyer's EU VAT number ${vatId ?? ""} is not valid` };
   if (vatId && ownPrefix !== undefined && ownPrefix !== "PL") {
-    const prefixCountry = ownPrefix === "EL" ? "GR" : ownPrefix;
-    if (
-      isEuCountry(prefixCountry) &&
-      isEuCountry(country) &&
-      prefixCountry !== country &&
-      EU_VAT_NUMBER_PATTERNS[country].test(vatId)
-    ) {
-      return {
-        error: `the buyer's VAT number ${vatId} reads both as a ${EU_COUNTRY_NAMES[prefixCountry]} number and as a ${EU_COUNTRY_NAMES[country]} number without its prefix; store it with its country prefix (${vatPrefixOf(country)}… for a ${EU_COUNTRY_NAMES[country]} registration)`,
-      };
-    }
     return euVat(ownPrefix, vatId.slice(2));
   }
   if (country === "PL" || ownPrefix === "PL") {
