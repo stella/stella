@@ -114,5 +114,9 @@
   {
     "name": "Test merge-group ancestor check",
     "reason": "The merge queue now requires every entry's own group to pass before it merges (ALLGREEN), so the polling step it tested and the step's script were removed."
+  },
+  {
+    "name": "exactMirror route guard",
+    "reason": "Elysia's exactMirror response normalization is gone with Elysia; the HTTP core parses every response through its route schema, which the response schema tests cover."
   }
 ]

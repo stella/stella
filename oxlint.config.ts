@@ -5535,7 +5535,7 @@ const config = defineConfig({
                 name: "@/api/lib/branded-types",
                 importNames: ["toSafeId"],
                 message:
-                  "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
+                  "Handlers must receive SafeId from request authorization (authorizeWorkspace, authenticateSession) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,

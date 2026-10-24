@@ -88,7 +88,11 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // endpoint. Endpoints made with it count under `createSafePublicSubjectHandler`
   // in their own files.
   "apps/api/src/handlers/case-law/decisions/public-subject.ts": 1,
-  "apps/api/src/handlers/case-law/public-routes.ts": 11,
+  "apps/api/src/handlers/case-law/public-routes.ts": 12,
+  // Factories: each route table builds its decision and law resolvers with
+  // its own authorization and resolved-response sink.
+  "apps/api/src/handlers/legal-resolve/decision-endpoint.ts": 1,
+  "apps/api/src/handlers/legal-resolve/law-endpoint.ts": 1,
   "apps/api/src/handlers/legislation/public-routes.ts": 11,
   // Built by a factory so tests can inject the bundled catalogue; all six are
   // internal-only public reads with no MCP tool.
