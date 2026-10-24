@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   readPersistedSidebarOpen,
   writePersistedSidebarOpen,
-} from "@/lib/sidebar-state";
+} from "@/components/sidebar/sidebar-state";
 
 export const usePersistedSidebarOpen = ({
   defaultOpen,

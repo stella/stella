@@ -1,8 +1,8 @@
 import type { BrowserContext } from "@playwright/test";
 import { panic } from "better-result";
 
-import { SIDEBAR_STATE_COOKIE } from "../../src/lib/sidebar-state-cookie";
-import type { SidebarStateValue } from "../../src/lib/sidebar-state-cookie";
+import { SIDEBAR_STATE_COOKIE } from "../../src/components/sidebar/sidebar-state-cookie";
+import type { SidebarStateValue } from "../../src/components/sidebar/sidebar-state-cookie";
 
 /**
  * Starts the app with the sidebar the way a user left it, using the same

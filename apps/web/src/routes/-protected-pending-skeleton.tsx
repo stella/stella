@@ -14,13 +14,13 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 import { cn } from "@stll/ui/utils";
 
-import { StellaWordmarkArabic } from "@/components/stella-wordmark";
-import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import {
   DEFAULT_SIDEBAR_OPEN,
   readPersistedSidebarOpen,
-} from "@/lib/sidebar-state";
+} from "@/components/sidebar/sidebar-state";
+import { StellaWordmarkArabic } from "@/components/stella-wordmark";
+import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 
 // The primary entries every signed-in person sees, from the same list the
 // real sidebar renders. Flag-gated entries (inbox, timesheets, case law) join

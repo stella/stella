@@ -32,6 +32,7 @@ import {
 import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import "@/fonts.css";
+import { readSidebarStateAttribute } from "@/components/sidebar/sidebar-state";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
@@ -44,7 +45,6 @@ import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
-import { readSidebarStateAttribute } from "@/lib/sidebar-state";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
@@ -177,7 +177,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     // language on pages that show one, and the interface locale otherwise;
     // data-lang-source tells prepaint-init.js to keep a document language.
     // data-sidebar-state carries the sidebar's stored state from the server
-    // render to the browser (see lib/sidebar-state.ts).
+    // render to the browser (see components/sidebar/sidebar-state.ts).
     <html
       lang={lang}
       dir={dir}

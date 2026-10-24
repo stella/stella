@@ -27,8 +27,8 @@ import {
   useSidebarLayout,
 } from "@stll/ui/sidebar";
 
+import { DEFAULT_SIDEBAR_OPEN } from "@/components/sidebar/sidebar-state";
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
-import { DEFAULT_SIDEBAR_OPEN } from "@/lib/sidebar-state";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 /**

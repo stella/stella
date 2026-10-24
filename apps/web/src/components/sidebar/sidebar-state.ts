@@ -4,11 +4,11 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import { detached } from "@/lib/detached";
 import {
   SIDEBAR_STATE_COOKIE,
   SIDEBAR_STATE_VALUES,
-} from "@/lib/sidebar-state-cookie";
+} from "@/components/sidebar/sidebar-state-cookie";
+import { detached } from "@/lib/detached";
 
 /**
  * The sidebar's open state outlives a reload. It is a cookie, not browser

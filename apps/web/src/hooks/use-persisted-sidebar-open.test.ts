@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parsePersistedSidebarOpen } from "@/lib/sidebar-state";
+import { parsePersistedSidebarOpen } from "@/components/sidebar/sidebar-state";
 
 describe("persisted sidebar state", () => {
   test("maps persisted values and leaves unknown ones to the default", () => {
