@@ -36,8 +36,6 @@ export const parsePersistedSidebarOpen = (
       return true;
     case SIDEBAR_STATE_VALUES.collapsed:
       return false;
-    case null:
-    case undefined:
     default:
       return null;
   }
