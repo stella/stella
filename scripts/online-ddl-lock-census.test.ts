@@ -151,9 +151,9 @@ describe("online DDL lock census", () => {
     ["text: spliced(createSql),", "text: createSql,"],
     ['mode: "enable" | "force",', "mode: string,"],
     ["if (!declaration.online)", "if (false)"],
-    ['return `"${identifier}"`;', "return identifier;"],
+    [`return \`"\${identifier}"\`;`, "return identifier;"],
   ])("the owner proof rejects weakened SQL boundaries: %s", (before, after) => {
-    const source = ownerSource.replace(before, after);
+    const source = ownerSource.replace(before, () => after);
     expect(source).not.toBe(ownerSource);
     expect(censusOnlineDdlSource(source).length).toBeGreaterThan(0);
   });

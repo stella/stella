@@ -700,6 +700,72 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261019091000_legislation_publisher_identity",
+    form: "add-column",
+    reason:
+      "Constant literal defaults use the PostgreSQL fast-default catalog path without rewriting either legislation table; lock acquisition is bounded by 1s and the statement by 10s.",
+  },
+  {
+    migration: "20261019091000_legislation_publisher_identity",
+    form: "create-trigger",
+    reason:
+      "The three identity and writer fences install trigger metadata without scanning existing rows, under the migration's 1s lock_timeout and 10s statement_timeout.",
+  },
+  {
+    migration: "20261019091000_legislation_publisher_identity",
+    form: "add-constraint",
+    reason:
+      "Identity, namespace, lifecycle and nonempty CHECK constraints are added NOT VALID under a 1s lock_timeout; validation runs separately under its weaker lock.",
+  },
+  {
+    migration: "20261019091000_legislation_publisher_identity",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS affect only the identifier lookup table created by this migration; retries retain the 1s lock_timeout and 10s statement_timeout.",
+  },
+  {
+    migration: "20261019091000_legislation_publisher_identity",
+    form: "create-policy",
+    reason:
+      "Policies install the identifier lookup table's existing ingestion/public-reader role boundary without application-relation reads, with DDL lock acquisition bounded to 1s.",
+  },
+  {
+    migration: "20261019091000_legislation_publisher_identity",
+    form: "create-index",
+    reason:
+      "The ordinary index targets the lookup table initially created empty by this migration, not the populated legislation corpus; replay is bounded by 1s lock_timeout and 10s statement_timeout.",
+  },
+  {
+    migration: "20261019091000_legislation_publisher_identity",
+    form: "add-foreign-key",
+    reason:
+      "The identifier lookup foreign key is installed NOT VALID without an existing-row scan; locks on the lookup and legislation_sources are bounded by 1s lock_timeout.",
+  },
+  {
+    migration: "20261020143000_case_law_coverage_slice_public_reader",
+    form: "create-policy",
+    reason:
+      "The SELECT-only public-reader policy adds metadata with a constant predicate and no application-relation reads, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261022120000_scheduler_pause_bound",
+    form: "create-index",
+    reason:
+      "The partial pause index covers one scheduler row per declared job or scheduled flow; lock acquisition is bounded to 1s and the entire index build to 5s.",
+  },
+  {
+    migration: "20261023100000_case_law_sitemap_shard_counts",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS apply to the new empty sitemap count table before publication, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261024090000_professional_use_acceptance_operator_source",
+    form: "add-constraint",
+    reason:
+      "The source CHECK is replaced transactionally and added NOT VALID, avoiding a scan under ACCESS EXCLUSIVE; 1s lock_timeout bounds acquisition and separate validation uses the weaker lock.",
+  },
+  {
     migration: "20261022233000_mcp_web_handoff",
     form: "create-table-references",
     reason:

@@ -179,19 +179,26 @@ const finiteUppercaseValues = (
     node.arguments.length !== 0 ||
     !ts.isPropertyAccessExpression(node.expression) ||
     node.expression.name.text !== "toUpperCase"
-  )
+  ) {
     return undefined;
+  }
   const receiver = node.expression.expression;
-  const parameterName = ts.isIdentifier(receiver)
-    ? receiver.text
-    : ts.isPropertyAccessExpression(receiver) &&
-        ts.isIdentifier(receiver.expression)
-      ? receiver.expression.text
-      : undefined;
+  let parameterName: string | undefined;
+  if (ts.isIdentifier(receiver)) {
+    parameterName = receiver.text;
+  } else if (
+    ts.isPropertyAccessExpression(receiver) &&
+    ts.isIdentifier(receiver.expression)
+  ) {
+    parameterName = receiver.expression.text;
+  }
   let current: ts.Node = node;
-  while (!ts.isArrowFunction(current) && !ts.isSourceFile(current))
+  while (!ts.isArrowFunction(current) && !ts.isSourceFile(current)) {
     current = current.parent;
-  if (!parameterName || !ts.isArrowFunction(current)) return undefined;
+  }
+  if (!parameterName || !ts.isArrowFunction(current)) {
+    return undefined;
+  }
   const parameter = current.parameters.find(
     ({ name }) => ts.isIdentifier(name) && name.text === parameterName,
   );
@@ -219,11 +226,14 @@ const finiteUppercaseValues = (
     type =
       property && ts.isPropertySignature(property) ? property.type : undefined;
   }
-  if (!type || !ts.isUnionTypeNode(type)) return undefined;
+  if (!type || !ts.isUnionTypeNode(type)) {
+    return undefined;
+  }
   const values: ExpandedSqlVariant[] = [];
   for (const member of type.types) {
-    if (!ts.isLiteralTypeNode(member) || !ts.isStringLiteral(member.literal))
+    if (!ts.isLiteralTypeNode(member) || !ts.isStringLiteral(member.literal)) {
       return undefined;
+    }
     values.push({ text: member.literal.text.toUpperCase(), resolved: true });
   }
   return values;
@@ -244,7 +254,9 @@ const expandTemplateInterpolation = (
     }
   }
   const finite = finiteUppercaseValues(expression, context);
-  if (finite) return finite;
+  if (finite) {
+    return finite;
+  }
   if (
     ts.isCallExpression(expression) &&
     ts.isIdentifier(expression.expression)
@@ -262,7 +274,7 @@ const expandTemplateInterpolation = (
       name === "quoteLiteral" &&
       expression.arguments.length === 1 &&
       literal &&
-      sameSyntax(literal.body, "`'${value.replaceAll(\"'\", \"''\")}'`")
+      sameSyntax(literal.body, `\`'\${value.replaceAll("'", "''")}'\``)
     ) {
       return [{ text: "'online_ddl_literal'", resolved: true }];
     }
@@ -276,8 +288,9 @@ const expandTemplateInterpolation = (
       !visiting.has(name)
     ) {
       const helper = ownerArrow(context, name);
-      if (helper && !ts.isBlock(helper.body))
+      if (helper && !ts.isBlock(helper.body)) {
         return expand(helper.body, context, new Set([...visiting, name]));
+      }
     }
   }
   return [{ text: IDENTIFIER_PLACEHOLDER, resolved: false }];
@@ -391,8 +404,9 @@ const isWithinLockTaking = (
       "policyTarget",
       "policyExpressions",
     ].includes(owner)
-  )
+  ) {
     return false;
+  }
   const helper = ownerArrow(context, owner);
   const declaration = helper?.parent;
   const statement = declaration?.parent.parent;
@@ -404,8 +418,9 @@ const isWithinLockTaking = (
     statement.modifiers?.some(
       ({ kind }) => kind === ts.SyntaxKind.ExportKeyword,
     )
-  )
+  ) {
     return false;
+  }
   const references = context.nodes.filter(
     (entry) =>
       ts.isIdentifier(entry) &&
@@ -546,21 +561,28 @@ const provesConcurrentCreateSql = (
       isCreateSqlIdentifier(input)
     );
   });
-  const guardedTarget = functionNodes.some(
-    (node) =>
-      ts.isIfStatement(node) &&
-      sameSyntax(
+  const guardedTarget = functionNodes.some((node) => {
+    if (
+      !ts.isIfStatement(node) ||
+      !sameSyntax(
         node.expression,
         "builtName !== name || builtTable !== tableName",
-      ) &&
-      ts.isBlock(node.thenStatement) &&
-      node.thenStatement.statements.length === 1 &&
-      ts.isExpressionStatement(node.thenStatement.statements[0]) &&
-      ts.isCallExpression(node.thenStatement.statements[0].expression) &&
-      ts.isIdentifier(node.thenStatement.statements[0].expression.expression) &&
-      node.thenStatement.statements[0].expression.expression.text === "panic" &&
-      node.end < call.pos,
-  );
+      ) ||
+      !ts.isBlock(node.thenStatement) ||
+      node.thenStatement.statements.length !== 1
+    ) {
+      return false;
+    }
+    const statement = node.thenStatement.statements.at(0);
+    return (
+      statement !== undefined &&
+      ts.isExpressionStatement(statement) &&
+      ts.isCallExpression(statement.expression) &&
+      ts.isIdentifier(statement.expression.expression) &&
+      statement.expression.expression.text === "panic" &&
+      node.end < call.pos
+    );
+  });
   const bindings = [
     ["match", "createSqlTarget.exec(createSql)"],
     ["builtName", "match?.at(1)"],
@@ -698,6 +720,208 @@ const validateStatementBrand = (source: ts.SourceFile): string[] => {
   return errors;
 };
 
+type CheckSqlOptions = {
+  text: string;
+  node: ts.Node;
+  description: string;
+  lockQueue?: string;
+};
+type SqlCensusContext = {
+  context: SourceContext;
+  checked: Set<ts.Node>;
+  errors: string[];
+};
+const checkSql = ({
+  text,
+  node,
+  description,
+  lockQueue,
+  context,
+  checked,
+  errors,
+}: CheckSqlOptions & SqlCensusContext): void => {
+  const { source } = context;
+  const variants = text.split("\n-- variant --\n");
+  for (const variant of variants) {
+    const line =
+      source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const statements = parseMigrationStatements(variant);
+    if (statements.length === 0) {
+      errors.push(`${description} at line ${line} has an empty SQL variant`);
+      continue;
+    }
+    let classifiedForms = 0;
+    for (const statement of statements) {
+      if (!isSql(statement.raw)) {
+        errors.push(
+          `${description} at line ${line} has an unclassified SQL statement: ${statement.raw.trim().slice(0, 140)}`,
+        );
+        continue;
+      }
+      const result = censusSql(statement.raw);
+      for (const error of result.errors) {
+        errors.push(`${description} at line ${line}: ${error}`);
+      }
+      if (result.forms.length === 0 && result.errors.length === 0) {
+        errors.push(
+          `${description} at line ${line} has no classified DDL form`,
+        );
+      }
+      classifiedForms += result.forms.length;
+      for (const form of result.forms) {
+        if (!Object.hasOwn(DDL_FORMS, form.form)) {
+          errors.push(
+            `${description} at line ${line} classified an unknown DDL form: ${form.form}`,
+          );
+        }
+        if (
+          lockQueue === "beside_writers" &&
+          [
+            "SHARE",
+            "SHARE ROW EXCLUSIVE",
+            "EXCLUSIVE",
+            "ACCESS EXCLUSIVE",
+          ].includes(form.lockMode)
+        ) {
+          errors.push(
+            `${description} at line ${line} must use blocks_writers for ${form.lockMode} ${form.form}`,
+          );
+        }
+        if (
+          form.lockMode === "ACCESS EXCLUSIVE" &&
+          !isWithinLockTaking(node, context)
+        ) {
+          errors.push(
+            `ACCESS EXCLUSIVE ${form.form} SQL at line ${line} must be passed through lockTaking`,
+          );
+        }
+      }
+    }
+    if (classifiedForms === 0) {
+      errors.push(
+        `${description} at line ${line} has no classified lock-taking statement`,
+      );
+    }
+  }
+  checked.add(node);
+};
+
+type CheckLockCallOptions = SqlCensusContext & {
+  call: ts.CallExpression;
+  provedBlock: boolean;
+};
+const checkLockCall = ({
+  call,
+  context,
+  checked,
+  errors,
+  provedBlock,
+}: CheckLockCallOptions): void => {
+  const { source } = context;
+
+  const line =
+    source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
+  const options = call.arguments.at(0);
+  if (
+    call.arguments.length !== 1 ||
+    !options ||
+    !ts.isObjectLiteralExpression(options) ||
+    options.properties.length !== 3 ||
+    options.properties.some(
+      (property) =>
+        !ts.isPropertyAssignment(property) &&
+        !ts.isShorthandPropertyAssignment(property),
+    )
+  ) {
+    errors.push(
+      `lockTaking at line ${line} requires the closed { tableName, text, lockQueue } object`,
+    );
+    return;
+  }
+  const properties = new Map(
+    options.properties.map((property) => [
+      "name" in property ? property.name.getText(source) : undefined,
+      property,
+    ]),
+  );
+  const text = properties.get("text");
+  const queue = properties.get("lockQueue");
+  const sqlArg =
+    text && ts.isPropertyAssignment(text) ? text.initializer : undefined;
+  const lockQueue =
+    queue &&
+    ts.isPropertyAssignment(queue) &&
+    ts.isStringLiteral(queue.initializer)
+      ? queue.initializer.text
+      : undefined;
+  if (
+    !properties.has("tableName") ||
+    !sqlArg ||
+    !lockQueue ||
+    !["beside_writers", "blocks_writers"].includes(lockQueue)
+  ) {
+    errors.push(
+      `lockTaking at line ${line} requires SQL text and a literal lock queue class`,
+    );
+    return;
+  }
+  if (enclosingVariableName(call) === "accessExclusive") {
+    checked.add(sqlArg);
+    if (!provedBlock) {
+      errors.push(
+        "accessExclusive lacks a checked, spliced blocks_writers block builder",
+      );
+    }
+    return;
+  }
+  if (isCreateSqlIdentifier(sqlArg) || isSplicedCreateSql(sqlArg)) {
+    if (
+      !isSplicedCreateSql(sqlArg) ||
+      !provesSpliced(context) ||
+      lockQueue !== "beside_writers" ||
+      !provesConcurrentCreateSql(source, call)
+    ) {
+      errors.push(
+        "createSql pass-through lacks an anchored concurrent-index AST proof",
+      );
+    }
+    return;
+  }
+  for (const variant of expand(sqlArg, context)) {
+    if (!variant.resolved) {
+      errors.push(
+        `lockTaking SQL argument at line ${line} has an unresolved SQL variant`,
+      );
+    } else {
+      checkSql({
+        text: variant.text,
+        node: sqlArg,
+        description: "lockTaking SQL",
+        lockQueue,
+        context,
+        checked,
+        errors,
+      });
+    }
+  }
+};
+
+const provesBlockBuilder = (context: SourceContext): boolean => {
+  const blockBuilder = ownerArrow(context, "accessExclusive");
+  return (
+    blockBuilder !== undefined &&
+    sameSyntax(
+      blockBuilder.body,
+      `lockTaking({
+    tableName,
+    text: \`DO \${BLOCK_TAG} BEGIN \${statements.map((statement) => \`\${spliced(statement)};\`).join(" ")} END \${BLOCK_TAG}\`,
+    lockQueue: "blocks_writers",
+  })`,
+    ) &&
+    provesSpliced(context)
+  );
+};
+
 export const censusOnlineDdlSource = (sourceText: string): string[] => {
   const source = ts.createSourceFile(
     OWNER_PATH,
@@ -720,8 +944,9 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
       node.expression.text === "accessExclusive"
-    )
+    ) {
       blockCalls.push(node);
+    }
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
@@ -737,184 +962,29 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
       sessionCalls.push(node);
     }
     if (
-      ts.isStringLiteralLike(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateExpression(node)
+      (ts.isStringLiteralLike(node) ||
+        ts.isNoSubstitutionTemplateLiteral(node) ||
+        ts.isTemplateExpression(node)) &&
+      (ts.isTemplateExpression(node) ? isSql(node.head.text) : isSql(node.text))
     ) {
-      if (
-        ts.isTemplateExpression(node) ? isSql(node.head.text) : isSql(node.text)
-      ) {
-        sqlNodes.push({ node });
-      }
+      sqlNodes.push({ node });
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
 
-  if (!provesQuotedIdentifier(context))
+  if (!provesQuotedIdentifier(context)) {
     errors.push(
       "quoteIdentifier lacks its anchored identifier validation and quoting proof",
     );
+  }
 
   const checked = new Set<ts.Node>();
-  const checkSql = (
-    text: string,
-    node: ts.Node,
-    description: string,
-    lockQueue?: string,
-  ): void => {
-    const variants = text.split("\n-- variant --\n");
-    for (const variant of variants) {
-      const line =
-        source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-      const statements = parseMigrationStatements(variant);
-      if (statements.length === 0) {
-        errors.push(`${description} at line ${line} has an empty SQL variant`);
-        continue;
-      }
-      let classifiedForms = 0;
-      for (const statement of statements) {
-        if (!isSql(statement.raw)) {
-          errors.push(
-            `${description} at line ${line} has an unclassified SQL statement: ${statement.raw.trim().slice(0, 140)}`,
-          );
-          continue;
-        }
-        const result = censusSql(statement.raw);
-        for (const error of result.errors) {
-          errors.push(`${description} at line ${line}: ${error}`);
-        }
-        if (result.forms.length === 0 && result.errors.length === 0) {
-          errors.push(
-            `${description} at line ${line} has no classified DDL form`,
-          );
-        }
-        classifiedForms += result.forms.length;
-        for (const form of result.forms) {
-          if (!Object.hasOwn(DDL_FORMS, form.form)) {
-            errors.push(
-              `${description} at line ${line} classified an unknown DDL form: ${form.form}`,
-            );
-          }
-          if (
-            lockQueue === "beside_writers" &&
-            [
-              "SHARE",
-              "SHARE ROW EXCLUSIVE",
-              "EXCLUSIVE",
-              "ACCESS EXCLUSIVE",
-            ].includes(form.lockMode)
-          ) {
-            errors.push(
-              `${description} at line ${line} must use blocks_writers for ${form.lockMode} ${form.form}`,
-            );
-          }
-          if (
-            form.lockMode === "ACCESS EXCLUSIVE" &&
-            !isWithinLockTaking(node, context)
-          ) {
-            errors.push(
-              `ACCESS EXCLUSIVE ${form.form} SQL at line ${line} must be passed through lockTaking`,
-            );
-          }
-        }
-      }
-      if (classifiedForms === 0) {
-        errors.push(
-          `${description} at line ${line} has no classified lock-taking statement`,
-        );
-      }
-    }
-    checked.add(node);
-  };
 
-  const blockBuilder = ownerArrow(context, "accessExclusive");
-  const provedBlock =
-    blockBuilder !== undefined &&
-    sameSyntax(
-      blockBuilder.body,
-      `lockTaking({
-    tableName,
-    text: \`DO \${BLOCK_TAG} BEGIN \${statements.map((statement) => \`\${spliced(statement)};\`).join(" ")} END \${BLOCK_TAG}\`,
-    lockQueue: "blocks_writers",
-  })`,
-    ) &&
-    provesSpliced(context);
+  const provedBlock = provesBlockBuilder(context);
 
   for (const call of lockCalls) {
-    const line =
-      source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
-    const options = call.arguments.at(0);
-    if (
-      call.arguments.length !== 1 ||
-      !options ||
-      !ts.isObjectLiteralExpression(options) ||
-      options.properties.length !== 3 ||
-      options.properties.some(
-        (property) =>
-          !ts.isPropertyAssignment(property) &&
-          !ts.isShorthandPropertyAssignment(property),
-      )
-    ) {
-      errors.push(
-        `lockTaking at line ${line} requires the closed { tableName, text, lockQueue } object`,
-      );
-      continue;
-    }
-    const properties = new Map(
-      options.properties.map((property) => [
-        "name" in property ? property.name?.getText(source) : undefined,
-        property,
-      ]),
-    );
-    const text = properties.get("text");
-    const queue = properties.get("lockQueue");
-    const sqlArg =
-      text && ts.isPropertyAssignment(text) ? text.initializer : undefined;
-    const lockQueue =
-      queue &&
-      ts.isPropertyAssignment(queue) &&
-      ts.isStringLiteral(queue.initializer)
-        ? queue.initializer.text
-        : undefined;
-    if (
-      !properties.has("tableName") ||
-      !sqlArg ||
-      !lockQueue ||
-      !["beside_writers", "blocks_writers"].includes(lockQueue)
-    ) {
-      errors.push(
-        `lockTaking at line ${line} requires SQL text and a literal lock queue class`,
-      );
-      continue;
-    }
-    if (enclosingVariableName(call) === "accessExclusive") {
-      checked.add(sqlArg);
-      if (!provedBlock)
-        errors.push(
-          "accessExclusive lacks a checked, spliced blocks_writers block builder",
-        );
-      continue;
-    }
-    if (isCreateSqlIdentifier(sqlArg) || isSplicedCreateSql(sqlArg)) {
-      if (
-        !isSplicedCreateSql(sqlArg) ||
-        !provesSpliced(context) ||
-        lockQueue !== "beside_writers" ||
-        !provesConcurrentCreateSql(source, call)
-      )
-        errors.push(
-          "createSql pass-through lacks an anchored concurrent-index AST proof",
-        );
-      continue;
-    }
-    for (const variant of expand(sqlArg, context)) {
-      if (!variant.resolved)
-        errors.push(
-          `lockTaking SQL argument at line ${line} has an unresolved SQL variant`,
-        );
-      else checkSql(variant.text, sqlArg, "lockTaking SQL", lockQueue);
-    }
+    checkLockCall({ call, context, checked, errors, provedBlock });
   }
 
   for (const call of blockCalls) {
@@ -941,29 +1011,44 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
         continue;
       }
       for (const variant of expand(statement, context)) {
-        if (!variant.resolved)
+        if (!variant.resolved) {
           errors.push(
             `accessExclusive SQL argument at line ${line} has an unresolved SQL variant`,
           );
-        else
-          checkSql(
-            variant.text,
-            statement,
-            "accessExclusive SQL",
-            "blocks_writers",
-          );
+        } else {
+          checkSql({
+            text: variant.text,
+            node: statement,
+            description: "accessExclusive SQL",
+            lockQueue: "blocks_writers",
+            context,
+            checked,
+            errors,
+          });
+        }
       }
     }
   }
 
   for (const { node } of sqlNodes) {
-    if (checked.has(node)) continue;
+    if (checked.has(node)) {
+      continue;
+    }
     for (const variant of expand(node, context)) {
-      if (!variant.resolved)
+      if (!variant.resolved) {
         errors.push(
           `SQL literal at line ${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1} has an unresolved SQL variant`,
         );
-      else checkSql(variant.text, node, "SQL literal");
+      } else {
+        checkSql({
+          text: variant.text,
+          node,
+          description: "SQL literal",
+          context,
+          checked,
+          errors,
+        });
+      }
     }
   }
 
