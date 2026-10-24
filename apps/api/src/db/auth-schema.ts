@@ -453,6 +453,10 @@ export const oauthClient = pgTable(
     clientId: text("client_id").notNull().unique(),
     clientSecret: text("client_secret"),
     clientDiscoveryId: text("client_discovery_id"),
+    // When this discovery-owned client's metadata document last passed a
+    // fetch and validation. It bounds how long the stored client keeps
+    // resolving while the document cannot be revalidated.
+    metadataValidatedAt: timestamptz("metadata_validated_at"),
     registrationOrigin: text("registration_origin", {
       enum: OAUTH_CLIENT_REGISTRATION_ORIGINS,
     })

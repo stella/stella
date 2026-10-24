@@ -700,6 +700,12 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261023233000_oauth_client_metadata_validated_at",
+    form: "add-column",
+    reason:
+      "The nullable, default-free validation timestamp is a catalog-only addition without a table rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261019091000_legislation_publisher_identity",
     form: "add-column",
     reason:
