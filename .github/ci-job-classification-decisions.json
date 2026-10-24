@@ -439,11 +439,6 @@
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "0958863416799fe380db35383ffeff93aa8705895a386920fc688e8e7e6fc92f"
   },
-  "candidate:.github/workflows/docs-source-policy.yml/docs-source-policy": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "60597d6004cd0347cd6154b2b8f8f2f36d38db33c16767f64be48bcd9f4ba732"
-  },
   "candidate:.github/workflows/fetch-public-documents.yml/fetch": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
@@ -832,7 +827,7 @@
   "candidate:.github/workflows/scheduled-run-alerts.yml/notify": {
     "kind": "ordinary",
     "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment.",
-    "reviewedDigest": "93f0abb577f41d97d2ccb9a34001bed9eef9fc13b4dc96a7c17fb88446ec3b44"
+    "reviewedDigest": "5b64fe66faba4e14b21ad3a2e26365a6879c9acb7e89263564a1f7a3e9866738"
   },
   "candidate:.github/workflows/scorecard.yml/scorecard": {
     "kind": "ordinary",

@@ -4761,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
+    "caseLawEmptyState": "Tippen Sie, um Gerichtsentscheidungen zu durchsuchen.",
     "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
     "continueInChat": "Im Chat fortsetzen",
@@ -4818,6 +4819,7 @@
     "savedSearchesEmpty": "Speichern Sie eine Suche, um sie erneut zu verwenden.",
     "scopeFilter": "Suchbereich",
     "scopePlaceholderAll": "In allen <scope>Quellen</scope> suchen …",
+    "scopePlaceholderCaseLaw": "In der <scope>Rechtsprechung</scope> suchen …",
     "scopePlaceholderMatters": "In allen <scope>Akten</scope> suchen …",
     "scopePlaceholderRegistries": "In <scope>Registern</scope> suchen …",
     "scopeRegistries": "Register",
