@@ -3,68 +3,33 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 // A job without a status function in its `if` runs only when every job up its
-// `needs` chain succeeded: one skipped ancestor skips it too, and the run can
-// still conclude success. A job below a conditionally skipped job therefore
-// states its own status function (`!cancelled()`, `always()`, ...) and names
-// the results it depends on. Staging promotion was skipped this way whenever a
-// release candidate found staging already running.
-//
-// The jobs listed here predate this check. Each one either intends to skip
-// with its ancestor or needs the explicit condition; review and remove entries,
-// never add one.
-const REVIEW_PENDING = new Set([
-  "autofix.yml#regenerate-derived-files",
-  "ci.yml#api-image-smoke",
-  "ci.yml#ci-checks-generated",
-  "ci.yml#dependency-malware",
-  "ci.yml#desktop-rust-tests",
-  "ci.yml#desktop-windows-dry-run",
-  "ci.yml#docker-checks",
-  "ci.yml#e2e-vite-canary",
-  "ci.yml#fix-tests-on-base",
-  "ci.yml#generated-sources",
-  "ci.yml#heavy-web-build",
-  "ci.yml#landing-build",
-  "ci.yml#legal-atlas-image",
-  "ci.yml#migration-upgrade-rehearsal",
-  "ci.yml#mobile-build",
-  "ci.yml#pr-heavy-gate",
-  "ci.yml#query-perf",
-  "ci.yml#release-typecheck",
-  "ci.yml#scan-engine-wasm-drift",
-  "ci.yml#stack-redaction-browsers",
-  "ci.yml#web-image-smoke",
-  "ci.yml#windows-scripts",
-  "deploy-landing.yml#build",
-  "deploy-landing.yml#deploy",
-  "deploy-staging.yml#staging-health",
-  "deploy-staging.yml#staging-wake",
-  "main-heavy.yml#suites",
-  "network-baseline-record.yml#deliver",
-  "network-baseline-record.yml#record",
-  "publish-npm.yml#pack",
-  "publish-npm.yml#release",
-  "release-desktop.yml#build",
-  "release-desktop.yml#carry-forward",
-  "release-desktop.yml#verify-production",
-  "release-pr.yml#version",
-  "release-tag.yml#marketing-freshness",
-  "release.yml#dispatch-release-health",
-  "release.yml#promote",
-  "user-journeys.yml#local-stack",
-  "user-journeys.yml#staging",
-]);
+// `needs` chain succeeded: one skipped ancestor skips it too. Skipping together
+// with a parent is usually the intent. The hazard is a parent that states a
+// status function (`!cancelled()`, `always()`, ...) so it still runs after a
+// skipped ancestor, while its child does not: the parent does the work, the
+// child silently skips, and the run can conclude success. Staging promotion
+// was skipped this way whenever a release candidate found staging running.
+// Such a child states its own status function and the results it depends on.
 
 const WORKFLOWS = path.resolve(import.meta.dirname, "../.github/workflows");
 const STATUS_FUNCTION = /\b(?:always|cancelled|failure|success)\(\)/u;
+// These let a job run after a skipped ancestor: `always()`, any `cancelled()`
+// test (`!cancelled()`), and a negated `failure()` or `success()`. A plain
+// `success()` skips with the ancestor; a plain `failure()` runs only after a
+// failure.
+const TOLERATES_SKIP =
+  /\b(?:always|cancelled)\(\)|!\s*(?:failure|success)\(\)/u;
 
 type Job = { needs?: unknown; if?: unknown };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** Jobs below a conditionally skipped job whose own `if` has no status function. */
-export const implicitSuccessBelowSkippable = (
+/**
+ * Jobs without a status function that need a parent which states one and sits
+ * below a conditionally skipped job.
+ */
+export const skipsAfterTolerantParent = (
   file: string,
   jobs: Readonly<Record<string, Job>>,
 ): string[] => {
@@ -77,6 +42,10 @@ export const implicitSuccessBelowSkippable = (
       ? value.filter((entry): entry is string => typeof entry === "string")
       : [];
   };
+  const conditionMatches = (name: string, pattern: RegExp) => {
+    const condition = jobs[name]?.if;
+    return typeof condition === "string" && pattern.test(condition);
+  };
   const ancestors = (name: string, seen = new Set<string>()): Set<string> => {
     for (const parent of needs(name)) {
       if (!seen.has(parent)) {
@@ -87,15 +56,17 @@ export const implicitSuccessBelowSkippable = (
     return seen;
   };
   return Object.keys(jobs)
-    .filter((name) => {
-      const condition = jobs[name]?.if;
-      if (typeof condition === "string" && STATUS_FUNCTION.test(condition)) {
-        return false;
-      }
-      return [...ancestors(name)].some(
-        (ancestor) => jobs[ancestor]?.if !== undefined,
-      );
-    })
+    .filter(
+      (name) =>
+        !conditionMatches(name, STATUS_FUNCTION) &&
+        needs(name).some(
+          (parent) =>
+            conditionMatches(parent, TOLERATES_SKIP) &&
+            [...ancestors(parent)].some(
+              (ancestor) => jobs[ancestor]?.if !== undefined,
+            ),
+        ),
+    )
     .map((name) => `${file}#${name}`);
 };
 
@@ -114,30 +85,38 @@ const workflowJobs = (file: string): Record<string, Job> => {
     : {};
 };
 
-test("a job below a conditionally skipped job states its own status function", () => {
-  const found = readdirSync(WORKFLOWS)
-    .filter((file) => /\.ya?ml$/u.test(file))
-    .toSorted()
-    .flatMap((file) => implicitSuccessBelowSkippable(file, workflowJobs(file)));
-  expect(found.filter((job) => !REVIEW_PENDING.has(job))).toEqual([]);
-  // The list only shrinks: a fixed job leaves it.
-  expect([...REVIEW_PENDING].filter((job) => !found.includes(job))).toEqual([]);
+test("no job silently skips below a parent that runs after a skipped ancestor", () => {
+  expect(
+    readdirSync(WORKFLOWS)
+      .filter((file) => /\.ya?ml$/u.test(file))
+      .toSorted()
+      .flatMap((file) => skipsAfterTolerantParent(file, workflowJobs(file))),
+  ).toEqual([]);
 });
 
-test("the check finds a skipped grandparent and accepts an explicit status function", () => {
+test("the check finds the child of a tolerant parent and nothing that skips with its parent", () => {
   const jobs = {
     wake: { if: "inputs.wake" },
     build: { needs: ["wake"], if: "!cancelled()" },
+    // Runs after the tolerated skip only if it says so.
     promote: { needs: ["build"], if: "github.ref == 'refs/heads/main'" },
-    report: { needs: ["promote"] },
     fixed: {
       needs: ["build"],
       if: "!cancelled() && needs.build.result == 'success'",
     },
-    plain: { needs: [] },
+    // Skips together with its parent, as intended.
+    scope: { if: "github.ref == 'refs/heads/main'" },
+    deploy: { needs: ["scope"] },
+    report: { needs: ["deploy"] },
+    // An explicit success() parent skips with the ancestor too.
+    gated: { needs: ["wake"], if: "success()" },
+    summary: { needs: ["gated"] },
+    // A negated failure() runs after the skip, so its child must say so.
+    lenient: { needs: ["wake"], if: "!failure()" },
+    publish: { needs: ["lenient"] },
   };
-  expect(implicitSuccessBelowSkippable("w.yml", jobs)).toEqual([
+  expect(skipsAfterTolerantParent("w.yml", jobs)).toEqual([
     "w.yml#promote",
-    "w.yml#report",
+    "w.yml#publish",
   ]);
 });
