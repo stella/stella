@@ -48,7 +48,7 @@ import {
 } from "@/api/handlers/data-exports/start-export";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { DATA_EXPORT_RETENTION_MS } from "@/api/lib/data-export-queue";
+import { DATA_EXPORT_RETENTION_MS } from "@/api/lib/data-export/queue";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   createRootMembershipScopedDb,
@@ -729,10 +729,13 @@ describe("personal matters", () => {
 });
 
 describe("starting an export", () => {
-  const scopedDb = createRootScopedDb(
-    { organizationId: ids.orgB, userId: ids.userB1, workspaceIds: [] },
-    database,
-  );
+  let scopedDb: ReturnType<typeof createRootScopedDb>;
+  beforeAll(() => {
+    scopedDb = createRootScopedDb(
+      { organizationId: ids.orgB, userId: ids.userB1, workspaceIds: [] },
+      database,
+    );
+  });
   const start = async () =>
     await scopedDb(
       async (tx) =>

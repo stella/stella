@@ -14,7 +14,7 @@
  *   at the part it was in instead of starting over.
  *
  * It never deletes what it wrote: objects under `exports/` are removed by
- * the bucket lifecycle (see `data-export-queue.ts`).
+ * the bucket lifecycle (see `lib/data-export/queue.ts`).
  */
 import { TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
@@ -59,8 +59,8 @@ import {
   dataExportObjectKey,
   dataExportPrefix,
   getDataExportQueue,
-} from "@/api/lib/data-export-queue";
-import type { DataExportJobData } from "@/api/lib/data-export-queue";
+} from "@/api/lib/data-export/queue";
+import type { DataExportJobData } from "@/api/lib/data-export/queue";
 import { lockMemberAccessRow } from "@/api/lib/db/aggregate-lock";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import { transition } from "@/api/lib/db/transitions";

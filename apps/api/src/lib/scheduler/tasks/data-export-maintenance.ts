@@ -16,7 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   DATA_EXPORT_HEARTBEAT_STALE_MS,
   enqueueDataExport,
-} from "@/api/lib/data-export-queue";
+} from "@/api/lib/data-export/queue";
 import {
   lockStaleDataExportRun,
   withAggregateTransaction,

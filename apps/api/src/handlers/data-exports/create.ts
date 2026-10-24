@@ -8,7 +8,7 @@ import {
 import { toDataExportSummary } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { enqueueDataExport } from "@/api/lib/data-export-queue";
+import { enqueueDataExport } from "@/api/lib/data-export/queue";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

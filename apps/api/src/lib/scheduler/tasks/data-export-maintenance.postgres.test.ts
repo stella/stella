@@ -9,7 +9,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import { DATA_EXPORT_HEARTBEAT_STALE_MS } from "@/api/lib/data-export-queue";
+import { DATA_EXPORT_HEARTBEAT_STALE_MS } from "@/api/lib/data-export/queue";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {

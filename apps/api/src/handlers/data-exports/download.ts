@@ -14,7 +14,7 @@ import {
   DATA_EXPORT_DOWNLOAD_URL_TTL_SECONDS,
   DATA_EXPORT_MANIFEST_FILE_NAME,
   dataExportObjectKey,
-} from "@/api/lib/data-export-queue";
+} from "@/api/lib/data-export/queue";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";

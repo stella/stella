@@ -14,7 +14,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { dataExportObjectKey } from "@/api/lib/data-export-queue";
+import { dataExportObjectKey } from "@/api/lib/data-export/queue";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
