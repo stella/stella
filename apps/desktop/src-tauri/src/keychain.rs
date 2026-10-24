@@ -499,20 +499,21 @@ mod tests {
     mark_account_expired_with(
       || Ok(()),
       |key| {
-        deleted.push(key);
+        deleted.push(key.to_string());
         Ok(())
       },
     )
     .unwrap();
 
-    assert_eq!(deleted.first(), Some(&ACCOUNT_DEVICE_KEY));
+    let expected_after_device = ACCOUNT_KEYS_TO_DELETE
+      .into_iter()
+      .filter(|key| *key != ACCOUNT_EXPIRED_KEY)
+      .map(String::from)
+      .collect::<Vec<_>>();
     assert_eq!(
-      &deleted[1..],
-      ACCOUNT_KEYS_TO_DELETE
-        .iter()
-        .copied()
-        .filter(|key| *key != ACCOUNT_EXPIRED_KEY)
-        .collect::<Vec<_>>()
+      deleted.first().map(String::as_str),
+      Some(ACCOUNT_DEVICE_KEY)
     );
+    assert_eq!(&deleted[1..], expected_after_device.as_slice());
   }
 }

@@ -29,6 +29,7 @@ use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::Mutex;
 
+use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::session_manager::SessionManager;
 
 const STARTUP_CHECK_DELAY: Duration = Duration::from_secs(10);
@@ -253,7 +254,7 @@ fn decode_base64_text(value: &str) -> Result<String, String> {
     .decode(value)
     .map_err(|error| format!("Updater signature encoding is invalid: {error}"))?;
   String::from_utf8(decoded)
-    .map_err(|_| "Updater signature encoding is not UTF-8".to_string())
+    .map_err(|error| format!("Updater signature encoding is not UTF-8: {error}"))
 }
 
 fn signed_version(trusted_comment: &str) -> Option<&str> {
@@ -290,8 +291,7 @@ fn checked_update_size(current: usize, chunk: usize) -> Result<usize, String> {
     .ok_or_else(|| "Update package size overflowed".to_string())?;
   if next > MAX_UPDATE_PACKAGE_BYTES {
     return Err(format!(
-      "Update package exceeds the {} byte limit",
-      MAX_UPDATE_PACKAGE_BYTES
+      "Update package exceeds the {MAX_UPDATE_PACKAGE_BYTES} byte limit"
     ));
   }
   Ok(next)
@@ -304,21 +304,12 @@ async fn download_update_package(
   if !headers.contains_key(ACCEPT) {
     headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
   }
-  let mut client = reqwest::Client::builder().user_agent("stella-desktop-updater");
-  if let Some(timeout) = update.timeout {
-    client = client.timeout(timeout);
-  }
-  if update.no_proxy {
-    client = client.no_proxy();
-  } else if let Some(proxy) = &update.proxy {
-    client = client.proxy(
-      reqwest::Proxy::all(proxy.as_str())
-        .map_err(|error| format!("Updater proxy is invalid: {error}"))?,
-    );
-  }
+  let client = DesktopHttpClient::new(HttpClientOptions {
+    timeout: update.timeout,
+    redirect: reqwest::redirect::Policy::default(),
+  })
+  .map_err(|error| format!("Updater client failed: {error}"))?;
   let response = client
-    .build()
-    .map_err(|error| format!("Updater client failed: {error}"))?
     .get(update.download_url.clone())
     .headers(headers)
     .send()
@@ -334,8 +325,7 @@ async fn download_update_package(
     && content_length > MAX_UPDATE_PACKAGE_BYTES as u64
   {
     return Err(format!(
-      "Update package exceeds the {} byte limit",
-      MAX_UPDATE_PACKAGE_BYTES
+      "Update package exceeds the {MAX_UPDATE_PACKAGE_BYTES} byte limit"
     ));
   }
 

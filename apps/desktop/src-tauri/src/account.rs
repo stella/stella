@@ -384,12 +384,10 @@ impl AccountStore {
   }
 
   async fn clear_ended_link(&mut self) -> Result<(), String> {
-    match self {
-      Self::Keychain => {
-        crate::device_proof::unlink(crate::keychain::delete_account_connection()).await
-      }
-      #[cfg(test)]
-      Self::Memory(_) | Self::ReadOnly(_) | Self::Fixture(_) => self.clear().await,
+    if matches!(self, Self::Keychain) {
+      crate::device_proof::unlink(self.clear()).await
+    } else {
+      self.clear().await
     }
   }
 
