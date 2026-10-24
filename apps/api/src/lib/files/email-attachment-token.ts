@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 
 /** Maximum descriptors exposed by one email preview. */
 export const MAX_EMAIL_ATTACHMENT_DESCRIPTORS = 100;
@@ -30,7 +30,7 @@ export const createEmailAttachmentDescriptor = ({
     panic("Email attachment index is out of bounds");
   }
 
-  const digest = createHmac("sha256", secret)
+  const digest = new Bun.CryptoHasher("sha256", secret)
     .update(
       descriptorMessage({ attachmentIndex, sourceFileId, sourceVersionId }),
     )

@@ -41,6 +41,8 @@ const cryptoImportPath = ({
     switch (imported) {
       case "createHash":
         return "createHash";
+      case "createHmac":
+        return "createHmac";
       case "webcrypto":
         return "crypto";
       case "subtle":
@@ -134,6 +136,7 @@ const normalizedPath = (value: string | null) =>
     ?.replace(/^\./u, "")
     .replace(/^nodeCrypto\.webcrypto/u, "crypto")
     .replace(/^nodeCrypto\.createHash$/u, "createHash")
+    .replace(/^nodeCrypto\.createHmac$/u, "createHmac")
     .replace(/^nodeCrypto\.subtle/u, "crypto.subtle") ?? null;
 
 const algorithmName = (
@@ -178,6 +181,7 @@ const algorithmName = (
 
 const isPrimitive = (value: string | null) =>
   value === "createHash" ||
+  value === "createHmac" ||
   value === "Bun.CryptoHasher" ||
   value === "Bun.SHA256" ||
   value === "Bun.SHA256.hash" ||
@@ -999,6 +1003,7 @@ export default eslintCompatPlugin({
         messages: {
           owned:
             "Use the SHA-256 owner for this runtime; raw SHA-256 primitives are confined to the registered owners.",
+          hmac: "Use `new Bun.CryptoHasher(algorithm, key)` for an HMAC; Node's `createHmac` is confined to the registered Node owners.",
         },
       },
       createOnce(context) {
@@ -1111,6 +1116,10 @@ export default eslintCompatPlugin({
             if (algorithm !== null && !sha256) {
               return;
             }
+          } else if (primitive === "createHmac") {
+            // Every HMAC is unified on Bun's hasher, whatever its algorithm.
+            context.report({ node, messageId: "hmac" });
+            return;
           } else if (
             primitive !== "Bun.SHA256" &&
             primitive !== "Bun.SHA256.hash"
