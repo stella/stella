@@ -1753,7 +1753,10 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/api/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts",
+      ],
       rules: {
         "mcp-authorized-context-owner/mcp-authorized-context-owner": "error",
       },

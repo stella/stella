@@ -1,23 +1,25 @@
 import { expect, test } from "bun:test";
 
-import { lintRuleAcrossFiles } from "./lint-single-rule.ts";
+import { lintRuleAcrossFiles, lintSingleRule } from "./lint-single-rule.ts";
 
 test("keeps authorized-context construction in the authority owner", async () => {
   expect(
-    await lintRuleAcrossFiles("mcp-authorized-context-owner", {
-      ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts": [
+    await lintSingleRule(
+      "mcp-authorized-context-owner",
+      [
         'import { authorizedMcpContextForTest } from "@/api/mcp/write-tool-authority";',
         "",
         'const authorizedMcpRequestContextBrand = Symbol("context");',
         "void authorizedMcpContextForTest;",
         "void authorizedMcpRequestContextBrand;",
       ].join("\n"),
-    }),
-  ).toEqual({
-    ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts": [
-      1, 3,
-    ],
-  });
+      {
+        sourcePath:
+          ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts",
+        cwd: "scratch",
+      },
+    ),
+  ).toEqual([1, 3]);
 });
 
 test("refuses the authorized-context test helper in production modules", async () => {
