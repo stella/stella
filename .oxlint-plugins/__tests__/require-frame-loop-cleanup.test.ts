@@ -762,22 +762,22 @@ for (const callback of [
 }
 
 test("an owned kickoff cannot hide another discarded kickoff of the same loop", async () => {
-  for (const ownedFirst of [false, true]) {
-    const setup = [
-      "useMountEffect(() => {",
-      "  let frame = 0;",
-      "  const tick = () => {",
-      "    if (visible()) frame = requestAnimationFrame(tick);",
-      "  };",
-    ];
-    const owned = [
-      "  frame = requestAnimationFrame(tick);",
-      "  cancelAnimationFrame(frame);",
-    ];
-    const discarded = "  requestAnimationFrame(tick);";
-    const starts = ownedFirst ? [...owned, discarded] : [discarded, ...owned];
-    expect(
-      await lintSingleRule(
+  const results = await Promise.all(
+    [false, true].map(async (ownedFirst) => {
+      const setup = [
+        "useMountEffect(() => {",
+        "  let frame = 0;",
+        "  const tick = () => {",
+        "    if (visible()) frame = requestAnimationFrame(tick);",
+        "  };",
+      ];
+      const owned = [
+        "  frame = requestAnimationFrame(tick);",
+        "  cancelAnimationFrame(frame);",
+      ];
+      const discarded = "  requestAnimationFrame(tick);";
+      const starts = ownedFirst ? [...owned, discarded] : [discarded, ...owned];
+      return await lintSingleRule(
         RULE,
         [
           ...setup,
@@ -785,9 +785,10 @@ test("an owned kickoff cannot hide another discarded kickoff of the same loop", 
           "  return () => cancelAnimationFrame(frame);",
           "});",
         ].join("\n"),
-      ),
-    ).toEqual([ownedFirst ? 8 : 6]);
-  }
+      );
+    }),
+  );
+  expect(results).toEqual([[6], [8]]);
 });
 
 for (const [progress, comparison, bounded] of [
