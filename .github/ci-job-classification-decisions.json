@@ -127,7 +127,7 @@
   "candidate:.github/workflows/ci.yml/pr-heavy-gate": {
     "kind": "support",
     "qualifier": "Gates merge-required heavy suites on successful pull-request quick checks.",
-    "reviewedDigest": "86a26963f9d5ad8cfc07f9dec4a790391e0e7554a5f9e09e0eef402aa146f640"
+    "reviewedDigest": "679c6990ebc14072581684dce3ba0e9cc6e46fa61167e876516439517d1b41fc"
   },
   "candidate:.github/workflows/ci.yml/docker-checks": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "dbfda2bec7f11319490da36598fc361d67c7b5913558903e1f7cd791343aceae"
+    "reviewedDigest": "b5b22e8e91aeb7262846131498e803a68e5c26ece61cf0c177b4cfd6516b0c03"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "33e5fbb27fc8af53e27fd90142e339c7c8b8fdbc5b1c0c915f0ac1145e9e6c9a"
+    "reviewedDigest": "de5c023f20fb6dcac3b1f0ae6ef22e9fd30184cd15f8d41638a7f657524fa078"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
