@@ -1,5 +1,41 @@
 # @stll/cli
 
+## 5.3.1
+
+### Patch Changes
+
+- [#5827](https://github.com/stella/stella/pull/5827) [`6f18636`](https://github.com/stella/stella/commit/6f186366c1749c64e0fdcf6f54d29dc746017155) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Comment on the claims of a list verification: `lists.verifications.claim-comments.list`, `.create`, `.update` and `.delete` read, add, change and remove comments on one claim, private unless shared with the matter.
+
+## 5.3.0
+
+### Minor Changes
+
+- [#6118](https://github.com/stella/stella/pull/6118) [`1f90c6b`](https://github.com/stella/stella/commit/1f90c6bdff83b54bd905a9087a0b132bf553fe25) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `stella capability` commands for document redline suggestions (`docx-suggestions list`, `resolve`, `revert`), assistant memory (`memories list`, `create`, `update`) and notifications (`notifications list`, `read-state-update`).
+
+  Memory writes use their own consent scope; memory and redline writes require confirmation for each call.
+
+- [#6472](https://github.com/stella/stella/pull/6472) [`83e4634`](https://github.com/stella/stella/commit/83e4634ae41525365ddcca368db1d128e6448729) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Paginate filesystem tree reads and expose bounded text previews in entity lists.
+
+- [#6196](https://github.com/stella/stella/pull/6196) [`534b9bf`](https://github.com/stella/stella/commit/534b9bf0ff8701234b84817d0b7ddb007b13b856) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add tax ID, VAT-payer status and invoice language to contacts, a language to invoices, and a command that adds a country's VAT rates from a preset.
+
+- [#6331](https://github.com/stella/stella/pull/6331) [`61ce03b`](https://github.com/stella/stella/commit/61ce03b8784374a9e9012e7f2273babd5a16db24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the Polish KSeF FA(3) e-invoice format to invoice export.
+
+### Patch Changes
+
+- [#6076](https://github.com/stella/stella/pull/6076) [`90be2f9`](https://github.com/stella/stella/commit/90be2f9b37607e3cad8bb027ba2299d6ae4392e4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Recognize the `action_feature_disabled` admission refusal, returned while an operator has turned the requested feature off, and exit with the feature-disabled code.
+
+- [#6487](https://github.com/stella/stella/pull/6487) [`8ccab27`](https://github.com/stella/stella/commit/8ccab27d6f3a721dd782b84c73b3c3db4fb8fc6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document uploads read their PUT timeout from the shared upload contract, so the CLI and the API agree on how long an upload may run and still be finalized.
+
+## 5.2.1
+
+### Patch Changes
+
+- [#6696](https://github.com/stella/stella/pull/6696) [`87beaf6`](https://github.com/stella/stella/commit/87beaf6bb6cc7d709af9961acd3f78d841746e6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe why AI is unavailable and whether the caller may configure the organization's provider in the AI availability capability.
+
+- [#6348](https://github.com/stella/stella/pull/6348) [`0008522`](https://github.com/stella/stella/commit/0008522c9ba216c440fc08b81e6c5e7fa553ec0f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law coverage reports each source's held decision-year range and its completeness per calendar year.
+
+- [#5704](https://github.com/stella/stella/pull/5704) [`c57c0e8`](https://github.com/stella/stella/commit/c57c0e833228f6351c5f7c9a5519e4bbebcf980f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update connector tool metadata for app-only web link refresh.
+
 ## 5.2.0
 
 ### Minor Changes

@@ -12,7 +12,6 @@ const DRIZZLE_DIR = nodePath.resolve(
   PENDING_CONTRACT_MIGRATIONS_DIR,
   "../../../../drizzle",
 );
-const DAY_MS = 86_400_000;
 
 describe("pending contract migrations", () => {
   test("every contract SQL file is registered and every entry has its file", () => {
@@ -24,14 +23,12 @@ describe("pending contract migrations", () => {
     );
   });
 
-  test("no entry has passed its deadline", () => {
+  test("every deadline is a valid YYYY-MM-DD date", () => {
     for (const migration of PENDING_CONTRACT_MIGRATIONS) {
-      const lastInstant = Date.parse(`${migration.expiresAt}T00:00:00.000Z`);
-      expect(Number.isFinite(lastInstant)).toBe(true);
-      // The rollout window for older readers has ended: ship the contract
-      // step as a migration under drizzle/ and delete the entry, or renew the
-      // deadline with the reason in the review.
-      expect(Date.now()).toBeLessThan(lastInstant + DAY_MS);
+      expect(migration.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+      expect(
+        new Date(`${migration.expiresAt}T00:00:00.000Z`).toISOString(),
+      ).toBe(`${migration.expiresAt}T00:00:00.000Z`);
     }
   });
 

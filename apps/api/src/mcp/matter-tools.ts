@@ -5,10 +5,11 @@ import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -52,15 +53,15 @@ import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nat
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
+  CHECK_COUNTERPARTY_PROJECTION,
   DELETED_TRUE_PROJECTION,
   LINK_MATTER_CONTACT_LINK_PROJECTION,
-  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LIST_CONTACTS_PROJECTION,
   LIST_TASKS_DETAIL_PROJECTION,
   LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
-  CHECK_COUNTERPARTY_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_MATTER_PROJECTION,
@@ -114,17 +115,16 @@ import {
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
+  entityIdInputSchema,
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
   structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
-  entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -1093,7 +1093,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
     ),
     birth_date: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "Full birth date; use date_of_birth for partial dates, never invent a day.",
@@ -1320,7 +1320,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or after this ISO date (YYYY-MM-DD)",
@@ -1329,7 +1329,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or before this ISO date (YYYY-MM-DD)",
@@ -1636,7 +1636,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       due_date: v.optional(
         v.pipe(
-          v.nullable(v.pipe(ISO_DATE_SCHEMA, v.maxLength(10))),
+          v.nullable(v.pipe(vApiDate, v.maxLength(10))),
           v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
         ),
       ),

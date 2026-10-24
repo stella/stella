@@ -7,8 +7,8 @@ import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
-  fields,
   featureEnrolments,
+  fields,
 } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -41,6 +41,7 @@ type FeatureAccessMockOptions = {
 };
 
 type ScopedDbMockOptions = {
+  authorizedWorkspaceIds?: readonly string[];
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
   visibleResources?: {
@@ -73,13 +74,13 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
       for: async () => await Promise.resolve(rows),
       orderBy: () => ({ limit, offset }),
     });
-  return {
-    from: () => ({
-      where,
-      innerJoin: () => ({ where }),
-      leftJoin: () => ({ where }),
-    }),
+  type JoinedQuery = {
+    where: typeof where;
+    innerJoin: () => JoinedQuery;
+    leftJoin: () => JoinedQuery;
   };
+  const from = (): JoinedQuery => ({ where, innerJoin: from, leftJoin: from });
+  return { from };
 };
 
 const fixtureSelect =
@@ -216,6 +217,14 @@ export const createScopedDbMock = (
       execute: async () => {
         await Promise.resolve();
       },
+      ...(options?.authorizedWorkspaceIds === undefined
+        ? {}
+        : {
+            selectDistinct: () =>
+              createSelectQueryMock(
+                options.authorizedWorkspaceIds?.map((id) => ({ id })) ?? [],
+              ),
+          }),
       ...(typeof tx === "object" && tx !== null ? tx : {}),
       query: {
         ...providedQuery,

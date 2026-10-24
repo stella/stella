@@ -7,10 +7,10 @@ import ts from "typescript6";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
-  SOURCE_FILE,
   lexShell,
   parseBunFlags,
   programWords,
+  SOURCE_FILE,
 } from "./install-free-ci";
 import { parseSource } from "./parse-memo";
 import { flattenWorkflowSteps } from "./workflow-steps";
@@ -27,9 +27,11 @@ export type OfflineImportAllowance = {
   file: string;
   reason: string;
 };
+// `entry` is the script whose import closure must stay transport-safe, or
+// null for Bun's native subcommands (`bun fmt`), which run no repository code
+// and open no connection.
 export type OfflineCheckCommand = { command: string } & (
-  | { protected: true; entry: string }
-  | { protected: false }
+  { protected: true; entry: string | null } | { protected: false }
 );
 export type OfflineCheckCallerSource = {
   file: string;
@@ -311,6 +313,8 @@ const packageCheckEntry = (words: readonly string[]) => {
   return undefined;
 };
 
+const NATIVE_OFFLINE_SUBCOMMANDS: ReadonlySet<string> = new Set(["fmt"]);
+
 /** Enumerate every check invocation, including shell substitutions and parallel groups. */
 export const enumerateOfflineChecks = (
   workflow: unknown,
@@ -332,11 +336,18 @@ export const enumerateOfflineChecks = (
           continue;
         }
         const words = programWords(event.words);
+        const command = JSON.stringify(words);
+        if (
+          words.at(0) === "bun" &&
+          NATIVE_OFFLINE_SUBCOMMANDS.has(words.at(1) ?? "")
+        ) {
+          checks.push({ command, protected: true, entry: null });
+          continue;
+        }
         const entry =
           words.at(0) === "bun"
             ? (offlineCheckEntry(words, root) ?? packageCheckEntry(words))
             : undefined;
-        const command = JSON.stringify(words);
         checks.push(
           entry === undefined
             ? { command, protected: false }
@@ -404,11 +415,112 @@ export const offlineCheckStartupViolations = (
 ): string[] => {
   const violations: string[] = [];
   for (const entry of new Set(entries)) {
-    const source = readFileSync(entry, "utf-8");
-    if (
-      !source.includes("offline-check-startup") ||
-      !source.includes("assertOfflineCheckPreload();")
-    ) {
+    const parsed = parseSource({
+      fileName: entry,
+      text: readFileSync(entry, "utf-8"),
+    });
+    const bindings = new Set<string>();
+    for (const statement of parsed.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.importClause?.isTypeOnly !== false ||
+        statement.importClause.namedBindings === undefined ||
+        !ts.isNamedImports(statement.importClause.namedBindings)
+      ) {
+        continue;
+      }
+      const specifier = statement.moduleSpecifier.text;
+      const resolved = Result.try(() =>
+        realpathSync(Bun.resolveSync(specifier, path.dirname(entry))),
+      );
+      if (
+        resolved.isErr() ||
+        ![
+          path.join(root, "scripts/offline-check-startup.ts"),
+          path.join(root, "packages/scripts/src/offline-check-startup.ts"),
+        ].includes(resolved.value)
+      ) {
+        continue;
+      }
+      for (const binding of statement.importClause.namedBindings.elements) {
+        if (
+          !binding.isTypeOnly &&
+          (binding.propertyName ?? binding.name).text ===
+            "assertOfflineCheckPreload"
+        ) {
+          bindings.add(binding.name.text);
+        }
+      }
+    }
+    const isGuardCall = (statement: ts.Statement | undefined) =>
+      statement !== undefined &&
+      ts.isExpressionStatement(statement) &&
+      ts.isCallExpression(statement.expression) &&
+      statement.expression.questionDotToken === undefined &&
+      ts.isIdentifier(statement.expression.expression) &&
+      bindings.has(statement.expression.expression.text);
+    const firstExecutable = parsed.statements.find(
+      (statement) =>
+        !ts.isImportDeclaration(statement) &&
+        !ts.isExportDeclaration(statement) &&
+        !ts.isTypeAliasDeclaration(statement) &&
+        !ts.isInterfaceDeclaration(statement) &&
+        !ts.isFunctionDeclaration(statement),
+    );
+    const calledAtStartup = parsed.statements.some((statement) => {
+      if (statement === firstExecutable && isGuardCall(statement)) {
+        return true;
+      }
+      if (
+        !ts.isIfStatement(statement) ||
+        !ts.isPropertyAccessExpression(statement.expression) ||
+        statement.expression.name.text !== "main" ||
+        !ts.isMetaProperty(statement.expression.expression) ||
+        statement.expression.expression.keywordToken !==
+          ts.SyntaxKind.ImportKeyword ||
+        statement.expression.expression.name.text !== "meta"
+      ) {
+        return false;
+      }
+      const namesGuard = (name: ts.BindingName): boolean =>
+        ts.isIdentifier(name)
+          ? bindings.has(name.text)
+          : name.elements.some(
+              (element) =>
+                ts.isBindingElement(element) && namesGuard(element.name),
+            );
+      const shadowsGuard = (child: ts.Statement): boolean => {
+        if (ts.isVariableStatement(child)) {
+          return child.declarationList.declarations.some(({ name }) =>
+            namesGuard(name),
+          );
+        }
+        return (
+          (ts.isFunctionDeclaration(child) ||
+            ts.isClassDeclaration(child) ||
+            ts.isEnumDeclaration(child) ||
+            ts.isModuleDeclaration(child)) &&
+          child.name !== undefined &&
+          ts.isIdentifier(child.name) &&
+          bindings.has(child.name.text)
+        );
+      };
+      if (
+        ts.isBlock(statement.thenStatement) &&
+        statement.thenStatement.statements.some(shadowsGuard)
+      ) {
+        return false;
+      }
+      // A check's guarded main branch starts with the assertion itself.
+      // Calls in dormant helpers or unrelated conditionals prove no startup.
+      return isGuardCall(
+        ts.isBlock(statement.thenStatement)
+          ? statement.thenStatement.statements.at(0)
+          : statement.thenStatement,
+      );
+    });
+    if (!calledAtStartup) {
       violations.push(
         `Offline check entry must assert the preload at startup: ${repoRelativePath(root, entry)}`,
       );
@@ -757,12 +869,16 @@ if (import.meta.main) {
   const violations = offlineCheckViolations(checks, exceptions);
   violations.push(
     ...offlineCheckStartupViolations(
-      checks.flatMap((check) => (check.protected ? [check.entry] : [])),
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
     ),
   );
   violations.push(
     ...protectedOfflineCheckCallerViolations(
-      checks.flatMap((check) => (check.protected ? [check.entry] : [])),
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
       trackedOfflineCheckCallerSources(),
     ),
   );
@@ -789,7 +905,7 @@ if (import.meta.main) {
   violations.push(
     ...offlineImportGraphViolations({
       entries: checks.flatMap((check) =>
-        check.protected ? [check.entry] : [],
+        check.protected && check.entry !== null ? [check.entry] : [],
       ),
       repositoryRoot: root,
       allowances: importAllowances,

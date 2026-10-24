@@ -1,27 +1,27 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
-  writeFileSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  OfflineCheckPolicyError,
   bunfigRuntimePreloadViolations,
   catalogGeneratorNetworkViolations,
   enumerateOfflineChecks,
   offlineCheckExceptionGrowth,
+  OfflineCheckPolicyError,
   offlineCheckStartupViolations,
-  offlineImportGraphViolations,
   offlineCheckViolations,
-  parseOfflineImportAllowances,
+  offlineImportGraphViolations,
   parseOfflineCheckExceptions,
+  parseOfflineImportAllowances,
   protectedOfflineCheckCallerViolations,
   trackedOfflineCheckCallerSources,
   usesOfflineCheckPreload,
@@ -219,12 +219,16 @@ test("committed check invocations and catalog generator transports are exhaustiv
   expect(offlineCheckViolations(checks, exceptions())).toEqual([]);
   expect(
     offlineCheckStartupViolations(
-      checks.flatMap((check) => (check.protected ? [check.entry] : [])),
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
     ),
   ).toEqual([]);
   expect(
     protectedOfflineCheckCallerViolations(
-      checks.flatMap((check) => (check.protected ? [check.entry] : [])),
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
       trackedOfflineCheckCallerSources(),
     ),
   ).toEqual([]);
@@ -236,6 +240,88 @@ test("committed check invocations and catalog generator transports are exhaustiv
   );
   expect(sources.size).toBeGreaterThan(0);
   expect(catalogGeneratorNetworkViolations(sources, exceptions())).toEqual([]);
+});
+
+test("startup proof requires the canonical runtime binding in an executed entry branch", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-startup-proof-"));
+  const entry = path.join(directory, "check.ts");
+  const owner = path.join(root, "scripts/offline-check-startup.ts");
+  const imported = `import { assertOfflineCheckPreload } from ${JSON.stringify(owner)};`;
+  const cases = [
+    { source: `${imported} assertOfflineCheckPreload();`, valid: true },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); }`,
+      valid: true,
+    },
+    {
+      source: `import { assertOfflineCheckPreload as guard } from ${JSON.stringify(owner)}; if (import.meta.main) { guard(); }`,
+      valid: true,
+    },
+    { source: `${imported} // assertOfflineCheckPreload();`, valid: false },
+    {
+      source: `${imported} const text = "assertOfflineCheckPreload();";`,
+      valid: false,
+    },
+    {
+      source: `${imported} const unused = () => assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (false) { assertOfflineCheckPreload(); }`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (import.meta.main) { const unused = () => assertOfflineCheckPreload(); }`,
+      valid: false,
+    },
+    {
+      source: `${imported} function unused(assertOfflineCheckPreload) { assertOfflineCheckPreload(); }`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); function assertOfflineCheckPreload() {} }`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); function unrelated(assertOfflineCheckPreload) {} }`,
+      valid: true,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); if (flag) { const assertOfflineCheckPreload = () => {}; } }`,
+      valid: true,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); const { guard: assertOfflineCheckPreload } = helpers; }`,
+      valid: false,
+    },
+    {
+      source: `${imported} doCheckWork(); assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source: `import type { assertOfflineCheckPreload } from ${JSON.stringify(owner)}; assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source:
+        'import { assertOfflineCheckPreload } from "./offline-check-startup"; assertOfflineCheckPreload();',
+      valid: false,
+    },
+  ];
+  try {
+    writeFileSync(
+      path.join(directory, "offline-check-startup.ts"),
+      "export const assertOfflineCheckPreload = () => {};\n",
+    );
+    for (const { source, valid } of cases) {
+      writeFileSync(entry, source);
+      expect(offlineCheckStartupViolations([entry]), source).toHaveLength(
+        valid ? 0 : 1,
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("tracked bunfig files cannot displace the command-line network preload", () => {
@@ -648,7 +734,7 @@ test("every protected blocking check has a transport-safe local import closure",
     ),
   );
   const entries = checks.flatMap((check) =>
-    check.protected ? [check.entry] : [],
+    check.protected && check.entry !== null ? [check.entry] : [],
   );
   expect(entries.length).toBeGreaterThan(0);
   expect(

@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  isTableChartable,
   isTableChartPlanUsable,
   parseTableChartNumber,
+  TABLE_CHART_LIMITS,
   tableChartPlanSchema,
   tableChartRequestSchema,
-  TABLE_CHART_LIMITS,
 } from "./table-chart";
 import type { TableChartPlan } from "./table-chart";
 
@@ -128,6 +129,22 @@ describe("table chart contract", () => {
     expect(
       v.safeParse(tableChartPlanSchema, { ...validPlan(), kind: "radar" })
         .success,
+    ).toBe(false);
+  });
+
+  test("a table is chartable only with a column whose every cell is numeric", () => {
+    expect(isTableChartable(table)).toBe(true);
+    expect(
+      isTableChartable({
+        headers: ["Situation", "Outcome"],
+        rows: [
+          ["Driving drunk", "Immediate termination"],
+          ["Low level", "Notice"],
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isTableChartable({ ...table, rows: [...table.rows, ["C", "n/a"]] }),
     ).toBe(false);
   });
 

@@ -52,6 +52,13 @@ const ENTITY_FEATURE_GATE_MIGRATION =
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  // Installs the stored-key organization guard function and trigger without
+  // dynamic SQL or timeout changes.
+  "20261020000100_stored_keys_organization_scope/migration.sql:a8f5e5afd839562bffe89b8c47b72fa43ccc40ef80a824bf3279151ed3e1dcb5",
+  "20261020000100_stored_keys_organization_scope/migration.sql:5126fea771b35cdd4a26652f19b7bd1ceffa44d999dc79cfc56869f870c834ae",
+  // Checks stored-key ownership with bounded existence reads before the
+  // static constraint validations.
+  "20261020000200_stored_keys_organization_scope_validate/migration.sql:4fe1c7457c1ef05de1ae41b2c0975e3accd0d9961f57d58744f1197f0222efb6",
   // Renames legacy resource paths in stable order with collision checks and
   // transaction-local snapshots. Static writes retain the 1s lock and 30s
   // statement budgets; a timeout rolls back the entire cutover.
@@ -120,6 +127,9 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   "20260902100000_case_law_decision_date_ceiling/migration.sql:d799f99eb97532f1f3819aae3e325fcc65d123f2a3bc7b98d4e9f41e417f8491",
   // The same tiered retry around the swap to a per-jurisdiction floor.
   "20260927200300_case_law_decision_date_floor_by_jurisdiction/migration.sql:c300312bf7d8af42fb76119b2f09fd4a372d9d836809e69198f5de811b2bb4f4",
+  // Widens GBR's floor with metadata-only NOT VALID DDL; the tiered lock
+  // retries end after 36 attempts under a 10-minute statement budget.
+  "20261024190200_case_law_decision_date_floor_gbr/migration.sql:d82056216650a9e07db1787e8a062350c4bc937feae538157bcb21a6fca15dbb",
   // The same tiered retry around adding the court id and its NOT VALID check,
   // refusing to run while a USA row lacks an id.
   "20261002120400_case_law_decision_court_id/migration.sql:fdc516be9eef4487a1cb269ae34793d2ed281e9ae55aeb91f6305005c5d6f3b5",
@@ -1940,6 +1950,8 @@ const REPLAY_SAFE_BEFORE_SPLIT: readonly RegExp[] = [
   /^DO\b/iu,
   /^(?:GRANT|REVOKE)\b/iu,
   /^COMMENT\s+ON\b/iu,
+  // Setting a policy's expressions again leaves the same policy; a rename does not.
+  /^ALTER\s+POLICY\b(?![\s\S]*\bRENAME\s+TO\b)/iu,
   /^CREATE\s+OR\s+REPLACE\b/iu,
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS\b/iu,
   /^CREATE\s+(?:TABLE|SEQUENCE|EXTENSION|SCHEMA)\s+IF\s+NOT\s+EXISTS\b/iu,
@@ -2089,7 +2101,7 @@ const isReplaySafeBeforeSplit = (
 const isRowScanningStatement = (relativePath: string, statement: string) => {
   if (
     /^CREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\b/iu.test(statement) ||
-    /^CREATE\s+POLICY\b/iu.test(statement) ||
+    /^(?:CREATE|ALTER)\s+POLICY\b/iu.test(statement) ||
     (/^DO\b/iu.test(statement) &&
       !isUnapprovedProceduralStatement(relativePath, statement))
   ) {
@@ -2193,6 +2205,8 @@ describe("split-transaction migrations", () => {
         false,
       ],
       [`CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`, [], false],
+      [`ALTER POLICY "p" ON "t" USING (true) WITH CHECK (true)`, [], true],
+      [`ALTER POLICY "p" ON "t" RENAME TO "q"`, [], false],
       [
         `CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`,
         [`DROP POLICY IF EXISTS "p" ON "t"`],
@@ -2313,6 +2327,12 @@ describe("entity feature gate migration semantics", () => {
         "fixture/migration.sql",
         "CREATE POLICY gate_policy ON public.items AS RESTRICTIVE FOR ALL " +
           "USING (true) WITH CHECK (value > 0)",
+      ),
+    ).toBe(false);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER POLICY gate_policy ON public.items WITH CHECK (value > 0)",
       ),
     ).toBe(false);
     expect(

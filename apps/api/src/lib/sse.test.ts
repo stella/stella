@@ -1,13 +1,19 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
+  RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
-  RESOURCE_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+import type { SseSessionLivenessReader } from "@/api/lib/sse";
+import {
+  createSseBroadcastPublisher,
+  type SseBroadcastPublisher,
+} from "@/api/lib/sse-broadcast";
 
 type MessageHandler = (message: string) => void;
 
@@ -117,8 +123,20 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 const setIntervalSpy = spyOn(globalThis, "setInterval");
 const clearIntervalSpy = spyOn(globalThis, "clearInterval");
 
+const clientsBeforeImport = createdClients.length;
+const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
+const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
 const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
   await import("@/api/lib/sse");
+
+// Measure the import itself. Bun's --rerun-each retains mock history between
+// iterations, so absolute call counts include lifecycle calls from earlier
+// runs even though importing (or retrieving) the module performed no work.
+const clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
+const redisClientsCreatedDuringImport =
+  createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
+const intervalsStartedDuringImport =
+  setIntervalSpy.mock.calls.length - intervalCallsBeforeImport;
 
 // Let the fire-and-forget subscribe promise inside startSse settle. A timer
 // turn drains the whole pending microtask queue, so this does not depend on
@@ -148,6 +166,7 @@ const observeStreamRead = async (stream: ReadableStream) => {
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
+const sessionId = "session_1";
 const publishWorkspaceEventMock = async (
   targetWorkspaceId: SafeId<"workspace">,
   event: WorkspaceRealtimeEvent,
@@ -170,22 +189,38 @@ const publishWorkspaceEventMock = async (
   }
 };
 const publishWorkspaceAccessRevokedMock = async (): Promise<void> => {};
+// Workspace publishes loop back through the fake Redis above; the remaining
+// scopes publish to a client that accepts and drops, so no test reaches a real
+// connection.
+const testPublisher: SseBroadcastPublisher = {
+  ...createSseBroadcastPublisher({
+    createClient: () => ({ publish: async () => 0 }),
+  }),
+  publishWorkspaceAccessRevoked: publishWorkspaceAccessRevokedMock,
+  publishWorkspaceEvent: publishWorkspaceEventMock,
+};
 const authorizeAllWorkspaceConnections = async ({
-  userIds,
+  sessionIds,
 }: {
-  userIds: readonly SafeId<"user">[];
-}) => new Set(userIds);
-const authorizeAllUserConnections = async () => true;
+  sessionIds: readonly string[];
+}) => new Set(sessionIds);
+const authorizeAllUserConnections = async ({
+  sessionIds,
+}: {
+  sessionIds: readonly string[];
+}) => new Set(sessionIds);
+const holdAllSessions: SseSessionLivenessReader = async (sessions) =>
+  await Promise.resolve(new Set(sessions.map((session) => session.sessionId)));
 const startTestSse = (): void => {
   startSse(
     {
+      sessions: holdAllSessions,
       user: authorizeAllUserConnections,
       workspace: authorizeAllWorkspaceConnections,
     },
     {
       createClient: createRedisClientMock,
-      publishAccessRevoked: publishWorkspaceAccessRevokedMock,
-      publishWorkspace: publishWorkspaceEventMock,
+      publisher: testPublisher,
     },
   );
 };
@@ -195,6 +230,8 @@ const subscribeToWorkspace = (
 ): ReadableStream =>
   subscribe({
     organizationId,
+    sessionId:
+      subscribingUserId === userId ? sessionId : `session-${subscribingUserId}`,
     signal,
     userId: subscribingUserId,
     workspaceId,
@@ -217,9 +254,9 @@ const broadcastTestEvent = (
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {
-    expect(createdClients).toHaveLength(0);
-    expect(setIntervalSpy).not.toHaveBeenCalled();
-    expect(createRedisClientMock).not.toHaveBeenCalled();
+    expect(clientsCreatedDuringImport).toBe(0);
+    expect(intervalsStartedDuringImport).toBe(0);
+    expect(redisClientsCreatedDuringImport).toBe(0);
   });
 
   test("registering a local connection before startSse does not throw", () => {
@@ -239,14 +276,27 @@ describe("sse module import", () => {
   });
 });
 
+/** The intervals `startSse` runs: the registry keep-alive and the sweep that
+ *  ends streams whose credential no longer holds. */
+const ascending = (a: number, b: number): number => a - b;
+
+const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
+  ascending,
+);
+
+/** The delays of the intervals started since the spy was cleared, ascending.
+ *  An omitted delay is 0, as the timer itself reads it. */
+const startedIntervals = () =>
+  setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
+
 describe("startSse / stopSse lifecycle", () => {
-  test("startSse starts the keep-alive timer and connects the Redis subscriber", async () => {
+  test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
     startTestSse();
 
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 
@@ -257,7 +307,7 @@ describe("startSse / stopSse lifecycle", () => {
     await settlePendingWork();
   });
 
-  test("startSse is idempotent: repeated calls create only one timer and one subscriber", async () => {
+  test("startSse is idempotent: repeated calls create its timers and one subscriber once", async () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
@@ -265,7 +315,7 @@ describe("startSse / stopSse lifecycle", () => {
     startTestSse();
     startTestSse();
 
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 
@@ -275,7 +325,7 @@ describe("startSse / stopSse lifecycle", () => {
     await settlePendingWork();
   });
 
-  test("stopSse clears the interval and closes the subscriber", async () => {
+  test("stopSse clears both intervals and closes the subscriber", async () => {
     clearIntervalSpy.mockClear();
     createdClients.length = 0;
 
@@ -287,7 +337,9 @@ describe("startSse / stopSse lifecycle", () => {
 
     stopSse();
 
-    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(
+      LIFECYCLE_INTERVALS_MS.length,
+    );
     expect(client?.close).toHaveBeenCalledTimes(1);
 
     await settlePendingWork();
@@ -455,13 +507,18 @@ describe("workspace access revocation", () => {
     const retainedUserId = toSafeId<"user">("user_2");
     startSse(
       {
+        sessions: holdAllSessions,
         user: authorizeAllUserConnections,
-        workspace: async ({ userIds }) =>
-          new Set(userIds.filter((candidate) => candidate === retainedUserId)),
+        workspace: async ({ sessionIds }) =>
+          new Set(
+            sessionIds.filter(
+              (candidate) => candidate === `session-${retainedUserId}`,
+            ),
+          ),
       },
       {
         createClient: createRedisClientMock,
-        publishWorkspace: publishWorkspaceEventMock,
+        publisher: testPublisher,
       },
     );
     stopSse();
@@ -587,18 +644,19 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     let authorizationCalls = 0;
     startSse(
       {
+        sessions: holdAllSessions,
         user: authorizeAllUserConnections,
-        workspace: async ({ userIds }) => {
+        workspace: async ({ sessionIds }) => {
           authorizationCalls += 1;
           if (authorizationCalls === 1) {
             await firstAuthorization.promise;
           }
-          return new Set(userIds);
+          return new Set(sessionIds);
         },
       },
       {
         createClient: createRedisClientMock,
-        publishWorkspace: publishWorkspaceEventMock,
+        publisher: testPublisher,
       },
     );
     await settlePendingWork();

@@ -1,3 +1,4 @@
+// parser-output-unchanged: failure grades classify telemetry; no parser reads this vocabulary.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -96,6 +97,8 @@ export const FAILURE_REASON_GRADE = {
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  // parser-output-unchanged: invoice renderer failures grade telemetry only.
+  invoice_renderer_failed: "defect",
   visual_preview_unavailable: "defect",
   visual_preview_timeout: "defect",
   visual_preview_response_invalid: "defect",
@@ -105,6 +108,9 @@ export const FAILURE_REASON_GRADE = {
   pg_lock_unavailable: "defect",
   pg_query_canceled: "defect",
   pg_auth_failed: "defect",
+  // 22007, 22008, 22P02: Postgres could not read a value as its column type.
+  // A value that fails there passed input validation, so the gap is a defect.
+  pg_invalid_input: "defect",
   connection_refused: "defect",
   socket_open_failed: "defect",
   timeout_unbounded: "defect",

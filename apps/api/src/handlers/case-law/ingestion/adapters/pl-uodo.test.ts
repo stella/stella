@@ -32,8 +32,8 @@ import {
   plUodoBodyFrom,
   plUodoDocketOfCourtUrn,
   plUodoListingIdentity,
-  plUodoRawPartsOf,
   plUodoQuarantineId,
+  plUodoRawPartsOf,
   tallyPlUodoSkips,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -701,7 +701,7 @@ describe("identity", () => {
       if (recordClass === "skipped") {
         continue;
       }
-      expect(heldWithoutDetail?.(plUodoListingIdentity(row)), row.refid).toBe(
+      expect(heldWithoutDetail(plUodoListingIdentity(row)), row.refid).toBe(
         recordClass === "court-ruling",
       );
     }
@@ -1167,7 +1167,7 @@ describe("a listed record is never dropped silently", () => {
     ).toEqual([]);
     // The reconciliation counts it held on its record, as it can hold no more.
     expect(
-      plUodoAdapter.reconciliation.heldWithoutDetail?.({
+      plUodoAdapter.reconciliation.heldWithoutDetail({
         type: "document",
         sourceDocumentId: stored?.sourceDocumentId ?? "",
       }),
