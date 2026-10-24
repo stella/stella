@@ -26,7 +26,7 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const COVERAGE_INDEX = CASE_LAW_COVERAGE_INDEX.name;
 const SOURCES = 3;
 const DECISIONS_PER_SOURCE = 4000;
-const SOURCE_DATE_SPAN = 10_000;
+const SOURCE_DATE_SPAN = 5000;
 
 const planNodes = (
   node: Record<string, unknown>,
@@ -131,7 +131,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           (id, source_id, case_number, court, country, language, decision_date, fulltext)
           SELECT gen_random_uuid(), sources.id, 'published/' || n,
             'Plan court', 'CZE', 'cs',
-            DATE '2000-01-01' + n + sources.source_index * ${SOURCE_DATE_SPAN}, 'Published text'
+            DATE '1970-01-01' + n + sources.source_index * ${SOURCE_DATE_SPAN}, 'Published text'
           FROM (
             SELECT id, (row_number() OVER (ORDER BY adapter_key) - 1)::integer AS source_index
             FROM case_law_sources
@@ -145,7 +145,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             CASE WHEN status = 'listing-only' THEN
               '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb ELSE '{}'::jsonb END
           FROM case_law_sources sources
-          CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2100-01-01')) endpoints(endpoint)
+          CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2010-01-01')) endpoints(endpoint)
           CROSS JOIN (VALUES ('withdrawn'), ('listing-only')) statuses(status)`);
         await db.execute(sql`INSERT INTO case_law_search_documents
           (decision_id, language, regconfig, searchable_text, tsv)
@@ -230,10 +230,10 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         ).toEqual(new Set(["Forward", "Backward"]));
         expect(rows).toHaveLength(SOURCES);
         for (const [sourceIndex, row] of rows.entries()) {
-          const firstDate = Temporal.PlainDate.from("2000-01-01").add({
+          const firstDate = Temporal.PlainDate.from("1970-01-01").add({
             days: sourceIndex * SOURCE_DATE_SPAN + 1,
           });
-          const lastDate = Temporal.PlainDate.from("2000-01-01").add({
+          const lastDate = Temporal.PlainDate.from("1970-01-01").add({
             days: sourceIndex * SOURCE_DATE_SPAN + DECISIONS_PER_SOURCE,
           });
           expect(row).toMatchObject({
