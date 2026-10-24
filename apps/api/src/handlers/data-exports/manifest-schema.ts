@@ -6,7 +6,7 @@
 
 import * as v from "valibot";
 
-import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export-version-scope";
+import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 
 export const DATA_EXPORT_FORMAT = "stella-data-export";
 export const DATA_EXPORT_FORMAT_VERSION = 1;

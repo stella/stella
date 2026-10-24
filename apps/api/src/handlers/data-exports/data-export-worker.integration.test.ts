@@ -4,7 +4,7 @@
  * permission when it claims the run and before every part.
  */
 
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
@@ -29,9 +29,18 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
-const { testDb, ids } = await getRlsFixture();
-const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+type ExportFixture = Awaited<ReturnType<typeof getRlsFixture>>;
+let testDb: ExportFixture["testDb"];
+let ids: ExportFixture["ids"];
+let database: RlsDatabase<Transaction>;
 const createdExportIds: SafeId<"dataExport">[] = [];
+
+beforeAll(async () => {
+  const fixture = await getRlsFixture();
+  testDb = fixture.testDb;
+  ids = fixture.ids;
+  database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+});
 
 afterAll(async () => {
   if (createdExportIds.length > 0) {

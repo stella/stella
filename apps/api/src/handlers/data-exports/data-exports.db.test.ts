@@ -7,7 +7,7 @@
  */
 
 import { Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
 import * as v from "valibot";
@@ -72,8 +72,10 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
-const { testDb, ids } = await getRlsFixture();
-const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+type ExportFixture = Awaited<ReturnType<typeof getRlsFixture>>;
+let testDb: ExportFixture["testDb"];
+let ids: ExportFixture["ids"];
+let database: RlsDatabase<Transaction>;
 
 const createdExportIds: SafeId<"dataExport">[] = [];
 
@@ -98,51 +100,58 @@ const fileBytes = versionIds.map((_, index) =>
 // A three-version document in matter A1, plus a tombstoned fourth version
 // the export must leave out.
 const tombstonedVersionId = toSafeId<"entityVersion">(Bun.randomUUIDv7());
-await testDb.insert(entities).values({
-  id: documentId,
-  workspaceId: ids.wsA1,
-  kind: "document",
-  name: "Kupní smlouva.pdf",
-});
-await testDb.insert(entityVersions).values([
-  ...versionIds.map((id, index) => ({
-    id,
+beforeAll(async () => {
+  const fixture = await getRlsFixture();
+  testDb = fixture.testDb;
+  ids = fixture.ids;
+  database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+
+  await testDb.insert(entities).values({
+    id: documentId,
     workspaceId: ids.wsA1,
-    entityId: documentId,
-    versionNumber: index + 1,
-    createdBy: ids.userA1,
-  })),
-  {
-    id: tombstonedVersionId,
-    workspaceId: ids.wsA1,
-    entityId: documentId,
-    versionNumber: 4,
-    deletedAt: new Date(),
-  },
-]);
-await testDb.insert(fields).values(
-  versionIds.map((versionId, index) => ({
-    id: fieldIds[index] ?? toSafeId<"field">(Bun.randomUUIDv7()),
-    workspaceId: ids.wsA1,
-    propertyId: ids.filePropertyA1,
-    entityVersionId: versionId,
-    content: {
-      version: 1 as const,
-      type: "file" as const,
-      id: fileIds[index] ?? "",
-      fileName: "Kupní smlouva.pdf",
-      mimeType: "application/pdf",
-      sizeBytes: fileBytes[index]?.byteLength ?? 0,
-      encrypted: false,
-      sha256Hex: sha256Hex(fileBytes[index] ?? new Uint8Array()),
-      pdfFileId: null,
+    kind: "document",
+    name: "Kupní smlouva.pdf",
+  });
+  await testDb.insert(entityVersions).values([
+    ...versionIds.map((id, index) => ({
+      id,
+      workspaceId: ids.wsA1,
+      entityId: documentId,
+      versionNumber: index + 1,
+      createdBy: ids.userA1,
+    })),
+    {
+      id: tombstonedVersionId,
+      workspaceId: ids.wsA1,
+      entityId: documentId,
+      versionNumber: 4,
+      deletedAt: new Date(),
     },
-  })),
-);
-await testDb
-  .update(entities)
-  .set({ currentVersionId: versionIds[2] })
-  .where(eq(entities.id, documentId));
+  ]);
+  await testDb.insert(fields).values(
+    versionIds.map((versionId, index) => ({
+      id: fieldIds[index] ?? toSafeId<"field">(Bun.randomUUIDv7()),
+      workspaceId: ids.wsA1,
+      propertyId: ids.filePropertyA1,
+      entityVersionId: versionId,
+      content: {
+        version: 1 as const,
+        type: "file" as const,
+        id: fileIds[index] ?? "",
+        fileName: "Kupní smlouva.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: fileBytes[index]?.byteLength ?? 0,
+        encrypted: false,
+        sha256Hex: sha256Hex(fileBytes[index] ?? new Uint8Array()),
+        pdfFileId: null,
+      },
+    })),
+  );
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: versionIds[2] })
+    .where(eq(entities.id, documentId));
+});
 
 afterAll(async () => {
   if (createdExportIds.length > 0) {

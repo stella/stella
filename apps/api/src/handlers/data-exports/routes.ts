@@ -14,18 +14,22 @@ export const dataExportsRoute = new Elysia({ prefix: "/data-exports" })
   .guard({ validateAuth: true })
   .get("/", listDataExports.handler, {
     permissions: listDataExports.config.permissions,
+    accountAccess: listDataExports.config.accountAccess,
     query: listDataExports.config.query,
   })
   .post("/", createDataExport.handler, {
     body: createDataExport.config.body,
     permissions: createDataExport.config.permissions,
+    accountAccess: createDataExport.config.accountAccess,
   })
   .get("/:exportId", readDataExport.handler, {
     params: readDataExport.config.params,
     permissions: readDataExport.config.permissions,
+    accountAccess: readDataExport.config.accountAccess,
   })
   .post("/:exportId/download", downloadDataExport.handler, {
     body: downloadDataExport.config.body,
     params: downloadDataExport.config.params,
     permissions: downloadDataExport.config.permissions,
+    accountAccess: downloadDataExport.config.accountAccess,
   });

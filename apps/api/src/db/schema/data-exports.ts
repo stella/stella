@@ -1,4 +1,4 @@
-import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export-version-scope";
+import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {

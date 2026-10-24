@@ -8,12 +8,17 @@ import {
   serializeDataExportJsonSchema,
 } from "@/api/handlers/data-exports/manifest-json-schema";
 
+import { formattedLikeRepository } from "../../../scripts/generated-artifacts";
+
 const target = path.join(
   import.meta.dir,
   "../../..",
   DATA_EXPORT_JSON_SCHEMA_PATH,
 );
-const expected = serializeDataExportJsonSchema();
+const expected = await formattedLikeRepository(
+  serializeDataExportJsonSchema(),
+  "json",
+);
 const file = Bun.file(target);
 const current = (await file.exists()) ? await file.text() : null;
 

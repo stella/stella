@@ -14,6 +14,6 @@ export const buildDataExportJsonSchema = (): Record<string, unknown> => ({
   $id: DATA_EXPORT_SCHEMA_ID,
 });
 
-/** Serialised exactly as committed, so the drift test compares bytes. */
+/** Serialized schema input for repository artifact formatting. */
 export const serializeDataExportJsonSchema = (): string =>
   `${JSON.stringify(buildDataExportJsonSchema(), null, 2)}\n`;

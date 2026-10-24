@@ -132,13 +132,16 @@ test("export schema inputs select the canonical producer without database initia
     "apps/api/src/handlers/data-exports/manifest-schema.ts",
     "utf-8",
   );
-  expect(manifest).toContain("@/api/lib/data-export-version-scope");
+  expect(manifest).toContain("@/api/lib/data-export/version-scope");
   expect(manifest).not.toContain("@/api/db/");
   for (const file of [
     "apps/api/scripts/generate-data-export-schema.ts",
+    "scripts/generated-artifacts.ts",
+    "packages/scripts/src/generated-artifact-format.ts",
+    "bunfig.toml",
     "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
     "apps/api/src/handlers/data-exports/manifest-schema.ts",
-    "apps/api/src/lib/data-export-version-scope.ts",
+    "apps/api/src/lib/data-export/version-scope.ts",
     "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
     "packages/api-contract/src/json-schema-regex.ts",
     "packages/legal-ast/src/analysis.ts",
