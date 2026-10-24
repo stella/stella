@@ -158,6 +158,114 @@ test("repeated interval helper proof stays bounded and shared aliases stay share
   }
 });
 
+test("effect factories transfer their actual result into cleanup ownership", async () => {
+  const cases = [
+    [
+      "const begin=()=>setInterval(tick,10);useMountEffect(()=>{begin();});",
+      false,
+    ],
+    [
+      "const begin=()=>setInterval(tick,10);useMountEffect(()=>begin());",
+      false,
+    ],
+    [
+      "const begin=()=>setInterval(tick,10);useMountEffect(()=>{const id=begin();return()=>clearInterval(id);});",
+      true,
+    ],
+    [
+      "const begin=()=>{return setInterval(tick,10);};useMountEffect(()=>{const id=begin();return()=>clearInterval(id);});",
+      true,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);const result=id;return result;};useMountEffect(()=>{const id=begin();return()=>clearInterval(id);});",
+      true,
+    ],
+    [
+      "const begin=()=>setInterval(tick,10);useMountEffect(()=>{register(begin());});",
+      true,
+    ],
+    [
+      "const begin=()=>setInterval(tick,10);const wrap=()=>{begin();};useMountEffect(()=>{const id=wrap();return()=>clearInterval(id);});",
+      false,
+    ],
+    [
+      "const begin=()=>setInterval(tick,10);const wrap=()=>{begin();return 0;};useMountEffect(()=>{const id=wrap();return()=>clearInterval(id);});",
+      false,
+    ],
+    [
+      "const begin=()=>setInterval(tick,10);const wrap=()=>{const id=begin();if(ready())return id;return 0;};useMountEffect(()=>{const id=wrap();return()=>clearInterval(id);});",
+      false,
+    ],
+    [
+      "const begin=()=>setInterval(tick,10);const alias=begin;const wrap=()=>{const id=alias();const result=id;return result;};useMountEffect(()=>{const id=wrap();return()=>clearInterval(id);});",
+      true,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};useMountEffect(()=>begin());",
+      true,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};useMountEffect(()=>{return begin();});",
+      true,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};useMountEffect(()=>{const stop=begin();return stop;});",
+      true,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};useMountEffect(()=>{begin();});",
+      false,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);if(ready())return()=>clearInterval(id);};useMountEffect(()=>begin());",
+      false,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>{const unused=()=>clearInterval(id);};};useMountEffect(()=>begin());",
+      false,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(
+      async ([code]) =>
+        (await lintSingleRule(RULE, `const Comp=()=>{${code}};`)).length === 0,
+    ),
+  );
+  expect(results).toEqual(cases.map(([, owned]) => owned));
+});
+
+test("factory cleanups cancel only the allocation that produced their result", async () => {
+  const factory =
+    "const factory=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};";
+  const cases = [
+    [`${factory}useMountEffect(()=>{factory();return factory();});`, false],
+    [
+      `${factory}useMountEffect(()=>{const first=factory();const second=factory();return()=>second();});`,
+      false,
+    ],
+    [
+      `${factory}useMountEffect(()=>{const first=factory();const second=factory();return()=>{first();second();};});`,
+      true,
+    ],
+    [
+      `${factory}const wrap=()=>factory();useMountEffect(()=>{wrap();return wrap();});`,
+      false,
+    ],
+    [
+      `${factory}const wrap=()=>factory();useMountEffect(()=>{const first=wrap();const second=wrap();return()=>{first();second();};});`,
+      true,
+    ],
+    [`useMountEffect(()=>{${factory}factory();return factory();});`, false],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(
+      async ([code]) =>
+        (await lintSingleRule(RULE, `const Comp=()=>{${code}};`)).length === 0,
+    ),
+  );
+  expect(results).toEqual(cases.map(([, owned]) => owned));
+});
+
 test("requires the effect cleanup to clear an interval the effect starts", async () => {
   expect(
     await lintSingleRule(

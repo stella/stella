@@ -101,7 +101,10 @@ const CANCEL_NAMES: Record<LoopKind, string> = {
 type Handle =
   | { kind: "binding"; variable: Variable }
   | { kind: "member"; text: string; rootVariable: Variable }
-  | { kind: "transferred" };
+  | {
+      kind: "transferred";
+      transfer: "using" | "closed" | "argument" | "returned";
+    };
 
 type Cancel = { argument: AstNode | null; node: AstNode };
 
@@ -506,7 +509,7 @@ const handleOf = (context: LoopContext, call: AstNode): Handle | null => {
       (declaration.kind === "using" || declaration.kind === "await using") &&
       isGlobalCall(context, call, START_NAMES.interval)
     ) {
-      return { kind: "transferred" };
+      return { kind: "transferred", transfer: "using" };
     }
     return assignedHandle(context, unwrapExpression(parent.id));
   }
@@ -530,14 +533,19 @@ const handleOf = (context: LoopContext, call: AstNode): Handle | null => {
     closeCall.callee === parent &&
     callArguments(closeCall).length === 0
   ) {
-    return { kind: "transferred" };
+    return { kind: "transferred", transfer: "closed" };
   }
   const handedOver =
     parent.type === "ReturnStatement" ||
     (parent.type === "ArrowFunctionExpression" && parent.body === current) ||
     (parent.type === "CallExpression" &&
       callArguments(parent).includes(current));
-  return handedOver ? { kind: "transferred" } : null;
+  return handedOver
+    ? {
+        kind: "transferred",
+        transfer: parent.type === "CallExpression" ? "argument" : "returned",
+      }
+    : null;
 };
 
 const cancelsHandle = (
@@ -569,6 +577,7 @@ type CleanupProof = {
   cancels: Cancel[];
   visiting: ReadonlySet<AstNode>;
   completed: Map<AstNode, ReadonlySet<UncancelledPath>>;
+  origin?: { start: AstNode; invocationPath: AstNode[] };
   setup?: {
     effect: AstNode;
     start: AstNode;
@@ -672,17 +681,25 @@ const cleanupExpressionPaths = (
         expression.range[0] > proof.setup.start.range[1]
           ? activeProof
           : proof;
-      return called === null
-        ? new Set(["continues"])
-        : new Set(
-            [...cleanupFunctionPaths(calledProof, called)].map((path) =>
-              path === "returns" ||
-              (called.async === true &&
-                (path === "suspends" || path === "throws"))
-                ? "continues"
-                : path,
-            ),
-          );
+      if (called === null) {
+        return proof.origin !== undefined &&
+          ownsReturnedCleanup({
+            proof: calledProof,
+            expression: expression.callee,
+            start: proof.origin.start,
+            budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
+          })
+          ? new Set()
+          : new Set(["continues"]);
+      }
+      return new Set(
+        [...cleanupFunctionPaths(calledProof, called)].map((path) =>
+          path === "returns" ||
+          (called.async === true && (path === "suspends" || path === "throws"))
+            ? "continues"
+            : path,
+        ),
+      );
     });
   }
   if (expression.type === "ConditionalExpression") {
@@ -819,7 +836,10 @@ const cleanupPaths = (
       proof.setup !== undefined &&
       enclosingFunctions(node).at(0) === proof.setup.effect
     ) {
-      if (node.range[0] < proof.setup.start.range[0]) {
+      if (
+        node.range[0] < proof.setup.start.range[0] &&
+        !isWithin(proof.setup.start, node)
+      ) {
         return new Set();
       }
       if (node.type === "ReturnStatement") {
@@ -1333,17 +1353,287 @@ type OwnedLoop = {
   effectAnchor: AstNode;
   loopBody: AstNode | null;
   start: AstNode;
+  invocationPath?: AstNode[];
+};
+
+type ReturnedHandleOptions = {
+  context: LoopContext;
+  expression: unknown;
+  expected: AstNode;
+  budget: { remaining: number };
+};
+
+const returnsHandleValue = ({
+  context,
+  expression: raw,
+  expected,
+  budget,
+}: ReturnedHandleOptions): boolean => {
+  if (budget.remaining <= 0) {
+    return false;
+  }
+  budget.remaining -= 1;
+  const expression = unwrapExpression(raw);
+  if (expression === expected) {
+    return true;
+  }
+  if (!isIdentifierReference(expression)) {
+    return false;
+  }
+  const variable = resolveVariable(context, expression);
+  return (
+    variable !== null &&
+    isSingleAssignment(variable) &&
+    returnsHandleValue({
+      context,
+      expression: stableInitializer(variable),
+      expected,
+      budget,
+    })
+  );
+};
+
+type FactoryHandleFlowOptions = {
+  context: LoopContext;
+  invocationPath: AstNode[];
+  start: AstNode;
+};
+
+const returnsCreatedHandle = ({
+  context,
+  invocationPath,
+  start,
+}: FactoryHandleFlowOptions): boolean => {
+  const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
+  return invocationPath.every((call, index) => {
+    const factory = namedCallTarget(context, call);
+    const expected = invocationPath.at(index + 1) ?? start;
+    if (
+      factory === null ||
+      factory.async === true ||
+      factory.generator === true ||
+      !isAstNode(factory.body)
+    ) {
+      return false;
+    }
+    const returnsValue = (expression: unknown) =>
+      returnsHandleValue({ context, expression, expected, budget });
+    if (factory.body.type !== "BlockStatement") {
+      return returnsValue(factory.body);
+    }
+    const returns = new Set<AstNode>();
+    const exits = cleanupPaths(
+      {
+        context,
+        handle: { kind: "transferred", transfer: "returned" },
+        cancels: [],
+        visiting: new Set(),
+        completed: new Map(),
+        setup: { effect: factory, start: expected, returns },
+      },
+      factory.body,
+    );
+    return (
+      [...exits].every((exit) => exit === "returns") &&
+      returns.size > 0 &&
+      [...returns].every((node) => returnsValue(node.argument))
+    );
+  });
+};
+
+type ReturnedCleanupOptions = {
+  proof: CleanupProof;
+  expression: unknown;
+  start: AstNode;
+  budget: { remaining: number };
+  visiting?: ReadonlySet<AstNode>;
+};
+
+const ownsReturnedCleanup = ({
+  proof,
+  expression: raw,
+  start,
+  budget,
+  visiting = new Set(),
+}: ReturnedCleanupOptions): boolean => {
+  if (budget.remaining <= 0) {
+    return false;
+  }
+  budget.remaining -= 1;
+  const expression = unwrapExpression(raw);
+  const cleanup = functionFor(proof.context, expression);
+  if (cleanup !== null) {
+    return cleanupFunctionPaths(proof, cleanup).size === 0;
+  }
+  if (isIdentifierReference(expression)) {
+    const variable = resolveVariable(proof.context, expression);
+    return (
+      variable !== null &&
+      isSingleAssignment(variable) &&
+      ownsReturnedCleanup({
+        proof,
+        expression: stableInitializer(variable),
+        start,
+        budget,
+        visiting,
+      })
+    );
+  }
+  if (expression?.type !== "CallExpression") {
+    return false;
+  }
+  const factory = namedCallTarget(proof.context, expression);
+  if (
+    factory === null ||
+    factory.async === true ||
+    factory.generator === true ||
+    visiting.has(factory)
+  ) {
+    return false;
+  }
+  const originatingCall = proof.origin?.invocationPath.find(
+    (call) => namedCallTarget(proof.context, call) === factory,
+  );
+  if (originatingCall !== undefined && expression !== originatingCall) {
+    return false;
+  }
+  const active = new Set([...visiting, factory]);
+  if (!isAstNode(factory.body)) {
+    return false;
+  }
+  if (factory.body.type !== "BlockStatement") {
+    return ownsReturnedCleanup({
+      proof,
+      expression: factory.body,
+      start,
+      budget,
+      visiting: active,
+    });
+  }
+  const creator = enclosingFunctions(start).at(0);
+  let anchor = isWithin(start, factory) ? start : factory;
+  if (anchor === factory && creator !== undefined) {
+    for (const call of directFunctionCalls(factory)) {
+      const paths = loopInvocationPaths({
+        context: proof.context,
+        invocation: call,
+        target: creator,
+        budget,
+      });
+      if (paths === null) {
+        return false;
+      }
+      if (paths.length > 0) {
+        anchor = call;
+        break;
+      }
+    }
+  }
+  const returns = new Set<AstNode>();
+  const exits = cleanupPaths(
+    {
+      ...proof,
+      completed: new Map(),
+      setup: { effect: factory, start: anchor, returns },
+    },
+    factory.body,
+  );
+  if (exits.size === 0) {
+    return true;
+  }
+  return (
+    [...exits].every((path) => path === "returns") &&
+    returns.size > 0 &&
+    [...returns].every((node) =>
+      ownsReturnedCleanup({
+        proof,
+        expression: node.argument,
+        start,
+        budget,
+        visiting: active,
+      }),
+    )
+  );
 };
 
 const isOwned = (
   context: LoopContext,
   cancels: Cancel[],
-  { effectAnchor, loopBody, start }: OwnedLoop,
+  { effectAnchor, loopBody, start, invocationPath }: OwnedLoop,
 ): boolean => {
-  const handle = handleOf(context, start);
+  const effect = enclosingEffect(effectAnchor);
+  const creator = enclosingFunctions(start).at(0);
+  if (
+    effect !== null &&
+    invocationPath === undefined &&
+    creator !== undefined &&
+    (effectAnchor !== start ||
+      (creator !== effect &&
+        isGlobalCall(context, start, START_NAMES.interval)))
+  ) {
+    const invocations =
+      effectAnchor !== start
+        ? [effectAnchor]
+        : directFunctionCalls(effect).filter((call) =>
+            invokesFunction(context, call, creator),
+          );
+    const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
+    for (const invocation of invocations) {
+      const paths = loopInvocationPaths({
+        context,
+        invocation,
+        target: creator,
+        budget,
+      });
+      if (
+        paths === null ||
+        paths.length === 0 ||
+        !paths.every((path) =>
+          isOwned(context, cancels, {
+            effectAnchor: invocation,
+            loopBody,
+            start,
+            invocationPath: path,
+          }),
+        )
+      ) {
+        return false;
+      }
+    }
+    if (invocations.length > 0) {
+      return true;
+    }
+  }
+  let ownershipStart = start;
+  let handle = handleOf(context, start);
+  if (effect !== null) {
+    const returnedHandle =
+      effectAnchor !== start &&
+      invocationPath !== undefined &&
+      returnsCreatedHandle({ context, invocationPath, start });
+    if (returnedHandle) {
+      handle = handleOf(context, effectAnchor);
+      ownershipStart = effectAnchor;
+    } else if (
+      handle?.kind === "transferred" &&
+      handle.transfer === "returned"
+    ) {
+      return false;
+    }
+    // React's returned value must be a cleanup, rather than the timer handle.
+    if (handle?.kind === "transferred" && handle.transfer === "returned") {
+      return false;
+    }
+  }
   if (
     handle === null ||
-    hasAmbiguousHandleWrites({ cancels, context, handle, start, loopBody })
+    hasAmbiguousHandleWrites({
+      cancels,
+      context,
+      handle,
+      start: ownershipStart,
+      loopBody,
+    })
   ) {
     return false;
   }
@@ -1368,8 +1658,10 @@ const isOwned = (
     cancels: [...matching, ...handoffs],
     visiting: new Set(),
     completed: new Map(),
+    ...(invocationPath === undefined
+      ? {}
+      : { origin: { start, invocationPath } }),
   };
-  const effect = enclosingEffect(effectAnchor);
   const declaration =
     handle.kind === "binding" ? handle.variable.defs.at(0)?.node : null;
   const bindingOwner = isAstNode(declaration)
@@ -1395,18 +1687,30 @@ const isOwned = (
   }
   // A finally block can start a timer after an earlier return or throw. Its
   // incoming completion is unknown to the structural setup-path proof.
-  if (startsInFinally(start, owner)) {
+  if (startsInFinally(ownershipStart, owner)) {
     return false;
   }
   const startupTransfers = transfers.filter(
     (transfer) =>
       cancelsHandle(context, transfer, handle) &&
       (effect === null || transfer.node.type === "CallExpression") &&
-      transfer.node.range[0] > start.range[1] &&
+      transfer.node.range[0] > ownershipStart.range[1] &&
       (effect === null ||
         loopBody === null ||
         !isWithin(transfer.node, loopBody)),
   );
+  if (
+    effect !== null &&
+    isAstNode(owner.body) &&
+    owner.body.type !== "BlockStatement"
+  ) {
+    return ownsReturnedCleanup({
+      proof,
+      expression: owner.body,
+      start: ownershipStart,
+      budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
+    });
+  }
   const returns = new Set<AstNode>();
   const exits = cleanupPaths(
     {
@@ -1416,7 +1720,7 @@ const isOwned = (
       completed: new Map(),
       setup: {
         effect: owner,
-        start: effect === null ? start : effectAnchor,
+        start: effect === null ? ownershipStart : effectAnchor,
         returns,
       },
     },
@@ -1432,9 +1736,15 @@ const isOwned = (
     returns.size > 0 &&
     [...returns].every((node) => {
       const argument = unwrapExpression(node.argument);
-      const cleanup = functionFor(context, argument);
-      if (cleanup !== null) {
-        return cleanupFunctionPaths(proof, cleanup).size === 0;
+      if (
+        ownsReturnedCleanup({
+          proof,
+          expression: argument,
+          start: ownershipStart,
+          budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
+        })
+      ) {
+        return true;
       }
       // A factory may explicitly return an object that owns the cancel method.
       // Merely defining a dormant closure elsewhere does not hand ownership out.
