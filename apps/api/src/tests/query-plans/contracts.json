@@ -493,8 +493,8 @@
       {
         "position": "root/0/1/0",
         "relation": "legislation_documents",
-        "nodeType": "Bitmap Heap Scan",
-        "index": "legislation_documents_country_idx"
+        "nodeType": "Seq Scan",
+        "index": null
       }
     ],
     "allowSeqScan": "hourly scheduler snapshot of the admitted jurisdictions"
