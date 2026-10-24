@@ -1,6 +1,12 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { filenameForContext, isAstNode, staticStringValue } from "./utils.ts";
+import {
+  filenameForContext,
+  getPropertyName,
+  isAstNode,
+  staticStringValue,
+} from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const OWNERS = [
   "apps/web/src/lib/errors/user-toast.ts",
@@ -63,6 +69,113 @@ const attributeValue = (node: unknown, name: string): string | null => {
   return null;
 };
 
+const isValueParent = (value: AstNode, parent: AstNode): boolean => {
+  switch (parent.type) {
+    case "ArrayExpression":
+    case "ChainExpression":
+    case "TSAsExpression":
+    case "TSNonNullExpression":
+    case "ParenthesizedExpression":
+      return true;
+    case "ConditionalExpression":
+      return parent.test !== value;
+    case "LogicalExpression":
+      return parent.operator !== "&&" || parent.left !== value;
+    case "JSXExpressionContainer": {
+      const container = parent.parent;
+      return (
+        isAstNode(container) &&
+        (container.type === "JSXElement" ||
+          container.type === "JSXFragment" ||
+          (container.type === "JSXAttribute" &&
+            isAstNode(container.name) &&
+            container.name.type === "JSXIdentifier" &&
+            container.name.name === "children"))
+      );
+    }
+    case "JSXElement":
+    case "JSXFragment":
+      return Array.isArray(parent.children) && parent.children.includes(value);
+    default:
+      return false;
+  }
+};
+
+const returnsTranslation = (
+  translation: AstNode,
+  callback: AstNode,
+): boolean => {
+  let value = translation;
+  while (isAstNode(value.parent)) {
+    const parent = value.parent;
+    if (parent === callback) {
+      return callback.body === value;
+    }
+    if (parent.type === "ReturnStatement" && parent.argument === value) {
+      let owner = parent.parent;
+      while (isAstNode(owner)) {
+        if (owner.type === "TryStatement") {
+          return false;
+        }
+        if (
+          owner.type === "ArrowFunctionExpression" ||
+          owner.type === "FunctionExpression" ||
+          owner.type === "FunctionDeclaration"
+        ) {
+          return owner === callback;
+        }
+        owner = owner.parent;
+      }
+      return false;
+    }
+    if (!isValueParent(value, parent)) {
+      return false;
+    }
+    value = parent;
+  }
+  return false;
+};
+
+// Only inline array projections whose value reaches JSX children cross a
+// function boundary. Event attributes and opaque calls are separate channels.
+const isRenderedProjection = (
+  callback: AstNode,
+  translation: AstNode,
+): boolean => {
+  if (!returnsTranslation(translation, callback)) {
+    return false;
+  }
+  const call = callback.parent;
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.at(0) !== callback ||
+    !isAstNode(call.callee) ||
+    call.callee.type !== "MemberExpression"
+  ) {
+    return false;
+  }
+  const method = call.callee.computed
+    ? staticStringValue(call.callee.property)
+    : getPropertyName(call.callee.property);
+  if (method !== "map" && method !== "flatMap") {
+    return false;
+  }
+  let value = call;
+  while (isAstNode(value.parent)) {
+    const parent = value.parent;
+    if (parent.type === "JSXExpressionContainer") {
+      return isValueParent(value, parent);
+    }
+    if (!isValueParent(value, parent)) {
+      return false;
+    }
+    value = parent;
+  }
+  return false;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-rendered-error-translation" },
   rules: {
@@ -98,9 +211,16 @@ export default eslintCompatPlugin({
             let parent: unknown = node.parent;
             while (isAstNode(parent)) {
               if (
-                parent.type === "ArrowFunctionExpression" ||
-                parent.type === "FunctionExpression" ||
-                parent.type === "FunctionDeclaration"
+                (parent.type === "ArrowFunctionExpression" ||
+                  parent.type === "FunctionExpression" ||
+                  parent.type === "FunctionDeclaration") &&
+                !isRenderedProjection(parent, node)
+              ) {
+                return;
+              }
+              if (
+                parent.type === "JSXAttribute" &&
+                (!isAstNode(parent.name) || parent.name.name !== "children")
               ) {
                 return;
               }

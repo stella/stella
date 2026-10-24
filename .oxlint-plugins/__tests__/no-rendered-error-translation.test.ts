@@ -45,3 +45,35 @@ test("does not treat an event handler translation as rendered alert content", as
     ),
   ).toEqual([]);
 });
+
+test("checks inline map and flatMap values that flow into alert children", async () => {
+  expect(
+    await lintSingleRule(
+      "no-rendered-error-translation",
+      `const map = <p role="alert">{items.map(() => t("errors.actionFailed"))}</p>;
+const flatMap = <p role="alert">{items.flatMap(function () { return [t("readerAnswers.networkError")]; })}</p>;
+const conditional = <p role="alert">{ready && items["map"](() => t("errors.actionFailed"))}</p>;
+const children = <p role="alert" children={items.map(() => t("errors.actionFailed"))} />;
+const nested = <p role="alert">{items.map(() => <span>{t("errors.actionFailed")}</span>)}</p>;
+const returning = <p role="alert">{items.map(() => { if (ready) { return t("errors.actionFailed"); } return "fine"; })}</p>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([1, 2, 3, 4, 5, 6]);
+});
+
+test("keeps event handlers, discarded projections and opaque callbacks outside rendered text", async () => {
+  expect(
+    await lintSingleRule(
+      "no-rendered-error-translation",
+      `const handler = <p role="alert"><button onClick={() => items.map(() => t("errors.actionFailed"))}>Retry</button></p>;
+const eventAttribute = <p role="alert" onClick={items.map(() => t("errors.actionFailed"))} />;
+const opaque = <p role="alert">{notify(items.map(() => t("errors.actionFailed")))}</p>;
+const count = <p role="alert">{items.map(() => t("errors.actionFailed")).length}</p>;
+const filter = <p role="alert">{items.filter(() => t("errors.actionFailed"))}</p>;
+const computed = <p role="alert">{items[map](() => t("errors.actionFailed"))}</p>;
+const discardedCall = <p role="alert">{items.map(() => { notify(t("errors.actionFailed")); return "fine"; })}</p>;
+const discardedStatement = <p role="alert">{items.flatMap(() => { t("errors.actionFailed"); return ["fine"]; })}</p>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([]);
+});
