@@ -80,6 +80,8 @@ const NON_READ_CALLS = new Set([
   "toHaveProperty",
   "toInclude",
   "toMatch",
+  "toMatchInlineSnapshot",
+  "toMatchSnapshot",
   "toStartWith",
   "toStrictEqual",
 ]);
@@ -125,10 +127,16 @@ export const expandBraces = (pattern: string): readonly string[] => {
   alternatives.push(current);
   const prefix = pattern.slice(0, open);
   const suffix = pattern.slice(close + 1);
-  const expanded = alternatives.flatMap((alternative) =>
-    expandBraces(`${prefix}${alternative}${suffix}`),
-  );
-  return expanded.slice(0, MAX_BRACE_EXPANSIONS);
+  const expanded: string[] = [];
+  for (const alternative of alternatives) {
+    for (const expansion of expandBraces(`${prefix}${alternative}${suffix}`)) {
+      expanded.push(expansion);
+      if (expanded.length === MAX_BRACE_EXPANSIONS) {
+        return expanded;
+      }
+    }
+  }
+  return expanded;
 };
 
 type TargetCandidate = {

@@ -8,11 +8,11 @@ import {
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   hasEffectiveAuthority,
   mcpMemberAuthority,
 } from "@/api/mcp/effective-authority";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Authority state is private, so equality is checked on what it exposes.
@@ -60,9 +60,9 @@ describe("MCP member authority", () => {
 
 describe("the context a capability handler receives", () => {
   const contextWith = (
-    credentialPermissions: McpRequestContext["credentialPermissions"],
+    credentialPermissions: AuthorizedMcpRequestContext["credentialPermissions"],
   ) =>
-    asTestRaw<McpRequestContext>({
+    asTestRaw<AuthorizedMcpRequestContext>({
       testDependencies: {
         loadOrgSettingsForAuth: mock(async () => ({
           orgAIConfig: null,
@@ -88,7 +88,7 @@ describe("the context a capability handler receives", () => {
     });
 
   const synthesize = async (
-    credentialPermissions: McpRequestContext["credentialPermissions"],
+    credentialPermissions: AuthorizedMcpRequestContext["credentialPermissions"],
   ) =>
     await synthesizeCapabilityContext({
       capabilityId: "views.create",

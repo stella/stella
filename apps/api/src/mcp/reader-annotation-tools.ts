@@ -44,7 +44,6 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
@@ -75,6 +74,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 const TARGET_ID_DESCRIPTION =
   "The document: for a decision, its decisionId (read_case_law_decision, " +
@@ -134,7 +134,7 @@ const resolveTargetForAgent = async ({
   targetId,
   targetType,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   targetId: string;
   targetType: ReaderAnnotationTargetType;
 }): Promise<TargetAccessResult> => {
@@ -666,6 +666,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "anchor and quote, oldest first.",
     inputSchema: listArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

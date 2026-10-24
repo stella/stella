@@ -1728,6 +1728,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
@@ -1757,6 +1758,15 @@ const config = defineConfig({
       ],
       rules: {
         "narrative-prose-component/require-prose": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts",
+      ],
+      rules: {
+        "mcp-authorized-context-owner/mcp-authorized-context-owner": "error",
       },
     },
     {

@@ -53,7 +53,6 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   hasEffectiveAuthority,
   mcpMemberAuthority,
@@ -92,6 +91,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type BillingToolName =
   | "list_time_entries"
@@ -370,7 +370,7 @@ const resolveTimeEntryWorkspace = async ({
   context,
   timeEntryId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   timeEntryId: SafeId<"timeEntry">;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -393,7 +393,7 @@ const resolveInvoiceWorkspace = async ({
   context,
   invoiceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -419,7 +419,7 @@ const loadUserNames = async ({
   context,
   userIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   userIds: readonly string[];
 }): Promise<Map<string, string>> => {
   if (userIds.length === 0) {
@@ -1276,7 +1276,7 @@ const readInvoiceDetail = async ({
   invoiceId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
 }) =>
@@ -1538,6 +1538,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { timeEntry: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1638,6 +1639,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { rate: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
@@ -1670,6 +1672,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1700,6 +1703,10 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
+    permissions: {
+      type: "all",
+      permissions: { organizationSettings: ["update"] },
+    },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",
