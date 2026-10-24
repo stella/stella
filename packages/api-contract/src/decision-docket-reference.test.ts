@@ -54,7 +54,7 @@ test("balanced wrappers preserve every grammar's reference identity", () => {
             for (const entry of [fixture.canonical, ...fixture.variants]) {
               const reference = readDecisionDocketReference(entry, { grammar });
               expect(reference, entry).not.toBeNull();
-              let wrapped = String(entry);
+              let wrapped: string = entry;
               for (const [opening, closing] of wrappers) {
                 wrapped = `${opening}${wrapped}${closing}`;
               }
