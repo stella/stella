@@ -16,6 +16,7 @@ import {
   parseTestRegistrations,
   platformConditionalFailure,
   repositoryTestExecutionTopology,
+  resultAggregationFailures,
   rootCommandExecutionFailure,
   scenarioBlockerFailure,
   scenarioLedgerGrowth,
@@ -4173,6 +4174,84 @@ context("extension browser spec collection", () => {
         },
       }),
     ).toBeUndefined();
+  });
+});
+
+context("result aggregation dependency ownership", () => {
+  const workflowWithNeeds = (needs: string) =>
+    Bun.YAML.parse(`jobs:
+  ci-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bun test fixture.test.ts
+  ci-result:
+    needs: ${needs}
+    steps: []
+`);
+
+  check.each([
+    "[ci-tests, other-job]",
+    "[other-job, ci-tests]",
+    "[other-job, ci-tests,]",
+    "\n      - other-job\n      - ci-tests",
+    "ci-tests",
+    '"ci-tests"',
+  ])("exact dependencies survive YAML formatting: %s", (needs) => {
+    const workflow: unknown = workflowWithNeeds(needs);
+    expect(
+      resultAggregationFailures({ workflow, collectors: ["ci-tests"] }),
+    ).toEqual([]);
+    expect(analyzeGatingWorkflow(workflow, []).jobs.has("ci-tests")).toBe(true);
+  });
+
+  check.each([
+    "[other-ci-tests, other-job]",
+    "[ci-tests-shadow, other-job]",
+    "[other-job]",
+    "[]",
+    "42",
+    "\n      - other-job",
+  ])("substrings cannot supply exact dependencies: %s", (needs) => {
+    const workflow: unknown = workflowWithNeeds(needs);
+    expect(
+      resultAggregationFailures({ workflow, collectors: ["ci-tests"] }),
+    ).toEqual(["result aggregation: ci-result does not consume ci-tests"]);
+    expect(analyzeGatingWorkflow(workflow, []).jobs.has("ci-tests")).toBe(
+      false,
+    );
+  });
+
+  check("text in later jobs cannot supply a result dependency", () => {
+    const workflow: unknown = Bun.YAML.parse(`jobs:
+  ci-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bun test fixture.test.ts
+  ci-result:
+    needs: [other-job]
+    steps: []
+  later-job:
+    env:
+      UNRELATED_TEXT: "ci-tests,"
+    steps: []
+`);
+    expect(
+      resultAggregationFailures({ workflow, collectors: ["ci-tests"] }),
+    ).toEqual(["result aggregation: ci-result does not consume ci-tests"]);
+    expect(analyzeGatingWorkflow(workflow, []).jobs.has("ci-tests")).toBe(
+      false,
+    );
+  });
+
+  check("a similarly named job cannot replace the result owner", () => {
+    const workflow: unknown = Bun.YAML.parse(`jobs:
+  ci-result-copy:
+    needs: [ci-tests]
+    steps: []
+`);
+    expect(
+      resultAggregationFailures({ workflow, collectors: ["ci-tests"] }),
+    ).toEqual(["result aggregation: ci-result job is missing"]);
   });
 });
 

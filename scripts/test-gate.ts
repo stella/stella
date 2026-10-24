@@ -3527,6 +3527,44 @@ const ignoresFailure = (
 const workflowRecord = (value: unknown): Record<string, unknown> | undefined =>
   isRecord(value) ? value : undefined;
 
+const workflowResultDependencies = (workflow: unknown) => {
+  const root = workflowRecord(workflow);
+  const jobs = workflowRecord(root?.["jobs"]);
+  const resultJob = workflowRecord(jobs?.["ci-result"]);
+  if (resultJob === undefined) {
+    return undefined;
+  }
+  const needs = resultJob["needs"];
+  if (typeof needs === "string") {
+    return [needs];
+  }
+  return Array.isArray(needs)
+    ? needs.filter((name): name is string => typeof name === "string")
+    : [];
+};
+
+type ResultAggregationOptions = {
+  workflow: unknown;
+  collectors: readonly string[];
+};
+
+export const resultAggregationFailures = ({
+  workflow,
+  collectors,
+}: ResultAggregationOptions): string[] => {
+  const dependencies = workflowResultDependencies(workflow);
+  if (dependencies === undefined) {
+    return ["result aggregation: ci-result job is missing"];
+  }
+  const consumed = new Set(dependencies);
+  return collectors
+    .filter((collector) => !consumed.has(collector))
+    .map(
+      (collector) =>
+        `result aggregation: ci-result does not consume ${collector}`,
+    );
+};
+
 const executableShell = (source: string): string =>
   source
     .split("\n")
@@ -3858,10 +3896,7 @@ export const validateTrustedOutputProducers = ({
 }: ValidateTrustedOutputProducersOptions) => {
   const root = workflowRecord(workflow);
   const jobs = workflowRecord(root?.["jobs"]) ?? {};
-  const resultNeeds = workflowRecord(jobs["ci-result"])?.["needs"];
-  const requiredJobs = new Set(
-    Array.isArray(resultNeeds) ? resultNeeds : [resultNeeds],
-  );
+  const requiredJobs = new Set(workflowResultDependencies(workflow));
   const findings: string[] = [];
   const used = referencedCollectorOutputs(workflow);
   const stepReferences = new Map<string, Set<string>>();
@@ -4195,18 +4230,8 @@ const analyzeWorkflowWithProducerDeclarations = (
 ): GatingWorkflowAnalysis => {
   const root = workflowRecord(workflow);
   const jobs = workflowRecord(root?.["jobs"]);
-  const resultJob = workflowRecord(jobs?.["ci-result"]);
-  if (jobs === undefined || resultJob === undefined) {
-    return { findings: [], jobs: new Map() };
-  }
-  const needs = resultJob["needs"];
-  let names: string[] = [];
-  if (Array.isArray(needs)) {
-    names = needs.filter((name): name is string => typeof name === "string");
-  } else if (typeof needs === "string") {
-    names = [needs];
-  }
-  if (names.length === 0) {
+  const names = workflowResultDependencies(workflow);
+  if (jobs === undefined || names === undefined || names.length === 0) {
     return { findings: [], jobs: new Map() };
   }
   const workflowCall = workflowRecord(
@@ -6286,13 +6311,14 @@ const validateExecutionTopology = (errors: string[]): void => {
     path.join(ROOT, ".github/workflows/ci.yml"),
     "utf-8",
   );
+  const parsedWorkflow: unknown = Bun.YAML.parse(workflow);
   errors.push(
     ...validateTrustedOutputProducers({
-      workflow: Bun.YAML.parse(workflow),
+      workflow: parsedWorkflow,
       registry: TRUSTED_OUTPUT_PRODUCERS,
     }).findings,
   );
-  const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
+  const analysis = analyzeGatingWorkflow(parsedWorkflow);
   const gatingJobs = analysis.jobs;
   errors.push(
     ...analysis.findings.filter((finding) =>
@@ -6317,19 +6343,9 @@ const validateExecutionTopology = (errors: string[]): void => {
     "route-smoke",
     "service-suites",
   ];
-  const resultStart = workflow.indexOf("  ci-result:");
-  if (resultStart === -1) {
-    errors.push("result aggregation: ci-result job is missing");
-  } else {
-    const resultJob = workflow.slice(resultStart);
-    for (const collector of collectors) {
-      if (!resultJob.includes(`${collector},`)) {
-        errors.push(
-          `result aggregation: ci-result does not consume ${collector}`,
-        );
-      }
-    }
-  }
+  errors.push(
+    ...resultAggregationFailures({ workflow: parsedWorkflow, collectors }),
+  );
   const requiredCommands = [
     "bun scripts/run-unlisted-script-tests.ts",
     "bun run test -- --concurrency=2",
