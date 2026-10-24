@@ -48,6 +48,7 @@ macro_rules! with_stella_commands {
       i18n::get_desktop_language => "get_desktop_language",
       i18n::set_desktop_language => "set_desktop_language",
       clipboard_commands::clipboard_get_snapshot => "clipboard_get_snapshot",
+      clipboard_commands::clipboard_get_capture_update => "clipboard_get_capture_update",
       clipboard_commands::clipboard_complete_welcome => "clipboard_complete_welcome",
       clipboard_commands::clipboard_set_capture_status => "clipboard_set_capture_status",
       clipboard_commands::clipboard_exclude_item_source_app => "clipboard_exclude_item_source_app",
