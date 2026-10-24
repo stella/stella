@@ -24,10 +24,19 @@ export type AdvertisedSchemas = {
   readonly query: JsonSchema | undefined;
 };
 
+/**
+ * A part is a node inside the capability's description, not a document of its
+ * own, so it carries no `$schema` dialect.
+ */
 const advertisedPart = (
   schema: v.GenericSchema | undefined,
-): JsonSchema | undefined =>
-  schema === undefined ? undefined : toRouteJsonSchema(schema);
+): JsonSchema | undefined => {
+  if (schema === undefined) {
+    return undefined;
+  }
+  const { $schema: _dialect, ...part } = toRouteJsonSchema(schema);
+  return part;
+};
 
 /** The three advertised part schemas of one capability's live endpoint config. */
 export const advertisedSchemas = (

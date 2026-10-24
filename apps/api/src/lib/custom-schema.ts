@@ -164,15 +164,25 @@ export const workspaceSegmentSchema = v.looseObject({
   workspaceId: resourceIdSchema("workspace"),
 });
 
+const UNIQUE_ITEMS_CHECKS = new WeakSet<object>();
+
+/** Whether a pipe action came from `uniqueItems`, which renders as `uniqueItems: true`. */
+export const isUniqueItemsCheck = (action: object): boolean =>
+  UNIQUE_ITEMS_CHECKS.has(action);
+
 /**
  * Every item of the array distinct, as JSON Schema's `uniqueItems`. Items are
  * compared by identity; an array of objects names the primitive `key` two
- * equal items share.
+ * equal items share. Items distinct by key are distinct as values, so the
+ * rendered `uniqueItems: true` never admits what the check refuses.
  */
 export const uniqueItems = <TItem>(
   key: (item: TItem) => unknown = (item) => item,
-) =>
-  v.check(
+) => {
+  const check = v.check(
     (items: TItem[]) => new Set(items.map(key)).size === items.length,
     "Items must be unique",
   );
+  UNIQUE_ITEMS_CHECKS.add(check);
+  return check;
+};

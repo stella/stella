@@ -63,7 +63,7 @@ export type CapabilityFileInput = {
    * Media types the handler accepts, as enforced in the handler body (empty when
    * it accepts any). Not derivable from the schema: a file schema carries only a
    * size cap. The cap itself is not repeated here — it is already in the entry's
-   * `inputSchema` as `maxSize`, and a second copy would be a drift surface.
+   * `inputSchema` as `x-maxBytes`, and a second copy would be a drift surface.
    */
   mediaTypes: readonly string[];
 };

@@ -205,9 +205,10 @@ const enumValues = (schema: PropSchema): readonly string[] | undefined => {
   }
   const literals: string[] = [];
   for (const branch of branches) {
+    // A string `const` implies its type, so a branch may leave `type` out.
     if (
       !isRecordSchema(branch) ||
-      branch["type"] !== "string" ||
+      (branch["type"] !== undefined && branch["type"] !== "string") ||
       typeof branch["const"] !== "string"
     ) {
       return undefined;

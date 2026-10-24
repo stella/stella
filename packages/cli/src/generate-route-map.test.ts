@@ -337,6 +337,22 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     });
   });
 
+  test("string literal unions without a stated type produce enum flags", () => {
+    const schema = {
+      anyOf: [{ const: "draft" }, { const: "approved" }],
+    } as const satisfies PropSchema;
+    expect(classifyProp("status", schema)).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["draft", "approved"],
+        repeatable: false,
+      },
+    });
+  });
+
   test.each([
     { label: "number literal", branch: { type: "number", const: 1 } },
     { label: "unbounded string", branch: { type: "string" } },

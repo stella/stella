@@ -13,6 +13,7 @@ import { ANALYSIS_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/decision-identifier";
 import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast";
 
+import { isUniqueItemsCheck } from "@/api/lib/custom-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 
 /** The `v.metadata` keys that are JSON Schema annotations. */
@@ -95,6 +96,15 @@ const keepRuntimeOnlyAction: NonNullable<
 > = ({ valibotAction, jsonSchema }) =>
   RUNTIME_ONLY_ACTIONS.has(valibotAction) ? jsonSchema : undefined;
 
+/** A `uniqueItems` check is the keyword JSON Schema already has. */
+const uniqueItemsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
+  valibotAction,
+  jsonSchema,
+}) =>
+  isUniqueItemsCheck(valibotAction)
+    ? { ...jsonSchema, uniqueItems: true }
+    : undefined;
+
 type ValibotJsonSchemaConfig = Omit<ConversionConfig, "overrideAction">;
 
 export type { JsonSchema };
@@ -122,6 +132,7 @@ export const toJsonSchema = (
     overrideAction: (context) =>
       stripInternalMetadata(context) ??
       keepUnicodePatternSource(context) ??
+      uniqueItemsAction(context) ??
       keepRuntimeOnlyAction(context),
   });
 
@@ -160,6 +171,20 @@ const binaryFile: NonNullable<ConversionConfig["overrideSchema"]> = ({
     ? { type: "string", format: "binary" }
     : undefined;
 
+/**
+ * A file's size cap. JSON Schema has no keyword for the byte length of binary
+ * content, so the cap is published as an extension keyword.
+ */
+const fileSizeAction: NonNullable<ConversionConfig["overrideAction"]> = ({
+  valibotAction,
+  jsonSchema,
+}) =>
+  valibotAction.type === "max_size" &&
+  "requirement" in valibotAction &&
+  typeof valibotAction.requirement === "number"
+    ? { ...jsonSchema, "x-maxBytes": valibotAction.requirement }
+    : undefined;
+
 /** A loose object passes undeclared keys through, which its rendering must say. */
 const looseObject: NonNullable<ConversionConfig["overrideSchema"]> = ({
   valibotSchema,
@@ -168,6 +193,44 @@ const looseObject: NonNullable<ConversionConfig["overrideSchema"]> = ({
   valibotSchema.type === "loose_object"
     ? { ...jsonSchema, additionalProperties: true }
     : undefined;
+
+const LITERAL_JSON_TYPES = {
+  string: "string",
+  number: "number",
+  boolean: "boolean",
+} as const;
+
+const isLiteralJsonType = (
+  type: string,
+): type is keyof typeof LITERAL_JSON_TYPES => type in LITERAL_JSON_TYPES;
+
+/**
+ * A literal states its type beside its `const`, so a client that reads a
+ * union of literals as an enum (the generated CLI's flags) sees one.
+ */
+const typedLiteral: NonNullable<ConversionConfig["overrideSchema"]> = ({
+  valibotSchema,
+  jsonSchema,
+}) => {
+  if (valibotSchema.type !== "literal" || !("const" in jsonSchema)) {
+    return undefined;
+  }
+  const type = typeof jsonSchema.const;
+  return isLiteralJsonType(type)
+    ? { ...jsonSchema, type: LITERAL_JSON_TYPES[type] }
+    : undefined;
+};
+
+/** An object with no required property says nothing by listing none. */
+const withoutEmptyRequired = (
+  jsonSchema: JsonSchema,
+): JsonSchema | undefined => {
+  if (!isUnknownArray(jsonSchema.required) || jsonSchema.required.length > 0) {
+    return undefined;
+  }
+  const { required: _none, ...rest } = jsonSchema;
+  return rest;
+};
 
 type JsonScalar = string | number | boolean;
 
@@ -199,8 +262,14 @@ const jsonScalars = (value: unknown): JsonScalar | JsonScalar[] | undefined => {
 export const toRouteJsonSchema = (schema: GenericSchema): JsonSchema =>
   convertToJsonSchema(schema, {
     errorMode: "ignore",
-    overrideSchema: (context) =>
-      wireDefault(context) ?? binaryFile(context) ?? looseObject(context),
+    overrideSchema: (context) => {
+      const node =
+        wireDefault(context) ??
+        binaryFile(context) ??
+        looseObject(context) ??
+        typedLiteral(context);
+      return withoutEmptyRequired(node ?? context.jsonSchema) ?? node;
+    },
     overrideAction: (context) => {
       const value = wireValueOf(context.valibotAction);
       if (value !== undefined) {
@@ -212,6 +281,8 @@ export const toRouteJsonSchema = (schema: GenericSchema): JsonSchema =>
       return (
         stripRouteInternalMetadata(context) ??
         keepUnicodePatternSource(context) ??
+        uniqueItemsAction(context) ??
+        fileSizeAction(context) ??
         keepRuntimeOnlyAction(context)
       );
     },

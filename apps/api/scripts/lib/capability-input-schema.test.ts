@@ -28,8 +28,10 @@ test("static conditional schemas project rendered inputs before public naming an
       projectInputSchema: (schemas: AdvertisedSchemas) => {
         projections += 1;
         // The projection sees the route's own rendering, before any field is
-        // given its public name.
-        expect(schemas.body).toEqual(toRouteJsonSchema(body));
+        // given its public name, as a part without a `$schema` dialect.
+        const { $schema: _dialect, ...rendered } = toRouteJsonSchema(body);
+        expect(schemas.body).toEqual(rendered);
+        expect(schemas.body).not.toHaveProperty("$schema");
         const properties = schemas.body?.properties;
         if (properties === undefined) {
           throw new Error("Expected the rendered body's properties");

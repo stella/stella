@@ -12,13 +12,16 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const DAILY_TARGET_MAX_MINUTES = 1440;
 export const dailyTargetBody = v.object({
-  minutes: v.nullable(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(DAILY_TARGET_MAX_MINUTES),
+  minutes: v.pipe(
+    v.nullable(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(DAILY_TARGET_MAX_MINUTES),
+      ),
     ),
+    v.description("Daily target in minutes; null clears the target"),
   ),
 });
 
