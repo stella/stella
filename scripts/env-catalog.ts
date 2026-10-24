@@ -1449,6 +1449,21 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
+  // the commit it deploys, the infrastructure repository and its App token,
+  // the readiness endpoint and edge header, and the bounds tests shorten.
+  "DEPLOY_SHA",
+  "INFRA_REPO",
+  "STAGING_POWER_TOKEN",
+  "STAGING_HEALTH_URL",
+  "EDGE_HEADER_NAME",
+  "EDGE_HEADER_VALUE",
+  "STAGING_WAKE_LOOKUP_ATTEMPTS",
+  "STAGING_WAKE_LOOKUP_INTERVAL_SECONDS",
+  "STAGING_WAKE_START_MINUTES",
+  "STAGING_WAKE_START_POLL_SECONDS",
+  "STAGING_WAKE_READY_MINUTES",
+  "STAGING_WAKE_READY_POLL_SECONDS",
   // Dated-waiver healing: the private repository its fix tasks go to, and
   // the merge hold that keeps it from arming removals.
   "DATED_WAIVER_FIX_REPO",

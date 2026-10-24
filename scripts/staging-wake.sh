@@ -29,10 +29,10 @@
 #   STAGING_WAKE_READY_POLL_SECONDS       pause between probes (30)
 set -euo pipefail
 
-readonly POWER_WORKFLOW="staging-power.yml"
-readonly LEASE_HOURS="2"
+readonly power_workflow="staging-power.yml"
+readonly lease_hours="2"
 # Must match the run-name of staging-power.yml for action=on.
-readonly RUN_TITLE="Staging power on (${LEASE_HOURS}h)"
+readonly run_title="Staging power on (${lease_hours}h)"
 
 lookup_attempts="${STAGING_WAKE_LOOKUP_ATTEMPTS:-30}"
 lookup_interval="${STAGING_WAKE_LOOKUP_INTERVAL_SECONDS:-2}"
@@ -111,11 +111,11 @@ probe_ready() {
 }
 
 dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo "Starting staging through ${POWER_WORKFLOW} on ${INFRA_REPO} (action=on, hours=${LEASE_HOURS})..."
+echo "Starting staging through ${power_workflow} on ${INFRA_REPO} (action=on, hours=${lease_hours})..."
 # A dispatch is never retried: a second "on" would leave two matching runs.
-if ! infra_api --method POST "/repos/${INFRA_REPO}/actions/workflows/${POWER_WORKFLOW}/dispatches" \
-  -f "ref=main" -f "inputs[action]=on" -f "inputs[hours]=${LEASE_HOURS}" >/dev/null; then
-  refuse "staging start failed" "Dispatching ${POWER_WORKFLOW} on ${INFRA_REPO} failed."
+if ! infra_api --method POST "/repos/${INFRA_REPO}/actions/workflows/${power_workflow}/dispatches" \
+  -f "ref=main" -f "inputs[action]=on" -f "inputs[hours]=${lease_hours}" >/dev/null; then
+  refuse "staging start failed" "Dispatching ${power_workflow} on ${INFRA_REPO} failed."
 fi
 
 # The dispatches endpoint answers 204 without a run id; the run is found by
@@ -123,14 +123,14 @@ fi
 run_id=""
 for ((attempt = 1; attempt <= lookup_attempts; attempt += 1)); do
   if ! run_ids="$(
-    infra_api "/repos/${INFRA_REPO}/actions/workflows/${POWER_WORKFLOW}/runs?event=workflow_dispatch&per_page=20" \
-      --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${RUN_TITLE}\") | .id"
+    infra_api "/repos/${INFRA_REPO}/actions/workflows/${power_workflow}/runs?event=workflow_dispatch&per_page=20" \
+      --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${run_title}\") | .id"
   )"; then
-    refuse "staging start failed" "Reading the ${POWER_WORKFLOW} runs on ${INFRA_REPO} failed."
+    refuse "staging start failed" "Reading the ${power_workflow} runs on ${INFRA_REPO} failed."
   fi
   matches="$(grep -c . <<<"$run_ids" || true)"
   if ((matches > 1)); then
-    refuse "staging start ambiguous" "More than one '${RUN_TITLE}' run started since ${dispatched_at}; cannot tell which one this dispatch created: https://github.com/${INFRA_REPO}/actions/workflows/${POWER_WORKFLOW}"
+    refuse "staging start ambiguous" "More than one '${run_title}' run started since ${dispatched_at}; cannot tell which one this dispatch created: https://github.com/${INFRA_REPO}/actions/workflows/${power_workflow}"
   fi
   if ((matches == 1)); then
     run_id="$run_ids"
@@ -141,7 +141,7 @@ for ((attempt = 1; attempt <= lookup_attempts; attempt += 1)); do
   fi
 done
 if [[ -z "$run_id" ]]; then
-  refuse "staging start failed" "The '${RUN_TITLE}' run did not appear after ${lookup_attempts} reads: https://github.com/${INFRA_REPO}/actions/workflows/${POWER_WORKFLOW}"
+  refuse "staging start failed" "The '${run_title}' run did not appear after ${lookup_attempts} reads: https://github.com/${INFRA_REPO}/actions/workflows/${power_workflow}"
 fi
 
 power_run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"
@@ -176,4 +176,4 @@ until probe_ready; do
 done
 
 echo "deploy=true" >> "$GITHUB_OUTPUT"
-echo "Staging is ready; it powers off again when its ${LEASE_HOURS} h lease ends." | tee -a "$summary"
+echo "Staging is ready; it powers off again when its ${lease_hours} h lease ends." | tee -a "$summary"
