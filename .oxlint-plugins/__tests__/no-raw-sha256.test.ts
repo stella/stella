@@ -317,7 +317,8 @@ const cryptoReExports = [
   "export const { subtle: api } = crypto;",
 ];
 
-test.each(cryptoReExports)(
+// Scratch-rooted cases lint alone: concurrent, they would queue on one oxlint.
+test.serial.each(cryptoReExports)(
   "confines crypto-bearing re-exports: %s",
   async (bridge) => {
     const reports = await lintSingleRule("no-raw-sha256", bridge, {

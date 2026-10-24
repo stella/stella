@@ -141,6 +141,13 @@ const withLintSlot = async <T>(
   return await next;
 };
 
+// Lone runs never share a run, so concurrency only queues them behind each
+// other on the one oxlint slot while every waiting test's timeout runs. More
+// lone runs waiting at once than one test fans out means concurrent tests are
+// queued: their timeouts would measure the whole file, not the case.
+const LONE_RUN_QUEUE_LIMIT = 12;
+let waitingLoneRuns = 0;
+
 /** One case's files, written to its own scratch root as for a lone run. */
 type LintCase = {
   readonly configPath: string;
@@ -471,6 +478,15 @@ export const runSingleRule = async (
       },
     })}\n`;
   const alone = lintsAlone({ cwd, overrides, fix });
+  if (alone) {
+    waitingLoneRuns += 1;
+    if (waitingLoneRuns > LONE_RUN_QUEUE_LIMIT) {
+      waitingLoneRuns -= 1;
+      return panic(
+        `${waitingLoneRuns + 1} lone oxlint runs are waiting at once for ${code}; declare tests whose cases use cwd "scratch", overrides or fix with test.serial so each timeout covers only its own runs`,
+      );
+    }
+  }
   const fixedConfig =
     ruleOptionsForRoot === undefined ? makeConfig(ruleOptions) : undefined;
   const delay = async (
@@ -538,6 +554,9 @@ export const runSingleRule = async (
     );
     return await lateRequest.outcome;
   });
+  if (alone) {
+    waitingLoneRuns -= 1;
+  }
   if (directory !== undefined) {
     await rm(directory, { force: true, recursive: true });
   }
