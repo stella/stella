@@ -55,6 +55,7 @@ const prefill = ({
 }) =>
   ({
     currency: "EUR",
+    language: "sk",
     invoiceDate: "2025-02-01",
     taxableSupplyDate: dateWorked,
     dueDays: 14,
@@ -70,6 +71,7 @@ const prefill = ({
     buyer: {
       buyerName: "Invoice client",
       buyerRegistrationId: null,
+      buyerTaxId: null,
       buyerVatId: null,
       buyerAddressLine1: null,
       buyerAddressLine2: null,

@@ -358,6 +358,7 @@ type Emit = {
   stepName: string | undefined;
   /** The cached projections equal fresh ones over the same messages. */
   fresh: boolean;
+  raw: readonly UIMessage<ChatClientTools>[];
   shown: ChatUIMessage[];
 };
 
@@ -492,6 +493,7 @@ const streamSession = async ({
         cause,
         stepName,
         fresh: matchesFreshProjection(messages),
+        raw: messages,
         shown,
       });
     },
@@ -691,9 +693,44 @@ const toolTargetsMessage = ({
       );
       return owners.length === 1 && owners.at(0)?.id === message.id;
     }
-    default:
+    case "ACTIVITY_DELTA":
+    case "ACTIVITY_SNAPSHOT":
+    case "CUSTOM":
+    case "TOOL_CALL_START":
+    case "TOOL_CALL_END":
+    case EventType.TEXT_MESSAGE_START:
+    case EventType.TEXT_MESSAGE_CONTENT:
+    case EventType.TEXT_MESSAGE_END:
+    case EventType.TEXT_MESSAGE_CHUNK:
+    case EventType.TOOL_CALL_CHUNK:
+    case EventType.TOOL_CALL_RESULT:
+    case EventType.STATE_SNAPSHOT:
+    case EventType.STATE_DELTA:
+    case EventType.MESSAGES_SNAPSHOT:
+    case EventType.RAW:
+    case EventType.RUN_STARTED:
+    case EventType.RUN_ERROR:
+    case EventType.STEP_STARTED:
+    case EventType.STEP_FINISHED:
+    case EventType.REASONING_START:
+    case EventType.REASONING_MESSAGE_START:
+    case EventType.REASONING_MESSAGE_CONTENT:
+    case EventType.REASONING_MESSAGE_END:
+    case EventType.REASONING_MESSAGE_CHUNK:
+    case EventType.REASONING_END:
+    case EventType.REASONING_ENCRYPTED_VALUE:
+    case EventType.SUBAGENT_STARTED:
+    case EventType.SUBAGENT_FINISHED:
+    case EventType.SUBAGENT_ERROR:
       return false;
+    default:
+      return cause satisfies never;
   }
+};
+
+type TextTargetOptions = ToolTargetOptions & {
+  raw: readonly UIMessage<ChatClientTools>[];
+  previousRaw: readonly UIMessage<ChatClientTools>[];
 };
 
 /** Immediate text emission uses the same active fallback owner as START.
@@ -704,7 +741,9 @@ const textTargetsMessage = ({
   historyIds,
   activeAssistantId,
   previous,
-}: ToolTargetOptions) => {
+  raw,
+  previousRaw,
+}: TextTargetOptions) => {
   if (
     cause.type !== EventType.TEXT_MESSAGE_CONTENT ||
     cause.delta === "" ||
@@ -715,8 +754,10 @@ const textTargetsMessage = ({
     return false;
   }
   const previousMessage = previous.find(({ id }) => id === message.id);
-  const previousPart = previousMessage?.parts.at(-1);
-  const part = message.parts.at(-1);
+  const previousPart = previousRaw
+    .find(({ id }) => id === message.id)
+    ?.parts.at(-1);
+  const part = raw.find(({ id }) => id === message.id)?.parts.at(-1);
   return (
     previousMessage !== undefined &&
     part?.type === "text" &&
@@ -860,6 +901,8 @@ const expectStableStreamIdentity = ({
           historyIds,
           activeAssistantId,
           previous: previous.shown,
+          raw: next.raw,
+          previousRaw: previous.raw,
         })
       ) {
         expect(message).toBe(shown);
@@ -930,6 +973,7 @@ describe("streamed chunks keep what they do not change", () => {
       cause,
       stepName: "step",
       fresh: true,
+      raw: [earlier, active],
       shown: [earlier, active],
     };
     const continued = {
@@ -947,7 +991,13 @@ describe("streamed chunks keep what they do not change", () => {
       history: [],
       emits: [
         before,
-        { cause, stepName: "step", fresh: true, shown: [earlier, continued] },
+        {
+          cause,
+          stepName: "step",
+          fresh: true,
+          raw: [earlier, continued],
+          shown: [earlier, continued],
+        },
       ],
     });
     expect(() =>
@@ -960,9 +1010,74 @@ describe("streamed chunks keep what they do not change", () => {
             cause,
             stepName: "step",
             fresh: true,
+            raw: [earlier, continued],
             shown: [{ ...earlier }, continued],
           },
         ],
+      }),
+    ).toThrow("expect(received).toBe(expected)");
+  });
+
+  test("whitespace text on a fallback assistant retains strict projected identity checks", async () => {
+    const history = transcript([[{ type: "text", content: "Settled answer" }]]);
+    const observed = await streamSession({
+      session: {
+        approved: false,
+        continuation: [],
+        first: {
+          end: "approval",
+          ops: [
+            { kind: "snapshot" },
+            { kind: "reasoning", delta: "" },
+            { kind: "text", delta: " " },
+            { kind: "tools", calls: [{ args: ['{"query":""}'] }] },
+          ],
+        },
+        history,
+        regenerate: null,
+      },
+    });
+    expectStableStreamIdentity({ ...observed, history });
+    const textIndex = observed.emits.findIndex(
+      ({ cause, raw }) =>
+        typeof cause === "object" &&
+        cause.type === EventType.TEXT_MESSAGE_CONTENT &&
+        raw.some((message) => {
+          const part = message.parts.at(-1);
+          return (
+            !STREAMED_IDS.has(message.id) &&
+            part?.type === "text" &&
+            part.content === " "
+          );
+        }),
+    );
+    expect(textIndex).toBeGreaterThan(0);
+    const textEmit = observed.emits.at(textIndex);
+    if (textEmit === undefined) {
+      throw new TypeError("Whitespace fallback text must produce an SDK emit");
+    }
+    const rawOwner = textEmit.raw.find((message) => {
+      const part = message.parts.at(-1);
+      return part?.type === "text" && part.content === " ";
+    });
+    const projectedOwner = textEmit.shown.find(({ id }) => id === rawOwner?.id);
+    expect(projectedOwner?.parts).toEqual([
+      { type: "thinking", content: "", stepId: "answer-reasoning-0" },
+    ]);
+    const historyIds = new Set(history.map(({ id }) => id));
+    const corrupted = {
+      ...textEmit,
+      shown: textEmit.shown.map((message) =>
+        historyIds.has(message.id) ? { ...message } : message,
+      ),
+    };
+    expect(() =>
+      expectStableStreamIdentity({
+        changed: observed.changed,
+        history,
+        emits: observed.emits.map((emit, index) =>
+          index === textIndex ? corrupted : emit,
+        ),
       }),
     ).toThrow("expect(received).toBe(expected)");
   });
@@ -1019,6 +1134,8 @@ describe("streamed chunks keep what they do not change", () => {
                 historyIds,
                 activeAssistantId,
                 previous: previous.shown,
+                raw: next.raw,
+                previousRaw: previous.raw,
               })),
         )
       ) {

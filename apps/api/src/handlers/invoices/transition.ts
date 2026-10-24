@@ -15,6 +15,7 @@ import {
   invoices,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
+import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -23,6 +24,7 @@ import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { hasActiveInvoiceCredit } from "@/api/lib/billing/invoice-document-type";
 import {
   lockDraftInvoiceForLines,
+  readInvoiceTotals,
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
@@ -196,6 +198,28 @@ const releaseInvoiceEntries = async (
       revertedExpenses,
     }),
   );
+};
+
+type ReadIssuedInvoiceVatOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const readIssuedInvoiceVat = async (
+  tx: Transaction,
+  { invoiceId, workspaceId }: ReadIssuedInvoiceVatOptions,
+) => {
+  const invoice = await tx.query.invoices.findFirst({
+    where: {
+      id: { eq: invoiceId },
+      RAW: (table) => invoiceInMatter(table, workspaceId),
+    },
+    with: INVOICE_DETAIL_RELATIONS,
+  });
+  if (invoice === undefined) {
+    panic("The locked issued invoice disappeared before its totals read");
+  }
+  return readInvoiceTotals(invoice).vatAmountMinor;
 };
 
 type VatCurrencyGuardOptions = {
@@ -385,6 +409,8 @@ const transitionInvoice = createSafeHandler(
               return Result.err(totals.error);
             }
             vatAmountMinor = totals.value.vatAmountMinor;
+          } else if (vatAmountMinor === null) {
+            vatAmountMinor = await readIssuedInvoiceVat(tx, scope);
           }
           const currencyError = await vatCurrencyError({
             tx,

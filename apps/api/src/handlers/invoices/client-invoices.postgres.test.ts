@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { ElysiaCustomStatusResponse } from "elysia";
 
 import { cents } from "@stll/money";
 
@@ -466,6 +467,9 @@ if (!databaseUrl || !runPostgres) {
       expect(atLimit.transactionRoundTrips).toBe(atOne.transactionRoundTrips);
       const selected =
         await clientInvoicePrefillScalingScenario.handler(context);
+      if (selected instanceof ElysiaCustomStatusResponse) {
+        panic("Selected client invoice prefill must succeed");
+      }
       for (const entry of entryValues) {
         expect(
           selected.matters.find(
