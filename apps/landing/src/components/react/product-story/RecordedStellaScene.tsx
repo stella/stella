@@ -3,8 +3,8 @@ import { useSyncExternalStore } from "react";
 import {
   productStoryEditorPortraitMedia,
   productStoryHeroMedia,
-  productStoryMedia,
   type ProductStoryMedia,
+  productStoryMedia,
   type ProductStorySceneId,
 } from "../../../data/product-story";
 

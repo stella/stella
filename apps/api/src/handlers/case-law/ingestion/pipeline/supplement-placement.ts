@@ -1,10 +1,10 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
+import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
 import type {
   DecisionSupplement,
   IngestionResult,

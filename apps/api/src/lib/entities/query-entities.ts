@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   and,
   count,
@@ -33,6 +33,7 @@ import {
   cellMetadata,
   desktopEditSessions,
   documentProcessingRuns,
+  type DocumentProcessingStatus,
   entities,
   entityVersions,
   extractedContent,
@@ -55,19 +56,20 @@ import {
 } from "@/api/lib/db-pagination";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { isValidDateCursorValue } from "@/api/lib/entities/cursor-validation";
+import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import {
-  entityQueryScopeCondition,
   type EntityQueryScope,
+  entityQueryScopeCondition,
 } from "@/api/lib/entities/query-scope";
 import {
   entityWindowUnionSource,
   windowRowKindColumn,
 } from "@/api/lib/entities/signal-window-rows";
 import {
-  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
-  readGeneratedCursorValues,
   type EntitiesWindowCursorValue,
   type EntitiesWindowCursorValues,
+  ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
+  readGeneratedCursorValues,
 } from "@/api/lib/entities/window-cursor";
 import {
   AGENDA_ITEM_KIND,
@@ -153,6 +155,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
   readOnly: boolean;
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
+  processingStatus?: DocumentProcessingStatus | null;
   fields: {
     id: string;
     propertyId: string;
@@ -952,6 +955,7 @@ const queryEntitiesGenerator = async function* ({
     cellMetadataRowsResult,
     activeSessionsResult,
     assigneeRowsResult,
+    processingStatusesResult,
   ] = await Promise.all([
     safeDb((tx) => {
       const createdByMembers = organizationMemberIdsSubquery(
@@ -1174,6 +1178,9 @@ const queryEntitiesGenerator = async function* ({
             ),
         )
       : Promise.resolve(Result.ok([])),
+    safeDb(
+      async (tx) => await getCurrentVersionProcessingStatuses(tx, pageIds),
+    ),
   ]);
 
   const entityRows = yield* entityRowsResult;
@@ -1182,6 +1189,7 @@ const queryEntitiesGenerator = async function* ({
   const cellMetadataRows = yield* cellMetadataRowsResult;
   const activeSessions = yield* activeSessionsResult;
   const assigneeRows = yield* assigneeRowsResult;
+  const processingStatuses = yield* processingStatusesResult;
   const cellMetadataActorIds = getCellMetadataActorIds(cellMetadataRows);
   const cellMetadataActors =
     cellMetadataActorIds.length > 0
@@ -1310,6 +1318,7 @@ const queryEntitiesGenerator = async function* ({
       readOnly: entity.readOnly,
       sortOrder: entity.sortOrder,
       activeEditBy: activeEditMap.get(entity.id) ?? null,
+      processingStatus: processingStatuses.get(entity.id) ?? null,
       fields: entityFields.map((field) => ({
         id: field.id,
         propertyId: field.propertyId,

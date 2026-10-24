@@ -242,6 +242,11 @@ fn oversized_office_download_error() -> String {
   "stella desktop refused an oversized Office file download.".to_string()
 }
 
+fn oversized_office_download(overflow: std::num::TryFromIntError) -> String {
+  crate::logging::log_cause(&overflow, "Office download size does not fit");
+  oversized_office_download_error()
+}
+
 fn non_office_download_body_error(file_type: DesktopEditFileType) -> String {
   format!(
     "stella desktop refused a non-{} download body.",
@@ -283,9 +288,12 @@ fn validate_office_download_response(
     return Ok(());
   };
 
-  let content_type = content_type.to_str().map_err(|_| {
-    "stella desktop received an invalid Office file content type.".to_string()
-  })?;
+  let content_type =
+    content_type
+      .to_str()
+      .map_err(crate::logging::with_cause_logged(
+        "stella desktop received an invalid Office file content type.",
+      ))?;
 
   if is_allowed_download_content_type(file_type, content_type) {
     return Ok(());
@@ -304,10 +312,8 @@ async fn read_office_download_bytes(
     let chunk = chunk.map_err(|e| {
       format!("stella desktop could not read the Office file download: {e}")
     })?;
-    let current_size =
-      u64::try_from(bytes.len()).map_err(|_| oversized_office_download_error())?;
-    let chunk_size =
-      u64::try_from(chunk.len()).map_err(|_| oversized_office_download_error())?;
+    let current_size = u64::try_from(bytes.len()).map_err(oversized_office_download)?;
+    let chunk_size = u64::try_from(chunk.len()).map_err(oversized_office_download)?;
     let next_size = current_size
       .checked_add(chunk_size)
       .ok_or_else(oversized_office_download_error)?;
@@ -326,8 +332,7 @@ fn validate_office_download_bytes(
   file_type: DesktopEditFileType,
   bytes: &[u8],
 ) -> Result<(), String> {
-  let size =
-    u64::try_from(bytes.len()).map_err(|_| oversized_office_download_error())?;
+  let size = u64::try_from(bytes.len()).map_err(oversized_office_download)?;
   if size > MAX_OFFICE_DOWNLOAD_BYTES {
     return Err(oversized_office_download_error());
   }
@@ -336,8 +341,10 @@ fn validate_office_download_bytes(
     return Err(non_office_download_body_error(file_type));
   }
 
-  let archive = ZipArchive::new(Cursor::new(bytes))
-    .map_err(|_| non_office_download_body_error(file_type))?;
+  let archive = ZipArchive::new(Cursor::new(bytes)).map_err(|error| {
+    crate::logging::log_cause(&error, "Office download is not a zip archive");
+    non_office_download_body_error(file_type)
+  })?;
   let has_content_types = archive.index_for_name(CONTENT_TYPES_ENTRY).is_some();
   let required_entry = file_type.main_part_path();
 
@@ -3106,6 +3113,8 @@ mod tests {
     assert_eq!(parsed["sessions"]["pendingFinalize"], 1);
     assert_eq!(parsed["sessions"]["takeoverDetected"], 1);
     assert_eq!(parsed["cleanupPathsQueued"], 1);
+    assert!(parsed["managedPolicy"]["updatesDisabled"].is_boolean());
+    assert!(parsed["managedPolicy"]["serverConfigured"].is_boolean());
   }
 
   #[test]

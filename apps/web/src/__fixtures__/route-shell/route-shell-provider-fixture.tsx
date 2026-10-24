@@ -54,9 +54,7 @@ const fixtureRouteSchema = v.object({
     loader: v.optional(v.unknown()),
     staticData: v.optional(
       v.looseObject({
-        appFrame: v.optional(
-          v.picklist(["none", "member", "admin", "knowledge"]),
-        ),
+        appFrame: v.optional(v.picklist(["none", "member", "knowledge"])),
       }),
     ),
   }),
@@ -311,6 +309,8 @@ const installFixtureNetwork = () => {
       if (pathname === "/v1/organization-settings/ai-availability") {
         return Response.json({
           available: true,
+          unavailableReason: null,
+          providerConfiguration: "allowed",
           instanceProvisioned: false,
           orgConfigured: true,
           deferredServiceTierAvailable: false,

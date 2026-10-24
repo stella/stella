@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -9,6 +9,7 @@ import {
   documentProcessingRuns,
   entities,
   entityVersions,
+  extractedContent,
   fields,
   folioCollabRooms,
   pdfSigningSessions,
@@ -58,6 +59,7 @@ type DeleteEntityVersionHandlerProps = {
   versionId: SafeId<"entityVersion">;
   deletedByUserId: string;
   recordAuditEvent: AuditRecorder;
+  processPromotedVersion?: typeof processExtraction;
 };
 
 export const deleteEntityVersionHandler = async function* ({
@@ -67,6 +69,7 @@ export const deleteEntityVersionHandler = async function* ({
   versionId,
   deletedByUserId,
   recordAuditEvent,
+  processPromotedVersion = processExtraction,
 }: DeleteEntityVersionHandlerProps) {
   const params = { entityId, versionId };
 
@@ -310,6 +313,21 @@ export const deleteEntityVersionHandler = async function* ({
         }
       }
 
+      await tx
+        .delete(extractedContent)
+        .where(
+          and(
+            eq(extractedContent.entityId, params.entityId),
+            eq(extractedContent.workspaceId, workspaceId),
+            or(
+              eq(extractedContent.sourceEntityVersionId, params.versionId),
+              isDeletingCurrent
+                ? isNull(extractedContent.sourceEntityVersionId)
+                : undefined,
+            ),
+          ),
+        );
+
       // Tombstone the version instead of deleting it. `fields` and S3 objects
       // stay; the row is hidden by the deletedAt filter on every read path.
       await tx
@@ -426,7 +444,7 @@ export const deleteEntityVersionHandler = async function* ({
 
   const promotedVersionId = txOutcome.promotedVersionId;
   if (promotedVersionId !== null) {
-    await processExtraction(params.entityId).catch((error: unknown) =>
+    await processPromotedVersion(params.entityId).catch((error: unknown) =>
       captureError(error, {
         entityId: params.entityId,
         versionId: promotedVersionId,

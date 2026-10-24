@@ -6,8 +6,8 @@ import { DownloadIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import {
-  MACOS_DMG_URL,
   type DesktopPlatform,
+  MACOS_DMG_URL,
   WINDOWS_EXE_URL,
   WINDOWS_MSI_URL,
 } from "@/lib/desktop-downloads";

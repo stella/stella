@@ -124,7 +124,11 @@ const seedThreadFile = async ({
 }) => {
   const threadId = createSafeId<"chatThread">();
   const fileId = createSafeId<"userFile">();
-  const s3Key = createUserFileKey({ fileId, mimeType: PDF_MIME_TYPE, userId });
+  const s3Key = createUserFileKey({
+    fileId,
+    mimeType: PDF_MIME_TYPE,
+    organizationId,
+  });
   await testDb.insert(chatThreads).values({
     id: threadId,
     dataWorkspaceIds,

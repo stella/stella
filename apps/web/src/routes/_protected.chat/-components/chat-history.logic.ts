@@ -119,8 +119,7 @@ export const groupChatHistoryByPeriod = <
 
 /** The query the field last sent to the URL, until the URL shows it. */
 type PendingSearchQuery =
-  | { status: "idle" }
-  | { status: "sent"; query: string | undefined };
+  { status: "idle" } | { status: "sent"; query: string | undefined };
 
 /**
  * The search field's own state: what it shows, what it knows of the URL, and

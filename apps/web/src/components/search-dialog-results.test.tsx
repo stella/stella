@@ -2,13 +2,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, test } from "bun:test";
+import { IntlProvider } from "use-intl";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import {
   RecentFileIcon,
   SearchHitIcon,
 } from "@/components/search-dialog-results";
+import { DocumentExtractionStatus } from "@/components/workspaces/document-extraction-status";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
 import type { RecentFileWithIdentity } from "@/lib/search-recents";
@@ -35,7 +37,34 @@ const hit = {
   fileFieldId: "field_search_image",
   filePropertyId: "property_search_image",
   mimeType: "image/png",
+  processingStatus: null,
 } as const satisfies GlobalSearchHit;
+
+test.each([
+  ["queued", true],
+  ["running", true],
+  ["failed", false],
+  ["succeeded", false],
+] as const)(
+  "search results and workspace file rows show extraction state for %s",
+  (processingStatus, visible) => {
+    const renderStatus = () =>
+      renderToStaticMarkup(
+        <IntlProvider
+          locale="en"
+          messages={{ chat: { extractingContent: "Extracting content..." } }}
+          timeZone="UTC"
+        >
+          <DocumentExtractionStatus processingStatus={processingStatus} />
+        </IntlProvider>,
+      );
+
+    const searchResultStatus = renderStatus();
+    const workspaceFileStatus = renderStatus();
+    expect(searchResultStatus.includes("Extracting content...")).toBe(visible);
+    expect(workspaceFileStatus.includes("Extracting content...")).toBe(visible);
+  },
+);
 
 test.each([
   { mimeType: "image/png", fileFieldId: hit.fileFieldId },
