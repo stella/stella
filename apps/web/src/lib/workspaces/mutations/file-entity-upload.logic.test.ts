@@ -195,7 +195,9 @@ describe("file entity upload retries", () => {
       ]);
       const { queue, done } = runBatch(script.steps);
       const delays: number[] = [];
-      queue.on("rate-limited", ({ retryAfterS }) => delays.push(retryAfterS));
+      queue.on("rate-limited", ({ retryAfterS }) => {
+        delays.push(retryAfterS);
+      });
 
       queue.enqueue([file()]);
       await flush();
@@ -247,14 +249,18 @@ describe("file entity upload retries", () => {
         await flush();
       }
       expect(done).toEqual([{ completed: [], failed: 1, cancelled: false }]);
-      expect(script.finalizes).toEqual(new Array(4).fill("upload-1"));
+      expect(script.finalizes).toEqual(
+        Array.from({ length: 4 }, () => "upload-1"),
+      );
 
       queue.retryFailed();
       await flush();
 
       expect(script.reservations).toEqual(["upload-1"]);
       expect(script.puts).toEqual(["upload-1"]);
-      expect(script.finalizes).toEqual(new Array(5).fill("upload-1"));
+      expect(script.finalizes).toEqual(
+        Array.from({ length: 5 }, () => "upload-1"),
+      );
       expect(script.aborts).toEqual([]);
       expect(done.at(-1)).toEqual({
         completed: ["entity-for-upload-1"],
