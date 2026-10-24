@@ -491,7 +491,7 @@ context("test registration census", () => {
     'function unrelated() { const enabled = false; } const enabled = process.env.STELLA_RUN_POSTGRES_TESTS === "true"; REGISTRATION_ALIAS',
     "function unrelated(process, Boolean) { process = other; Boolean = other; } REGISTRATION",
     'function unrelated(globalThis) { globalThis.Boolean = other; globalThis.process.env.STELLA_RUN_POSTGRES_TESTS = "false"; } REGISTRATION',
-    'process.env.UNRELATED_FIXTURE = "false"; REGISTRATION',
+    'process.env.STELLA_LOCAL_DEV = "false"; REGISTRATION',
     "class Example { static { var process = other; var Boolean = other; } } REGISTRATION",
     "namespace Unrelated { var process = other; var Boolean = other; } REGISTRATION",
   ])("service condition bindings retain their lexical owner: %s", (layout) => {
