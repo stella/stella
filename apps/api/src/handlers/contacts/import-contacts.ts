@@ -8,9 +8,9 @@ import { CONTACT_IMPORT_ISSUE_CODE } from "@stll/api-contract";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  type ContactImportReceiptResult,
   contactImportRequests,
   contacts,
-  type ContactImportReceiptResult,
   type ContactType,
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";

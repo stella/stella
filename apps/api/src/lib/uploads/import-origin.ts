@@ -4,8 +4,8 @@ import type { Static } from "elysia";
 import { Temporal } from "@stll/time";
 
 import {
-  ORIGINAL_AUTHOR_NAME_MAX_LENGTH,
   type ImportDocumentSource,
+  ORIGINAL_AUTHOR_NAME_MAX_LENGTH,
 } from "@/api/lib/document-source";
 import { tExternalRef } from "@/api/lib/imports/external-ref";
 
