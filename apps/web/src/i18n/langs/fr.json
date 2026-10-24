@@ -4762,6 +4762,7 @@
   },
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
+    "caseLawEmptyState": "Commencez à saisir pour rechercher des décisions de justice.",
     "caseLawMatchingDecisions": "{count, plural, one {# décision correspondante} other {# décisions correspondantes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ décision correspondante} other {#+ décisions correspondantes}}",
     "continueInChat": "Continuer dans une conversation",
@@ -4819,6 +4820,7 @@
     "savedSearchesEmpty": "Enregistrez une recherche pour la réutiliser.",
     "scopeFilter": "Portée de la recherche",
     "scopePlaceholderAll": "Rechercher dans toutes les <scope>sources</scope>…",
+    "scopePlaceholderCaseLaw": "Rechercher dans la <scope>jurisprudence</scope>…",
     "scopePlaceholderMatters": "Rechercher dans tous les <scope>dossiers</scope>…",
     "scopePlaceholderRegistries": "Rechercher dans les <scope>registres</scope>…",
     "scopeRegistries": "Registres",

@@ -4762,6 +4762,7 @@
   },
   "search": {
     "aiRefine": "Improve query with AI",
+    "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
     "continueInChat": "Continue in chat",
@@ -4819,6 +4820,7 @@
     "savedSearchesEmpty": "Save a search to reuse it.",
     "scopeFilter": "Search scope",
     "scopePlaceholderAll": "Search across all <scope>sources</scope>…",
+    "scopePlaceholderCaseLaw": "Search in <scope>case law</scope>…",
     "scopePlaceholderMatters": "Search across all <scope>matters</scope>…",
     "scopePlaceholderRegistries": "Search in <scope>registries</scope>…",
     "scopeRegistries": "Registries",

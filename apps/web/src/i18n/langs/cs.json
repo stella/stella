@@ -4762,6 +4762,7 @@
   },
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",
+    "caseLawEmptyState": "Začněte psát pro vyhledávání v soudních rozhodnutích.",
     "caseLawMatchingDecisions": "{count, plural, one {# odpovídající rozhodnutí} few {# odpovídající rozhodnutí} many {# odpovídajícího rozhodnutí} other {# odpovídajících rozhodnutí}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ odpovídající rozhodnutí} few {#+ odpovídající rozhodnutí} many {#+ odpovídajícího rozhodnutí} other {#+ odpovídajících rozhodnutí}}",
     "continueInChat": "Pokračovat v chatu",
@@ -4819,6 +4820,7 @@
     "savedSearchesEmpty": "Uložte hledání, abyste je mohli použít znovu.",
     "scopeFilter": "Rozsah hledání",
     "scopePlaceholderAll": "Hledat ve všech <scope>zdrojích</scope>…",
+    "scopePlaceholderCaseLaw": "Hledat v <scope>judikatuře</scope>…",
     "scopePlaceholderMatters": "Hledat ve všech <scope>spisech</scope>…",
     "scopePlaceholderRegistries": "Hledat v <scope>rejstřících</scope>…",
     "scopeRegistries": "Rejstříky",

@@ -4762,6 +4762,7 @@
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",
+    "caseLawEmptyState": "Empiece a escribir para buscar resoluciones judiciales.",
     "caseLawMatchingDecisions": "{count, plural, one {# resolución coincidente} other {# resoluciones coincidentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ resolución coincidente} other {#+ resoluciones coincidentes}}",
     "continueInChat": "Continuar en el chat",
@@ -4819,6 +4820,7 @@
     "savedSearchesEmpty": "Guarda una búsqueda para volver a usarla.",
     "scopeFilter": "Ámbito de búsqueda",
     "scopePlaceholderAll": "Buscar en todas las <scope>fuentes</scope>…",
+    "scopePlaceholderCaseLaw": "Buscar en la <scope>jurisprudencia</scope>…",
     "scopePlaceholderMatters": "Buscar en todos los <scope>asuntos</scope>…",
     "scopePlaceholderRegistries": "Buscar en <scope>registros</scope>…",
     "scopeRegistries": "Registros",
