@@ -136,6 +136,39 @@ describe("the PDF text builder", () => {
     );
   });
 
+  test.each([1, 17, 98])(
+    "preserves a standalone numeric fact within footnote %i",
+    (label) => {
+      const count = label + 1;
+      const ast = build(
+        `Body.${label}\n\n${label}\n Number of controllers:\n${count}\nin total.`,
+      );
+      const notes = ast.blocks.filter(
+        (block) => block.type === "paragraph" && block.note !== undefined,
+      );
+      expect(notes.map(({ id, plainText }) => ({ id, plainText }))).toEqual([
+        {
+          id: `fn-${label}`,
+          plainText: `Number of controllers: ${count} in total.`,
+        },
+      ]);
+    },
+  );
+
+  test("recognizes an unindented next note after a separating blank line", () => {
+    const ast = build("Body.1 Body.2\n\n1\n First note.\n\n2\nSecond note.");
+    expect(
+      ast.blocks
+        .filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        )
+        .map(({ id, plainText }) => ({ id, plainText })),
+    ).toEqual([
+      { id: "fn-1", plainText: "First note." },
+      { id: "fn-2", plainText: "Second note." },
+    ]);
+  });
+
   test.each(["DPIA.", "GDPR.", "DSA.", "CJEU,"])(
     "recognizes a footnote after punctuation on %s",
     (acronym) => {
@@ -299,6 +332,7 @@ const layout: fc.Arbitrary<Layout> = fc.record({
   sections: fc.array(section, { minLength: 1, maxLength: 4 }),
   linesPerPage: fc.integer({ min: 4, max: 12 }),
   loneMarks: fc.boolean(),
+  numericFacts: fc.boolean(),
   separator: fc.boolean(),
 });
 
@@ -337,12 +371,14 @@ type Layout = {
   sections: Section[];
   linesPerPage: number;
   loneMarks: boolean;
+  numericFacts: boolean;
   separator: boolean;
 };
 
 const render = ({
   linesPerPage,
   loneMarks,
+  numericFacts,
   sections,
   separator,
 }: Layout): { text: string; expected: Expected } => {
@@ -359,7 +395,12 @@ const render = ({
     for (let index = 0; index < marks; index += 1) {
       note += 1;
       labels.push(String(note));
-      expected.notes.push({ label: String(note), text: `Note ${note} text.` });
+      expected.notes.push({
+        label: String(note),
+        text: numericFacts
+          ? `Note ${note} Controllers: ${note + 1} in total. text.`
+          : `Note ${note} text.`,
+      });
       lines.at(-1)?.notes.push(note);
     }
     const first = lines[0];
@@ -427,7 +468,11 @@ const render = ({
       out.push(" ");
     }
     for (const label of notes) {
-      out.push(String(label), ` Note ${label}`, "text.");
+      out.push(String(label), ` Note ${label}`);
+      if (numericFacts) {
+        out.push("Controllers:", String(label + 1), "in total.");
+      }
+      out.push("text.");
     }
     if (footers) {
       out.push(`${pages.length + 1} | Adopted`);

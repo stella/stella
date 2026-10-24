@@ -186,10 +186,13 @@ const readNotes = (
   let previous = after;
   for (let index = start; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    // A note whose first line lost its indent still opens on the next mark.
+    // A missing indent needs a separating blank line; a consecutive integer
+    // inside a note can be substantive text.
     if (
       isNoteStart(lines, index) ||
-      (FOOTNOTE_MARK_LINE.test(line) && Number(line) === previous + 1)
+      (isBlank(lines[index - 1]) &&
+        FOOTNOTE_MARK_LINE.test(line) &&
+        Number(line) === previous + 1)
     ) {
       const label = Number(line);
       if (label <= previous) {
