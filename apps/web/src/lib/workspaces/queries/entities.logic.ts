@@ -117,7 +117,7 @@ export const entitiesKeys = {
     excludedKinds,
     previewableForAi,
   }: EntitiesPageKey) => {
-    const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFieldMode = fieldMode ?? "visible";
     return [
       ...entitiesKeys.all(workspaceId),
       {
@@ -148,7 +148,7 @@ export const entitiesKeys = {
     includeAssignees,
     find,
   }: EntitiesWindowKey) => {
-    const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFieldMode = fieldMode ?? "visible";
     const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
@@ -178,7 +178,7 @@ export const entitiesKeys = {
     fieldMode,
     fieldIds,
   }: FilesystemEntitiesKey) => {
-    const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFieldMode = fieldMode ?? "visible";
     return [
       ...entitiesKeys.all(workspaceId),
       "filesystem-tree",
@@ -207,7 +207,7 @@ export const entitiesKeys = {
     optionValues,
     find,
   }: KanbanGroupKey) => {
-    const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFieldMode = fieldMode ?? "visible";
     const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
