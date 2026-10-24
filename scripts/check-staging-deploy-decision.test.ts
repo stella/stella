@@ -258,6 +258,8 @@ const runRecord = async (deploySha: string) => {
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       STUB_CALLS_PATH: callsPath,
       WEB_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
     },
   });
   return {
