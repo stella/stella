@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 5.3.1
+
+### Patch Changes
+
+- [#5827](https://github.com/stella/stella/pull/5827) [`6f18636`](https://github.com/stella/stella/commit/6f186366c1749c64e0fdcf6f54d29dc746017155) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Comment on the claims of a list verification: `lists.verifications.claim-comments.list`, `.create`, `.update` and `.delete` read, add, change and remove comments on one claim, private unless shared with the matter.
+
 ## 5.3.0
 
 ### Minor Changes
