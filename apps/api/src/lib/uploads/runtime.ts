@@ -9,6 +9,7 @@
  */
 import { Result, TaggedError } from "better-result";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -29,6 +30,38 @@ export const PRESIGN_URL_EXPIRY_SECONDS = 5 * 60;
  * down once async scanning lands in phase 6.
  */
 export const FINALIZE_CLAIM_TIMEOUT_MS = 60_000;
+
+/**
+ * Time after the longest client PUT for its finalize to land: the finalize
+ * admission wait, the client's retries of a finalize whose response it did
+ * not receive, and one claim cool-down after a transient finalize failure.
+ */
+const FINALIZE_AFTER_PUT_WINDOW_MS = 10 * 60 * 1000;
+
+export type UploadTimeline = {
+  /** When S3 stops accepting a PUT to the issued URL (checked at its start). */
+  urlExpiresAt: Date;
+  /**
+   * The last moment the upload can be finalized, stored as
+   * `pending_uploads.expires_at`. A PUT may start just before `urlExpiresAt`
+   * and run for `DOCUMENT_UPLOAD_PUT_TIMEOUT_MS`, the ceiling every client
+   * applies, so the deadline covers that whole PUT and its finalize.
+   */
+  finalizeDeadline: Date;
+};
+
+/** The URL expiry and finalize deadline of an upload reserved at `issuedAt`. */
+export const uploadTimeline = (issuedAt: Date): UploadTimeline => {
+  const urlExpiresAtMs = issuedAt.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000;
+  return {
+    urlExpiresAt: new Date(urlExpiresAtMs),
+    finalizeDeadline: new Date(
+      urlExpiresAtMs +
+        DOCUMENT_UPLOAD_PUT_TIMEOUT_MS +
+        FINALIZE_AFTER_PUT_WINDOW_MS,
+    ),
+  };
+};
 
 type TmpUploadKeyProps = {
   organizationId: SafeId<"organization">;

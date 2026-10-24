@@ -37,3 +37,12 @@ export const setFixedBrowserTime = async (
   await page.clock.setFixedTime(time);
   await page.addInitScript({ content: TEMPORAL_CLOCK_INIT });
 };
+
+/** Install advancing time and keep native Temporal on the same clock. */
+export const installBrowserClock = async (
+  page: Page,
+  time: Date | number | string,
+): Promise<void> => {
+  await page.clock.install({ time });
+  await page.addInitScript({ content: TEMPORAL_CLOCK_INIT });
+};

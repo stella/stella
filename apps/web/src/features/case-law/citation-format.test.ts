@@ -211,3 +211,31 @@ describe("Hungarian citation typography", () => {
     }
   });
 });
+
+describe("British neutral citations", () => {
+  test.each(["GBR", "gbr", "GB", "gb"])(
+    "%s keeps the neutral citation and adds a paragraph locator",
+    (country) => {
+      expect(
+        formatDecisionCitation({
+          caseNumber: "[2024] UKSC 12",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          country,
+          court: "UKSC",
+          decisionDate: "2024-03-18",
+          decisionType: null,
+          ecli: null,
+          name: "Example v Example",
+          paragraph: null,
+          pincite: "42",
+        }),
+      ).toBe("Example v Example [2024] UKSC 12 [42]");
+    },
+  );
+
+  test("uses English quotation marks for corpus and region codes", () => {
+    for (const country of ["GBR", "gbr", "GB"]) {
+      expect(formatJurisdictionQuotation("text", country)).toBe("“text”");
+    }
+  });
+});

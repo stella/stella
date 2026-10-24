@@ -593,6 +593,11 @@ test("visual sandbox regeneration follows its shared error metadata owner", () =
 });
 
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
+  expect(
+    generatorsForFiles([
+      "packages/api-contract/src/document-version-upload.ts",
+    ]).map(({ id }) => id),
+  ).toContain("cli-registry");
   const requiredIds = [
     "capability-catalog",
     "capability-runtime",
