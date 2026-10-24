@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/statutes" });
@@ -31,7 +32,7 @@ globalThis.fetch = Object.assign(
     }
     if (url.pathname.endsWith("/organization-settings/ai-availability")) {
       availabilityReads += 1;
-      return Response.json({ available: true });
+      return Response.json(aiAvailableResponse());
     }
     // A reader opening its chat for the first time has no thread yet.
     if (/\/chat\/threads\/[^/]+\/messages$/u.test(url.pathname)) {

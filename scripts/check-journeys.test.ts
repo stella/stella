@@ -188,18 +188,27 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
   }
   if (pathname === "/desktop/release-workflow") {
     return Response.json({
-      workflow_runs: scenario.releaseWorkflowRuns ?? [
-        {
-          status: scenario.releaseWorkflowStatus ?? "completed",
-          conclusion: scenario.releaseWorkflowConclusion ?? "success",
-          created_at: "2026-10-09T09:00:00Z",
-        },
-      ],
+      workflow_runs: (
+        scenario.releaseWorkflowRuns ?? [
+          {
+            status: scenario.releaseWorkflowStatus ?? "completed",
+            conclusion: scenario.releaseWorkflowConclusion ?? "success",
+            created_at: "2026-10-09T09:00:00Z",
+          },
+        ]
+      ).map((run) => ({
+        ...run,
+        display_title: run.display_title ?? "Release Artifacts v10.0.0",
+      })),
     });
   }
-  // GitHub lists a workflow_run-triggered run under the default branch, so a
-  // branch-filtered query for the tag finds none of the desktop runs.
-  if (pathname === "/desktop/desktop-workflow-by-branch") {
+  // GitHub lists a dispatched release run and every workflow_run-triggered
+  // run under the default branch, so a branch-filtered query for the tag
+  // finds none of them.
+  if (
+    pathname === "/desktop/release-workflow-by-branch" ||
+    pathname === "/desktop/desktop-workflow-by-branch"
+  ) {
     return Response.json({ workflow_runs: [] });
   }
   if (pathname === "/desktop/desktop-workflow") {
@@ -214,7 +223,7 @@ const desktopFixture = ({ pathname, scenario }: DesktopFixtureOptions) => {
         ]
       ).map((run) => ({
         ...run,
-        display_title: run.display_title ?? "Release Desktop App v10.0.0",
+        display_title: run.display_title ?? "Desktop Release Artifacts v10.0.0",
       })),
     });
   }
@@ -405,6 +414,7 @@ case "$*" in
   *releases/tags*) route=release ;;
   *release-desktop.yml*branch=*) route=desktop-workflow-by-branch ;;
   *release-desktop.yml*) route=desktop-workflow ;;
+  *release.yml*branch=*) route=release-workflow-by-branch ;;
   *release.yml*) route=release-workflow ;;
   *) route=latest ;;
 esac
@@ -768,7 +778,7 @@ describe("scheduled read journeys", () => {
             status: "in_progress",
             conclusion: null,
             created_at: "2026-10-09T09:00:00Z",
-            display_title: "Release Desktop App v2.0.0",
+            display_title: "Desktop Release Artifacts v2.0.0",
           },
         ],
       },
@@ -777,6 +787,53 @@ describe("scheduled read journeys", () => {
     expect(result.exit).toBe(1);
     expect(result.stderr).toContain(
       "Desktop latest must match the newest stable application tag",
+    );
+  });
+  test("finds a dispatched release run for the tag by its run name", async () => {
+    const releaseRun = (display_title: string): WorkflowRun => ({
+      status: "in_progress",
+      conclusion: null,
+      created_at: "2026-10-09T09:00:00Z",
+      display_title,
+    });
+    const publishing = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [releaseRun("Release Artifacts v10.0.0")],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(publishing.exit).toBe(0);
+    expect(publishing.stdout).toBe("desktop-release-policy: publishing\n");
+
+    const otherTag = await run({
+      scenario: {
+        latest: "v2.0.0",
+        newestTagCreatedAt: "2020-01-01T00:00:00Z",
+        releaseWorkflowRuns: [releaseRun("Release Artifacts v2.0.0")],
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(otherTag.exit).toBe(1);
+    expect(otherTag.stderr).toContain(
+      "Desktop latest must match the newest stable application tag",
+    );
+  });
+  test("fails on a failed release run for the tag", async () => {
+    const result = await run({
+      scenario: {
+        latest: "v2.0.0",
+        releaseWorkflowConclusion: "failure",
+        desktopWorkflowRuns: [],
+      },
+      mode: "desktop",
+    });
+    expect(result.exit).toBe(1);
+    expect(result.stderr).toContain(
+      "Desktop release workflow failed for the newest stable application tag",
     );
   });
   test("rejects an old newest release that is not latest", async () => {

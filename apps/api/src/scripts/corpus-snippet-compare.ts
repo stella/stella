@@ -23,11 +23,11 @@ import {
   parseSnippetCompareQueryFile,
   passageSkipReason,
   renderSnippetCompareMarkdown,
-  snippetCompareReport,
   type SnippetCompareHit,
   type SnippetCompareOutcome,
   type SnippetCompareQuery,
   type SnippetCompareQueryRow,
+  snippetCompareReport,
 } from "@/api/scripts/corpus-snippet-compare-report";
 
 /**

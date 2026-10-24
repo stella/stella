@@ -7,8 +7,8 @@ import { sha256HexToBase64 } from "@stll/sha256";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  pendingUploads,
   type PendingUploadPurposeData,
+  pendingUploads,
   workspaces,
 } from "@/api/db/schema";
 import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -47,8 +47,8 @@ import { documentUploadFileFields } from "@/api/lib/uploads/file-metadata-schema
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
-  uploadTimeline,
   type UploadTimeline,
+  uploadTimeline,
 } from "@/api/lib/uploads/runtime";
 
 const TREE_KEY_MAX_LENGTH = 512;

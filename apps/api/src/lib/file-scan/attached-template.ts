@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
 import {
@@ -12,7 +12,7 @@ import {
   scanMediaType,
   scanMediaTypeSet,
 } from "@/api/lib/file-scan/media-type";
-import type { Match, Scanner, ScanContext } from "@/api/lib/file-scan/scanner";
+import type { Match, ScanContext, Scanner } from "@/api/lib/file-scan/scanner";
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
 
 const MAX_ARCHIVE_ENTRIES = 1000;
@@ -48,9 +48,7 @@ const RELATIONSHIPS_INSPECTION_FAILED: Match = {
 };
 
 type RelationshipEntryRead =
-  | { type: "ok"; xml: string }
-  | { type: "too-large" }
-  | { type: "unreadable" };
+  { type: "ok"; xml: string } | { type: "too-large" } | { type: "unreadable" };
 
 const isWordOpenXmlUpload = (context: ScanContext | undefined): boolean => {
   if (context === undefined) {

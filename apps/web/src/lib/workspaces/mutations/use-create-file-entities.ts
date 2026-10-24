@@ -28,7 +28,6 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
-import { validateUploadFileNotEmpty } from "@/lib/files/upload-file-validation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -77,9 +76,6 @@ const prepareFolderTreeUpload = async ({
   propertyId,
   plan,
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
-  for (const placement of plan.files) {
-    readQueryResult(validateUploadFileNotEmpty(placement.file.size));
-  }
   const reservable = folderReservableFiles(plan);
   const files = [];
   for (const { key, placement } of reservable) {
@@ -461,7 +457,8 @@ const runUploadBatch = async ({
       abort: async (uploadId) => await abortUpload(workspaceId, uploadId),
     });
     const queue = new UploadQueue<UploadResult>(
-      uploader.upload,
+      async (file, signal) =>
+        readQueryResult(await uploader.upload(file, signal)),
       MAX_PARALLEL_FILE_UPLOADS,
     );
 

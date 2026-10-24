@@ -12,11 +12,12 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { createSqlClient } from "@/api/db/sql-client";
 import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
 
 const EXIT_CODE = {
@@ -342,7 +343,7 @@ const run = async (
       }),
     );
   }
-  const sql = new SQL({
+  const sql = createSqlClient({
     connectionTimeout: DATABASE_CONNECTION_TIMEOUT_SECONDS,
     max: 1,
     url: databaseUrl,

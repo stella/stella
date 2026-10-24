@@ -4,9 +4,9 @@ import path from "node:path";
 
 import {
   actionAdmissionRefusalLines,
+  type CliActionAdmissionRefusal,
   readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
-  type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { inferFileMimeType } from "./file-mime-type.js";
 import { formatCapabilityCommand } from "./generate-capability-tree.js";
@@ -47,11 +47,17 @@ const UPLOAD_CAPABILITY_ACCESS = {
 const UPLOAD_PURPOSE = {
   createEntity: "entity_create",
 } as const;
-export const DOCUMENT_UPLOAD_POLICY = {
+type DocumentUploadPolicy = {
+  readonly maxBytes: number;
+  readonly minimumBytesPerSecond: number;
+  readonly putTimeoutMs: typeof DOCUMENT_UPLOAD_PUT_TIMEOUT_MS;
+};
+
+export const DOCUMENT_UPLOAD_POLICY: DocumentUploadPolicy = {
   maxBytes: 52_428_800, // 50 MiB
   minimumBytesPerSecond: 32_768, // 32 KiB/s
   putTimeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
-} as const;
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

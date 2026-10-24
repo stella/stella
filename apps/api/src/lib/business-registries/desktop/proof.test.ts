@@ -33,7 +33,7 @@ import {
   DESKTOP_REGISTRY_KEY_SECONDS,
   DESKTOP_REGISTRY_ROTATION_INTERVAL_SECONDS,
 } from "./config";
-import { VerifiedDesktopDeviceProof, desktopProofRequestUrl } from "./proof";
+import { desktopProofRequestUrl, VerifiedDesktopDeviceProof } from "./proof";
 
 const NOW = new Date("2026-10-06T12:00:00.000Z");
 const IAT = NOW.getTime() / 1000;
