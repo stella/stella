@@ -261,6 +261,11 @@ export type Measurement = {
   // some trials and passed in others is a same-head flake for the quarantine
   // history (scripts/flaky-test-history.ts).
   failedTests: Record<string, number>;
+  // The first assertion or error line each failing test printed, and the
+  // exit status of a failing trial that named no test, so a red gate says
+  // what failed without the trial output.
+  failureDetails?: Record<string, string>;
+  unnamedFailureStatus?: number;
   durationMs: number;
   planned: number;
 };
@@ -305,6 +310,23 @@ export const renderReport = (report: Report) =>
       ({ file, reason }) =>
         `| ${markdown(file)} | 0 | 0 | ${markdown(reason)} |`,
     ),
+    ...report.results.flatMap(
+      ({ file, failures, failureDetails = {}, unnamedFailureStatus }) => {
+        if (failures === 0) {
+          return [];
+        }
+        const named = Object.entries(failureDetails).map(
+          ([name, detail]) =>
+            `- \`${markdown(file)}\` › ${markdown(name)}: ${markdown(detail || "no assertion line printed")}`,
+        );
+        return unnamedFailureStatus === undefined
+          ? named
+          : [
+              ...named,
+              `- \`${markdown(file)}\`: a trial failed with exit status ${String(unnamedFailureStatus)} and named no test; rerun the file to see its output`,
+            ];
+      },
+    ),
     ...report.errors.map((error) => `\nRunner error: ${markdown(error)}`),
     "",
   ].join("\n");
@@ -339,6 +361,7 @@ export type RunOutcome =
       status: number;
       ranTests: boolean;
       failedTests: readonly string[];
+      failureDetails?: readonly { name: string; detail: string }[];
     }
   | { type: "no-tests"; reason: string };
 
@@ -367,15 +390,23 @@ const executionOutcome = (
   const output = `${outcome.stdout}\n${outcome.stderr}`;
   let ranTests: boolean;
   let failedTests: readonly string[];
+  let failureDetails: { name: string; detail: string }[] = [];
   switch (runner) {
     case "bun":
     case "api":
-    case "web":
+    case "web": {
       ranTests = /\b[1-9]\d* (?:pass|fail)\b/u.test(output);
-      failedTests = [
-        ...new Set(testFailures(output.split("\n")).map(({ name }) => name)),
-      ];
+      const failures = testFailures(output.split("\n"));
+      failedTests = [...new Set(failures.map(({ name }) => name))];
+      failureDetails = failures.map(({ name, detail }) => ({
+        name,
+        detail:
+          detail.find((line) => /\berror\b|Expected|Received/u.test(line)) ??
+          detail.at(0) ??
+          "",
+      }));
       break;
+    }
     case "rust":
       ranTests = /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
       failedTests = [];
@@ -390,6 +421,32 @@ const executionOutcome = (
     status: outcome.status,
     ranTests,
     failedTests,
+    ...(runner === "rust" ? {} : { failureDetails }),
+  };
+};
+
+// Records what a failing trial reported: the first line per failing test,
+// or the exit status when it named none.
+const recordFailure = (
+  result: Measurement,
+  outcome: Extract<RunOutcome, { type: "executed" }>,
+) => {
+  if (outcome.passed) {
+    return;
+  }
+  // Names without details (a runner that reports no detail lines) still
+  // name the failure.
+  const details =
+    outcome.failureDetails ??
+    outcome.failedTests.map((name) => ({ name, detail: "" }));
+  if (details.length === 0) {
+    result.unnamedFailureStatus = outcome.status;
+    return;
+  }
+  // The first trial's line wins: later trials repeat the same failure.
+  result.failureDetails = {
+    ...Object.fromEntries(details.map(({ name, detail }) => [name, detail])),
+    ...result.failureDetails,
   };
 };
 
@@ -533,7 +590,7 @@ export const executeGate = async ({
       continue;
     }
     measured.push({ file: target.file, durationMs });
-    report.results.push({
+    const first: Measurement = {
       file: target.file,
       runs: 1,
       failures: Number(!outcome.passed),
@@ -543,7 +600,9 @@ export const executeGate = async ({
       ),
       durationMs,
       planned: 1,
-    });
+    };
+    recordFailure(first, outcome);
+    report.results.push(first);
   }
   const plan = planRepeats(measured, remaining());
   // The plan spends the remaining budget as one serial pool, and one test
@@ -574,6 +633,9 @@ export const executeGate = async ({
       if (outcome.type === "no-tests" || !outcome.passed) {
         result.failures += 1;
         result.failedIterations.push(index + 1);
+      }
+      if (outcome.type === "executed") {
+        recordFailure(result, outcome);
       }
       for (const name of outcome.type === "executed"
         ? outcome.failedTests

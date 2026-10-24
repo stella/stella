@@ -10,10 +10,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import {
   analyzeModule,
   API_ALL_RULES,
   API_SHARD_SECONDS,
+  buildImportGraph,
   selectApiTestImpact,
 } from "./api-test-impact";
 import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
@@ -36,6 +38,8 @@ const withRepository = (
       }),
     );
     write("apps/api/package.json", JSON.stringify({ name: "@stll/api" }));
+    write("apps/web/x.tsx", "export const x = true;");
+    write("apps/landing/y.astro", "<main />");
     write("apps/api/src/tests/setup-env.ts", 'import "./preload-helper";');
     write("apps/api/src/tests/preload-helper.ts", "export const setup = true;");
     write(
@@ -198,36 +202,155 @@ test("preload dependencies always widen, while erased type imports do not select
   });
 });
 
-test("a planted source-text reader and transitive directory scanner run on every application change", () => {
+test("readers widen another app only when their paths can reach it", () => {
   withRepository((root, write) => {
     write(
-      "apps/api/src/text.test.ts",
-      'import { readFileSync } from "node:fs"; readFileSync("apps/web/src/screen.tsx");',
+      "apps/api/src/web-reader.ts",
+      'import { readFileSync } from "node:fs"; export const data = readFileSync("apps/web/x.tsx");',
     );
+    write("apps/api/src/web-reader.test.ts", 'import "./web-reader";');
     write(
-      "apps/api/src/list.ts",
-      'import { readdirSync } from "node:fs"; export const files = readdirSync("apps");',
+      "apps/api/src/root-reader.ts",
+      'import { readdirSync } from "node:fs"; export const files = readdirSync(process.cwd());',
     );
-    write("apps/api/src/list.test.ts", 'import "./list";');
+    write("apps/api/src/root-reader.test.ts", 'import "./root-reader";');
     write(
-      "apps/api/src/data-reader.ts",
-      'import { readFileSync } from "node:fs"; export const data = readFileSync("rules.yar");',
+      "apps/api/src/api-reader.ts",
+      'import { readFileSync } from "node:fs"; export const data = readFileSync("apps/api/rules.yar");',
     );
-    write("apps/api/src/data.test.ts", 'import "./data-reader";');
-    for (const changed of [
-      "apps/web/src/screen.tsx",
-      "apps/desktop/src/feature.ts",
-      "packages/example/src/feature.ts",
-    ]) {
-      const selection = selectApiTestImpact({ root, changed: [changed] });
-      expect(selection.mode).toBe("selected");
-      expect(selection.files).toContain("src/text.test.ts");
-      expect(selection.files).toContain("src/list.test.ts");
-      expect(selection.files).not.toContain("src/data.test.ts");
+    write("apps/api/src/api-reader.test.ts", 'import "./api-reader";');
+    write("apps/api/src/z.ts", "export const z = true;");
+    write("packages/p/q.ts", "export const q = true;");
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/root-reader.test.ts", "src/web-reader.test.ts"]);
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/landing/y.astro"] }).files,
+    ).toEqual(["src/root-reader.test.ts"]);
+    for (const changed of ["apps/api/src/z.ts", "packages/p/q.ts"]) {
+      expect(selectApiTestImpact({ root, changed: [changed] }).files).toEqual([
+        "src/api-reader.test.ts",
+        "src/root-reader.test.ts",
+        "src/web-reader.test.ts",
+      ]);
     }
-    expect(selectApiTestImpact({ root, changed: ["docs/guide.md"] }).mode).toBe(
-      "none",
+  });
+});
+
+test("another app is selected from text anywhere in a reader closure", () => {
+  withRepository((root, write) => {
+    write("apps/api/src/path.ts", 'export const target = "apps/web/x.tsx";');
+    write(
+      "apps/api/src/computed-reader.ts",
+      'import { readFileSync } from "node:fs"; export const read = (target: string) => readFileSync(target);',
     );
+    write(
+      "apps/api/src/computed-reader.test.ts",
+      'import "./path"; import "./computed-reader";',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/computed-reader.test.ts"]);
+  });
+});
+
+test("a root helper in another module and segment-built app paths reach another app", () => {
+  withRepository((root, write) => {
+    write("apps/api/src/root.ts", "export const root = process.cwd();");
+    write(
+      "apps/api/src/root-joined-reader.ts",
+      'import path from "node:path"; import { readFileSync } from "node:fs"; import { root } from "./root"; export const read = () => readFileSync(path.join(root, "x.tsx"));',
+    );
+    write(
+      "apps/api/src/root-joined-reader.test.ts",
+      'import "./root-joined-reader";',
+    );
+    write(
+      "apps/api/src/segment-reader.test.ts",
+      'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join("apps", "web", "x.tsx"));',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/root-joined-reader.test.ts", "src/segment-reader.test.ts"]);
+  });
+});
+
+test("a quoted app directory reaches that app", () => {
+  withRepository((root, write) => {
+    write(
+      "apps/api/src/web-dir-scanner.test.ts",
+      'import { readdirSync } from "node:fs"; readdirSync("apps/web");',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/web-dir-scanner.test.ts"]);
+  });
+});
+
+test("caller-only readers do not reach another app", () => {
+  withRepository((root, write) => {
+    write(
+      "apps/api/src/computed-reader.test.ts",
+      'import { readFileSync } from "node:fs"; export const read = (target: string) => readFileSync(target);',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).mode,
+    ).toBe("none");
+  });
+});
+
+test("wildcard globs, repository climbs and analysis failures reach another app", () => {
+  withRepository((root, write) => {
+    const cases = {
+      star: 'new Bun.Glob("apps/*/src/**/*.ts").scanSync();',
+      brace: 'new Bun.Glob("apps/{web,api}/src/**/*.ts").scanSync();',
+      starstar: 'new Bun.Glob("apps/**").scanSync();',
+      starsuffix: 'new Bun.Glob("apps/web*/src/**/*.ts").scanSync();',
+      slashclimb:
+        'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(import.meta.dir, "../", "../", "web", "x.tsx"));',
+      template:
+        // The fixture source holds a template literal; `$` and `{` are joined
+        // so this file's own string is not mistaken for one.
+        'import { readdirSync } from "node:fs"; const name = process.argv[2]; readdirSync(`apps/' +
+        "$" +
+        "{name}/src`);",
+      nested:
+        'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(path.dirname(import.meta.path), "sub", "..", "..", "..", "web", "x.tsx"));',
+      appsdir: 'import { readdirSync } from "node:fs"; readdirSync("apps/");',
+      root: 'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(import.meta.dir, "..", "..", ".."));',
+      failed:
+        'import "./missing"; import { readFileSync } from "node:fs"; readFileSync(target);',
+    };
+    for (const [name, source] of Object.entries(cases)) {
+      write(`apps/api/src/${name}.test.ts`, source);
+    }
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual([
+      "src/appsdir.test.ts",
+      "src/brace.test.ts",
+      "src/failed.test.ts",
+      "src/nested.test.ts",
+      "src/root.test.ts",
+      "src/slashclimb.test.ts",
+      "src/star.test.ts",
+      "src/starstar.test.ts",
+      "src/starsuffix.test.ts",
+      "src/template.test.ts",
+    ]);
+  });
+});
+
+test("relative import specifiers alone do not reach every app", () => {
+  withRepository((root, write) => {
+    write("lib/x.ts", "export const x = true;");
+    write(
+      "apps/api/src/import-reader.test.ts",
+      'import "../../../lib/x"; import { readFileSync } from "node:fs"; readFileSync(target);',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).mode,
+    ).toBe("none");
   });
 });
 
@@ -408,8 +531,8 @@ test("computed template imports and require calls retain their test importers", 
       'const file = "./handler"; require(file);',
     );
     expect(
-      selectApiTestImpact({ root, changed: ["apps/web/src/screen.tsx"] }).files,
-    ).toEqual(["src/loader.test.ts", "src/require.test.ts"]);
+      selectApiTestImpact({ root, changed: ["apps/web/src/screen.tsx"] }).mode,
+    ).toBe("none");
   });
 });
 
@@ -443,6 +566,31 @@ test("the repository graph reaches real handler tests and workspace consumers", 
   expect(handler.files.length).toBeLessThan(apiTestCount);
   expect(pkg.files.length).toBeLessThan(apiTestCount);
 }, 40_000);
+
+test("a real web change selects only tests with a web-reaching reader", () => {
+  const repositoryRoot = path.resolve(import.meta.dir, "..");
+  const selection = selectApiTestImpact({
+    changed: ["apps/web/src/components/globe.tsx"],
+  });
+  expect(selection.mode).toBe("selected");
+  // A share of the suite, not a count: the suite grows, and CI's tree also
+  // holds generated modules. Before this rule a web change selected about
+  // 41% of the API tests; a quarter is a generous ceiling over today's 14%.
+  const suite = listApiTestPaths(path.join(repositoryRoot, "apps/api"));
+  expect(selection.files.length).toBeLessThan(suite.length / 4);
+
+  const tests = selection.files.map((file) => `apps/api/${file}`);
+  const graph = buildImportGraph(repositoryRoot, tests);
+  for (const testPath of tests) {
+    expect(
+      [...graph.closure(testPath)].some((file) => {
+        const reach = graph.reaches.get(file);
+        return reach === "all" || reach?.has("web") === true;
+      }),
+      testPath,
+    ).toBe(true);
+  }
+}, 30_000);
 
 test("selection is a deterministic union through cycles, duplicates and reordered changes", () => {
   withRepository((root, write) => {
