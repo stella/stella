@@ -469,10 +469,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-sqs"],
   },
   {
-    path: "apps/api/src/lib/observability/otel.ts",
+    path: "apps/api/src/lib/observability/otlp-log-exporter.ts",
     class: "operator-configured-infrastructure",
     reason: "Exports sanitized logs to the configured OTLP endpoint.",
-    transports: ["module:@opentelemetry/exporter-logs-otlp-http"],
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "apps/api/src/lib/stella-openrouter-text-adapter.ts",
@@ -615,10 +615,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/infosoud"],
   },
   {
-    path: "apps/api/src/lib/analytics/posthog-node.ts",
-    class: "vendor-sdk",
-    reason: "Sends configured analytics events to the PostHog service.",
-    transports: ["module:posthog-node"],
+    path: "apps/api/src/lib/analytics/posthog-client.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Sends configured analytics events to the PostHog batch API.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "apps/api/src/lib/email/inbound/authentication.ts",
