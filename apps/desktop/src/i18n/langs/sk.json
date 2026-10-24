@@ -241,6 +241,7 @@
     "strikethrough": "Prečiarknuté",
     "underline": "Podčiarknuté",
     "unnamedClip": "Text",
+    "clipName": "Názov",
     "allClips": "Všetky klipy",
     "clips": "Klipy",
     "externalRegistry": "Externý register",

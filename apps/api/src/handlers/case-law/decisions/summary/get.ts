@@ -27,11 +27,122 @@ import {
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
 import { tSafeId } from "@/api/lib/custom-schema";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 import {
   decisionSummaryResponseSchema,
   projectDecisionSummary,
 } from "../summary-response";
+
+const DECISION_SUMMARY_COLUMNS = {
+  id: publishedCaseLawDecisions.id,
+  caseNumber: publishedCaseLawDecisions.caseNumber,
+  court: publishedCaseLawDecisions.court,
+  courtId: publishedCaseLawDecisions.courtId,
+  country: publishedCaseLawDecisions.country,
+  decisionDate: publishedCaseLawDecisions.decisionDate,
+  decisionType: publishedCaseLawDecisions.decisionType,
+  headnote: publisherHeadnoteMetadataSql(publishedCaseLawDecisions.metadata),
+  keywords: publisherKeywordsMetadataSql(publishedCaseLawDecisions.metadata),
+  citationCount: publishedCaseLawDecisions.citationCount,
+};
+
+type PublishedDecisionRow = typeof publishedCaseLawDecisions.$inferSelect;
+// The metadata expressions select only publisher headnote/keywords; neither
+// the rest of metadata nor document bodies belong in a hover-card read.
+type SummaryDecisionSource = Omit<
+  typeof DECISION_SUMMARY_COLUMNS,
+  "headnote" | "keywords"
+> &
+  Pick<PublishedDecisionRow, "metadata">;
+const UNSELECTED_SUMMARY_COLUMNS = [
+  // Publisher identity and alternate addressing are available on the full read.
+  "sourceId",
+  "caseNumberType",
+  "citationKey",
+  "docketFamilyKey",
+  "slug",
+  "ecli",
+  "language",
+  "languageGroupKey",
+  "sourceUrl",
+  "documentUrl",
+  "sourceDocumentId",
+  "sheetNumber",
+  // Documents, raw observations and analysis are deliberately never loaded by hover.
+  "fulltext",
+  "sections",
+  "documentAst",
+  "analysis",
+  "parserVersion",
+  "sourceRaw",
+  "sourceRawS3Key",
+  "sourceRawContentType",
+  "textS3Key",
+  "normalizedS3Key",
+  "astS3Key",
+  // Ingestion, publication and indexing lifecycle stays on the server.
+  "textlessDetailRecheckedAt",
+  "documentFetchRequestedAt",
+  "documentFetchAttemptedAt",
+  "documentFetchAttempts",
+  "sourceHash",
+  "sourceObservedAt",
+  "sourceObservationOrder",
+  "sourceObservationHash",
+  "redactedAt",
+  "corpusMirrorStatus",
+  "citationAuthority",
+  "citationAuthorityComputedAt",
+  "contentHash",
+  "indexedHash",
+  "indexedGeneration",
+  "indexedAt",
+  "projectionEpoch",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof PublishedDecisionRow)[];
+type MissingSummarySourceColumn = UnprojectedColumns<
+  PublishedDecisionRow,
+  SummaryDecisionSource,
+  (typeof UNSELECTED_SUMMARY_COLUMNS)[number]
+>;
+type UnexpectedSummarySourceColumn = UnbackedProjectionKeys<
+  PublishedDecisionRow,
+  SummaryDecisionSource,
+  (typeof UNSELECTED_SUMMARY_COLUMNS)[number]
+>;
+true satisfies MissingSummarySourceColumn extends never ? true : never;
+true satisfies UnexpectedSummarySourceColumn extends never ? true : never;
+
+const REPORTER_PUBLICATION_COLUMNS = {
+  value: caseLawDecisionIdentifiers.value,
+};
+type ReporterIdentifierRow = typeof caseLawDecisionIdentifiers.$inferSelect;
+const UNSELECTED_REPORTER_COLUMNS = [
+  // The gated decision and fixed reporter type are query predicates, not card fields.
+  "decisionId",
+  "type",
+  // Normalization, alias provenance and ingestion time do not describe the publication.
+  "normalizedValue",
+  "declaredAt",
+  "createdAt",
+] as const satisfies readonly (keyof ReporterIdentifierRow)[];
+type MissingReporterColumn = UnprojectedColumns<
+  ReporterIdentifierRow,
+  typeof REPORTER_PUBLICATION_COLUMNS,
+  (typeof UNSELECTED_REPORTER_COLUMNS)[number]
+>;
+type UnexpectedReporterColumn = UnbackedProjectionKeys<
+  ReporterIdentifierRow,
+  typeof REPORTER_PUBLICATION_COLUMNS,
+  (typeof UNSELECTED_REPORTER_COLUMNS)[number]
+>;
+true satisfies MissingReporterColumn extends never ? true : never;
+true satisfies UnexpectedReporterColumn extends never ? true : never;
 
 /** A bounded, stored-only projection for citation cards. */
 const readDecisionSummary = async (
@@ -39,29 +150,13 @@ const readDecisionSummary = async (
 ): Promise<CaseLawDecisionSummary> => {
   const [decision, publication, courtWeights] = await Promise.all([
     subject.tx
-      .select({
-        id: publishedCaseLawDecisions.id,
-        caseNumber: publishedCaseLawDecisions.caseNumber,
-        court: publishedCaseLawDecisions.court,
-        courtId: publishedCaseLawDecisions.courtId,
-        country: publishedCaseLawDecisions.country,
-        ecli: publishedCaseLawDecisions.ecli,
-        decisionDate: publishedCaseLawDecisions.decisionDate,
-        decisionType: publishedCaseLawDecisions.decisionType,
-        headnote: publisherHeadnoteMetadataSql(
-          publishedCaseLawDecisions.metadata,
-        ),
-        keywords: publisherKeywordsMetadataSql(
-          publishedCaseLawDecisions.metadata,
-        ),
-        citationCount: publishedCaseLawDecisions.citationCount,
-      })
+      .select(DECISION_SUMMARY_COLUMNS)
       .from(publishedCaseLawDecisions)
       .where(eq(publishedCaseLawDecisions.id, subject.id))
       .limit(1)
       .then((rows) => rows.at(0)),
     subject.tx
-      .select({ value: caseLawDecisionIdentifiers.value })
+      .select(REPORTER_PUBLICATION_COLUMNS)
       .from(caseLawDecisionIdentifiers)
       .where(
         and(
@@ -106,7 +201,7 @@ const readDecisionSummaryRoute = createSafePublicSubjectHandler({
     contract: "patch",
     access: "read",
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "covered", by: "read_case_law_decision" },
+    mcp: { type: "internal", reason: "search_ui" },
     cache: { kind: "none" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     response: safePublicHandlerResponseSchemasWithStatusText(
