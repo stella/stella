@@ -44,7 +44,8 @@
     "capture:product-story": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun e2e/marketing/record-product-story.ts",
     "test:e2e:staging": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.staging.config.ts",
     "test:e2e:ui": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.config.ts --ui",
-    "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts"
+    "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts",
+    "test:e2e:journeys": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.journeys.config.ts"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
@@ -190,6 +191,7 @@
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/render-probe": "workspace:*",
+    "@stll/sanctions": "workspace:*",
     "@stll/scripts": "workspace:*",
     "@stll/ssr-testkit": "workspace:^",
     "@stll/typescript-config": "workspace:*",
