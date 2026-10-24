@@ -514,8 +514,7 @@ export const validateSchemaIntrospection = ({
         return;
       }
       let knownNonDatabaseReceiver:
-        | ReturnType<typeof nonDatabaseMethodReceiver>
-        | undefined;
+        ReturnType<typeof nonDatabaseMethodReceiver> | undefined;
       const dependency = (specifier: string, full: boolean): void => {
         const module = canonicalModuleId(specifier, file);
         if (

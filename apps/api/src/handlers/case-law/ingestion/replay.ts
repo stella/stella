@@ -4,14 +4,14 @@ import {
   asc,
   desc,
   eq,
+  gt,
   isNotNull,
   isNull,
-  gt,
-  lte,
   lt,
+  lte,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
@@ -21,8 +21,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawReplayBlocked,
   caseLawReplayBatches,
+  caseLawReplayBlocked,
 } from "@/api/db/schema";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -72,11 +72,11 @@ import type { ParserReparseScope } from "@/api/lib/legal-search/parser-reparse-s
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 import {
-  REPLAY_PREVIEW_FAILURE,
   classifyReplayFailure,
+  REPLAY_PREVIEW_FAILURE,
+  type ReplayFailure,
   replayFailure,
   ReplayStageError,
-  type ReplayFailure,
 } from "./replay-failure";
 
 /**
@@ -577,8 +577,8 @@ export const countReplayability = async ({
       // sql-perf-allow: bounded by one explicit operator replay preflight
       await tx
         .select({
-          storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
-          needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
+          storedLocally: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)::int`,
+          needsRefetch: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)::int`,
         })
         .from(caseLawDecisions)
         .where(
@@ -591,8 +591,8 @@ export const countReplayability = async ({
   );
 
   return {
-    storedLocally: Number(counts?.storedLocally ?? 0),
-    needsRefetch: Number(counts?.needsRefetch ?? 0),
+    storedLocally: counts?.storedLocally ?? 0,
+    needsRefetch: counts?.needsRefetch ?? 0,
   };
 };
 
@@ -1492,8 +1492,7 @@ export const acquireReplayLease = async <TLease>({
  * means the first must not read as a very large second.
  */
 export type ReplayVisitBound =
-  | { type: "all" }
-  | { type: "at-most"; limit: number };
+  { type: "all" } | { type: "at-most"; limit: number };
 
 export type ReplayCaseLawSourceOptions = {
   signal?: AbortSignal;

@@ -39,9 +39,9 @@ import path from "node:path";
 
 import { isAutofixProtectedPath } from "./autofix-protected-paths";
 import {
-  GENERATORS,
-  type Generator,
   allowedOutputs,
+  type Generator,
+  GENERATORS,
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,
@@ -987,9 +987,7 @@ export const push = async ({
       if (response.status < 500 || attempt >= attempts) {
         return fail(`${route} answered ${String(response.status)}`);
       }
-      await new Promise((resolve) =>
-        setTimeout(resolve, retryDelayMs * attempt),
-      );
+      await Bun.sleep(retryDelayMs * attempt);
     }
   };
   const field = (value: unknown, ...keys: string[]): unknown => {

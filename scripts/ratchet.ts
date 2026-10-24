@@ -74,8 +74,8 @@ import {
   isExcludedTestInclusiveSource,
 } from "./source-globs";
 import {
-  unmanagedTransitionTables,
   statusWriteCalls,
+  unmanagedTransitionTables,
 } from "./status-write-shapes";
 import { countUndeclaredEdenWrites } from "./undeclared-eden-writes";
 import {
@@ -88,6 +88,13 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
+
+// The single owners of a transport: callers reach fetch and Bun SQL clients
+// through them, so their own acquisition is the capability, not a legacy site.
+const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/db/sql-client.ts",
+]);
 
 // Shared source globs + exclusions for the app-source metrics.
 const APP_SOURCE_GLOBS = [
@@ -1412,7 +1419,7 @@ const countUnhandledDetachedPromises = (content: string): number => {
 // counters extract module specifiers per line and resolve them against the
 // importing file's path. Deliberately NOT literal-stripped: import specifiers
 // ARE string literals. Fidelity limits: the specifier must sit on the same
-// line as its `from`/`import(`/`import` keyword (oxfmt formats imports that
+// line as its `from`/`import(`/`import` keyword (bun fmt formats imports that
 // way), and an import-shaped string inside a template literal would count
 // (stable noise; none today).
 const MODULE_SPECIFIER =
@@ -3060,10 +3067,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       for (const file of scanRepoFiles(context, [
         "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
       ])) {
-        if (
-          !isApiProductionModule(file) ||
-          file === "apps/api/src/lib/safe-outbound-fetch.ts"
-        ) {
+        if (!isApiProductionModule(file) || TRANSPORT_OWNER_MODULES.has(file)) {
           continue;
         }
         for (const capability of outboundTransportReferences({

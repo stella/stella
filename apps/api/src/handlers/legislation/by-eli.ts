@@ -25,8 +25,8 @@ import {
 import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
 import { legislationWorkIdentifierCondition } from "@/api/lib/legal-search/legislation-work-identifiers";
 import type {
-  LegislationReadTransaction,
   LegislationReadDb,
+  LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 
 export const readStatuteByEliQuerySchema = t.Object({

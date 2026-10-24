@@ -4,35 +4,35 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  writeRawSourcePayload,
   RAW_SOURCE_FAMILY,
+  writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 import { SoftLawBlockedError } from "@/api/lib/legal-search/soft-law-access-types";
 import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-authority-policy";
 import {
-  softLawIdentityKey,
   softLawContentHash,
+  softLawIdentityKey,
 } from "@/api/lib/legal-search/soft-law-fingerprint";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
-  SoftLawObservation,
   SoftLawAttempt,
+  SoftLawObservation,
 } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import {
+  isTextlessExtraction,
+  SOFT_LAW_BATCH_LIMIT,
   SoftLawIngestionError,
   SoftLawItemError,
   SoftLawListingIncompleteError,
-  SOFT_LAW_BATCH_LIMIT,
-  isTextlessExtraction,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
-  SoftLawSourceAdapter,
-  SoftLawEntry,
   SoftLawDiscoveryEntry,
   SoftLawDocumentInput,
+  SoftLawEntry,
   SoftLawMetadata,
+  SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
 import { createSoftLawFetch } from "./publisher-access";

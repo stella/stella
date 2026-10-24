@@ -23,19 +23,19 @@ import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapter
 import type {
   FailedSliceCandidate,
   LedgerSlice,
-  ShortSliceCandidate,
   SelectReconciliationWorkUnitInput,
+  ShortSliceCandidate,
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
-  RECONCILIATION_FAILED_SLICE_RETRY_MS,
-  RECONCILIATION_SETTLED_RECHECK_MS,
-  RECONCILIATION_SLICE_STALE_MS,
-  SLICE_WALK_REASON,
   floorSliceWalk,
   isSliceSettled,
   partitionShortSliceCandidates,
+  RECONCILIATION_FAILED_SLICE_RETRY_MS,
+  RECONCILIATION_SETTLED_RECHECK_MS,
+  RECONCILIATION_SLICE_STALE_MS,
   selectReconciliationWorkUnit,
+  SLICE_WALK_REASON,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { toUtcDateString } from "@/api/lib/dates";

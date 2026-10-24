@@ -23,20 +23,20 @@ import {
 
 import { AIConfigModelRow } from "@/components/ai-config-model-row";
 import {
+  DEFAULT_MODELS_BY_PROVIDER,
   getModelOptionsForRole,
   getRolePickerRows,
   isProviderRoleSupported,
   isProviderValue,
   PROVIDER_LABELS,
-  DEFAULT_MODELS_BY_PROVIDER,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ModelSelection,
+  ProviderDefaultRoleModels,
   ProviderValue,
+  RoleModelOverrides,
   RoleModelSelections,
   RoleValue,
-  RoleModelOverrides,
-  ProviderDefaultRoleModels,
 } from "@/components/ai-config-role-models.logic";
 
 type AIConfigRoleModelPickerProps = {

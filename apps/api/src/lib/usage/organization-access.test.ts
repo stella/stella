@@ -16,9 +16,9 @@ import {
   type ConfiguredAccess,
 } from "@/api/lib/usage/configured-access";
 import {
-  resolveOrganizationAccess,
   type FreeTier,
   type OrganizationAccessType,
+  resolveOrganizationAccess,
 } from "@/api/lib/usage/organization-access";
 import type {
   OrganizationAccessSnapshot,

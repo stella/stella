@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
+      "accountRestricted": "Nastavení poskytovatele AI není pro tento účet dostupné.",
+      "configUnreadable": "Konfiguraci poskytovatele AI nelze načíst. Požádejte správce organizace o nové připojení.",
       "cta": "Otevřít nastavení AI",
       "description": "Přidejte přihlašovací údaje poskytovatele a začněte používat funkce AI.",
+      "permissionRequired": "Poskytovatele AI může připojit pouze správce organizace.",
+      "seatRequired": "Požádejte správce organizace, aby vám přidělil licenci.",
       "title": "Připojit poskytovatele AI"
     },
     "refinePlaceholder": "Jak má AI upravit znění?",
@@ -3525,6 +3529,12 @@
       "title": "Slovníček pro anonymizaci",
       "unsupportedVisualContent": "Tento soubor obsahuje obrázky nebo vektorovou grafiku, u kterých nelze ověřit citlivý text. Export není k dispozici.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
+    },
+    "conversionRefusal": {
+      "legacyFormat": "Toto je starší soubor {format}. Chcete-li jej převést, uložte jej znovu jako {replacementExtension}.",
+      "unsupportedEncoding": "Tento dokument používá nepodporované kódování {encoding}, takže jej nelze převést.",
+      "unsupportedField": "Tento dokument obsahuje pole {fieldType}, které nelze převést.",
+      "unsupportedReference": "Tento dokument odkazuje na externí prostředek v {element} {attribute}, takže jej nelze převést."
     },
     "external": {
       "confirmDescription": "Chystáte se navštívit externí web.",
