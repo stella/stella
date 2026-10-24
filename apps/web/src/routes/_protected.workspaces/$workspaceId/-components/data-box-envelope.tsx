@@ -99,18 +99,20 @@ export const DataBoxEnvelope = ({
 
   return (
     <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-      <h2 className="text-sm font-medium sm:col-span-2">
-        {t("correspondence.dataBox.statedInFile")}
+      <div className="space-y-1 sm:col-span-2">
+        <h2 className="text-sm font-medium">
+          {t("correspondence.dataBox.statedInFile")}
+        </h2>
         {envelope.directionBasis !== "organization_recipient" && (
-          <span className="text-muted-foreground ms-2 text-xs font-normal">
+          <p className="text-muted-foreground text-xs">
             {t(
               envelope.directionBasis === "organization_sender"
                 ? "correspondence.dataBox.sent"
                 : "correspondence.dataBox.directionUnknown",
             )}
-          </span>
+          </p>
         )}
-      </h2>
+      </div>
       <Field label={t("emailViewer.from")}>
         <Party contacts={contacts.sender} party={envelope.sender} />
       </Field>

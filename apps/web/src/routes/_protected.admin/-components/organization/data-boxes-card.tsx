@@ -17,6 +17,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { allCorrespondenceQueryRoot } from "@/lib/resource-query-roots.logic";
@@ -53,10 +54,14 @@ export const OrganizationDataBoxesCard = () => {
     );
   const add = useSettingsMutation({
     mutationFn: async (boxId: string) =>
-      unwrapEden(
-        await api["organization-settings"].correspondence["data-boxes"].post({
-          boxId,
-        }),
+      invokeCapability(
+        "organization-settings.correspondence.data-boxes.create",
+        async (request) =>
+          unwrapEden(
+            await api["organization-settings"].correspondence[
+              "data-boxes"
+            ].post({ boxId }, request),
+          ),
       ),
     invalidate: organizationDataBoxesKeys.all,
     errorToast: { title: t("errors.actionFailed") },
@@ -67,10 +72,14 @@ export const OrganizationDataBoxesCard = () => {
   });
   const remove = useSettingsMutation({
     mutationFn: async (boxId: string) =>
-      unwrapEden(
-        await api["organization-settings"].correspondence["data-boxes"]({
-          boxId,
-        }).delete(),
+      invokeCapability(
+        "organization-settings.correspondence.data-boxes.delete",
+        async (request) =>
+          unwrapEden(
+            await api["organization-settings"].correspondence["data-boxes"]({
+              boxId,
+            }).delete(undefined, request),
+          ),
       ),
     invalidate: organizationDataBoxesKeys.all,
     errorToast: { title: t("errors.actionFailed") },

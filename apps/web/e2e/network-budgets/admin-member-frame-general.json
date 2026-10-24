@@ -1,6 +1,6 @@
 {
   "route": "/admin/general",
-  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data.",
+  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. Organization correspondence controls also read the bounded inventory of at most 20 own data-box IDs.",
   "budget": {
     "depth": 5,
     "requests": [
@@ -14,6 +14,7 @@
       "GET /v1/notifications/events",
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
+      "GET /v1/organization-settings/correspondence/data-boxes",
       "GET /v1/organization-settings/deployment-features",
       "GET /v1/signals/count",
       "GET /v1/time-timers",
@@ -30,6 +31,7 @@
       "GET /v1/notifications/events": 1,
       "GET /v1/organization-settings": 1,
       "GET /v1/organization-settings/ai-availability": 1,
+      "GET /v1/organization-settings/correspondence/data-boxes": 1,
       "GET /v1/organization-settings/deployment-features": 1,
       "GET /v1/signals/count": 1,
       "GET /v1/time-timers": 1,
@@ -46,6 +48,7 @@
       "GET /v1/notifications/events": 4,
       "GET /v1/organization-settings": 4,
       "GET /v1/organization-settings/ai-availability": 4,
+      "GET /v1/organization-settings/correspondence/data-boxes": 4,
       "GET /v1/organization-settings/deployment-features": 5,
       "GET /v1/signals/count": 4,
       "GET /v1/time-timers": 7,
@@ -61,6 +64,7 @@
       "GET /v1/notifications": 4096,
       "GET /v1/organization-settings": 1024,
       "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/organization-settings/correspondence/data-boxes": 1024,
       "GET /v1/organization-settings/deployment-features": 1024,
       "GET /v1/signals/count": 1024,
       "GET /v1/time-timers": 1024,
