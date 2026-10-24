@@ -176,15 +176,11 @@ const isFlagOff = (node: ts.Node): boolean => {
 // Follow only values supplied to ledger inputs. A nearby ledger call cannot
 // account for an unrelated callback, collection, or shadowed declaration.
 type StorageCallback =
-  | ts.ArrowFunction
-  | ts.FunctionExpression
-  | ts.FunctionDeclaration;
+  ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration;
 
 const collectCallbackFlow = (ast: ts.SourceFile) => {
   const bindings: (
-    | ts.VariableDeclaration
-    | ts.ParameterDeclaration
-    | ts.FunctionDeclaration
+    ts.VariableDeclaration | ts.ParameterDeclaration | ts.FunctionDeclaration
   )[] = [];
   const calls: ts.CallExpression[] = [];
   const collect = (candidate: ts.Node) => {

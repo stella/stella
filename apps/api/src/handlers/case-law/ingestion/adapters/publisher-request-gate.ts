@@ -151,8 +151,7 @@ const loadRedisClient = async () => {
 };
 
 let deployedStore:
-  | ReturnType<typeof RedisClientModule.createAdmissionRedis>
-  | undefined;
+  ReturnType<typeof RedisClientModule.createAdmissionRedis> | undefined;
 const deployedGateClient = async () => {
   const { createAdmissionRedis } = await loadRedisClient();
   deployedStore ??= createAdmissionRedis();

@@ -12,6 +12,27 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "task-metadata": {
+    load: async () => {
+      const { TaskMetadataPlayground } =
+        await import("./-components/task-metadata-playground");
+      return { default: TaskMetadataPlayground };
+    },
+  },
+  "column-composer": {
+    load: async () => {
+      const { ColumnComposerPlayground } =
+        await import("./-components/column-composer-playground");
+      return { default: ColumnComposerPlayground };
+    },
+  },
+  "handoff-confirmation": {
+    load: async () => {
+      const { HandoffConfirmationPlayground } =
+        await import("./-components/handoff-confirmation-playground");
+      return { default: HandoffConfirmationPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =
@@ -31,6 +52,13 @@ const visualLoaders = {
       const { OAuthConsentPlayground } =
         await import("./-components/oauth-consent-playground");
       return { default: OAuthConsentPlayground };
+    },
+  },
+  "upload-rejections": {
+    load: async () => {
+      const { UploadRejectionsPlayground } =
+        await import("./-components/upload-rejections-playground");
+      return { default: UploadRejectionsPlayground };
     },
   },
   "page-crop": {
@@ -66,6 +94,20 @@ const visualLoaders = {
       const { ChatCitationsPlayground } =
         await import("./-components/chat-citations-playground");
       return { default: ChatCitationsPlayground };
+    },
+  },
+  "chat-statute-citations": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_STATUTE_CITATIONS_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-statute-citations-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_STATUTE_CITATIONS_CASSETTE} />
+        ),
+      };
     },
   },
   "chat-link-icons": {

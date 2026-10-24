@@ -9,12 +9,12 @@ import { jsonSchemaToType } from "../src/lib/json-schema/json-schema-to-type";
 import { toJsonSchema } from "../src/lib/json-schema/valibot-to-json-schema";
 import {
   APP_CITATION_PAGE_SCHEMA,
-  APP_PROVISION_HISTORY_SCHEMA,
-  APP_SEARCH_SCHEMA,
-  APP_RESOLVE_SCHEMA,
-  APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
+  APP_OPEN_DECISION_SCHEMA,
+  APP_PROVISION_HISTORY_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
+  APP_RESOLVE_SCHEMA,
+  APP_SEARCH_SCHEMA,
 } from "../src/mcp/app-browser-contracts";
 import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";

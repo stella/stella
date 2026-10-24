@@ -8,9 +8,9 @@ import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import {
   OAUTH_ENDPOINT_POLICY,
+  OAUTH_REGISTRATION_SCOPE_POLICY,
   OAUTH_SCOPE_POLICY_PATHS,
   OPEN_REGISTRATION_SCOPES,
-  OAUTH_REGISTRATION_SCOPE_POLICY,
 } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
@@ -25,8 +25,8 @@ import {
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import {
   OAUTH_CLIENT_REGISTRATION_FIXTURES,
-  OAUTH_REQUIRED_CALLBACK_FIXTURES,
   OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES,
+  OAUTH_REQUIRED_CALLBACK_FIXTURES,
 } from "@/api/tests/helpers/oauth-client-registration-fixtures";
 import {
   authorizeOAuthClient,

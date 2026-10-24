@@ -9,6 +9,7 @@
       "noOtherSessions": "Žádná další aktivní sezení",
       "revokeOtherSessions": "Odhlásit ostatní zařízení",
       "revokeOtherSessionsConfirm": "Tímto ukončíte všechna sezení kromě aktuálního.",
+      "signedInFrom": "Přihlášení přes {clientName}",
       "unknownDevice": "Neznámé zařízení"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
+      "accountRestricted": "Nastavení poskytovatele AI není pro tento účet dostupné.",
+      "configUnreadable": "Konfiguraci poskytovatele AI nelze načíst. Požádejte správce organizace o nové připojení.",
       "cta": "Otevřít nastavení AI",
       "description": "Přidejte přihlašovací údaje poskytovatele a začněte používat funkce AI.",
+      "permissionRequired": "Poskytovatele AI může připojit pouze správce organizace.",
+      "seatRequired": "Požádejte správce organizace, aby vám přidělil licenci.",
       "title": "Připojit poskytovatele AI"
     },
     "refinePlaceholder": "Jak má AI upravit znění?",
@@ -137,6 +142,8 @@
       "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
       "title": "Nepodařilo se vás přihlásit"
     },
+    "handoffAccount": "Pokračovat jako <account>{email}</account> v organizaci <organization>{organizationName}</organization>?",
+    "handoffTitle": "Pokračovat v aplikaci stella",
     "headline": "Jasno v každém případě.",
     "invitation": {
       "declined": "Pozvánka odmítnuta",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Moje organizace",
     "password": "Heslo",
     "professionalUse": {
-      "description": "Při zakládání vašeho účtu se vám toto prohlášení nezobrazilo. Pro pokračování ho přijměte.",
       "title": "Potvrďte profesní použití"
     },
     "professionalUseStatement": "Vytvořením účtu potvrzujete, že stellu používáte pro profesní účely, a berete na vědomí, že stella je nástroj pro právní profesionály a nenahrazuje právní poradenství.",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
+    "reauthenticationRequired": "Pro pokračování v této akci se znovu přihlaste.",
     "resendCode": "Poslat kód znovu na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
@@ -950,7 +957,8 @@
       "searchable": "Dostupné k vyhledání",
       "title": "Pokrytí judikatury",
       "totalFrom": "Celkem k {date}",
-      "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."
+      "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici.",
+      "unreadListingPeriods": "Nenačtená období výpisu"
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "decisionTypes": {
@@ -3522,6 +3530,12 @@
       "unsupportedVisualContent": "Tento soubor obsahuje obrázky nebo vektorovou grafiku, u kterých nelze ověřit citlivý text. Export není k dispozici.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Toto je starší soubor {format}. Chcete-li jej převést, uložte jej znovu jako {replacementExtension}.",
+      "unsupportedEncoding": "Tento dokument používá nepodporované kódování {encoding}, takže jej nelze převést.",
+      "unsupportedField": "Tento dokument obsahuje pole {fieldType}, které nelze převést.",
+      "unsupportedReference": "Tento dokument odkazuje na externí prostředek v {element} {attribute}, takže jej nelze převést."
+    },
     "external": {
       "confirmDescription": "Chystáte se navštívit externí web.",
       "confirmTitle": "Otevřít externí odkaz?",
@@ -4221,6 +4235,22 @@
       "guestStorageUnavailable": "Zvýraznění a poznámky se na této kartě nepodařilo uložit.",
       "highlight": "Zvýraznit",
       "highlightedPassage": "Zvýrazněná pasáž",
+      "history": {
+        "colorRestored": "Barva obnovena",
+        "commentRemoved": "Komentář odebrán",
+        "commentRestored": "Komentář obnoven",
+        "highlightRemoved": "Zvýraznění odebráno",
+        "highlightRestored": "Zvýraznění obnoveno",
+        "markChanged": "Zvýraznění nebo komentář se mezitím změnily jinde, proto zůstávají beze změny.",
+        "markGone": "Toto zvýraznění nebo komentář už neexistuje.",
+        "nothingToRedo": "Není co opakovat",
+        "nothingToUndo": "Není co vrátit",
+        "redoShortcut": "Znovu provést změnu zvýraznění nebo komentáře",
+        "styleRestored": "Styl obnoven",
+        "textRestored": "Text komentáře obnoven",
+        "undoShortcut": "Vrátit změnu zvýraznění nebo komentáře",
+        "visibilityRestored": "Sdílení obnoveno"
+      },
       "removeHighlight": "Odebrat zvýraznění",
       "sharedBadge": "Sdíleno",
       "styleHighlight": "Zvýraznění",
@@ -4938,7 +4968,7 @@
       "description": "Používejte stellu ze svého AI asistenta a mějte přehled, co má přístup k vašemu účtu.",
       "developerDescription": "Adresy serveru a nástroj pro příkazový řádek pro technická nastavení.",
       "developerTitle": "Přístup pro vývojáře",
-      "disconnectConfirmDescription": "Tím zrušíte přístup aplikace {clientName} k vašemu účtu i všechny tokeny, které vydala. Kdykoli se můžete znovu připojit.",
+      "disconnectConfirmDescription": "Tím zrušíte přístup aplikace {clientName} k vašemu účtu i všechny tokeny, které vydala. Kdykoli se můžete znovu připojit. Odhlásí se také relace prohlížeče vytvořené přes toto připojení.",
       "disconnectConfirmTitle": "Odpojit aplikaci {clientName}?",
       "disconnectSuccess": "Aplikace {clientName} byla odpojena",
       "integrationsDescription": "Externí služby, které za vás AI může používat, například úložiště dokumentů.",
@@ -5991,6 +6021,7 @@
       "downloadFailed": "Stažení se nezdařilo",
       "downloadPdf": "Stáhnout jako PDF",
       "downloadSearchablePdf": "Prohledávatelné PDF",
+      "emptyFile": "Soubor je prázdný.",
       "includeReferenceNumber": "Přidat referenční číslo",
       "itemLimitReached": "Tento spis dosáhl limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",

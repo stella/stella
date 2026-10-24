@@ -5,7 +5,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 
 import { member } from "@/api/db/auth-schema";
-import type { rootDb, rlsDb } from "@/api/db/root";
+import type { rlsDb, rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   agentSkillResources,

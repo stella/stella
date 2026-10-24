@@ -119,6 +119,21 @@ test("requests no decision until clicked, switches kind, returns to table and re
   expect(calls).toBe(1);
 });
 
+test("a table without a numeric column offers no chart", () => {
+  let calls = 0;
+  const view = mount(
+    async () => {
+      calls += 1;
+      return ready;
+    },
+    "en",
+    "| Situation | Outcome |\n| --- | --- |\n| Driving drunk | Termination |\n| Low level | Notice |",
+  );
+  expect(view.getByRole("table")).toBeDefined();
+  expect(view.queryByRole("button", { name: "Show as chart" })).toBeNull();
+  expect(calls).toBe(0);
+});
+
 test("an unavailable decision keeps the table and is reused for the session", async () => {
   let calls = 0;
   const view = mount(async () => {

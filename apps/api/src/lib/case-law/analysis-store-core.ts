@@ -14,9 +14,9 @@ import {
   and,
   eq,
   or,
+  type SQL,
   sql,
   TransactionRollbackError,
-  type SQL,
 } from "drizzle-orm";
 
 import type {
@@ -37,9 +37,9 @@ import {
 } from "./analysis-failure";
 import {
   analysisSentinel,
+  type AnalysisStoreKey,
   claimableAnalysisRowFor,
   storedAnalysisFingerprintFor,
-  type AnalysisStoreKey,
 } from "./stored-analysis";
 
 /**

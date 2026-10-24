@@ -4,18 +4,18 @@ import { expect, test } from "bun:test";
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 
 import {
-  runBackgroundReplayTick,
   type BackgroundReplayBatch,
   type BackgroundReplayDependencies,
   type BackgroundReplaySource,
+  runBackgroundReplayTick,
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 
 import {
   REPLAY_FAILURE_CODES,
-  ReplayStageError,
   replayFailure,
+  ReplayStageError,
 } from "./replay-failure";
 
 const fixture = (dailyBudget = 3) => {

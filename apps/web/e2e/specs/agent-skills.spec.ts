@@ -2,8 +2,8 @@ import {
   type APIRequestContext,
   type Locator,
   type Page,
-  type Response,
   request as playwrightRequest,
+  type Response,
 } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import * as v from "valibot";

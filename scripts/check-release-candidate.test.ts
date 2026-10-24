@@ -298,6 +298,7 @@ const historyEdits = fc.array(
   }),
   { minLength: 1, maxLength: 6 },
 );
+// Measured p95: 17.2 s; this must spawn release checks across real Git histories.
 test("only the version commit is accepted across generated main histories", () => {
   // Each sample spawns the release scripts, so the histories are drawn once
   // and run as a batch rather than inside a property predicate.
@@ -387,4 +388,4 @@ printf '%s\\n' '[[{"context":"staging/verified","state":"success"},{"context":"m
       rmSync(directory, { recursive: true, force: true });
     }
   }
-}, 60_000);
+}, 35_000);
