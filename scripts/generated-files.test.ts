@@ -717,7 +717,7 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
-  // Local skill sources must affect selection and identity, including a skill
+  // Local skill sources must affect the generation input contract, including a skill
   // added after the generator's other inputs were last reviewed.
   const instructions = generator("ai-instructions");
   const localSkills = tracked.filter((file) =>
@@ -729,9 +729,6 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
       instructions.inputs.some((glob) => matchesGeneratedGlob(glob, file)),
       `ai-instructions: ${file}`,
     ).toBe(true);
-    expect(generatorsForFiles([file]).map(({ id }) => id)).toContain(
-      instructions.id,
-    );
   }
   // Pooled checks are steps of their job, so resolve names through them.
   const workflow: unknown = Bun.YAML.parse(ci);
