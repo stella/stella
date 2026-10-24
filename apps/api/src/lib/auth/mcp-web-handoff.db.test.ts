@@ -346,7 +346,6 @@ describe("MCP web handoff lifecycle", () => {
       token,
       now: before,
       expiresAt: new Date(deadline.getTime() + 7 * 24 * 60 * 60 * 1000),
-      credentialMode: "cookie",
     });
     expect(refreshed?.expiresAt).toEqual(deadline);
     expect(

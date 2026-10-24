@@ -11,143 +11,137 @@ import {
   createAuthResponseCookiesPlugin,
   forwardAuthResponseCookies,
 } from "@/api/lib/auth/auth-response-cookies";
-import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import { createSessionLifetime } from "@/api/lib/auth/session-lifetime";
 import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
 
 describe("session cookie forwarding", () => {
-  test.each(["cookie", "bearer"] as const)(
-    "keeps native refresh credentials usable for %s requests",
-    async (credentialMode) => {
-      let clock = new Date("2026-10-01T12:00:00.000Z");
-      setSystemTime(clock);
-      try {
-        const sessions: Session[] = [];
-        const database = {
-          user: [],
-          session: sessions,
-          account: [],
-          verification: [],
-        };
-        const refreshedModes: string[] = [];
-        const store = {
-          observe: async ({ token }) =>
-            database.session.find((current) => current.token === token) ?? null,
-          refresh: async ({ token, expiresAt, now, credentialMode: mode }) => {
-            const current = database.session.find((row) => row.token === token);
-            if (!current) {
-              return null;
-            }
-            refreshedModes.push(mode);
-            const updated = {
-              ...current,
-              expiresAt,
-              updatedAt: now,
-              token: mode === "bearer" ? token : "replacement-session-token",
-            };
-            database.session = [updated];
-            return updated;
-          },
-          revokeById: async ({ sessionId, userId }) => {
-            database.session = database.session.filter(
-              (row) => row.id !== sessionId || row.userId !== userId,
-            );
-          },
-        } satisfies SessionLifetimeStore;
-        const lifetime = createSessionLifetime({ store, now: () => clock });
-        const auth = betterAuth({
-          baseURL: "http://localhost:3001",
-          secret: "test-secret-that-is-long-enough-for-better-auth",
-          database: memoryAdapter(database),
-          emailAndPassword: { enabled: true },
-          session: { expiresIn: 30 * 24 * 60 * 60, updateAge: 24 * 60 * 60 },
-          plugins: [createSessionBearer(), lifetime.plugin],
-          hooks: {
-            before: createAuthMiddleware(async (ctx) => {
-              lifetime.prepare(ctx.context);
-              await Promise.resolve();
-            }),
-          },
-        });
-        const signup = await auth.api.signUpEmail({
-          body: {
-            email: "account@example.test",
-            name: "Account",
-            password: "Fixture password 123!",
-          },
-          asResponse: true,
-        });
-        expect(signup.status).toBe(200);
-        expect(signup.headers.get("set-auth-token")).toBeNull();
-        const cookie = signup.headers
-          .getSetCookie()
-          .map((value) => value.split(";").at(0))
-          .join("; ");
-        const signed =
-          getSessionCookie(new Headers({ cookie })) ??
-          panic("Sign-up did not issue a session cookie");
-        const original =
-          database.session.at(0) ?? panic("Sign-up did not create a session");
-        database.session = [
-          {
-            ...original,
-            expiresAt: new Date(clock.getTime() + 24 * 60 * 60 * 1000),
-          },
-        ];
-        const app = new Elysia()
-          .use(createAuthResponseCookiesPlugin())
-          .get("/", async ({ request, set }) => {
-            const resolved = await auth.api.getSession({
-              headers: request.headers,
-              returnHeaders: true,
-            });
-            forwardAuthResponseCookies(set.headers, resolved.headers);
-            return new Response(resolved.response ? "ready" : "unavailable", {
-              headers: { "set-cookie": "route=kept; Path=/" },
-            });
+  test("a cookie client keeps working across a session rotation", async () => {
+    let clock = new Date("2026-10-01T12:00:00.000Z");
+    setSystemTime(clock);
+    try {
+      const sessions: Session[] = [];
+      const database = {
+        user: [],
+        session: sessions,
+        account: [],
+        verification: [],
+      };
+      const store = {
+        observe: async ({ token }) =>
+          database.session.find((current) => current.token === token) ?? null,
+        refresh: async ({ token, expiresAt, now }) => {
+          const current = database.session.find((row) => row.token === token);
+          if (!current) {
+            return null;
+          }
+          const updated = {
+            ...current,
+            expiresAt,
+            updatedAt: now,
+            token: "replacement-session-token",
+          };
+          database.session = [updated];
+          return updated;
+        },
+        revokeById: async ({ sessionId, userId }) => {
+          database.session = database.session.filter(
+            (row) => row.id !== sessionId || row.userId !== userId,
+          );
+        },
+      } satisfies SessionLifetimeStore;
+      const lifetime = createSessionLifetime({ store, now: () => clock });
+      const auth = betterAuth({
+        baseURL: "http://localhost:3001",
+        secret: "test-secret-that-is-long-enough-for-better-auth",
+        database: memoryAdapter(database),
+        emailAndPassword: { enabled: true },
+        session: { expiresIn: 30 * 24 * 60 * 60, updateAge: 24 * 60 * 60 },
+        plugins: [lifetime.plugin],
+        hooks: {
+          before: createAuthMiddleware(async (ctx) => {
+            lifetime.prepare(ctx.context);
+            await Promise.resolve();
+          }),
+        },
+      });
+      const signup = await auth.api.signUpEmail({
+        body: {
+          email: "account@example.test",
+          name: "Account",
+          password: "Fixture password 123!",
+        },
+        asResponse: true,
+      });
+      expect(signup.status).toBe(200);
+      expect(signup.headers.get("set-auth-token")).toBeNull();
+      const cookie = signup.headers
+        .getSetCookie()
+        .map((value) => value.split(";").at(0))
+        .join("; ");
+      const signed =
+        getSessionCookie(new Headers({ cookie })) ??
+        panic("Sign-up did not issue a session cookie");
+      const original =
+        database.session.at(0) ?? panic("Sign-up did not create a session");
+      database.session = [
+        {
+          ...original,
+          expiresAt: new Date(clock.getTime() + 24 * 60 * 60 * 1000),
+        },
+      ];
+      const app = new Elysia()
+        .use(createAuthResponseCookiesPlugin())
+        .get("/", async ({ request, set }) => {
+          const resolved = await auth.api.getSession({
+            headers: request.headers,
+            returnHeaders: true,
           });
-        const requestHeaders =
-          credentialMode === "bearer"
-            ? { authorization: `Bearer ${signed}` }
-            : { cookie };
-        const response = await app.handle(
-          new Request("http://localhost/", { headers: requestHeaders }),
-        );
-        expect(await response.text()).toBe("ready");
-        expect(refreshedModes).toEqual([credentialMode]);
-        expect(response.headers.get("set-auth-token")).toBeNull();
-        const current =
-          database.session.at(0) ?? panic("Refresh removed the session");
-        expect(current.expiresAt.getTime()).toBeGreaterThan(
-          clock.getTime() + 29 * 24 * 60 * 60 * 1000,
-        );
-        expect(current.token === original.token).toBe(
-          credentialMode === "bearer",
-        );
-        clock = new Date(clock.getTime() + 61_000);
-        setSystemTime(clock);
-        const refreshedCookie = response.headers
-          .getSetCookie()
-          .map((value) => value.split(";").at(0))
-          .join("; ");
-        const followupHeaders =
-          credentialMode === "bearer"
-            ? requestHeaders
-            : { cookie: refreshedCookie };
-        const followup = await app.handle(
-          new Request("http://localhost/", { headers: followupHeaders }),
-        );
-        expect(await followup.text()).toBe("ready");
-        expect(followup.headers.get("set-auth-token")).toBeNull();
-        const unsigned = await auth.api.getSession({
-          headers: { authorization: `Bearer ${current.token}` },
+          forwardAuthResponseCookies(set.headers, resolved.headers);
+          return new Response(resolved.response ? "ready" : "unavailable", {
+            headers: { "set-cookie": "route=kept; Path=/" },
+          });
         });
-        expect(unsigned).toBeNull();
-      } finally {
-        setSystemTime();
-      }
-    },
-  );
+      // Sessions are cookie credentials; a session token is never a bearer.
+      expect(
+        await auth.api.getSession({
+          headers: { authorization: `Bearer ${signed}` },
+        }),
+      ).toBeNull();
+      const response = await app.handle(
+        new Request("http://localhost/", { headers: { cookie } }),
+      );
+      expect(await response.text()).toBe("ready");
+      expect(response.headers.get("set-auth-token")).toBeNull();
+      const current =
+        database.session.at(0) ?? panic("Refresh removed the session");
+      expect(current.expiresAt.getTime()).toBeGreaterThan(
+        clock.getTime() + 29 * 24 * 60 * 60 * 1000,
+      );
+      expect(current.token).not.toBe(original.token);
+      clock = new Date(clock.getTime() + 61_000);
+      setSystemTime(clock);
+      const refreshedCookie = response.headers
+        .getSetCookie()
+        .map((value) => value.split(";").at(0))
+        .join("; ");
+      const followup = await app.handle(
+        new Request("http://localhost/", {
+          headers: { cookie: refreshedCookie },
+        }),
+      );
+      expect(await followup.text()).toBe("ready");
+      // The replaced cookie stops working once the grace period has passed.
+      expect(
+        await (
+          await app.handle(
+            new Request("http://localhost/", { headers: { cookie } }),
+          )
+        ).text(),
+      ).toBe("unavailable");
+    } finally {
+      setSystemTime();
+    }
+  });
 
   test.each(["response", "sse"] as const)(
     "appends forwarded cookies to a %s route's own cookies",

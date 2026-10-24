@@ -567,10 +567,28 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch", "module:@tanstack/ai-mcp"],
   },
   {
-    path: "apps/api/src/lib/auth/session-bearer.ts",
+    path: "apps/api/src/lib/auth/demo-account-policy.ts",
     class: "vendor-sdk",
-    reason: "Uses Better Auth plugin APIs for bearer session handling.",
-    transports: ["module:better-auth/plugins"],
+    reason: "Uses Better Auth middleware APIs for demo account policy.",
+    transports: ["module:better-auth/api"],
+  },
+  {
+    path: "apps/api/src/lib/auth/oauth-consent-info.ts",
+    class: "vendor-sdk",
+    reason: "Uses Better Auth middleware for OAuth consent information.",
+    transports: ["module:better-auth/api"],
+  },
+  {
+    path: "apps/api/src/lib/auth/review-account-plugin.ts",
+    class: "vendor-sdk",
+    reason: "Uses Better Auth APIs for review account handling.",
+    transports: ["module:better-auth/api"],
+  },
+  {
+    path: "apps/api/src/lib/auth/registration-adapter.ts",
+    class: "vendor-sdk",
+    reason: "Uses Better Auth APIs for account registration handling.",
+    transports: ["module:better-auth/api"],
   },
   {
     path: "apps/api/src/lib/auth/session-lifetime.ts",
@@ -659,7 +677,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: [
       "global:fetch",
       "module:better-auth",
-      "module:better-auth/plugins",
+      "module:better-auth/adapters/drizzle",
+      "module:better-auth/crypto",
     ],
   },
   {

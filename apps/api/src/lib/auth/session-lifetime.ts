@@ -8,12 +8,13 @@ import {
   createAuthMiddleware,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
-import { parseSessionOutput, parseUserOutput } from "better-auth/db";
+import { parseUserOutput } from "better-auth/db";
 import * as v from "valibot";
 
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
-import { DAY_IN_MS } from "@stll/time";
-
+import {
+  liveSessionAdapterWhere,
+  SESSION_ABSOLUTE_AGE_MS,
+} from "@/api/lib/auth/session-liveness";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -22,14 +23,42 @@ import {
   SYNTHETIC_SESSION_PREFIX,
 } from "@/api/lib/synthetic-principal/constants";
 
-export const SESSION_ABSOLUTE_AGE_MS = 90 * DAY_IN_MS;
-export const SESSION_IDLE_AGE_MS = 60 * 60 * 1000;
-export const SESSION_PRIOR_TOKEN_GRACE_MS = 60 * 1000;
-// Synthetic and handoff sessions resolve storage on every read; ordinary snapshots retain their cache.
+export { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
+
+export const SESSION_PRIOR_TOKEN_RECOVERY_MS = 10 * 60 * 1000;
+// Requests already in flight with the old cookie when the replacement is first
+// presented keep working this long; their refusal would delete the new cookie.
+export const SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS = 60 * 1000;
+
+/**
+ * A rotation stays pending until the replacement is first presented, which
+ * shortens the prior credential's window to the confirmed grace.
+ */
+export const isPendingRotation = (
+  priorTokenExpiresAt: unknown,
+  now: Date,
+): boolean => {
+  const expiresAt =
+    priorTokenExpiresAt instanceof Date ||
+    typeof priorTokenExpiresAt === "string"
+      ? new Date(priorTokenExpiresAt)
+      : null;
+  return (
+    expiresAt !== null &&
+    expiresAt.getTime() > now.getTime() + SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS
+  );
+};
+
+// Synthetic and handoff sessions resolve storage on every read, and a pending
+// rotation needs one storage read before its snapshot is reusable; ordinary
+// snapshots retain their cache.
 const cookieCacheVersion = (
   session: Pick<Session, "id"> & Readonly<Record<string, unknown>>,
 ) => {
-  if (session.id.startsWith(SYNTHETIC_SESSION_PREFIX)) {
+  if (
+    session.id.startsWith(SYNTHETIC_SESSION_PREFIX) ||
+    isPendingRotation(session["priorTokenExpiresAt"], new Date())
+  ) {
     return Bun.randomUUIDv7();
   }
   if (typeof session["originConsentId"] === "string") {
@@ -95,12 +124,11 @@ export const SESSION_LIFETIME_FIELDS = {
 type SessionObservation = {
   token: string;
   now: Date;
-  boundary: "startup" | "activity";
+  presentedToken?: string;
 };
 
 type SessionRefresh = {
   token: string;
-  credentialMode: "cookie" | "bearer";
   now: Date;
   expiresAt: Date;
 };
@@ -126,7 +154,7 @@ const resolveObservedSession = async (
   const user = await internalAdapter.findUserById(session.userId);
   return user
     ? {
-        session: parseSessionOutput(options, session),
+        session,
         user: parseUserOutput(options, user),
       }
     : null;
@@ -149,7 +177,7 @@ const findPriorSessionToken = async ({
     where: [
       { field: "priorTokenHash", value: hashSessionToken(token) },
       { field: "priorTokenExpiresAt", operator: "gt", value: now },
-      { field: "expiresAt", operator: "gt", value: now },
+      ...liveSessionAdapterWhere(now),
     ],
     select: ["token"],
   });
@@ -222,6 +250,18 @@ const createRevokeSessionByIdEndpoint = (
     },
   );
 
+const readPresentedSessionToken = async () => {
+  const ctx = tryGetCurrentAuthEndpointContext();
+  if (!ctx?.getSignedCookie) {
+    return undefined;
+  }
+  const token = await ctx.getSignedCookie(
+    ctx.context.authCookies.sessionToken.name,
+    ctx.context.secret,
+  );
+  return typeof token === "string" ? token : undefined;
+};
+
 export const createSessionLifetime = ({
   store,
   now = () => new Date(),
@@ -245,14 +285,14 @@ export const createSessionLifetime = ({
     const result = store.observe({
       token,
       now: now(),
-      boundary:
-        ctx?.path === "/get-session" &&
-        ctx.getHeader?.(AUTH_SESSION_STARTUP_HEADER) === "1"
-          ? "startup"
-          : "activity",
+      presentedToken: await readPresentedSessionToken(),
     });
     memo?.set(token, result);
-    return await result;
+    const observed = await result;
+    if (observed) {
+      memo?.set(observed.token, result);
+    }
+    return observed;
   };
 
   const forgetObservations = () => {
@@ -275,7 +315,13 @@ export const createSessionLifetime = ({
       let current = await observe(token);
       if (!current) {
         const expired = await findSession(token);
-        if (expired && expired.session.expiresAt <= now()) {
+        // An expired or outlived row is removed, like any refused session.
+        if (
+          expired &&
+          (expired.session.expiresAt <= now() ||
+            expired.session.createdAt.getTime() <=
+              now().getTime() - SESSION_ABSOLUTE_AGE_MS)
+        ) {
           await deleteSession(expired.session.token);
         }
         return null;
@@ -326,14 +372,18 @@ export const createSessionLifetime = ({
     };
     adapter.updateSession = async (token, data) => {
       if (data.expiresAt) {
+        const current = await observe(token);
+        if (
+          !current ||
+          current.expiresAt.getTime() >=
+            current.createdAt.getTime() + SESSION_ABSOLUTE_AGE_MS
+        ) {
+          return current;
+        }
         forgetObservations();
         const ctx = tryGetCurrentAuthEndpointContext();
-        const authorization = ctx?.getHeader?.("authorization") ?? "";
         const refreshed = await store.refresh({
           token,
-          credentialMode: /^bearer\s/iu.test(authorization)
-            ? "bearer"
-            : "cookie",
           expiresAt: data.expiresAt,
           now: now(),
         });

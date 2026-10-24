@@ -8,7 +8,6 @@ import {
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
@@ -468,7 +467,6 @@ const api = new Elysia()
         LOCAL_CLIENT_IDENTITY_HEADER,
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
-        AUTH_SESSION_STARTUP_HEADER,
         TANSTACK_RUN_ID_HEADER,
         CAPABILITY_REQUEST_HEADER,
       ],

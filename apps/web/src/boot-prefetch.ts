@@ -1,4 +1,3 @@
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 /**
  * Boot-time auth prefetch.
@@ -138,7 +137,6 @@ type StartBootPrefetchOptions = {
   fetchImpl?: FetchLike;
   now?: () => number;
   reportError?: ReportPrefetchError;
-  wasDiscarded?: boolean;
 };
 
 /** Fired once by `boot-prefetch-entry.ts`. Evaluating this module has no
@@ -148,9 +146,6 @@ export const startBootPrefetch = ({
   fetchImpl = fetch,
   now = () => Temporal.Now.instant().epochMilliseconds,
   reportError = reportPrefetchError,
-  wasDiscarded = typeof document !== "undefined" &&
-    "wasDiscarded" in document &&
-    document.wasDiscarded === true,
 }: StartBootPrefetchOptions = {}): void => {
   // A second boot attempt supersedes, cancels, and invalidates every response
   // from the first one. This also keeps test and bfcache re-entry behavior
@@ -188,7 +183,6 @@ export const startBootPrefetch = ({
       credentials: "include",
       headers: {
         accept: "application/json",
-        ...(!wasDiscarded ? { [AUTH_SESSION_STARTUP_HEADER]: "1" } : {}),
       },
       signal: requestSignal(),
     },

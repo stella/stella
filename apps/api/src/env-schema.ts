@@ -257,8 +257,6 @@ export const envApiServerSchema = {
       v.maxLength(2),
     ),
   ),
-  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
-  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_MINT_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_TEXT_ENABLED: v.optional(v.picklist(["0", "1"]), "0"),
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: v.optional(
