@@ -6,7 +6,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import type { DecisionReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 
-import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -18,8 +18,7 @@ const { QueryClient, QueryClientProvider } =
 const { DecisionReaderProvider } =
   await import("@stll/decision-reader/reader-adapters");
 const { IntlProvider } = await import("use-intl");
-const { MarginNotes } =
-  await import("@/features/case-law/components/case-viewer/analysis/margin-notes");
+const { MarginNotes } = await import("@/components/legal-reader/margin-notes");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
 class ResizeObserverProbe implements ResizeObserver {
@@ -76,7 +75,7 @@ const renderInline = (items: MarginItem[]): string =>
   );
 
 const analysisNote: MarginItem = {
-  category: "reasoning",
+  accentVar: "--option-violet",
   depth: 0,
   id: "note-1",
   kind: "annotation",
@@ -109,6 +108,21 @@ describe("notes drawn in the text's own flow", () => {
 
     expect(markup).toContain(messages.common.delete);
     expect(markup).not.toContain("opacity-0");
+  });
+
+  // Every reader's optimistic comment carries a pending id until the server
+  // stores it; there is nothing yet to change or delete it by.
+  test("a reader's own comment not yet stored offers no controls", () => {
+    const markup = renderInline([
+      {
+        ...ownComment,
+        id: "pending:1:0",
+        onEdit: () => undefined,
+      },
+    ]);
+
+    expect(markup).toContain("My own words.");
+    expect(markup).not.toContain("<button");
   });
 });
 

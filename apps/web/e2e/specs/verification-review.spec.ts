@@ -168,6 +168,14 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
         await route.fulfill({ json: { items: [], nextCursor: null } });
         return;
       }
+      // The claim detail panel lists the claim's comments; this journey has none.
+      if (
+        route.request().method() === "GET" &&
+        path === `${root}/claim-comments`
+      ) {
+        await route.fulfill({ json: { items: [], nextCursor: null } });
+        return;
+      }
       if (
         route.request().method() === "POST" &&
         path === `${root}/claim-reviews`
