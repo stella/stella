@@ -133,7 +133,7 @@ const snapshot = (root: string): Record<string, string> =>
   Object.fromEntries(
     readdirSync(root, { recursive: true, withFileTypes: true })
       .filter((entry) => entry.isFile())
-      .map((entry) => {
+      .map((entry): [string, string] => {
         const path = nodePath.join(entry.parentPath, entry.name);
         return [repoRelativePath(root, path), readFileSync(path, "utf-8")];
       })
@@ -356,8 +356,8 @@ describe("every release-tag gate is classified for the cut", () => {
     for (const gate of tagPreCut) {
       expect(gate.check.kind).toBe("command");
       if (gate.check.kind === "command") {
-        expect(gate.check.command.join(" "), gate.name).toBe(
-          commands.get(gate.name),
+        expect(commands.get(gate.name), gate.name).toBe(
+          gate.check.command.join(" "),
         );
       }
     }
