@@ -74,12 +74,20 @@ sampled, so waits shorter than the inspection interval may not be observed.
 
 `deploy-staging.yml` runs on `main` only. Its optional `sha` input pins the
 commit to deploy; blank deploys the tip of `main`. A pinned commit must be a
-full SHA that `main` contains (`git merge-base --is-ancestor`), so a release
-candidate can be deployed and verified while `main` keeps moving. Any other
-value fails the run before anything is built. The run builds, promotes and
-smokes that one commit. It records a Deployment as `in_progress` after
-promotion and marks it `success` only when the gating web
-and API chat smokes pass. The `staging/verified` commit status records the same
+full SHA on `main`'s first-parent history, or a verified same-repository release
+PR head when `release_candidate=true`, so a release candidate can be deployed
+and verified while `main` keeps moving. Any other value fails the run before
+anything is built. A `main-heavy.yml` dispatch with
+`release_candidate=true` automatically dispatches staging for its candidate
+SHA, unless that SHA's newest bot-authored `staging/verified` status is
+`success`. Pushing a release-version commit (`chore: release v…`) likewise starts
+staging for the merged SHA. That run reuses the release PR head as `proof_sha`
+only when both commits have identical git trees and the PR head's newest
+bot-authored `staging/verified` status is `success`; otherwise it stages the
+merged tree as a full release candidate. A full run builds, promotes and smokes
+that one commit. It records a Deployment as `in_progress` after promotion and
+marks it `success` only when the gating web and API chat smokes pass. The
+`staging/verified` commit status records the same
 result on the deployed SHA and links to the workflow run. A new promotion resets
 that status to `pending`; a failed or incomplete gating smoke records `failure`.
 The API model-turn smoke retains its separate report-only policy.
@@ -170,22 +178,28 @@ The steps in full:
    `latest`, or equals it while the generated contract surface differs from
    the published tarball.
 
+   At the cut, dispatch the release-candidate heavy suites for the release PR
+   head. This also starts PR-depth checks and staging for that candidate; staging
+   is skipped if its newest bot-authored `staging/verified` status is `success`:
+
+   ```bash
+   gh workflow run main-heavy.yml --ref main -f sha=<release-pr-head-sha> -F release_candidate=true
+   ```
+
 5. Merge the commit to `main` and note its SHA. This version commit is the
    only commit that can ship under that version. The push dispatches
    `release-tag.yml` with its exact SHA; missing gates fail the tag run.
    `main` stays open: later merges do not affect this release.
-6. Deploy that exact commit to staging:
+6. The version commit push automatically starts staging for the merged SHA.
+   The deploy reuses the release PR head as `proof_sha` only when both commits
+   have identical git trees and that PR head's newest bot-authored
+   `staging/verified` status is `success`; otherwise it stages the merged tree
+   as a full release candidate.
 
-   ```bash
-   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha> -F release_candidate=true
-   gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
-   ```
-
-   Both gates first refuse a candidate whose VERSION is already tagged or whose
-   SHA differs from the commit that set the pending VERSION on main. Ordinary pinned dispatches leave
-   `release_candidate` false and skip this check. The release-candidate heavy run dispatches
-   `main-pr-depth.yml` for the same SHA. The staging run also refuses a
-   SHA that `main` does not contain. When staging does not answer, the
+   Both gates first refuse a candidate whose VERSION is already tagged. For a
+   SHA on `main`, it must be the commit that set the pending VERSION; a release
+   PR head must pass the shared verifier. Ordinary pinned dispatches leave
+   `release_candidate` false and skip this check. When staging does not answer, the
    release-candidate run starts it through the infra repository's
    `staging-power.yml` (`action=on`, `hours=2`; the lease powers it off
    again), waits up to 15 minutes for that run and up to 45 minutes for
@@ -193,8 +207,9 @@ The steps in full:
    reason. Other dispatches still refuse an off staging. When its smokes pass,
    the commit carries `staging/verified` = `success`. `main-heavy.yml`
    records `main/heavy`, while `main-pr-depth.yml` records `main/pr-depth`, on the same commit. If the run is cancelled because
-   a newer staging dispatch replaced it while it waited, dispatch it again
-   with the same `sha`; tagging refuses until `staging/verified` is green.
+   a newer staging dispatch replaced it while it waited, rerun the
+   release-candidate `main-heavy.yml` dispatch with the same `sha`; tagging
+   refuses until `staging/verified` is green.
 
    A commit that landed through the merge queue usually needs neither heavy
    status. The queue fast-forwards `main` to the merge-group commit, so the

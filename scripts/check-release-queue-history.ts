@@ -747,7 +747,7 @@ export const formatReleaseQueueHistoryNotice = (
     ...report.commitsWithoutPullRequest.map(
       (commit) => `  ${commit} (no associated merged pull request)`,
     ),
-    "A merge-group receipt on the release commit does not cover them; run the heavy suites on it:",
+    "A merge-group receipt on the release commit does not cover them; dispatch the release-candidate heavy suites (this also starts staging):",
     "  gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -f release_candidate=true",
   ].join("\n");
 

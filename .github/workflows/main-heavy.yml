@@ -142,6 +142,74 @@ jobs:
               inputs: { sha: process.env.SHA },
             });
 
+      - name: Dispatch release candidate staging
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true && steps.reuse.outputs.run != 'false' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          SHA: ${{ inputs.sha }}
+        with:
+          retries: 2
+          script: |
+            const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+              ...context.repo,
+              ref: process.env.SHA,
+              per_page: 100,
+            });
+            // Statuses are newest first; an older success cannot override a newer bot result.
+            const staging = statuses.find(status => status.context === "staging/verified"
+              && status.creator?.login === "github-actions[bot]");
+            if (staging?.state === "success") return;
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: "deploy-staging.yml",
+              ref: "main",
+              inputs: { release_candidate: "true", sha: process.env.SHA },
+            });
+
+      - name: Dispatch version commit staging
+        if: >-
+          github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v')
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 2
+          script: |
+            const pulls = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+              ...context.repo,
+              commit_sha: context.sha,
+              per_page: 100,
+            });
+            const repository = `${context.repo.owner}/${context.repo.repo}`;
+            const releases = pulls.filter(pull => pull.state === "closed" && pull.merged_at
+              && pull.merge_commit_sha === context.sha && pull.title.startsWith("chore: release v")
+              && pull.head.repo?.full_name === repository && pull.base.repo.full_name === repository
+              && pull.base.ref === "main");
+            const release = releases.length === 1 ? releases[0] : undefined;
+            let proofSha;
+            if (release) {
+              const [head, version] = await Promise.all([
+                github.rest.git.getCommit({ ...context.repo, commit_sha: release.head.sha }),
+                github.rest.git.getCommit({ ...context.repo, commit_sha: context.sha }),
+              ]);
+              if (head.data.tree.sha === version.data.tree.sha) {
+                const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+                  ...context.repo,
+                  ref: release.head.sha,
+                  per_page: 100,
+                });
+                const staging = statuses.find(status => status.context === "staging/verified"
+                  && status.creator?.login === "github-actions[bot]");
+                if (staging?.state === "success") proofSha = release.head.sha;
+              }
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: "deploy-staging.yml",
+              ref: "main",
+              inputs: proofSha
+                ? { sha: context.sha, proof_sha: proofSha }
+                : { release_candidate: "true", sha: context.sha },
+            });
+
       - name: Select untested heavy SHA
         if: steps.reuse.outputs.run != 'false'
         id: selection
