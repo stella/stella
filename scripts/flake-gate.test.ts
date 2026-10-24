@@ -370,18 +370,18 @@ test("the gate reports bounded output only for the first failed trial of each fi
     reportFailureOutput: (output) => {
       diagnostics.push(output);
     },
-    run: ({ seed, onFailureOutput }) => {
+    run: async ({ seed, onFailureOutput }) => {
       elapsed += 1;
       if (seed > 1) {
         onFailureOutput?.(`${"x".repeat(32_768)}failure seed ${seed}`);
       }
-      return Promise.resolve({
+      return {
         type: "executed",
         passed: seed === 1,
         status: seed === 1 ? 0 : 1,
         ranTests: true,
         failedTests: seed === 1 ? [] : ["fixture"],
-      });
+      };
     },
   });
   expect(diagnostics).toHaveLength(2);

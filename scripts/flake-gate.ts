@@ -444,7 +444,11 @@ export const runOnce = async ({
         onStdoutLine: listing.acceptLine,
       });
       if (discovery.type === "timeout" || discovery.status !== 0) {
-        return executionOutcome("rust", discovery);
+        return executionOutcome({
+          runner: "rust",
+          outcome: discovery,
+          onFailureOutput,
+        });
       }
       const batches = listing.batches();
       if (batches.length === 0) {
@@ -461,7 +465,6 @@ export const runOnce = async ({
           env: target.env,
           deadline,
         });
-        const execution = executionOutcome("rust", completed);
         if (completed.type === "completed" && completed.status === 0) {
           const ignored =
             /^test result: ok\. 0 passed; 0 failed; (?<count>[1-9]\d*) ignored;/mu.exec(
@@ -472,6 +475,11 @@ export const runOnce = async ({
             continue;
           }
         }
+        const execution = executionOutcome({
+          runner: "rust",
+          outcome: completed,
+          onFailureOutput,
+        });
         // Once listing selected names, zero execution without ignored evidence is a failure.
         if (!execution.passed) {
           return execution;

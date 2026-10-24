@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
@@ -764,7 +765,7 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
   await act(async () =>
     fireEvent.click(
       screen.getByRole("button", {
-        name: `${arabic.statutes.outline}: ${path.at(-1)?.title}`,
+        name: `${arabic.statutes.outline}: ${path.at(-1)?.title ?? panic("The Arabic breadcrumb fixture needs a current heading")}`,
       }),
     ),
   );
