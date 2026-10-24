@@ -110,11 +110,9 @@ type DocxBrowserEditorBaseProps = {
   isEditing?: boolean | undefined;
   onClose: () => void;
   onCompatibilityChange?:
-    | ((compatibility: DocxCompatibility) => void)
-    | undefined;
+    ((compatibility: DocxCompatibility) => void) | undefined;
   onCollaborationPublishableChange?:
-    | ((publishable: boolean) => void)
-    | undefined;
+    ((publishable: boolean) => void) | undefined;
   canUnlock: boolean;
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;

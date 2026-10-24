@@ -31,8 +31,8 @@ import {
 import type { SidebarLayout } from "./sidebar.logic";
 import { Skeleton } from "./skeleton";
 import {
-  TooltipPopup,
   Tooltip as TooltipRoot,
+  TooltipPopup,
   TooltipTrigger,
 } from "./tooltip";
 

@@ -15,6 +15,7 @@ const messages = {
   "statutes.diffRemoved": "Removed",
   "statutes.diffInserted": "Inserted",
   "common.copyLink": "Copy link",
+  "common.copied": "Copied",
   "common.back": "Back",
   "caseLaw.viewer.legalSentence": "Legal sentence",
   "caseLaw.viewer.abstract": "Abstract",

@@ -8,25 +8,25 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import {
   bindDiscoveredMetadata,
   buildAuthorizeUrl,
-  discoverOAuthMetadata,
-  discoverOAuthMetadataForApproval,
-  getOAuthEndpointOrigins,
-  endpointsRequiringConfirmation,
-  oauthDomainsMatch,
-  exchangeAuthorizationCode,
-  refreshOAuthToken,
-  MCP_OAUTH_INVALID_GRANT_CODE,
-  validateApprovedOAuthIssuer,
   buildMcpClientMetadataDocument,
   buildOAuthClientRegistrationRequest,
   clientRegistrationMode,
+  discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
+  endpointsRequiringConfirmation,
+  exchangeAuthorizationCode,
   getMcpClientMetadataDocumentUrl,
   getMcpOAuthRedirectUri,
+  getOAuthEndpointOrigins,
+  MCP_OAUTH_INVALID_GRANT_CODE,
+  oauthDomainsMatch,
+  refreshOAuthToken,
   tokenExpiresAt,
+  validateApprovedOAuthIssuer,
 } from "@/api/lib/mcp-upstream/oauth";
 import type {
-  UpstreamAuthorizationServerMetadata,
   TokenResponse,
+  UpstreamAuthorizationServerMetadata,
 } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 import {

@@ -58,7 +58,7 @@ includes:
 | i18n sync          | `bun run i18n:check` | Ensure translation keys are consistent |
 | Code quality       | oxlint + tsgolint    | Lint rules and TypeScript diagnostics  |
 | Custom lint rules  | oxlint JS plugins    | Semantic tokens, RTL, ownership IDs    |
-| Format             | oxfmt                | Consistent code formatting             |
+| Format             | bun fmt              | Consistent code formatting             |
 | Tests              | Bun test runner      | Functional correctness                 |
 | Policy evidence    | Repository guard     | Policy-to-implementation drift         |
 

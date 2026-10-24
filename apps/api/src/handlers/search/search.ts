@@ -1,17 +1,25 @@
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { isEntityKind } from "@stll/api-contract";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
+import type { DocumentProcessingStatus } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { parseGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { getSearchPreviewLocatorCandidates } from "@/api/lib/search/query";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
+import type {
+  EntityGlobalSearchHit,
+  GlobalSearchHit,
+} from "@/api/lib/search/types";
 
 const isoDateTime = t.String({ format: "date-time" });
 
@@ -39,6 +47,10 @@ export const searchBodySchema = t.Object({
 });
 
 type SearchBodySchema = Static<typeof searchBodySchema>;
+
+const isEntitySearchHit = (
+  hit: GlobalSearchHit,
+): hit is EntityGlobalSearchHit => isEntityKind(hit.type);
 
 type SearchFilterInput = {
   query: string;
@@ -187,8 +199,30 @@ export const searchHandler = async ({
     { scopedDb },
   );
 
+  const entityHits = result.hits.filter(isEntitySearchHit);
+  const processingStatuses =
+    entityHits.length === 0
+      ? new Map<string, DocumentProcessingStatus>()
+      : await scopedDb(
+          async (tx) =>
+            await getCurrentVersionProcessingStatuses(
+              tx,
+              entityHits.map((hit) => hit.resource.id),
+            ),
+        );
+
+  const hits: GlobalSearchHit[] = result.hits.map((hit) =>
+    isEntitySearchHit(hit)
+      ? {
+          ...hit,
+          processingStatus: processingStatuses.get(hit.resource.id) ?? null,
+        }
+      : hit,
+  );
+
   return {
     ...result,
+    hits,
     previewLocatorCandidates: getSearchPreviewLocatorCandidates(body.query),
   };
 };

@@ -5,8 +5,8 @@ import ts from "typescript6";
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import {
   OUTBOUND_PERMIT_GRANT_OWNERS,
-  OUTBOUND_TRANSPORT_CLASSES,
   OUTBOUND_TRANSPORT_CENSUS,
+  OUTBOUND_TRANSPORT_CLASSES,
   type OutboundTransportCensusEntry,
 } from "./outbound-transport-census.ts";
 import { parseSource } from "./parse-memo.ts";

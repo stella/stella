@@ -9,13 +9,13 @@ import { EXIT_CODES, resolveMcpErrorCodeExit } from "../mcp-constants.js";
 import { buildCommonFlags, type CommonFlagValues } from "../output-flags.js";
 import {
   buildRenderPlan,
+  type OutputFormat,
   renderResult,
   terminalWidth,
-  type OutputFormat,
 } from "../output.js";
 import {
-  renderClientError,
   readOutputFormat,
+  renderClientError,
   renderToolError,
   reservedFlagUsageError,
   scopeGranted,
@@ -24,8 +24,8 @@ import {
 } from "../run-leaf-command.js";
 import {
   createUploadDocumentDependencies,
-  type UploadFailure,
   uploadDocument,
+  type UploadFailure,
 } from "../upload-document.js";
 
 const parseString = (input: string): string => input;

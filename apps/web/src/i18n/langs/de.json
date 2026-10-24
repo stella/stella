@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
+      "accountRestricted": "Die Einstellungen des KI-Anbieters sind für dieses Konto nicht verfügbar.",
+      "configUnreadable": "Die Konfiguration des KI-Anbieters kann nicht gelesen werden. Bitten Sie eine Organisationsadministration, ihn erneut zu verbinden.",
       "cta": "KI-Einstellungen öffnen",
       "description": "Fügen Sie Anbieter-Zugangsdaten hinzu, um KI-Funktionen zu nutzen.",
+      "permissionRequired": "Nur eine Organisationsadministration kann einen KI-Anbieter verbinden.",
+      "seatRequired": "Bitten Sie eine Organisationsadministration, Ihnen einen Platz zuzuweisen.",
       "title": "KI-Anbieter verbinden"
     },
     "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
@@ -3526,6 +3530,12 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
+      "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
+      "unsupportedField": "Dieses Dokument enthält ein {fieldType}-Feld, das nicht konvertiert werden kann.",
+      "unsupportedReference": "Dieses Dokument verweist in {element} {attribute} auf eine externe Ressource und kann daher nicht konvertiert werden."
+    },
     "external": {
       "confirmDescription": "Sie sind dabei, eine externe Website zu besuchen.",
       "confirmTitle": "Externen Link öffnen?",
@@ -4225,6 +4235,22 @@
       "guestStorageUnavailable": "Hervorhebungen und Notizen konnten in diesem Tab nicht gespeichert werden.",
       "highlight": "Hervorheben",
       "highlightedPassage": "Hervorgehobene Textstelle",
+      "history": {
+        "colorRestored": "Farbe wiederhergestellt",
+        "commentRemoved": "Kommentar entfernt",
+        "commentRestored": "Kommentar wiederhergestellt",
+        "highlightRemoved": "Hervorhebung entfernt",
+        "highlightRestored": "Hervorhebung wiederhergestellt",
+        "markChanged": "Diese Hervorhebung oder dieser Kommentar wurde inzwischen an anderer Stelle geändert und bleibt daher unverändert.",
+        "markGone": "Diese Hervorhebung oder dieser Kommentar existiert nicht mehr.",
+        "nothingToRedo": "Nichts zum Wiederholen",
+        "nothingToUndo": "Nichts zum Rückgängigmachen",
+        "redoShortcut": "Änderung an Hervorhebung oder Kommentar wiederholen",
+        "styleRestored": "Stil wiederhergestellt",
+        "textRestored": "Kommentartext wiederhergestellt",
+        "undoShortcut": "Änderung an Hervorhebung oder Kommentar rückgängig machen",
+        "visibilityRestored": "Freigabe wiederhergestellt"
+      },
       "removeHighlight": "Hervorhebung entfernen",
       "sharedBadge": "Geteilt",
       "styleHighlight": "Markierung",

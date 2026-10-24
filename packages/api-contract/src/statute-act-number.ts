@@ -39,7 +39,7 @@ export const statuteEliParts = (
 };
 
 /** `89/2012 Sb.`, or null for an ELI that carries no act number. */
-const statuteActNumber = (eli: string): string | null => {
+export const statuteActNumber = (eli: string): string | null => {
   const { collection, year, number: ordinal } = statuteEliParts(eli);
   if (collection === null || year === null || ordinal === null) {
     return null;
