@@ -1128,11 +1128,11 @@ const listCreatedRuns = async ({
     return response;
   }
   const pages = v.parse(runPagesSchema, JSON.parse(response.value));
-  const runs = pages.flatMap((page) => page.workflow_runs);
+  let runs = pages.flatMap((page) => page.workflow_runs);
   const total = pages.at(0)?.total_count ?? 0;
   if (total > RUN_LISTING_CAP && to - from >= SECOND_MS) {
     const mid = from + Math.floor((to - from) / (2 * SECOND_MS)) * SECOND_MS;
-    const halves: ListedRun[] = [];
+    runs = [];
     for (const [start, end] of [
       [from, mid],
       [mid + SECOND_MS, to],
@@ -1148,9 +1148,8 @@ const listCreatedRuns = async ({
       if (half.isErr()) {
         return half;
       }
-      halves.push(...half.value);
+      runs.push(...half.value);
     }
-    return Result.ok(halves);
   }
   if (runs.length !== total) {
     return Result.err(
