@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { roles } from "@stll/permissions";
 
@@ -19,6 +19,7 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { MCP_MODES } from "@/api/mcp/constants";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
@@ -73,6 +74,11 @@ const inaccessibleData = {
   safeDb: async () => panic("safeDb must not run during authorization"),
   scopedDb: async () => panic("scopedDb must not run during authorization"),
 };
+
+test("raw request resources require authorization before handler use", () => {
+  expectTypeOf<McpRequestResources>().not.toExtend<AuthorizedMcpRequestContext>();
+  expectTypeOf<AuthorizedMcpRequestContext>().toExtend<McpRequestResources>();
+});
 
 test("declared authorization issues no database statements before refusal or handler entry", async () => {
   const definition: McpToolAuthorityDeclaration = {
