@@ -43,6 +43,7 @@ import {
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   hasMemberPermission,
   sessionMemberRole,
@@ -1011,6 +1012,58 @@ if (!databaseUrl || !runPostgres) {
       expect(lines).toEqual([]);
       expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
       expect(auditEvents.length).toBeGreaterThan(0);
+      await db.execute(sql`INSERT INTO invoices
+        (id, organization_id, workspace_id, client_id, invoice_date, currency, status)
+        SELECT gen_random_uuid(), ${scenario.orgId}, ${scenario.secondMatterId}::uuid,
+          ${scenario.clientId}::uuid, '2026-10-16'::date, 'EUR', 'draft'
+        FROM generate_series(1, ${LIMITS.invoicesPerWorkspace - 2})`);
+      expect(await readQuota()).toEqual([
+        { first: "2", second: String(LIMITS.invoicesPerWorkspace) },
+      ]);
+      const creditsBeforeQuotaRefusal = await db.query.invoices.findMany({
+        where: {
+          organizationId: { eq: scenario.orgId },
+          originalInvoiceId: { eq: scenario.invoiceId },
+        },
+        columns: { id: true },
+        orderBy: { id: "asc" },
+      });
+      const auditCountBeforeQuotaRefusal = auditEvents.length;
+      expect(
+        await createInvoice.handler(
+          createTestHandlerContext<Parameters<typeof createInvoice.handler>[0]>(
+            { ...fullContext, body },
+          ),
+        ),
+      ).toMatchObject({
+        code: 400,
+        response: {
+          message: "Invoice limit reached for a participating matter",
+        },
+      });
+      expect(
+        await db.query.invoices.findMany({
+          where: {
+            organizationId: { eq: scenario.orgId },
+            originalInvoiceId: { eq: scenario.invoiceId },
+          },
+          columns: { id: true },
+          orderBy: { id: "asc" },
+        }),
+      ).toEqual(creditsBeforeQuotaRefusal);
+      expect(auditEvents).toHaveLength(auditCountBeforeQuotaRefusal);
+      expect(await readQuota()).toEqual([
+        { first: "2", second: String(LIMITS.invoicesPerWorkspace) },
+      ]);
+      await db
+        .delete(invoices)
+        .where(
+          and(
+            eq(invoices.organizationId, scenario.orgId),
+            eq(invoices.workspaceId, scenario.secondMatterId),
+          ),
+        );
+      expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
       const beforeRefusals = await db.query.invoices.findMany({
         where: { organizationId: { eq: scenario.orgId } },
         columns: { id: true },

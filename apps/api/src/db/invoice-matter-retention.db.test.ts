@@ -12,6 +12,13 @@ import { invoiceLines, invoices, workspaces } from "@/api/db/schema";
 import * as schema from "@/api/db/schema";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
+import { CLIENT_INVOICE_CONSTRAINTS } from "./client-invoice-backfill";
+import {
+  createUngatedTableGateForTests,
+  validateOnlineConstraints,
+} from "./online-ddl";
+import type { OnlineMigrationConnection } from "./online-migration-connection";
+
 const invoiceTables = Object.values(schema).flatMap((value) =>
   is(value, PgTable) &&
   /^invoices?$|^invoice_/u.test(getTableConfig(value).name)
@@ -158,11 +165,43 @@ test("the retention migration changes only foreign keys and keeps existing invoi
     "20261021165000_invoice_matter_retention",
     "20261021165001_invoice_matter_retention_validate",
   ]) {
-    // Each directory is its own migrator transaction; validation cannot hold
-    // the ACCESS EXCLUSIVE locks from the constraint replacement.
+    // These additive/catalog migrations release their locks before online validation.
     await database.exec(`BEGIN; ${await retentionMigration(name)} COMMIT;`);
     expect(await readInvoiceState(database)).toEqual(before);
   }
+  const connection = {
+    execute: async (query, params = []) => {
+      await database.query(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      (await database.query(query, [...params])).rows,
+    release: () => {},
+  } satisfies OnlineMigrationConnection;
+  const retainedNames = new Set(
+    invoiceForeignKeys()
+      .filter((key) => key.parent === "workspaces")
+      .map((key) => key.name),
+  );
+  const validations = CLIENT_INVOICE_CONSTRAINTS.filter(({ constraintName }) =>
+    retainedNames.has(constraintName),
+  );
+  expect(
+    validations.map(({ constraintName }) => constraintName).toSorted(),
+  ).toEqual([...retainedNames].toSorted());
+  expect(
+    (
+      await database.query<{ validated: boolean }>(
+        "SELECT convalidated AS validated FROM pg_constraint WHERE contype='f' AND confrelid='workspaces'::regclass",
+      )
+    ).rows.every(({ validated }) => !validated),
+  ).toBe(true);
+  expect(
+    await validateOnlineConstraints({
+      connection,
+      tables: createUngatedTableGateForTests(connection),
+      constraints: validations,
+    }),
+  ).toEqual({ type: "complete" });
   await expectDeletionRefused(database);
   const constraints = await database.query<{
     name: string;

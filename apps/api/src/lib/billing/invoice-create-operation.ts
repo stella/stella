@@ -13,6 +13,7 @@ import {
   INVOICE_ATTACHMENT,
   INVOICE_BILLING_PURPOSE,
   INVOICE_STATUS,
+  invoiceLines,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
@@ -39,6 +40,7 @@ import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorizatio
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
+import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import {
   claimInvoiceExpenses,
   claimInvoiceTimeEntries,
@@ -481,14 +483,18 @@ type CreateDraftInvoiceOptions = {
   now: Date;
   recordAuditEvent: AuditRecorder;
 };
+type CreationMatterLocks =
+  { type: "single_matter" } | AcquiredInvoiceMatterLocks;
 type CheckCreationOptions = {
+  organizationId: SafeId<"organization">;
+  matterLocks: CreationMatterLocks;
   workspaceId: SafeId<"workspace">;
   body: CreateInvoiceInput;
 };
 /** Everything that can refuse a create before anything is written. */
 const checkCreation = async (
   tx: Transaction,
-  { workspaceId, body }: CheckCreationOptions,
+  { organizationId, workspaceId, body, matterLocks }: CheckCreationOptions,
 ) => {
   const arrangement = await lockBillingArrangement(tx, workspaceId);
   const flatFee =
@@ -514,22 +520,6 @@ const checkCreation = async (
   if (entries.isErr()) {
     return Result.err(entries.error);
   }
-  const counts = await tx
-    .select({
-      count: sql<string>`public.stella_matter_invoice_count(${workspaceId})::text`,
-    })
-    .from(sql`(SELECT 1) quota`);
-  const totalInvoices = Number(
-    counts.at(0)?.count ?? panic("Invoice quota aggregate returned no row"),
-  );
-  if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Invoice limit reached for this workspace",
-      }),
-    );
-  }
   const documentType = body.documentType ?? "invoice";
   const originalInvoiceId = body.originalInvoiceId ?? null;
   if (
@@ -552,7 +542,101 @@ const checkCreation = async (
   if (valid.isErr()) {
     return Result.err(valid.error);
   }
-  return Result.ok({ flatFee, documentType, originalInvoiceId });
+  const originalScope =
+    originalInvoiceId === null
+      ? null
+      : await tx.query.invoices.findFirst({
+          where: {
+            id: { eq: originalInvoiceId },
+            organizationId: { eq: organizationId },
+          },
+          columns: { workspaceId: true, clientId: true },
+        });
+  const quotaMatters = new Set<SafeId<"workspace">>();
+  switch (matterLocks.type) {
+    case "single_matter":
+      quotaMatters.add(workspaceId);
+      break;
+    case "acquired": {
+      if (
+        originalInvoiceId !== matterLocks.invoiceId ||
+        documentType !== "credit_note"
+      ) {
+        return panic(
+          "Credit creation locks do not belong to the original invoice",
+        );
+      }
+      if (originalScope === null || originalScope === undefined) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Original invoice not found in this matter",
+          }),
+        );
+      }
+      const participants = await tx
+        .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+        .from(invoiceLines)
+        .where(
+          and(
+            eq(invoiceLines.organizationId, organizationId),
+            eq(invoiceLines.invoiceId, originalInvoiceId),
+          ),
+        )
+        .limit(LIMITS.invoiceLinesPerInvoice + 1);
+      if (originalScope.workspaceId !== null) {
+        quotaMatters.add(originalScope.workspaceId);
+      }
+      for (const participant of participants) {
+        quotaMatters.add(participant.workspaceId);
+      }
+      // validateInvoiceDocument holds the original row. Refuse a snapshot
+      // expansion without acquiring any new matter lock after it.
+      if (
+        participants.length > LIMITS.invoiceLinesPerInvoice ||
+        [...quotaMatters].some((id) => !matterLocks.workspaceIds.has(id))
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            code: "invoice_participation_changed",
+            message: "Invoice matters changed; reload and try again",
+          }),
+        );
+      }
+      break;
+    }
+    default:
+      matterLocks satisfies never;
+      return panic("Unknown invoice creation lock scope");
+  }
+  if (quotaMatters.size > 0) {
+    const counts = await tx
+      .select({
+        count: sql<string>`max(public.stella_matter_invoice_count(quota.matter_id))::text`,
+      })
+      .from(
+        sql`unnest(ARRAY[${sql.join(
+          [...quotaMatters].map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )}]) AS quota(matter_id)`,
+      );
+    const totalInvoices = Number(
+      counts.at(0)?.count ?? panic("Invoice quota aggregate returned no row"),
+    );
+    if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            matterLocks.type === "acquired"
+              ? "Invoice limit reached for a participating matter"
+              : "Invoice limit reached for this workspace",
+        }),
+      );
+    }
+  }
+  return Result.ok({ flatFee, documentType, originalInvoiceId, originalScope });
 };
 
 type BillCreatedDraftOptions = {
@@ -731,30 +815,57 @@ export const createDraftInvoice = async (
     recordAuditEvent,
   }: CreateDraftInvoiceOptions,
 ): Promise<Result<CreateInvoiceResult, HandlerError>> => {
-  const runningError = await guardRunningTimeEntries({
-    tx,
-    workspaceId,
-    actorUserId,
-    selection: { type: "entries", ids: body.timeEntryIds },
-  });
-  if (runningError) {
-    return Result.err(runningError);
+  let matterLocks: CreationMatterLocks = { type: "single_matter" };
+  if (
+    body.documentType === "credit_note" &&
+    body.originalInvoiceId !== undefined
+  ) {
+    if (body.timeEntryIds.length > 0 || body.expenseIds.length > 0) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Credit notes cannot bill time entries or expenses",
+        }),
+      );
+    }
+    const running = await guardRunningTimeEntries({
+      tx,
+      organizationId,
+      workspaceId,
+      actorUserId,
+      selection: {
+        type: "invoice",
+        invoiceId: body.originalInvoiceId,
+        runningCheck: "additional",
+        additionalIds: [],
+      },
+    });
+    if (running.isErr()) {
+      return Result.err(running.error);
+    }
+    matterLocks = running.value;
+  } else {
+    const runningError = await guardRunningTimeEntries({
+      tx,
+      workspaceId,
+      actorUserId,
+      selection: { type: "entries", ids: body.timeEntryIds },
+    });
+    if (runningError) {
+      return Result.err(runningError);
+    }
   }
-  const checked = await checkCreation(tx, { workspaceId, body });
+  const checked = await checkCreation(tx, {
+    organizationId,
+    workspaceId,
+    body,
+    matterLocks,
+  });
   if (checked.isErr()) {
     return Result.err(checked.error);
   }
-  const { flatFee, documentType, originalInvoiceId } = checked.value;
-  const originalScope =
-    originalInvoiceId === null
-      ? null
-      : await tx.query.invoices.findFirst({
-          where: {
-            id: { eq: originalInvoiceId },
-            organizationId: { eq: organizationId },
-          },
-          columns: { workspaceId: true, clientId: true },
-        });
+  const { flatFee, documentType, originalInvoiceId, originalScope } =
+    checked.value;
   const defaults = await resolveCreationDefaults(tx, {
     organizationId,
     workspaceId,

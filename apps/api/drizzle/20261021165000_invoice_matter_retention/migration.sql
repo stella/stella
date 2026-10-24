@@ -2,7 +2,7 @@ SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '30s';--> statement-breakpoint
 -- Lock review: each atomic swap takes ACCESS EXCLUSIVE for catalog-only DDL,
 -- waits at most one second, and does not scan or rewrite invoice rows. Keep
--- validation in the next migration so these locks are released first.
+-- validation in the online phase so these locks are released first.
 -- stella-migration-safety: reviewed drop-constraint - Replace both matter cascades atomically with restrictive NOT VALID foreign keys; existing rows are untouched and new writes remain checked.
 ALTER TABLE "invoices"
   DROP CONSTRAINT "invoices_workspace_id_workspaces_id_fkey",

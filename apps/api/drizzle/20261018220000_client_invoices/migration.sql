@@ -4,25 +4,8 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS client_id uuid;--> statement-break
 ALTER TABLE invoice_lines ADD COLUMN IF NOT EXISTS recorded_description text,
  ADD COLUMN IF NOT EXISTS recorded_quantity numeric(18,4), ADD COLUMN IF NOT EXISTS recorded_unit varchar(32),
  ADD COLUMN IF NOT EXISTS recorded_unit_price bigint, ADD COLUMN IF NOT EXISTS recorded_net_amount bigint;--> statement-breakpoint
--- Build indexes outside the additive DDL transaction; retries repair interrupted builds.
--- squawk-ignore transaction-nesting
-COMMIT;--> statement-breakpoint
-SET statement_timeout = 0;--> statement-breakpoint
-SET lock_timeout = 0;--> statement-breakpoint
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS invoices_id_org_unique ON invoices (id,organization_id);--> statement-breakpoint
-REINDEX INDEX CONCURRENTLY invoices_id_org_unique;--> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS invoices_org_client_created_idx ON invoices (organization_id,client_id,created_at,id);--> statement-breakpoint
-REINDEX INDEX CONCURRENTLY invoices_org_client_created_idx;--> statement-breakpoint
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS invoices_client_number_uidx ON invoices (organization_id,client_id,invoice_number) WHERE workspace_id IS NULL;--> statement-breakpoint
-REINDEX INDEX CONCURRENTLY invoices_client_number_uidx;--> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS invoices_client_backfill_idx ON invoices (id) WHERE client_id IS NULL AND workspace_id IS NOT NULL;--> statement-breakpoint
-REINDEX INDEX CONCURRENTLY invoices_client_backfill_idx;--> statement-breakpoint
-SET statement_timeout = '60s';--> statement-breakpoint
-SET lock_timeout = '5s';--> statement-breakpoint
--- squawk-ignore transaction-nesting, ban-uncommitted-transaction
-BEGIN;--> statement-breakpoint
-ALTER TABLE invoices ADD CONSTRAINT invoices_id_org_unique UNIQUE USING INDEX invoices_id_org_unique;--> statement-breakpoint
-ALTER TABLE invoices ADD CONSTRAINT invoices_original_organization_fk FOREIGN KEY (original_invoice_id,organization_id) REFERENCES invoices(id,organization_id) NOT VALID;--> statement-breakpoint
+-- The online phase builds the indexes, then attaches the tenant key and
+-- its NOT VALID original-invoice foreign key through the table gate.
 -- Client-level invoices carry a client instead of a single matter.
 -- squawk-ignore ban-drop-not-null
 ALTER TABLE invoices ALTER COLUMN workspace_id DROP NOT NULL;--> statement-breakpoint

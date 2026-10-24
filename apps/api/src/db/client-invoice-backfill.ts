@@ -3,9 +3,33 @@ import { panic } from "better-result";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { readConstraintCompletion } from "./online-constraint-completion";
-import { validateOnlineConstraints } from "./online-ddl";
+import {
+  installInvoiceTenantKey,
+  readInvoiceTenantKeyInstalled,
+  validateOnlineConstraints,
+} from "./online-ddl";
 import type { OnlineConstraintValidation } from "./online-ddl";
 import type { OnlineRepair } from "./online-migration-connection";
+
+/** Indexes are ready before repairs; startup refuses an unfinished installation. */
+export const CLIENT_INVOICE_TENANT_KEY = {
+  name: "client-invoice-tenant-key",
+  readCompletion: async (connection) =>
+    (await readInvoiceTenantKeyInstalled(connection))
+      ? { type: "complete" }
+      : {
+          type: "incomplete",
+          reason: "Invoice tenant constraints are not installed",
+        },
+  repair: async (_connection, tables) =>
+    await tables.run({
+      target: { tableName: "invoices", name: "client-invoice-tenant-key" },
+      kind: "index_repair",
+      work: async (session) => {
+        await session.run(installInvoiceTenantKey());
+      },
+    }),
+} satisfies OnlineRepair;
 
 const CLIENT_BACKFILL_BATCH_SIZE = 500;
 const PENDING_CLIENT_INVOICES = `SELECT i.id FROM public.invoices i JOIN public.workspaces w ON w.id=i.workspace_id AND w.organization_id=i.organization_id WHERE i.client_id IS NULL AND w.client_id IS NOT NULL`;
@@ -51,6 +75,22 @@ export const CLIENT_INVOICE_BACKFILL = {
 } satisfies OnlineRepair;
 
 export const CLIENT_INVOICE_CONSTRAINTS = [
+  {
+    tableName: "invoices",
+    constraintName: "invoices_workspace_id_workspaces_id_fkey",
+  },
+  {
+    tableName: "invoices",
+    constraintName: "invoices_workspace_organization_fk",
+  },
+  {
+    tableName: "invoice_lines",
+    constraintName: "invoice_lines_workspace_id_workspaces_id_fk",
+  },
+  {
+    tableName: "invoice_lines",
+    constraintName: "invoice_lines_workspace_organization_fk",
+  },
   { tableName: "invoices", constraintName: "invoices_scope_check" },
   {
     tableName: "invoices",

@@ -29,6 +29,7 @@ import {
   CLIENT_INVOICE_BACKFILL,
   CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
   CLIENT_INVOICE_CONSTRAINTS,
+  CLIENT_INVOICE_TENANT_KEY,
 } from "./client-invoice-backfill";
 import {
   CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
@@ -54,6 +55,7 @@ import {
   createOnlineTableGate,
   declaresOnlineBuild,
   dropIndexConcurrently,
+  INVOICE_TENANT_UNIQUE_INDEX,
   reindexIndexConcurrently,
   renameIndex,
   runGatedTableWork,
@@ -382,14 +384,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "invoice_lines_workspace_organization_idx",
     tableName: "invoice_lines",
   },
-  {
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_org_unique" ON public."invoices" USING btree (id, organization_id)',
-    definitionBody: "ON public.invoices USING btree (id, organization_id)",
-    isUnique: true,
-    name: "invoices_id_org_unique",
-    tableName: "invoices",
-  },
+  INVOICE_TENANT_UNIQUE_INDEX,
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "invoices_org_client_created_idx" ON public."invoices" USING btree (organization_id, client_id, created_at, id)',
@@ -821,6 +816,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CLIENT_INVOICE_TENANT_KEY,
   CLIENT_INVOICE_BACKFILL,
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,

@@ -1497,6 +1497,20 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (
+            query.includes('AS "uniquePresent"') &&
+            query.includes('AS "foreignReady"')
+          ) {
+            return [
+              {
+                indexReady: true,
+                uniquePresent: true,
+                uniqueReady: true,
+                foreignPresent: true,
+                foreignReady: true,
+              },
+            ];
+          }
           if (query.includes("pg_backend_pid() AS pid")) {
             return [{ pid: 1, database: "test" }];
           }
