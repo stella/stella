@@ -141,6 +141,7 @@ describe("invoice transition integration", () => {
       unitPrice: cents(10_000),
       vatRateBps: 2300,
       vatTreatment: "domestic_vat",
+      exemptionReason: null,
       netAmount: cents(10_000),
       vatAmount: cents(2300),
       grossAmount: cents(12_300),
@@ -160,6 +161,103 @@ describe("invoice transition integration", () => {
       .delete(sellerProfiles)
       .where(eq(sellerProfiles.id, sellerProfileId));
   });
+
+  test("refuses a Polish VAT invoice in a currency other than złoty (art. 106e ust. 11)", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Kancelaria Wisła",
+      vatId: "PL5260001246",
+      vatPayer: true,
+      country: "PL",
+      defaultCurrency: "EUR",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId, currency: "EUR" })
+      .where(eq(invoices.id, invoiceId));
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId,
+      position: 0,
+      description: "Porada prawna",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(10_000),
+      vatRateBps: 2300,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(10_000),
+      vatAmount: cents(2300),
+      grossAmount: cents(12_300),
+      source: "manual",
+    });
+
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      code: 409,
+      response: {
+        message: "This seller's VAT invoices must state the VAT amount in PLN",
+        hint: "Issue the invoice in PLN; converting the VAT amount from another currency is not supported yet.",
+      },
+    });
+    await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
+  test.each(["exempt", "not_vat_payer"] as const)(
+    "refuses a Polish %s line without its exemption basis",
+    async (vatTreatment) => {
+      const sellerProfileId = createSafeId<"sellerProfile">();
+      await testDb.insert(sellerProfiles).values({
+        id: sellerProfileId,
+        organizationId: ids.orgA,
+        legalName: "Kancelaria Wisła",
+        vatId: "PL5260001246",
+        vatPayer: vatTreatment !== "not_vat_payer",
+        country: "PL",
+        defaultCurrency: "PLN",
+      });
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+      await testDb
+        .update(invoices)
+        .set({ sellerProfileId, currency: "PLN" })
+        .where(eq(invoices.id, invoiceId));
+      await testDb.insert(invoiceLines).values({
+        id: createSafeId<"invoiceLine">(),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        invoiceId,
+        position: 0,
+        description: "Porada prawna",
+        quantity: "1.0000",
+        unit: "h",
+        unitPrice: cents(10_000),
+        vatRateBps: 0,
+        vatTreatment,
+        netAmount: cents(10_000),
+        vatAmount: cents(0),
+        grossAmount: cents(10_000),
+        source: "manual",
+      });
+
+      expect(await runTransition(invoiceId, "finalize")).toEqual({
+        code: 400,
+        response: {
+          message: `Polish ${vatTreatment} invoice lines require an exemption basis`,
+          hint: "Add the statutory exemption reason to every exempt or non-VAT-payer line, then finalize again.",
+        },
+      });
+      await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+      await testDb
+        .delete(sellerProfiles)
+        .where(eq(sellerProfiles.id, sellerProfileId));
+    },
+  );
 
   test("allocates consecutive default-series numbers and keeps the first through revert and refinalize", async () => {
     const seriesId = createSafeId<"numberSeries">();
