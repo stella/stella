@@ -953,7 +953,7 @@ export const invoices = p.pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
-      onDelete: "restrict",
+      onDelete: "no action",
     }),
     workspaceId: safeWorkspaceId("workspace_id"),
     invoiceNumber: p.varchar("invoice_number", { length: 64 }),

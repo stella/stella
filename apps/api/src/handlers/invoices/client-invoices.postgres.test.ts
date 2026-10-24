@@ -255,6 +255,45 @@ if (!databaseUrl || !runPostgres) {
         actors,
       };
     };
+    test("organization deletion cascades through contacts, matters and client-linked invoices", async () => {
+      const scenario = await seedScenario();
+      // A contact cannot disappear while its invoice remains; an organization
+      // deletion removes both in one statement, regardless of cascade order.
+      await expectSqlState(
+        db.delete(contacts).where(eq(contacts.id, scenario.clientId)),
+        "23503",
+      );
+      const deleted = await db
+        .delete(organization)
+        .where(eq(organization.id, scenario.orgId))
+        .returning({ id: organization.id });
+      expect(deleted).toEqual([{ id: scenario.orgId }]);
+      expect(
+        await db
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.organizationId, scenario.orgId)),
+      ).toEqual([]);
+      expect(
+        await db
+          .select({ id: workspaces.id })
+          .from(workspaces)
+          .where(eq(workspaces.organizationId, scenario.orgId)),
+      ).toEqual([]);
+      expect(
+        await db
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(eq(invoices.organizationId, scenario.orgId)),
+      ).toEqual([]);
+      expect(
+        await db
+          .select({ id: invoiceLines.id })
+          .from(invoiceLines)
+          .where(eq(invoiceLines.organizationId, scenario.orgId)),
+      ).toEqual([]);
+    });
+
     test("a newly participating matter invalidates a lock set acquired from an older snapshot", async () => {
       const scenario = await seedScenario();
       const thirdMatterId = createSafeId<"workspace">();
