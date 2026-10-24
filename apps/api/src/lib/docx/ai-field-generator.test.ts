@@ -9,7 +9,7 @@ import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { agentSkills } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,
@@ -281,6 +281,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     const model = blockingModel(reached);
     const generation = admitModelDispatch({
       organizationId,
+      userId: null,
       actionKind: "report-export.background",
       organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
@@ -299,7 +300,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     expect(providerSignal.aborted).toBe(false);
     lease.abort();
 
-    expect(await generation).toMatchObject({ type: "failed" });
+    expect((await generation).unwrap()).toMatchObject({ type: "failed" });
     expect(providerSignal.aborted).toBe(true);
   });
 });
@@ -903,7 +904,8 @@ describe("buildAiConditionDecider decision tier", () => {
         skillContext: { organizationId, userId, safeDb: skillDb },
         generation: {
           dataClass: "customer",
-          role: "fast",
+          userId,
+          task: "classify",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency: "eu",
@@ -912,7 +914,7 @@ describe("buildAiConditionDecider decision tier", () => {
           tenantWorkspaceIds: [],
           caching: resolveCaching({
             promptCachingEnabled: false,
-            role: "fast",
+            task: "classify",
             scopeKey: organizationId,
           }),
           prompt: "Decide the template conditions from their current values.",

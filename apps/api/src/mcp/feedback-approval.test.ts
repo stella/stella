@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
@@ -95,6 +96,11 @@ describe("feedback approval", () => {
 
   test("refuses alternate numeric spellings even with a valid approval signature", () => {
     const [prefix, expiresAt, mac] = approval.split(".");
+    if (prefix === undefined || expiresAt === undefined || mac === undefined) {
+      return panic(
+        "The approval fixture must contain a version, expiry, and signature",
+      );
+    }
     for (const token of [`${expiresAt}e0`, `+${expiresAt}`, ` ${expiresAt}`]) {
       expect(
         checkFeedbackApproval({

@@ -1,11 +1,10 @@
-import { panic } from "better-result";
 import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   getTableConfig,
   PgDialect,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
@@ -21,8 +20,8 @@ import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
-  runOnlineMigrations,
   type OnlineRepairOptions,
+  runOnlineMigrations,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
@@ -68,7 +67,12 @@ const repairConnection = (
     }
     return await connection.unsafe(statement, [...parameters]);
   },
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
+  terminate: async () => {
+    await terminateReserved(connection);
+  },
 });
 
 const withScratch = async (
@@ -286,6 +290,9 @@ describe.skipIf(!enabled)(
               },
               pollMs: 1,
               retryMs: 7,
+              // The writer this test holds is the wait under test.
+              idleHolderMs: 3_600_000,
+              longHolderMs: 3_600_000,
             };
             const outcome = await runOnlineMigrations(
               { reserve: async () => connection },
@@ -365,7 +372,7 @@ describe.skipIf(!enabled)(
             );
             expect(outcome).toEqual({
               type: "deferred",
-              index: staged.name,
+              step: staged.name,
               retryAfterMs: config.retryMs,
             });
             expect(await readFinal()).toEqual(before);
@@ -381,15 +388,15 @@ describe.skipIf(!enabled)(
               "SELECT i.indisvalid AS valid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1",
               [staged.name],
             );
-            expect(stageState).toEqual(
+            expect([...stageState]).toEqual(
               reason === "cancel" ? [{ valid: false }] : [],
             );
             expect(readings).toBe(reason === "cancel" ? 3 : 1);
           } finally {
             await blocker.unsafe("ROLLBACK");
-            blocker.release();
-            observer.release();
-            builder.release();
+            await blocker.release();
+            await observer.release();
+            await builder.release();
           }
         });
       });
@@ -397,7 +404,7 @@ describe.skipIf(!enabled)(
 
     for (const kind of ["date", "receipt"] as const) {
       test(`${kind} repair deploys pending and resumes its committed batch exactly once`, async () => {
-        await withScratch(async (client) => {
+        await withScratch(async (client, openClient) => {
           const fixture = await createFixture(client, kind);
           let now = Date.parse("2026-10-01T12:00:00Z");
           let readings = 0;
@@ -441,10 +448,28 @@ describe.skipIf(!enabled)(
           };
           const runnerOptions = {
             repairs: [repair],
-            indexGate: { ebs: { type: "disabled" } },
-            // The adapter reports every index ready, so no build observes.
-            reserveObserver: () =>
-              panic("Repair holds never build an online index"),
+            // The adapter reports every index ready, so only the repair's
+            // constraint validation opens the gate, on a session of its own.
+            indexGate: {
+              ebs: { type: "disabled" },
+              config: {
+                ...readOnlineIndexConfig({}),
+                health: { ...defaultConfig, busyWindows: [] },
+              },
+            },
+            reserveObserver: async () => {
+              const observer = await openClient().reserve();
+              return {
+                execute: async (statement, parameters = []) => {
+                  await observer.unsafe(statement, [...parameters]);
+                },
+                query: async (statement, parameters = []) =>
+                  await observer.unsafe(statement, [...parameters]),
+                release: async () => {
+                  await observer.release();
+                },
+              };
+            },
             log: (record: unknown) => {
               events.push(record);
             },

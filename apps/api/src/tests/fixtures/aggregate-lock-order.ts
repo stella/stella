@@ -20,6 +20,17 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    account: { aggregate: "account", id: userId, mode: "no key update" },
+    accountExport: {
+      aggregate: "accountExport",
+      id: { id: Bun.randomUUIDv7(), userId },
+      mode: "share",
+    },
+    folioCollabRoom: {
+      aggregate: "folioCollabRoom",
+      id: { id: createSafeId<"folioCollabRoom">(), workspaceId },
+      mode: "update",
+    },
     signingSession: {
       aggregate: "signingSession",
       id: {
@@ -52,6 +63,18 @@ export const aggregateFences = () => {
       aggregate: "definition",
       id: { id: definitionId, organizationId },
       mode: "update",
+    },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
+    legislationAmendmentWork: {
+      aggregate: "legislationAmendmentWork",
+      id: {
+        sourceId: createSafeId<"legislationSource">(),
+        eli: "eli/cz/sb/2012/89",
+        language: "cs",
+      },
     },
     scoutCensus: {
       aggregate: "scoutCensus",
@@ -157,6 +180,10 @@ export const aggregateFences = () => {
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
     sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
+    chatToolGrants: {
+      aggregate: "chatToolGrants",
+      id: { organizationId, userId },
+    },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

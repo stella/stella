@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import Elysia from "elysia";
 
 import {
+  createSearchSummaryChatThread,
   refineSearchBodySchema,
   refineSearchQuery,
   searchSummaryChatBodySchema,
-  createSearchSummaryChatThread,
   summarizeSearchBodySchema,
   summarizeSearchResults,
 } from "@/api/handlers/search/ai";
@@ -88,7 +88,7 @@ const refineSearchEndpoint = createSafeRootHandler(
     actionAdmission: { type: "handler", actionKind: "search.refine" },
     mcp: { type: "internal", reason: "search_ui" },
     body: refineSearchBodySchema,
-    requiresUsage: { actionType: "chat", modelRole: "fast" },
+    requiresUsage: { actionType: "chat", modelTask: "short-text" },
   } satisfies HandlerConfig,
   async function* ({
     body,
@@ -132,7 +132,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     actionAdmission: { type: "handler", actionKind: "search.summarize" },
     mcp: { type: "internal", reason: "search_ui" },
     body: summarizeSearchBodySchema,
-    requiresUsage: { actionType: "chat", modelRole: "fast" },
+    requiresUsage: { actionType: "chat", modelTask: "short-text" },
   } satisfies HandlerConfig,
   async function* ({
     body,
@@ -183,6 +183,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
   } satisfies HandlerConfig,
   async function* ({
     body,
+    featureAccessSnapshot,
     getActiveWorkspaceIds,
     safeDb,
     scopedDb,
@@ -200,6 +201,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             accessibleWorkspaceIds: activeWorkspaceIds,
             body,
+            featureAccessSnapshot,
             safeDb,
             scopedDb,
             userId: user.id,
@@ -219,24 +221,30 @@ export const searchRoute = new Elysia({ prefix: "/search" })
   .post("/", searchEndpoint.handler, {
     body: searchEndpoint.config.body,
     permissions: searchEndpoint.config.permissions,
+    accountAccess: searchEndpoint.config.accountAccess,
   })
   .post("/facets", searchFacetsEndpoint.handler, {
     body: searchFacetsEndpoint.config.body,
     permissions: searchFacetsEndpoint.config.permissions,
+    accountAccess: searchFacetsEndpoint.config.accountAccess,
   })
   .post("/preview", searchPreviewEndpoint.handler, {
     body: searchPreviewEndpoint.config.body,
     permissions: searchPreviewEndpoint.config.permissions,
+    accountAccess: searchPreviewEndpoint.config.accountAccess,
   })
   .post("/refine", refineSearchEndpoint.handler, {
     body: refineSearchEndpoint.config.body,
     permissions: refineSearchEndpoint.config.permissions,
+    accountAccess: refineSearchEndpoint.config.accountAccess,
   })
   .post("/summary", summarizeSearchEndpoint.handler, {
     body: summarizeSearchEndpoint.config.body,
     permissions: summarizeSearchEndpoint.config.permissions,
+    accountAccess: summarizeSearchEndpoint.config.accountAccess,
   })
   .post("/summary/chat", searchSummaryChatEndpoint.handler, {
     body: searchSummaryChatEndpoint.config.body,
     permissions: searchSummaryChatEndpoint.config.permissions,
+    accountAccess: searchSummaryChatEndpoint.config.accountAccess,
   });

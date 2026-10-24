@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { OnlineTableGate } from "./online-ddl";
+
 /**
  * The connection the online phase of a migration runs on, and the shape of a
  * data repair registered with it. Separate from `online-migrations.ts` so a
@@ -14,12 +16,7 @@ import { panic } from "better-result";
  * joined string and split it in SQL (`string_to_array($1, ',')::uuid[]`).
  */
 export type OnlineMigrationParam =
-  | string
-  | number
-  | bigint
-  | boolean
-  | Date
-  | null;
+  string | number | bigint | boolean | Date | null;
 
 const isOnlineMigrationParam = (
   value: unknown,
@@ -75,13 +72,27 @@ export type OnlineRepairCompletion =
   | { type: "complete" };
 
 /**
+ * Where an online step stopped. A step whose table-locking work the gate held
+ * or cancelled defers the phase at that step: every later step may depend on
+ * it, so none of them runs, and the caller runs the phase again after
+ * `retryAfterMs`.
+ */
+export type OnlineMigrationOutcome =
+  | { type: "complete" }
+  | { type: "deferred"; step: string; retryAfterMs: number };
+
+/**
  * A data repair that a schema migration left to the online phase.
  *
  * `repair` runs on the migrate entrypoint under the online-migrations lock,
  * with no statement budget on the session; it owns its own transactions and
  * their budgets, and must converge: every call brings the database closer to
  * `readCompletion` reporting `complete`, an interrupted call is resumed by
- * calling again, and a call on a completed database changes nothing.
+ * calling again, and a call on a completed database changes nothing. A
+ * statement that locks a table (a validation, an ANALYZE) runs only through
+ * `tables`; when the gate defers it, `repair` returns that deferral, the
+ * phase defers there as it does at an index, and the next run calls `repair`
+ * again.
  *
  * `readCompletion` never repairs. The phase reads it before the repair, and
  * runs no walk when the postcondition already holds, so the fixed point costs
@@ -94,5 +105,8 @@ export type OnlineRepair = {
   readCompletion: (
     connection: OnlineMigrationConnection,
   ) => Promise<OnlineRepairCompletion>;
-  repair: (connection: OnlineMigrationConnection) => Promise<void>;
+  repair: (
+    connection: OnlineMigrationConnection,
+    tables: OnlineTableGate,
+  ) => Promise<OnlineMigrationOutcome>;
 };

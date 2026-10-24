@@ -5,7 +5,10 @@ import type {
   FeedbackVia,
 } from "@stll/api-contract/feedback";
 
+import type { CustomerDistinctId } from "@/api/lib/auth/principal-audience";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ReleaseFailureEventProperties } from "@/api/lib/observability/release-failure-contract";
+import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-contract";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 import type { McpCredentialType } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -17,6 +20,7 @@ export const SERVER_ANALYTICS_EVENTS = {
   exception: "$exception",
   feedbackReportSubmitted: "feedback_report_submitted",
   mcpSessionInitialized: "mcp_session_initialized",
+  releaseFailureWindow: RELEASE_FAILURE_EVENT,
 } as const;
 
 export type AnalyticsPrimitive = boolean | number | string;
@@ -112,10 +116,7 @@ export type McpSessionInitializedProperties = {
  * are three different facts.
  */
 export type FeedbackDeliveryOutcome =
-  | "delivered"
-  | "failed"
-  | "not_configured"
-  | "skipped_duplicate";
+  "delivered" | "failed" | "not_configured" | "skipped_duplicate";
 
 /**
  * One filed report, as telemetry. Content never appears here: the event says
@@ -184,8 +185,15 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
         properties: FeedbackReportSubmittedProperties;
       }
     | {
+        // Product usage: only a principal classified as a customer may send
+        // it (`principal-audience.ts`).
+        distinctId: CustomerDistinctId;
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.releaseFailureWindow;
+        properties: ReleaseFailureEventProperties;
       }
   );
 

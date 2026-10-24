@@ -124,7 +124,7 @@ const recordNothing: AuditRecorder = async () => {
 describe("fill to workspace records the completion decision", () => {
   test("an undecided AI condition saves the document but records the fill as partial", async () => {
     const templateId = createSafeId<"template">();
-    const s3Key = `templates/${templateId}.docx`;
+    const s3Key = `${ids.orgA}/templates/${templateId}.docx`;
     const docx = await gatedDocx();
     fakeS3.put("stella", s3Key, new Uint8Array(docx.bytes));
     await testDb.insert(templates).values({

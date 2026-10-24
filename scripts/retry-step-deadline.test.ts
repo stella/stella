@@ -18,12 +18,31 @@ const stepSchema = v.object({
   "timeout-minutes": v.optional(v.union([v.number(), v.string()])),
 });
 type Step = v.InferOutput<typeof stepSchema>;
+const matrixLegSchema = v.record(v.string(), v.unknown());
+type MatrixLeg = v.InferOutput<typeof matrixLegSchema>;
 const fileSchema = v.object({
   env: envSchema,
   jobs: v.optional(
     v.record(
       v.string(),
-      v.object({ env: envSchema, steps: v.optional(v.array(stepSchema)) }),
+      v.object({
+        env: envSchema,
+        steps: v.optional(v.array(stepSchema)),
+        strategy: v.optional(
+          v.object({
+            matrix: v.optional(
+              v.union([
+                v.string(),
+                v.object({
+                  include: v.optional(
+                    v.union([v.string(), v.array(matrixLegSchema)]),
+                  ),
+                }),
+              ]),
+            ),
+          }),
+        ),
+      }),
     ),
   ),
   runs: v.optional(v.object({ steps: v.optional(v.array(stepSchema)) })),
@@ -31,6 +50,37 @@ const fileSchema = v.object({
 
 type Env = Record<string, string | number | boolean>;
 type BoundedStep = { where: string; step: Step; env: Env };
+
+// A deadline may name one matrix value; each `include` leg is then checked
+// with its own value. Any other expression stays unreadable, so it fails.
+const MATRIX_DEADLINE = /^\$\{\{\s*matrix\.([\w-]+)\s*\}\}$/u;
+export const deadlineLegs = (
+  bounded: BoundedStep,
+  legs: readonly MatrixLeg[],
+): BoundedStep[] => {
+  const timeout = bounded.step["timeout-minutes"];
+  const key =
+    typeof timeout === "string"
+      ? MATRIX_DEADLINE.exec(timeout)?.at(1)
+      : undefined;
+  if (key === undefined || legs.length === 0) {
+    return [bounded];
+  }
+  return legs.map((leg, index) => {
+    const value = leg[key];
+    return {
+      ...bounded,
+      where: `${bounded.where} [matrix leg ${String(index + 1)}]`,
+      step: {
+        ...bounded.step,
+        "timeout-minutes":
+          typeof value === "number" || typeof value === "string"
+            ? value
+            : "missing",
+      },
+    };
+  });
+};
 
 const root = new URL("../.github/", import.meta.url);
 const boundedRetrySteps = (): BoundedStep[] => {
@@ -52,13 +102,25 @@ const boundedRetrySteps = (): BoundedStep[] => {
       fileSchema,
       Bun.YAML.parse(readFileSync(new URL(path, root), "utf-8")),
     );
-    const groups: { where: string; env: Env; steps: Step[] }[] = [
-      ...Object.entries(parsed.jobs ?? {}).map(([id, job]) => ({
-        where: `${path} ${id}`,
-        env: { ...parsed.env, ...job.env },
-        steps: job.steps ?? [],
-      })),
-      { where: path, env: {}, steps: parsed.runs?.steps ?? [] },
+    const groups: {
+      where: string;
+      env: Env;
+      steps: Step[];
+      legs: readonly MatrixLeg[];
+    }[] = [
+      ...Object.entries(parsed.jobs ?? {}).map(([id, job]) => {
+        const matrix = job.strategy?.matrix;
+        return {
+          where: `${path} ${id}`,
+          env: { ...parsed.env, ...job.env },
+          steps: job.steps ?? [],
+          legs:
+            typeof matrix === "object" && Array.isArray(matrix.include)
+              ? matrix.include
+              : [],
+        };
+      }),
+      { where: path, env: {}, steps: parsed.runs?.steps ?? [], legs: [] },
     ];
     for (const group of groups) {
       for (const step of group.steps) {
@@ -66,11 +128,16 @@ const boundedRetrySteps = (): BoundedStep[] => {
           step["timeout-minutes"] !== undefined &&
           step.run?.includes("retry.sh")
         ) {
-          found.push({
-            where: `${group.where} "${step.name ?? step.run}"`,
-            step,
-            env: { ...group.env, ...step.env },
-          });
+          found.push(
+            ...deadlineLegs(
+              {
+                where: `${group.where} "${step.name ?? step.run}"`,
+                step,
+                env: { ...group.env, ...step.env },
+              },
+              group.legs,
+            ),
+          );
         }
       }
     }
@@ -99,6 +166,41 @@ test("every bounded step that wraps retry.sh fits all of its attempts", () => {
   const steps = boundedRetrySteps();
   // Composite installs no longer retry; the invariant also covers an empty census.
   expect(steps.map(retryEnvelopeViolation).filter(Boolean)).toEqual([]);
+});
+
+test("a matrix deadline is checked on every leg, and other expressions fail", () => {
+  const bounded = (timeout: string): BoundedStep => ({
+    where: "x",
+    step: { run: "bash scripts/retry.sh bun ci", "timeout-minutes": timeout },
+    env: {},
+  });
+  const violations = (timeout: string, legs: readonly MatrixLeg[]) =>
+    deadlineLegs(bounded(timeout), legs).map(retryEnvelopeViolation);
+
+  const githubExpression = (inner: string) => `\${{ ${inner} }}`;
+  const matrixDeadline = githubExpression("matrix.install_timeout_minutes");
+  expect(
+    violations(matrixDeadline, [
+      { install_timeout_minutes: 30 },
+      { install_timeout_minutes: 5 },
+    ]),
+  ).toEqual([undefined, undefined]);
+  expect(
+    violations(matrixDeadline, [
+      { install_timeout_minutes: 30 },
+      { install_timeout_minutes: 1 },
+    ]),
+  ).toEqual([
+    undefined,
+    "x [matrix leg 2]: 60s deadline < 105s retry envelope",
+  ]);
+  expect(violations(matrixDeadline, [{ os: "macos" }])[0]).toBeString();
+  expect(violations(matrixDeadline, [])[0]).toBeString();
+  expect(
+    violations(githubExpression("matrix.os == 'windows' && 30 || 5"), [
+      { os: "windows" },
+    ])[0],
+  ).toBeString();
 });
 
 test("the retry envelope guard rejects a deadline that cuts off the last attempt", () => {

@@ -4,14 +4,19 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  caseLawCoverageSlices,
   caseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
@@ -22,15 +27,20 @@ import {
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
 import {
+  readCaseLawCoverageYearsQuery,
+  summarizeCaseLawCoverageYears,
+} from "@/api/handlers/case-law/decisions/coverage-years";
+import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readProvisionPendingCounts } from "@/api/lib/case-law/provision-pending";
+import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import {
-  publishedUnredactedCaseLawDecisionFor,
-  publishedUnredactedCaseLawDecisionSqlFor,
+  publishedCaseLawDecisionFor,
+  publishedCaseLawDecisionSqlFor,
 } from "@/api/lib/case-law/published-decisions-sql";
 import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
 import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
@@ -350,6 +360,10 @@ const loadCoverage = async (
         async (tx) =>
           await readCaseLawArrivalsQuery(tx, { sourceIds, now: NOW }),
       ),
+    readYearCompleteness: async (sources) =>
+      await readAsReader(
+        async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
+      ),
     readFacets: async (country) =>
       Result.ok({
         country: [{ value: country, count: 3 }],
@@ -364,7 +378,183 @@ const loadCoverage = async (
   });
 
 test(
-  "unindexed, withdrawn and listing-only decisions cannot widen either served year bound",
+  "slice ledgers report complete, short, and unlisted years while unsliced sources are explicit",
+  async () => {
+    const db = drizzle({ client });
+    await db.insert(caseLawCoverageSlices).values([
+      {
+        sourceId: czSourceId,
+        slice: "2023-01-01",
+        reported: 2,
+        collected: 2,
+        checkedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2024-01-01",
+        reported: 5,
+        collected: 3,
+        checkedAt: new Date("2026-01-02T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-02",
+        walkError: "publisher_unavailable",
+        checkedAt: new Date("2026-01-03T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-03",
+        walkError: "rate_limited",
+        checkedAt: new Date("2026-01-04T00:00:00.000Z"),
+      },
+    ]);
+
+    try {
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      expect(czech?.knownGaps).toEqual({
+        type: "reconciled",
+        summary: { missing: 2, shortSlices: 1, unlistedSlices: 2 },
+        years: [
+          { year: 2023, type: "complete" },
+          {
+            year: 2024,
+            type: "gaps",
+            missing: 2,
+            shortSlices: 1,
+          },
+          {
+            year: 2025,
+            type: "unlisted",
+            missing: 0,
+            shortSlices: 0,
+            unlistedSlices: 2,
+          },
+        ],
+      });
+
+      const unsliced = await readAsReader(
+        async (tx) =>
+          await readCaseLawCoverageYearsQuery(tx, [
+            { id: czSourceId, adapterKey: ADAPTER_KEYS.PL_NSA },
+          ]),
+      );
+      expect(unsliced.get(String(czSourceId))).toEqual({
+        type: "not_reconciled",
+        reason:
+          "The source listing is not partitioned into calendar-date slices.",
+      });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a walk error never reaches the public coverage response",
+  async () => {
+    const db = drizzle({ client });
+    const secret = "k3y-6348-walk";
+    await db.insert(caseLawCoverageSlices).values({
+      sourceId: czSourceId,
+      slice: "2022-03-04",
+      walkError: `AdapterFetchError: GET https://listing.example/rozhodnuti?key=${secret}&strana=2 refused`,
+      checkedAt: new Date("2026-01-05T00:00:00.000Z"),
+    });
+
+    try {
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      // The failed walk still counts as an unread listing period.
+      expect(
+        czech?.knownGaps.type === "reconciled"
+          ? czech.knownGaps.years.find(({ year }) => year === 2022)
+          : undefined,
+      ).toEqual({
+        year: 2022,
+        type: "unlisted",
+        missing: 0,
+        shortSlices: 0,
+        unlistedSlices: 1,
+      });
+      const body = JSON.stringify(coverage.value);
+      for (const leaked of [
+        secret,
+        "key=",
+        "listing.example",
+        "AdapterFetchError",
+      ]) {
+        expect(body).not.toContain(leaked);
+      }
+      // The public role holds no grant on the column at all.
+      // Drizzle wraps the driver error, so the refusal is on the cause.
+      expect(
+        await rejectionOf(
+          readAsReader(
+            async (tx) =>
+              await tx.execute(
+                sql`SELECT walk_error FROM case_law_coverage_slices LIMIT 1`,
+              ),
+          ),
+        ),
+      ).toMatchObject({
+        cause: { message: expect.stringContaining("permission denied") },
+      });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test("per-year missing counts sum to the source missing count", () => {
+  assertProperty(
+    "per-year missing counts sum to the source missing count",
+    fc.property(
+      fc.array(
+        fc.record({
+          year: fc.integer({ min: 1900, max: 2100 }),
+          missing: fc.nat({ max: 10_000 }),
+          shortSlices: fc.nat({ max: 366 }),
+          unlistedSlices: fc.nat({ max: 366 }),
+        }),
+      ),
+      (rows) => {
+        const result = summarizeCaseLawCoverageYears(rows);
+        let missingFromYears = 0;
+        for (const year of result.years) {
+          if (year.type === "gaps") {
+            missingFromYears += year.missing;
+          }
+          if (year.type === "unlisted") {
+            missingFromYears += year.missing;
+          }
+        }
+        expect(missingFromYears).toBe(result.summary.missing);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+test(
+  "year bounds span every held decision, indexed or not",
   async () => {
     const db = drizzle({ client });
     const sourceId = createSafeId<"caseLawSource">();
@@ -428,41 +618,46 @@ test(
         })),
       );
       const decision = alias(caseLawDecisions, "publication_parity_decisions");
-      await readAsReader(async (tx) => {
-        const published = await tx
+      {
+        const published = await db
           .select({ id: caseLawDecisions.id })
           .from(caseLawDecisions)
           .where(
             and(
               eq(caseLawDecisions.sourceId, sourceId),
-              publishedUnredactedCaseLawDecisionFor(caseLawDecisions),
+              publishedCaseLawDecisionFor(caseLawDecisions),
             ),
           );
-        const aliased = await tx
+        const aliased = await db
           .select({ id: decision.id })
           .from(decision)
           .where(
             and(
               eq(decision.sourceId, sourceId),
-              publishedUnredactedCaseLawDecisionFor(decision),
+              publishedCaseLawDecisionFor(decision),
             ),
           );
-        const raw = await tx
+        const raw = await db
           .select({ id: decision.id })
           .from(decision)
           .where(
             and(
               eq(decision.sourceId, sourceId),
               sql.raw(
-                publishedUnredactedCaseLawDecisionSqlFor(
-                  "publication_parity_decisions",
-                ),
+                publishedCaseLawDecisionSqlFor("publication_parity_decisions"),
               ),
             ),
           );
         for (const rows of [published, aliased, raw]) {
           expect(rows.map(({ id }) => id).toSorted()).toEqual(expectedIds);
         }
+      }
+      await readAsReader(async (tx) => {
+        const published = await tx
+          .select({ id: publishedCaseLawDecisions.id })
+          .from(publishedCaseLawDecisions)
+          .where(eq(publishedCaseLawDecisions.sourceId, sourceId));
+        expect(published.map(({ id }) => id).toSorted()).toEqual(expectedIds);
       });
       const fixture = await client.query(
         `
@@ -490,18 +685,13 @@ test(
         ),
       );
       const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
+        readCaseLawCoverageSourcesQuery(tx),
       );
-      const unknown = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
-      );
-      expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: null,
-        decisionYearTo: null,
-      });
+      // Held, not searchable: the unindexed endpoints still bound the years,
+      // while withdrawn and listing-only decisions never do.
       expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: 2000,
-        decisionYearTo: 2010,
+        decisionYearFrom: 1800,
+        decisionYearTo: 2020,
         pendingTextCount: 0,
       });
       expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({
@@ -512,6 +702,60 @@ test(
         decisionYearFrom: null,
         decisionYearTo: null,
       });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "pending-text aggregates count listing-only rows and exclude erased or completed rows",
+  async () => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: `pending-text-${sourceId}`,
+        name: "Pending-text fixture",
+      }),
+    );
+    try {
+      await db.insert(caseLawDecisions).values(
+        [
+          { caseNumber: "pending a", metadata: LISTING_ONLY },
+          { caseNumber: "pending b", metadata: LISTING_ONLY },
+          { caseNumber: "erased", metadata: LISTING_ONLY, redactedAt: NOW },
+          {
+            caseNumber: "completed",
+            metadata: LISTING_ONLY,
+            fulltext: "Decision text",
+          },
+          { caseNumber: "detail", metadata: {} },
+        ].map((row) =>
+          decisionRow({
+            ...row,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            sourceId,
+            createdAt: NOW,
+          }),
+        ),
+      );
+      const counts = await readAsReader(
+        async (tx) =>
+          await readPendingTextCountsBySource(tx, [sourceId, withheldSourceId]),
+      );
+      expect(counts).toEqual([{ sourceId, pendingTextCount: 2 }]);
+      expect(
+        await readAsReader(
+          async (tx) => await readPendingTextCountsBySource(tx, []),
+        ),
+      ).toEqual([]);
     } finally {
       await db
         .delete(caseLawDecisions)

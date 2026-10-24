@@ -1,10 +1,10 @@
-import {
-  ADMITTED_PUBLIC_COUNTRIES,
-  PAGES_PUBLIC_COUNTRIES,
-} from "./public-country-capability";
+import { publicCountriesFor } from "./public-country-capability";
 
 /** Statute jurisdictions admitted to search, the API search surfaces and MCP. */
-export const PUBLIC_LEGISLATION_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES;
+export const PUBLIC_LEGISLATION_COUNTRIES = publicCountriesFor(
+  "legislation",
+  "search",
+);
 
 export type PublicLegislationCountry =
   (typeof PUBLIC_LEGISLATION_COUNTRIES)[number];
@@ -30,7 +30,10 @@ export const publicLegislationCountry = (
 };
 
 /** Statute jurisdictions whose pages are served, listed in sitemaps and crawlable. */
-export const PUBLIC_LEGISLATION_PAGE_COUNTRIES = PAGES_PUBLIC_COUNTRIES;
+export const PUBLIC_LEGISLATION_PAGE_COUNTRIES = publicCountriesFor(
+  "legislation",
+  "pages",
+);
 
 export const isPublicLegislationPageCountry = (country: string): boolean =>
   PUBLIC_LEGISLATION_PAGE_COUNTRIES.some((candidate) => candidate === country);

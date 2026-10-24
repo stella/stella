@@ -1,16 +1,21 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import { MODEL_ROLES, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  TANSTACK_AI_PROVIDERS,
+} from "@stll/ai-catalog";
+import type { BYOKProvider, ModelOverrideGroup } from "@stll/ai-catalog";
 
 import { organizationSettings } from "@/api/db/schema";
 import {
-  supportsRegion,
   type DataRegion,
   type DecisionModelProvider,
   type OrgAIConfig,
   type OrgAIModelSelection,
   type OrgAIProviderConfig,
+  supportsRegion,
 } from "@/api/lib/ai-config";
 import {
   decryptAIConfig,
@@ -34,11 +39,11 @@ import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { createSafeId } from "@/api/lib/branded-types";
 import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
-import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
+import { isAllowedBYOKModelForTask } from "@/api/lib/tanstack-ai-models";
 import { probeDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 import { resolveDecisionConfig } from "./ai-config-decision";
+import { resolveAIConfigDefaults } from "./ai-config-defaults";
 
 const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 
@@ -95,7 +100,7 @@ const updateAIConfigBody = t.Object({
   decision: t.Optional(t.Nullable(decisionBody)),
 });
 
-const config = {
+export const updateAIConfigConfig = {
   contract: "replace",
   precondition: {
     type: "deferred",
@@ -123,7 +128,7 @@ const AI_CONFIG_ERROR_CODE = {
  * encrypts the config, and stores it.
  */
 const updateAIConfig = createSafeRootHandler(
-  config,
+  updateAIConfigConfig,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     let existingConfig: OrgAIConfig | undefined;
     const row = yield* Result.await(
@@ -321,6 +326,9 @@ const updateAIConfig = createSafeRootHandler(
         region: providerResponseRegion(providerConfig),
         ...providerResponseExtras(providerConfig),
       })),
+      ...resolveAIConfigDefaults(
+        orgConfig.providers.map(({ provider }) => provider),
+      ),
       overrideModels: orgConfig.overrideModels,
       decision: decisionModelResponse(orgConfig.decision),
     });
@@ -465,7 +473,7 @@ type OverrideModelSelectionInput = {
 };
 
 type OverrideModelsInput = Partial<
-  Record<ModelRole, OverrideModelSelectionInput | undefined>
+  Record<ModelOverrideGroup, OverrideModelSelectionInput | undefined>
 >;
 
 type OverrideModelsResult =
@@ -473,7 +481,7 @@ type OverrideModelsResult =
   | { valid: false; error: string };
 
 const normalizeRoleSelection = (
-  role: ModelRole,
+  role: ModelOverrideGroup,
   selection: OverrideModelSelectionInput,
   configuredProviders: ReadonlySet<BYOKProvider>,
 ):
@@ -493,10 +501,10 @@ const normalizeRoleSelection = (
   }
 
   if (
-    !isAllowedBYOKModelForRole({
+    !isAllowedBYOKModelForTask({
       provider: selection.provider,
       modelId,
-      role,
+      task: MODEL_OVERRIDE_GROUP_TASK[role],
     })
   ) {
     return {
@@ -525,8 +533,8 @@ const normalizeOverrideModels = (
   if (selections === null) {
     return { valid: true, overrideModels: null };
   }
-  const selectionsByRole: [ModelRole, OrgAIModelSelection][] = [];
-  for (const role of MODEL_ROLES) {
+  const selectionsByRole: [ModelOverrideGroup, OrgAIModelSelection][] = [];
+  for (const role of MODEL_OVERRIDE_GROUPS) {
     const selection = selections[role];
     if (selection === undefined) {
       continue;

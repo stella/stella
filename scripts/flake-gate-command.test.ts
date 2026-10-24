@@ -111,7 +111,7 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "apps/landing/package.json:test",
       },
       {
-        "command": "([ -n "$TURBO_HASH" ] || bun run generate:route-tree) && bun scripts/run-tests.ts",
+        "command": "([ -n "$TURBO_HASH" ] || bun run generate:web-sources) && bun scripts/run-tests.ts",
         "reason": "shell-expansion",
         "script": "apps/web/package.json:test",
       },
@@ -124,6 +124,11 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "command": "bun run codegen:runtime && bun test",
         "reason": "shell-syntax",
         "script": "packages/cli/package.json:test",
+      },
+      {
+        "command": "bun ../../scripts/prepare-mcp-apps.ts && bun test",
+        "reason": "shell-syntax",
+        "script": "packages/mcp-apps/package.json:test",
       },
       {
         "command": "bun run test:bun && cargo test",

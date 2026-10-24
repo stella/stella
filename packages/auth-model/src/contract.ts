@@ -120,7 +120,7 @@ export type BetterAuthFieldDefault =
 
 export type BetterAuthFieldReference = {
   field: "id";
-  model: "organization" | "user";
+  model: "oauthConsent" | "organization" | "user";
   onDelete: "cascade" | null;
 };
 
@@ -343,6 +343,11 @@ export const BETTER_AUTH_CORE_SCHEMA = {
       activeOrganizationId: field("string", { input: "server-managed" }),
     }),
     indexes: [
+      {
+        fields: ["id"],
+        predicate: `"session"."id" LIKE 'synthetic-session-%'`,
+        unique: false,
+      },
       {
         fields: ["userId", "activeOrganizationId"],
         predicate: null,

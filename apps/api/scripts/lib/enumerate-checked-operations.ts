@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { canonicalModuleId } from "../../../../.oxlint-plugins/module-id.ts";
-import { VERIFICATION_MODEL_ROLE } from "../../src/lib/lists/verification/model-call";
+import { VERIFICATION_MODEL_TASK } from "../../src/lib/lists/verification/model-call";
 import { REPO_ROOT } from "./enumerate-safe-handlers";
 
 type ConditionalOperation = {
@@ -39,8 +39,7 @@ const resolveCheckerExport = ({
   sources,
   visited = new Set<string>(),
 }: ResolveCheckerExportOptions):
-  | ConditionalOperation["checker"]
-  | undefined => {
+  ConditionalOperation["checker"] | undefined => {
   const checker = checkerName(exportedName);
   if (moduleId === CHECKER_MODULE) {
     return checker;
@@ -114,8 +113,8 @@ const readMeteringValue = (node: ts.Expression): unknown => {
       }),
     );
   }
-  if (ts.isIdentifier(node) && node.text === "VERIFICATION_MODEL_ROLE") {
-    return VERIFICATION_MODEL_ROLE;
+  if (ts.isIdentifier(node) && node.text === "VERIFICATION_MODEL_TASK") {
+    return VERIFICATION_MODEL_TASK;
   }
   return panic(`Admission census cannot resolve ${node.getText()}`);
 };

@@ -1,4 +1,8 @@
-import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
+import {
+  CAPABILITY_RUNTIME_INPUTS,
+  CI_GENERATED_OUTPUTS,
+  MCP_APP_GENERATED_OUTPUTS,
+} from "../packages/scripts/src/generated-files";
 
 export {
   CI_GENERATED_OUTPUTS,
@@ -7,9 +11,23 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
-  | { check: null; checkedBy: string; unchecked?: never }
-  | { check: null; checkedBy?: never; unchecked: string };
+  | {
+      check: readonly string[];
+      checkedBy?: string;
+      checkedWith?: never;
+      unchecked?: never;
+    }
+  | {
+      check: null;
+      checkedBy: string;
+      /**
+       * The command the `checkedBy` step runs when it is neither `write` nor
+       * its `--check` form.
+       */
+      checkedWith?: readonly string[];
+      unchecked?: never;
+    }
+  | { check: null; checkedBy?: never; checkedWith?: never; unchecked: string };
 
 export type Generator = {
   id: string;
@@ -17,6 +35,7 @@ export type Generator = {
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
+  prepare?: readonly string[];
   /**
    * Whether the autofix workflow may run `write` and push its outputs. Only a
    * pure function of committed source qualifies: no network, secrets, clock,
@@ -44,6 +63,23 @@ const MODEL_CATALOG_INPUTS = [
 ] as const;
 
 const GENERATOR_DECLARATIONS = [
+  {
+    id: "migration-lock-baseline",
+    outputKind: "committed",
+    outputs: ["scripts/migration-lock-baseline.ts"],
+    inputs: [
+      "scripts/check-migration-locks.ts",
+      "scripts/check-migration-safety.ts",
+      "scripts/migration-lock-census.ts",
+      "scripts/online-ddl-lock-census.ts",
+      "apps/api/src/db/online-ddl.ts",
+      "apps/api/drizzle/**/*.sql",
+    ],
+    write: ["bun", "scripts/check-migration-locks.ts", "--write-baseline"],
+    check: ["bun", "scripts/check-migration-locks.ts"],
+    autofix: false,
+    after: [],
+  },
   {
     id: "cloud-setup",
     outputKind: "committed",
@@ -111,6 +147,27 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "case-law-publication-migration",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/drizzle/20261010212100_case_law_publication_filter/migration.sql",
+    ],
+    inputs: [
+      "scripts/generate-case-law-publication-migration.ts",
+      "apps/api/src/lib/case-law/published-decisions-sql.ts",
+      "apps/api/src/lib/legal-search/partial-observation-sql.ts",
+      "apps/api/drizzle/20260916110000_published_statute_citation_counts/migration.sql",
+    ],
+    write: ["bun", "scripts/generate-case-law-publication-migration.ts"],
+    check: [
+      "bun",
+      "scripts/generate-case-law-publication-migration.ts",
+      "--check",
+    ],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "status-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
@@ -122,6 +179,26 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "apps/api/scripts/generate-status-tables.ts", "--write"],
     check: ["bun", "apps/api/scripts/generate-status-tables.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "account-export-tables",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/account-export/user-owned-tables.gen.ts"],
+    inputs: [
+      "apps/api/src/db/schema/**",
+      "apps/api/src/db/auth-schema.ts",
+      "apps/api/src/db/agent-auth-schema.ts",
+      "apps/api/src/lib/account-export/schema-census.ts",
+      "apps/api/scripts/generate-account-export-tables.ts",
+    ],
+    write: [
+      "bun",
+      "apps/api/scripts/generate-account-export-tables.ts",
+      "--write",
+    ],
+    check: ["bun", "apps/api/scripts/generate-account-export-tables.ts"],
     autofix: true,
     after: [],
   },
@@ -162,11 +239,7 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "capability-catalog",
     outputKind: "committed",
-    outputs: [
-      "packages/cli/capabilities/**",
-      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
-      "docs/capability-coverage.md",
-    ],
+    outputs: ["packages/cli/capabilities/**", "docs/capability-coverage.md"],
     inputs: [
       "apps/api/src/**",
       "apps/api/src/handlers/**",
@@ -176,7 +249,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/lib/**",
       "packages/cli/src/**",
       "packages/**",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "apps/api/scripts/export-capability-catalog.ts"],
     check: null,
@@ -187,13 +260,11 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "capability-runtime",
     outputKind: "derived",
-    outputs: CI_GENERATED_OUTPUTS.capabilityRuntime,
-    inputs: [
-      "packages/cli/capabilities/**",
+    outputs: [
+      ...CI_GENERATED_OUTPUTS.capabilityRuntime,
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
-      "apps/api/scripts/generate-capability-runtime.ts",
-      "packages/cli/src/capability-catalog-data.ts",
     ],
+    inputs: CAPABILITY_RUNTIME_INPUTS,
     write: ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
@@ -220,15 +291,19 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/export-mcp-tool-registry.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
+      "apps/api/src/lib/chat/case-law-citation-projection.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
       "apps/api/src/lib/chat/legislation-result-projections.ts",
       "apps/api/src/lib/chat/projection-fields.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
+      "apps/api/src/lib/case-law/citation-vocabulary.ts",
+      "apps/api/src/lib/case-law/search-warnings.ts",
+      "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "packages/api-contract/src/case-law-court-year.ts",
       "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       "packages/api-contract/src/mcp-capability-executors.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "packages/cli/src/**",
       "packages/cli/package.json",
       "packages/cli/capabilities/**",
@@ -271,22 +346,19 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "mcp-app-contracts",
-    outputKind: "committed",
-    outputs: [
-      "packages/mcp-apps/src/shared/generated/schemas.json",
-      "packages/mcp-apps/src/shared/generated/contracts.js",
-      "packages/mcp-apps/src/shared/generated/contracts.d.ts",
-    ],
+    outputKind: "derived",
+    outputs: [...MCP_APP_GENERATED_OUTPUTS.contracts],
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
       "apps/api/src/mcp/app-contracts.ts",
       "apps/api/src/mcp/decision-reader-contract.ts",
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/lib/chat/*projection*.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
+      "apps/api/src/lib/case-law/citation-vocabulary.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "apps/api/src/lib/json-schema/**",
@@ -296,8 +368,9 @@ const GENERATOR_DECLARATIONS = [
       "bun.lock",
     ],
     write: ["bun", "--cwd=apps/api", "run", "generate:mcp-app-contracts"],
-    check: null,
-    checkedBy: "MCP app package bundles and shared assets guard",
+    prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
+    check: ["bun", "scripts/check-mcp-generated-tracking.ts"],
+    checkedBy: "MCP app derived outputs guard",
     autofix: true,
     after: [],
   },
@@ -334,14 +407,10 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "mcp-app-bundles",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: [
       "packages/mcp-apps/src/*/generated/app.html.txt",
-      "packages/mcp-apps/src/shared/generated/messages.json",
-      "packages/mcp-apps/src/shared/generated/reader-messages.json",
-      "packages/mcp-apps/src/shared/generated/reader-inputs.json",
-      "packages/mcp-apps/src/shared/generated/style.css",
-      "packages/mcp-apps/src/generated/bundles.ts",
+      ...MCP_APP_GENERATED_OUTPUTS.bundles,
     ],
     inputs: [
       "packages/mcp-apps/src/**",
@@ -350,7 +419,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/api/src/lib/chat/legislation-result-projections.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "packages/api-contract/src/case-law-court-year.ts",
@@ -365,9 +434,10 @@ const GENERATOR_DECLARATIONS = [
       "packages/fetch/**",
       "bun.lock",
     ],
-    write: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
-    check: null,
-    checkedBy: "MCP app package bundles and shared assets guard",
+    write: ["bun", "packages/mcp-apps/scripts/build-mcp-apps.ts"],
+    prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
+    check: ["bun", "scripts/check-mcp-generated-tracking.ts"],
+    checkedBy: "MCP app derived outputs guard",
     autofix: true,
     after: ["mcp-app-contracts"],
   },
@@ -444,13 +514,42 @@ const GENERATOR_DECLARATIONS = [
       "scripts/ownership-loader.ts",
       "scripts/ownership-types.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/**",
       "packages/**",
     ],
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
     checkedBy: "Module ownership",
+    autofix: true,
+    after: [],
+  },
+  {
+    // Refreshes only the reviewed digests of jobs whose kind, qualifier and
+    // privilege are unchanged since the merge base; new, reclassified and
+    // privileged jobs keep failing the check until a human reviews them.
+    // This file loads without imports in reduced checkouts, so the paths are
+    // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
+    id: "ci-job-classification-digests",
+    outputKind: "committed",
+    outputs: [".github/ci-job-classification-decisions/**"],
+    inputs: [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-job-classification-decisions/**",
+      ".github/ci-job-classification-sources.json",
+      "scripts/check-ci-job-classification.ts",
+      "scripts/ci-job-classification/**",
+      "packages/collation/src/collation.ts",
+      "packages/sha256/src/node.ts",
+      "packages/sha256/src/types.ts",
+    ],
+    write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
+    check: null,
+    checkedBy: "Check workflow job classifications",
+    // The check reads git history, so it cannot load the offline network
+    // preload every `--check` command must use; it runs as the default mode.
+    checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     autofix: true,
     after: [],
   },
@@ -474,7 +573,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/ui/src/styles/theme.css",
       "scripts/design-tokens-doc.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "scripts/design-tokens-doc.ts", "--write"],
     check: null,
@@ -591,24 +690,18 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "i18n-messages-web",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
     inputs: [
       "apps/web/src/i18n/langs/*.json",
       "packages/scripts/src/i18n-typegen.ts",
+      "apps/web/package.json",
     ],
-    write: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-    ],
-    check: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-      "--check",
-    ],
-    autofix: true,
+    write: ["bun", "--filter", "@stll/web", "generate:messages"],
+    check: null,
+    unchecked:
+      "derived on demand; the web i18n check validates the source catalogs",
+    autofix: false,
     after: [],
   },
   {
@@ -679,7 +772,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/scripts/src/glossary-gen.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "packages/text-normalize/src/**",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [
@@ -771,7 +864,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "apps/api/src/db/role-names.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
       "apps/api/src/env*.ts",
@@ -1003,10 +1096,15 @@ const GENERATOR_DECLARATIONS = [
       ".agents/skills/**/SKILL.md",
       ".claude/skills/**/SKILL.md",
     ],
-    inputs: [".ai/manifest.json", ".ai/local/**", ".ai/shared"],
+    inputs: [
+      ".ai/manifest.json",
+      ".ai/local/**",
+      ".ai/local-skills/**",
+      ".ai/shared",
+    ],
     write: ["bun", "run", "sync-ai"],
     check: ["bash", ".ai/shared/scripts/sync-ai-skills.sh", "--check", "."],
-    autofix: false,
+    autofix: true,
     after: [],
   },
 ] as const satisfies readonly Generator[];
@@ -1103,7 +1201,67 @@ export const generatorsForFiles = (files: readonly string[]) => {
       }
     }
   }
+  // A derived output is never committed, so a clean checkout lacks it: every
+  // derived generator a selected one declares in `after` must run first, and
+  // so must its own derived prerequisites.
+  const pending = [...selected];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator === undefined) {
+      continue;
+    }
+    for (const upstream of derivedPrerequisites(generator)) {
+      if (!selected.has(upstream.id)) {
+        selected.add(upstream.id);
+        pending.push(upstream.id);
+      }
+    }
+  }
   return GENERATORS.filter((generator) => selected.has(generator.id));
+};
+
+/**
+ * Derived generators whose outputs `generator` needs present to run: the
+ * derived ones it declares in `after`. (Input globs are too broad to infer
+ * this from; a generator that reads a derived output declares it.)
+ */
+export const derivedPrerequisites = (generator: Generator) =>
+  GENERATORS.filter(
+    (upstream) =>
+      upstream.outputKind === "derived" &&
+      generator.after.includes(upstream.id),
+  );
+
+/**
+ * The check that proves `generator`'s outputs are current, so a run may skip
+ * `write`. A derived output is never committed, so a passing check (it guards
+ * tracking, not presence) says nothing about whether a clean checkout has it:
+ * derived generators always write.
+ */
+const upToDateCheck = (generator: Generator) =>
+  generator.outputKind === "committed" ? generator.check : null;
+
+/**
+ * Run `write` for every generator whose outputs are not proven current, in
+ * the given order. Returns the first generator that failed, or null.
+ */
+export const runGenerators = (
+  generators: readonly Generator[],
+  spawn: (command: readonly string[]) => number,
+  log: (line: string) => void = console.log,
+): Generator | null => {
+  for (const generator of generators) {
+    const check = upToDateCheck(generator);
+    if (check && spawn(check) === 0) {
+      continue;
+    }
+    log(`Regenerating ${generator.id}`);
+    if (spawn(generator.write) !== 0) {
+      return generator;
+    }
+  }
+  return null;
 };
 
 export const allowedOutputs = (generators: readonly Generator[]) => [

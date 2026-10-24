@@ -6,6 +6,8 @@ import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
+import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
@@ -41,7 +43,7 @@ const metadata = {
   country: "CZE",
   date: "2024-04-15",
   ecli: null,
-  appUrl: "https://stella.example/case-law/fixture",
+  url: "https://stella.example/case-law/fixture",
 } as const satisfies ReaderPage["metadata"];
 const OPEN = {
   status: "available",
@@ -170,7 +172,7 @@ const LINK_PAGES = [
           end: "Cited decision".length,
           citationId: "linked-citation",
           decisionId: citedDecisionId,
-          appUrl: citedDecisionUrl,
+          url: citedDecisionUrl,
         },
       ],
     },
@@ -187,7 +189,7 @@ const LINK_PAGES = [
           start: linkedText.indexOf("cited provision"),
           end: linkedText.indexOf("cited provision") + "cited provision".length,
           provision,
-          appUrl: provisionUrl,
+          url: provisionUrl,
         },
       ],
     },
@@ -199,7 +201,7 @@ const CITED_OPEN = {
     ...metadata,
     decisionId: citedDecisionId,
     caseNumber: "II. ÚS 456/24",
-    appUrl: citedDecisionUrl,
+    url: citedDecisionUrl,
   },
 } satisfies ReaderOpen;
 const CITED_PAGE = {
@@ -212,7 +214,7 @@ const PREVIEW = {
   language: "cs",
   anchorId: provision.anchor,
   citedAnchorId: provision.cited_anchor,
-  appUrl: provisionUrl,
+  url: provisionUrl,
   headings: [],
   heading: null,
   blocks: [
@@ -242,9 +244,9 @@ const RESULT_FIXTURE = {
       index === RESULT_TARGET_INDEX
         ? metadata.caseNumber
         : `Fixture result ${index + 1}`,
-    appUrl:
+    url:
       index === RESULT_TARGET_INDEX
-        ? `${metadata.appUrl}#par=48-49`
+        ? `${metadata.url}#par=48-49`
         : `https://stella.example/law/cze/cases/fixture/result-${index + 1}`,
   })),
 } satisfies SearchResults;
@@ -260,6 +262,7 @@ type HostOptions = {
   surface?: "reader" | "results";
   sandbox?: "opaque" | "same-origin";
   revision?: "stable" | "updated";
+  handoff?: "minted" | "declined";
 };
 const mountReader = async ({
   page,
@@ -272,6 +275,7 @@ const mountReader = async ({
   surface = "reader",
   sandbox = "opaque",
   revision = "stable",
+  handoff = "declined",
 }: HostOptions) => {
   const bundle = await readFile(
     new URL(
@@ -313,6 +317,8 @@ const mountReader = async ({
       searchResult,
       revision: documentRevision,
       revisedPages,
+      handoff: handoffStatus,
+      handoffTool,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -415,6 +421,28 @@ const mountReader = async ({
             }
             const { name, arguments: args } = params;
             calls.push({ name, arguments: args });
+            if (name === handoffTool) {
+              if (typeof args["url"] !== "string") {
+                rejectRequest(id, "Invalid fixture handoff URL");
+                return;
+              }
+              reply({
+                jsonrpc: "2.0",
+                id,
+                result:
+                  handoffStatus === "minted"
+                    ? toolResult({
+                        url: `${args["url"]}#sh=sh1_fixture`,
+                      } satisfies v.InferInput<
+                        typeof mcpWebHandoffLinkOutputSchema
+                      >)
+                    : {
+                        isError: true,
+                        content: [{ type: "text", text: "Handoff declined." }],
+                      },
+              });
+              break;
+            }
             if (name === "open_case_law_decision") {
               reply({
                 jsonrpc: "2.0",
@@ -563,6 +591,8 @@ const mountReader = async ({
       searchResult: RESULT_FIXTURE,
       revision,
       revisedPages: REVISED_PAGES,
+      handoff,
+      handoffTool: MCP_WEB_HANDOFF_TOOL_NAME,
     },
   );
   expect(mounted).toBe("mounted");
@@ -596,7 +626,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       paragraphs: "48-49",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
       revision: "updated",
     });
@@ -728,7 +758,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([metadata.appUrl]);
+      .toEqual([metadata.url]);
     const recorded = await history(page);
     expect(recorded.toolResponses).toHaveLength(2);
     expect(
@@ -755,7 +785,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       paragraphs: "48-49",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
     });
     await expect(app.locator("#para48[data-reader-landing]")).toBeVisible();
@@ -774,39 +804,50 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([`${metadata.appUrl}#par=48-49`]);
+      .toEqual([`${metadata.url}#par=48-49`]);
     expect(
       (await history(page)).calls.map(({ arguments: args }) => args["cursor"]),
     ).toEqual([undefined, "fixture-page-2"]);
   });
 
-  test(`${host} reader respects app-only withheld status and exposes a localized web action`, async ({
-    page,
-  }) => {
-    const app = await mountReader({
+  for (const handoff of ["minted", "declined"] as const) {
+    test(`${host} reader respects app-only withheld status and exposes a localized web action (handoff ${handoff})`, async ({
       page,
-      host,
-      locale: "cs",
-      open: WITHHELD,
-      pages: [WITHHELD_PAGE],
+    }) => {
+      const app = await mountReader({
+        page,
+        host,
+        locale: "cs",
+        open: WITHHELD,
+        pages: [WITHHELD_PAGE],
+        handoff,
+      });
+      await expect(
+        app.getByText(metadata.caseNumber, { exact: true }),
+      ).toBeVisible();
+      await expect(app.locator("article")).toHaveCount(0);
+      await app
+        .getByRole("button", { name: "Otevřít ve stelle", exact: true })
+        .click();
+      await expect
+        .poll(async () => (await history(page)).links)
+        .toEqual([
+          handoff === "minted"
+            ? `${metadata.url}#sh=sh1_fixture`
+            : metadata.url,
+        ]);
+      expect((await history(page)).calls).toEqual([
+        {
+          name: "read_case_law_decision_blocks",
+          arguments: { decision_id: metadata.decisionId },
+        },
+        {
+          name: MCP_WEB_HANDOFF_TOOL_NAME,
+          arguments: { url: metadata.url },
+        },
+      ]);
     });
-    await expect(
-      app.getByText(metadata.caseNumber, { exact: true }),
-    ).toBeVisible();
-    await expect(app.locator("article")).toHaveCount(0);
-    await app
-      .getByRole("button", { name: "Otevřít ve stelle", exact: true })
-      .click();
-    await expect
-      .poll(async () => (await history(page)).links)
-      .toEqual([metadata.appUrl]);
-    expect((await history(page)).calls).toEqual([
-      {
-        name: "read_case_law_decision_blocks",
-        arguments: { decision_id: metadata.decisionId },
-      },
-    ]);
-  });
+  }
 
   test(`${host} reader displays app-only body when the opening result withholds model text`, async ({
     page,
@@ -926,6 +967,8 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       pages: LINK_PAGES,
     });
     await loadReferencePages(app);
+    const pageCalls = (await history(page)).calls;
+    expectOnlyReferencePageCalls(pageCalls);
     await app
       .getByRole("button", { name: "Cited decision", exact: true })
       .click();
@@ -935,7 +978,17 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await expect
       .poll(async () => (await history(page)).links)
       .toEqual([citedDecisionUrl, provisionUrl]);
-    expectOnlyReferencePageCalls((await history(page)).calls);
+    expect((await history(page)).calls).toEqual([
+      ...pageCalls,
+      {
+        name: MCP_WEB_HANDOFF_TOOL_NAME,
+        arguments: { url: citedDecisionUrl },
+      },
+      {
+        name: MCP_WEB_HANDOFF_TOOL_NAME,
+        arguments: { url: provisionUrl },
+      },
+    ]);
   });
 
   test(`${host} reader leaves references as text when neither navigation nor a URL is available`, async ({
@@ -947,11 +1000,11 @@ for (const host of ["ChatGPT", "Claude"] as const) {
         ...readerPage.content,
         citationAnchors: readerPage.content.citationAnchors.map((anchor) => ({
           ...anchor,
-          appUrl: null,
+          url: null,
         })),
         provisionAnchors: readerPage.content.provisionAnchors.map((anchor) => ({
           ...anchor,
-          appUrl: null,
+          url: null,
         })),
       },
     })) satisfies ReaderPage[];
@@ -1025,7 +1078,7 @@ test("reader reassembles fragmented blocks and consumes anchor-only pages", asyn
             start: 0,
             end: 9,
             citationId: "fixture-citation",
-            appUrl: citedDecisionUrl,
+            url: citedDecisionUrl,
             decisionId: "00000000-0000-4000-8000-000000000002",
           },
         ],
@@ -1067,7 +1120,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       surface: "results",
       open: {
         ...OPEN,
-        metadata: { ...metadata, appUrl: `${metadata.appUrl}#par=48-49` },
+        metadata: { ...metadata, url: `${metadata.url}#par=48-49` },
       },
     });
     const rows = app.locator("tbody tr");
@@ -1090,7 +1143,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       .click();
     await expect
       .poll(async () => (await history(page)).links)
-      .toEqual([`${metadata.appUrl}#par=48-49`]);
+      .toEqual([`${metadata.url}#par=48-49`]);
     await expect(page.locator("iframe")).toHaveCount(1);
     await expect
       .poll(async () => (await history(page)).calls)
@@ -1122,9 +1175,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     expect(
       await opener.evaluate(() => document.scrollingElement?.scrollTop),
     ).toBe(scrollBefore);
-    expect((await history(page)).links).toEqual([
-      `${metadata.appUrl}#par=48-49`,
-    ]);
+    expect((await history(page)).links).toEqual([`${metadata.url}#par=48-49`]);
     await expect(page.locator("iframe")).toHaveCount(1);
   });
 }

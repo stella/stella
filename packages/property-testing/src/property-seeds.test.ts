@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { PropertyTestConfigError } from "./index";
-import { REPO_ROOT, parsePinnedSeeds, readPinnedSeeds } from "./pinned-seeds";
+import { parsePinnedSeeds, readPinnedSeeds, REPO_ROOT } from "./pinned-seeds";
 
 const propertyIds = (file: string, source: string): Set<string> => {
   const parsed = ts.createSourceFile(

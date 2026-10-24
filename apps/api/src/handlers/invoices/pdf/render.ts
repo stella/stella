@@ -1,24 +1,30 @@
 import {
+  ops,
   PDF,
-  type PDFFormXObject,
   PdfArray,
   PdfDict,
+  type PDFFormXObject,
   PdfName,
   PdfNumber,
   PdfStream,
-  ops,
   rgb,
 } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { encode } from "uqr";
 
 import type { InvoiceStatus } from "@stll/api-contract";
-import { buildCzechQrPaymentPayload } from "@stll/invoicing";
+import {
+  buildCzechQrPaymentPayload,
+  buildPolishQrPaymentPayload,
+  normalizeIban,
+  parseNip,
+} from "@stll/invoicing";
 import type {
   InvoiceDocumentType,
   InvoiceTotals,
   VatTreatment,
 } from "@stll/invoicing";
+import { buildPayBySquarePayload } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
@@ -453,7 +459,7 @@ export const buildInvoicePaymentPayload = ({
   ) {
     return null;
   }
-  return buildCzechQrPaymentPayload({
+  const payment = {
     documentType: invoice.documentType,
     iban: seller.iban,
     amountMinor: totals.grossAmountMinor,
@@ -465,7 +471,42 @@ export const buildInvoicePaymentPayload = ({
     ...(invoice.status === "draft" || invoice.invoiceNumber === null
       ? {}
       : { message: invoice.invoiceNumber }),
-  });
+  };
+  // The payer scans with a banking app of the account's country: Slovak apps
+  // read PAY by square and Polish apps the ZBP code, not the Czech SPD code.
+  // The address country is free text, so the IBAN's country code decides.
+  // The ZBP recommendation fixes error correction L; the others keep M.
+  const country = normalizeIban(seller.iban)?.slice(0, 2);
+  if (country === "SK") {
+    return buildPayBySquarePayload({
+      ...payment,
+      ...(seller.bic === null ? {} : { bic: seller.bic }),
+      beneficiaryName: seller.legalName,
+    }).map((result) => ({ ...result, errorCorrection: "M" as const }));
+  }
+  if (country === "PL") {
+    // An institutional payee's code needs a Polish NIP. A Polish account does
+    // not make its owner a Polish taxpayer, and the code is optional: a seller
+    // without a valid NIP gets no code rather than a failed PDF.
+    const nip = seller.vatId === null ? null : parseNip(seller.vatId);
+    if (nip === null) {
+      return null;
+    }
+    return buildPolishQrPaymentPayload({
+      documentType: payment.documentType,
+      iban: payment.iban,
+      amountMinor: payment.amountMinor,
+      currency: payment.currency,
+      recipientNip: nip,
+      recipientName: seller.legalName,
+      title:
+        payment.message ?? invoice.reference ?? INVOICE_PDF_LABELS.pl.invoice,
+    }).map((result) => ({ ...result, errorCorrection: "L" as const }));
+  }
+  return buildCzechQrPaymentPayload(payment).map((result) => ({
+    ...result,
+    errorCorrection: "M" as const,
+  }));
 };
 
 const PAGE_WIDTH = 595.28;
@@ -554,11 +595,11 @@ const createInvoiceWriter = async ({ pdf, lang }: InvoiceWriterOptions) => {
       write(`${label}: ${isolate(value)}`);
     }
   };
-  const writeQr = (payload: string) => {
+  const writeQr = (payload: string, ecc: "L" | "M") => {
     if (y < MARGIN + QR_SIZE + LINE_HEIGHT) {
       newPage();
     }
-    const qr = encode(payload, { border: 4, ecc: "M" });
+    const qr = encode(payload, { border: 4, ecc });
     const moduleSize = QR_SIZE / qr.size;
     page.drawRectangle({
       x: MARGIN,
@@ -779,7 +820,7 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
     }
     const payable = payment.value;
     if (payable.status === "payable") {
-      writeQr(payable.payload);
+      writeQr(payable.payload, payable.errorCorrection);
     }
   }
   if (invoice.notes !== null) {

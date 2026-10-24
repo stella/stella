@@ -13,16 +13,19 @@
  * guessing.
  */
 
-import { panic } from "better-result";
+// The check pool evaluates step conditions before dependency installation
+// may have succeeded; keep this module free of package imports.
+class GitHubExpressionError extends Error {
+  override name = "GitHubExpressionError";
+  readonly _tag = "GitHubExpressionError";
+}
+const panic: (message: string) => never = (message) => {
+  throw new GitHubExpressionError(message);
+};
 
 export const UNKNOWN = Symbol("unknown");
-type Value =
-  | string
-  | number
-  | boolean
-  | null
-  | Value[]
-  | { [key: string]: Value };
+export type Value =
+  string | number | boolean | null | Value[] | { [key: string]: Value };
 export type Result = Value | typeof UNKNOWN;
 
 type Token =
@@ -119,10 +122,48 @@ const text = (value: Value | undefined): string => {
   return value === null || value === undefined ? "" : JSON.stringify(value);
 };
 
-const looseEquals = (left: Value | undefined, right: Value | undefined) =>
-  typeof left === "string" && typeof right === "string"
+// GitHub's number coercion for a comparison of two different types: null is 0,
+// a boolean is 0 or 1, a string is a JSON number (blank reads as 0, anything
+// else as NaN), and an array or object is NaN.
+const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/u;
+const coercedNumber = (value: Value | undefined): number => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === "boolean") {
+    return value ? 1 : 0;
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      return 0;
+    }
+    return JSON_NUMBER.test(trimmed) ? Number(trimmed) : Number.NaN;
+  }
+  return Number.NaN;
+};
+const kind = (value: Value | undefined) => {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+  return Array.isArray(value) ? "array" : typeof value;
+};
+
+// Loose equality as GitHub evaluates it: strings compare case-insensitively,
+// arrays and objects only by identity, and values of different types as the
+// numbers they coerce to. `null == ''` is therefore true, as it is for an
+// unset job output in a workflow `if:`.
+const looseEquals = (left: Value | undefined, right: Value | undefined) => {
+  if (kind(left) !== kind(right)) {
+    return coercedNumber(left) === coercedNumber(right);
+  }
+  return typeof left === "string" && typeof right === "string"
     ? left.toLowerCase() === right.toLowerCase()
     : left === right;
+};
 
 const compare = (operator: string, left: Result, right: Result): Result => {
   if (left === UNKNOWN || right === UNKNOWN) {
@@ -148,7 +189,7 @@ const compare = (operator: string, left: Result, right: Result): Result => {
   return a >= b;
 };
 
-const toValue = (parsed: unknown): Value => {
+export const toValue = (parsed: unknown): Value => {
   if (
     parsed === null ||
     typeof parsed === "string" ||
@@ -279,8 +320,21 @@ const callFunction = (
       return text(first).toLowerCase().startsWith(text(second).toLowerCase());
     case "endswith":
       return text(first).toLowerCase().endsWith(text(second).toLowerCase());
+    case "format":
+      return text(first).replaceAll(
+        /\{\{|\}\}|\{(\d+)\}/gu,
+        (token, index: string | undefined) => {
+          if (index === undefined) {
+            return token.slice(1);
+          }
+          const value = values[Number(index) + 1];
+          return value === undefined
+            ? panic(`format index ${index}`)
+            : text(value);
+        },
+      );
     default:
-      // format, join, hashFiles and friends: no guard depends on their value.
+      // join, hashFiles and friends: no guard depends on their value.
       return UNKNOWN;
   }
 };
@@ -329,7 +383,9 @@ export const evaluate = (source: string, context: Context): Result => {
     if (Object.hasOwn(context.values, path)) {
       return context.values[path] ?? null;
     }
-    return context.fallback?.(path) ?? UNKNOWN;
+    // A fallback's null is a known null (a missing property), not unknown.
+    const value = context.fallback?.(path);
+    return value === undefined ? UNKNOWN : value;
   };
 
   const call = (name: string): Result => {

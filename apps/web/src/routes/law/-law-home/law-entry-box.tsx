@@ -18,10 +18,11 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
 import { PublicLawAskInChat } from "@/components/public-law-search";
+import type { PublicLawAskScope } from "@/components/public-law-search";
 
 type LawEntryBoxProps = {
-  /** The chat prompt for the current entry; null hides the chat button. */
-  askPrompt: (query: string) => string | null;
+  /** The corpus "Ask in chat" scopes the question to; null hides it. */
+  askScope: PublicLawAskScope | null;
   /** The pickers in the status row under the box: jurisdiction, scope. */
   pickers: ReactNode;
   /** The row's end slot, where the chat keeps its meter: the corpus's status. */
@@ -41,7 +42,7 @@ type LawEntryBoxProps = {
  * submits; the box is one line's worth of intent, not a draft.
  */
 export const LawEntryBox = ({
-  askPrompt,
+  askScope,
   maxLength,
   onQueryChange,
   onSubmit,
@@ -52,7 +53,6 @@ export const LawEntryBox = ({
   status,
 }: LawEntryBoxProps) => {
   const trimmed = query.trim();
-  const prompt = trimmed.length > 0 ? askPrompt(trimmed) : null;
 
   return (
     <div className="flex w-full flex-col">
@@ -93,8 +93,8 @@ export const LawEntryBox = ({
         </div>
         <div className={COMPOSER_LARGE_ACTION_ROW_CLASS}>
           <div className={cn(COMPOSER_LEADING_GROUP_CLASS, "me-auto")}>
-            {prompt !== null && (
-              <PublicLawAskInChat label={trimmed} prompt={prompt} />
+            {askScope !== null && trimmed.length > 0 && (
+              <PublicLawAskInChat askScope={askScope} question={trimmed} />
             )}
           </div>
           <div className="flex items-center gap-0.5">

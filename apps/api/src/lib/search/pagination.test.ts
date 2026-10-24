@@ -252,4 +252,38 @@ describe("global search keyset pagination", () => {
       propertyConfig(),
     );
   });
+
+  test("an insert before the cursor cannot shift or duplicate the next page", () => {
+    const original = [
+      { hit: { id: "entity:4" }, score: 4 },
+      { hit: { id: "entity:3" }, score: 3 },
+      { hit: { id: "entity:2" }, score: 2 },
+      { hit: { id: "entity:1" }, score: 1 },
+    ];
+    const first = paginateScoredSearchHits({
+      scoredHits: original,
+      limit: 2,
+      seen: 0,
+    });
+    const cursor = decodeGlobalSearchCursor(first.nextCursor ?? "");
+    expect(cursor).not.toBeNull();
+
+    const afterInsert = [
+      { hit: { id: "entity:new" }, score: 5 },
+      ...original,
+    ].filter(
+      ({ hit, score }) =>
+        cursor === null ||
+        isAfterGlobalSearchCursor({ id: hit.id, score }, cursor),
+    );
+    const second = paginateScoredSearchHits({
+      scoredHits: afterInsert,
+      limit: 2,
+      seen: cursor?.seen ?? 0,
+    });
+
+    expect(first.items).toEqual([{ id: "entity:4" }, { id: "entity:3" }]);
+    expect(second.items).toEqual([{ id: "entity:2" }, { id: "entity:1" }]);
+    expect(second.nextCursor).toBeNull();
+  });
 });

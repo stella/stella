@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { sql, TransactionRollbackError, type SQLChunk } from "drizzle-orm";
+import { sql, type SQLChunk, TransactionRollbackError } from "drizzle-orm";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -22,6 +22,7 @@ import {
   readChatContentV3Completion,
   resetChatContentV3Checkpoints,
 } from "./chat-content-v3-backfill";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 let database: TestDatabase;
@@ -181,7 +182,11 @@ const repair = () => {
   return {
     repair: async (connection: Connection) => {
       await installGuards(connection);
-      await implementation.repair(connection);
+      // The fixture is one rolled-back transaction, so validation runs ungated.
+      return await implementation.repair(
+        connection,
+        createUngatedTableGateForTests(connection),
+      );
     },
   };
 };

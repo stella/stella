@@ -137,7 +137,10 @@ export const listStatuteSitemapStatutesHandler = async (
   query: SitemapShardStatutesQuery,
   legislationDb: LegislationReadDb,
 ) => {
-  const unavailable = publicLawCountryUnavailable(query.country, "pages");
+  const unavailable = publicLawCountryUnavailable(query.country, {
+    domain: "legislation",
+    surface: "pages",
+  });
   if (unavailable !== null) {
     return unavailable;
   }

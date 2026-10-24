@@ -12,7 +12,7 @@
 
 import { Result } from "better-result";
 
-import { sanitizeQueryErrorText, type FailureGrade } from "@stll/errors";
+import { type FailureGrade, sanitizeQueryErrorText } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {
@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
+import { releaseFailureIdentity } from "@/api/lib/observability/release-failures";
 import {
   getRequestContext,
   recordRequestFailure,
@@ -190,6 +191,8 @@ const observe = (
     grading,
     channel: legacyChannelOf(policy),
     degradation: fingerprintDegradation(evidence),
+    route: undefined,
+    identity: releaseFailureIdentity(evidence),
   });
 
   if (policy.severity === "ERROR") {

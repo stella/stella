@@ -417,7 +417,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225607000}\n\nid: 2\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225608000}\n\nid: 3\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225609000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225609000}\n\nid: 2\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225610000,\"metadata\":{\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:04.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:05.000Z\"}}}\n\nid: 3\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"timestamp\":1767225611000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 4\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225612000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
             "status": 200,
             "turnId": "00000000-0000-7000-8000-000000000004"
           },
@@ -425,7 +425,7 @@
             "activeTurnId": null,
             "messages": [
               {
-                "createdAt": "2026-01-01T00:00:04.000Z",
+                "createdAt": "2026-01-01T00:00:06.000Z",
                 "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
                 "role": "user",
@@ -438,7 +438,7 @@
                 ]
               },
               {
-                "createdAt": "2026-01-01T00:00:05.000Z",
+                "createdAt": "2026-01-01T00:00:07.000Z",
                 "edited": false,
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -457,6 +457,10 @@
                   "turnOutcome": {
                     "type": "failed",
                     "error": "unknown"
+                  },
+                  "turnTiming": {
+                    "status": "finished",
+                    "durationMs": 0
                   }
                 },
                 "role": "assistant",
@@ -465,7 +469,7 @@
               }
             ],
             "olderCursor": null,
-            "lastActivityAt": "2026-01-01T00:00:06.000Z"
+            "lastActivityAt": "2026-01-01T00:00:08.000Z"
           }
         }
       ]

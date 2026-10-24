@@ -11,6 +11,7 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   canonicalModuleId,
   everyNode,
   getImportedName,
@@ -18,9 +19,9 @@ import {
   invokedCallee,
   isAstNode,
   isCallTo,
+  isFileIn,
   isIdentifier,
   isIdentifierReference,
-  isFileIn,
   isStringLiteral,
   memberPropertyName,
   repoRelativeFilename,
@@ -28,7 +29,6 @@ import {
   resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 // ── Rule 1: no-raw-filename-write ──────────────────────────────
@@ -837,12 +837,65 @@ export default eslintCompatPlugin({
           );
         };
 
+        const isSchemaMetadata = (node: AstNode): boolean => {
+          const parent = node.parent;
+          if (isAstNode(parent) && parent.type === "CallExpression") {
+            const callee = unwrapExpression(parent.callee);
+            const binding =
+              callee === null ? null : resolveImport(context, callee);
+            if (
+              binding !== null &&
+              ((binding.moduleId === "drizzle-orm/pg-core" &&
+                binding.imported === "getTableConfig") ||
+                (binding.moduleId === "drizzle-orm" &&
+                  ["getTableName", "getColumns"].includes(binding.imported)))
+            ) {
+              return true;
+            }
+          }
+          // A column-only FK callback describes a schema; it cannot perform a
+          // read. Calls inside the callback still pass through query checks.
+          if (
+            isAstNode(parent) &&
+            parent.type === "MemberExpression" &&
+            parent.object === node
+          ) {
+            const callback = parent.parent;
+            if (
+              isAstNode(callback) &&
+              callback.type === "ArrowFunctionExpression" &&
+              callback.body === parent
+            ) {
+              const declaration = callback.parent;
+              // Only the first argument is the column callback.
+              if (
+                isAstNode(declaration) &&
+                declaration.type === "CallExpression" &&
+                Array.isArray(declaration.arguments) &&
+                declaration.arguments.at(0) === callback
+              ) {
+                const callee = unwrapExpression(declaration.callee);
+                if (
+                  callee?.type === "MemberExpression" &&
+                  memberPropertyName(callee) === "references"
+                ) {
+                  return true;
+                }
+              }
+            }
+          }
+          return false;
+        };
+
         const checkTableReference = (node: unknown): void => {
           if (
             !isAstNode(node) ||
             isInTypePosition(node) ||
             authSchemaExport(node) !== USER_TABLE_EXPORT
           ) {
+            return;
+          }
+          if (isSchemaMetadata(node)) {
             return;
           }
           const chain = queryChainRoot(node);

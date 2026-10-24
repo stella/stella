@@ -70,7 +70,9 @@ describe("MCP gateway rate limiter", () => {
     const limiter = createMcpGatewayRateLimiter({
       createRedis: () => ({ send: async () => " 1 " }),
       now: () => 1000,
-      onRedisError: (error) => onRedisError(error),
+      onRedisError: (error) => {
+        onRedisError(error);
+      },
     });
 
     expect(

@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
-import { spawn, type ChildProcess } from "node:child_process";
-import { readFile, readdir, realpath } from "node:fs/promises";
+import { type ChildProcess, spawn } from "node:child_process";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
@@ -274,13 +274,23 @@ type RunBudgetedCheckOptions = {
   graceMs?: number;
   env?: NodeJS.ProcessEnv;
   summary?: "tasks" | "none";
+  // Runs end at twice their budget. Only callers that exercise other
+  // behaviour with a real process opt out, so wall-clock margins on a busy
+  // machine cannot decide their outcome.
+  deadline?: "twice-budget" | "none";
 };
 
 const PROCESS_GROUP_ENV = "CODE_QUALITY_PROCESS_GROUP";
 const TASK_STALL = "Code-quality task stalled";
+const TASK_OVERRUN = "Code-quality run exceeded twice its budget";
 // Healthy API lint emitted no output for 196.999521 s. Twice that observed gap
 // rounds up to 400 s; advancing owned CPU time also counts as progress.
 export const TASK_STALL_MS = 400_000;
+
+// Advancing CPU time keeps a quiet compiler alive past its warning budget, but
+// a process that spins after its work is done would then never stall. Twice
+// the run's budget is the hard bound: past it the run fails whatever it does.
+export const TASK_DEADLINE_BUDGETS = 2;
 
 type TaskProgressWatchdogOptions = {
   budgetMs: number;
@@ -288,6 +298,8 @@ type TaskProgressWatchdogOptions = {
   now: () => number;
   warn: () => void;
   kill: () => void;
+  // A wall-clock bound that progress cannot extend; diagnostics have none.
+  deadline?: { ms: number; overrun: () => void };
 };
 export const createTaskProgressWatchdog = ({
   budgetMs,
@@ -295,6 +307,7 @@ export const createTaskProgressWatchdog = ({
   now,
   warn,
   kill,
+  deadline,
 }: TaskProgressWatchdogOptions) => {
   const started = now();
   let progressAt = started;
@@ -326,7 +339,13 @@ export const createTaskProgressWatchdog = ({
         return;
       }
       warning();
-      if (!stalled && now() - progressAt >= stallMs) {
+      if (stalled) {
+        return;
+      }
+      if (deadline !== undefined && now() - started >= deadline.ms) {
+        stalled = true;
+        deadline.overrun();
+      } else if (now() - progressAt >= stallMs) {
         stalled = true;
         kill();
       }
@@ -441,6 +460,26 @@ export const ownedProcessTreeRows = (snapshot: string, group: number) => {
     }
   }
   return rows.filter((row) => owned.has(row.pid)).map((row) => row.text);
+};
+
+export const processCpuSnapshot = (snapshot: string, group: number) => {
+  const rows = ownedProcessTreeRows(snapshot, group);
+  const activity = rows.some((row) => row.split(/\s+/u).at(3)?.startsWith("R"))
+    ? "runnable"
+    : "waiting";
+  const cpu = rows
+    .map((row) => {
+      const fields = row.split(/\s+/u);
+      const processId = fields.at(0);
+      const cpuTime = fields.at(4);
+      if (processId === undefined || cpuTime === undefined) {
+        return invalid("Malformed process CPU snapshot row");
+      }
+      return `${processId}:${cpuTime}`;
+    })
+    .toSorted()
+    .join("|");
+  return { activity, cpu };
 };
 
 export const ownedProcessGroupMembers = (snapshot: string, group: number) =>
@@ -644,6 +683,7 @@ type TaskMonitorOptions = {
   pid: number | undefined;
   reportDiagnostic: (message: string) => void;
   terminate: (reason: string) => void;
+  deadline: "twice-budget" | "none";
 };
 const createTaskMonitor = ({
   budgetMs,
@@ -652,6 +692,7 @@ const createTaskMonitor = ({
   pid,
   reportDiagnostic,
   terminate,
+  deadline,
 }: TaskMonitorOptions) => {
   const telemetry = () =>
     `elapsed_ms=${Date.now() - startedAt} budget_ms=${budgetMs} stall_ms=${stallMs} max_progress_gap_ms=${watchdog.maximumGapMs()}`;
@@ -667,6 +708,19 @@ const createTaskMonitor = ({
       );
       terminate(TASK_STALL);
     },
+    ...(deadline === "twice-budget"
+      ? {
+          deadline: {
+            ms: budgetMs * TASK_DEADLINE_BUDGETS,
+            overrun: () => {
+              reportDiagnostic(
+                `::error title=task-overrun::kind=infra class=task-overrun ${telemetry()} idle_ms=${watchdog.idleMs()}\n`,
+              );
+              terminate(TASK_OVERRUN);
+            },
+          },
+        }
+      : {}),
   });
   let previousCpu: string | undefined;
   let progressProbeWarning = false;
@@ -681,20 +735,9 @@ const createTaskMonitor = ({
         report: reportDiagnostic,
       });
       if (pid === undefined) {
-        return "";
+        return processCpuSnapshot("", -1);
       }
-      return ownedProcessTreeRows(snapshot, pid)
-        .map((row) => {
-          const fields = row.split(/\s+/u);
-          const processId = fields.at(0);
-          const cpuTime = fields.at(4);
-          if (processId === undefined || cpuTime === undefined) {
-            return invalid("Malformed process CPU snapshot row");
-          }
-          return `${processId}:${cpuTime}`;
-        })
-        .toSorted()
-        .join("|");
+      return processCpuSnapshot(snapshot, pid);
     });
     if (completion.signal.aborted) {
       return;
@@ -710,8 +753,11 @@ const createTaskMonitor = ({
       }
       return;
     }
-    const cpu = cpuSnapshot.value;
-    if (previousCpu !== undefined && cpu !== previousCpu) {
+    const { activity, cpu } = cpuSnapshot.value;
+    if (
+      activity === "runnable" ||
+      (previousCpu !== undefined && cpu !== previousCpu)
+    ) {
       watchdog.progress();
     }
     previousCpu = cpu;
@@ -769,6 +815,7 @@ export const runBudgetedCheck = async ({
   graceMs = 1000,
   env,
   summary = "tasks",
+  deadline = "twice-budget",
 }: RunBudgetedCheckOptions) => {
   const executable = command.at(0);
   if (
@@ -851,6 +898,7 @@ export const runBudgetedCheck = async ({
     pid: child.pid,
     reportDiagnostic,
     terminate,
+    deadline,
   });
   const tee = (chunk: Buffer, channel: "stdout" | "stderr") => {
     const text = chunk.toString();
@@ -1083,7 +1131,10 @@ const finishBudgetedCheck = async ({
     return {
       exitCode: 124,
       output,
-      outcome: termination === TASK_STALL ? "stalled" : "interrupted",
+      outcome:
+        termination === TASK_STALL || termination === TASK_OVERRUN
+          ? "stalled"
+          : "interrupted",
     };
   }
   if (!turbo) {

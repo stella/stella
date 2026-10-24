@@ -40,10 +40,14 @@ import {
 import { PromptBar } from "@/components/ai-suggestions/host";
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import {
-  ChatSubmitPreservedError,
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
   useChatEditor,
 } from "@/components/chat-editor-provider";
-import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import type {
+  ChatDraftAttachment,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
 import {
   composerStoredMarkdown,
   composerText,
@@ -93,6 +97,12 @@ import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-co
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { chatThreadOptions } from "@/features/chat/queries";
+import {
+  claimQueuedChatSend,
+  hasQueuedChatSend,
+  settleQueuedChatSend,
+  subscribeQueuedChatSend,
+} from "@/features/chat/queued-chat-sends";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -104,9 +114,9 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  type ChatThreadRef,
   createChatThreadId,
   getChatThreadKey,
-  type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -167,9 +177,6 @@ export const ChatTabPanel = ({
   const t = useTranslations();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
-      if (ChatSubmitPreservedError.is(error)) {
-        return;
-      }
       getAnalytics().captureError(error);
       notifyUserError(error, t("common.somethingWentWrong"));
     },
@@ -265,6 +272,7 @@ export const ChatTabPanel = ({
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -284,6 +292,7 @@ export const ChatTabPanel = ({
     approvalPendingMessageId,
   } = useChatSession({
     chat,
+    timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
@@ -299,10 +308,10 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<ChatSendOutcome> => {
       try {
         if (!(await ensureAIAvailable())) {
-          return;
+          return CHAT_SEND_KEPT;
         }
 
         // PromptBar emits the raw editor HTML; the backend parses
@@ -310,14 +319,18 @@ export const ChatTabPanel = ({
         await sendMessage(
           await buildChatRequestMessage({ files, html: prompt }),
         );
+        return CHAT_SEND_SENT;
       } catch (submitError) {
+        // Reported here, so the composer only takes the draft back.
         capturePromptSubmitError(submitError);
+        return CHAT_SEND_KEPT;
       }
     },
   );
 
   const {
     handleAskUserEditingChange,
+    lastMessageId,
     suggestedFollowupPrompt,
     suggestedPrompts,
   } = useSuggestedFollowupPrompts({
@@ -334,6 +347,7 @@ export const ChatTabPanel = ({
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
+    followupAnalytics: { surface: "inspector-chat" },
     placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
     suggestedFollowupPrompt,
     threadRef,
@@ -475,6 +489,46 @@ export const ChatTabPanel = ({
     return useInspectorCommandStore.subscribe(consumeRenameRequest);
   });
 
+  // A surface that opened this tab with its question queued ("Ask in chat"):
+  // send it once, through the same AI check and session a typed message takes.
+  // The question is claimed only once that check passes: while it fails (no
+  // key yet, or the check itself failed) the question stays queued, and asking
+  // again retries here instead of losing it.
+  const queuedSendInFlight = useRef(false);
+  const sendQueuedQuestion = useLatestCallback(async () => {
+    if (queuedSendInFlight.current || !hasQueuedChatSend(threadRef)) {
+      return;
+    }
+    queuedSendInFlight.current = true;
+    try {
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+      const queuedHtml = claimQueuedChatSend(threadRef);
+      if (queuedHtml === null) {
+        return;
+      }
+      const outcome = await handlePromptSubmit({
+        prompt: queuedHtml,
+        files: [],
+      });
+      // A question that was not sent waits again, so the next attempt sends
+      // it instead of losing it.
+      settleQueuedChatSend(
+        threadRef,
+        outcome.kind === "sent" ? "sent" : "not-sent",
+      );
+    } finally {
+      queuedSendInFlight.current = false;
+    }
+  });
+  useMountEffect(() => {
+    detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    return subscribeQueuedChatSend(threadRef, () => {
+      detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    });
+  });
+
   const handleComposerSubmit = useLatestCallback(
     async ({
       prompt,
@@ -482,7 +536,7 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<ChatSendOutcome> => {
       const newThreadMessages: string[] = [];
       const handledReserved = runReservedChatCommand(prompt, {
         new: (args) => {
@@ -511,16 +565,15 @@ export const ChatTabPanel = ({
         },
       });
       if (!handledReserved) {
-        await handlePromptSubmit({ prompt, files });
-        return;
+        return await handlePromptSubmit({ prompt, files });
       }
 
       const newThreadMessage = newThreadMessages.at(0);
       if (newThreadMessage === undefined) {
-        return;
+        return CHAT_SEND_SENT;
       }
       if (!(await ensureAIAvailable())) {
-        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+        return CHAT_SEND_KEPT;
       }
       const newThreadId = createChatThreadId();
       const newThreadRef: ChatThreadRef =
@@ -544,6 +597,7 @@ export const ChatTabPanel = ({
       });
       leave();
       resetChatTabId(tab.id, newThreadId);
+      return CHAT_SEND_SENT;
     },
   );
 
@@ -555,6 +609,7 @@ export const ChatTabPanel = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation,
           handleAlwaysAllow,
           handleApprove,
@@ -682,19 +737,23 @@ export const ChatTabPanel = ({
             }
             followupChips={
               <SuggestedFollowupChips
+                analyticsSurface="inspector-chat"
+                messageId={lastMessageId}
                 onSelect={(prompt) => {
                   editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
                     editorController.submit(async (draft) => {
                       if (!(await ensureAIAvailable())) {
-                        return;
+                        return CHAT_SEND_KEPT;
                       }
                       await sendMessage(await buildChatRequestMessage(draft));
+                      return CHAT_SEND_SENT;
                     }),
                     "chat-tab-panel.submit",
                   );
                 }}
                 prompts={suggestedPrompts}
+                threadId={threadRef.threadId}
               />
             }
             layout="standalone"

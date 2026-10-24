@@ -8,11 +8,12 @@ import type {
 } from "@tanstack/ai/client";
 
 import type {
-  TanStackAIProvider,
   ReasoningEffort,
   ReasoningProvenance,
+  TanStackAIProvider,
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
@@ -41,12 +42,16 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type {
-  PersistedToolCallPart,
-  PersistedToolResultPart,
   persistedChatMessageContentV3Proof,
+  PersistedJsonObject,
+  PersistedToolCallPart,
+  PersistedToolProviderMetadata,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
+
+export type { ChatTurnTiming } from "@stll/api-contract/chat";
 
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 
@@ -101,17 +106,25 @@ export type ChatAttachmentMetadata = {
 };
 
 export type ChatAttachmentPart =
-  | ImagePart<ChatAttachmentMetadata>
-  | DocumentPart<ChatAttachmentMetadata>;
+  ImagePart<ChatAttachmentMetadata> | DocumentPart<ChatAttachmentMetadata>;
 
 type SdkChatPart = MessagePart<ChatClientTools>;
 export type ChatTanStackPart =
-  | Exclude<SdkChatPart, { type: "thinking" | "tool-call" }>
+  | Exclude<SdkChatPart, { type: "text" | "thinking" | "tool-call" }>
+  | (Extract<SdkChatPart, { type: "text" }> & {
+      /** Provider artefacts a writer stored with the text, kept as stored. */
+      providerMetadata?: PersistedJsonObject;
+    })
   | (Extract<SdkChatPart, { type: "tool-call" }> &
-      Pick<ToolCallPart, "metadata">)
+      Pick<ToolCallPart, "metadata"> & {
+        /** Provider artefacts a writer stored with the call, kept as stored. */
+        providerMetadata?: PersistedToolProviderMetadata;
+      })
   | (ThinkingPart & {
       /** Server-issued replay identity; historical parts may have none. */
       provenance?: ReasoningProvenance;
+      /** Provider artefacts a writer stored with the reasoning, kept as stored. */
+      providerMetadata?: PersistedJsonObject;
     });
 
 export type ChatPart = ChatTanStackPart;
@@ -169,6 +182,8 @@ export type ChatTurnOutcome =
     };
 
 export type ChatMessageMetadata = {
+  /** Server-owned active execution time; human interaction waits are excluded. */
+  turnTiming?: ChatTurnTiming | null | undefined;
   /** Server-owned generated-document draft binding. Incoming client metadata
    * deliberately does not accept this field. */
   activeDraftContext?: GeneratedDocumentActiveDraftContext | undefined;

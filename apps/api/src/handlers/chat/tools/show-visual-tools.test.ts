@@ -156,7 +156,7 @@ describe("show visual", () => {
     },
   );
 
-  test("carries the court and year guidance in its description", () => {
+  test("offers rendered views for general visual intents alongside court and year guidance", () => {
     const tool = createShowVisualTools({
       origin: createVisualResourceOrigin(),
       preview: unavailablePreview,
@@ -164,6 +164,23 @@ describe("show visual", () => {
     })[VISUAL_PREVIEW_TOOL_NAME];
     expect(tool.description).toEndWith(VISUAL_SHOWCASE_GUIDANCE);
     expect(tool.description).toContain("facets.courtYear");
+    for (const intent of [
+      "visualise",
+      "chart",
+      "graph",
+      "timeline",
+      "diagram",
+      "a page",
+      "nice HTML",
+    ]) {
+      expect(tool.description).toContain(intent);
+    }
+    expect(tool.description).toContain(
+      "Recognize equivalent intents in any language",
+    );
+    expect(tool.description).toContain("do not answer with an HTML code block");
+    expect(tool.description).toContain("GENERAL LEGAL-ANALYSIS VIEWS:");
+    expect(tool.description).toContain("legal-analysis-showcase.html");
     expect(tool.description).toContain(
       "The host supplies the current app theme.",
     );

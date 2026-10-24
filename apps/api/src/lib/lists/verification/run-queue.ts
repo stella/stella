@@ -25,8 +25,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import {
-  requeueDeterministicJob,
   QUEUE_REQUEUE_OUTCOME,
+  requeueDeterministicJob,
 } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -51,7 +51,7 @@ import type {
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import {
   ListVerificationAccessRevokedError,
-  VERIFICATION_MODEL_ROLE,
+  VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
 import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
@@ -79,13 +79,13 @@ import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import {
-  brandPersistedUserId,
   brandPersistedListVerificationRunId,
+  brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import {
   formatModelRef,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
 } from "@/api/lib/tanstack-ai-models";
 
 const QUEUE_NAME = "legal-list-verification-runs";
@@ -609,7 +609,7 @@ const resolveRunningActorAccess = async (
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
   readDocument?: typeof readVerificationDocument;
-  generateObjectForRole?: VerificationModelDeps["generateObjectForRole"];
+  generateObjectForTask?: VerificationModelDeps["generateObjectForTask"];
 };
 
 /** Null on success, else the code the run failed with. */
@@ -669,8 +669,8 @@ const executeRun = async ({
       return Result.ok({
         orgAIConfig,
         managedAIResidency,
-        model: getTanStackTextModelInfoForRole(
-          VERIFICATION_MODEL_ROLE,
+        model: getTanStackTextModelInfoForTask(
+          VERIFICATION_MODEL_TASK,
           orgAIConfig,
           {
             dataClass: "customer",
@@ -718,9 +718,9 @@ const executeRun = async ({
             organizationId: actor.organizationId,
           }),
       ),
-    ...(execution.generateObjectForRole === undefined
+    ...(execution.generateObjectForTask === undefined
       ? {}
-      : { generateObjectForRole: execution.generateObjectForRole }),
+      : { generateObjectForTask: execution.generateObjectForTask }),
     refreshAccessProof: async () => {
       const decision = await resolveRunningActorAccess(actor, grants);
       if (decision.status === "unavailable") {

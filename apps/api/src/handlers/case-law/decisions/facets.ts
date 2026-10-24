@@ -53,6 +53,7 @@ export const listDecisionFacetsHandler = async ({
   country,
 }: ListDecisionFacetsQuery) => {
   const countryRead = readPublicLawCountry(country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
   });
@@ -71,8 +72,7 @@ export const listDecisionFacetsHandler = async ({
 };
 
 type BrowseFacetsReadError =
-  | LegalBrowseFacetsError
-  | NonRedistributableSourcesError;
+  LegalBrowseFacetsError | NonRedistributableSourcesError;
 
 export type BrowseFacetsUnderPolicyRead = {
   country: string;

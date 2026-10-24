@@ -27,10 +27,10 @@ import {
   snapshotOperationInput,
 } from "@/api/lib/proofs/checked-transaction";
 import {
-  createModelActionAdmitter,
-  modelActionRefusal,
   type AdmittedModelAction,
+  createModelActionAdmitter,
   type ModelActionAdmitter,
+  modelActionRefusal,
 } from "@/api/lib/rate-limit/model-action-admission";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 
@@ -70,7 +70,7 @@ const assertTemplateFillUsage = async ({
     return null;
   }
   const authorization = await authorizeHandlerUsage({
-    metering: { actionType: "chat", modelRole: "fast" },
+    metering: { actionType: "chat", modelTask: "short-text" },
     organizationId,
     orgAIConfig,
     workspaceId: null,
@@ -238,7 +238,7 @@ export const buildTemplateFillAiWiring = (
                 workspaceId: null,
               },
               feature,
-              modelRole: "fast",
+              modelTask: "short-text",
               orgAIConfig: config.orgAIConfig,
               modelTier: admission.modelTier,
               properties: { organization_id: organizationId },

@@ -19,11 +19,11 @@ import { repoRelativePath } from "@stll/portable-path";
 import { templatePackContentIdentity } from "../src/content-identity";
 import { PUBLIC_PACK_IDS } from "../src/public-packs";
 import {
-  packIndexSchema,
-  packManifestSchema,
   type GeneratedTemplatePack,
   type GeneratedTemplatePackTemplate,
+  packIndexSchema,
   type PackIndexTemplate,
+  packManifestSchema,
 } from "../src/schema";
 
 const packageRoot = path.join(import.meta.dirname, "..");

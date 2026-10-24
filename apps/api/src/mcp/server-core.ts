@@ -1,22 +1,22 @@
 import {
-  ProtocolError,
-  ProtocolErrorCode,
   createMcpHandler,
   isInitializeRequest,
   isLegacyRequest,
+  ProtocolError,
+  ProtocolErrorCode,
   Server,
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import type {
   AuthInfo,
-  CallToolResult,
   CallToolRequest,
-  ServerContext,
+  CallToolResult,
   McpHttpHandler,
-  Tool as McpTool,
   ReadResourceResult,
-  Resource,
   RequestId,
+  Resource,
+  ServerContext,
+  Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -43,7 +43,9 @@ import {
 } from "@/api/lib/rate-limit/action-size-limits";
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import {
   isMcpSession,
   type McpAuthenticationFailure,
@@ -51,8 +53,8 @@ import {
 } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
-  invokedCapabilityConsumesServices,
   featureOmittedCapabilityIds,
+  invokedCapabilityConsumesServices,
 } from "@/api/mcp/capability-tools";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
@@ -63,11 +65,11 @@ import {
   MCP_TOOL_OMISSION_REASONS,
   type McpMode,
   type McpToolOmissionReason,
+  STELLA_API_CONTRACT,
   STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
   STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
-  STELLA_API_CONTRACT,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -87,10 +89,19 @@ import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
   createMcpPreflightHeaders,
+  getMcpServerIcons,
   getMcpWwwAuthenticateHeader,
   type McpChallengeError,
 } from "@/api/mcp/metadata";
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
+import {
+  addMcpPhaseDuration,
+  measureMcpPhase,
+  observeMcpRequest,
+  setMcpMetricParsedMethod,
+  setMcpMetricProtocolPath,
+  setMcpMetricToolName,
+} from "@/api/mcp/request-metrics";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
@@ -103,15 +114,19 @@ import type {
 import {
   closestToolNames,
   didYouMean,
+  MAX_TOOL_NAME_CHARS,
   MCP_INTERNAL_ERROR_HINT,
   oauthScopeRecoveryHint,
   quoteToolName,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import {
+  MCP_WEB_HANDOFF_TOOL,
+  withWebHandoffLinks,
+} from "@/api/mcp/web-handoff-links";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
-const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
 
 const mcpStructuredErrorResult = (
@@ -123,8 +138,7 @@ const toolResultDisposition = (annotations: McpTool["annotations"]) =>
   annotations?.readOnlyHint === true ? "read" : "mutation";
 
 type ByteStreamReadResult =
-  | { done: false; value: Uint8Array }
-  | { done: true; value?: undefined };
+  { done: false; value: Uint8Array } | { done: true; value?: undefined };
 
 const isByteStreamReadResult = (
   value: unknown,
@@ -142,9 +156,9 @@ const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
   body.getReader();
 
 const formatUnknownToolName = (toolName: string): string =>
-  toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+  toolName.length <= MAX_TOOL_NAME_CHARS
     ? toolName
-    : `${toolName.slice(0, MAX_TOOL_NAME_SUGGESTION_CHARS)}...`;
+    : `${toolName.slice(0, MAX_TOOL_NAME_CHARS)}...`;
 
 /** `missing_scope` envelope with a CLI command that preserves all grants. */
 const missingScopeResult = ({
@@ -179,9 +193,13 @@ type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
   chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
+  decorateToolResult?: typeof withWebHandoffLinks;
   authenticateMcpRequest: (
     token: string,
-    options: { mode: McpMode },
+    options: {
+      mode: McpMode;
+      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+    },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
@@ -304,11 +322,16 @@ export const mcpOmittedToolNamesByReason = ({
   return { feature: feature.toSorted(), scope: scope.toSorted() };
 };
 
+/** An accepted MCP credential: who it resolved to, and what an event-stream
+ *  answer to it stays bound to. */
+type McpAuthenticated = { session: McpSession; stream: SseStreamBinding };
+
 const withMcpCors = async (
   response: Response,
-  session?: McpSession,
+  authenticated?: McpAuthenticated,
   mode: McpMode = "default",
 ) => {
+  const session = authenticated?.session;
   const headers = new Headers(response.headers);
   for (const [key, value] of createMcpCorsHeaders()) {
     if (!headers.has(key)) {
@@ -343,8 +366,14 @@ const withMcpCors = async (
   });
   // Both transport legs exit here, so this is where an event-stream answer —
   // the notification channel, or a tool call whose work outlasts an
-  // intermediary's idle timeout — picks up the keep-alive.
-  return isEventStreamResponse(answer) ? withSseHeartbeat(answer) : answer;
+  // intermediary's idle timeout — picks up the keep-alive and its binding to
+  // the credential that asked for it.
+  if (!isEventStreamResponse(answer)) {
+    return answer;
+  }
+  return authenticated === undefined
+    ? panic("An MCP event stream must answer an accepted credential")
+    : withSseHeartbeat(answer, authenticated.stream);
 };
 
 /** Transport-level refusal (the SDK reserves -32000..-32099 for these). */
@@ -533,8 +562,7 @@ const withTransportAcceptHeader = (request: Request): Request => {
 };
 
 type McpRequestFrame =
-  | { request: Request; status: "within_limit" }
-  | { status: "too_large" };
+  { request: Request; status: "within_limit" } | { status: "too_large" };
 
 type DeclaredBodyLength = "undeclared" | "within_limit" | "too_large";
 
@@ -781,6 +809,7 @@ export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
   chargeReadBytes = chargeMcpReadBytes,
   actionSizePolicy = getActionSizePolicy,
+  decorateToolResult = withWebHandoffLinks,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
@@ -858,7 +887,7 @@ export const createMcpHttpRequestHandler = ({
       // Suggest the closest names the caller can actually see (scope-filtered
       // list), so a typo resolves without leaking tools they lack access to.
       const suggestions =
-        toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+        toolName.length <= MAX_TOOL_NAME_CHARS
           ? closestToolNames(
               toolName,
               (await listMcpTools(context, mode, session.scopes)).map(
@@ -875,6 +904,8 @@ export const createMcpHttpRequestHandler = ({
             : "No such tool. Call tools/list for the tools available to this session.",
       });
     }
+
+    setMcpMetricToolName(definition.name, mode);
 
     const requiredScopes = requiredScopesForTool(definition);
     const missingScope = requiredScopes.find(
@@ -909,14 +940,22 @@ export const createMcpHttpRequestHandler = ({
       : undefined;
     const run = async (signal?: AbortSignal) => {
       signal?.throwIfAborted();
-      const result = await handleMcpToolCall({
-        args: toolRequest.params.arguments ?? {},
-        context,
-        mode,
-        toolName,
-      });
+      const result = await measureMcpPhase(
+        "dispatch",
+        async () =>
+          await handleMcpToolCall({
+            args: toolRequest.params.arguments ?? {},
+            context,
+            mode,
+            toolName,
+          }),
+      );
+      const decoratedResult =
+        toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
+          ? result
+          : await decorateToolResult(result, context);
       return await boundMcpToolResult({
-        result,
+        result: decoratedResult,
         requestId: mcpReq.id,
         definition,
         readClass,
@@ -990,24 +1029,37 @@ export const createMcpHttpRequestHandler = ({
     request: Request;
     session: McpSession;
   }) => {
-    const context = await resolveMcpSessionContext(session, {
-      clientIp,
-      request,
-    });
+    const context = await measureMcpPhase(
+      "context",
+      async () =>
+        await resolveMcpSessionContext(session, {
+          clientIp,
+          request,
+        }),
+    );
 
+    const serverBuildStartedAt = performance.now();
     // The low-level Server API accepts JSON Schema directly, which keeps the
     // MCP surface independent from the chat tool generics used elsewhere.
     // oxlint-disable-next-line typescript/no-deprecated -- low-level Server is the intended "advanced use case" API per the SDK; McpServer would couple us to chat tool generics
     const server = new Server(
-      { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
+      {
+        icons: getMcpServerIcons(),
+        name: getMcpServerName(mode),
+        version: MCP_SERVER_VERSION,
+      },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
         instructions: getMcpInstructions(mode, context),
       },
     );
 
-    server.setRequestHandler("tools/list", async () => {
-      const tools = await listMcpTools(context, mode, session.scopes);
+    server.setRequestHandler("tools/list", async (listRequest) => {
+      setMcpMetricParsedMethod(listRequest.method);
+      const tools = await measureMcpPhase(
+        "tool_projection",
+        async () => await listMcpTools(context, mode, session.scopes),
+      );
       return {
         tools,
         _meta: {
@@ -1062,8 +1114,9 @@ export const createMcpHttpRequestHandler = ({
 
     server.setRequestHandler(
       "tools/call",
-      async (toolRequest, requestContext) =>
-        await observeMcpToolCall({
+      async (toolRequest, requestContext) => {
+        setMcpMetricParsedMethod(toolRequest.method);
+        return await observeMcpToolCall({
           context,
           mode,
           toolName: toolRequest.params.name,
@@ -1078,7 +1131,13 @@ export const createMcpHttpRequestHandler = ({
               }),
               mode,
             ),
-        }),
+        });
+      },
+    );
+
+    addMcpPhaseDuration(
+      "server_build",
+      performance.now() - serverBuildStartedAt,
     );
 
     return server;
@@ -1167,6 +1226,9 @@ export const createMcpHttpRequestHandler = ({
     const observeHandshake: NonNullable<typeof transport.onmessage> = (
       message,
     ) => {
+      if ("method" in message) {
+        setMcpMetricParsedMethod(message.method);
+      }
       if (!isInitializeRequest(message)) {
         return;
       }
@@ -1334,159 +1396,195 @@ export const createMcpHttpRequestHandler = ({
       clientIp = null,
       mode = "default",
     }: { clientIp?: string | null | undefined; mode?: McpMode } = {},
-  ): Promise<Response> => {
-    if (incomingRequest.method === "OPTIONS") {
-      return new Response(null, {
-        headers: createMcpPreflightHeaders(),
-        status: 204,
-      });
-    }
+  ): Promise<Response> =>
+    await observeMcpRequest({
+      method: incomingRequest.headers.get("mcp-method"),
+      mode,
+      run: async () => {
+        if (incomingRequest.method === "OPTIONS") {
+          return new Response(null, {
+            headers: createMcpPreflightHeaders(),
+            status: 204,
+          });
+        }
 
-    const configuredPolicy = actionSizePolicy();
-    if (Result.isError(configuredPolicy)) {
-      return withMcpCors(
-        actionSizeErrorResponse(configuredPolicy.error),
-        undefined,
-        mode,
-      );
-    }
-    const policy = configuredPolicy.value;
-    const envelopeDisposition: { type: "read" | "tool" } = { type: "read" };
-    const completeResponse = async (
-      response: Response,
-      session?: McpSession,
-    ) => {
-      const bounded =
-        policy === undefined || envelopeDisposition.type === "tool"
-          ? response
-          : await boundActionJsonResponse(response, {
-              maximum: policy.responseBytes,
-              disposition: "refuse",
-              operation: "mcp",
+        const configuredPolicy = actionSizePolicy();
+        if (Result.isError(configuredPolicy)) {
+          return withMcpCors(
+            actionSizeErrorResponse(configuredPolicy.error),
+            undefined,
+            mode,
+          );
+        }
+        const policy = configuredPolicy.value;
+        const envelopeDisposition: { type: "read" | "tool" } = { type: "read" };
+        const completeResponse = async (
+          response: Response,
+          accepted?: McpAuthenticated,
+        ) => {
+          const bounded =
+            policy === undefined || envelopeDisposition.type === "tool"
+              ? response
+              : await boundActionJsonResponse(response, {
+                  maximum: policy.responseBytes,
+                  disposition: "refuse",
+                  operation: "mcp",
+                });
+          return withMcpCors(bounded, accepted, mode);
+        };
+        let framedRequest = incomingRequest;
+        if (policy !== undefined) {
+          const bounded = await boundActionRequest(
+            incomingRequest,
+            policy.requestBytes,
+          );
+          if (Result.isError(bounded)) {
+            return withMcpCors(
+              actionSizeErrorResponse(bounded.error, policy.responseBytes),
+              undefined,
+              mode,
+            );
+          }
+          framedRequest = bounded.value;
+        }
+
+        // Preserve the existing transport frame limit while admission is disabled.
+        if (
+          policy === undefined &&
+          declaredBodyLength(incomingRequest) === "too_large"
+        ) {
+          return payloadTooLargeResponse();
+        }
+
+        const token = extractBearerToken(incomingRequest);
+        if (!token) {
+          return accessDeniedResponse({ denial: "missing_credentials", mode });
+        }
+
+        // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
+        // else (a token-verification infrastructure outage surfaced as
+        // `McpTokenVerificationError`, a bug in session resolution, or a transport
+        // fault) is a server-side problem, not a bad token: capture it and return
+        // a retryable 5xx so the client backs off instead of dropping into a
+        // re-consent loop.
+        const failureResponse = (error: unknown): Response => {
+          if (error instanceof McpAuthenticationError) {
+            return accessDeniedResponse({ denial: "invalid_token", mode });
+          }
+
+          captureError(error, {
+            phase: "transport",
+            mode,
+            source: "mcp",
+          });
+
+          return retryableServerErrorResponse();
+        };
+
+        try {
+          const authenticated = await measureMcpPhase(
+            "auth",
+            async () => await authenticateMcpRequest(token, { mode }),
+          );
+          if (Result.isError(authenticated)) {
+            return failureResponse(authenticated.error);
+          }
+          const session = authenticated.value;
+          // An event-stream answer holds while this token still authenticates:
+          // a genuine rejection ends it, a verification outage leaves it to
+          // the next sweep.
+          const accepted: McpAuthenticated = {
+            session,
+            stream: {
+              kind: "credential",
+              revalidate: async () => {
+                const again = await authenticateMcpRequest(token, {
+                  mode,
+                  resolveApiKeySession: revalidateMachineApiKeySession,
+                });
+                if (Result.isOk(again)) {
+                  return true;
+                }
+                return again.error instanceof McpAuthenticationError
+                  ? false
+                  : await Promise.reject(again.error);
+              },
+            },
+          };
+
+          // Refuse session termination only after the token is accepted, so an
+          // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
+          // drives OAuth discovery.
+          if (incomingRequest.method === "DELETE") {
+            return await completeResponse(
+              sessionOperationUnsupportedResponse(),
+              accepted,
+            );
+          }
+
+          // A chunked body is metered only for an accepted token: a caller
+          // without one is refused from the headers alone, so it cannot hold
+          // connections and buffers open by streaming a body that is discarded
+          // anyway.
+          const frame =
+            policy === undefined
+              ? await withCappedRequestBody(incomingRequest)
+              : { request: framedRequest, status: "within_limit" as const };
+          if (frame.status === "too_large") {
+            return await completeResponse(payloadTooLargeResponse(), accepted);
+          }
+          const request = withTransportAcceptHeader(frame.request);
+
+          const authInfo = {
+            clientId: session.userId,
+            extra: { [FACTORY_STATE_KEY]: { clientIp, session } },
+            scopes: session.scopes,
+            token,
+          };
+          const legacyRequest = await isLegacyRequest(request);
+          setMcpMetricProtocolPath(legacyRequest ? "legacy" : "modern");
+          const dispatch = async () =>
+            responseDisposition.run(envelopeDisposition, async () =>
+              legacyRequest
+                ? await serveLegacyRequest({
+                    authInfo,
+                    clientIp,
+                    mode,
+                    request,
+                    session,
+                  })
+                : await handlerForMode(mode).fetch(request, { authInfo }),
+            );
+          const response =
+            policy === undefined
+              ? await dispatch()
+              : await withTenantActionSizePolicy(policy, dispatch);
+
+          // `createMcpHandler` owns and catches modern exchange failures. Restore
+          // the public retry contract the outer catch provides on the legacy leg.
+          if (!legacyRequest && response.status >= 500) {
+            return policy === undefined
+              ? retryableServerErrorResponse()
+              : await completeResponse(
+                  retryableServerErrorResponse(),
+                  accepted,
+                );
+          }
+
+          return await completeResponse(response, accepted);
+        } catch (error) {
+          if (error instanceof McpOrganizationAccessError) {
+            return accessDeniedResponse({
+              denial: "organization_forbidden",
+              mode,
             });
-      return withMcpCors(bounded, session, mode);
-    };
-    let framedRequest = incomingRequest;
-    if (policy !== undefined) {
-      const bounded = await boundActionRequest(
-        incomingRequest,
-        policy.requestBytes,
-      );
-      if (Result.isError(bounded)) {
-        return withMcpCors(
-          actionSizeErrorResponse(bounded.error, policy.responseBytes),
-          undefined,
-          mode,
-        );
-      }
-      framedRequest = bounded.value;
-    }
+          }
 
-    // Preserve the existing transport frame limit while admission is disabled.
-    if (
-      policy === undefined &&
-      declaredBodyLength(incomingRequest) === "too_large"
-    ) {
-      return payloadTooLargeResponse();
-    }
-
-    const token = extractBearerToken(incomingRequest);
-    if (!token) {
-      return accessDeniedResponse({ denial: "missing_credentials", mode });
-    }
-
-    // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
-    // else (a token-verification infrastructure outage surfaced as
-    // `McpTokenVerificationError`, a bug in session resolution, or a transport
-    // fault) is a server-side problem, not a bad token: capture it and return
-    // a retryable 5xx so the client backs off instead of dropping into a
-    // re-consent loop.
-    const failureResponse = (error: unknown): Response => {
-      if (error instanceof McpAuthenticationError) {
-        return accessDeniedResponse({ denial: "invalid_token", mode });
-      }
-
-      captureError(error, {
-        phase: "transport",
-        mode,
-        source: "mcp",
-      });
-
-      return retryableServerErrorResponse();
-    };
-
-    try {
-      const authenticated = await authenticateMcpRequest(token, { mode });
-      if (Result.isError(authenticated)) {
-        return failureResponse(authenticated.error);
-      }
-      const session = authenticated.value;
-
-      // Refuse session termination only after the token is accepted, so an
-      // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
-      // drives OAuth discovery.
-      if (incomingRequest.method === "DELETE") {
-        return await completeResponse(
-          sessionOperationUnsupportedResponse(),
-          session,
-        );
-      }
-
-      // A chunked body is metered only for an accepted token: a caller
-      // without one is refused from the headers alone, so it cannot hold
-      // connections and buffers open by streaming a body that is discarded
-      // anyway.
-      const frame =
-        policy === undefined
-          ? await withCappedRequestBody(incomingRequest)
-          : { request: framedRequest, status: "within_limit" as const };
-      if (frame.status === "too_large") {
-        return await completeResponse(payloadTooLargeResponse(), session);
-      }
-      const request = withTransportAcceptHeader(frame.request);
-
-      const authInfo = {
-        clientId: session.userId,
-        extra: { [FACTORY_STATE_KEY]: { clientIp, session } },
-        scopes: session.scopes,
-        token,
-      };
-      const legacyRequest = await isLegacyRequest(request);
-      const dispatch = async () =>
-        responseDisposition.run(envelopeDisposition, async () =>
-          legacyRequest
-            ? await serveLegacyRequest({
-                authInfo,
-                clientIp,
-                mode,
-                request,
-                session,
-              })
-            : await handlerForMode(mode).fetch(request, { authInfo }),
-        );
-      const response =
-        policy === undefined
-          ? await dispatch()
-          : await withTenantActionSizePolicy(policy, dispatch);
-
-      // `createMcpHandler` owns and catches modern exchange failures. Restore
-      // the public retry contract the outer catch provides on the legacy leg.
-      if (!legacyRequest && response.status >= 500) {
-        return policy === undefined
-          ? retryableServerErrorResponse()
-          : await completeResponse(retryableServerErrorResponse(), session);
-      }
-
-      return await completeResponse(response, session);
-    } catch (error) {
-      if (error instanceof McpOrganizationAccessError) {
-        return accessDeniedResponse({ denial: "organization_forbidden", mode });
-      }
-
-      return failureResponse(error);
-    }
-    // No teardown here on purpose. The handler owns instance lifetime and a
-    // response body may still be streaming when this returns; closing it here
-    // is what truncated the notification stream under the hand-wired transport.
-  };
+          return failureResponse(error);
+        }
+        // No teardown here on purpose. The handler owns instance lifetime and a
+        // response body may still be streaming when this returns; closing it here
+        // is what truncated the notification stream under the hand-wired transport.
+      },
+    });
 };

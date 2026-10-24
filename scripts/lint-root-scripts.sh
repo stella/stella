@@ -6,10 +6,10 @@
 # own CI guards (ratchet, rc-bailouts, typecheck-baseline, lint-changed) — sits
 # outside every target. This closes that gap.
 #
-# The file list is enumerated from git rather than passed as the `scripts`
-# directory: a directory target silently matches zero files in a linked
-# worktree (Oxlint's ignore walker excludes it) and exits 0, which reads as a
-# pass. An explicit list fails loudly instead.
+# The TypeScript driver owns the file selection and exact Oxlint invocation
+# shared with code-check:affected. It enumerates tracked files rather than
+# passing the `scripts` directory because Oxlint's ignore walker can silently
+# match zero files for a directory target in a linked worktree.
 #
 # This run subsumes the former SQL-only guard: `no-bare-jsonb-cast` is "error"
 # in the base config, so a repair or backfill script writing JSONB through a
@@ -17,20 +17,4 @@
 # caught here.
 set -euo pipefail
 
-bun scripts/ci-generated-sources.ts prepare
-
-files=()
-while IFS= read -r file; do
-  files+=("${file}")
-done < <(git ls-files 'scripts/*.ts' 'scripts/**/*.ts')
-
-if [[ ${#files[@]} -eq 0 ]]; then
-  echo "lint-root-scripts: no script files found; refusing to pass vacuously" >&2
-  exit 1
-fi
-
-exec bun --bun oxlint -c oxlint.config.ts \
-  --report-unused-disable-directives-severity=error \
-  --type-aware \
-  --type-check \
-  "${files[@]}"
+exec bun scripts/lint-root-scripts.ts

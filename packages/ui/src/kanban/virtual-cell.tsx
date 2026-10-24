@@ -16,8 +16,8 @@ import { cn } from "../lib/utils";
 import {
   KANBAN_CARD_STICKY_TOP_VAR,
   KANBAN_STICKY_TOP_CLASS,
-  resolveKanbanCardStickyTop,
   type KanbanCardStickyTopStyle,
+  resolveKanbanCardStickyTop,
 } from "./sticky-lane";
 
 const DEFAULT_ESTIMATE_SIZE_PX = 128;
@@ -255,7 +255,7 @@ export const KanbanVirtualCell = <TRow,>({
         "min-h-20 rounded-xl p-2",
         rows.length === 0
           ? "overflow-visible"
-          : "max-h-[min(60vh,40rem)] overflow-y-auto overscroll-y-contain",
+          : "max-h-[min(60dvh,40rem)] overflow-y-auto overscroll-y-contain",
         active &&
           accentVariants === undefined &&
           "bg-primary/5 ring-primary/50 ring-2",

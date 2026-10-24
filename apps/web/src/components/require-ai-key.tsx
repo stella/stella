@@ -9,10 +9,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
@@ -24,37 +24,43 @@ import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor
 import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
 import {
   createProviderCredentialDraft,
-  haveSameRoleModelSelections,
-  createDefaultRoleModels,
-  ensureRoleModelsForProviders,
   getProviderValues,
   hasUsableProviderDrafts,
+  haveSameRoleModelSelections,
+  projectDefaultRoleModels,
+  projectProviderDefaultRoleModels,
   providerDraftsFromStoredProviders,
+  retainRoleOverridesForProviders,
   roleModelsFromOverrideModels,
-  serializeOverrideModels,
+  roleOverridesFromStoredModels,
   serializeProviderDrafts,
+  serializeRoleOverrides,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ModelSelection,
   ProviderCredentialDraft,
-  RoleModelSelections,
+  RoleModelOverrides,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
   aiAvailabilityOptions,
   aiConfigOptions,
+  aiDefaultsPreviewOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
+import type { OrganizationAIAvailability } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
@@ -65,7 +71,9 @@ type AIAvailabilityContextValue = {
 const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
   null,
 );
-const AIUnavailableContext = createContext(false);
+const AIUnavailableContext = createContext<OrganizationAIAvailability | null>(
+  null,
+);
 
 /**
  * Provides the AI key gate. Idempotent: under an existing provider it renders
@@ -86,6 +94,7 @@ export const AIAvailabilityProvider = ({
 
 const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
+  const t = useTranslations();
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -100,8 +109,10 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const openAIKeyDialog = useCallback(() => {
-    setOpen(true);
-  }, []);
+    if (data?.providerConfiguration === "allowed") {
+      setOpen(true);
+    }
+  }, [data]);
 
   const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
@@ -124,23 +135,34 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       return true;
     }
 
-    setOpen(true);
+    if (availability.providerConfiguration === "allowed") {
+      setOpen(true);
+      return false;
+    }
+    // This member cannot connect a provider, so the action they triggered
+    // stops here; say why instead of doing nothing.
+    stellaToast.add({
+      title: t(aiUnavailableMessageKey(availability)),
+      type: "info",
+    });
     return false;
-  }, [availabilityOptions, queryClient, tErrors]);
+  }, [availabilityOptions, queryClient, t, tErrors]);
 
   const openIfAIUnavailable = useCallback(() => {
     if (
       dataQuery.status === "success" &&
       data &&
       !data.available &&
+      data.providerConfiguration === "allowed" &&
       !isFetching
     ) {
       setOpen(true);
     }
   }, [data, dataQuery.status, isFetching]);
-  const aiUnavailable = Boolean(
-    dataQuery.status === "success" && data && !data.available && !isFetching,
-  );
+  const aiUnavailable =
+    dataQuery.status === "success" && data && !data.available && !isFetching
+      ? data
+      : null;
 
   // Force-close the dialog whenever the availability query flips to available
   // (e.g. keys configured elsewhere and refetched). Adjust-state-during-render on
@@ -173,15 +195,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   );
 };
 
-export const useAIKeyGate = () => {
-  const context = use(AIAvailabilityContext);
-
-  if (!context) {
-    panic("useAIKeyGate must be used within AIAvailabilityProvider");
-  }
-
-  return context;
-};
+export const useAIKeyGate = () =>
+  useRequiredRouteProvider({
+    context: AIAvailabilityContext,
+    scope: PROVIDER_SCOPE.ai,
+    missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
+  });
 
 const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
   useMountEffect(() => {
@@ -191,10 +210,14 @@ const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
 };
 
 export const AIUnavailableDialogTrigger = () => {
-  const aiUnavailable = use(AIUnavailableContext);
+  const availability = use(AIUnavailableContext);
   const { openAIKeyDialog } = useAIKeyGate();
-  if (!aiUnavailable) {
+  const t = useTranslations();
+  if (availability === null) {
     return null;
+  }
+  if (availability.providerConfiguration !== "allowed") {
+    return <p>{t(aiUnavailableMessageKey(availability))}</p>;
   }
   return <OpenAIKeyDialogOnMount open={openAIKeyDialog} />;
 };
@@ -241,28 +264,78 @@ export const RequireAIKey = ({
 
   return (
     <div className="flex h-full w-full flex-1 items-center justify-center p-6">
-      <AIUnavailableDialogTrigger />
+      {data?.providerConfiguration === "allowed" ? (
+        <AIUnavailableDialogTrigger />
+      ) : null}
       <div className="border-border bg-card text-card-foreground flex max-w-md flex-col gap-4 rounded-lg border p-6 shadow-sm">
         <div className="flex flex-col gap-1">
           <h2 className="text-foreground text-lg font-semibold">
             {t("ai.keyRequired.title")}
           </h2>
           <p className="text-muted-foreground text-sm">
-            {t("ai.keyRequired.description")}
+            {data === undefined
+              ? t("ai.keyRequired.description")
+              : t(aiUnavailableMessageKey(data))}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={openAIKeyDialog}>{t("ai.keyRequired.cta")}</Button>
-          <Button
-            render={<Link to="/settings/organization/ai" />}
-            variant="ghost"
-          >
-            {t("organization.aiConfig.title")}
-          </Button>
+          {data?.providerConfiguration === "allowed" ? (
+            <>
+              <Button onClick={openAIKeyDialog}>
+                {t("ai.keyRequired.cta")}
+              </Button>
+              <Button render={<Link to="/admin/ai" />} variant="ghost">
+                {t("organization.aiConfig.title")}
+              </Button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
   );
+};
+
+function aiUnavailableMessageKey(availability: OrganizationAIAvailability) {
+  switch (availability.providerConfiguration) {
+    case "permission_required":
+      return "ai.keyRequired.permissionRequired" as const;
+    case "account_restricted":
+      return "ai.keyRequired.accountRestricted" as const;
+    case "allowed":
+      break;
+    default:
+      availability.providerConfiguration satisfies never;
+      return panic("Unhandled AI provider configuration capability");
+  }
+
+  switch (availability.unavailableReason) {
+    case "member_assignment_required":
+      return "ai.keyRequired.seatRequired" as const;
+    case "unreadable":
+      return "ai.keyRequired.configUnreadable" as const;
+    case "own_key_required":
+    case "provider_not_configured":
+      return "ai.keyRequired.description" as const;
+    case null:
+      return panic("Available AI rendered an unavailable message");
+    default:
+      availability.unavailableReason satisfies never;
+      return panic("Unhandled AI unavailable reason");
+  }
+}
+
+const ACCOUNT_ACCESS_UNAVAILABLE_CODE = "account_access_unavailable";
+const FORBIDDEN_STATUS = 403;
+
+// The server refused the config read for this principal: say which refusal.
+// Any other failure is transient and keeps the shared retry feedback.
+const configRefusalMessageKey = (error: unknown) => {
+  if (!APIError.is(error) || error.status !== FORBIDDEN_STATUS) {
+    return null;
+  }
+  return error.code === ACCOUNT_ACCESS_UNAVAILABLE_CODE
+    ? ("ai.keyRequired.accountRestricted" as const)
+    : ("ai.keyRequired.permissionRequired" as const);
 };
 
 type AIKeyRequiredDialogProps = {
@@ -288,26 +361,35 @@ export const AIKeyRequiredDialog = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const availabilityQuery = useChromeQuery(
+    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
+  const availabilityView = useQueryView(availabilityQuery);
+  useQueryViewError(availabilityView);
+  const mayConfigure =
+    availabilityView.type === "items" &&
+    availabilityView.items.providerConfiguration === "allowed";
   const configQuery = useChromeQuery({
     ...aiConfigOptions({ organizationId: activeOrganizationId }),
-    enabled: open,
+    enabled: open && mayConfigure,
   });
   const configView = useQueryView(configQuery);
   useQueryViewError(configView);
+  const configRefusalKey =
+    configView.type === "error"
+      ? configRefusalMessageKey(configView.error)
+      : null;
   const config = configView.type === "items" ? configView.items : undefined;
   const [providers, setProviders] = useState<ProviderCredentialDraft[]>(
     DEFAULT_PROVIDER_DRAFTS,
   );
-  const [roleModels, setRoleModels] = useState<RoleModelSelections>(
-    createDefaultRoleModels,
-  );
+  const [roleModels, setRoleModels] = useState<RoleModelOverrides>({});
 
   const [initialProviders, setInitialProviders] = useState(
     DEFAULT_PROVIDER_DRAFTS,
   );
-  const [initialRoleModels, setInitialRoleModels] = useState(
-    createDefaultRoleModels,
-  );
+  const [initialRoleModels, setInitialRoleModels] =
+    useState<RoleModelOverrides>({});
 
   // Re-syncs the provider/role-model form drafts from `config` when the
   // dialog opens (or when `configured` flips while it's open), deliberately
@@ -333,13 +415,13 @@ export const AIKeyRequiredDialog = ({
         setProviders(nextProviders);
         setInitialProviders(nextProviders);
         setInitialRoleModels(
-          roleModelsFromOverrideModels({
+          roleOverridesFromStoredModels({
             overrideModels: config.overrideModels,
             providers: providerValues,
           }),
         );
         setRoleModels(
-          roleModelsFromOverrideModels({
+          roleOverridesFromStoredModels({
             overrideModels: config.overrideModels,
             providers: providerValues,
           }),
@@ -348,12 +430,8 @@ export const AIKeyRequiredDialog = ({
         const nextProviders = DEFAULT_PROVIDER_DRAFTS;
         setProviders(nextProviders);
         setInitialProviders(nextProviders);
-        setInitialRoleModels(
-          createDefaultRoleModels(getProviderValues(nextProviders)),
-        );
-        setRoleModels(
-          createDefaultRoleModels(getProviderValues(nextProviders)),
-        );
+        setInitialRoleModels({});
+        setRoleModels({});
       }
     }
   }
@@ -362,9 +440,9 @@ export const AIKeyRequiredDialog = ({
     const providerValues = getProviderValues(nextProviders);
     setProviders(nextProviders);
     setRoleModels((prev) =>
-      ensureRoleModelsForProviders({
+      retainRoleOverridesForProviders({
         providers: providerValues,
-        roleModels: prev,
+        overrides: prev,
       }),
     );
   };
@@ -379,26 +457,39 @@ export const AIKeyRequiredDialog = ({
   const saveMutation = useMutation({
     mutationFn: async () => {
       const providerValues = getProviderValues(providers);
-      const overrideModels = serializeOverrideModels({
+      const serialized = serializeRoleOverrides({
         providers: providerValues,
-        roleModels,
+        overrides: roleModels,
       });
-      if (!overrideModels) {
+      if (serialized.kind === "invalid") {
         // The Configure button is disabled when `canSave` is false, which
-        // checks the same `serializeOverrideModels(...) !== null` invariant.
+        // checks the same serialization invariant.
         // The inline message at the field below renders the translated text.
         panic("ai-config save fired with no valid override models");
       }
 
       const response = await api["organization-settings"]["ai-config"].post({
         providers: serializeProviderDrafts(providers),
-        overrideModels,
+        overrideModels: serialized.overrides,
       });
 
       return unwrapEden(response);
     },
     onSuccess: async (data) => {
-      setProviders(providerDraftsFromStoredProviders(data.providers));
+      const savedProviders = providerDraftsFromStoredProviders(data.providers);
+      queryClient.setQueryData(
+        aiDefaultsPreviewOptions({
+          organizationId: activeOrganizationId,
+          providers: getProviderValues(savedProviders),
+        }).queryKey,
+        {
+          defaultModels: projectDefaultRoleModels(data.defaultModels),
+          providerDefaultModels: projectProviderDefaultRoleModels(
+            data.providerDefaultModels,
+          ),
+        },
+      );
+      setProviders(savedProviders);
       queryClient.setQueryData(
         aiAvailabilityOptions({ organizationId: activeOrganizationId })
           .queryKey,
@@ -425,10 +516,41 @@ export const AIKeyRequiredDialog = ({
   });
 
   const providerValues = getProviderValues(providers);
+  const storedProviderValues = config?.configured
+    ? config.providers.map(({ provider }) => provider)
+    : [];
+  const defaultsQuery = useChromeQuery({
+    ...aiDefaultsPreviewOptions({
+      organizationId: activeOrganizationId,
+      providers: providerValues,
+    }),
+    enabled: open && mayConfigure && configQuery.status === "success",
+    ...(config !== undefined &&
+    JSON.stringify(providerValues) === JSON.stringify(storedProviderValues)
+      ? {
+          initialData: {
+            defaultModels: projectDefaultRoleModels(config.defaultModels),
+            providerDefaultModels: projectProviderDefaultRoleModels(
+              config.providerDefaultModels,
+            ),
+          },
+        }
+      : {}),
+  });
+  const defaultsView = useQueryView(defaultsQuery);
+  useQueryViewError(defaultsView);
+  const defaultModels =
+    defaultsView.type === "items" ? defaultsView.items.defaultModels : null;
+  const providerDefaultModels =
+    defaultsView.type === "items"
+      ? defaultsView.items.providerDefaultModels
+      : [];
   const canSave =
     configQuery.status === "success" &&
+    defaultModels !== null &&
     hasUsableProviderDrafts(providers) &&
-    serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
+    serializeRoleOverrides({ providers: providerValues, overrides: roleModels })
+      .kind === "valid";
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -453,29 +575,44 @@ export const AIKeyRequiredDialog = ({
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pb-3">
-          <QueryViewFeedback view={configView} />
-          <div className="grid gap-3">
-            <AIConfigProvidersEditor
-              compact
-              disabled={saveMutation.isPending}
-              onProvidersChange={updateProviders}
-              providers={providers}
-            />
+          {configRefusalKey !== null ? (
+            <p className="text-muted-foreground text-sm">
+              {t(configRefusalKey)}
+            </p>
+          ) : (
+            <div className="grid gap-3">
+              <QueryViewFeedback view={configView} />
+              <AIConfigProvidersEditor
+                compact
+                disabled={saveMutation.isPending}
+                onProvidersChange={updateProviders}
+                providers={providers}
+              />
 
-            <AIConfigRoleModelPicker
-              compact
-              disabled={saveMutation.isPending}
-              onModelChange={setRoleModel}
-              providers={providerValues}
-              roleModels={roleModels}
-            />
+              {defaultModels === null ? (
+                <QueryViewFeedback view={defaultsView} />
+              ) : (
+                <AIConfigRoleModelPicker
+                  compact
+                  disabled={saveMutation.isPending}
+                  onModelChange={setRoleModel}
+                  providers={providerValues}
+                  providerDefaultModels={providerDefaultModels}
+                  roleModels={roleModelsFromOverrideModels({
+                    overrideModels: roleModels,
+                    providers: providerValues,
+                    defaultModels,
+                  })}
+                />
+              )}
 
-            {!canSave && (
-              <p className="text-destructive-foreground text-xs">
-                {tOrganization("aiConfig.selectModelForEachRole")}
-              </p>
-            )}
-          </div>
+              {!canSave && (
+                <p className="text-destructive-foreground text-xs">
+                  {tOrganization("aiConfig.selectModelForEachRole")}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter className="px-4 py-3">
           <DialogClose render={<Button variant="ghost" />}>
@@ -485,6 +622,7 @@ export const AIKeyRequiredDialog = ({
             disabled={!canSave}
             loading={saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
+            title={configRefusalKey === null ? undefined : t(configRefusalKey)}
           >
             {tOrganization("aiConfig.configure")}
           </Button>

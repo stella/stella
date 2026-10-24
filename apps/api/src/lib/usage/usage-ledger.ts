@@ -31,23 +31,24 @@ import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { ModelTask } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
-  usageEvents,
   usageAllocations,
   usageEntitlements,
+  usageEvents,
   workspaces,
 } from "@/api/db/schema";
 import type {
   UsageActionType,
   UsageAllocationReason,
   UsageAllocationSource,
+  UsageEntitlementStatus,
   UsageEventLane,
   UsageServiceTier,
-  UsageEntitlementStatus,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -65,8 +66,7 @@ import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state"
 const UNRECOGNIZED_STATUS = "unrecognized" as const;
 
 type ReadEntitlementStatus =
-  | UsageEntitlementStatus
-  | typeof UNRECOGNIZED_STATUS;
+  UsageEntitlementStatus | typeof UNRECOGNIZED_STATUS;
 
 const storedEntitlementStatusSchema = v.picklist(USAGE_ENTITLEMENT_STATUSES);
 
@@ -337,7 +337,7 @@ type RecordUsageEventInput = {
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
   actionType: UsageActionType;
-  modelRole: string;
+  modelTask: ModelTask | "decision";
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;
@@ -370,7 +370,7 @@ export const recordUsageEvent = async ({
   workspaceId,
   userId,
   actionType,
-  modelRole,
+  modelTask,
   unitsConsumed,
   serviceTier,
   isByok,
@@ -412,7 +412,7 @@ export const recordUsageEvent = async ({
     periodStart: periodResolved.start,
     periodEnd: periodResolved.end,
     actionType,
-    modelRole,
+    modelRole: modelTask,
     unitsConsumed,
     serviceTier,
     isByok,

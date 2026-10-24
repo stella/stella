@@ -1,8 +1,6 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
 import { sql } from "drizzle-orm";
 import type { SQL as SqlFragment } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import { stellaPublicLawReader } from "@/api/db/rls";
@@ -11,6 +9,7 @@ import type { Transaction } from "@/api/db/root";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { parsePostgresTimeoutMs } from "@/api/db/shared-pool-timeout-policy";
 import { setSharedReadTransactionGuards } from "@/api/db/shared-pool-timeouts";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
@@ -39,17 +38,7 @@ export type PublicLawReadIsolation = "read-committed" | "repeatable-read";
 
 export type PublicLawReadOptions = { isolation?: PublicLawReadIsolation };
 
-type PublicLawQueryKey = Extract<
-  keyof Transaction["query"],
-  "caseLawDecisions"
->;
-
-type PublicLawSharedReadTransaction = Pick<
-  Transaction,
-  "execute" | "select"
-> & {
-  query: Pick<Transaction["query"], PublicLawQueryKey>;
-};
+type PublicLawSharedReadTransaction = Pick<Transaction, "execute" | "select">;
 
 export type PublicLawDatabaseRolePermissions = {
   canAccessOtherDatabase: boolean;
@@ -477,7 +466,7 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
 
   if (externalPublicLawDatabase === null) {
     const client = runTransactionsInCallerContext(
-      new SQL({
+      createSqlClient({
         url,
         connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS,
         max: envBase.PUBLIC_LAW_DATABASE_POOL_MAX,
@@ -486,7 +475,7 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
         ...sharedPoolConnectionSettings("public_law"),
       }),
     );
-    const database = drizzle({
+    const database = createDatabase({
       client,
       relations: databaseRelations,
       logger: isLocalDevOpen() ? queryCountLogger : undefined,

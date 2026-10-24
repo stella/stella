@@ -85,6 +85,7 @@ const SNAPSHOT = {
     },
   ],
   persistence: { imageCleanup: "idle", status: "encrypted" },
+  revision: 0,
   retention: "month",
   screenCapture: "hidden",
   sourceAppExclusionLimit: 128,
@@ -252,8 +253,7 @@ const installNativeBoundary = async (
       let resolveFirstState: ((value: Connection) => void) | null = null;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
-        | ((value: DesktopRegistrySearchResponse) => void)
-        | null = null;
+        ((value: DesktopRegistrySearchResponse) => void) | null = null;
       Reflect.set(window, "__STELLA_RESOLVE_FIRST_STATE__", () =>
         resolveFirstState?.(currentConnection),
       );
@@ -309,6 +309,14 @@ const installNativeBoundary = async (
               return { ...clipboardSnapshot, welcomeStatus: "completed" };
             case "get_state":
               return settingsSnapshot;
+            case "shortcut_get_snapshot":
+              return {
+                defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
+                keys: { code: "KeyV", modifiers: ["shift", "super"] },
+                registration: "active",
+              };
+            case "permissions_get_snapshot":
+              return { rows: [] };
             case "account_get_state":
               return accountSnapshot;
             case "open_stella_account":

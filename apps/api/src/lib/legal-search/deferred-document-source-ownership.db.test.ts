@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -11,14 +13,15 @@ import {
   claimDocumentFetch,
   fetchDecisionDocument,
   markDocumentUnavailable,
+  MAX_DOCUMENT_FETCH_ATTEMPTS,
   parkDocumentFetch,
   storeBackfilledDocument,
-  MAX_DOCUMENT_FETCH_ATTEMPTS,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { BackfilledDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -29,6 +32,26 @@ const barrier = () => {
     release = resolve;
   });
   return { promise, resolve: release };
+};
+
+/** A deadline timer that fires only when the test says so. */
+const manualDeadline = () => {
+  const scheduled = barrier();
+  let fireDeadline = (): void => panic("deadline was never scheduled");
+  const scheduleTimeout: WithTimeoutScheduler = (callback) => {
+    fireDeadline = callback;
+    scheduled.resolve();
+    return () => {
+      fireDeadline = () => {};
+    };
+  };
+  return {
+    scheduleTimeout,
+    fire: async () => {
+      await scheduled.promise;
+      fireDeadline();
+    },
+  };
 };
 
 if (!databaseUrl || !enabled) {
@@ -244,7 +267,7 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async (fence) =>
           await fence.scopedDb(async (tx) => {
             const attempt = await Result.tryPromise({
@@ -279,7 +302,7 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async (fence) =>
           await fence.scopedDb(async (tx) => {
             await tx
@@ -308,7 +331,7 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async (fence) => {
           await fence.beforeRemoteEffect(async () => {
             const merge = await acquireCaseLawSourceIngestionLease({
@@ -423,19 +446,25 @@ if (!databaseUrl || !enabled) {
         await releaseLock.promise;
       });
       await locked.promise;
+      const deadline = manualDeadline();
       let started = false;
-      const stopped = await Result.tryPromise({
+      const run = Result.tryPromise({
         try: async () =>
           await withDeferredDocumentSourceOwnership({
             decisionId,
             scopedDb,
-            timeoutMs: 50,
+            timeoutMs: 50, // timeout under test
+            scheduleTimeout: deadline.scheduleTimeout,
             operation: async () => {
               started = true;
             },
           }),
         catch: (error) => error,
       });
+      // The source row stays locked until the run settles, so acquisition
+      // cannot finish before the deadline fires.
+      await deadline.fire();
+      const stopped = await run;
       releaseLock.resolve();
       await holder;
       expect(Result.isError(stopped)).toBe(true);
@@ -525,13 +554,13 @@ if (!databaseUrl || !enabled) {
       const result = await withDeferredDocumentSourceOwnership({
         decisionId: first.decisionId,
         scopedDb,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         operation: async () => {
           expect(
             await withDeferredDocumentSourceOwnership({
               decisionId: sameSource.id,
               scopedDb,
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               operation: async () => "document",
             }),
           ).toEqual({ status: "completed", value: "document" });
@@ -539,7 +568,7 @@ if (!databaseUrl || !enabled) {
             await withDeferredDocumentSourceOwnership({
               decisionId: otherSource.decisionId,
               scopedDb,
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               operation: async () => "document",
             }),
           ).toEqual({ status: "completed", value: "document" });
@@ -637,6 +666,7 @@ if (!databaseUrl || !enabled) {
           panic("crawler fixture missing");
         }
         const controller = new AbortController();
+        const deadline = manualDeadline();
         const started = barrier();
         const continueWork = barrier();
         const lateFinished = barrier();
@@ -645,7 +675,8 @@ if (!databaseUrl || !enabled) {
           decisionId,
           scopedDb,
           signal: controller.signal,
-          timeoutMs: failure === "deadline" ? 50 : 1000,
+          timeoutMs: 50, // timeout under test
+          scheduleTimeout: deadline.scheduleTimeout,
           operation: async (fence) => {
             started.resolve();
             if (failure === "throw") {
@@ -667,14 +698,20 @@ if (!databaseUrl || !enabled) {
             lateFinished.resolve();
           },
         });
+        // Observed from the start, so a rejection before the test awaits it
+        // is never unhandled.
+        const settled = Result.tryPromise({
+          try: async () => await run,
+          catch: (error) => error,
+        });
         await started.promise;
         if (failure === "abort") {
           controller.abort(new Error("document cancelled"));
         }
-        const stopped = await Result.tryPromise({
-          try: async () => await run,
-          catch: (error) => error,
-        });
+        if (failure === "deadline") {
+          await deadline.fire();
+        }
+        const stopped = await settled;
         expect(Result.isError(stopped)).toBe(true);
         if (Result.isOk(stopped)) {
           panic("worker did not stop");

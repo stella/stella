@@ -297,16 +297,16 @@ type BenchModel = {
 };
 
 const getBenchModel = async (): Promise<BenchModel | null> => {
-  const { getTanStackTextModelInfoForRole, requireTanStackAIAvailableForRole } =
+  const { getTanStackTextModelInfoForTask, requireTanStackAIAvailableForTask } =
     await import("@/api/lib/tanstack-ai-models");
 
   const { resolveTanStackTextModel } =
     await import("@/api/lib/tanstack-ai-generate");
 
-  const available = requireTanStackAIAvailableForRole({
+  const available = requireTanStackAIAvailableForTask({
     configStatus: ORG_AI_CONFIG_STATUS.ok,
     orgConfig: null,
-    role: "fast",
+    task: "short-text",
     dataClass: "public_corpus",
   });
   if (Result.isError(available)) {
@@ -315,16 +315,17 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
 
   const overrideModel = process.env["AI_BENCH_MODEL"];
   if (overrideModel) {
-    const info = getTanStackTextModelInfoForRole("fast", null, {
+    const info = getTanStackTextModelInfoForTask("short-text", null, {
       dataClass: "public_corpus",
       organizationId: null,
       modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
     });
     const model = await resolveTanStackTextModel({
+      userId: null,
       modelId: overrideModel,
       orgAIConfig: null,
       dataClass: "public_corpus",
-      role: "fast",
+      task: "short-text",
       organizationId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
     });
@@ -335,13 +336,14 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     };
   }
 
-  const info = getTanStackTextModelInfoForRole("fast", null, {
+  const info = getTanStackTextModelInfoForTask("short-text", null, {
     dataClass: "public_corpus",
     organizationId: null,
     modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
   });
   const model = await resolveTanStackTextModel({
-    role: "fast",
+    userId: null,
+    task: "short-text",
     orgAIConfig: null,
     dataClass: "public_corpus",
     organizationId: null,
@@ -892,7 +894,7 @@ const runBenchTask = async ({
   const start = performance.now();
   const caching = resolveCaching({
     promptCachingEnabled: true,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const stream = streamChatChunks({

@@ -395,8 +395,7 @@ type McpTaskSpec = {
    * model is asked to read.
    */
   preflight?:
-    | { type: "capability-described" }
-    | { type: "compat-search-returned" };
+    { type: "capability-described" } | { type: "compat-search-returned" };
   /**
    * The tool names this task exposes, for a task about a client that carries
    * fewer tools than the surface has. Absent exposes the whole default
@@ -1800,7 +1799,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "chat",
+    task: "chat",
     scopeKey: null,
   });
   let finalText = "";
@@ -2645,11 +2644,12 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "chat",
+        task: "chat",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),

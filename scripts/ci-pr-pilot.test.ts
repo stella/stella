@@ -4,6 +4,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
+import { renderResultInputs } from "./ci-result-inputs";
 import { evaluate } from "./github-expression";
 
 const schema = v.object({
@@ -192,6 +193,7 @@ test("nonexistent calendar dates cannot certify fast coverage", async () => {
 const conditionContext = (profile: string, event: string, depth: string) => {
   const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
+    "github.event.action": "synchronize",
     "github.event.pull_request.draft": false,
     "github.event.pull_request.labels.*.name": [],
     "inputs.heavy_only": false,
@@ -205,13 +207,13 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
-    "needs.ci-plan.outputs.e2e_production_required": "true",
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";
   }
   const scopes = source.matchAll(
-    /needs\.ci-plan\.outputs\.([a-z_]+_required)/gu,
+    // Scope names carry digits (`e2e_landing_required`).
+    /needs\.ci-plan\.outputs\.([a-z0-9_]+_required)/gu,
   );
   for (const match of scopes) {
     const scope = match.at(1);
@@ -234,6 +236,9 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "web-build",
   "scan-engine-wasm-drift",
 ]);
+// Jobs that now also run at fast depth: on a pull request they run, and every
+// other event keeps the plan its former predicate had at full depth.
+const DECLARED_EVERY_DEPTH_CHANGES = new Set(["e2e-landing"]);
 
 // Jobs that became parts of one shared job: the part's steps, under the
 // shared job's condition, keep the job's former plan.
@@ -272,6 +277,11 @@ test("off and unset preserve today's job plan across every event and depth", asy
           (job) => FOLDED_PARTS.get(job) ?? job,
         ),
         "postgres-service-suites",
+        "generated-sources",
+        "code-quality-api-cancel",
+        "code-quality-web-rest-cancel",
+
+        "pr-heavy-gate",
       ]),
     ].toSorted(),
   ).toEqual(
@@ -301,6 +311,20 @@ test("off and unset preserve today's job plan across every event and depth", asy
         for (const depth of ["fast", "full"]) {
           const context = conditionContext("normal-v1", event, depth);
           for (const [name, job] of Object.entries(original.jobs)) {
+            if (DECLARED_EVERY_DEPTH_CHANGES.has(name)) {
+              const actual = evaluate(
+                workflow.jobs[name]?.if ?? "true",
+                context,
+              );
+              const baseline = evaluate(
+                job.if ?? "true",
+                conditionContext("normal-v1", event, "full"),
+              );
+              expect(actual, name).toBe(
+                event === "pull_request" ? true : baseline,
+              );
+              continue;
+            }
             if (DECLARED_NORMAL_PLAN_CHANGES.has(name)) {
               const actual = evaluate(
                 workflow.jobs[name]?.if ?? "true",
@@ -325,6 +349,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
     "web-build",
     "scan-engine-wasm-drift",
   ]);
+  expect([...DECLARED_EVERY_DEPTH_CHANGES]).toEqual(["e2e-landing"]);
 });
 
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {
@@ -476,6 +501,7 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
     }
     if (
       allowed.includes(name) &&
+      !name.endsWith("-cancel") &&
       evaluate(
         original.jobs[name]?.if ?? "true",
         conditionContext("normal-v1", "pull_request", "fast"),
@@ -583,24 +609,32 @@ test("pilot-fast aggregation requires its planned jobs and accepts deferred skip
     ]),
   );
   const aggregate = (needs: typeof successful) =>
-    Bun.spawnSync(["bash", "-c", run], {
-      env: {
-        ...process.env,
-        ...aggregation.env,
-        COVERAGE_PROFILE: "pilot-fast-v1",
-        PILOT_FAST_JOBS: JSON.stringify(selected),
-        NEEDS: JSON.stringify(needs),
-        PLAN: JSON.stringify(plan),
-        PLAN_RESULT: "success",
-        TRUSTED: "true",
-        EVENT: "pull_request",
-        SUITE_DEPTH: "fast",
-        QUEUE_DEPTH: "full",
-        QUEUE_VALIDATION: "false",
-        HEAVY_ONLY: "false",
-        RUN_REQUIRED: "true",
+    Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        renderResultInputs(run, {
+          needs: JSON.stringify(needs),
+          plan: JSON.stringify(plan),
+        }),
+      ],
+      {
+        env: {
+          ...process.env,
+          ...aggregation.env,
+          COVERAGE_PROFILE: "pilot-fast-v1",
+          PILOT_FAST_JOBS: JSON.stringify(selected),
+          PLAN_RESULT: "success",
+          TRUSTED: "true",
+          EVENT: "pull_request",
+          SUITE_DEPTH: "fast",
+          QUEUE_DEPTH: "full",
+          QUEUE_VALIDATION: "false",
+          HEAVY_ONLY: "false",
+          RUN_REQUIRED: "true",
+        },
       },
-    });
+    );
   // ci-result remains in the profile but is absent from its own dependency map.
   expect(successful).not.toHaveProperty("ci-result");
   const passed = aggregate(successful);

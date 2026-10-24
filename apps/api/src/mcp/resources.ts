@@ -10,14 +10,16 @@ import {
 } from "@stll/api-contract";
 import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
 import {
-  STATUTE_TIMELINE_APP,
   CASE_LAW_RESULTS_APP,
+  CITATION_GRAPH_APP,
   DECISION_READER_APP,
+  STATUTE_TIMELINE_APP,
 } from "@stll/mcp-apps/manifest";
 
 import { envBase } from "@/api/env-base";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import { getMcpResourceScopes, getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -32,7 +34,10 @@ import {
   hasLegislationWorkflowContent,
   LEGISLATION_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/legislation-workflow-reference";
-import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import {
+  getStaticMcpToolDefinition,
+  REGISTERED_MCP_TOOL_NAMES,
+} from "@/api/mcp/static-tool-definitions";
 import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
 import {
   buildFieldReference,
@@ -47,7 +52,7 @@ import {
   TEMPLATE_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
-import { unlistedToolNames } from "@/api/mcp/tool-mentions";
+import { namedToolNames } from "@/api/mcp/tool-mentions";
 
 import { isMcpAppAvailable } from "./app-policy";
 
@@ -106,14 +111,31 @@ const servedWhereItsToolsAreListed = (
   resource: Omit<StaticResource, "isServedInMode" | "read"> & {
     read: (mode: McpMode) => string;
   },
-): StaticResource => ({
-  ...resource,
-  isServedInMode: (mode, context) =>
-    unlistedToolNames(
+): StaticResource => {
+  // The rendered text is a pure function of the mode, and this check runs on
+  // every request (the connect-time instructions scope their resource
+  // pointers through it), so the tools it names are read once per mode.
+  const namedToolsByMode = new Map<McpMode, readonly string[]>();
+  const namedTools = (mode: McpMode): readonly string[] => {
+    const cached = namedToolsByMode.get(mode);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const named = namedToolNames(
       `${resource.description}\n${resource.read(mode)}`,
-      surfaceToolVocabulary(mode, context),
-    ).length === 0,
-});
+      REGISTERED_MCP_TOOL_NAMES,
+    );
+    namedToolsByMode.set(mode, named);
+    return named;
+  };
+  return {
+    ...resource,
+    isServedInMode: (mode, context) => {
+      const { listed } = surfaceToolVocabulary(mode, context);
+      return namedTools(mode).every((name) => listed.has(name));
+    },
+  };
+};
 
 const PRODUCT_IDENTITY_URI = "stella://about";
 
@@ -129,10 +151,43 @@ const STELLA_PRODUCT_IDENTITY = {
     "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
 } as const;
 
-const buildProductIdentity = (): string =>
-  JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
+// The endpoint is this deployment's own, so a self-hosted server never
+// advertises another origin.
+const buildProductIdentity = (mode: McpMode): string => {
+  const endpoint = getMcpResourceUrl(mode);
+  return JSON.stringify(
+    {
+      ...STELLA_PRODUCT_IDENTITY,
+      connection: {
+        endpoint,
+        oauth_scopes: getMcpResourceScopes(mode),
+        install: {
+          claude: `claude mcp add --transport http stella ${endpoint}`,
+          codex: `codex mcp add stella --url ${endpoint}`,
+        },
+      },
+    },
+    null,
+    2,
+  );
+};
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: CITATION_GRAPH_APP.uri,
+    name: "citation-graph",
+    title: "Citation graph",
+    description: "Explore a decision's citations and their treatments.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => MCP_APP_BUNDLES["citation-graph"],
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: STATUTE_TIMELINE_APP.uri,
     name: "statute-timeline",

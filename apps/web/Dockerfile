@@ -1,11 +1,11 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim).
+# Pin to digest for supply-chain integrity (oven/bun:1.4.4-slim).
 # Run the JavaScript toolchain on the native build host. Cross-platform
 # installs select the target's optional native packages explicitly; the final
 # image alone belongs to the deployment target.
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS build-base
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS build-base
 WORKDIR /app
 
-FROM --platform=$TARGETPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS runtime-base
+FROM --platform=$TARGETPLATFORM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS runtime-base
 WORKDIR /app
 
 FROM build-base AS install-inputs
@@ -84,7 +84,6 @@ ARG VITE_FEATURE_FOLIO_COLLAB
 ARG VITE_FEATURE_USAGE
 ARG VITE_POSTHOG_LOCAL_DEBUG
 ARG VITE_BETA_FEATURES_ENABLED=true
-ARG VITE_FEATURE_AI_MEMORY=false
 ARG VITE_FEATURE_GOVERNED_WORKFLOW=false
 ARG VITE_FEATURE_INBOX=false
 ARG VITE_SELFHOST=true
@@ -126,7 +125,6 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_FEATURE_USAGE="${VITE_FEATURE_USAGE}" \
     VITE_POSTHOG_LOCAL_DEBUG="${VITE_POSTHOG_LOCAL_DEBUG}" \
     VITE_BETA_FEATURES_ENABLED="${VITE_BETA_FEATURES_ENABLED}" \
-    VITE_FEATURE_AI_MEMORY="${VITE_FEATURE_AI_MEMORY}" \
     VITE_FEATURE_GOVERNED_WORKFLOW="${VITE_FEATURE_GOVERNED_WORKFLOW}" \
     VITE_FEATURE_INBOX="${VITE_FEATURE_INBOX}" \
     VITE_SELFHOST="${VITE_SELFHOST}" \

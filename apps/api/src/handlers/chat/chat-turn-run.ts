@@ -36,6 +36,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitChatTurnSettlementMetric } from "@/api/lib/observability/request-metrics";
 import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { withSseHeartbeat } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -55,7 +56,10 @@ class ChatTurnDeliveryOverflow extends TaggedError("ChatTurnDeliveryOverflow")<{
 /** Bound queued bytes and wait for consumer demand before writing more.
  *  A stalled connection detaches after a bounded wait; draining then continues
  *  so delivery cannot indefinitely prevent the owned turn from settling. */
-const eagerlyDeliverTurn = (response: Response): Response => {
+const eagerlyDeliverTurn = (
+  response: Response,
+  onDeliveryStalled: (() => void) | undefined,
+): Response => {
   const upstream = response.body;
   if (upstream === null) {
     return panic("A chat turn response has no stream");
@@ -120,6 +124,7 @@ const eagerlyDeliverTurn = (response: Response): Response => {
                         );
                       }
                       delivery = "overflowed";
+                      onDeliveryStalled?.();
                       controller.error(
                         new ChatTurnDeliveryOverflow({
                           message:
@@ -263,8 +268,7 @@ export const countChatTurnSettlement = (
  * stored outcome is counted, so the count matches the durable row.
  */
 export type ChatTurnStoredSettlement =
-  | { type: "stored"; outcome: ChatTurnOutcome }
-  | { type: "not-owned" };
+  { type: "stored"; outcome: ChatTurnOutcome } | { type: "not-owned" };
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
@@ -308,6 +312,7 @@ type ChatTurnRunOptions = {
   heartbeat?: ChatTurnRunHeartbeat | undefined;
   /** The boundary mode the run's settlement is counted under. */
   mode: ChatTurnObservation["mode"];
+  onDeliveryStalled?: (() => void) | undefined;
   owner: ChatTurnRunOwner;
   /** Who tracks the run; the process by default. */
   ownership?: ChatTurnOwnership | undefined;
@@ -598,10 +603,13 @@ export class ChatTurnRun {
    * Start producing `output`, built against `control`, and serve it. The
    * response is a viewer: closing it detaches delivery while the producer
    * keeps draining into the log under its existing deadlines and ownership.
+   * `viewer` is the credential that asked for it, and the response ends with
+   * that credential the same way.
    */
   produce(
     output: AsyncIterable<StreamChunk>,
     durability: StreamDurability,
+    viewer: SseStreamBinding,
   ): Response {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
@@ -615,12 +623,14 @@ export class ChatTurnRun {
             ? output
             : this.trackUpstream(output),
           {
-            abortController: this.control.abortController,
+            // Run control cuts the provider; delivery drains its terminal events.
             durability: { adapter: durability },
             headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
           },
         ),
+        viewer,
       ),
+      this.options.onDeliveryStalled,
     );
     if (this.pendingAbort !== undefined) {
       this.abort(this.pendingAbort);

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import { GENERATORS } from "./generated-files";
 import {
   landingBuildRootInputs,
@@ -16,6 +17,7 @@ import {
   readStringLiterals,
   readTestInputs,
 } from "./test-input-readers";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const GLOBAL =
@@ -132,8 +134,7 @@ const identifierExpressions = ({
   code,
   source,
 }: Pick<PathExpressionOptions, "expression" | "code" | "source">):
-  | readonly string[]
-  | undefined => {
+  readonly string[] | undefined => {
   if (
     identifierBindingCache?.source !== source ||
     identifierBindingCache.code !== code
@@ -563,8 +564,7 @@ const declaredMarkdownInputs = (
 };
 
 type GlobPathResult =
-  | PathExpressionResult
-  | { kind: "declared"; inputs: readonly string[] };
+  PathExpressionResult | { kind: "declared"; inputs: readonly string[] };
 
 type GlobPathOptions = PathExpressionOptions & {
   target: string;
@@ -1068,7 +1068,10 @@ const markdownPolicyReaders = (root: string): readonly MarkdownReader[] => {
     );
   }
   const readers: MarkdownReader[] = [];
-  for (const step of job.steps) {
+  const steps = flattenWorkflowSteps(job.steps, (pool) =>
+    readFileSync(path.join(root, checkPoolRegistryPath(pool)), "utf-8"),
+  );
+  for (const step of steps) {
     const reader = markdownPolicyReader(step);
     if (reader !== undefined) {
       readers.push(reader);
@@ -1398,6 +1401,13 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
   return readers;
 };
 
+export const hasDeclaredMarkdownReader = (file: string, root = ROOT) =>
+  markdownReaders(root).some(
+    (reader) =>
+      !reader.file.startsWith(".github/workflows/ci.yml:ci-checks-policy:") &&
+      reader.inputs.some((input) => matches(file, input)),
+  );
+
 export const markdownChecks = ({
   changed,
   root = ROOT,
@@ -1421,7 +1431,28 @@ export const markdownChecks = ({
   return [...checks.values()];
 };
 
-type ScopeOptions = { changed: readonly string[]; root?: string };
+type ScopeOptions = {
+  changed: readonly string[];
+  root?: string | undefined;
+};
+// Parsing dominates; keyed by file text, an edited lockfile or turbo config
+// is parsed again while repeated plans over one revision parse it once.
+const parsedLocks = new Map<string, ReturnType<typeof parseLockfile>>();
+const parsedTurbo = new Map<string, unknown>();
+const readPackageScopeInputs = (root: string) => {
+  const lockText = readFileSync(path.join(root, "bun.lock"), "utf-8");
+  const turboText = readFileSync(path.join(root, "turbo.json"), "utf-8");
+  if (!parsedLocks.has(lockText)) {
+    parsedLocks.set(lockText, parseLockfile(Bun.JSONC.parse(lockText)));
+  }
+  if (!parsedTurbo.has(turboText)) {
+    parsedTurbo.set(turboText, Bun.JSONC.parse(turboText));
+  }
+  return {
+    lock: parsedLocks.get(lockText),
+    turbo: parsedTurbo.get(turboText),
+  };
+};
 export const requiresPackageChecks = ({
   changed,
   root = ROOT,
@@ -1482,9 +1513,7 @@ export const requiresLandingBuild = ({
     ) {
       return true;
     }
-    const lock = parseLockfile(
-      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
-    );
+    const { lock, turbo } = readPackageScopeInputs(root);
     if (lock === undefined) {
       return true;
     }
@@ -1514,9 +1543,6 @@ export const requiresLandingBuild = ({
         }
       }
     }
-    const turbo: unknown = Bun.JSONC.parse(
-      readFileSync(path.join(root, "turbo.json"), "utf-8"),
-    );
     const inputs = landingBuildRootInputs(turbo);
     // An absent task/input declaration cannot prove the landing is unaffected.
     if (inputs.length === 0) {
@@ -1542,9 +1568,7 @@ export const requiresDesktopBrowser = ({
     if (changed.some((file) => GLOBAL.test(file))) {
       return true;
     }
-    const lock = parseLockfile(
-      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
-    );
+    const { lock, turbo } = readPackageScopeInputs(root);
     if (lock === undefined) {
       return true;
     }
@@ -1583,9 +1607,6 @@ export const requiresDesktopBrowser = ({
         }
       }
     }
-    const turbo: unknown = Bun.JSONC.parse(
-      readFileSync(path.join(root, "turbo.json"), "utf-8"),
-    );
     if (typeof turbo !== "object" || turbo === null || !("tasks" in turbo)) {
       return true;
     }

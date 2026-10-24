@@ -14,9 +14,9 @@ import {
   FEEDBACK_FALLBACK_AREA,
   FEEDBACK_KIND_LABEL_KEYS,
   feedbackReceiptSchema,
-  ROUTE_AREA_PATTERNS,
   resolveFeedbackArea,
   resolveFeedbackChannel,
+  ROUTE_AREA_PATTERNS,
 } from "@/components/feedback-dialog.logic";
 
 describe("feedback channel for the session", () => {
@@ -131,7 +131,7 @@ describe("feedback area for the current route", () => {
     ["/law/cases", "case_law"],
     ["/law/cz/cases/abc", "case_law"],
     ["/law/cz/statutes/89-2012", "legislation"],
-    ["/settings/organization/members", "web_app"],
+    ["/admin/members", "web_app"],
     ["/settings/account/desktop", "desktop"],
     ["/tools/anonymize", "web_app"],
     ["/onboarding", "web_app"],

@@ -17,10 +17,10 @@ import type { CapabilityLeafSpec } from "./route-types.js";
 import {
   composeInputFromFlags,
   confirmDestructive,
-  renderClientError,
   maybeConfirmAndRetry,
   parseInputObject,
   readOutputFormat,
+  renderClientError,
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
@@ -171,12 +171,16 @@ export const runCapabilityCommand = async ({
   }
 
   // Write capabilities own confirmation; read arguments never carry a gate.
-  if (spec.access === "write" && spec.destructive) {
+  if (
+    spec.access === "write" &&
+    (spec.destructive || spec.confirmation === "required")
+  ) {
     const outcome = await confirmDestructive({
       context,
       flags,
       writers,
       label: spec.commandPath.join(" "),
+      operation: spec.destructive ? "destructive" : "approval",
     });
     if (outcome === "aborted") {
       setExit(context, EXIT_CODES.aborted);

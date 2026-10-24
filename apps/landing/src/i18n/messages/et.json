@@ -569,7 +569,7 @@
           "question": "Kust andmed pärinevad?"
         },
         "1": {
-          "answer": "Kaks loendit, mõlemad kasvavad. Ühendatud registrid hõlmavad juba ARES-t (Tšehhi), Companies House’i (Ühendkuningriik), SEC EDGAR-i (USA), KRS-i (Poola), PRH-d (Soome) ja VIES-t (ELi käibemaks). Lisaks registritele lisanduvad ametlikud allikad jurisdiktsioonide kaupa; näiteks Tšehhil, Hispaanial ja Taiwanil on need juba olemas, ning kohtupraktika lugemisvaates saad jurisdiktsiooni kaupa sirvida ja filtreerida, kui ametlikke allikaid lisandub.",
+          "answer": "Avaliku kohtupraktika lugejas on praegu Tšehhi kohtulahendid. Ühendatud ettevõtteregistrid on ARES (Tšehhi), Companies House (Ühendkuningriik), SEC EDGAR (USA), KRS (Poola), PRH (Soome) ja VIES (ELi käibemaks).",
           "question": "Millised jurisdiktsioonid ja registrid on kaetud?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Too rakenduse stella tööruum esiplaanile",
     "controlBody": "stella on <gh>avatud lähtekoodiga</gh> õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes.",
     "controlTitle": "Hoia taristu enda kontrolli all.",
-    "dataBody": "Kohtupraktika ja ettevõtete registrid otse toimikus, igas jurisdiktsioonis, kus töötad. Anonüümimine hoiab tuvastavad andmed tehisintellektist eemal.",
+    "dataBody": "Loe Tšehhi kohtupraktikat koos AI märkustega õigusküsimuste kohta, esiletõstude, allajoonimiste, juristi kommentaaride ja viidetega vastustega. Otsi ettevõtteid ühendatud ametlikest registritest ja viita toimikus allikatele.",
+    "dataConstitutionalAlt": "Tšehhi konstitutsioonikohtu lahend IV.ÚS 1394/24 nummerdatud lõikude, AI märkusega õigusküsimuse kohta, esiletõstu, allajoonimise, juristi kommentaari ja vestlusega, milles on kaks küsimust ning viidetega vastused.",
     "dataEyebrow": "Õigusandmed",
-    "dataMainAlt": "Kohtu ametlik lahend, avatud rakenduses stella",
+    "dataMainAlt": "Tšehhi ülemkohtu lahend 27 Cdo 59/2022 nummerdatud lõikude, AI märkusega õigusküsimuse kohta, esiletõstu, allajoonimise, juristi kommentaari ja vestlusega, milles on kaks küsimust ning viidetega vastused.",
+    "dataSupremeAlt": "Tšehhi ülemkohtu lahend 27 Cdo 1525/2025 nummerdatud lõikude, AI märkusega õigusküsimuse kohta, esiletõstu, allajoonimise, juristi kommentaari ja vestlusega, milles on kaks küsimust ning viidetega vastused.",
     "dataTitle": "Kohtupraktika ja registrid käepärast.",
     "exploreAgent": "Tutvu tehisintellekti agendiga",
     "exploreAnonymization": "Tutvu anonüümimisega",

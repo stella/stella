@@ -70,7 +70,7 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
-`bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
+`bun run typecheck` uses Bun’s native checker through the workspace
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. Manual checks dispatch offers
@@ -95,6 +95,10 @@ There, local formatting and generator runs are optional, except that workflow
 files must be formatted locally. Fork pull requests get no autofix: run
 `bun run autofix` (the same generators, lint fixes and formatting, against the
 canonical repository's main) before pushing.
+
+Network fetches in CI go through `scripts/retry.sh` (`scripts/gh-retry.sh` for
+the GitHub API) or a cache-first action, in a step with its own
+`timeout-minutes`; `scripts/check-ci-network-steps.ts` enforces both.
 
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
@@ -129,7 +133,7 @@ then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select
 narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
 index or page.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, oxfmt. For these, use `WebFetch` or
+**Not covered (no `llms.txt`):** Tailwind CSS. For it, use `WebFetch` or
 `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.

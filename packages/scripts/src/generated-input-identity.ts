@@ -2,7 +2,7 @@ import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 
 import type { Sha256Hasher } from "../../sha256/src/types";
-import { CI_GENERATED_FILES } from "./generated-files";
+import { ciGeneratedFiles } from "./generated-file-inventory";
 
 type GeneratedInputGitOptions = {
   root: string;
@@ -36,7 +36,7 @@ export const generatedInputTreeHash = ({
   root,
   toolchain,
   generatedOutputs,
-  excluded = new Set<string>(CI_GENERATED_FILES),
+  excluded = new Set<string>(ciGeneratedFiles(root)),
   createHasher,
   hashFile,
   onFailure,

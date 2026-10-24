@@ -13,8 +13,8 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   clauses,
   clauseVersions,
-  templates,
   templateClauses,
+  templates,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -27,8 +27,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -194,7 +194,7 @@ describe("clause body preconditions", () => {
       {
         text: "List text",
         listKind: "bullet",
-        listLevel: 1,
+        numbering: { kind: "levelOnly", ilvl: 1 },
         style: null,
         level: "wrong",
         extra: "extension",
@@ -246,7 +246,11 @@ describe("clause body preconditions", () => {
       throw new Error("Expected a clause body in the HTTP response");
     }
     expect(read["body"]).toEqual([
-      { text: "List text", listKind: "bullet", listLevel: 1 },
+      {
+        text: "List text",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 1 },
+      },
       {
         text: "{% if party %}",
         isDirective: true,
@@ -809,7 +813,7 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       organizationId: ids.orgA,
       name: "Legacy template",
       fileName: "legacy.docx",
-      s3Key: "legacy.docx",
+      s3Key: `${ids.orgA}/legacy.docx`,
       sizeBytes: 1,
       createdBy: ids.userA1,
     });
@@ -898,7 +902,7 @@ test("clause resolution scopes relation reads even without the RLS backstop", as
     organizationId: ids.orgA,
     name: "Scoped template",
     fileName: "scoped.docx",
-    s3Key: "scoped.docx",
+    s3Key: `${ids.orgA}/scoped.docx`,
     sizeBytes: 1,
     createdBy: ids.userA1,
   });
@@ -971,7 +975,7 @@ test("resolved clause provenance names latest, pinned and explicit saved version
     organizationId: ids.orgA,
     name: "Versioned",
     fileName: "versioned.docx",
-    s3Key: "versioned.docx",
+    s3Key: `${ids.orgA}/versioned.docx`,
     sizeBytes: 1,
     createdBy: ids.userA1,
   });

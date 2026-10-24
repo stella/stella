@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -34,7 +37,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -198,7 +201,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const context = resolveMeteringContext({
         metering: {
           actionType: "chat",
-          modelRole: "fast",
+          modelTask: "short-text",
           serviceTier: "flex",
         },
         organizationId: toSafeId<"organization">(
@@ -310,7 +313,7 @@ describe("createSafeRootHandler usage preflight", () => {
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat", modelRole: "fast" },
+          requiresUsage: { actionType: "chat", modelTask: "short-text" },
         },
         async function* () {
           meteredHandlerCalled = true;
@@ -625,6 +628,37 @@ describe("request.failed severity", () => {
     expect(exceptions).toHaveLength(0);
   });
 
+  test("an operator feature refusal is a warning without exception capture", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.featureDisabled];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.featureDisabled,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toEqual([]);
+  });
+
+  test("an unavailable admission service remains a captured server fault", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.admissionUnavailable];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures.at(0)?.severityText).toBe("ERROR");
+    expect(exceptions).toHaveLength(1);
+  });
+
   test("grades a database failure as a server fault", async () => {
     const { response, failures } = await runFailingHandler(
       new DatabaseError({ message: "connection closed" }),
@@ -903,7 +937,7 @@ describe("authorizeHandlerRunSize", () => {
   const userId = toSafeId<"user">("019e7000-0000-7000-8000-000000000001");
 
   const baseInput = {
-    metering: { actionType: "doc_review", modelRole: "pdf" },
+    metering: { actionType: "doc_review", modelTask: "pdf" },
     organizationId,
     orgAIConfig: null,
     workspaceId: null,
@@ -1077,14 +1111,15 @@ describe("provider failure HTTP response", () => {
           },
           async function* () {
             const generated = await Result.tryPromise(async () =>
-              generateTanStackTextForRole({
+              generateTanStackTextForTask({
                 tenantWorkspaceIds: [],
                 caching: { enabled: false, reason: "org-disabled" },
                 serviceTier: "standard",
                 orgAIConfig: null,
                 dataClass: "public_corpus",
-                role: "chat",
+                task: "chat",
                 organizationId: null,
+                userId: null,
                 admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",
                 finishPolicy: "require-complete",

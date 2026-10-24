@@ -30,33 +30,34 @@ import {
   chatMessageRevisions,
   chatMessages,
   chatThreads,
+  chatToolGrants,
   chatTurns,
-  documentTranslationRuns,
   desktopPresence,
   desktopTimeEntryBatches,
-  templateLookupFormats,
+  documentTranslationRuns,
   entities,
-  entityViews,
   entityVersions,
+  entityViews,
+  featureEnrolments,
   fields,
   invoiceLines,
   invoices,
   legalLists,
   legalReaderAnnotations,
   legalReaderAnswers,
-  numberSeries,
   notifications,
-  savedTimeNarratives,
+  numberSeries,
   savedSearches,
+  savedTimeNarratives,
   searchHistoryEntries,
   sellerProfiles,
   signals,
+  templateLookupFormats,
   timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -97,6 +98,10 @@ import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
+import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
+import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
+import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
+import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
@@ -116,7 +121,9 @@ import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entrie
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
+import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
+import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -131,8 +138,11 @@ import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list"
 import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
+import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
+import updateMemory from "@/api/handlers/memories/update";
 import listNotifications from "@/api/handlers/notifications/list";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
@@ -166,6 +176,7 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import {
+  AI_MEMORY_FEATURE_ID,
   FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
@@ -174,7 +185,7 @@ import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
-import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -250,6 +261,33 @@ const legalListAccess = ({ session, user }: TestHandlerContext) =>
           featureId: LEGAL_LISTS_FEATURE_ID,
           grants: {
             [LEGAL_LISTS_FEATURE_ID]: [
+              {
+                type: "organization",
+                organizationId: session.activeOrganizationId,
+              },
+            ],
+          },
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+        }),
+      ],
+    ]),
+  });
+
+const memoryAccess = ({ session, user }: TestHandlerContext) =>
+  createFeatureAccessSnapshot({
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+    decisions: new Map([
+      [
+        AI_MEMORY_FEATURE_ID,
+        decideFeatureAccess({
+          registry: FEATURE_REGISTRY,
+          featureId: AI_MEMORY_FEATURE_ID,
+          grants: {
+            [AI_MEMORY_FEATURE_ID]: [
               {
                 type: "organization",
                 organizationId: session.activeOrganizationId,
@@ -486,6 +524,17 @@ const chatRevisionAcceptMessageB = toSafeId<"chatMessage">(
 const chatRevisionRevertMessageB = toSafeId<"chatMessage">(
   "22222222-2222-4222-8222-222222222292",
 );
+// Stored tool approvals of user A1 in organization B: one for every
+// conversation, one given in thread B, and one the delete case removes.
+const chatToolGrantAlwaysB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222297",
+);
+const chatToolGrantConversationB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222298",
+);
+const chatToolGrantDeleteB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222299",
+);
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
 /** Thread B's stored model, so a foreign "auto" selection is observable. */
@@ -544,7 +593,7 @@ const chatRecapB = "Recap of thread B";
 
 // The model sees only the transcript the handler loaded. Answering with a
 // title only when thread B's answer is in it shows the read reached B's rows.
-const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
+const generateTitleFromTranscript: typeof generateTanStackTextForTask = async (
   options,
 ) =>
   "prompt" in options && options.prompt.includes("Here is the summary.")
@@ -552,7 +601,7 @@ const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
     : "";
 
 const suggestChatThreadTitle = createSuggestThreadTitle({
-  generateTextForRole: generateTitleFromTranscript,
+  generateTextForTask: generateTitleFromTranscript,
 });
 const proposeChatMessageSpanEdit = createProposeMessageSpanEdit({
   generateObject: async () => ({ replacement: "Updated" }),
@@ -603,6 +652,14 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
       .from(chatThreads)
       .where(eq(chatThreads.id, threadId))
   ).at(0) ?? null;
+
+const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
+  (
+    await testDb
+      .select({ id: chatToolGrants.id })
+      .from(chatToolGrants)
+      .where(eq(chatToolGrants.id, grantId))
+  ).length > 0;
 
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
   (
@@ -1020,6 +1077,52 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
+  },
+  {
+    // The positive run rejects B's suggestion; the revert case below returns
+    // it to pending, so the fixture leaves the matrix as it entered.
+    name: "docx suggestion resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
+    name: "docx suggestion revert",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(revertDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(revertDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
   },
   {
     name: "document review source list",
@@ -1523,16 +1626,54 @@ const isolationCases: IsolationCase[] = [
     name: "memory list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listMemories, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listMemories, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     expectDenied: (result, { ids: testIds }) =>
       expectPageExcludesId(result, testIds.aiMemoryFirmB),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.aiMemoryFirmB),
+  },
+  {
+    // `pinned: false` matches the fixture, so the positive run reaches the
+    // locked row without writing.
+    name: "memory update",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(updateMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(updateMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
+  },
+  {
+    name: "memory delete",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(deleteMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(deleteMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toEqual({ id: testIds.aiMemoryDeleteB }),
   },
   {
     name: "organization contact read by id",
@@ -1637,6 +1778,21 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesField(result, "id", notificationB),
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
+  },
+  {
+    // Same organization, other recipient: only the recipient predicate stands
+    // between user A1 and user B1's notification.
+    name: "notification mark read",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(markNotificationRead, sameUserWorkspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(markNotificationRead, workspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
     name: "chat thread list",
@@ -1953,6 +2109,87 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: expectStatus(409),
+  },
+  {
+    // The same person's approvals in another firm stay with that firm: the
+    // list in organization A neither returns them nor sees thread B's grant.
+    name: "chat tool grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatToolGrants, workspaceA, {
+        query: { threadId: chatThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatToolGrants, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(chatToolGrantIds(result)).not.toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).not.toContain(
+        chatToolGrantConversationB,
+      );
+    },
+    expectPositive: (result) => {
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantConversationB);
+    },
+  },
+  {
+    name: "chat tool grant coverage",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatToolGrantCoverage, workspaceA, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatToolGrantCoverage, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    expectDenied: (result) => expect(result).toEqual({ covered: false }),
+    expectPositive: (result) => expect(result).toEqual({ covered: true }),
+  },
+  {
+    // A grant names the conversation it was given in; organization A cannot
+    // attach one to thread B.
+    name: "chat tool grant create",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(createChatToolGrant, workspaceA, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(createChatToolGrant, sameUserWorkspaceB, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        scope: "conversation",
+        toolName: "add_comment",
+      }),
+  },
+  {
+    name: "chat tool grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteChatToolGrant, workspaceA, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+      exists: await chatToolGrantExists(chatToolGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteChatToolGrant, sameUserWorkspaceB, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
   },
   {
     name: "chat thread rename",
@@ -2638,7 +2875,7 @@ testState.beforeAll(async () => {
       ],
       fallback: null,
     },
-    tool: { version: 1, role: "fast" },
+    tool: { version: 1, task: "short-text" },
   });
   await testDb.insert(caseLawResearchAnswers).values({
     columnId: researchColumnB,
@@ -2907,6 +3144,30 @@ testState.beforeAll(async () => {
     userMessageId: chatTurnUserMessageB,
     workspaceId: null,
   });
+  await testDb.insert(chatToolGrants).values([
+    {
+      id: chatToolGrantAlwaysB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "web_search",
+    },
+    {
+      id: chatToolGrantConversationB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "conversation",
+      chatThreadId: chatThreadB,
+      toolName: "remember",
+    },
+    {
+      id: chatToolGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "fetch_url",
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -3209,6 +3470,15 @@ function recordField(result: unknown, field: string): unknown {
     throw new Error("Expected an object result");
   }
   return result[field];
+}
+
+function chatToolGrantIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const grants = recordField(result, "grants");
+  if (!Array.isArray(grants)) {
+    throw new TypeError("Expected a chat tool grant list response");
+  }
+  return grants.map((grant) => recordField(grant, "id"));
 }
 
 function globalChatThreadIds(result: unknown): unknown[] {

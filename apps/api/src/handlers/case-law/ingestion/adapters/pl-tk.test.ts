@@ -27,8 +27,10 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlTkDecision,
-  createPlTkSessionCooldown,
+  buildPlTkDecision,
+  createPlTkPageCache,
   createPlTkPublisherSessionCooldown,
+  createPlTkSessionCooldown,
   encodePlTkCursor,
   parsePlTkCursor,
   parsePlTkListingPage,
@@ -36,13 +38,17 @@ import {
   PL_TK_QUARANTINE_PREFIX,
   PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
   plTkAdapter,
-  plTkSessionCooldown,
   plTkBatchWindow,
   plTkRawPartsOf,
+  plTkSessionCooldown,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import type {
+  PlTkListingRow,
+  PlTkPageCache,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { parsePlTkPage } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
@@ -620,6 +626,65 @@ describe("the crawl cursor", () => {
 });
 
 describe("a crawl page against the portal", () => {
+  test.each(["fresh fetch", "cached HTML"] as const)(
+    "releases the previous parsed page before parsing a %s case",
+    async (path) => {
+      const [firstPage, secondPage] = await Promise.all([
+        caseFixture("pl-tk-case-k-2-26.html.gz"),
+        caseFixture("pl-tk-case-k-44-16.html.gz"),
+      ]);
+      const firstRow = rowFor({
+        documentId: "25564",
+        caseId: "29150",
+        caseNumber: "K 2/26",
+      });
+      const secondRow = rowFor({
+        documentId: "16940",
+        caseId: "17892",
+        caseNumber: "K 44/16",
+      });
+      let sizeWhileParsingSecond = -1;
+      const cache: PlTkPageCache = createPlTkPageCache((source) => {
+        if (source === secondPage) {
+          sizeWhileParsingSecond = cache.parsedSize();
+        }
+        return parsePlTkPage(source);
+      });
+      cache.parse(firstRow.caseId ?? panic("missing case id"), firstPage);
+      if (path === "cached HTML") {
+        cache.html.set(
+          secondRow.caseId ?? panic("missing case id"),
+          secondPage,
+        );
+      } else {
+        installPortal({
+          listingPage: () => undefined,
+          casePage: () => secondPage,
+        });
+      }
+
+      const actual = await buildPlTkDecision({
+        cursor: "merits:0,0,0",
+        pageCache: cache,
+        row: secondRow,
+        session: { sessionId: "s1" },
+        signal: undefined,
+      });
+
+      expect(sizeWhileParsingSecond).toBe(0);
+      expect(cache.parsedSize()).toBe(1);
+      expect(actual).toEqual(
+        Result.ok(
+          assemblePlTkDecision({
+            row: secondRow,
+            casePage: secondPage,
+            rawParts: plTkRawPartsOf(secondRow, secondPage),
+          }),
+        ),
+      );
+    },
+  );
+
   test("reads the stage's oldest rulings first, over HTTP/2, one case page per case", async () => {
     const [first, last, oldestCase] = await Promise.all([
       listingFixture("pl-tk-listing-merits-page-0.html.gz"),

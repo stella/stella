@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import fc from "fast-check";
+import * as posthogSdk from "posthog-js";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/env";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
@@ -28,8 +31,7 @@ type PostHogInitOptions = {
   capture_pageleave: boolean;
   capture_pageview: boolean;
   capture_performance:
-    | boolean
-    | { network_timing: boolean; web_vitals: boolean };
+    boolean | { network_timing: boolean; web_vitals: boolean };
   disable_persistence: boolean;
   disable_session_recording: boolean;
   mask_all_text: boolean;
@@ -77,7 +79,7 @@ const resetMock = mock((options?: ResetOptions) => {
 });
 const groupMock = mock((_type: string, _key: string) => undefined);
 
-const posthogMock = {
+const posthogMock = Object.assign(new posthogSdk.PostHog(), {
   capture: captureMock,
   captureException: captureExceptionMock,
   get_distinct_id: getDistinctIdMock,
@@ -87,7 +89,7 @@ const posthogMock = {
   _isIdentified: isIdentifiedMock,
   register: registerMock,
   reset: resetMock,
-};
+});
 
 Object.defineProperty(globalThis, "__APP_VERSION__", {
   configurable: true,
@@ -99,6 +101,7 @@ Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
 });
 
 void mock.module("posthog-js", () => ({
+  ...posthogSdk,
   posthog: posthogMock,
 }));
 
@@ -209,14 +212,16 @@ describe("PostHog browser analytics adapter", () => {
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.pageLeft,
       properties: {
-        $current_url: "https://app.example.test/workspaces/ws_1",
+        $current_url: "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $pathname: "/workspaces/ws_1",
         $host: "app.example.test",
         $prev_pageview_pathname: "/workspaces/ws_1",
-        $session_entry_url: "https://app.example.test/workspaces/ws_1",
+        $session_entry_url:
+          "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $session_entry_pathname: "/workspaces/ws_1",
         $referrer: "https://app.example.test/workspaces/ws_1",
-        $session_entry_referrer: "https://www.google.com/",
+        $session_entry_referrer:
+          "https://www.google.com/?sh=sh1_sample#sh=sh1_sample",
         $prev_pageview_duration: 12,
         title: "Client Smith v Example",
         $session_id: "session-1",
@@ -371,6 +376,30 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test.each([
+    ["AuthClientError", undefined],
+    ["ApiError", 403],
+  ])("keeps a user-visible %s", (type, status) => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [{ type, value: "private detail" }],
+        feature: "auth",
+        route_template: "/auth/error",
+        user_visible: true,
+        ...(status === undefined ? {} : { error_status: status }),
+      },
+    });
+
+    expect(sanitized?.properties).toMatchObject({
+      feature: "auth",
+      route_template: "/auth/error",
+      user_visible: true,
+    });
+  });
+
+  test.each([
     "ai_config_provider_validation_failed",
     CHAT_CONTINUATION_REJECTED_ERROR_CODE,
     API_FILE_SECURITY_REJECTED_ERROR_CODE,
@@ -427,7 +456,9 @@ describe("PostHog browser analytics adapter", () => {
 
     expect(sanitized?.properties).toEqual({
       $exception_fingerprint: "QuotaExceededError|||",
-      $exception_list: [{ type: "QuotaExceededError", value: "" }],
+      $exception_list: [
+        { type: "QuotaExceededError", value: "QuotaExceededError" },
+      ],
       $exception_type: "QuotaExceededError",
     });
   });
@@ -463,7 +494,7 @@ describe("PostHog browser analytics adapter", () => {
 
     expect(sanitized?.properties).toEqual({
       $exception_fingerprint: "DOMException|||",
-      $exception_list: [{ type: "DOMException", value: "" }],
+      $exception_list: [{ type: "DOMException", value: "DOMException" }],
       $exception_type: "DOMException",
     });
   });
@@ -528,7 +559,9 @@ describe("PostHog browser analytics adapter", () => {
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
         $exception_fingerprint: "UnhandledRejection|||",
-        $exception_list: [{ type: "UnhandledRejection", value: "" }],
+        $exception_list: [
+          { type: "UnhandledRejection", value: "UnhandledRejection" },
+        ],
         $exception_type: "UnhandledRejection",
       },
     });
@@ -556,7 +589,7 @@ describe("PostHog browser analytics adapter", () => {
         $exception_list: [
           {
             type: "TypeError",
-            value: "",
+            value: "TypeError",
             stacktrace: {
               type: "raw",
               frames: [
@@ -610,7 +643,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(sanitized?.properties?.["$exception_list"]).toEqual([
       {
         type: "TypeError",
-        value: "",
+        value: "TypeError",
         stacktrace: {
           type: "raw",
           frames: [
@@ -732,6 +765,39 @@ describe("PostHog browser analytics adapter", () => {
       },
     );
     expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  test("key action timings send the action, surface and bucket only", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    analytics.captureKeyActionTiming({
+      action: "search-results",
+      durationBucketMs: 750,
+      surface: "case-law",
+    });
+
+    expect(captureMock).toHaveBeenCalledWith(
+      WEB_ANALYTICS_EVENTS.keyActionTimed,
+      { action: "search-results", durationBucketMs: 750, surface: "case-law" },
+    );
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.keyActionTimed,
+        properties: {
+          action: "search-results",
+          durationBucketMs: 750,
+          surface: "case-law",
+          title: "Client Smith v Example",
+        },
+      })?.properties,
+    ).toEqual({
+      action: "search-results",
+      durationBucketMs: 750,
+      surface: "case-law",
+    });
   });
 
   test("captureError ignores null and undefined", () => {
@@ -1080,7 +1146,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(sanitized?.properties?.["$exception_list"]).toEqual([
       {
         type: "TypeError",
-        value: "",
+        value: "TypeError",
         stacktrace: {
           type: "raw",
           frames: [
@@ -1429,7 +1495,7 @@ describe("PostHog browser analytics adapter", () => {
         $exception_list: [
           {
             type: "TypeError",
-            value: "",
+            value: "TypeError",
             stacktrace: {
               type: "raw",
               frames: [
@@ -1533,7 +1599,7 @@ describe("PostHog browser analytics adapter", () => {
       properties: {
         error_reference: "ERR-DEAD-BEEF-1234",
         $exception_fingerprint: "TypeError|||",
-        $exception_list: [{ type: "TypeError", value: "" }],
+        $exception_list: [{ type: "TypeError", value: "TypeError" }],
         $exception_type: "TypeError",
       },
     });
@@ -1549,7 +1615,7 @@ describe("PostHog browser analytics adapter", () => {
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
         $exception_fingerprint: "TypeError|||",
-        $exception_list: [{ type: "TypeError", value: "" }],
+        $exception_list: [{ type: "TypeError", value: "TypeError" }],
         $exception_type: "TypeError",
       },
     });
@@ -1894,6 +1960,9 @@ describe("PostHog browser analytics adapter", () => {
     );
     expect(sanitized?.properties?.["error_status"]).toBe(409);
     expect(sanitized?.properties?.["error_code"]).toBe("conflict");
+    expect(sanitized?.properties?.["$exception_list"]).toEqual([
+      { type: "ApiError", value: "ApiError[conflict] 409" },
+    ]);
 
     // A free-text code or an out-of-range status never passes through.
     const rejected = initOptions?.before_send({
@@ -1909,6 +1978,36 @@ describe("PostHog browser analytics adapter", () => {
     );
     expect(rejected?.properties).not.toContainKey("error_status");
     expect(rejected?.properties).not.toContainKey("error_code");
+  });
+
+  test("exception properties never carry arbitrary message text", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    assertProperty(
+      "exception properties never carry arbitrary message text",
+      fc.property(fc.string(), (message) => {
+        const privateMessage = `Alex Doe <alex@example.test> document ${JSON.stringify(message)}`;
+        const sanitized = initOptions?.before_send({
+          event: WEB_ANALYTICS_EVENTS.exception,
+          properties: {
+            area: "case-law-search",
+            $exception_list: [{ type: "ApiError", value: privateMessage }],
+            error_status: 502,
+            error_code: "model_output_incomplete",
+            unknown_field: privateMessage,
+          },
+        });
+        const serialized = JSON.stringify(sanitized?.properties);
+        expect(serialized).not.toContain(privateMessage);
+        expect(sanitized?.properties?.["$exception_list"]).toEqual([
+          {
+            type: "ApiError",
+            value: "ApiError[model_output_incomplete] 502 area=case-law-search",
+          },
+        ]);
+        expect(sanitized?.properties).not.toContainKey("unknown_field");
+      }),
+    );
   });
 
   test("captureError reports the status and code of an API error", () => {

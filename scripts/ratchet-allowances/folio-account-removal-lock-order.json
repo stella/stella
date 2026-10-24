@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/account-deletion-steps.ts",
+  "delta": 2,
+  "reason": "Pending collaboration claims acquire registered room locks sequentially in immutable primary-key order after all workspace parent locks. Resets then enter one application-role scope per organization inside the same transaction; parallel scope changes on that connection are invalid. Claim writes and retired snapshot inserts are bounded in batches within each scope."
+}

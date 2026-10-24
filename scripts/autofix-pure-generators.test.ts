@@ -15,8 +15,8 @@ import {
   isAutofixProtectedPath,
 } from "./autofix-protected-paths";
 import {
-  GENERATORS,
   allowedOutputs,
+  GENERATORS,
   generatorsForFiles,
   matchesGeneratedGlob,
 } from "./generated-files";
@@ -26,7 +26,6 @@ import {
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
   // Reads `<dir>/en.json` alone and prints its key tree in source order.
-  "i18n-messages-web": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-landing": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",
   // Splices the static @stll/locales arrays between fixed markers.
@@ -34,12 +33,16 @@ const PURE_AUTOFIX = {
   // `generate` renders the env catalog and schema defaults plus the web
   // Dockerfile; only `doctor` reads the process environment or env files.
   "env-examples": "env:generate",
-  // Renders the env catalog and the self-host contract, formatted by the
-  // pinned oxfmt; `check` alone reads workflows and runs the manifest script.
+  // Renders the env catalog and the self-host contract, formatted by
+  // bun fmt; `check` alone reads workflows and runs the manifest script.
   selfhost: "selfhost:generate",
   // Parsers and AST repairs are pure (no clock, network or database on the
   // re-parse path); it fails rather than re-stamping an analysis.
   "case-law-fixture-reparse": "apps/api/scripts/reparse-case-law-fixtures.ts",
+  // Copies .ai/shared modules and skills (the pinned submodule, checked out
+  // by autofix) and .ai/local* into AGENTS.md, GEMINI.md and skill copies,
+  // staging in a temp directory; no network, clock or environment input.
+  "ai-instructions": "sync-ai",
 } as const;
 
 const generator = (id: string) => {
@@ -140,10 +143,12 @@ test("translation content never becomes an autofix output", () => {
       ).toBe(false);
     }
   }
-  const selected = generatorsForFiles(["apps/web/src/i18n/langs/cs.json"]);
-  expect(selected.map(({ id }) => id)).toContain("i18n-messages-web");
+  const selected = generatorsForFiles([
+    "apps/landing/src/i18n/messages/cs.json",
+  ]);
+  expect(selected.map(({ id }) => id)).toContain("i18n-messages-landing");
   const allowed = allowedOutputs(selected);
-  expect(allowed).toContain("apps/web/src/i18n/langs/messages.gen.ts");
+  expect(allowed).toContain("apps/landing/src/i18n/messages/messages.gen.ts");
   for (const catalogue of catalogues) {
     expect(
       allowed.some((output) => matchesGeneratedGlob(output, catalogue)),

@@ -65,10 +65,11 @@ import {
   getMentionViewScope,
   insertChatMention,
 } from "@/components/chat-mention-helpers";
+import { chatMentionOptionId } from "@/components/chat-mention-node-attrs";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import {
-  ComposerEditModeSubmenu,
   type ComposerEditModeMenuProps,
+  ComposerEditModeSubmenu,
 } from "@/components/chat/chat-edit-mode-menu";
 import {
   CHAT_MODEL_MENU_POPUP_CLASS_NAME,
@@ -79,20 +80,20 @@ import {
   charBeforeCaret,
   chooseShortcutPopupSide,
   COMPOSER_MENU_SHORTCUT_CHAR,
+  type ComposerMenuShortcut,
   contextMentionSearchKey,
   resolveComposerMenuShortcut,
   SHORTCUT_POPUP_SIDE,
-  shouldDrainSkillPages,
-  type ComposerMenuShortcut,
   type ShortcutPopupSide,
+  shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
 import { ComposerQueryResults } from "@/components/chat/composer-query-results";
 import {
   COMPOSER_LIST_VIEWPORT_CLASS_NAME,
+  type ComposerSearchTrigger,
   ComposerSubmenuSearch,
   pickHighlightedItemOnTab,
   useFocusSearchOnOpen,
-  type ComposerSearchTrigger,
 } from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
@@ -116,11 +117,11 @@ import {
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
+  type ChatSkillRowState,
   chatSkillRowState,
+  type ComposerSkillChatContext,
   oneClickSkillNeeds,
   slashItemSkillId,
-  type ChatSkillRowState,
-  type ComposerSkillChatContext,
 } from "@/lib/prompts/chat-skill-availability.logic";
 import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
@@ -1201,7 +1202,7 @@ const ComposerContextResults = ({
       .map((option) => (
         <ComposerMentionItem
           editor={editor}
-          key={option.resource.id}
+          key={chatMentionOptionId(option)}
           option={option}
         />
       ));
@@ -1371,7 +1372,7 @@ const ComposerContextMatterSub = ({
     return fileOptions.map((option) => (
       <ComposerMentionItem
         editor={editor}
-        key={option.resource.id}
+        key={chatMentionOptionId(option)}
         option={option}
       />
     ));

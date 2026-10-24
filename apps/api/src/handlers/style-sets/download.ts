@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -9,6 +10,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
@@ -33,7 +35,7 @@ const config = {
 
 export default createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, user, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const [styleSet] = await tx
@@ -55,13 +57,23 @@ export default createSafeRootHandler(
         if (!styleSet) {
           return null;
         }
+        const s3Key = storedKeyForOrganization(
+          styleSet.s3Key,
+          session.activeOrganizationId,
+        );
+        if (s3Key === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
           resourceId: styleSet.id,
-          s3Key: styleSet.s3Key,
+          userId: user.id,
+          source: { kind: "request", sessionId: session.id },
+          s3Key,
           expiresInSeconds: STYLE_SET_DOWNLOAD_TTL_SECONDS,
           fileName: styleSet.fileName,
           organizationId: session.activeOrganizationId,

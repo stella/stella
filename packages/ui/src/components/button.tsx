@@ -1,15 +1,15 @@
 "use client";
 
-import type * as React from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import {
-  BUTTON_DISPOSITION,
   blockDisabledActivation,
   blockDisabledKeyActivation,
+  BUTTON_DISPOSITION,
   resolveButtonDisposition,
 } from "../lib/button-disposition";
 import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
@@ -28,8 +28,20 @@ import { renderTooltipTrigger } from "./tooltip-trigger-helper";
  */
 const buttonAccessibleDisabledClass = "cursor-not-allowed opacity-64";
 
+/**
+ * Press feedback: the button gives slightly under the pointer.
+ *
+ * Applied by `Button` only while it can act, so a disabled or loading button
+ * never appears to respond. `scale` is its own property in Tailwind v4, so it
+ * composes with a caller's `translate` (a vertically centred icon button) and
+ * the transition names only the transform family. Menu rows and link-styled
+ * buttons keep the treatment of their surface instead.
+ */
+const buttonPressClass =
+  "motion-safe:transition-transform motion-safe:duration-150 ease-out motion-safe:active:scale-[0.98]";
+
 const buttonVariants = cva(
-  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
   {
     defaultVariants: {
       size: "default",
@@ -89,7 +101,8 @@ type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
-  tooltip?: React.ReactNode;
+  icon?: ReactNode;
+  tooltip?: ReactNode;
 } & useRender.ComponentProps<"button">;
 
 function Button({
@@ -98,14 +111,15 @@ function Button({
   size,
   render,
   loading,
+  icon,
   children,
   disabled,
   tooltip,
   ...props
 }: ButtonProps) {
-  const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
-    render ? undefined : "button";
-
+  const typeValue: ButtonHTMLAttributes<HTMLButtonElement>["type"] = render
+    ? undefined
+    : "button";
   // Same value `renderTooltipTrigger` mounts below, so the disposition and the
   // popup cannot disagree about whether this button has a tooltip.
   const tooltipContent = tooltip ?? props["aria-label"] ?? props.title;
@@ -118,24 +132,28 @@ function Button({
     disposition === BUTTON_DISPOSITION.accessibleDisabled;
 
   const defaultProps = {
-    children: loading ? (
+    children: (
       <>
-        <Loader
-          className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
-          data-slot="button-loader"
-          size="sm"
-          variant="decorative"
-        />
+        {loading ? (
+          <Loader
+            animation="none"
+            className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
+            data-slot="button-loader"
+            size="sm"
+            variant="decorative"
+          />
+        ) : (
+          icon
+        )}
         {children}
       </>
-    ) : (
-      children
     ),
     className: cn(
+      disposition === BUTTON_DISPOSITION.enabled &&
+        size !== "row" &&
+        variant !== "link" &&
+        buttonPressClass,
       buttonVariants({ className, size, variant }),
-      // While loading, the loader is the button's only icon: a caller's own
-      // leading icon would otherwise sit beside it as a second spinner.
-      loading && "[&_svg:not([data-slot=button-loader]_svg)]:hidden",
       isAccessibleDisabled && buttonAccessibleDisabledClass,
     ),
     "data-slot": "button",

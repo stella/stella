@@ -18,6 +18,7 @@ import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
+import { setUserErrorRouteTemplate } from "@/lib/errors/user-toast";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
@@ -26,6 +27,9 @@ import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
+
+// The one owner of the generated route tree; tests read it through here.
+export { routeTree };
 
 export function getRouter() {
   const analyticsValue = createAnalyticsValue();
@@ -108,6 +112,7 @@ export function getRouter() {
       return;
     }
     routeErrorLifecycle.routeResolved(path);
+    setUserErrorRouteTemplate(path);
     analyticsValue.analytics.capturePageViewed({ path });
   });
 

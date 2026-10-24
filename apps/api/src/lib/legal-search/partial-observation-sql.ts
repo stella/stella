@@ -1,4 +1,5 @@
-// parser-output-unchanged: Coverage listing-only SQL is a read predicate; pipeline quality ranks, publisher fields, and parsed documents are unchanged.
+// parser-output-unchanged: Only the index-name documentation changes; observation marker parsing and SQL predicates are identical.
+// parser-output-unchanged: Pipeline-owned quality ranks and marker writes change; publisher fields and parsed documents are unchanged.
 /**
  * The quality marker the ingestion pipeline persists with a partial source
  * observation, and the SQL that reads it.
@@ -70,7 +71,7 @@ export const PARTIAL_OBSERVATION_FIELD = {
  * A row with no marker is a row that carries detail.
  *
  * The path is inlined rather than bound: this predicate is the definition of
- * `case_law_decisions_search_candidate_idx`, and PostgreSQL can only match a
+ * `case_law_decisions_search_candidate_published_idx`, and PostgreSQL can only match a
  * query against a partial index's predicate once both are constants. A bound
  * path folds to a constant under a custom plan and stays a parameter under a
  * generic one, which would silently drop the search's candidate read back to
@@ -109,9 +110,3 @@ export const storedObservationHasDetailSqlFor = (
   metadataColumn: string,
 ): string =>
   `jsonb_extract_path_text(${metadataColumn}, '${PARTIAL_OBSERVATION_KEY}', '${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}') is distinct from 'true'`;
-
-/** Raw SQL form of the listing-only predicate for a code-owned table alias. */
-export const storedObservationIsListingOnlySqlFor = (
-  metadataColumn: string,
-): string =>
-  `jsonb_extract_path_text(${metadataColumn}, '${PARTIAL_OBSERVATION_KEY}', '${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}') = 'true'`;
