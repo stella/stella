@@ -236,6 +236,11 @@ export const createRememberTool = ({
           }),
         );
       }
+      if (insertResult.value.type === "authority_unavailable") {
+        return Result.err(
+          memoryWriteRefusalChatToolError(insertResult.value.error),
+        );
+      }
       return Result.ok({ status: "saved" } as const);
     })();
     // TanStack AI reports a tool failure by the error its server function

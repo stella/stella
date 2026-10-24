@@ -196,6 +196,7 @@ import {
   PAST_CHAT_SCOPE_TYPE,
   resolvePastChatScope,
 } from "@/api/handlers/chat/tools/past-chat-tools";
+import type { ResolveCurrentChatExecutionContext } from "@/api/handlers/chat/tools/registry-adapter/current-execution-context";
 import {
   hydrateRegistryToolInputRefs,
   resolveRegistryToolInputRefs,
@@ -238,10 +239,9 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import { resolveCredentialMemberExecutionContext } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
@@ -2158,10 +2158,10 @@ export type SendMessageDependencies = {
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
   /**
-   * Reads the caller's membership when an approved write tool runs. Defaults
-   * to the credential-boundary read; tests bind it to their own database.
+   * Rebuilds live authority when a delayed registry tool runs. Defaults to
+   * fresh credential-boundary membership, matter, and database scopes.
    */
-  resolveCurrentMembership?: ResolveCredentialMemberAuthorization;
+  resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -2200,10 +2200,9 @@ const readOwnedTurnThreadNames = async ({
   return read;
 };
 
-const currentMembershipReader = (
-  dependencies: SendMessageDependencies,
-): ResolveCredentialMemberAuthorization =>
-  dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
+const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
+  dependencies.resolveCurrentExecutionContext ??
+  resolveCredentialMemberExecutionContext;
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2846,7 +2845,8 @@ export const createSendMessage = (
           pinServerValidatedWorkspaceId,
           requestWorkspaceId: workspaceId,
           refRegistry,
-          resolveCurrentMembership: currentMembershipReader(dependencies),
+          resolveCurrentExecutionContext:
+            currentExecutionContextReader(dependencies),
           toolDefectMemo,
           safeDb,
           scopedDb,

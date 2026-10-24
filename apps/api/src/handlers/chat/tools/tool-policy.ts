@@ -38,10 +38,10 @@ const CHAT_TOOL_POLICIES = {
   },
   /**
    * Official public endpoints are authoritative government/public-body
-   * registries designed to receive the lookup key the user supplied
-   * (for example an ICO or company name sent to ARES). These tools may
-   * send that lookup input directly: they must not include workspace
-   * document text or other privileged context in their schema.
+   * registries designed to receive lookup keys (for example an ICO or company
+   * name sent to ARES). The model can derive those arguments from untrusted
+   * context, so every outbound call requires approval even though the
+   * destination is authoritative.
    */
   [CHAT_TOOL_POLICY_KIND.publicOfficial]: {
     kind: CHAT_TOOL_POLICY_KIND.publicOfficial,

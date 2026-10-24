@@ -18,8 +18,18 @@ describe("tool approval grant policy", () => {
         alwaysApprovedTools: grants,
         canAlwaysAllow: true,
         conversationApprovedTools: grants,
-        isPublicOfficialApproval: true,
         name: USE_CONNECTOR_SECRET_TOOL_NAME,
+      }),
+    ).toBe(false);
+  });
+
+  test("an official public lookup without a grant waits for the user", () => {
+    expect(
+      hasAutomaticApproval({
+        alwaysApprovedTools: new Set(),
+        canAlwaysAllow: true,
+        conversationApprovedTools: new Set(),
+        name: "business_registry_lookup",
       }),
     ).toBe(false);
   });

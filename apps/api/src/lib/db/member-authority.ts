@@ -10,6 +10,7 @@ import { workspaceMembers, workspaces } from "@/api/db/schema";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockMemberAccessRow } from "@/api/lib/db/aggregate-lock";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -86,6 +87,52 @@ export const resolveWorkspaceMemberAccess = async (
   db: WorkspaceMemberAuthorityDb,
 ): Promise<AccessibleWorkspace | null> =>
   (await resolveWorkspaceMemberAuthority(lookup, db))?.workspace ?? null;
+
+type CurrentWorkspaceMemberPermissionOptions = WorkspaceMemberLookup & {
+  db: Transaction;
+  permissions: PermissionInput;
+};
+
+/**
+ * Recheck the authority a deferred member action needs now. Archived and
+ * deleting matters cannot receive new model work or output publications.
+ */
+export const hasCurrentActiveWorkspaceMemberPermission = async ({
+  db,
+  permissions,
+  ...lookup
+}: CurrentWorkspaceMemberPermissionOptions): Promise<boolean> => {
+  const held = await holdMemberAccessOnTx(db, {
+    organizationId: lookup.organizationId,
+    userId: lookup.userId,
+    workspaceIds: [lookup.workspaceId],
+  });
+  if (
+    held.type === "not-member" ||
+    held.workspaceIds.at(0) !== lookup.workspaceId
+  ) {
+    return false;
+  }
+  const workspace = (
+    await db
+      .select({ status: workspaces.status })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, lookup.workspaceId),
+          eq(workspaces.organizationId, lookup.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  const authority = await resolveWorkspaceMemberAuthority(lookup, db);
+  return (
+    authority !== null &&
+    workspace?.status === "active" &&
+    isMemberRole(authority.role) &&
+    hasCurrentMemberPermission(authority.role, permissions)
+  );
+};
 
 type CurrentOrganizationMemberPermissionOptions = {
   db: Transaction;
