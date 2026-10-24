@@ -33,8 +33,8 @@ import { removedCommandError } from "./registry-drift.js";
 import type { CurrentRegistry } from "./registry-refresh.js";
 import {
   refreshRegistryCache,
-  resolveCommandTree,
   requiresFeatureAccessRefresh,
+  resolveCommandTree,
 } from "./registry-refresh.js";
 
 const resolvePreamble = async (

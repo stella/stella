@@ -14,8 +14,8 @@ import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,

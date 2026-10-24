@@ -3,6 +3,7 @@ import { and, eq, gt, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
 import { sha256Base64ToHex } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
@@ -207,11 +208,14 @@ const extractProcuracao = createSafeRootHandler(
                 message: "The source upload is incomplete",
                 cause: objectHead.error,
               })
-            : new HandlerError({
-                status: 500,
-                message: "Failed to read the source upload",
-                cause: objectHead.error,
-              }),
+            : classifyFailure(
+                new HandlerError({
+                  status: 500,
+                  message: "Failed to read the source upload",
+                  cause: objectHead.error,
+                }),
+                "upstream_unavailable",
+              ),
         );
       }
       if (

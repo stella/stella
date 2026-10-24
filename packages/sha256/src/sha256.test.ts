@@ -160,7 +160,14 @@ const countingBlob = (bytes: Uint8Array, ledger: BlobReadLedger): Blob => {
 
 test("a Blob is hashed in one front-to-back pass of bounded chunks at any size", async () => {
   const smallSize = browser.BLOB_HASH_CHUNK_BYTES * 2 + 7;
-  for (const size of [smallSize, smallSize * 10]) {
+  for (const size of [
+    1,
+    browser.BLOB_HASH_CHUNK_BYTES - 1,
+    browser.BLOB_HASH_CHUNK_BYTES,
+    browser.BLOB_HASH_CHUNK_BYTES + 1,
+    smallSize,
+    smallSize * 10,
+  ]) {
     const bytes = Uint8Array.from({ length: size }, (_, index) => index % 251);
     const ledger = emptyLedger();
 
@@ -169,7 +176,9 @@ test("a Blob is hashed in one front-to-back pass of bounded chunks at any size",
     );
 
     expect(ledger.wholeReads).toBe(0);
-    expect(ledger.peakHeldBytes).toBe(browser.BLOB_HASH_CHUNK_BYTES);
+    expect(ledger.peakHeldBytes).toBe(
+      Math.min(size, browser.BLOB_HASH_CHUNK_BYTES),
+    );
     // Contiguous, non-overlapping ranges that cover every byte exactly once.
     let next = 0;
     for (const [start, end] of ledger.ranges) {

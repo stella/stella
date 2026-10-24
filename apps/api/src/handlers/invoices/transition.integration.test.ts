@@ -12,11 +12,13 @@ import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
   expenses,
+  featureEnrolments,
   INVOICE_STATUS,
+  invoiceLines,
   invoices,
   numberSeries,
+  sellerProfiles,
   timeEntries,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -111,6 +113,54 @@ describe("invoice transition integration", () => {
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
   });
 
+  test("refuses a Slovak VAT invoice in a currency other than euro (zákon 222/2004 Z. z. § 74 ods. 1 písm. i)", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Kancelária Dunaj",
+      vatId: "SK1234567890",
+      vatPayer: true,
+      country: "SK",
+      defaultCurrency: "USD",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId })
+      .where(eq(invoices.id, invoiceId));
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId,
+      position: 0,
+      description: "Právna konzultácia",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(10_000),
+      vatRateBps: 2300,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(10_000),
+      vatAmount: cents(2300),
+      grossAmount: cents(12_300),
+      source: "manual",
+    });
+
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      code: 409,
+      response: {
+        message: "This seller's VAT invoices must state the VAT amount in EUR",
+        hint: "Issue the invoice in EUR; converting the VAT amount from another currency is not supported yet.",
+      },
+    });
+    expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.DRAFT);
+    await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
   test("allocates consecutive default-series numbers and keeps the first through revert and refinalize", async () => {
     const seriesId = createSafeId<"numberSeries">();
     seededSeriesIds.push(seriesId);
@@ -149,6 +199,8 @@ describe("invoice transition integration", () => {
     await assertAssignedNumber(first, "AUTO-2026-001");
     expect(await runTransition(first, "finalize")).toEqual({ id: first });
     expect(await readNumber(first)).toBe("AUTO-2026-001");
+    expect(await runTransition(second, "void")).toEqual({ id: second });
+    expect(await readNumber(second)).toBe("AUTO-2026-002");
     const third = await seedInvoice({
       status: INVOICE_STATUS.DRAFT,
       invoiceNumber: null,

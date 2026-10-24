@@ -300,8 +300,7 @@ export const protectEcjFormexParts = ({
   storedRawContentType,
   candidate,
 }: EcjCompletionFormexPartsOptions):
-  | { type: "accepted" }
-  | { type: "review-required"; fields: string[] } => {
+  { type: "accepted" } | { type: "review-required"; fields: string[] } => {
   const decoded = Result.try({
     try: () => ({
       before: new TextDecoder("utf-8", { fatal: true }).decode(storedRaw),
@@ -362,8 +361,7 @@ export const protectEcjLegacyDocument = ({
   storedRawContentType,
   candidate,
 }: EcjCompletionLegacyDocumentOptions):
-  | { type: "accepted" }
-  | { type: "review-required"; fields: string[] } => {
+  { type: "accepted" } | { type: "review-required"; fields: string[] } => {
   const decoded = Result.try({
     try: () => ({
       before: new TextDecoder("utf-8", { fatal: true }).decode(storedRaw),

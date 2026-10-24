@@ -1,3 +1,4 @@
+// parser-output-unchanged: failure grades classify telemetry; no parser reads this vocabulary.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -96,6 +97,8 @@ export const FAILURE_REASON_GRADE = {
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  // parser-output-unchanged: invoice renderer failures grade telemetry only.
+  invoice_renderer_failed: "defect",
   visual_preview_unavailable: "defect",
   visual_preview_timeout: "defect",
   visual_preview_response_invalid: "defect",

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 /**
  * Shared inline-editable field component.
  *
@@ -11,6 +11,7 @@ import { useState, type ReactNode } from "react";
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -39,11 +40,11 @@ import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   EntityKind,
+  SelectPropertyOption,
   WorkspaceFieldContent,
   WorkspaceProperty,
-  SelectPropertyOption,
 } from "@/lib/types";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 
 type EditableFieldProps = {
   workspaceId: string;
@@ -224,6 +225,18 @@ const InlineEditor = ({
     return (
       <InlineTextEditor
         displayVariant={displayVariant}
+        loadValue={async () => {
+          const entity = await queryClient.query(
+            entityOptions(workspaceId, entityId),
+          );
+          const field = entity.fields.find(
+            (candidate) => candidate.propertyId === propertyId,
+          );
+          return field?.content.type === "text" ? field.content.value : "";
+        }}
+        onLoadError={(error) => {
+          notifyUserError(error, t("errors.actionFailed"));
+        }}
         onSave={(value) => save({ type: "text", version: 1, value })}
         property={property}
         stopPropagation={stopPropagation}
@@ -477,35 +490,51 @@ const InlineDateEditor = ({
 const InlineTextEditor = ({
   value,
   displayVariant,
+  loadValue,
+  onLoadError,
   onSave,
   property,
   stopPropagation,
 }: {
   value: string;
+  loadValue: () => Promise<string>;
+  onLoadError: (error: unknown) => void;
   displayVariant: FieldValueVariant;
   onSave: (value: string) => void;
   property: WorkspaceProperty;
   stopPropagation: boolean;
 }) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
+  const [state, setState] = useState<
+    | { status: "display" }
+    | { status: "loading" }
+    | { status: "editing"; draft: string; originalValue: string }
+  >({ status: "display" });
 
-  if (!editing) {
+  if (state.status !== "editing") {
     return (
       <button
         className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
         data-open-expanded-cell
+        disabled={state.status === "loading"}
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
           }
-          // Drop straight into edit mode on first click. The
-          // row-expansion side effect still fires via the
-          // data-open-expanded-cell attribute the table grid reads,
-          // so the cell gets the extra space at the same moment the
-          // textarea mounts.
-          setDraft(value);
-          setEditing(true);
+          setState({ status: "loading" });
+          detached(
+            Result.tryPromise(loadValue).then((result) => {
+              if (result.isErr()) {
+                onLoadError(result.error);
+                return setState({ status: "display" });
+              }
+              return setState({
+                status: "editing",
+                draft: result.value,
+                originalValue: result.value,
+              });
+            }),
+            "editable-field.load-text",
+          );
         }}
         onKeyDown={(event) => {
           if (stopPropagation) {
@@ -531,15 +560,24 @@ const InlineTextEditor = ({
     <textarea
       autoFocus
       className="border-input bg-background focus:ring-ring min-h-20 w-full min-w-0 resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
-      dir={contentDir(draft)}
+      dir={contentDir(state.draft)}
       onBlur={() => {
-        const trimmed = draft.trim();
-        if (trimmed !== value) {
+        const trimmed = state.draft.trim();
+        if (
+          state.draft !== state.originalValue &&
+          trimmed !== state.originalValue
+        ) {
           onSave(trimmed);
         }
-        setEditing(false);
+        setState({ status: "display" });
       }}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) =>
+        setState({
+          status: "editing",
+          draft: e.target.value,
+          originalValue: state.originalValue,
+        })
+      }
       onClick={(event) => {
         if (stopPropagation) {
           event.stopPropagation();
@@ -550,7 +588,7 @@ const InlineTextEditor = ({
           e.stopPropagation();
         }
         if (e.key === "Escape") {
-          setEditing(false);
+          setState({ status: "display" });
         }
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
@@ -558,7 +596,7 @@ const InlineTextEditor = ({
         }
       }}
       rows={2}
-      value={draft}
+      value={state.draft}
     />
   );
 };

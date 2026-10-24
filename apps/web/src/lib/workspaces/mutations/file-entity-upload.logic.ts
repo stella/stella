@@ -1,7 +1,34 @@
-import { isTransientUploadStatus, uploadErrorStatus } from "@/lib/upload-queue";
+import { Result, TaggedError } from "better-result";
 
-const HTTP_CONFLICT = 409;
-const HTTP_TOO_MANY_REQUESTS = 429;
+import {
+  uploadErrorStatus,
+  uploadFailureDisposition,
+} from "@/lib/upload-queue";
+
+class FileEntityUploadError extends TaggedError("FileEntityUploadError")<{
+  message: string;
+  cause: unknown;
+  status: number;
+  response: Response | undefined;
+}> {}
+
+const normalizeUploadError = (error: unknown): Error => {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new FileEntityUploadError({
+    message: "Upload request failed",
+    cause: error,
+    status: uploadErrorStatus(error),
+    response:
+      error !== null &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response instanceof Response
+        ? error.response
+        : undefined,
+  });
+};
 
 export type FileEntityUploadGrant = {
   uploadId: string;
@@ -27,25 +54,17 @@ export type FileEntityUploadSteps<TResult> = {
 };
 
 /**
- * Whether a finalize that failed can still complete on the same upload: no
- * answer or a server error (the server may have committed it, or kept the
- * staged bytes for a retry), a claim that is still busy or cooling down
- * (409), or a rate limit (429). The upload id then stays the one to finalize,
- * so a retry replays a committed result instead of uploading a second copy.
- * Any other answer is the server's final word on that upload.
+ * Every failure the queue can retry retains the same finalization identity:
+ * the server may already have committed or retained its staged bytes. Using
+ * the queue's disposition keeps automatic and manual retries from creating
+ * another upload when a response is lost or a request times out.
  */
-export const finalizeFailureKeepsUpload = (error: unknown): boolean => {
-  const status = uploadErrorStatus(error);
-  return (
-    isTransientUploadStatus(status) ||
-    status === HTTP_CONFLICT ||
-    status === HTTP_TOO_MANY_REQUESTS
-  );
-};
+export const finalizeFailureKeepsUpload = (error: unknown): boolean =>
+  uploadFailureDisposition(error) === "retryable";
 
 export type FileEntityUploader<TResult> = {
   /** One attempt for the file; the upload queue calls it again on retry. */
-  upload: (file: File, signal: AbortSignal) => Promise<TResult>;
+  upload: (file: File, signal: AbortSignal) => Promise<Result<TResult, Error>>;
   /** Release every upload whose bytes are staged but not finalized. */
   abortStaged: () => Promise<void>;
 };
@@ -61,31 +80,44 @@ export const createFileEntityUploader = <TResult>(
 ): FileEntityUploader<TResult> => {
   const stagedUploadIds = new Map<File, string>();
 
-  const upload = async (file: File, signal: AbortSignal): Promise<TResult> => {
-    let uploadId = stagedUploadIds.get(file);
-    if (uploadId === undefined) {
-      const grant = await steps.reserve(file, signal);
-      await steps.put(file, grant, signal);
-      uploadId = grant.uploadId;
-      stagedUploadIds.set(file, uploadId);
-    }
+  const upload = async (
+    file: File,
+    signal: AbortSignal,
+  ): Promise<Result<TResult, Error>> => {
+    const attempted = await Result.tryPromise({
+      try: async () => {
+        let uploadId = stagedUploadIds.get(file);
+        if (uploadId === undefined) {
+          const grant = await steps.reserve(file, signal);
+          await steps.put(file, grant, signal);
+          uploadId = grant.uploadId;
+          stagedUploadIds.set(file, uploadId);
+        }
 
-    try {
-      const result = await steps.finalize(uploadId, signal);
-      stagedUploadIds.delete(file);
-      return result;
-    } catch (error) {
-      const stillStaged = stagedUploadIds.get(file) === uploadId;
-      if (signal.aborted || !finalizeFailureKeepsUpload(error)) {
-        stagedUploadIds.delete(file);
-      }
-      if (signal.aborted && stillStaged) {
-        // Cancelled while this finalize was in flight, and the batch's
-        // `abortStaged` has not released this upload yet.
-        await steps.abort(uploadId);
-      }
-      throw error;
-    }
+        const finalized = await Result.tryPromise({
+          try: async () => await steps.finalize(uploadId, signal),
+          catch: (error) => error,
+        });
+        if (Result.isOk(finalized)) {
+          stagedUploadIds.delete(file);
+          return finalized;
+        }
+
+        const error = finalized.error;
+        const stillStaged = stagedUploadIds.get(file) === uploadId;
+        if (signal.aborted || !finalizeFailureKeepsUpload(error)) {
+          stagedUploadIds.delete(file);
+        }
+        if (signal.aborted && stillStaged) {
+          // Cancelled while this finalize was in flight, and the batch's
+          // `abortStaged` has not released this upload yet.
+          await steps.abort(uploadId);
+        }
+        return finalized;
+      },
+      catch: (error) => error,
+    });
+    return attempted.andThen((result) => result).mapError(normalizeUploadError);
   };
 
   const abortStaged = async (): Promise<void> => {

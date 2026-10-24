@@ -14,10 +14,12 @@ import {
 } from "@stll/api-contract";
 
 import { env } from "@/env";
+import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
 import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
@@ -202,6 +204,9 @@ const NOISE_PATTERNS = [
 export const isNoiseException = (event: {
   properties?: Record<string, unknown>;
 }): boolean => {
+  if (event.properties?.["user_visible"] === true) {
+    return false;
+  }
   const list = event.properties?.["$exception_list"];
   if (!Array.isArray(list) || list.length === 0) {
     return false;
@@ -226,6 +231,8 @@ export const isNoiseException = (event: {
 // (`ClientTelemetryError.area`). The pattern rejects anything free-form so
 // no dynamic string can ride along.
 const TELEMETRY_AREA = /^[a-z][a-z0-9-]{0,39}$/u;
+const USER_VISIBLE_FEATURE = /^[a-z][a-z0-9-]{0,39}$/u;
+const ROUTE_TEMPLATE = /^(?:unknown|\/[A-Za-z0-9_.$/-]*)$/u;
 
 declare const exceptionCodeBrand: unique symbol;
 type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
@@ -451,7 +458,7 @@ const templateUrl = (
   return { url: `${parsed.origin}${template}`, pathname: template };
 };
 
-const sanitizeExceptionEvent = (
+export const sanitizeExceptionEvent = (
   event: CaptureResult,
   history: RouteTemplateHistory,
 ): CaptureResult => {
@@ -460,6 +467,9 @@ const sanitizeExceptionEvent = (
   const appVersion = properties["app_version"];
   const area = properties["area"];
   const errorReference = properties["error_reference"];
+  const feature = properties["feature"];
+  const routeTemplate = properties["route_template"];
+  const userVisible = properties["user_visible"] === true;
   const exceptionList = properties["$exception_list"];
   const entries: unknown[] = Array.isArray(exceptionList) ? exceptionList : [];
   const safeArea = telemetryArea(area);
@@ -516,6 +526,17 @@ const sanitizeExceptionEvent = (
           }),
       ...(isErrorReference(errorReference)
         ? { error_reference: errorReference }
+        : {}),
+      ...(userVisible ? { user_visible: true } : {}),
+      ...(userVisible &&
+      typeof feature === "string" &&
+      USER_VISIBLE_FEATURE.test(feature)
+        ? { feature }
+        : {}),
+      ...(userVisible &&
+      typeof routeTemplate === "string" &&
+      ROUTE_TEMPLATE.test(routeTemplate)
+        ? { route_template: routeTemplate }
         : {}),
     },
   };
@@ -717,17 +738,42 @@ const sanitizeSdkUrlContext = (
   ) {
     delete properties["$session_entry_referrer"];
   }
-  return { ...event, properties };
+  return {
+    ...event,
+    properties: {
+      ...properties,
+      ...Object.fromEntries(
+        ["$referrer", "$session_entry_referrer"].flatMap((key) => {
+          const value = properties[key];
+          return typeof value === "string"
+            ? [[key, sanitizeHandoffUrl(value)]]
+            : [];
+        }),
+      ),
+    },
+  };
 };
 
 const errorContextProperties = (
   context: ErrorCaptureContext | undefined,
-): Record<string, string> | undefined => {
-  if (context?.type !== "recovery") {
-    return undefined;
+): Record<string, string | boolean> | undefined => {
+  switch (context?.type) {
+    case "recovery":
+      return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: true,
+      };
+    case "detached":
+    case undefined:
+      return undefined;
+    default: {
+      context satisfies never;
+      return panic(`Unhandled context: ${String(context)}`);
+    }
   }
-
-  return { error_reference: context.reference };
 };
 
 const devErrorContext = (
@@ -742,6 +788,12 @@ const devErrorContext = (
       return { detached: context.operation };
     case "recovery":
       return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: "true",
+      };
     default: {
       context satisfies never;
       return panic(`Unhandled context: ${String(context)}`);
@@ -764,6 +816,7 @@ export const signedInAnonymousId = (userId: string): string =>
  * rather than relying on deployment-specific environment settings.
  */
 type CreatePostHogAnalyticsOptions = {
+  routeTemplates?: readonly string[];
   key: string;
   host: string;
   /**
@@ -774,10 +827,58 @@ type CreatePostHogAnalyticsOptions = {
   uiHost?: string | undefined;
 };
 
+// Events whose properties are already typed for PostHog go straight to the
+// SDK; keeping them out of the factory keeps its body to the stateful parts.
+const forwardedCaptures: Pick<
+  Analytics,
+  | "capturePageHangSuspected"
+  | "captureLongAnimationFrame"
+  | "captureGuideStepSkipped"
+  | "captureFeedbackDialogOpened"
+  | "captureFeedbackReportSubmitted"
+  | "captureProvisionPlacementGaps"
+  | "captureInspectorRestoreRecovered"
+  | "captureFollowupShown"
+  | "captureFollowupSelected"
+  | "captureKeyActionTiming"
+> = {
+  capturePageHangSuspected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.pageHangSuspected, properties);
+  },
+  captureLongAnimationFrame: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.longAnimationFrame, properties);
+  },
+  captureGuideStepSkipped: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
+  },
+  captureFeedbackDialogOpened: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
+  },
+  captureFeedbackReportSubmitted: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
+  },
+  captureProvisionPlacementGaps: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+  },
+  captureInspectorRestoreRecovered: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered, properties);
+  },
+  captureFollowupShown: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
+  },
+  captureFollowupSelected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
+  },
+  captureKeyActionTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
+  },
+};
+
 export const createPostHogAnalytics = ({
   host,
   key,
   uiHost,
+  routeTemplates = [],
 }: CreatePostHogAnalyticsOptions): {
   analytics: Analytics;
   client: typeof posthog | undefined;
@@ -829,6 +930,13 @@ export const createPostHogAnalytics = ({
             : sanitizeExceptionEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
           return routeErrorLifecycleSanitizer?.(event) ?? null;
+        case WEB_ANALYTICS_EVENTS.pageHangSuspected:
+        case WEB_ANALYTICS_EVENTS.longAnimationFrame:
+          return sanitizeHangDiagnosticEvent({
+            event,
+            appUrl: env.VITE_PUBLIC_APP_URL,
+            routeTemplates,
+          });
         case WEB_ANALYTICS_EVENTS.webVitals:
           return sanitizeWebVitalsEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.pageViewed:
@@ -948,33 +1056,7 @@ export const createPostHogAnalytics = ({
         path,
       });
     },
-    captureGuideStepSkipped: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
-    },
-    captureFeedbackDialogOpened: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
-    },
-    captureFeedbackReportSubmitted: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
-    },
-    captureProvisionPlacementGaps: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
-    },
-    captureInspectorRestoreRecovered: (properties) => {
-      posthog.capture(
-        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
-        properties,
-      );
-    },
-    captureFollowupShown: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
-    },
-    captureFollowupSelected: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
-    },
-    captureKeyActionTiming: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
-    },
+    ...forwardedCaptures,
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")
         .then((module) => {

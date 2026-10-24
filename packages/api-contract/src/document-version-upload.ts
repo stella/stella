@@ -18,7 +18,7 @@ export const DOCUMENT_VERSION_UPLOAD_TRANSPORT = {
  * expires and runs to this ceiling still finalizes. The web app, the CLI and
  * the API all read this one value.
  */
-export const DOCUMENT_UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
+export const DOCUMENT_UPLOAD_PUT_TIMEOUT_MS = 1_800_000;
 
 export const DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS: readonly string[] = [
   DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,

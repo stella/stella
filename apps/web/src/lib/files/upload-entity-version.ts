@@ -72,9 +72,9 @@ export const uploadEntityVersion = async ({
   }
 
   // The page holds the bytes until this settles, so a reload must prompt.
-  return await withActiveUpload(async (active) => {
+  return await withActiveUpload(async () => {
     signal?.throwIfAborted();
-    const sha256Hex = await hashUploadFile(active, fileToUpload);
+    const sha256Hex = await hashUploadFile(fileToUpload);
     signal?.throwIfAborted();
 
     const wsClient = api.uploads({

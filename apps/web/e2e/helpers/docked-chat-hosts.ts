@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
@@ -108,9 +108,6 @@ export const declaredAppFrameScope = (
           case "member":
             scope = APP_FRAME_SCOPE.member;
             break;
-          case "admin":
-            scope = APP_FRAME_SCOPE.admin;
-            break;
           case "knowledge":
             scope = APP_FRAME_SCOPE.knowledge;
             break;
@@ -125,12 +122,31 @@ export const declaredAppFrameScope = (
   return scope;
 };
 
+/** A preview-only PDF viewer returns its viewport without the docked chat
+ * reader it otherwise wraps, so it mounts no reader dock. */
+const mountsNoReaderDock = (
+  node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  source: ts.SourceFile,
+): boolean =>
+  node.tagName.getText(source) === "PeekPdfViewer" &&
+  node.attributes.properties.some(
+    (attribute) =>
+      ts.isJsxAttribute(attribute) &&
+      attribute.name.getText(source) === "interactionMode" &&
+      attribute.initializer !== undefined &&
+      ts.isStringLiteral(attribute.initializer) &&
+      attribute.initializer.text === "preview-only",
+  );
+
 /** Follow rendered component imports, rather than utility imports or inherited shells. */
-const renderedImports = (source: ts.SourceFile): string[] => {
+export const renderedImports = (source: ts.SourceFile): string[] => {
   const rendered = new Set<string>();
   const dynamicImports = new Map<string, Set<string>>();
   const collect = (node: ts.Node): void => {
-    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      !mountsNoReaderDock(node, source)
+    ) {
       rendered.add(node.tagName.getText(source).split(".").at(0) ?? "");
     }
     if (

@@ -267,11 +267,13 @@ describe("answering a stored or in-flight analysis", () => {
                 annotations: [],
               },
             ],
-            holding: {
-              text: "Dovolání není přípustné.",
-              anchors: [{ startAnchorId: "b2", endAnchorId: "b2" }],
-            },
-            abstract: "Soud dovolání zamítl.",
+            holding: [
+              {
+                text: "Dovolání není přípustné.",
+                anchors: [{ startAnchorId: "b2", endAnchorId: "b2" }],
+              },
+            ],
+            abstract: [{ text: "Soud dovolání zamítl.", anchors: [] }],
             topics: ["dovolání"],
           },
         }),

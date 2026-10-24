@@ -61,14 +61,34 @@ test("an upload hash keeps the reload guard on until its last chunk is read", as
   }
   const file = new GatedFile([bytes]);
 
-  const hashed = withActiveUpload(
-    async (active) => await hashUploadFile(active, file),
-  );
+  const hashed = hashUploadFile(file);
   await firstChunkRead.promise;
   expect(hasActiveUpload()).toBe(true);
 
   releaseFirstChunk.resolve(undefined);
   expect(await hashed).toBe(await sha256Hex(bytes));
   expect(chunkReads).toBe(3);
+  expect(hasActiveUpload()).toBe(false);
+});
+
+test("a failed standalone hash releases only its own reload guard", async () => {
+  const releaseUpload = retainActiveUpload();
+  const readFailure = new DOMException("File read failed", "NotReadableError");
+  class UnreadableChunk extends Blob {
+    override arrayBuffer(): Promise<ArrayBuffer> {
+      return Promise.reject(readFailure);
+    }
+  }
+  class UnreadableFile extends Blob {
+    override slice(): Blob {
+      return new UnreadableChunk();
+    }
+  }
+
+  expect(await rejectionOf(hashUploadFile(new UnreadableFile(["bytes"])))).toBe(
+    readFailure,
+  );
+  expect(hasActiveUpload()).toBe(true);
+  releaseUpload();
   expect(hasActiveUpload()).toBe(false);
 });
