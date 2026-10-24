@@ -84,6 +84,7 @@ import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
 import { createMcpTransportRateLimitOptions } from "@/api/handlers/mcp/transport-rate-limit";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
+import { mobileUpdatesRoute } from "@/api/handlers/mobile-updates/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
@@ -638,7 +639,12 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(legislationRoute)
       .use(legislationCorpusRoute)
-      .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
+      .use(
+        new Elysia()
+          .use(publicLegislationRoute)
+          .use(publicSanctionsRoute)
+          .use(mobileUpdatesRoute),
+      )
       .use(publicKnowledgeRoute)
       // Compose the search slice in one link to bound the server's inferred
       // Elysia chain depth while preserving each route's full contract.
