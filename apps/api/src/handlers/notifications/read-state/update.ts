@@ -2,11 +2,15 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { notifications } from "@/api/db/schema";
+import {
+  notificationParamsSchema,
+  readUnreadCount,
+} from "@/api/handlers/notifications/read-model";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-import { notificationParamsSchema, readUnreadCount } from "./read-model";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
@@ -18,7 +22,14 @@ const config = {
   // rows (user-scoped RLS); workspace:read is the access floor.
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "native_tool_ui" },
+  mcp: {
+    type: "capability",
+    reason: "notification_inbox",
+    consumesServices: false,
+  },
+  realtime: noResourceSetUpdates(
+    "Read state belongs only to the caller, who receives the updated unread count in this response.",
+  ),
   access: "write",
   params: notificationParamsSchema,
 } satisfies HandlerConfig;
@@ -78,5 +89,11 @@ const markNotificationRead = createSafeRootHandler(
     return Result.ok({ unreadCount });
   },
 );
+
+declareAggregateMutation(markNotificationRead.handler, {
+  type: "independent",
+  reason:
+    "Updates one caller-owned notification idempotently; unread count is a read-only response projection.",
+});
 
 export default markNotificationRead;
