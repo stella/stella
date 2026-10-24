@@ -118,7 +118,9 @@ jobs:
   # refreshed head re-runs every release proof.
   refresh-release-plan:
     needs: gate
-    if: needs.gate.outputs.may-version == 'false' && vars.STELLA_MERGE_HOLD == ''
+    if: >-
+      !cancelled() && needs.gate.result == 'success' &&
+      needs.gate.outputs.may-version == 'false' && vars.STELLA_MERGE_HOLD == ''
     name: Plan the release pull request refresh
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -167,7 +169,10 @@ jobs:
   # No install runs in this job: the token exists only beside GitHub's merge.
   refresh-release-merge:
     needs: refresh-release-plan
-    if: needs.refresh-release-plan.outputs.refresh == 'true' && needs.refresh-release-plan.outputs.merge == 'true'
+    if: >-
+      !cancelled() && needs.refresh-release-plan.result == 'success' &&
+      needs.refresh-release-plan.outputs.refresh == 'true' &&
+      needs.refresh-release-plan.outputs.merge == 'true'
     name: Merge main into the release pull request
     runs-on: ubuntu-24.04
     timeout-minutes: 10
