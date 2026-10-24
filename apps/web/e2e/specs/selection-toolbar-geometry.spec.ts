@@ -48,7 +48,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     page,
   }) => {
     // Vite injects styles in development; production emits hashed asset links.
-    await page.goto("/auth");
+    await page.goto("/auth", { waitUntil: "domcontentloaded" });
     await expect
       .poll(
         async () =>
@@ -79,7 +79,27 @@ for (const [name, selectionCase] of Object.entries(cases)) {
         })
         .join("\n"),
     );
-    await page.setContent(`<head>${styles}</head><div id="fixture"></div>`);
+    const fixtureUrl = new URL("/e2e/selection-toolbar-fixture", page.url())
+      .href;
+    await page.route(fixtureUrl, async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<!doctype html><head>${styles}</head><body><div id="fixture"></div></body>`,
+      });
+    });
+    await page.goto(fixtureUrl, { waitUntil: "domcontentloaded" });
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(() =>
+            Array.from(
+              document.querySelectorAll("link[rel='stylesheet']"),
+            ).every(
+              (link) => link instanceof HTMLLinkElement && link.sheet !== null,
+            ),
+          ),
+      )
+      .toBe(true);
     await page.addScriptTag({ content: fixture.bundle });
     const pane = page.getByTestId("pane");
     await expect(pane).toBeVisible();

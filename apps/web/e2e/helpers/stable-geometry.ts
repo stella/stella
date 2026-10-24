@@ -9,9 +9,7 @@ const EXPECTED_FONTS = [
 ] as const;
 const MOTION_STYLE_ID = "stable-geometry-motion";
 
-export const test = base.extend({});
-
-test.use({
+export const test = base.extend({
   deviceScaleFactor: 1,
   reducedMotion: "reduce",
   viewport: VIEWPORT,

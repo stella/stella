@@ -26,7 +26,10 @@ export default eslintCompatPlugin({
             const filename = filenameForContext(context);
             if (
               !filename.endsWith(".geometry.spec.ts") &&
-              !filename.endsWith("-geometry.spec.ts")
+              !filename.endsWith("-geometry.spec.ts") &&
+              !filename.endsWith(
+                "/__fixtures__/require-stable-geometry.fixture.ts",
+              )
             ) {
               return;
             }

@@ -32,3 +32,12 @@ test("accepts the same APIs outside geometry specs", async () => {
     }),
   ).toEqual([]);
 });
+
+test("the executed lint fixture exercises the same rejected APIs", async () => {
+  expect(
+    await lintSingleRule("require-stable-geometry", GEOMETRY_SOURCE, {
+      sourcePath:
+        ".oxlint-plugins/__fixtures__/require-stable-geometry.fixture.ts",
+    }),
+  ).toEqual([1, 2, 3]);
+});
