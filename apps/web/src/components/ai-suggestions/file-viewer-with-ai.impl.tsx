@@ -25,8 +25,8 @@ import {
 import type { DocxEditorRef } from "@stll/folio-react";
 
 import {
-  getCreateDocumentDraftPersistence,
   type CreateDocumentDraftPersistence,
+  getCreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";

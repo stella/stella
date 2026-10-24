@@ -99,6 +99,10 @@ type StackFrameRuntime = { type: "browser" } | { type: "server"; root: string };
 const serverFramePath = (path: string, root: string): string => {
   const terminator = path.search(/[?#]/u);
   const file = terminator === -1 ? path : path.slice(0, terminator);
+  // A literal root prefix does not establish containment across dot segments.
+  if (file.split("/").some((segment) => segment === "." || segment === "..")) {
+    return file.slice(file.lastIndexOf("/") + 1);
+  }
   return file.startsWith(`${root}/`)
     ? file.slice(root.length + 1)
     : file.slice(file.lastIndexOf("/") + 1);

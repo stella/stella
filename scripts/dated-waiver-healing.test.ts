@@ -11,8 +11,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   createPrivateTaskSink,
   DATED_WAIVER_AUTOFIX_LABEL,
-  FIX_TASK_IDENTITY_LABEL,
   EXPIRY_ALERT_LABEL,
+  FIX_TASK_IDENTITY_LABEL,
   probeSourceFingerprint,
   RESOLUTION_POLICY,
   waiverKey,
@@ -22,20 +22,20 @@ import {
   applyHealing,
   armRemoval,
   armRemovalUnlessHeld,
-  disarmRemoval,
   collectProbeReport,
-  readReport,
-  renderHealingFailureSignal,
-  runHealingBoundary,
-  healingWriteNeeded,
+  disarmRemoval,
   executeProbeCommand,
-  redactProbeOutput,
-  renderRemovalEvidence,
+  type HealingActions,
   type HealingEntry,
-  HealingRunError,
   HealingError,
   type HealingFailure,
-  type HealingActions,
+  HealingRunError,
+  healingWriteNeeded,
+  readReport,
+  redactProbeOutput,
+  renderHealingFailureSignal,
+  renderRemovalEvidence,
+  runHealingBoundary,
 } from "./dated-waiver-healing";
 import {
   createProbeBudget,
@@ -44,16 +44,16 @@ import {
   runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
-  type PublishedRemoval,
   listRemovalProposals,
   orphanRemovalProposals,
+  type PublishedRemoval,
   retireRemoval,
 } from "./dated-waiver-publish";
 import {
   collectWaivers,
+  type DatedWaiver,
   dueWaivers,
   RECHECK_INSTRUCTIONS,
-  type DatedWaiver,
 } from "./dated-waivers";
 
 const entry = {

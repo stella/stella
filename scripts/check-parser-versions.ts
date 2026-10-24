@@ -418,15 +418,15 @@ class StaticTree {
       const declaration = `\\b(?:const|let|var)\\s+${name}(?:\\s*:[^=;]+)?\\s*=\\s*`;
       source = source.replace(
         new RegExp(`(${declaration})\\d+\\b`, "u"),
-        "$1<VERSION>",
+        (_, start: string) => `${start}0`,
       );
       source = source.replace(
         new RegExp(`(${declaration}\\{)([^}]*)(\\})`, "u"),
         (_, start: string, properties: string, end: string) =>
-          `${start}${properties.replace(/(:\s*)\d+\b/gu, "$1<VERSION>")}${end}`,
+          `${start}${properties.replace(/(:\s*)\d+\b/gu, (_number, colon: string) => `${colon}0`)}${end}`,
       );
     }
-    return source;
+    return printedCode(file, source);
   }
 
   owners(): SourceOwnersResult {
@@ -568,6 +568,34 @@ const withoutOutputUnchangedMarkers = (source: string): string =>
     .split("\n")
     .filter((line) => !OUTPUT_UNCHANGED.test(line))
     .join("\n");
+
+const NAMED_SPECIFIERS =
+  /^((?:import|export)(?: type)? \{)([^}]*)(\} from )/gmu;
+
+// Layout, comments, types and the order of names inside one import never
+// change what a parser emits, so a formatting-only edit must not demand a
+// version bump. Compare the code the transpiler prints, with named
+// specifiers sorted; statement order still counts. Source it cannot parse
+// compares verbatim, which still demands the bump.
+const printedCode = (file: string, source: string): string => {
+  const printer = file.endsWith("x") ? jsxTranspiler : transpiler;
+  let printed: string;
+  try {
+    printed = printer.transformSync(source);
+  } catch {
+    return source;
+  }
+  return printed.replace(
+    NAMED_SPECIFIERS,
+    (_, open: string, names: string, close: string) =>
+      `${open}${names
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .toSorted()
+        .join(", ")}${close}`,
+  );
+};
 
 const LOCATION_DEPENDENT = /\bimport\.meta\b|\b__dirname\b|\b__filename\b/u;
 const SOURCE_MODULE = /\.[cm]?[jt]sx?$/u;
@@ -761,8 +789,7 @@ export const checkParserVersions = ({
 };
 
 type GitResult =
-  | { type: "ok"; output: Uint8Array }
-  | { type: "failed"; detail: string };
+  { type: "ok"; output: Uint8Array } | { type: "failed"; detail: string };
 
 const git = (args: string[], input?: string): GitResult => {
   const result = Bun.spawnSync(["git", ...args], {
@@ -777,8 +804,7 @@ const git = (args: string[], input?: string): GitResult => {
 };
 
 type ReadGitTreeResult =
-  | { type: "ok"; files: SourceTree }
-  | { type: "failed"; detail: string };
+  { type: "ok"; files: SourceTree } | { type: "failed"; detail: string };
 
 // Read immutable git objects in one batch, without checking out either tree.
 export const readGitTree = (ref: string): ReadGitTreeResult => {

@@ -22,7 +22,6 @@
     "auth-md-spec-check.yml/auth-md-spec-check": "main",
     "marketing-screenshots-update.yml/update": "main",
     "publish-product-media.yml/publish": "main",
-    "docs-source-policy.yml/docs-source-policy": "main",
     "nightly-test.yml/sanctions-real-editions": "main",
     "nightly-test.yml/workspace-replay": "main",
     "nightly-test.yml/full-test-plan": "main",
@@ -33,7 +32,6 @@
     "nightly-test.yml/valkey-suites": "main",
     "nightly-test.yml/smoke-suite": "main",
     "nightly-test.yml/migration-exact-base-upgrade": "main",
-    "nightly-test.yml/report-failure": "main",
     "api-test-memory.yml/measure": "main",
     "api-test-memory.yml/refresh": "main",
     "sync-branch-protection.yml/sync": "main",
@@ -41,6 +39,7 @@
     "nightly-property-test.yml/provider-request-combinations": "main",
     "nightly-property-test.yml/turn-outcome-combinations": "main",
     "nightly-property-test.yml/chat-mutation-matrix": "main",
+    "nightly-property-test.yml/sanctions-properties": "main",
     "nightly-property-test.yml/tanstack-drift": "main",
     "dependency-malware-nightly.yml/dependency-malware-scan": "main",
     "dependency-malware-nightly.yml/report-failure": "main",
@@ -90,6 +89,7 @@
     "typecheck-base.yml/record": "main",
     "deploy-staging.yml/resolve": "main",
     "deploy-staging.yml/staging-health": "main",
+    "deploy-staging.yml/staging-wake": "main",
     "deploy-staging.yml/build-api": "main",
     "deploy-staging.yml/build-web": "main",
     "deploy-staging.yml/promote-staging": "main",
@@ -119,6 +119,10 @@
     "generated-conflicts-publish.yml/publish": "main",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
+    "user-journeys.yml/staging-commit": "main",
+    "user-journeys.yml/staging": "main",
+    "user-journeys.yml/local-stack": "main",
+    "user-journeys.yml/scheduled": "main",
     "provenance-nightly.yml/provenance-update": "main",
     "deploy-landing.yml/scope": "main",
     "deploy-landing.yml/build": "main",
@@ -182,7 +186,8 @@
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
-    "queue-admission.yml/admission": "dispatch-only"
+    "queue-admission.yml/admission": "dispatch-only",
+    "ci-runner-loss-retry.yml/retry": "pr-fast"
   },
   "pushMain": {
     "typecheck-base.yml": {

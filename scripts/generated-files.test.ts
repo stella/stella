@@ -29,13 +29,13 @@ import {
   type ScopeOutput,
 } from "./ci-plan-scope";
 import {
-  GENERATORS,
+  allowedOutputs,
   CI_GENERATED_FILES,
   CI_GENERATED_OUTPUTS,
-  allowedOutputs,
-  GUARD_A_EXCLUSIONS,
   derivedPrerequisites,
+  GENERATORS,
   generatorsForFiles,
+  GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
   runGenerators,
@@ -579,6 +579,11 @@ test("the route generator guard rejects missing script and direct pin", async ()
 });
 
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
+  expect(
+    generatorsForFiles([
+      "packages/api-contract/src/document-version-upload.ts",
+    ]).map(({ id }) => id),
+  ).toContain("cli-registry");
   const requiredIds = [
     "capability-catalog",
     "capability-runtime",
@@ -636,7 +641,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .filter(Boolean);
   const changedPaths = [
     [
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "capability-catalog",
       "capability-runtime",
       "cli-registry",
@@ -685,7 +690,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
 
 test("the planned allowlist is exactly the selected committed output union", () => {
   for (const paths of [
-    ".oxfmtrc.json\n",
+    "bunfig.toml\n",
     "packages/api-contract/src/mcp-tool.ts\n",
     "docs/unrelated.md\n",
   ]) {
@@ -1026,7 +1031,10 @@ test("route tree has one derived owner and a cache producer for every consumer",
   const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
   expect(ignored.exitCode).toBe(0);
   const producer = config.tasks["@stll/web#generate:route-tree"];
-  expect(producer?.outputs).toEqual(["src/routeTree.gen.ts"]);
+  expect(producer?.outputs).toEqual([
+    "src/routeTree.gen.ts",
+    "src/route-templates.gen.ts",
+  ]);
   expect(
     generationInputs("generate:route-tree")
       .map((input) =>
@@ -1148,6 +1156,7 @@ test("web messages have one derived owner and are generated wherever the route t
 
 // Runs in a copy of the tracked files the checks read, never by deleting the
 // checkout's declarations: other test files read them concurrently.
+// Measured p95 is 19.8 s; this test must run the real web catalog checker in that copy.
 test("web catalog checks pass without the derived message declarations", async () => {
   const repo = new URL("..", import.meta.url).pathname;
   const tracked = Bun.spawnSync(
@@ -1203,7 +1212,7 @@ test("web catalog checks pass without the derived message declarations", async (
   } finally {
     await rm(copy, { recursive: true, force: true });
   }
-}, 60_000);
+}, 40_000);
 
 test("long optional runs accept dispatch only", () => {
   for (const file of [

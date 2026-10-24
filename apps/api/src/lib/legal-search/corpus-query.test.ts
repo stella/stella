@@ -8,12 +8,12 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
-  CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
-  type CorpusStemming,
-  type CorpusFreeTextOptions,
+  CORPUS_QUERY_LEAF_BUDGET,
   corpusDecisionTypeClause,
   corpusFreeTextClause,
+  type CorpusFreeTextOptions,
+  type CorpusStemming,
   type CorpusTermExpander,
   partitionCorpusQueryTokens,
   quoteCorpusValue,

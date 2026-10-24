@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
+import * as posthogSdk from "posthog-js";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
@@ -9,6 +10,7 @@ import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/env";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { APIError } from "@/lib/errors/api";
@@ -31,8 +33,7 @@ type PostHogInitOptions = {
   capture_pageleave: boolean;
   capture_pageview: boolean;
   capture_performance:
-    | boolean
-    | { network_timing: boolean; web_vitals: boolean };
+    boolean | { network_timing: boolean; web_vitals: boolean };
   disable_persistence: boolean;
   disable_session_recording: boolean;
   mask_all_text: boolean;
@@ -80,7 +81,7 @@ const resetMock = mock((options?: ResetOptions) => {
 });
 const groupMock = mock((_type: string, _key: string) => undefined);
 
-const posthogMock = {
+const posthogMock = Object.assign(new posthogSdk.PostHog(), {
   capture: captureMock,
   captureException: captureExceptionMock,
   get_distinct_id: getDistinctIdMock,
@@ -90,7 +91,7 @@ const posthogMock = {
   _isIdentified: isIdentifiedMock,
   register: registerMock,
   reset: resetMock,
-};
+});
 
 Object.defineProperty(globalThis, "__APP_VERSION__", {
   configurable: true,
@@ -102,6 +103,7 @@ Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
 });
 
 void mock.module("posthog-js", () => ({
+  ...posthogSdk,
   posthog: posthogMock,
 }));
 
@@ -133,6 +135,213 @@ describe("PostHog browser analytics adapter", () => {
     registerMock.mockClear();
     resetMock.mockClear();
     groupMock.mockClear();
+  });
+
+  test("captures hang diagnostics without storage values or SDK page context", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+      routeTemplates: ["/chat/$threadId"],
+    });
+    const diagnostic = {
+      routeTemplate: "/chat/$threadId",
+      phase: "boot",
+      build: "1.2.3-abc123",
+      restoredState: [{ key: "stella:inspector-state", bytes: 123 }],
+    } as const;
+    analytics.capturePageHangSuspected(diagnostic);
+    expect(captureMock).toHaveBeenCalledWith(
+      WEB_ANALYTICS_EVENTS.pageHangSuspected,
+      diagnostic,
+    );
+    const result = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.pageHangSuspected,
+      properties: {
+        ...diagnostic,
+        token: "phc_test",
+        distinct_id: "anonymous",
+        $current_url: "https://staging.stll.app/chat/private-id",
+        title: "Privileged title",
+        restoredState: [
+          {
+            key: "stella:inspector-state",
+            bytes: 123,
+            value: "Privileged content",
+          },
+          { key: "private-account-id", bytes: 42 },
+          { key: "stella:inspector-width", bytes: -1 },
+        ],
+      },
+    });
+    expect(result?.properties).toEqual({
+      ...diagnostic,
+      token: "phc_test",
+      distinct_id: "anonymous",
+    });
+    expect(JSON.stringify(result)).not.toContain("Privileged");
+    for (const invalid of [
+      { phase: "unknown" },
+      { build: "private build text" },
+      { routeTemplate: "/chat?id=private" },
+      { routeTemplate: "/chat/private-thread-id" },
+      { routeTemplate: "/chat/$chatId" },
+      { routeTemplate: "https://staging.stll.app/chat/private-thread-id" },
+    ]) {
+      expect(
+        initOptions?.before_send({
+          event: WEB_ANALYTICS_EVENTS.pageHangSuspected,
+          properties: { ...diagnostic, ...invalid },
+        }),
+      ).toBeNull();
+    }
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.pageHangSuspected,
+        properties: { ...diagnostic, routeTemplate: "unknown" },
+      })?.properties?.["routeTemplate"],
+    ).toBe("unknown");
+  });
+
+  test("hang diagnostics accept only the route templates supplied by their router", () => {
+    createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+      routeTemplates: ["/isolated/$routeId"],
+    });
+    for (const routeTemplate of ["/isolated/$routeId", "/chat/$threadId"]) {
+      const result = initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.pageHangSuspected,
+        properties: {
+          routeTemplate,
+          phase: "session",
+          build: "test",
+          restoredState: [],
+        },
+      });
+      if (routeTemplate === "/isolated/$routeId") {
+        expect(result?.properties?.["routeTemplate"]).toBe(routeTemplate);
+      } else {
+        expect(result).toBeNull();
+      }
+    }
+  });
+
+  test("allows long animation frames with bounded static script attribution only", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const diagnostic = {
+      duration: 1200,
+      scripts: [
+        {
+          invoker: "Window.requestAnimationFrame",
+          sourceURL: `${env.VITE_PUBLIC_APP_URL}/assets/index-Abc123.js?token=secret#private`,
+          sourceFunctionName: "PrivilegedDocumentName",
+        },
+      ],
+    };
+    analytics.captureLongAnimationFrame(diagnostic);
+    expect(captureMock).toHaveBeenCalledWith(
+      WEB_ANALYTICS_EVENTS.longAnimationFrame,
+      diagnostic,
+    );
+    const event = {
+      event: WEB_ANALYTICS_EVENTS.longAnimationFrame,
+      properties: {
+        ...diagnostic,
+        $current_url: "https://staging.stll.app/private",
+        scripts: [
+          ...diagnostic.scripts,
+          {
+            invoker: "DIV#privileged.onclick",
+            sourceURL: `${env.VITE_PUBLIC_APP_URL}/assets/other-Abc123.js`,
+            sourceFunctionName: "PrivateName",
+          },
+          {
+            invoker: "Window.setTimeout",
+            sourceURL: "https://external.test/assets/index.js",
+            sourceFunctionName: "external",
+          },
+          {
+            invoker: "Window.setTimeout",
+            sourceURL: `${env.VITE_PUBLIC_APP_URL}/files/private-id`,
+            sourceFunctionName: "private",
+          },
+        ],
+      },
+    };
+    expect(initOptions?.before_send(event)?.properties).toEqual({
+      duration: 1200,
+      scripts: [
+        {
+          invoker: "Window.requestAnimationFrame",
+          sourceURL: `${env.VITE_PUBLIC_APP_URL}/assets/index-Abc123.js`,
+          sourceFunctionName: "?",
+        },
+        {
+          invoker: "?",
+          sourceURL: `${env.VITE_PUBLIC_APP_URL}/assets/other-Abc123.js`,
+          sourceFunctionName: "?",
+        },
+      ],
+    });
+    for (const duration of [0, 999, 1000, Number.NaN, Infinity]) {
+      expect(
+        initOptions?.before_send({
+          ...event,
+          properties: { ...event.properties, duration },
+        }),
+      ).toBeNull();
+    }
+    expect(
+      initOptions?.before_send({
+        ...event,
+        properties: {
+          ...event.properties,
+          scripts: Array.from({ length: 50 }, () => diagnostic.scripts.at(0)),
+        },
+      })?.properties?.["scripts"],
+    ).toHaveLength(10);
+  });
+
+  test("retains first-party frame attribution when the configured app URL includes a slash or path", () => {
+    for (const appUrl of [
+      "https://staging.stll.app/",
+      "https://staging.stll.app/app/",
+    ]) {
+      const result = sanitizeHangDiagnosticEvent({
+        event: {
+          event: WEB_ANALYTICS_EVENTS.longAnimationFrame,
+          uuid: "normalized-origin-frame",
+          properties: {
+            duration: 1200,
+            scripts: [
+              {
+                invoker: "Window.requestAnimationFrame",
+                sourceURL:
+                  "https://staging.stll.app/assets/index-Abc123.js?secret=value",
+                sourceFunctionName: "private",
+              },
+              {
+                invoker: "Window.setTimeout",
+                sourceURL: "https://external.test/assets/index-Abc123.js",
+                sourceFunctionName: "private",
+              },
+            ],
+          },
+        },
+        appUrl,
+        routeTemplates: [],
+      });
+      expect(result?.properties["scripts"]).toEqual([
+        {
+          invoker: "Window.requestAnimationFrame",
+          sourceURL: "https://staging.stll.app/assets/index-Abc123.js",
+          sourceFunctionName: "?",
+        },
+      ]);
+    }
   });
 
   test("structurally disables interaction tracking features", () => {
@@ -214,14 +423,16 @@ describe("PostHog browser analytics adapter", () => {
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.pageLeft,
       properties: {
-        $current_url: "https://app.example.test/workspaces/ws_1",
+        $current_url: "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $pathname: "/workspaces/ws_1",
         $host: "app.example.test",
         $prev_pageview_pathname: "/workspaces/ws_1",
-        $session_entry_url: "https://app.example.test/workspaces/ws_1",
+        $session_entry_url:
+          "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $session_entry_pathname: "/workspaces/ws_1",
         $referrer: "https://app.example.test/workspaces/ws_1",
-        $session_entry_referrer: "https://www.google.com/",
+        $session_entry_referrer:
+          "https://www.google.com/?sh=sh1_sample#sh=sh1_sample",
         $prev_pageview_duration: 12,
         title: "Client Smith v Example",
         $session_id: "session-1",
@@ -860,6 +1071,27 @@ describe("PostHog browser analytics adapter", () => {
     );
   });
 
+  test("captureError on the server strips directories from dot-segment frames", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const error = new TypeError("Privileged document name");
+    error.stack = [
+      `TypeError: ${error.message}`,
+      `    at renderMatter (${process.cwd()}/../private-client/render.tsx?token=private#client:10:15)`,
+    ].join("\n");
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(
+      ["TypeError:", "    at renderMatter (render.tsx:10:15)"].join("\n"),
+    );
+  });
+
   // Frame syntax is engine-specific, so the redaction has to hold for each
   // one: every frame survives, and the header carrying the message does not.
   const ENGINE_FRAMES = {
@@ -1032,6 +1264,16 @@ describe("PostHog browser analytics adapter", () => {
         "    at renderMatter (/srv/checkout-client-smith/stella/apps/web/src/routes/matter.tsx:10:15)",
       safeFrame: "    at renderMatter (matter.tsx:10:15)",
     },
+    aboveAppRoot: {
+      frame:
+        "    at renderMatter (/app/apps/web/../private-client/render.tsx:10:15)",
+      safeFrame: "    at renderMatter (render.tsx:10:15)",
+    },
+    insideDotSegment: {
+      frame:
+        "    at renderMatter (/app/apps/web/src/./private-client/render.tsx:10:15)",
+      safeFrame: "    at renderMatter (render.tsx:10:15)",
+    },
     query: {
       frame:
         "    at renderMatter (/app/apps/web/src/routes/matter.tsx?matter=private#client:10:15)",
@@ -1061,6 +1303,70 @@ describe("PostHog browser analytics adapter", () => {
       ).toBeUndefined();
     },
   );
+
+  test("server dot-segment frames retain only the basename", async () => {
+    await assertProperty(
+      "server dot-segment frames retain only the basename",
+      fc.property(
+        fc.array(fc.constantFrom("src", "routes", "dist", "server")),
+        fc.constantFrom(".", ".."),
+        fc.array(fc.constantFrom("private-client", "private-matter")),
+        fc.constantFrom("render.tsx", "provider-B5cnvp1A.js"),
+        fc.constantFrom(
+          "",
+          "?token=private",
+          "#client",
+          "?token=private#client",
+        ),
+        fc.constantFrom("v8", "callsite"),
+        (
+          directories,
+          dotSegment,
+          privateDirectories,
+          basename,
+          metadata,
+          syntax,
+        ) => {
+          const file = [
+            SERVER_RUNTIME.root,
+            ...directories,
+            dotSegment,
+            "private-client",
+            ...privateDirectories,
+            basename,
+          ].join("/");
+          const frame =
+            syntax === "v8"
+              ? `    at renderMatter (${file}${metadata}:10:15)`
+              : `renderMatter@${file}${metadata}:10:15`;
+          const stack =
+            syntax === "v8"
+              ? ["TypeError: Privileged document name", frame].join("\n")
+              : frame;
+          const safeFrame =
+            syntax === "v8"
+              ? `    at renderMatter (${basename}:10:15)`
+              : `renderMatter@${basename}:10:15`;
+          expect(
+            redactTelemetryStack({
+              errorType: "TypeError",
+              runtime: SERVER_RUNTIME,
+              stack,
+              syntax,
+            }),
+          ).toBe(["TypeError:", safeFrame].join("\n"));
+          expect(
+            redactTelemetryStack({
+              errorType: "TypeError",
+              runtime: BROWSER_RUNTIME,
+              stack,
+              syntax,
+            }),
+          ).toBeUndefined();
+        },
+      ),
+    );
+  });
 
   test("server stack redaction still drops locations that are not files or web URLs", () => {
     expect(

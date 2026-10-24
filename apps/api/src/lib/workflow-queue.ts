@@ -61,8 +61,8 @@ import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtim
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import {
-  brandPersistedExtractionRunId,
   brandPersistedEntityId,
+  brandPersistedExtractionRunId,
   brandPersistedOrganizationId,
   brandPersistedPropertyId,
   brandPersistedUserId,
@@ -100,10 +100,10 @@ import type { OrphanCellsDatabase } from "@/api/lib/workflow/orphan-cells";
 import { reconcilePendingCells } from "@/api/lib/workflow/orphan-recovery";
 import { settle } from "@/api/lib/workflow/owned-state";
 import {
-  workflowQueueClassForServiceTier,
   WORKFLOW_QUEUE_NAMES,
   WORKFLOW_WORKER_SPECS,
   type WorkflowQueueClass,
+  workflowQueueClassForServiceTier,
   type WorkflowWorkerSpec,
 } from "@/api/lib/workflow/queue-topology";
 import { getRootWorkflowRunStateStore } from "@/api/lib/workflow/root-run-state-store";
