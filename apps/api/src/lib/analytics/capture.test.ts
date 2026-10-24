@@ -696,7 +696,7 @@ test("capture preserves finite dimensions when fingerprint metadata is unreadabl
 
 test("conversion refusal fingerprints depend on kind rather than variable details", () => {
   assertProperty(
-    "conversion-refusal-fingerprints-ignore-payload",
+    "conversion refusal fingerprints depend on kind rather than variable details",
     fc.property(fc.string(), (detail) => {
       captured.length = 0;
       resetCaptureWindows();
