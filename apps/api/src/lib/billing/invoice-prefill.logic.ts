@@ -114,6 +114,43 @@ export const isWellFormedEuVatId = (vatId: string | null): boolean => {
 };
 
 /**
+ * `isWellFormedEuVatId` as a PostgreSQL regular expression over the same
+ * compacted value (`EU_VAT_ID_SQL_COMPACT`), derived from the one format map
+ * so the repair that moves stored rows cannot drift from the rule.
+ */
+export const EU_VAT_ID_SQL_PATTERN = `^(?:${[...EU_VAT_ID_FORMATS]
+  .map(
+    ([prefix, format]) =>
+      `${prefix}(?:${format.source.replace(/^\^/u, "").replace(/\$$/u, "")})`,
+  )
+  .join("|")})$`;
+
+/** `compactVatId` in SQL, for a column named by `column`. */
+export const EU_VAT_ID_SQL_COMPACT = (column: string) =>
+  `upper(regexp_replace(${column}, '[[:space:].-]', '', 'g'))`;
+
+type ContactTaxIdentifiers = {
+  taxId: string | null;
+  vatId: string | null;
+};
+
+/**
+ * A contact's tax and VAT IDs as invoicing reads them and every writer stores
+ * them: an EU VAT number in the tax ID field while the VAT ID is empty is the
+ * VAT ID. Contacts written before the two fields were separated hold it there
+ * until the contact VAT ID repair moves it.
+ */
+export const contactTaxIdentifiers = ({
+  taxId,
+  vatId,
+}: ContactTaxIdentifiers): ContactTaxIdentifiers =>
+  (vatId === null || vatId.trim() === "") &&
+  taxId !== null &&
+  isWellFormedEuVatId(taxId)
+    ? { taxId: null, vatId: taxId }
+    : { taxId, vatId };
+
+/**
  * The number part of business tax IDs outside the EU whose syntax is fixed;
  * any other country needs at least five characters, four of them digits.
  */
@@ -363,11 +400,15 @@ export const buyerSnapshotFromContact = (
         addresses?.find((entry) => entry.isPrimary) ??
         addresses?.at(0))
       : contact.billingAddress;
+  const identifiers = contactTaxIdentifiers({
+    taxId: contact.taxId,
+    vatId: contact.vatId,
+  });
   return {
     buyerName: text(contact.displayName, 512),
     buyerRegistrationId: text(contact.registrationNumber, 64),
-    buyerTaxId: text(contact.taxId, 64),
-    buyerVatId: text(contact.vatId, 64),
+    buyerTaxId: text(identifiers.taxId, 64),
+    buyerVatId: text(identifiers.vatId, 64),
     buyerAddressLine1: text(address?.line1, 512),
     buyerAddressLine2: text(address?.line2, 512),
     buyerCity: text(address?.city, 256),

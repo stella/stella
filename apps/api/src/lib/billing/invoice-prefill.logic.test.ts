@@ -5,7 +5,9 @@ import type { VatTreatment } from "@stll/invoicing";
 import {
   addressCountry,
   buyerSnapshotFromContact,
+  contactTaxIdentifiers,
   decideInvoiceVat,
+  EU_VAT_ID_SQL_PATTERN,
   euVatPrefix,
   invoiceDueDays,
   isWellFormedEuVatId,
@@ -379,6 +381,86 @@ describe("buyer snapshot", () => {
     });
     expect(snapshot.buyerName).toHaveLength(512);
     expect(snapshot.buyerAddressLine1).toBe("Office Street 1");
+  });
+});
+
+describe("contact tax and VAT IDs", () => {
+  test("an EU VAT number in tax_id with no vat_id reads as the VAT ID", () => {
+    // A contact stored before the fields were separated, not yet repaired.
+    expect(
+      contactTaxIdentifiers({ taxId: "DE298765432", vatId: null }),
+    ).toEqual({ taxId: null, vatId: "DE298765432" });
+    expect(
+      contactTaxIdentifiers({ taxId: "sk 2020 123 456", vatId: "" }),
+    ).toEqual({ taxId: null, vatId: "sk 2020 123 456" });
+  });
+
+  test("a stored VAT ID and national tax numbers stay where they are", () => {
+    expect(
+      contactTaxIdentifiers({ taxId: "DE298765432", vatId: "DE111111111" }),
+    ).toEqual({ taxId: "DE298765432", vatId: "DE111111111" });
+    for (const taxId of ["2020123456", "HRB123456", "GB123456789", "SK12"]) {
+      expect(contactTaxIdentifiers({ taxId, vatId: null })).toEqual({
+        taxId,
+        vatId: null,
+      });
+    }
+  });
+
+  test("an un-repaired contact is still reverse charged from its snapshot", () => {
+    const snapshot = buyerSnapshotFromContact({
+      displayName: "Musterkunde GmbH",
+      registrationNumber: null,
+      taxId: "DE298765432",
+      vatId: null,
+      vatPayer: true,
+      billingAddress: { line1: "Hauptstraße 1", city: "Berlin", country: "DE" },
+      addresses: [],
+    });
+    expect(snapshot).toMatchObject({
+      buyerTaxId: null,
+      buyerVatId: "DE298765432",
+    });
+    expect(
+      decideInvoiceVat({
+        seller: { country: null, vatId: "CZ12345678", vatPayer: true },
+        buyerVatId: snapshot.buyerVatId,
+        buyerVatPayer: true,
+        buyerCountry: "DE",
+        standardRateBps: 2100,
+      }).vatTreatment,
+    ).toBe("reverse_charge");
+  });
+
+  test("the repair's SQL pattern accepts exactly what the rule accepts", () => {
+    const sql = new RegExp(EU_VAT_ID_SQL_PATTERN, "u");
+    const compact = (value: string) =>
+      value.replaceAll(/[\s.-]/gu, "").toUpperCase();
+    for (const value of [
+      "SK2020123456",
+      "CZ12345678",
+      "CZ1234567890",
+      "DE123456789",
+      "ATU12345678",
+      "FRXX123456789",
+      "NL123456789B01",
+      "ESX1234567X",
+      "EL123456789",
+      "XI123456789",
+      "IE1234567WA",
+      "sk 2020 123 456",
+      "HRB123456",
+      "SK12",
+      "CZ1234567",
+      "2020123456",
+      "12345678",
+      "HRA 98765",
+      "GB123456789",
+      "US-EIN-12-3456789",
+      "DEAB",
+    ]) {
+      expect(sql.test(compact(value))).toBe(isWellFormedEuVatId(value));
+    }
   });
 });
 

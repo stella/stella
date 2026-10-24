@@ -27,6 +27,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
@@ -155,8 +156,10 @@ export const insertContactRow = async ({
       tags: body.tags,
       color: body.color,
       registrationNumber: body.registrationNumber,
-      taxId: body.taxId,
-      vatId: body.vatId,
+      ...contactTaxIdentifiers({
+        taxId: body.taxId ?? null,
+        vatId: body.vatId ?? null,
+      }),
       vatPayer: body.vatPayer,
       bankAccounts: body.bankAccounts,
       billingAddress: body.billingAddress,

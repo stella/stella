@@ -655,11 +655,11 @@ describe("imported tax identifiers", () => {
     // number, or invoice prefill would charge domestic VAT instead of
     // reversing the charge.
     expect(importedTaxIdentifiers("DE298765432", "none")).toEqual({
-      taxId: undefined,
+      taxId: null,
       vatId: "DE298765432",
     });
     expect(importedTaxIdentifiers("SK2020123456", "none")).toEqual({
-      taxId: undefined,
+      taxId: null,
       vatId: "SK2020123456",
     });
   });
@@ -668,19 +668,19 @@ describe("imported tax identifiers", () => {
     // A Slovak DIČ has no prefix; a register number is not a VAT number.
     expect(importedTaxIdentifiers("2020123456", "none")).toEqual({
       taxId: "2020123456",
-      vatId: undefined,
+      vatId: null,
     });
     expect(importedTaxIdentifiers("HRB123456", "none")).toEqual({
       taxId: "HRB123456",
-      vatId: undefined,
+      vatId: null,
     });
     expect(importedTaxIdentifiers("12345678909", "br_cpf_cnpj")).toEqual({
       taxId: "12345678909",
-      vatId: undefined,
+      vatId: null,
     });
     expect(importedTaxIdentifiers(undefined, "none")).toEqual({
-      taxId: undefined,
-      vatId: undefined,
+      taxId: null,
+      vatId: null,
     });
   });
 });
