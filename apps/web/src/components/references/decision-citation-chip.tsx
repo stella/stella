@@ -47,6 +47,12 @@ type DecisionCitationChipProps = {
    * badge that repeats the court the text just named.
    */
   label?: ReactNode;
+  /**
+   * The citing text's own words for the decision, drawn ahead of the badge
+   * inside the same trigger, so the whole reference opens the preview and
+   * not only its badge.
+   */
+  citingText?: ReactNode;
 };
 
 const DecisionCitationLabel = ({
@@ -109,6 +115,21 @@ const DecisionCitationLabel = ({
   }
 };
 
+/** How the trigger sits in its line, by what it draws. */
+const triggerShapeClassName = ({
+  label,
+  citingText,
+}: Pick<DecisionCitationChipProps, "label" | "citingText">): string => {
+  if (label !== undefined) {
+    return "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150";
+  }
+  if (citingText !== undefined) {
+    // Inline, so a long reference still wraps with the prose.
+    return "rounded-sm";
+  }
+  return "inline-flex rounded align-baseline";
+};
+
 /** The same decision annotation in answers, provenance cards and reader text. */
 export const DecisionCitationChip = ({
   decision,
@@ -118,6 +139,7 @@ export const DecisionCitationChip = ({
   paragraphNumber = null,
   onOpen,
   label,
+  citingText,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -188,9 +210,7 @@ export const DecisionCitationChip = ({
           <a
             className={cn(
               "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-              label === undefined
-                ? "inline-flex rounded align-baseline"
-                : "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150",
+              triggerShapeClassName({ label, citingText }),
             )}
             href={sanitizeHref(readerHref)}
             ref={triggerRef}
@@ -199,11 +219,14 @@ export const DecisionCitationChip = ({
         tooltip={false}
       >
         {label === undefined ? (
-          <DecisionCitationLabel
-            decision={decision}
-            presentation={presentation}
-            paragraphNumber={paragraph}
-          />
+          <>
+            {citingText !== undefined && <>{citingText} </>}
+            <DecisionCitationLabel
+              decision={decision}
+              presentation={presentation}
+              paragraphNumber={paragraph}
+            />
+          </>
         ) : (
           <>
             {label}
@@ -242,7 +265,7 @@ export const DecisionCitationChip = ({
             <span className="text-muted-foreground text-xs">{date}</span>
           </div>
         )}
-        {preview === undefined && passage !== undefined && (
+        {passage !== undefined && (
           <ScrollArea axis="vertical" className="max-h-64">
             <div
               className="text-sm wrap-anywhere whitespace-pre-wrap"

@@ -45,7 +45,7 @@ export type ShortcutRejection =
   | { reason: "windowsKeyReserved" }
   | { reason: "taken" };
 
-type ShortcutRegistration = "active" | "paused" | "unavailable";
+type ShortcutRegistration = "active" | "paused" | "unavailable" | "managed";
 
 export type ClipboardShortcutSnapshot = {
   defaultKeys: ShortcutKeys;
@@ -54,8 +54,7 @@ export type ClipboardShortcutSnapshot = {
 };
 
 export type ShortcutCheck =
-  | { status: "valid" }
-  | { rejection: ShortcutRejection; status: "rejected" };
+  { status: "valid" } | { rejection: ShortcutRejection; status: "rejected" };
 
 export type ShortcutUpdate =
   | { snapshot: ClipboardShortcutSnapshot; status: "saved" }
@@ -284,7 +283,8 @@ export const isClipboardShortcutSnapshot = (
   isShortcutKeys(value["defaultKeys"]) &&
   (value["registration"] === "active" ||
     value["registration"] === "paused" ||
-    value["registration"] === "unavailable");
+    value["registration"] === "unavailable" ||
+    value["registration"] === "managed");
 
 export const isShortcutCheck = (value: unknown): value is ShortcutCheck =>
   isRecord(value) &&

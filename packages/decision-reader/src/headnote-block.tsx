@@ -22,8 +22,7 @@ type CourtChip = { abbreviation: string; tier: CourtTier };
  * boolean that can be set with the first.
  */
 export type HeadnoteOrigin =
-  | { type: "ai" }
-  | { type: "court"; chip: CourtChip | null };
+  { type: "ai" } | { type: "court"; chip: CourtChip | null };
 
 /**
  * The mark itself. The court's chip stands beside the court's name, which the
@@ -32,7 +31,7 @@ export type HeadnoteOrigin =
  * a chip for it. The model's mark is the shared AI label, which opens what
  * the reader should know about text the court did not write.
  */
-export const HeadnoteOriginLabel = ({ origin }: { origin: HeadnoteOrigin }) => {
+const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
   const messages = useReaderMessages();
 
   switch (origin.type) {
@@ -104,7 +103,7 @@ export const HeadnoteBlock = ({
         data-reader-chrome=""
         data-slot="headnote-origin"
       >
-        <HeadnoteOriginLabel origin={origin} />
+        <OriginMark origin={origin} />
       </span>
       <details
         data-reader-chrome={origin.type === "court" ? undefined : ""}

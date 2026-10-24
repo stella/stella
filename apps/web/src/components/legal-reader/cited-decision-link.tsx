@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -9,7 +10,10 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
-import type { CitedDecisionTarget as ReaderCitedDecisionTarget } from "@stll/decision-reader/reader-types";
+import type {
+  CitationAnchorSource,
+  CitedDecisionTarget as ReaderCitedDecisionTarget,
+} from "@stll/decision-reader/reader-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { useIsMobile } from "@stll/ui/use-mobile";
@@ -29,11 +33,31 @@ import {
   CITATION_TREATMENT_LABEL,
 } from "@/features/case-law/citation-treatment";
 import type { CitationTreatment } from "@/features/case-law/citation-treatment";
+import {
+  CitationPassageQuote,
+  useCitationPassage,
+} from "@/features/case-law/components/case-viewer/citation-passage-preview";
 import { decisionCardSummaryOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import { useQueryView } from "@/lib/use-query-view";
+
+/** Where the citing text names the decision, when a passage can be quoted. */
+type CitedDecisionPassage =
+  | {
+      type: "citation";
+      citation: CitationAnchorSource;
+      /** The decision whose text holds the citation. */
+      textDecisionId: string;
+    }
+  | { type: "text"; text: string };
+
+type CitedDecisionPreviewProps = {
+  passage?: CitedDecisionPassage | undefined;
+  /** How the citing text treats the cited decision. */
+  treatment?: CitationTreatment | undefined;
+};
 
 type CitedDecisionTarget = Pick<
   ReaderCitedDecisionTarget,
@@ -49,28 +73,115 @@ type CitedDecisionTarget = Pick<
   | "slug"
 >;
 
-type CitedDecisionLinkProps = {
+type CitedDecisionChipProps = CitedDecisionPreviewProps & {
   decision: CitedDecisionTarget;
-  /** Retained for navigation to the words selected in a generated answer. */
-  passage?: { type: "text"; text: string } | { type: "citation" } | undefined;
-  treatment?: CitationTreatment | undefined;
   presentation?: DecisionCitationPresentation | undefined;
+  /**
+   * Text that already names the decision, drawn as the trigger itself in
+   * place of a court badge that would repeat it.
+   */
+  label?: ReactNode;
+  /** The citing text's own words, opened together with the court badge. */
+  citingText?: ReactNode;
+};
+
+type CitedDecisionLinkProps = Omit<
+  CitedDecisionChipProps,
+  "label" | "citingText"
+> & {
   children: ReactNode;
   className?: string | undefined;
 };
 
 /**
- * The source wording stays in the document; its court chip opens the shared
- * preview and keeps the inspector navigation action beside the source text.
+ * What the citing text says about a cited decision: the passage, how it
+ * treats the decision. Metadata and navigation belong to the shared chip.
+ * Reading a citation and following it are separate gestures, so weighing one
+ * never costs the reader the text they are in.
+ */
+export const CitedDecisionPreview = ({
+  passage,
+  treatment,
+}: CitedDecisionPreviewProps) => {
+  const t = useTranslations();
+  let quoted: ReactNode;
+  if (passage !== undefined) {
+    switch (passage.type) {
+      case "citation":
+        quoted = <CitingPassage passage={passage} />;
+        break;
+      case "text":
+        quoted = <span dir="auto">{passage.text}</span>;
+        break;
+      default:
+        passage satisfies never;
+        return panic("Unhandled cited decision passage");
+    }
+  }
+
+  return (
+    <>
+      {treatment !== undefined && (
+        <span className="text-muted-foreground flex items-center gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))]">
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 rounded-full",
+              CITATION_TREATMENT_DOT[treatment],
+            )}
+          />
+          {t(CITATION_TREATMENT_LABEL[treatment])}
+        </span>
+      )}
+      {quoted}
+    </>
+  );
+};
+
+/**
+ * Its own component so the read that finds the passage starts when the
+ * preview opens, not when the citation is rendered: a decision's text names
+ * dozens of others, and none of those reads is worth paying up front.
+ */
+const CitingPassage = ({
+  passage,
+}: {
+  passage: Extract<CitedDecisionPassage, { type: "citation" }>;
+}) => {
+  const read = useCitationPassage(passage);
+
+  return <CitationPassageQuote read={read} />;
+};
+
+/**
+ * The source wording stays in the document and, together with its court
+ * chip, opens the shared preview: the reader points at the reference they
+ * are reading, not at a badge beside it.
  */
 export const CitedDecisionLink = ({
   children,
   className,
+  ...chip
+}: CitedDecisionLinkProps) => (
+  <CitedDecisionChip
+    {...chip}
+    citingText={<span className={className}>{children}</span>}
+    label={undefined}
+  />
+);
+
+/**
+ * The shared decision chip, wired to open the decision beside the text on a
+ * wide screen and in the main view on a narrow one.
+ */
+export const CitedDecisionChip = ({
   decision,
+  label,
+  citingText,
   passage,
   treatment,
   presentation,
-}: CitedDecisionLinkProps) => {
+}: CitedDecisionChipProps) => {
   const isMobile = useIsMobile();
   const inspector = useInspectorView();
   const navigate = useNavigate();
@@ -114,38 +225,40 @@ export const CitedDecisionLink = ({
   };
 
   return (
-    <>
-      <span className={className}>{children}</span>{" "}
-      <DecisionCitationChip
-        decision={{
-          decisionId: decision.id,
-          court: decision.court,
-          courtShortCode: decisionCitationCourtLabel(decision),
-          caseNumber: decision.caseNumber,
-          decisionDate: decision.decisionDate,
-          readerUrl,
-          originalUrl: decision.sourceUrl ?? null,
-        }}
-        onOpen={openDecision}
-        preview={
-          <CitedDecisionCard decisionId={decision.id} treatment={treatment} />
-        }
-        presentation={presentation}
-      />
-    </>
+    <DecisionCitationChip
+      decision={{
+        decisionId: decision.id,
+        court: decision.court,
+        courtShortCode: decisionCitationCourtLabel(decision),
+        caseNumber: decision.caseNumber,
+        decisionDate: decision.decisionDate,
+        readerUrl,
+        originalUrl: decision.sourceUrl ?? null,
+      }}
+      label={label}
+      citingText={citingText}
+      onOpen={openDecision}
+      preview={<CitedDecisionCard decision={decision} treatment={treatment} />}
+      passage={
+        passage !== undefined ? (
+          <CitedDecisionPreview passage={passage} />
+        ) : undefined
+      }
+      presentation={presentation}
+    />
   );
 };
 
 export const CitedDecisionCard = ({
-  decisionId,
+  decision: knownDecision,
   treatment,
 }: {
-  decisionId: string;
+  decision: Pick<CitedDecisionTarget, "id" | "court" | "caseNumber">;
   treatment: CitationTreatment | undefined;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const read = useQuery(decisionCardSummaryOptions(decisionId));
+  const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
   const view = useQueryView(read);
 
   if (view.type === "pending") {
@@ -158,7 +271,17 @@ export const CitedDecisionCard = ({
     );
   }
   if (view.type !== "items") {
-    return <QueryViewFeedback view={view} />;
+    return (
+      <div className="flex flex-col gap-2">
+        <BidiText as="div" className="text-sm font-medium">
+          {knownDecision.court}
+        </BidiText>
+        <BidiText as="div" className="text-sm">
+          {knownDecision.caseNumber}
+        </BidiText>
+        <QueryViewFeedback view={view} />
+      </div>
+    );
   }
 
   const decision = view.items;

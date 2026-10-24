@@ -1,9 +1,6 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { TSchema } from "elysia";
 
-import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -15,7 +12,6 @@ import {
   courtPresentation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
-import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -23,27 +19,8 @@ import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
-import { tSafeId } from "@/api/lib/custom-schema";
-import {
-  boundedString,
-  nullableBoundedString,
-} from "@/api/lib/search/response-text-bounds";
 
-export const decisionSummaryResponseSchema = t.Object(
-  {
-    id: tSafeId("caseLawDecision"),
-    caseNumber: boundedString(1024),
-    court: boundedString(2048),
-    courtAbbreviation: nullableBoundedString(512),
-    courtTier: t.UnionEnum(COURT_TIER_LABELS),
-    decisionDate: nullableBoundedString(128),
-    decisionType: nullableBoundedString(512),
-    headnote: decisionHeadnotePreviewSchema,
-    citationCount: t.Number(),
-    publication: nullableBoundedString(2048),
-  } satisfies Record<keyof CaseLawDecisionSummary, TSchema>,
-  { additionalProperties: false },
-);
+import { projectDecisionSummary } from "./summary-response";
 
 /** A bounded, stored-only projection for citation cards. */
 export const readDecisionSummary = async (
@@ -96,7 +73,7 @@ export const readDecisionSummary = async (
     return panic("Gated case-law decision disappeared during summary read");
   }
   const presentation = courtPresentation(courtWeights, decision);
-  return {
+  return projectDecisionSummary({
     id: decision.id,
     caseNumber: decision.caseNumber,
     court: decision.court,
@@ -110,5 +87,5 @@ export const readDecisionSummary = async (
     }),
     citationCount: decision.citationCount,
     publication: publication?.value ?? null,
-  };
+  });
 };

@@ -32,7 +32,9 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           execute: async (statement, parameters = []) => {
             await connection.unsafe(statement, [...parameters]);
           },
-          release: () => connection.release(),
+          release: async () => {
+            await connection.release();
+          },
           terminate: async () => {
             await terminateReserved(connection);
           },
@@ -61,6 +63,8 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
             retryMs: 1,
             maxSnapshotWaitMs: 600_000,
             clientConnectionCheckMs: 10,
+            idleHolderMs: 3_600_000,
+            longHolderMs: 3_600_000,
             parallelWorkers: 1,
             maintenanceWorkMemMb: 16,
           },
@@ -93,8 +97,8 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           );
         } finally {
           await gate.close();
-          builder.release();
-          observer.release();
+          await builder.release();
+          await observer.release();
         }
       },
       { closeMode: "force" },

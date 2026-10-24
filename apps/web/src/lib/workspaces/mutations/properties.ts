@@ -7,8 +7,8 @@ import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
-  WorkspaceProperty,
   SelectPropertyOption,
+  WorkspaceProperty,
 } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 

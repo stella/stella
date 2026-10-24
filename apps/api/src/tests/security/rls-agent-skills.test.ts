@@ -17,8 +17,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
   createScopedQuery,
+  TestDatabase,
 } from "@/api/tests/security/test-utils";
 
 const testId = <T extends SafeIdType>() => toSafeId<T>(Bun.randomUUIDv7());

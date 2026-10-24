@@ -507,6 +507,7 @@
     "windowsKeyReserved": "O Windows reserva para si os atalhos com a tecla Windows. Use Ctrl ou Alt.",
     "taken": "Outro app já usa {shortcut}. Escolha outro.",
     "unavailable": "Outro app usa {shortcut}, então ele não abre a área de transferência. Escolha outro atalho.",
+    "managed": "Sua organização desativou o histórico da área de transferência.",
     "action": {
       "copy": "Copiar",
       "paste": "Colar",

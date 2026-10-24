@@ -170,6 +170,7 @@ const groupByTreatment = (
 };
 
 export const CitationList = ({
+  decision,
   decisionId,
   direction,
 }: DecisionCitationsProps & { direction: CitationDirection }) => {
@@ -231,6 +232,8 @@ export const CitationList = ({
           <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
             {group.items.map((item) => (
               <CitationRow
+                decision={decision}
+                direction={direction}
                 item={item}
                 presentations={presentations}
                 key={item.id}
@@ -371,10 +374,14 @@ export const DecisionCitations = ({
 };
 
 const CitationRow = ({
+  decision,
+  direction,
   item,
   presentations,
 }: {
   presentations: ReadonlyMap<string, DecisionCitationPresentation>;
+  decision: CitedDecisionAddress;
+  direction: CitationDirection;
   item: DecisionCitation;
 }) => {
   const t = useTranslations();
@@ -392,6 +399,12 @@ const CitationRow = ({
   }
 
   const decided = formatDecisionDate(item.decision.decisionDate, format);
+  // Incoming: the far decision's text names this one. Outgoing: this
+  // decision's text names the far one. The passage is quoted from whichever
+  // text does the naming, and names whichever decision is cited there.
+  const cited = direction === "incoming" ? decision : item.decision;
+  const textDecisionId =
+    direction === "incoming" ? item.decision.id : decision.id;
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
@@ -407,6 +420,14 @@ const CitationRow = ({
         }
         passage={{
           type: "citation",
+          citation: {
+            citationText: item.citationText,
+            decision: cited,
+            id: item.id,
+            sectionIndex: item.sectionIndex,
+            treatment: item.treatment,
+          },
+          textDecisionId,
         }}
         treatment={item.treatment}
       >

@@ -48,10 +48,8 @@ import {
   readCaseLawCorpusStatusQuerySchema,
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
-import {
-  decisionSummaryResponseSchema,
-  readDecisionSummary,
-} from "@/api/handlers/case-law/decisions/summary";
+import { readDecisionSummary } from "@/api/handlers/case-law/decisions/summary";
+import { decisionSummaryResponseSchema } from "@/api/handlers/case-law/decisions/summary-response";
 import readJudgePortrait from "@/api/handlers/case-law/judges/read-portrait";
 import {
   readStatuteCitationCountsHandler,
@@ -271,7 +269,7 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   },
 });
 
-const readDecisionSummaryRoute = createSafePublicSubjectHandler({
+export const readDecisionSummaryRoute = createSafePublicSubjectHandler({
   config: {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,

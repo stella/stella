@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
