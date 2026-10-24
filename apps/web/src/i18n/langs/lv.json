@@ -2284,6 +2284,7 @@
     "scopeKnowledgeWrite": "Izveidot, rediģēt un dzēst jūsu klauzulas un palaist pārbaudes ceļvežus",
     "scopeLawRead": "Lasīt publiski pieejamos tiesību aktus un judikatūru",
     "scopeMattersWrite": "Izveidot un rediģēt jūsu lietas un uzdevumus",
+    "scopeMemoryWrite": "Izveidot un atjaunināt asistenta atmiņu",
     "scopeOfflineAccess": "Paturēt jūs pieslēgtu bez atkārtotas apstiprināšanas",
     "scopeOnboarding": "Konfigurēt jūsu organizācijas prakses jurisdikcijas",
     "scopeProfile": "Piekļūt jūsu profila informācijai",
@@ -2311,6 +2312,7 @@
     "summaryLineRead": "<group>Lasīt:</group> {items}",
     "summaryLineUse": "<group>Lietot:</group> {items}",
     "summaryMattersWrite": "lietas un uzdevumi",
+    "summaryMemoryWrite": "asistenta atmiņa",
     "summaryProfile": "profils",
     "summaryRead": "dokumenti, lietas un kontakti",
     "summaryReadAnonymized": "anonimizēti dokumenti un lietas",
@@ -2676,6 +2678,7 @@
       "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "contact": "Sazinieties ar mums",
+      "featureDisabled": "Šī funkcija ir īslaicīgi izslēgta.",
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
       "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
     },

@@ -45,4 +45,6 @@ export const ACTION_ADMISSION_ERROR_KEYS = {
   [ACTION_ADMISSION_CODES.notEnabled]: "errors.actionAdmission.notEnabled",
   [ACTION_ADMISSION_CODES.admissionUnavailable]:
     "errors.actionAdmission.admissionUnavailable",
+  [ACTION_ADMISSION_CODES.featureDisabled]:
+    "errors.actionAdmission.featureDisabled",
 } as const satisfies Record<ActionAdmissionCode, TranslationKey>;

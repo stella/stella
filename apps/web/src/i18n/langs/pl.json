@@ -2284,6 +2284,7 @@
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
     "scopeLawRead": "Czytać publiczne przepisy prawa i orzecznictwo",
     "scopeMattersWrite": "Tworzenie i edytowanie Twoich spraw i zadań",
+    "scopeMemoryWrite": "Tworzenie i aktualizowanie pamięci asystenta",
     "scopeOfflineAccess": "Utrzymywanie Cię zalogowanym bez konieczności ponownej zgody",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
     "scopeProfile": "Dostęp do Twoich danych profilowych",
@@ -2311,6 +2312,7 @@
     "summaryLineRead": "<group>Odczyt:</group> {items}",
     "summaryLineUse": "<group>Korzystanie:</group> {items}",
     "summaryMattersWrite": "sprawy i zadania",
+    "summaryMemoryWrite": "pamięć asystenta",
     "summaryProfile": "profil",
     "summaryRead": "dokumenty, sprawy i kontakty",
     "summaryReadAnonymized": "zanonimizowane dokumenty i sprawy",
@@ -2676,6 +2678,7 @@
       "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
       "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
       "contact": "Skontaktuj się z nami",
+      "featureDisabled": "Ta funkcja jest tymczasowo wyłączona.",
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
       "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
     },

@@ -2284,6 +2284,7 @@
     "scopeKnowledgeWrite": "Ihre Klauseln erstellen, bearbeiten und löschen und Playbooks ausführen",
     "scopeLawRead": "Öffentliche Rechtsvorschriften und Rechtsprechung lesen",
     "scopeMattersWrite": "Ihre Akten und Aufgaben erstellen und bearbeiten",
+    "scopeMemoryWrite": "Erinnerungen des Assistenten erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
     "scopeProfile": "Auf Ihre Profilinformationen zugreifen",
@@ -2311,6 +2312,7 @@
     "summaryLineRead": "<group>Lesen:</group> {items}",
     "summaryLineUse": "<group>Verwenden:</group> {items}",
     "summaryMattersWrite": "Akten und Aufgaben",
+    "summaryMemoryWrite": "Erinnerungen des Assistenten",
     "summaryProfile": "Profil",
     "summaryRead": "Dokumente, Akten und Kontakte",
     "summaryReadAnonymized": "anonymisierte Dokumente und Akten",
@@ -2676,6 +2678,7 @@
       "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
       "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
       "contact": "Kontaktieren Sie uns",
+      "featureDisabled": "Diese Funktion ist vorübergehend deaktiviert.",
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
       "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
     },

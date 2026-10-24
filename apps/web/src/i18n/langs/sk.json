@@ -2284,6 +2284,7 @@
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
     "scopeLawRead": "Čítať verejné právne predpisy a judikatúru",
     "scopeMattersWrite": "Vytvoriť a upraviť vaše spisy a úlohy",
+    "scopeMemoryWrite": "Vytváranie a úprava pamäte asistenta",
     "scopeOfflineAccess": "Udržať vás prihláseného bez opakovaného schválenia",
     "scopeOnboarding": "Nastavte jurisdikcie praxe vašej organizácie",
     "scopeProfile": "Pristupovať k informáciám o vašom profile",
@@ -2311,6 +2312,7 @@
     "summaryLineRead": "<group>Čítanie:</group> {items}",
     "summaryLineUse": "<group>Používanie:</group> {items}",
     "summaryMattersWrite": "spisy a úlohy",
+    "summaryMemoryWrite": "pamäť asistenta",
     "summaryProfile": "profil",
     "summaryRead": "dokumenty, spisy a kontakty",
     "summaryReadAnonymized": "anonymizované dokumenty a spisy",
@@ -2676,6 +2678,7 @@
       "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
       "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
       "contact": "Kontaktujte nás",
+      "featureDisabled": "Táto funkcia je dočasne vypnutá.",
       "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
       "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
     },

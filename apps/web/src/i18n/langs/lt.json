@@ -2284,6 +2284,7 @@
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",
     "scopeLawRead": "Skaityti viešus teisės aktus ir teismų praktiką",
     "scopeMattersWrite": "Kurti ir redaguoti jūsų bylas ir užduotis",
+    "scopeMemoryWrite": "Kurti ir atnaujinti asistento atmintį",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
     "scopeProfile": "Pasiekti jūsų profilio informaciją",
@@ -2311,6 +2312,7 @@
     "summaryLineRead": "<group>Skaitymas:</group> {items}",
     "summaryLineUse": "<group>Naudojimas:</group> {items}",
     "summaryMattersWrite": "bylos ir užduotys",
+    "summaryMemoryWrite": "asistento atmintis",
     "summaryProfile": "profilis",
     "summaryRead": "dokumentai, bylos ir kontaktai",
     "summaryReadAnonymized": "anonimizuoti dokumentai ir bylos",
@@ -2676,6 +2678,7 @@
       "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
       "contact": "Susisiekite su mumis",
+      "featureDisabled": "Ši funkcija laikinai išjungta.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },
