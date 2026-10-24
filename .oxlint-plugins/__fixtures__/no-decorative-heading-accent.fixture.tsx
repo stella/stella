@@ -80,3 +80,10 @@ export const _counterAccent = () => (
     <span className="tabular-nums font-bold">42</span>
   </h2>
 );
+
+export const _nonnumericCounter = () => (
+  <h2>One
+    {/* oxlint-disable-next-line no-decorative-heading-accent/no-decorative-heading-accent -- the counter exception requires numeric content */}
+    <span className="tabular-nums text-muted-foreground">word</span>
+  </h2>
+);

@@ -26,6 +26,19 @@ test("heading accents preserve layout and numeric meaning", async () => {
     ['<h2><mark className="bg-yellow" aria-label="new">N</mark></h2>', false],
     ["<h2><strong>Title</strong></h2>", false],
     ['<p><span className="italic">Body</span></p>', false],
+    [
+      '<h2>One <span className="tabular-nums text-muted-foreground">word</span></h2>',
+      true,
+    ],
+    [
+      '<h2>Items <span className="tabular-nums">{format.number(count)}+</span></h2>',
+      false,
+    ],
+    [
+      '<h2>Items <span className="tabular-nums">{format.number(count)} word</span></h2>',
+      true,
+    ],
+    ['<h2>Items <span className="tabular-nums">٤٢</span></h2>', false],
   ] as const;
   const source = cases
     .map(

@@ -9,6 +9,7 @@ import {
   classBaseName,
   classTokens,
   elementName,
+  getPropertyName,
   isAstNode,
   jsxName,
   staticStringValue,
@@ -37,6 +38,38 @@ const COUNTER_CLASSES = new Set([
   "ms-2",
 ]);
 
+type CounterPart = "number" | "separator" | "other";
+
+const counterPart = (node: unknown): CounterPart => {
+  if (!isAstNode(node)) return "other";
+  if (node.type === "JSXEmptyExpression") return "separator";
+  if (node.type === "JSXExpressionContainer")
+    return counterPart(node.expression);
+  if (node.type === "Literal" && typeof node.value === "number")
+    return "number";
+  if (node.type === "JSXText" || node.type === "Literal") {
+    if (
+      typeof node.value !== "string" ||
+      !/^[\p{N}\p{P}\p{Z}\s%+−]*$/u.test(node.value)
+    )
+      return "other";
+    return /\p{N}/u.test(node.value) ? "number" : "separator";
+  }
+  // The shared locale formatter renders numeric values through `.number()`.
+  const callee = node.type === "CallExpression" ? node.callee : null;
+  return isAstNode(callee) &&
+    callee.type === "MemberExpression" &&
+    getPropertyName(callee.property) === "number"
+    ? "number"
+    : "other";
+};
+
+const hasNumericContent = (node: AstNode): boolean => {
+  if (!Array.isArray(node.children)) return false;
+  const parts = node.children.map(counterPart);
+  return parts.includes("number") && !parts.includes("other");
+};
+
 // Numeric counters retain their stable digits and secondary treatment;
 // layout-only utilities do not give heading words a decorative accent.
 const hasDecorativeStyle = (node: AstNode): boolean =>
@@ -56,6 +89,7 @@ const hasDecorativeStyle = (node: AstNode): boolean =>
       !tokens.every((token) => LAYOUT_CLASSES.has(token)) &&
       !(
         tokens.includes("tabular-nums") &&
+        hasNumericContent(node) &&
         tokens.every((token) => COUNTER_CLASSES.has(token))
       )
     );
