@@ -390,6 +390,60 @@ describe("country invoice wording", () => {
     expect(text).toContain("§ 38");
   });
 
+  test("prints Polish NIP labels, reverse charge wording, and exemption bases", async () => {
+    const polish = {
+      ...options,
+      seller: {
+        ...options.seller,
+        country: "PL",
+        taxId: "5260001246",
+        vatId: "PL5260001246",
+      },
+      invoice: {
+        ...options.invoice,
+        currency: "PLN",
+        language: "pl",
+        buyerCountry: "PL",
+        buyerTaxId: "7250018513",
+        buyerVatId: null,
+        lines: [
+          { ...sampleLine, vatTreatment: "reverse_charge" },
+          {
+            ...sampleLine,
+            vatTreatment: "exempt",
+            exemptionReason: "art. 43 ust. 1 pkt 29",
+          },
+        ],
+      },
+    } satisfies RenderInvoicePdfOptions;
+    const { text } = await textOf(polish);
+    expect(text.match(/NIP/gu)).toHaveLength(3);
+    expect(text).toContain("odwrotne obciążenie");
+    expect(text).toContain("art. 43 ust. 1 pkt 29");
+  });
+
+  test("keeps the EU VAT label for a foreign buyer on a Polish invoice", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: {
+        ...options.seller,
+        country: "PL",
+        taxId: null,
+        vatId: "PL5260001246",
+      },
+      invoice: {
+        ...options.invoice,
+        currency: "PLN",
+        language: "pl",
+        buyerCountry: "DE",
+        buyerTaxId: null,
+        buyerVatId: "DE123456789",
+      },
+    });
+    expect(text).toContain("NIP");
+    expect(text).toContain("Numer VAT");
+  });
+
   test("keeps Czech labels while adding the Czech profile note", async () => {
     const { text } = await textOf(options);
     expect(text).toContain("Datum zdanitelného plnění");

@@ -212,6 +212,7 @@ type InvoiceExpenseTextItem = {
 type InvoiceLineTextItem = {
   description: string;
   unit: string | null;
+  exemptionReason: string | null;
 };
 
 /** Buyer as it reads on the document: every field is authored text. */
@@ -357,6 +358,15 @@ const invoiceDetailTextFieldSpecs = (
     read: (item) => item.unit,
     apply: (item, value) => {
       item.unit = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.lines[].exemptionReason",
+    items: (payload) => payload.invoice.lines,
+    scope: () => workspaceId,
+    read: (item) => item.exemptionReason,
+    apply: (item, value) => {
+      item.exemptionReason = value;
     },
   }),
 ];
