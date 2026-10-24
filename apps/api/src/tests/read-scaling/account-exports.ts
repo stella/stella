@@ -10,10 +10,19 @@ import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+type AccountExportScalingMeasurementOptions = {
+  size: number;
+  handler: typeof personalDataExportDownloadLink.handler;
+};
+
 export const accountExportDownloadScalingScenario = {
   name: "account export download link",
   handler: personalDataExportDownloadLink.handler,
-  measure: async (size: number) => {
+  measure: async ({
+    size,
+    handler,
+  }: AccountExportScalingMeasurementOptions) => {
+    expect(handler).toBe(personalDataExportDownloadLink.handler);
     // The handler owns its real RLS connection; fixture writes stay outside
     // measurement and are confined to fresh accounts.
     const { rootDb } = await import("@/api/db/root");
@@ -68,9 +77,7 @@ export const accountExportDownloadScalingScenario = {
           expiresAt,
         },
       ]);
-      const denied = await personalDataExportDownloadLink.handler(
-        context(otherExportId),
-      );
+      const denied = await handler(context(otherExportId));
       expect(denied).toBeInstanceOf(ElysiaCustomStatusResponse);
       if (!(denied instanceof ElysiaCustomStatusResponse)) {
         panic("Another account's export must not return a download link");
@@ -78,9 +85,7 @@ export const accountExportDownloadScalingScenario = {
       expect(denied.code).toBe(404);
 
       return await runWithMeasuredQueryCounter(async (counter) => {
-        const response = await personalDataExportDownloadLink.handler(
-          context(exportId),
-        );
+        const response = await handler(context(exportId));
         if (response instanceof ElysiaCustomStatusResponse) {
           panic("Ready account export must return its download link");
         }
