@@ -173,6 +173,53 @@ describe("routing", () => {
     await server.fetch("http://localhost/nowhere");
     expect(order).toEqual(["outer:in", "inner:in", "inner:out", "outer:out"]);
   });
+
+  test("a stage's replacement context reaches inner stages and the route of that request only", async () => {
+    const seen: string[] = [];
+    const tag = (ctx: { request: Request }) =>
+      ctx.request.headers.get("x-tag") ?? "none";
+    const observe =
+      (name: string): Middleware =>
+      async (ctx, inner) => {
+        seen.push(`${name}:${tag(ctx)}`);
+        return await inner();
+      };
+    const replace: Middleware = async (ctx, inner) => {
+      const headers = new Headers(ctx.request.headers);
+      headers.set("x-tag", `replaced-${tag(ctx)}`);
+      return await inner({
+        ...ctx,
+        request: new Request(ctx.request, { headers }),
+      });
+    };
+    const replacing = serveForTest(
+      createHttpApp({
+        middleware: [observe("outer"), replace, observe("inner")],
+        routes: routes(
+          { "/tag": { GET: definition(({ ctx }) => tag(ctx)) } },
+          { middleware: [observe("group")] },
+        ),
+      }),
+    );
+    try {
+      const first = await replacing.fetch("http://localhost/tag", {
+        headers: { "x-tag": "a" },
+      });
+      const second = await replacing.fetch("http://localhost/tag");
+      expect(await first.text()).toBe("replaced-a");
+      expect(await second.text()).toBe("replaced-none");
+      expect(seen).toEqual([
+        "outer:a",
+        "inner:replaced-a",
+        "group:replaced-a",
+        "outer:none",
+        "inner:replaced-none",
+        "group:replaced-none",
+      ]);
+    } finally {
+      await replacing.stop();
+    }
+  });
 });
 
 describe("answers", () => {

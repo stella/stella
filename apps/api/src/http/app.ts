@@ -34,24 +34,22 @@ type BunRouteHandler = (
 const isWebRequest = (value: unknown): value is Request =>
   value instanceof Request;
 
-const compose = async (
-  stages: readonly Middleware[],
-  ctx: RequestContext,
-  last: (ctx: RequestContext) => Promise<Response>,
-): Promise<Response> => {
-  const run = async (
-    index: number,
-    current: RequestContext,
-  ): Promise<Response> => {
-    const stage = stages[index];
-    return stage === undefined
-      ? await last(current)
-      : await stage(
-          current,
-          async (replacement) => await run(index + 1, replacement ?? current),
-        );
-  };
-  return await run(0, ctx);
+type Next = (ctx: RequestContext) => Promise<Response>;
+
+/**
+ * The stages folded into one function when the app is built, outermost
+ * first. A request then runs each stage once with no per-stage wrapper of its
+ * own: the pipeline is about twenty stages deep, and an awaiting wrapper per
+ * stage per request was a fifth of the time of a request that never reaches a
+ * handler.
+ */
+const chain = (stages: readonly Middleware[], last: Next): Next => {
+  let next = last;
+  for (const stage of stages.toReversed()) {
+    const inner = next;
+    next = (ctx) => stage(ctx, (replacement) => inner(replacement ?? ctx));
+  }
+  return next;
 };
 
 const METHOD_BY_NAME: Readonly<Partial<Record<string, HttpMethod>>> = {
@@ -139,22 +137,41 @@ export const createHttpApp = ({
 }: HttpAppOptions): HttpApp => {
   const index = indexRoutes(routes);
 
-  const runRoute = async (
-    entry: RouteEntry,
-    ctx: RequestContext,
-  ): Promise<Response> =>
-    await compose(entry.middleware, ctx, async (inner) => {
-      const answer = await entry.definition.run({
-        ctx: inner,
-        route: entry.path,
-        readBody: async () =>
-          await readBody(
-            inner.request,
-            entry.definition.config.bodyMode ?? "auto",
-          ),
+  const routeChains = new Map<RouteEntry, Next>(
+    routes.map((entry) => [
+      entry,
+      chain(entry.middleware, async (inner) => {
+        const answer = await entry.definition.run({
+          ctx: inner,
+          route: entry.path,
+          readBody: async () =>
+            await readBody(
+              inner.request,
+              entry.definition.config.bodyMode ?? "auto",
+            ),
+        });
+        return toResponse(await encodeAnswer(entry, answer, inner), inner.set);
+      }),
+    ]),
+  );
+
+  const pipeline = chain(middleware, async (inner) => {
+    const matched =
+      inner.route === undefined ? undefined : index.get(inner.route);
+    if (matched === undefined) {
+      throw new HttpFailureError(HTTP_FAILURE.notFound);
+    }
+    const routeChain =
+      inner.routeEntry === undefined
+        ? undefined
+        : routeChains.get(inner.routeEntry);
+    if (routeChain === undefined) {
+      throw new HttpFailureError(HTTP_FAILURE.methodNotAllowed, {
+        allow: [...matched.byMethod.keys()],
       });
-      return toResponse(await encodeAnswer(entry, answer, inner), inner.set);
-    });
+    }
+    return await routeChain(inner);
+  });
 
   const handle = async (
     request: Request,
@@ -180,17 +197,7 @@ export const createHttpApp = ({
       },
       set: createResponseSet(),
     };
-    const response = await compose(middleware, ctx, async (inner) => {
-      if (matched === undefined) {
-        throw new HttpFailureError(HTTP_FAILURE.notFound);
-      }
-      if (routeEntry === undefined) {
-        throw new HttpFailureError(HTTP_FAILURE.methodNotAllowed, {
-          allow: [...matched.byMethod.keys()],
-        });
-      }
-      return await runRoute(routeEntry, inner);
-    });
+    const response = await pipeline(ctx);
     return request.method === "HEAD" ? withoutBody(response) : response;
   };
 
