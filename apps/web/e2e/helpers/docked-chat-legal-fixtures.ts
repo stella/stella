@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { panic } from "better-result";
 
 import {
@@ -11,6 +11,7 @@ import {
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 
+import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "./api";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
 
@@ -197,4 +198,29 @@ export const installDockedLegalFixtures = async (page: Page) => {
       await route.fulfill({ json: body });
     },
   );
+};
+
+/** Opens the reader's seeded conversation through the English chat rail. */
+export const openFreshDecisionReaderChat = async (page: Page) => {
+  await installDockedLegalFixtures(page);
+  await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
+    await route.fulfill({ json: { prompts: [] } });
+  });
+  await page.goto("/law", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () => !history.pushState.toString().includes("[native code]"),
+  );
+  await page.evaluate((target) => {
+    history.pushState(null, "", target);
+  }, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
+  await expect(page.locator(".reader-scroll article")).toBeVisible();
+  // A fresh reader keeps the inspector collapsed; activate its existing chat
+  // tab rather than the footer action that can create another conversation.
+  await page
+    .getByRole("button", { name: messages.chat.newChat, exact: true })
+    .and(page.locator('[data-slot="inspector-rail-tab"]'))
+    .click();
+  const composer = page.locator('[data-slot="docked-chat-composer"]');
+  await expect(composer.getByRole("textbox")).toBeVisible();
+  return composer;
 };
