@@ -257,11 +257,27 @@ jobs:
         run: |
           set -euo pipefail
           bun scripts/prepare-maintenance-release.ts --refresh
+          generated="$RUNNER_TEMP/release-refresh-generated-paths"
+          jq -r '.generatedPaths[]' scripts/changeset-policy.json > "$generated"
+          # The commit carries only the release paths, so a change anywhere
+          # else would be dropped from it; refuse instead of committing less.
+          unexpected=""
+          while IFS= read -r path; do
+            case "$path" in
+              .changeset/* | docs/changelog/*) continue ;;
+            esac
+            grep -qxF -- "$path" "$generated" || unexpected+="  $path"$'\n'
+          done < <(git status --porcelain=v1 --untracked-files=all | cut -c4-)
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::The refresh changed files outside the release paths:"
+            printf '%s' "$unexpected"
+            exit 1
+          fi
           {
             echo "paths<<PATHS_EOF"
             echo ".changeset"
             echo "docs/changelog"
-            jq -r '.generatedPaths[]' scripts/changeset-policy.json
+            cat "$generated"
             echo "PATHS_EOF"
           } >> "$GITHUB_OUTPUT"
 
