@@ -140,7 +140,9 @@ pub fn settle(stored: Step, context: FlowContext) -> Step {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum Progress {
-  InProgress { resume: Step },
+  // Earlier builds stored this value for first-run progress.
+  #[serde(rename = "inProgress")]
+  FirstRun { resume: Step },
   /// Started again from settings after it was completed: it resumes like
   /// the first run but never reopens at launch.
   Replaying { resume: Step },
@@ -150,14 +152,14 @@ pub enum Progress {
 impl Progress {
   /// The first run ended once; a replay from settings does not undo that.
   pub fn first_run_finished(self) -> bool {
-    !matches!(self, Self::InProgress { .. })
+    !matches!(self, Self::FirstRun { .. })
   }
 }
 
 /// The same tour at another step; a completed tour stays completed.
 pub fn resumed(progress: Progress, step: Step) -> Progress {
   match progress {
-    Progress::InProgress { .. } => Progress::InProgress { resume: step },
+    Progress::FirstRun { .. } => Progress::FirstRun { resume: step },
     Progress::Replaying { .. } => Progress::Replaying { resume: step },
     Progress::Completed => Progress::Completed,
   }
@@ -167,7 +169,7 @@ pub fn resumed(progress: Progress, step: Step) -> Progress {
 /// still in progress stays a first run.
 pub fn restarted(progress: Progress) -> Progress {
   match progress {
-    Progress::InProgress { .. } => Progress::InProgress {
+    Progress::FirstRun { .. } => Progress::FirstRun {
       resume: Step::Welcome,
     },
     Progress::Replaying { .. } | Progress::Completed => Progress::Replaying {
@@ -221,7 +223,7 @@ pub fn launch_mode(
   rows: &[PermissionRow],
 ) -> Option<Mode> {
   match progress {
-    Progress::InProgress { .. } => Some(Mode::Tour),
+    Progress::FirstRun { .. } => Some(Mode::Tour),
     Progress::Replaying { .. } | Progress::Completed => {
       let permissions = revoked(&history.granted, rows);
       (!permissions.is_empty()).then_some(Mode::Fix { permissions })
@@ -258,7 +260,7 @@ impl Onboarding {
     let progress = preference
       .read()
       .and_then(|stored| serde_json::from_str(&stored).ok())
-      .unwrap_or(Progress::InProgress {
+      .unwrap_or(Progress::FirstRun {
         resume: Step::Welcome,
       });
     let history_preference =
@@ -304,7 +306,7 @@ impl Onboarding {
 
   fn step(&self) -> Step {
     match self.progress {
-      Progress::InProgress { resume } | Progress::Replaying { resume } => resume,
+      Progress::FirstRun { resume } | Progress::Replaying { resume } => resume,
       Progress::Completed => Step::Done,
     }
   }
@@ -908,7 +910,7 @@ mod tests {
   fn progress_round_trips_through_its_stored_form() {
     for progress in [
       Progress::Completed,
-      Progress::InProgress {
+      Progress::FirstRun {
         resume: Step::Permissions,
       },
       Progress::Replaying {
@@ -919,7 +921,7 @@ mod tests {
       assert_eq!(serde_json::from_str::<Progress>(&stored).unwrap(), progress);
     }
     assert_eq!(
-      serde_json::to_value(Progress::InProgress {
+      serde_json::to_value(Progress::FirstRun {
         resume: Step::TryIt
       })
       .unwrap(),
@@ -991,7 +993,7 @@ mod tests {
     };
     assert_eq!(
       launch_mode(
-        Progress::InProgress { resume: Step::Welcome },
+        Progress::FirstRun { resume: Step::Welcome },
         &history,
         &current,
       ),
@@ -1058,17 +1060,17 @@ mod tests {
       assert_eq!(launch_mode(replay, &history, &[]), None);
     }
     for step in Step::ALL {
-      let first_run = Progress::InProgress { resume: step };
+      let first_run = Progress::FirstRun { resume: step };
       assert!(!first_run.first_run_finished());
       assert_eq!(
         restarted(first_run),
-        Progress::InProgress {
+        Progress::FirstRun {
           resume: Step::Welcome
         }
       );
       assert_eq!(
         resumed(
-          Progress::InProgress {
+          Progress::FirstRun {
             resume: Step::Welcome
           },
           step
