@@ -214,7 +214,7 @@ jobs:
   # properties. The default test run
   # covers the same assertions on a bounded fixture.
   sanctions-properties:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read

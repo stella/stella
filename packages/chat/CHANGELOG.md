@@ -1,5 +1,13 @@
 # @stll/chat
 
+## 0.2.6
+
+### Patch Changes
+
+- [#6567](https://github.com/stella/stella/pull/6567) [`76bfdfd`](https://github.com/stella/stella/commit/76bfdfdbf1ede83c7d3dc1db8a8dcc919e479d2a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `getChatLinkSite`, which returns the registrable domain of a link hostname so link icons can be requested once per site.
+- Updated dependencies [[`c2289c3`](https://github.com/stella/stella/commit/c2289c387f5e59f6b5248a99325d69e5fd84b2cc)]:
+  - @stll/ui@0.50.1
+
 ## 0.2.5
 
 ### Patch Changes
