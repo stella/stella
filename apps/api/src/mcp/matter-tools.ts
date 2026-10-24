@@ -784,21 +784,17 @@ const saveContactArgsSchema = nullAsAbsent(
               v.string(),
               v.maxLength(EXTERNAL_SOURCE_MAX_LENGTH),
               v.regex(EXTERNAL_SOURCE_PATTERN),
-              v.description(
-                "Lowercase key of the system the contact came from",
-              ),
+              v.description("Lowercase source-system key"),
             ),
             id: v.pipe(
               v.string(),
               v.nonEmpty(),
               v.maxLength(EXTERNAL_ID_MAX_LENGTH),
-              v.description("The contact's id in that system"),
+              v.description("ID in the source system"),
             ),
           }),
           v.description(
-            "When creating, the contact's identity in the system it came " +
-              "from, as read_contact returns it; a second contact with the " +
-              "same source and id is refused",
+            "Creation only. read_contact returns it; duplicate source/id is refused.",
           ),
         ),
       ),
@@ -2505,8 +2501,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "Create or update a contact (a person or organization in the address " +
       "book, shared across the whole organization). Omit contact_id to create " +
       "(type required, plus display_name or the name parts it is derived " +
-      "from, and optionally external: the contact's source system and id " +
-      "there); pass contact_id to update. String fields other than " +
+      "from); pass contact_id to update. String fields other than " +
       "display_name accept null to clear them.",
     inputSchema: saveContactArgsSchema,
     inputNormalization: {
