@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 5.4.0
+
+### Minor Changes
+
+- [#6780](https://github.com/stella/stella/pull/6780) [`6e05ee0`](https://github.com/stella/stella/commit/6e05ee01231be81f8ce70f702898166e7c97249c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invoice line commands accept an exemption basis, the legal provision printed for an exempt or non-VAT-payer line, and the VAT rate preset command accepts Poland.
+
 ## 5.3.1
 
 ### Patch Changes
