@@ -4,6 +4,7 @@
     "allowJs": false,
     "checkJs": false,
     "strict": true,
+    "types": ["bun-types"],
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -13,6 +14,5 @@
     "src/**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ],
-  "exclude": ["src/**/*.test.ts", "src/**/test-support/**"]
+  ]
 }

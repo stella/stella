@@ -17,7 +17,7 @@
     "start": "expo start",
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
-    "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.test.json && bun check --no-pretty --all --project=tsconfig.scripts.json",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.scripts.json",
     "web": "expo start --web"
   },
   "dependencies": {
