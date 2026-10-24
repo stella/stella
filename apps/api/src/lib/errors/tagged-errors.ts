@@ -768,6 +768,8 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
+  /** Parser error class recovered from worker stderr; null for termination. */
+  workerErrorClass: string | null;
 }> {}
 
 /**

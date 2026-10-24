@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
     "professionalUse": {
-      "description": "لم يُعرض عليك هذا البيان عند إنشاء حسابك. اقبله للمتابعة.",
       "title": "تأكيد الاستخدام المهني"
     },
     "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
@@ -3530,6 +3529,12 @@
       "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
+      "unsupportedEncoding": "هذا المستند يستخدم ترميز {encoding} غير مدعوم، لذا لا يمكن تحويله.",
+      "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله.",
+      "unsupportedReference": "يشير هذا المستند إلى مورد خارجي في {element} {attribute}، لذا لا يمكن تحويله."
+    },
     "external": {
       "confirmDescription": "أنت على وشك زيارة موقع إلكتروني خارجي.",
       "confirmTitle": "فتح الرابط الخارجي؟",
@@ -4229,6 +4234,22 @@
       "guestStorageUnavailable": "تعذر حفظ التمييزات والملاحظات في هذا التبويب.",
       "highlight": "تمييز",
       "highlightedPassage": "المقطع المميّز",
+      "history": {
+        "colorRestored": "تمت استعادة اللون",
+        "commentRemoved": "تمت إزالة التعليق",
+        "commentRestored": "تمت استعادة التعليق",
+        "highlightRemoved": "تمت إزالة التمييز",
+        "highlightRestored": "تمت استعادة التمييز",
+        "markChanged": "تم تغيير هذا التمييز أو التعليق في مكان آخر في هذه الأثناء، لذا تُرك كما هو.",
+        "markGone": "لم يعد هذا التمييز أو التعليق موجودًا.",
+        "nothingToRedo": "لا يوجد ما يمكن إعادته",
+        "nothingToUndo": "لا يوجد ما يمكن التراجع عنه",
+        "redoShortcut": "إعادة تغيير التمييز أو التعليق",
+        "styleRestored": "تمت استعادة النمط",
+        "textRestored": "تمت استعادة نص التعليق",
+        "undoShortcut": "التراجع عن تغيير التمييز أو التعليق",
+        "visibilityRestored": "تمت استعادة المشاركة"
+      },
       "removeHighlight": "إزالة التمييز",
       "sharedBadge": "مشارك",
       "styleHighlight": "تمييز",
@@ -4740,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
+    "caseLawEmptyState": "ابدأ الكتابة للبحث في الأحكام القضائية.",
     "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "continueInChat": "المتابعة في الدردشة",
@@ -4797,6 +4819,7 @@
     "savedSearchesEmpty": "احفظ بحثاً لإعادة استخدامه.",
     "scopeFilter": "نطاق البحث",
     "scopePlaceholderAll": "البحث في جميع <scope>المصادر</scope>…",
+    "scopePlaceholderCaseLaw": "البحث في <scope>الاجتهاد القضائي</scope>…",
     "scopePlaceholderMatters": "البحث في جميع <scope>الملفات القانونية</scope>…",
     "scopePlaceholderRegistries": "البحث في <scope>السجلات</scope>…",
     "scopeRegistries": "السجلات",

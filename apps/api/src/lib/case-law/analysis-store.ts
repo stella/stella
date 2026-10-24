@@ -12,7 +12,8 @@
  * process keeps it in memory instead.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
 
 import type { AnalysisGenerating } from "@stll/legal-ast/analysis";
 import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
@@ -46,8 +47,17 @@ type MemoryClaim = Parameters<AnalysisStore["claim"]>[0] & {
   unlessFailed?: FailureClaimGuard | undefined;
 };
 
-// Synchronous: nothing awaits between the checks and the write, so in one
-// process no claim or failure can land in between.
+const ownsGeneration = (stored: unknown, sentinel: AnalysisGenerating) => {
+  const held = parsePersistedDecisionAnalysis(stored);
+  return (
+    held !== null &&
+    "status" in held &&
+    "runId" in held &&
+    held.runId === sentinel.runId &&
+    held.inputFingerprint === sentinel.inputFingerprint
+  );
+};
+
 /** Creates the process-local store used when the corpus database is read-only. */
 export const createMemoryAnalysisStore = (
   now: () => Date = () => new Date(),
@@ -57,6 +67,8 @@ export const createMemoryAnalysisStore = (
   // could accumulate.
   const memoryFailures = new Map<string, AnalysisFailureRecord>();
 
+  // Synchronous: nothing awaits between the checks and the write, so in one
+  // process no claim or failure can land in between.
   const claimInMemory = ({
     decisionId,
     fingerprint,
@@ -93,29 +105,33 @@ export const createMemoryAnalysisStore = (
     claimUnlessFailed: async (claim) =>
       await Promise.resolve(Result.ok(claimInMemory(claim))),
     // The document behind a memory entry is a read-only row this process
-    // never re-parses, so the fingerprint alone identifies the run here.
-    // `expected` still applies: it separates two runs over one document.
-    save: async ({ analysis, decisionId, expected }) => {
+    // never re-parses. Run ids fence claims; revisions compare the same
+    // structural expected value as the JSONB writer.
+    save: async ({ analysis, decisionId, ownership }) => {
       const stored = memoryAnalyses.get(decisionId);
       const held = parsePersistedDecisionAnalysis(stored);
+      const owns = (() => {
+        switch (ownership.type) {
+          case "generation":
+            return ownsGeneration(stored, ownership.sentinel);
+          case "revision":
+            return deepEquals(stored, ownership.expected);
+          default:
+            ownership satisfies never;
+            return panic("Unknown analysis write ownership");
+        }
+      })();
       const wrote =
-        held?.inputFingerprint === analysis.inputFingerprint &&
-        (expected === undefined || stored === expected);
+        held !== null &&
+        held.inputFingerprint === analysis.inputFingerprint &&
+        owns;
       if (wrote) {
         memoryAnalyses.set(decisionId, analysis);
       }
       return await Promise.resolve(wrote);
     },
     savePartial: async ({ decisionId, partialTree, sentinel }) => {
-      const held = parsePersistedDecisionAnalysis(
-        memoryAnalyses.get(decisionId),
-      );
-      const wrote =
-        held !== null &&
-        "status" in held &&
-        "runId" in held &&
-        held.runId === sentinel.runId &&
-        held.inputFingerprint === sentinel.inputFingerprint;
+      const wrote = ownsGeneration(memoryAnalyses.get(decisionId), sentinel);
       if (wrote) {
         memoryAnalyses.set(decisionId, {
           ...sentinel,
@@ -125,16 +141,7 @@ export const createMemoryAnalysisStore = (
       return await Promise.resolve(wrote);
     },
     clear: async ({ decisionId, sentinel }) => {
-      const held = parsePersistedDecisionAnalysis(
-        memoryAnalyses.get(decisionId),
-      );
-      if (
-        held !== null &&
-        "status" in held &&
-        "runId" in held &&
-        held.runId === sentinel.runId &&
-        held.inputFingerprint === sentinel.inputFingerprint
-      ) {
+      if (ownsGeneration(memoryAnalyses.get(decisionId), sentinel)) {
         memoryAnalyses.delete(decisionId);
       }
       await Promise.resolve();
@@ -142,16 +149,7 @@ export const createMemoryAnalysisStore = (
     fail: async ({ decisionId, failure, keyTag, sentinel }) => {
       // Only the run that still holds the row files its failure; a superseded
       // run writes nothing (as the row store's single statement does).
-      const held = parsePersistedDecisionAnalysis(
-        memoryAnalyses.get(decisionId),
-      );
-      if (
-        held !== null &&
-        "status" in held &&
-        "runId" in held &&
-        held.runId === sentinel.runId &&
-        held.inputFingerprint === sentinel.inputFingerprint
-      ) {
+      if (ownsGeneration(memoryAnalyses.get(decisionId), sentinel)) {
         memoryFailures.set(memoryFailureKey(decisionId, keyTag), failure);
         memoryAnalyses.delete(decisionId);
       }

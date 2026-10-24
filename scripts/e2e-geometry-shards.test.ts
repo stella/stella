@@ -114,6 +114,7 @@ const productionShardRun = () => {
   return run;
 };
 
+// Measured p95 is 36.8 s; this test must enumerate the production Playwright suite.
 test("production shards split every geometry viewport evenly without losing hosts", () => {
   const run = productionShardRun();
   const generalProjects =
@@ -168,7 +169,7 @@ test("production shards split every geometry viewport evenly without losing host
     );
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   }
-}, 60_000);
+}, 75_000);
 
 test.each([
   { generalStatus: 0, geometryStatus: 0, expectedStatus: 0 },

@@ -6,7 +6,7 @@ import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
   type CaseLawAnalysisFailureCode as AnalysisFailureCode,
-  type CaseLawAnalysisProgressResponse,
+  caseLawAnalysisProgressSchema,
   type CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import {
@@ -47,7 +47,7 @@ export type AnalysisError =
 
 type AnalysisResponse =
   | { status: "done"; analysis: DecisionAnalysis }
-  | (CaseLawAnalysisProgressResponse & { tree: DecisionAnalysis["tree"] })
+  | { status: "generating"; tree: DecisionAnalysis["tree"] }
   | { status: "error"; error: AnalysisError };
 
 export type AnalysisQueryResult =
@@ -146,19 +146,10 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "generating") {
-    const parsed = parsePersistedDecisionAnalysis({
-      version: 3,
-      status: "generating",
-      startedAt: "1970-01-01T00:00:00.000Z",
-      inputFingerprint: "response",
-      partialTree: value["partialTree"],
-    });
-    if (parsed === null || !("status" in parsed)) {
-      return value["partialTree"] === undefined
-        ? { status: "generating", tree: [] }
-        : null;
-    }
-    return { status: "generating", tree: parsed.partialTree ?? [] };
+    const parsed = v.safeParse(caseLawAnalysisProgressSchema, value);
+    return parsed.success
+      ? { status: "generating", tree: parsed.output.partialTree }
+      : null;
   }
 
   if (status === "error") {

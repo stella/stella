@@ -36,6 +36,7 @@ export const analysisSentinel = (
   version: CURRENT_ANALYSIS_VERSION,
   status: "generating",
   runId: Bun.randomUUIDv7(),
+  partialTree: [],
   startedAt: now.toISOString(),
   inputFingerprint: fingerprint,
 });
@@ -82,7 +83,7 @@ export const storedAnalysisState = ({
     startedAt.isOk() &&
     now.getTime() - startedAt.value.epochMilliseconds < SENTINEL_STALE_MS
   ) {
-    return { kind: "generating", partialTree: analysis.partialTree ?? [] };
+    return { kind: "generating", partialTree: analysis.partialTree };
   }
   reportCaseLawIncompleteAnswer({
     surface: "analysis",

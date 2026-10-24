@@ -178,6 +178,8 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
       temporary,
       "clone",
       "--quiet",
+      // Keep each fixture's object database independent of its disposable seed.
+      "--no-local",
       ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
       seed,
       clone,
@@ -1019,6 +1021,7 @@ test("the base may predate a required domain action definition but head may not 
   });
 }, 30_000);
 
+// Measured p95: 10.2 s; this must run the ratchet repeatedly in a real Git clone.
 test("untracked files cannot increase file, duplication, directory or dependency metrics", () => {
   withClone((root) => {
     const libFile = "apps/api/src/lib/domain/helper.ts";
@@ -1075,7 +1078,7 @@ test("untracked files cannot increase file, duplication, directory or dependency
     expect(staged.code, staged.output).toBe(1);
     expect(staged.output).toContain("as-casts: 6 -> 16");
   });
-}, 30_000);
+}, 25_000);
 
 test("malformed ledger and dependency schemas fail in both measurement roles", () => {
   withClone((root) => {

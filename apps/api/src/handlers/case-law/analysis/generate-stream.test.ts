@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { analysisFailureRecord } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
@@ -34,8 +36,8 @@ const draft = heading("Draft", "b3");
 const invalid = { label: "Invalid" };
 const output = (): AnalysisOutput => ({
   headings: [first, second],
-  holding: { text: "A legal rule.", anchors: [] },
-  abstract: "A useful summary of the decision.",
+  holding: [{ text: "A legal rule.", anchors: [] }],
+  abstract: [{ text: "A useful summary of the decision.", anchors: [] }],
   topics: ["procedure"],
 });
 const partial = (
@@ -223,6 +225,13 @@ describe("streamed case-law analysis generation", () => {
     ).toBe(false);
     expect(store.peek(decisionId)).toEqual(held);
 
+    await run(store, superseded, {
+      async *streamAnalysis() {
+        yield complete();
+      },
+    });
+    expect(store.peek(decisionId)).toEqual(held);
+
     await store.clear({ decisionId, sentinel: superseded });
     expect(store.peek(decisionId)).toEqual(held);
 
@@ -241,6 +250,17 @@ describe("streamed case-law analysis generation", () => {
     expect(
       await store.readFailure({ decisionId, keyTag: "platform" }),
     ).toBeNull();
+
+    await run(store, replacement, {
+      async *streamAnalysis() {
+        yield complete();
+      },
+    });
+    expect(store.peek(decisionId)).toMatchObject({
+      version: 4,
+      tree: [{ label: "First" }, { label: "Second" }],
+    });
+    expect(store.peek(decisionId)).not.toHaveProperty("status");
   });
 
   test("paces refused writes from a superseded run", async () => {
@@ -286,12 +306,43 @@ describe("streamed case-law analysis generation", () => {
       },
     });
     expect(store.peek(decisionId)).toMatchObject({
-      version: 3,
+      version: 4,
       inputFingerprint: fingerprint,
       tree: [{ label: "First" }, { label: "Second" }],
     });
     expect(store.peek(decisionId)).not.toHaveProperty("partialTree");
     expect(store.peek(decisionId)).not.toHaveProperty("status");
+  });
+
+  test("a revision compares the observed value rather than parser object identity", async () => {
+    const { sentinel, store } = await setup();
+    await run(store, sentinel, {
+      async *streamAnalysis() {
+        yield complete();
+      },
+    });
+    const observed = parsePersistedDecisionAnalysis(store.peek(decisionId));
+    if (observed === null || "status" in observed) {
+      throw new Error("expected a completed analysis");
+    }
+    const revision = { ...observed, model: "revised" };
+    expect(
+      await store.save({
+        analysis: revision,
+        contentHash: null,
+        decisionId,
+        ownership: { type: "revision", expected: observed },
+      }),
+    ).toBe(true);
+    expect(
+      await store.save({
+        analysis: { ...observed, model: "stale" },
+        contentHash: null,
+        decisionId,
+        ownership: { type: "revision", expected: observed },
+      }),
+    ).toBe(false);
+    expect(store.peek(decisionId)).toEqual(revision);
   });
 
   test("gives an invalid-stream fallback only the remaining deadline", async () => {

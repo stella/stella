@@ -424,10 +424,9 @@ export const runGeneration = async ({
     // One deadline for the whole run: a fallback after an invalid stream gets
     // what is left of it, never a fresh one.
     const runStartedAt = nowMs();
-    try {
-      result = await withGenerationDeadline(
-        generationOptions,
-        async (abortSignal) => {
+    const streamed = await Result.tryPromise({
+      try: async () =>
+        await withGenerationDeadline(generationOptions, async (abortSignal) => {
           const events =
             streamAnalysis === undefined
               ? streamTanStackObjectForTask({
@@ -436,11 +435,16 @@ export const runGeneration = async ({
                 })
               : streamAnalysis({ abortSignal });
           for await (const event of events) {
-            if (event.type === "complete") {
-              return event.object;
-            }
-            if (event.type !== "partial") {
-              continue;
+            switch (event.type) {
+              case "complete":
+                return event.object;
+              case "delta":
+                continue;
+              case "partial":
+                break;
+              default:
+                event satisfies never;
+                return panic("Unknown structured analysis event");
             }
             const headings = event.partial.headings;
             if (!Array.isArray(headings)) {
@@ -468,9 +472,13 @@ export const runGeneration = async ({
             await publishIfDue();
           }
           return undefined;
-        },
-      );
-    } catch (streamError) {
+        }),
+      catch: (error) => error,
+    });
+    if (Result.isOk(streamed)) {
+      result = streamed.value;
+    } else {
+      const streamError = streamed.error;
       // Preserve the existing strict repair and fallback ladder. The streamed
       // sections remain on the sentinel while that ladder settles.
       if (classifyAIError(streamError) !== "output_invalid") {
@@ -489,7 +497,7 @@ export const runGeneration = async ({
           : await generateAnalysisObject({ deadlineMs: remainingDeadlineMs });
     }
     if (result === undefined) {
-      return panic("Structured analysis stream ended without a result");
+      panic("Structured analysis stream ended without a result");
     }
 
     analysis = buildDecisionAnalysis({
@@ -528,6 +536,7 @@ export const runGeneration = async ({
     contentHash,
     decisionId,
     persistence: store,
+    sentinel,
     onFailure: async (error) =>
       await handleGenerationFailure({
         aiAnalytics,

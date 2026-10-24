@@ -1119,6 +1119,7 @@ test("thin groups certify only normal-profile completion on a head included in t
   }
 });
 
+// Measured p95 is 33.8 s; this test must evaluate every queued job through the real aggregator.
 test("thin groups require queued code checks regardless of normal PR completion", async () => {
   const admitted = queueAdmittedJobs(workflow);
   expect(admitted).toContain("ci-browser");
@@ -1291,7 +1292,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
       }
     }
   }
-}, 35_000);
+}, 70_000);
 
 test("a metadata event without completed evidence starts no suites", async () => {
   for (const action of ["labeled", "unlabeled", "auto_merge_enabled"]) {
