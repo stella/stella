@@ -12,19 +12,6 @@ import type { QueryCounter } from "@/api/lib/db-query-counter";
 import ledger from "./statement-ceiling.json";
 
 export const DEFAULT_STATEMENT_CEILING = 100;
-// Temporary initial census: retain full task measurements until the existing
-// test finalizer reports their maximum; remove before freezing the ledger.
-const RESET_INITIAL_CENSUS_IDENTITY = "scheduler reviewOrganization.reset";
-let collectingInitialResetCensus = false;
-export const enableTemporaryResetCensusForTesting = () => {
-  if (readRuntimeMode().nodeEnv !== NODE_ENV.test) {
-    panic("The initial reset statement census requires the test runtime");
-  }
-  collectingInitialResetCensus = true;
-};
-const collectsInitialResetCensus = (identity: string): boolean =>
-  collectingInitialResetCensus && identity === RESET_INITIAL_CENSUS_IDENTITY;
-
 export type StatementCeilingKind = keyof typeof ledger;
 type StatementAllowance = { threshold: number; reason: string };
 export type StatementCeilingLedger = Record<
@@ -74,9 +61,6 @@ export const createStatementCeilingMonitor = (
     const identity = `${kind} ${key}`;
     const statements = counter.count + counter.transactions;
     observed.set(identity, Math.max(observed.get(identity) ?? 0, statements));
-    if (collectsInitialResetCensus(identity)) {
-      return;
-    }
     const threshold =
       allowances[kind][key]?.threshold ?? DEFAULT_STATEMENT_CEILING;
     if (statements <= threshold) {
@@ -90,15 +74,6 @@ export const createStatementCeilingMonitor = (
   };
   const assertSatisfied = () => {
     const failures = [...violations];
-    const resetMaximum = observed.get(RESET_INITIAL_CENSUS_IDENTITY);
-    if (
-      resetMaximum !== undefined &&
-      collectsInitialResetCensus(RESET_INITIAL_CENSUS_IDENTITY)
-    ) {
-      failures.push(
-        `Temporary initial statement census: ${RESET_INITIAL_CENSUS_IDENTITY}: observed maximum ${resetMaximum} statements; freeze the measured initial ledger and remove this diagnostic`,
-      );
-    }
     for (const [kind, entries] of Object.entries(allowances)) {
       for (const [key, { threshold }] of Object.entries(entries)) {
         const count = observed.get(`${kind} ${key}`);

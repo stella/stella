@@ -336,10 +336,14 @@ export const createSchedulerTaskRegistry = (
             runWithStatementCeiling({
               kind: "scheduler",
               key: name,
-              run: async () =>
-                await (typeof entry === "function"
-                  ? entry(context)
-                  : entry.task(context)),
+              run: async () => {
+                const task = typeof entry === "function" ? entry : entry.task;
+                const outcome = await task(context);
+                if (outcome === undefined) {
+                  return undefined;
+                }
+                return outcome;
+              },
             }),
         ];
       },
