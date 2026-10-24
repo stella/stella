@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeEach, mock } from "bun:test";
 
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
+
 import {
   installDomNetworkGuard,
   markTestEnded,
@@ -12,6 +14,13 @@ import {
   markTimerTestStarted,
   reportLeakedTimers,
 } from "@/testing/timer-guard";
+
+// Tests run the program that ships: compiled by the React Compiler, as the
+// Vite build compiles it. Components leave memoization to the compiler, so an
+// uncompiled render would loop or re-render where the app does not. The
+// first plugin whose filter matches a module loads it, so a test stubs a
+// source module with `mock.module`, never with its own `Bun.plugin`.
+Bun.plugin(reactCompilerBunPlugin);
 
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.

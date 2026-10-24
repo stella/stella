@@ -36,6 +36,11 @@ Object.assign(globalThis, {
   },
 });
 
+// The first plugin whose filter matches a module loads it, and the test
+// preload has already registered the React Compiler for every source module.
+// Clearing it lets the engine stubs register first; the compiler goes back
+// after them, so the panel still renders as it ships.
+Bun.plugin.clearAll();
 Bun.plugin({
   name: "file-tab-rendering-engine-test-loader",
   setup(build) {
@@ -70,10 +75,6 @@ Bun.plugin({
     }));
   },
 });
-// The panel renders as it ships: compiled by the React Compiler, as the Vite
-// build compiles it. Without it the render budget below would measure manual
-// memoization the compiler replaces. Registered after the engine stubs, so
-// those modules keep their stand-ins.
 Bun.plugin(reactCompilerBunPlugin);
 
 const { act, cleanup, fireEvent, render, waitFor } =
