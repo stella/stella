@@ -1,29 +1,31 @@
 import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
 
 import {
+  accountExports,
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
-  folioCollabRooms,
   desktopTimeEntryBatches,
-  legalReaderAnswerMessages,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
   euCompletionControls,
   euCompletionReceipts,
+  folioCollabRooms,
+  legalReaderAnswerMessages,
   pdfSigningSessions,
-  workObligations,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
+  syntheticSessionControl,
+  workObligations,
 } from "@/api/db/schema";
 import {
-  FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
+  FLOW_RUN_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
-  WRITABLE_STATUS_COLUMNS,
   StatusTable,
+  WRITABLE_STATUS_COLUMNS,
 } from "@/api/lib/db/status-tables.gen";
 import {
   defineFixedLifecycle,
@@ -33,9 +35,9 @@ import {
   defineTransitions,
 } from "@/api/lib/db/transitions";
 import type {
-  ScopedTransitionDeclaration,
   FixedLifecycleSpec,
   LifecycleSpec,
+  ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
 import {
@@ -79,6 +81,19 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+// A failed attempt retries until its budget is spent; a ready archive expires.
+const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
+  accountExports,
+  {
+    requested: ["processing", "failed"],
+    processing: ["ready", "requested", "failed"],
+    ready: ["expired"],
+    failed: [],
+    expired: [],
+  },
+  { terminal: ["failed", "expired"] },
+);
 
 export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
   ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
@@ -241,6 +256,15 @@ const EU_COMPLETION_CONTROL_LIFECYCLE = defineLifecycle({
   graphs: { state: { edges: { off: ["on"], on: ["off"] }, terminal: [] } },
 });
 
+export const SYNTHETIC_SESSION_CONTROL_TRANSITIONS = defineTransitions(
+  syntheticSessionControl,
+  {
+    enabled: ["revoked"],
+    revoked: [],
+  },
+  { terminal: ["revoked"] },
+);
+
 // The approval copies its dry-run receipt's outcome as foreign-key proof.
 const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
   table: euCompletionApprovals,
@@ -275,6 +299,7 @@ export const TRANSITIONS = {
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
   accountDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
   accountDeletionRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  accountExports: ACCOUNT_EXPORT_TRANSITIONS,
   agentSkillProposals: { unmanaged: UNMANAGED_REASONS.userDecision },
   aiMemories: { unmanaged: UNMANAGED_REASONS.userDecision },
   auditLogs: { unmanaged: UNMANAGED_REASONS.userDecision },
@@ -378,6 +403,7 @@ export const TRANSITIONS = {
   softLawIngestionAttempts: { unmanaged: UNMANAGED_REASONS.workerRun },
   softLawSources: { unmanaged: UNMANAGED_REASONS.workerRun },
   styleSets: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  syntheticSessionControl: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,
   templateDeletionCleanupRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templateFills: { unmanaged: UNMANAGED_REASONS.workerRun },
   templatePersistenceRequests: { unmanaged: UNMANAGED_REASONS.cleanup },

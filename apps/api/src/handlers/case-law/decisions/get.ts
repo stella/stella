@@ -12,9 +12,9 @@ import {
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisionJudges,
+  caseLawJudges,
   caseLawSources,
   publishedCaseLawDecisions,
-  caseLawJudges,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
@@ -407,6 +407,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       listPublicDecisionLanguageAlternates({
         tx,
         languageGroupKey: decision.languageGroupKey,
+        countries: subject.countries,
       }),
       listDecisionJudges(tx, decisionId),
       citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED

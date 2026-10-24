@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -26,10 +27,10 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -54,8 +55,8 @@ import {
   PublisherRateLimitRefusalError,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
@@ -87,11 +88,11 @@ import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
-  splitStoredDecisionTextMetadata,
   type DecisionTextFields,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   AdapterFetchError,
@@ -2370,8 +2371,7 @@ const isEcjCelexVariant = (value: unknown): value is EcjCelexVariant =>
  * A variant Cellar lists but does not serve — no manifestation for the
  * language, or nothing behind the one it names — is reported as unavailable
  * rather than written. It is an ordinary outcome, not a failure: the loop
- * parks such an item, widens its schedule and eventually retires it, and a
- * retired item is what lets its slice settle. Writing a detail-less row
+ * parks such an item and widens its schedule up to the capped backoff. Writing a detail-less row
  * instead would make the identity held and take the document out of every
  * later reconciliation.
  */

@@ -1,33 +1,34 @@
 import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import {
   BUN_FLAGS,
+  checkDockerSource,
   checkRepositoryDockerSources,
   commandEntries,
-  checkDockerSource,
   copySource,
   dockerInstructions,
   dockerPruneScopes,
   inDockerContext,
   installToolingCopies,
   sourceClosureProblems,
-  updateInstallToolingCopies,
   type SourceTree,
+  updateInstallToolingCopies,
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
 import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
+import { workflowJobSteps } from "./workflow-steps";
 
 const root = mkdtempSync(path.join(tmpdir(), "docker-source-fixtures-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -1411,36 +1412,34 @@ describe("Docker source closure", () => {
     );
   });
 
+  // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
   test("every tracked Dockerfile passes the full hydrated repository check", () => {
     expect(
       checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
-  }, 30_000);
+  }, 40_000);
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
-    const workflow = v.parse(
-      v.object({
-        jobs: v.object({
-          "ci-checks-rest": v.object({
-            steps: v.array(
-              v.object({
-                name: v.optional(v.string()),
-                run: v.optional(v.string()),
-                if: v.optional(v.string()),
-                "timeout-minutes": v.optional(v.number()),
-              }),
-            ),
-          }),
+    // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
+    const steps = v.parse(
+      v.array(
+        v.looseObject({
+          name: v.optional(v.string()),
+          run: v.optional(v.string()),
+          if: v.optional(v.string()),
+          "timeout-minutes": v.optional(v.number()),
         }),
-      }),
-      Bun.YAML.parse(
-        readFileSync(
-          new URL("../.github/workflows/ci.yml", import.meta.url),
-          "utf-8",
+      ),
+      workflowJobSteps(
+        Bun.YAML.parse(
+          readFileSync(
+            new URL("../.github/workflows/ci.yml", import.meta.url),
+            "utf-8",
+          ),
         ),
+        "ci-checks-rest",
       ),
     );
-    const steps = workflow.jobs["ci-checks-rest"].steps;
     const restore = steps.findIndex((step) =>
       step.run?.includes("ci-generated-sources.ts restore"),
     );

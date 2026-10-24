@@ -32,23 +32,30 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import {
+  BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserControlResult,
+} from "@stll/api-contract/browser-control";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
-  visualPreviewToolOutputSchema,
   type VisualPreviewOutput,
+  visualPreviewToolOutputSchema,
 } from "@stll/api-contract/visual-preview";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import {
-  createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  toPersistableChatMessage,
+  createChatAttachmentPart,
   normalizePersistedChatMessageContent,
+  toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_RUN_MODE,
+  validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { cutShortAssistantMessage } from "@/api/handlers/chat/chat-turn-persistence";
@@ -69,6 +76,10 @@ import {
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
+import {
+  BROWSER_CONTROL_TOOL_NAME,
+  createBrowserControlTool,
+} from "@/api/handlers/chat/tools/browser-control-tool";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
@@ -78,10 +89,12 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import {
   applyChatToolPolicy,
   CHAT_TOOL_POLICY_KIND,
+  getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
 import type {
   ChatAnonRestoration,
   ChatMessage,
+  PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -94,6 +107,7 @@ import {
 } from "@/api/lib/chat/model-ingress-guard";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
@@ -126,13 +140,13 @@ import {
   collectInitialRestorationPlaceholders,
   createChatAttemptState,
   hydrateMessages,
+  prepareResumeForThirdParty,
   processServerChatStream,
   pruneOrphanedToolParts,
-  prepareResumeForThirdParty,
   recordChatAttemptFinish,
-  toChatMessage,
   resolveAgentRunBoundaryError,
   shouldAttemptChatFallback,
+  toChatMessage,
   transformClientVisibleStream,
   transformOutgoingStream,
   transformPersistenceVisibleStream,
@@ -453,8 +467,7 @@ type TurnSignals = {
   runSignal?: AbortSignal;
   teardownAfterSourceChunks?: number;
   getRestorableCheckpoint?: () =>
-    | ReturnType<typeof toPersistableChatMessage>
-    | undefined;
+    ReturnType<typeof toPersistableChatMessage> | undefined;
 };
 
 const uncutTurnSignals = (): TurnSignals => {
@@ -1880,10 +1893,7 @@ describe("a turn cut while the model was thinking", () => {
 
 type AdmissionExit = "drain" | "throw" | "teardown" | "adapter-error";
 type AdmissionCheckpoint =
-  | "approval"
-  | "client-tool"
-  | "ask-user"
-  | "incomplete";
+  "approval" | "client-tool" | "ask-user" | "incomplete";
 
 const persistAdmissionLoss = async ({
   exit,
@@ -2987,6 +2997,253 @@ describe("native continuation persistence", () => {
       })),
     ).toEqual([{ id: owningMessageId, toolCalls: persistedToolCalls }]);
     expect(clientProcessor.getMessages().at(-1)?.id).toBe(owningMessageId);
+  });
+});
+
+describe("approved client tool with an output schema", () => {
+  const owningMessageId = toSafeId<"chatMessage">(
+    "33333333-3333-4333-8333-333333333333",
+  );
+  const callId = "call-browser";
+  const browserArguments = '{"action":"open","url":"https://example.com/"}';
+  const browserTools = createBrowserControlTool();
+  applyChatToolPolicy(
+    browserTools[BROWSER_CONTROL_TOOL_NAME],
+    CHAT_TOOL_POLICY_KIND.external,
+  );
+  const approvedCall = {
+    approval: { approved: true, id: `approval_${callId}`, needsApproval: true },
+    arguments: browserArguments,
+    id: callId,
+    input: { action: "open", url: "https://example.com/" },
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+    name: BROWSER_CONTROL_TOOL_NAME,
+    state: "approval-responded",
+    type: "tool-call",
+  } satisfies ChatMessage["parts"][number];
+  const userMessage: ChatMessage = {
+    id: "user-1",
+    role: "user",
+    parts: [{ content: "Open example.com", type: "text" }],
+  };
+  const browserResult = {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    snapshot: {
+      contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      elements: [],
+      revision: "revision-1",
+      tabId: 1,
+      text: "Example Domain",
+      textOffset: 0,
+      textTotalChars: 14,
+      title: "Example Domain",
+      url: "https://example.com/",
+    },
+    status: "success",
+  } as const satisfies BrowserControlResult;
+  const clientToolInterruptId = `client_tool_${callId}`;
+  const noDbReads: SafeDb = async () => {
+    throw new Error("This validation path should not read the database");
+  };
+
+  /** One run through the production SDK wrapper and persistence path, then
+   *  the browser's processor over the client-visible stream. */
+  const runTurn = async ({
+    messages,
+    parentRunId,
+    reply,
+    resume,
+    runId,
+  }: {
+    messages: ChatMessage[];
+    parentRunId: string;
+    reply: string;
+    resume: { interruptId: string; payload: unknown }[];
+    runId: string;
+  }) => {
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      initialMessages: messages,
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = toChatMessage(message);
+        },
+      },
+    });
+    const terminal: { finish: ProcessedStreamFinishEvent | null } = {
+      finish: null,
+    };
+    const source: PublicStreamChunk[] = [];
+    const observed = async function* (): AsyncIterable<PublicStreamChunk> {
+      for await (const chunk of streamChatChunks({
+        adapter: createTextReplyAdapter(reply),
+        agentLoopStrategy: maxIterations(3),
+        messages,
+        parentRunId,
+        resume: resume.map((resolution) => ({
+          ...resolution,
+          status: "resolved" as const,
+        })),
+        runId,
+        threadId: "thread-1",
+        tools: Object.values(browserTools),
+      })) {
+        source.push(chunk);
+        yield chunk;
+      }
+    };
+    const emitted = await collectChunks(
+      processServerChatStream({
+        ...uncutTurnSignals(),
+        getResponseMessage: () => responseMessage,
+        initialMessages: messages,
+        mapMessageId: createTurnMessageIdMapper(owningMessageId),
+        onFinish: (event) => {
+          terminal.finish = event;
+        },
+        processor,
+        source: observed(),
+      }),
+    );
+    const finish =
+      terminal.finish ?? panic("Expected the real engine to finish the turn");
+    const handedToClient: { input: unknown; toolCallId: string }[] = [];
+    const browser = new StreamProcessor({
+      initialMessages: messages,
+      events: {
+        onToolCall: ({ input, toolCallId }) => {
+          handedToClient.push({ input, toolCallId });
+        },
+      },
+    });
+    for (const chunk of await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks(emitted),
+        storedHistory: NOTHING_REWRITTEN,
+      }),
+    )) {
+      browser.processChunk(chunk);
+    }
+    browser.finalizeStream();
+    return { browser, emitted, finish, handedToClient, source };
+  };
+
+  const reloadParts = (message: PersistableChatMessage) =>
+    chatMessageFromPersisted({
+      id: owningMessageId,
+      role: "assistant",
+      content: chatMessageContentFromMessage(message),
+    }).parts;
+
+  // Resuming the approval hands the call to the browser and stops before the
+  // model. Live, stored and reloaded, the call stays owed its real result,
+  // never a result its output schema rejects or one the browser reads as run.
+  test("is handed to the browser input-only and continues with its result", async () => {
+    expect(
+      getChatToolPolicy(browserTools[BROWSER_CONTROL_TOOL_NAME]).needsApproval,
+    ).toBe(true);
+    const approved = await runTurn({
+      messages: [
+        userMessage,
+        { id: owningMessageId, role: "assistant", parts: [approvedCall] },
+      ],
+      parentRunId: "run-1",
+      reply: "The model must not run before the browser answers.",
+      runId: "run-2",
+      resume: [
+        { interruptId: `approval_${callId}`, payload: { approved: true } },
+      ],
+    });
+    // The fixture must reach the fault: the engine's interrupt snapshot
+    // carries a result row for the approved call the browser has not run.
+    expect(
+      approved.source.some(
+        (chunk) =>
+          chunk.type === EventType.MESSAGES_SNAPSHOT &&
+          chunk.messages.some(
+            (message) =>
+              message.role === "tool" && message.toolCallId === callId,
+          ),
+      ),
+    ).toBe(true);
+    expect(
+      approved.emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
+    ).toBe(false);
+    expect(approved.finish.outcome).toEqual({
+      type: "awaiting-user",
+      interaction: { type: "client-tool", toolCallId: callId },
+    });
+    const stored = approved.finish.responseMessage;
+    expect(stored.parts).toEqual([approvedCall]);
+    expect(
+      Result.isOk(
+        validateToolCallParts({
+          allowPartialInput: false,
+          allowDeferredServerInput: true,
+          message: stored,
+          tools: browserTools,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      approved.browser.getMessages().find(({ id }) => id === owningMessageId)
+        ?.parts,
+    ).toEqual(stored.parts);
+    expect(reloadParts(stored)).toEqual(stored.parts);
+    expect(approved.handedToClient).toEqual([
+      { input: approvedCall.input, toolCallId: callId },
+    ]);
+
+    // The browser posts the command's result; the server accepts it as the
+    // answer to the stored turn and the model continues from it.
+    approved.browser.addToolResult(callId, browserResult);
+    const answered =
+      approved.browser.getMessages().find(({ id }) => id === owningMessageId) ??
+      panic("The browser lost the answered message");
+    const continuation = await validateMessage({
+      message: {
+        id: owningMessageId,
+        role: "assistant",
+        parts: answered.parts,
+      },
+      persistedMessage: {
+        content: chatMessageContentFromMessage(stored),
+        role: "assistant",
+      },
+      resume: [
+        {
+          interruptId: clientToolInterruptId,
+          payload: browserResult,
+          status: "resolved",
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: toSafeId<"chatThread">("thread-1"),
+      tools: browserTools,
+      userId: toSafeId<"user">("user-1"),
+    });
+    if (Result.isError(continuation)) {
+      throw continuation.error;
+    }
+    const continued = await runTurn({
+      messages: [userMessage, continuation.value.message],
+      parentRunId: "run-2",
+      reply: "Opened example.com.",
+      runId: "run-3",
+      resume: [{ interruptId: clientToolInterruptId, payload: browserResult }],
+    });
+    expect(continued.finish.outcome).toEqual({ type: "completed" });
+    expect(continued.finish.responseMessage.parts).toMatchObject([
+      {
+        approval: approvedCall.approval,
+        id: callId,
+        output: browserResult,
+        state: "complete",
+        type: "tool-call",
+      },
+      { state: "complete", toolCallId: callId, type: "tool-result" },
+      { content: "Opened example.com.", type: "text" },
+    ]);
   });
 });
 
@@ -7082,7 +7339,7 @@ describe("decision passage court numbers", () => {
           // Intentionally left pending.
         });
       },
-      timeoutMs: 10,
+      timeoutMs: 10, // timeout under test
     });
     const text = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
     await stamper.prepare(text);

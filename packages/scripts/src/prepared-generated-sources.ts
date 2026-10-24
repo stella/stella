@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -28,7 +28,8 @@ export const generatedInputIdentity = (root: string) => {
     v.object({ version: v.string() }),
     JSON.parse(
       readFileSync(
-        path.join(root, "node_modules/typescript/package.json"),
+        // The generators run on the TypeScript 6 compiler API.
+        path.join(root, "node_modules/typescript6/package.json"),
         "utf-8",
       ),
     ),
@@ -145,6 +146,45 @@ export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
     }
   }
   return manifest;
+};
+
+/**
+ * The producer's bytes of one generated file, when this checkout's prepared
+ * manifest belongs to the current source and toolchain and the file on disk
+ * still has the bytes the producer recorded; otherwise undefined, never an
+ * error. Unlike hasPreparedGeneratedSources it ignores
+ * CI_GENERATED_SOURCES_MANIFEST, which regeneration guards clear for the rest
+ * of their job: it answers only whether an independent printout is on disk.
+ */
+export const preparedGeneratedFile = (
+  root: string,
+  file: string,
+): Uint8Array | undefined => {
+  const raw = Result.try((): unknown =>
+    JSON.parse(readFileSync(preparedManifestPath(root), "utf-8")),
+  );
+  if (Result.isError(raw)) {
+    return undefined;
+  }
+  const manifest = v.safeParse(preparedManifestSchema, raw.value);
+  if (!manifest.success) {
+    return undefined;
+  }
+  const expected = generatedInputIdentity(root);
+  const recorded = manifest.output.files[file];
+  if (
+    recorded === undefined ||
+    manifest.output.sourceSha !== expected.sourceSha ||
+    manifest.output.inputHash !== expected.inputHash ||
+    manifest.output.bunVersion !== expected.bunVersion ||
+    manifest.output.compilerVersion !== expected.compilerVersion
+  ) {
+    return undefined;
+  }
+  const bytes = Result.try(() => readFileSync(path.join(root, file)));
+  return Result.isOk(bytes) && generatedFileHash(bytes.value) === recorded
+    ? bytes.value
+    : undefined;
 };
 
 export const hasPreparedGeneratedSources = (root: string) => {

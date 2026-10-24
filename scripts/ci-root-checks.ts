@@ -10,8 +10,13 @@ import {
   type SelectionGraph,
   withDerivedOutputs,
 } from "./ci-affected-selection";
+import {
+  type ReadCheckPool,
+  readWorkingTreeCheckPool,
+} from "./ci-check-pool-registry";
 import { rootCheckGate } from "./ci-root-check-gate";
 import declaredInputs from "./ci-root-check-inputs.json" with { type: "json" };
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dir, "..");
 const stepSchema = v.looseObject({
@@ -26,6 +31,7 @@ const checkInputsSchema = v.record(v.string(), v.array(v.string()));
 const inputsSchema = v.strictObject({
   "ci-checks-rest": checkInputsSchema,
   "ci-checks-policy": checkInputsSchema,
+  "code-quality-web-rest": checkInputsSchema,
 });
 const toolingPackages = [
   "@stll/scripts",
@@ -65,12 +71,18 @@ export const rootCheckInputs = (graph: SelectionGraph) =>
 export const validateRootCheckCensus = (
   workflowSource: string,
   inputs = ROOT_CHECK_INPUTS,
+  readPool: ReadCheckPool = readWorkingTreeCheckPool,
 ) => {
   const workflow = v.parse(workflowSchema, Bun.YAML.parse(workflowSource));
   for (const [job, checks] of Object.entries(inputs)) {
-    const { steps } = v.parse(
+    const { steps: declaredSteps } = v.parse(
       jobSchema,
       workflow.jobs[job] ?? panic(`Missing root job: ${job}`),
+    );
+    // Pooled checks are steps of their job for selection purposes.
+    const steps = v.parse(
+      v.array(stepSchema),
+      flattenWorkflowSteps(declaredSteps, readPool),
     );
     const actual = steps
       .filter(({ run }) => run !== undefined)

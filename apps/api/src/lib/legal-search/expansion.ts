@@ -44,7 +44,10 @@ import {
   parseExpansionDictionaryOffLoop,
   unpackExpansionForms,
 } from "@/api/lib/legal-search/morphology/dictionary";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
+import {
+  MORPHOLOGY_LANGUAGES,
+  type MorphologyLanguage,
+} from "@/api/lib/legal-search/morphology/stem";
 import type { QueryExpansionMode } from "@/api/lib/legal-search/query-expansion-mode";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
@@ -174,8 +177,7 @@ type LoadedDictionary = {
 const shortHash = (contentHash: string): string => contentHash.slice(0, 12);
 
 type DictionaryLoad =
-  | (LoadedDictionary & { status: "loaded" })
-  | { status: "unavailable" };
+  (LoadedDictionary & { status: "loaded" }) | { status: "unavailable" };
 
 const UNAVAILABLE: DictionaryLoad = { status: "unavailable" };
 
@@ -427,6 +429,44 @@ const dictionaryFor = async (
   // fallback exists to prevent.
   detached(refresh, "legal-search.expansion-dictionary-refresh");
   return { ...previous, status: "loaded" };
+};
+
+/** The languages a deployment can expand, for the shadow-mode invariant. */
+export const PUBLISHED_EXPANSION_LANGUAGES = MORPHOLOGY_LANGUAGES.filter(
+  (language) => EXPANSION_DICTIONARY[language] === "published",
+);
+
+/**
+ * What resolving one language's dictionary answered. `stale` is a payload
+ * still served from memory while its latest read found nothing.
+ */
+export type ExpansionDictionaryProbe =
+  | { status: "loaded"; entries: number }
+  | { status: "stale"; entries: number }
+  | { status: "unavailable" };
+
+/**
+ * Resolve a language's dictionary as a cold request would, and say what came
+ * back. Shadow mode never waits for a cold load, so a dictionary that cannot
+ * be read turns every shadow record into `no_dictionary` and the rollout
+ * measures nothing while looking healthy; this lets an invariant ask directly.
+ */
+export const probeExpansionDictionary = async (
+  language: MorphologyLanguage,
+): Promise<ExpansionDictionaryProbe> => {
+  const dictionary = await dictionaryFor(language);
+  switch (dictionary.status) {
+    case "unavailable":
+      return { status: "unavailable" };
+    case "loaded":
+      return {
+        status: resolvedUnavailable.has(language) ? "stale" : "loaded",
+        entries: dictionary.entries.size,
+      };
+    default:
+      dictionary satisfies never;
+      return panic(`Unhandled dictionary: ${String(dictionary)}`);
+  }
 };
 
 /**

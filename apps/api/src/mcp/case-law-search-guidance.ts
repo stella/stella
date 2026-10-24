@@ -37,17 +37,19 @@ type SearchCaseLawTexts = {
 };
 
 const DESCRIPTION_HEAD =
-  "Search case law within one country. `queries` merges phrasings of " +
-  "one question; matchedQueries names those behind each hit. " +
-  "`limit` is the merged page, split evenly " +
-  "across them.";
+  "Search case law. `queries` merges phrasings; matchedQueries " +
+  "names each hit's phrasings. `limit` is split evenly.";
 
 const DESCRIPTION_TAIL =
-  " Filter by court, language, dates, decision type, provision or source_id " +
-  "from facets.source. Facets cover the first phrasing on page one; multiple " +
-  "phrasings have no total. Function words are optional; strict requires all " +
-  "words. Hits include matching passages, citationAuthority, resourceName and " +
-  "caseNumber. Read the decision for details and citations for polarity.";
+  " Without strict, empty first relevance pages try some_terms hits ranked " +
+  "by term coverage; short pages may append them after all_terms hits. " +
+  "Totals/facets count full matches (facets: first phrasing, page one; total: " +
+  "uncounted for multiple phrasings). Filters: court, language, dates, " +
+  "decision type, provision, source_id (facets.source value). searches[] " +
+  "reports queryUsed and warnings. strict requires every word; otherwise " +
+  "function words are optional. Hits carry match, citationAuthority, " +
+  "matchingPassages, resourceName and caseNumber. read_case_law_decision " +
+  "types the reference; read_case_law_citations gives citing polarity.";
 
 const QUERIES_TAIL =
   "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.";
@@ -74,15 +76,11 @@ const SEARCH_CASE_LAW_TEXTS = {
     courts: `Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. ${COURTS_TAIL}`,
   },
   v1: {
-    description:
-      `${DESCRIPTION_HEAD} Put the most central phrasing first; three are ` +
-      "usually enough. A hit is a passage holding every word of a phrasing " +
-      "except function words, so keep each phrasing to the few words that " +
-      `define the issue.${DESCRIPTION_TAIL}`,
+    description: `${DESCRIPTION_HEAD} Put the most central phrasing first; three are usually enough.${DESCRIPTION_TAIL}`,
     queries:
       `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ` +
-      "Every word of a phrasing except function words must occur in the " +
-      "same passage, so give each phrasing the two to four words that " +
+      "A full match needs every word of a phrasing except function words in " +
+      "one passage, so give each phrasing the two to four words that " +
       "define the issue, and put an alternative wording in a phrasing of " +
       "its own rather than lengthening one. Write a provision as `§ N` " +
       `plus the act's name or abbreviation. ${QUERIES_TAIL}`,

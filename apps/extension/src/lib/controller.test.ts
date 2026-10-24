@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  type BrowserController,
   browserControllerMatchesSender,
   disconnectBrowserController,
   replaceBrowserControllerTab,
-  type BrowserController,
 } from "./controller";
 import { CONTROLLED_TAB_RULE_IDS } from "./tab-containment";
 

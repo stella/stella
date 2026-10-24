@@ -1,6 +1,6 @@
 import {
-  count,
   and,
+  count,
   eq,
   inArray,
   isNotNull,
@@ -31,12 +31,13 @@ import {
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
-  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
-  bufferObjectCleanupIntents,
   accountDeletionEffectChunks,
   accountDeletionRequests,
+  accountExports,
   agentSkills,
   aiMemories,
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
   chatThreads,
   contacts,
   correspondence,
@@ -47,13 +48,14 @@ import {
   entities,
   fileChatThreads,
   fileComparisonUploads,
-  folioCollabRoomTokens,
   folioCollabRooms,
+  folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
+  mcpWebHandoff,
   pdfSigningSessions,
-  pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
+  pendingUploads,
   rateEntries,
   searchHistoryEntries,
   searchHistoryOwners,
@@ -67,8 +69,8 @@ import {
   workObligationEvents,
   workObligations,
   workspaceMembers,
-  workspaceViewTemplates,
   workspaces,
+  workspaceViewTemplates,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import {
@@ -76,6 +78,7 @@ import {
   buildAccountDeletionTaskReassignmentTargets,
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
+import { ACCOUNT_EXPORT_LIMITS } from "@/api/lib/account-export/constants";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
   AUDIT_ACTION,
@@ -100,17 +103,18 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
-  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
   consumeInBatches,
   createS3DeletionEffectChunks,
+  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
 } from "@/api/lib/destructive-effect-chunks";
 import {
   clearCorrespondenceAssignmentsForOffboarding,
   eraseCorrespondenceActorDisplays,
 } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
-import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
+import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -266,6 +270,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
 };
 
 export const REVOKE_OAUTH_TOKENS_TABLES = [
+  mcpWebHandoff,
   oauthAccessToken,
   oauthRefreshToken,
   oauthConsent,
@@ -280,6 +285,8 @@ export const revokeOAuthTokensAndGrants = async (
   currentUserId: SafeId<"user">,
 ): Promise<void> => {
   await revokeAllUserOAuthTokens(tx, currentUserId);
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx.delete(mcpWebHandoff).where(eq(mcpWebHandoff.userId, currentUserId));
   await tx.delete(oauthConsent).where(eq(oauthConsent.userId, currentUserId));
   await tx.delete(oauthClient).where(eq(oauthClient.userId, currentUserId));
 };
@@ -1170,12 +1177,13 @@ export const deleteFileComparisonUploads = async ({
 
 export type DeleteUserFilesParams = {
   tx: Transaction;
-  currentUserId: string;
+  currentUserId: SafeId<"user">;
   s3KeysToDelete: string[];
 };
 
 export const DELETE_USER_FILES_TABLES = [
   userFiles,
+  accountExports,
 ] as const satisfies readonly PgTable[];
 
 /**
@@ -1187,35 +1195,71 @@ export const deleteUserFiles = async ({
   tx,
   currentUserId,
   s3KeysToDelete,
-}: DeleteUserFilesParams): Promise<void> => {
+}: DeleteUserFilesParams): Promise<Date | null> => {
+  // audit: skip - The enclosing account-deletion request records file and export erasure in this transaction.
+  // The account lock held by erasure fences claims and completion. Reclaimed
+  // ledger rows hold no object keys and leave without a result set.
+  await tx
+    .delete(accountExports)
+    .where(
+      and(
+        eq(accountExports.userId, currentUserId),
+        sql`jsonb_array_length(${accountExports.attemptObjectKeys}) = 0`,
+      ),
+    );
+  // Rows that still name attempted objects are bounded by the request budget
+  // over one reclamation window; their keys join the durable cleanup request.
+  // Claims cannot outlive their absolute lease, so reclamation waits until
+  // every possible publication has stopped, storage cancellation included.
+  const exportObjects = await tx
+    .delete(accountExports)
+    .where(eq(accountExports.userId, currentUserId))
+    .returning({
+      keys: accountExports.attemptObjectKeys,
+      notBefore:
+        sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs + ACCOUNT_EXPORT_LIMITS.publicationCancellationMarginMs} * INTERVAL '1 millisecond')`.mapWith(
+          accountExports.createdAt,
+        ),
+    });
+  for (const { keys } of exportObjects) {
+    s3KeysToDelete.push(...keys);
+  }
   const files = await tx
     .select({
       id: userFiles.id,
       s3Key: userFiles.s3Key,
       thumbnailFileId: userFiles.thumbnailFileId,
+      organizationId: chatThreads.organizationId,
       userId: userFiles.userId,
     })
     .from(userFiles)
+    .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
     .where(eq(userFiles.userId, currentUserId));
 
   if (files.length > 0) {
     s3KeysToDelete.push(
-      ...files.flatMap((file) =>
-        file.thumbnailFileId
-          ? [
-              file.s3Key,
-              createUserFileKey({
-                fileId: file.thumbnailFileId,
-                mimeType: "image/webp",
-                userId: brandPersistedUserId(file.userId),
-              }),
-            ]
-          : [file.s3Key],
-      ),
+      ...files
+        .flatMap((file) =>
+          file.thumbnailFileId
+            ? [
+                file.s3Key,
+                createUserFileThumbnailKey({
+                  sourceKey: file.s3Key,
+                  thumbnailFileId: file.thumbnailFileId,
+                  organizationId: brandPersistedOrganizationId(
+                    file.organizationId,
+                  ),
+                  uploaderUserId: brandPersistedUserId(file.userId),
+                }),
+              ]
+            : [file.s3Key],
+        )
+        .filter((key) => key !== null),
     );
   }
 
   await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
+  return exportObjects.at(0)?.notBefore ?? null;
 };
 
 export const DELETE_CHAT_THREADS_TABLES = [
@@ -1380,6 +1424,7 @@ export type RecordAccountDeletionRequestParams = {
   workspaceIds: SafeId<"workspace">[];
   taskReassignmentCount: number;
   s3KeysToDelete: string[];
+  storageCleanupNotBefore?: Date | null;
 };
 
 /**
@@ -1395,6 +1440,7 @@ export const recordAccountDeletionRequest = async ({
   workspaceIds,
   taskReassignmentCount,
   s3KeysToDelete,
+  storageCleanupNotBefore,
 }: RecordAccountDeletionRequestParams): Promise<void> => {
   const effectChunks = createS3DeletionEffectChunks(s3KeysToDelete);
   await tx.insert(accountDeletionRequests).values({
@@ -1404,7 +1450,13 @@ export const recordAccountDeletionRequest = async ({
     workspaceIds,
     taskReassignmentCount,
     status: s3KeysToDelete.length > 0 ? "pending" : "completed",
-    storageCleanup: { s3Keys: s3KeysToDelete },
+    storageCleanup: {
+      s3Keys: s3KeysToDelete,
+      ...(storageCleanupNotBefore === undefined ||
+      storageCleanupNotBefore === null
+        ? {}
+        : { notBefore: storageCleanupNotBefore.toISOString() }),
+    },
     completedAt: s3KeysToDelete.length > 0 ? null : new Date(),
   });
 

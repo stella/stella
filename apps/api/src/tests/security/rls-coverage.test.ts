@@ -12,9 +12,9 @@ import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_VIEW_NAME,
   stella,
   stellaIngestion,
+  WORKSPACE_ACCESS_VIEW_NAME,
 } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import {
@@ -32,9 +32,9 @@ import {
   fetchStellaIngestionColumnPrivileges,
   fetchStellaIngestionPolicies,
   fetchStellaIngestionTablePrivileges,
-  fetchStellaUserSelectColumnPrivileges,
-  fetchStellaTablePrivileges,
   fetchStellaPolicies,
+  fetchStellaTablePrivileges,
+  fetchStellaUserSelectColumnPrivileges,
   fetchWorkspaceTenantPairForeignKeys,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -388,6 +388,8 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    // Root-owned OAuth state denies all app-role access.
+    "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -420,7 +422,7 @@ describe("policy coverage", () => {
     // Owner/admin targets have a dedicated policy assertion and no DELETE grant.
     "time_daily_targets",
     // AI memory is multi-scope (org OR user OR workspace in one table)
-    // and archive-only (no permissive DELETE). The generic workspace /
+    // with scoped permanent deletion. The generic workspace /
     // org loops can't express either shape; the dedicated test below
     // asserts its real policy boundaries.
     "ai_memories",
@@ -1006,7 +1008,7 @@ describe("policy coverage", () => {
     }
   });
 
-  test("ai_memories is multi-scope and archive-only (no permissive delete)", async () => {
+  test("ai_memories applies the same scope to reads and permanent deletion", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const tablePolicies = policies.filter(
       (p) => p.table_name === "ai_memories",
@@ -1020,7 +1022,7 @@ describe("policy coverage", () => {
     expect(cmds).toContain("r");
     expect(cmds).toContain("a");
     expect(cmds).toContain("w");
-    for (const command of ["r", "a", "w"] as const) {
+    for (const command of ["r", "a", "w", "d"] as const) {
       const policy = tablePolicies.find((p) => p.command === command);
       expect(policy?.permissive).toBe(true);
       const expr = command === "a" ? policy?.check_expr : policy?.using_expr;
@@ -1033,14 +1035,10 @@ describe("policy coverage", () => {
       expect(expr).toContain("source_data_workspace_ids");
     }
 
-    // Archive-only: DELETE is locked by a single RESTRICTIVE `false`
-    // policy so a later permissive DELETE cannot silently unlock hard
-    // deletes (same durability guarantee as audit_logs).
+    const selectPolicy = tablePolicies.find((p) => p.command === "r");
     const deletePolicies = tablePolicies.filter((p) => p.command === "d");
     expect(deletePolicies).toHaveLength(1);
-    const deletePolicy = deletePolicies.at(0);
-    expect(deletePolicy?.permissive).toBe(false);
-    expect(deletePolicy?.using_expr).toBe("false");
+    expect(deletePolicies.at(0)?.using_expr).toBe(selectPolicy?.using_expr);
   });
 
   test("docx_suggestions carries the contributing-matter subset check", async () => {
@@ -1366,6 +1364,7 @@ describe("policy coverage", () => {
       "oauth_access_token",
       "oauth_client",
       "service_oauth_clients",
+      "mcp_web_handoff",
       "oauth_consent",
       "oauth_refresh_token",
       "session",
@@ -1463,6 +1462,27 @@ describe("policy coverage", () => {
     const policy = result.rows.at(0);
     expect(policy?.rls_enabled).toBe(true);
     expect(policy?.rls_forced).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
+  });
+
+  test("web handoffs retain an owner-only RLS policy", async () => {
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      owner_using: string | null;
+      owner_check: string | null;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.mcp_web_handoff'::regclass
+        AND policy.polname = 'mcp_web_handoff_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
     expect(policy?.owner_using).toContain("CURRENT_USER");
     expect(policy?.owner_using).toContain("pg_get_userbyid");
     expect(policy?.owner_check).toBe(policy?.owner_using);

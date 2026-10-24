@@ -7,6 +7,8 @@ type ReadBaseLedgerOptions = {
   ledgerRel: string;
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
+  normalizeBaseEntries?:
+    ((entries: string[], baseCommit: string) => string[]) | undefined;
 };
 
 type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
@@ -14,8 +16,7 @@ type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
 };
 
 type CompareLedgerMembershipResult =
-  | { type: "unresolved-base" }
-  | { type: "compared"; added: string[] };
+  { type: "unresolved-base" } | { type: "compared"; added: string[] };
 
 const compareLedgerMembership = ({
   baseRef,
@@ -23,6 +24,7 @@ const compareLedgerMembership = ({
   ledgerRel,
   repoRoot,
   parseLedger,
+  normalizeBaseEntries,
 }: CompareLedgerMembershipOptions): CompareLedgerMembershipResult => {
   const resolved = Bun.spawnSync(
     [
@@ -47,7 +49,10 @@ const compareLedgerMembership = ({
   });
   return {
     type: "compared",
-    added: addedEntries(current, base),
+    added: addedEntries(
+      current,
+      base === null ? null : (normalizeBaseEntries?.(base, commit) ?? base),
+    ),
   };
 };
 
@@ -128,6 +133,7 @@ type RunLedgerMembershipGuardOptions = {
   ledgerRel: string;
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
+  normalizeBaseEntries?: ReadBaseLedgerOptions["normalizeBaseEntries"];
   label: string;
   remediation: string;
   args?: readonly string[];
@@ -139,6 +145,7 @@ export const runLedgerMembershipGuard = ({
   ledgerRel,
   repoRoot,
   parseLedger,
+  normalizeBaseEntries,
   label,
   remediation,
   args = process.argv.slice(2),
@@ -165,6 +172,7 @@ export const runLedgerMembershipGuard = ({
     ledgerRel,
     repoRoot,
     parseLedger,
+    normalizeBaseEntries,
   });
   if (comparison.type === "unresolved-base") {
     error(

@@ -1382,6 +1382,33 @@ describe("list_capabilities", () => {
     }
   });
 
+  test.each(["", " ", "  ", "\t\n", "\u00a0\u2003"])(
+    "blank query %j preserves id-order pages and cursor binding",
+    async (query) => {
+      const first = parseToolPayload<{ nextCursor: string | null }>(
+        await call("list_capabilities", { limit: 1 }),
+      );
+      const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+      for (const args of [{ limit: 1 }, { limit: 1, cursor }]) {
+        expect(await call("list_capabilities", { ...args, query })).toEqual(
+          await call("list_capabilities", args),
+        );
+      }
+    },
+  );
+
+  test("surrounding query whitespace preserves relevance cursor binding", async () => {
+    const first = parseToolPayload<{ nextCursor: string | null }>(
+      await call("list_capabilities", { query: "time entries", limit: 1 }),
+    );
+    const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+    expect(
+      await call("list_capabilities", { query: "  time entries ", cursor }),
+    ).toEqual(
+      await call("list_capabilities", { query: "time entries", cursor }),
+    );
+  });
+
   test("ranks suggestion capabilities by id before description-only matches", async () => {
     const result = await call("list_capabilities", {
       query: "suggestion",

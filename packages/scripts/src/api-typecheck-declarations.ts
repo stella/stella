@@ -2,7 +2,7 @@
 import { panic } from "better-result";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -15,9 +15,9 @@ import {
 } from "./api-typecheck-config";
 import {
   apiResolvedTypecheckInputs,
-  uncoveredApiTypecheckFiles,
   nativeTypecheckProgramFiles,
   requireApiTypecheckGeneratedSources,
+  uncoveredApiTypecheckFiles,
 } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import {

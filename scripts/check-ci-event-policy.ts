@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
@@ -52,7 +52,7 @@ export const workflowSchema = v.looseObject({
       steps: v.optional(
         v.pipe(
           v.unknown(),
-          v.transform(flattenWorkflowSteps),
+          v.transform((steps) => flattenWorkflowSteps(steps)),
           v.array(
             v.looseObject({
               env: v.optional(v.record(v.string(), v.unknown())),
@@ -113,8 +113,7 @@ type CheckMainConcurrencyOptions = {
   file: string;
   workflow: v.InferOutput<typeof workflowSchema>;
   concurrencyPolicy:
-    | v.InferOutput<typeof policySchema>["pushMain"][string]
-    | undefined;
+    v.InferOutput<typeof policySchema>["pushMain"][string] | undefined;
 };
 
 const checkMainConcurrency = ({

@@ -20,15 +20,16 @@ import {
   changesetNamesCli,
   classifyCliRelease,
   CLI_CONTRACT_SURFACE,
+  type CliContractSurface,
   compareStableVersions,
   findSurfaceDrift,
   parseGeneratedConstants,
+  type PublishedCli,
   readHeadSurface,
   readPublishedPackageSurface,
   verdictFromClassification,
-  type CliContractSurface,
-  type PublishedCli,
 } from "./check-cli-release-coupling";
+import { readCiCheckCommandText } from "./ci-check-pool-registry";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const SCRIPT = "scripts/check-cli-release-coupling.ts";
@@ -390,7 +391,7 @@ describe("release workflows run the gate", () => {
   });
 
   test("a release pull request sees the same verdict before merging", () => {
-    expect(read(".github/workflows/ci.yml")).toContain(
+    expect(readCiCheckCommandText()).toContain(
       `bun ${SCRIPT} --base "origin/$BASE_REF"`,
     );
   });

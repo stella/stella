@@ -35,25 +35,25 @@ import {
 } from "./mcp-client.js";
 import {
   EXIT_CODES,
+  type ExitCode,
   FEATURE_DISABLED_ERROR_CODES,
+  mapHttpStatusExit,
   MAX_ALL_BYTES,
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
-  mapHttpStatusExit,
   resolveMcpErrorCodeExit,
-  type ExitCode,
 } from "./mcp-constants.js";
 import {
   buildRenderPlan,
   jsonlLine,
   MERGED_TEXT_PATH,
+  type OutputFormat,
+  type RenderPlan,
   renderPlanExitCode,
   renderResult,
   selectFormat,
   terminalWidth,
   valueAtPath,
-  type OutputFormat,
-  type RenderPlan,
   type Writers,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -314,8 +314,7 @@ const coerceFlagValue = async (
 };
 
 type ArgsResult =
-  | { ok: true; args: Record<string, unknown> }
-  | { ok: false; message: string };
+  { ok: true; args: Record<string, unknown> } | { ok: false; message: string };
 
 type ComposeInputFromFlagsOptions<T extends FlagSpec> = {
   base: Record<string, unknown>;
@@ -1120,6 +1119,11 @@ export const toolErrorLines = (
   },
   flagPaths?: ReadonlySet<string>,
 ): string[] => {
+  if (envelope.code === "unknown_tool") {
+    return [
+      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
+    ];
+  }
   const admission = readCliActionAdmissionRefusal(envelope);
   if (admission !== undefined) {
     return actionAdmissionRefusalLines(admission);

@@ -1,14 +1,19 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  actionlintWorkflowSource,
   checkWorkflowYaml,
   parseWorkflowYaml,
   validateActionMetadata,
-  actionlintWorkflowSource,
   validateLocalActionReferences,
+  validateNoRubyProcessSpawns,
+  validateNoRubyShell,
+  validateWorkflowJobTimeouts,
   validateWorkflowSize,
   WORKFLOW_SIZE_LIMIT_BYTES,
 } from "./check-workflow-yaml";
@@ -114,11 +119,62 @@ describe("workflow YAML validation", () => {
     );
   });
 
+  test("Ruby workflow shells and script process spawns are rejected", async () => {
+    expect(() =>
+      validateNoRubyShell(
+        { jobs: { check: { steps: [{ shell: "ruby {0}", run: "puts 1" }] } } },
+        "workflow.yml",
+      ),
+    ).toThrow("workflow.yml: Ruby workflow shells are not allowed");
+    for (const shell of [
+      "/usr/bin/ruby {0}",
+      "/usr/bin/env ruby {0}",
+      "env ruby3.3 -w {0}",
+    ]) {
+      expect(() =>
+        validateNoRubyShell(
+          { steps: [{ shell, run: "puts 1" }] },
+          "workflow.yml",
+        ),
+      ).toThrow("workflow.yml: Ruby workflow shells are not allowed");
+    }
+    expect(() =>
+      validateNoRubyShell(
+        { steps: [{ shell: "bash {0}", run: "true" }] },
+        "workflow.yml",
+      ),
+    ).not.toThrow();
+
+    const root = mkdtempSync(path.join(tmpdir(), "workflow-ruby-spawn-"));
+    try {
+      mkdirSync(path.join(root, "scripts"));
+      const runtime = "ruby";
+      writeFileSync(
+        path.join(root, "scripts/check.ts"),
+        `Bun.spawnSync(["${runtime}", "-e", "puts 1"]);\n`,
+      );
+      const rejection = await rejectionOf(validateNoRubyProcessSpawns(root));
+      expect(rejection instanceof Error ? rejection.message : "").toContain(
+        "spawning Ruby from scripts is not allowed",
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("malformed workflow YAML reports its file", async () => {
     const file = path.join(FIXTURES, "malformed-workflow.yml");
     expect(await rejectionOf(parseWorkflowYaml(file))).toHaveProperty(
       "message",
       `${file}: invalid YAML`,
+    );
+  });
+
+  test("a step-running job without a timeout names the workflow, job, and rule", async () => {
+    const file = path.join(FIXTURES, "missing-job-timeout.yml");
+    const workflow = await parseWorkflowYaml(file);
+    expect(() => validateWorkflowJobTimeouts(workflow, file)).toThrow(
+      `${file}: job missing-timeout runs steps and must define timeout-minutes; every step-running workflow job requires a timeout`,
     );
   });
 

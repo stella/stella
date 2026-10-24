@@ -16,10 +16,10 @@
     {
       "name": "case_law_coverage",
       "nameChars": 17,
-      "descriptionChars": 294,
+      "descriptionChars": 297,
       "inputSchemaChars": 451,
-      "totalChars": 762,
-      "estimatedTokens": 292
+      "totalChars": 765,
+      "estimatedTokens": 293
     },
     {
       "name": "check_counterparty",
@@ -121,9 +121,9 @@
       "name": "describe_capability",
       "nameChars": 19,
       "descriptionChars": 393,
-      "inputSchemaChars": 240,
-      "totalChars": 652,
-      "estimatedTokens": 238
+      "inputSchemaChars": 256,
+      "totalChars": 668,
+      "estimatedTokens": 244
     },
     {
       "name": "fetch",
@@ -270,6 +270,14 @@
       "estimatedTokens": 374
     },
     {
+      "name": "mint_web_handoff",
+      "nameChars": 16,
+      "descriptionChars": 110,
+      "inputSchemaChars": 169,
+      "totalChars": 295,
+      "estimatedTokens": 113
+    },
+    {
       "name": "open_case_law_decision",
       "nameChars": 22,
       "descriptionChars": 234,
@@ -337,17 +345,17 @@
       "name": "read_capability",
       "nameChars": 15,
       "descriptionChars": 364,
-      "inputSchemaChars": 897,
-      "totalChars": 1276,
-      "estimatedTokens": 501
+      "inputSchemaChars": 913,
+      "totalChars": 1292,
+      "estimatedTokens": 507
     },
     {
       "name": "read_case_law_citations",
       "nameChars": 23,
-      "descriptionChars": 804,
-      "inputSchemaChars": 843,
-      "totalChars": 1670,
-      "estimatedTokens": 627
+      "descriptionChars": 767,
+      "inputSchemaChars": 1140,
+      "totalChars": 1930,
+      "estimatedTokens": 739
     },
     {
       "name": "read_case_law_decision",
@@ -400,10 +408,10 @@
     {
       "name": "read_statute",
       "nameChars": 12,
-      "descriptionChars": 693,
+      "descriptionChars": 800,
       "inputSchemaChars": 990,
-      "totalChars": 1695,
-      "estimatedTokens": 648
+      "totalChars": 1802,
+      "estimatedTokens": 684
     },
     {
       "name": "read_statute_provisions",
@@ -424,10 +432,10 @@
     {
       "name": "resolve_case_law_decision",
       "nameChars": 25,
-      "descriptionChars": 766,
+      "descriptionChars": 554,
       "inputSchemaChars": 671,
-      "totalChars": 1462,
-      "estimatedTokens": 544
+      "totalChars": 1250,
+      "estimatedTokens": 473
     },
     {
       "name": "resolve_law_citation",
@@ -521,8 +529,8 @@
       "name": "search",
       "nameChars": 6,
       "descriptionChars": 521,
-      "inputSchemaChars": 306,
-      "totalChars": 833,
+      "inputSchemaChars": 307,
+      "totalChars": 834,
       "estimatedTokens": 304
     },
     {
@@ -544,18 +552,18 @@
     {
       "name": "search_case_law",
       "nameChars": 15,
-      "descriptionChars": 603,
-      "inputSchemaChars": 4825,
-      "totalChars": 5443,
-      "estimatedTokens": 2217
+      "descriptionChars": 799,
+      "inputSchemaChars": 4909,
+      "totalChars": 5723,
+      "estimatedTokens": 2317
     },
     {
       "name": "search_legislation",
       "nameChars": 18,
-      "descriptionChars": 638,
-      "inputSchemaChars": 2065,
-      "totalChars": 2721,
-      "estimatedTokens": 1080
+      "descriptionChars": 722,
+      "inputSchemaChars": 2354,
+      "totalChars": 3094,
+      "estimatedTokens": 1228
     },
     {
       "name": "set_field_value",
@@ -609,13 +617,13 @@
       "name": "write_capability",
       "nameChars": 16,
       "descriptionChars": 433,
-      "inputSchemaChars": 1053,
-      "totalChars": 1502,
-      "estimatedTokens": 589
+      "inputSchemaChars": 1069,
+      "totalChars": 1518,
+      "estimatedTokens": 596
     }
   ],
   "totals": {
-    "characters": 126188,
-    "estimatedTokens": 50006
+    "characters": 127343,
+    "estimatedTokens": 50464
   }
 }

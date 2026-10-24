@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -302,7 +302,7 @@ test("shared commands and inert text are accepted", () => {
   ).toEqual([]);
 });
 
-// Both files must outlive Bun's 5s default; a preload-only budget protects one file.
+// Measured p95 is 20.2 s; both spawned files must outlive Bun's default timeout.
 test("the CLI budget reaches every sequential file and its removal fails", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "custom-lint-budget-"));
   try {
@@ -324,4 +324,4 @@ test("the CLI budget reaches every sequential file and its removal fails", () =>
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-}, 30_000);
+}, 45_000);

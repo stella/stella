@@ -15,17 +15,20 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
+  corpusIndexManifestCoversJurisdiction,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  deriveCorpusIndexProjectionDescriptor,
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
   type CorpusIndexProjectionInput,
+  deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
@@ -106,6 +109,8 @@ export type CaseLawProjectionCanonicalInput = {
   decisionDate: string | null;
   ecli: string | null;
   metadata: Record<string, unknown> | null;
+  provisionKeys: readonly string[];
+  vacatedFrom: string | null;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
 
@@ -124,6 +129,8 @@ export const caseLawProjectionInputFromCanonical = ({
   decisionDate,
   ecli,
   metadata,
+  provisionKeys,
+  vacatedFrom,
   sourceDescriptor,
 }: CaseLawProjectionCanonicalInput): CaseLawProjectionInput => ({
   family: "case_law",
@@ -145,6 +152,8 @@ export const caseLawProjectionInputFromCanonical = ({
   decisionDate,
   ecli,
   metadata,
+  provisionKeys,
+  vacatedFrom,
 });
 
 /**
@@ -450,11 +459,24 @@ const lockCaseLawProjectionInput = async (
       `Case-law projection subject exceeds ${DECISION_IDENTIFIER_MAX_COUNT} identifiers: ${subject.entityId}`,
     );
   }
+  const provisionKeys = (
+    await readCaseLawProvisionKeys(tx, [
+      { id: row.documentId, jurisdiction: row.jurisdiction },
+    ])
+  ).get(String(row.documentId));
+  const vacatedFrom =
+    (await readCaseLawJurisdictionVacatedTx(tx, [row.jurisdiction])).get(
+      row.jurisdiction,
+    ) ?? null;
   return {
     epoch: row.projectionEpoch,
     input: caseLawProjectionInputFromCanonical({
       ...row,
       identifiers,
+      provisionKeys:
+        provisionKeys ??
+        panic(`Provision keys were not loaded for ${row.documentId}`),
+      vacatedFrom,
       sourceDescriptor: source.sourceDescriptor,
     }),
   };
@@ -591,17 +613,59 @@ type GenerationProjection = {
 /**
  * The descriptor each generation is owed for one canonical input. A retiring
  * generation appears only where that descriptor is an erasure.
+ *
+ * A partial generation is owed nothing for a jurisdiction it does not hold:
+ * no state, so it never carries a row per decision of the corpus. But a
+ * generation whose scope no longer covers the decision owes an erasure when it
+ * holds a projection of it, so a decision corrected out of a jurisdiction
+ * (or a jurisdiction dropped from a scope) does not leave a copy behind that
+ * nothing would ever delete. The existing projections are read in one probe by
+ * the state primary key.
  */
-const projectionsFor = (
+const projectionsFor = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
   manifests: readonly RegisteredManifest[],
   input: Parameters<typeof deriveCorpusIndexProjectionDescriptor>[1],
-): GenerationProjection[] =>
-  manifests.flatMap(({ generation, manifest, accepts }) => {
+): Promise<GenerationProjection[]> => {
+  const uncovered = manifests.filter(
+    ({ manifest }) =>
+      !corpusIndexManifestCoversJurisdiction(manifest, input.jurisdiction),
+  );
+  const projected =
+    uncovered.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await tx
+              .select({ generation: corpusIndexProjectionStates.generation })
+              .from(corpusIndexProjectionStates)
+              .where(
+                and(
+                  eq(corpusIndexProjectionStates.family, subject.family),
+                  eq(corpusIndexProjectionStates.entityId, subject.entityId),
+                  inArray(
+                    corpusIndexProjectionStates.generation,
+                    uncovered.map(({ generation }) => generation),
+                  ),
+                  eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+                ),
+              )
+              .limit(uncovered.length)
+          ).map(({ generation }) => generation),
+        );
+  return manifests.flatMap(({ generation, manifest, accepts }) => {
+    if (!corpusIndexManifestCoversJurisdiction(manifest, input.jurisdiction)) {
+      return projected.has(generation)
+        ? [{ generation, descriptor: { action: "erase" } as const }]
+        : [];
+    }
     const descriptor = deriveCorpusIndexProjectionDescriptor(manifest, input);
     return accepts === "erase-only" && descriptor.action !== "erase"
       ? []
       : [{ generation, descriptor }];
   });
+};
 
 export const readActiveCorpusProjectionManifest = async (
   tx: Transaction,
@@ -771,6 +835,7 @@ const writeDesiredStates = async (
       set: {
         desiredAction: sql`excluded.desired_action`,
         desiredEpoch: sql`excluded.desired_epoch`,
+        desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
         desiredFingerprint: sql`excluded.desired_fingerprint`,
         desiredIndexId: sql`excluded.desired_index_id`,
         workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
@@ -816,7 +881,9 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const projections = projectionsFor(
+  const projections = await projectionsFor(
+    tx,
+    subject,
     await projectionManifests(tx, subject.family),
     locked.input,
   );
@@ -850,7 +917,9 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; changed: boolean; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const projections = projectionsFor(
+  const projections = await projectionsFor(
+    tx,
+    subject,
     await projectionManifests(tx, subject.family),
     locked.input,
   );
@@ -939,6 +1008,46 @@ export const synchronizeLockedCorpusProjectionDesiredStateTx = async (
   await reconcileCorpusProjectionDesiredStateTx(tx, subject);
 };
 
+/**
+ * Retire a canonical row from every active projection without deleting its
+ * database record. Decision aliases use this to keep old UUIDs resolvable
+ * while ensuring only the survivor remains searchable.
+ */
+export const synchronizeRetiredCaseLawProjectionDesiredStateTx = async (
+  tx: Transaction,
+  {
+    lock,
+    subject,
+  }: {
+    lock: ActiveCorpusProjectionSourceLock;
+    subject: Extract<CorpusIndexProjectionSubject, { family: "case_law" }>;
+  },
+): Promise<void> => {
+  if (lock.family !== subject.family) {
+    return panic(
+      `Corpus projection source lock family ${lock.family} cannot retire ${subject.family}`,
+    );
+  }
+  const locked = await lockProjectionInput(tx, subject);
+  const manifests = await projectionManifests(tx, subject.family);
+  if (manifests.length === 0) {
+    return;
+  }
+  const epoch = locked.epoch + 1n;
+  await setCanonicalProjectionEpoch(tx, subject, epoch);
+  await writeDesiredStates(
+    tx,
+    manifests.map(({ generation }) =>
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor: { action: "erase" },
+      }),
+    ),
+  );
+};
+
 /** Seed one newly registered generation without invalidating existing ones. */
 export const ensureCorpusProjectionDesiredStateTx = async (
   tx: Transaction,
@@ -1021,4 +1130,62 @@ export const ensureCorpusProjectionDesiredStateTx = async (
     }),
   ]);
   return { epoch, created: true };
+};
+
+/**
+ * Owe an erasure to one decision a generation still holds although the
+ * jurisdiction-serving pointer moved readers to another generation. Run after
+ * the gated flip (`case-law-serving-flip.ts`).
+ *
+ * Only this generation's state changes, and the canonical epoch is left alone:
+ * the generation that now serves the decision keeps its applied copy exactly
+ * as it is, so no reader sees the decision leave and return. The existing
+ * erasure path then deletes the old copy from the old index.
+ */
+export const eraseServedElsewhereDesiredStateTx = async (
+  tx: Transaction,
+  subject: Extract<CorpusIndexProjectionSubject, { family: "case_law" }>,
+  generation: string,
+): Promise<{ changed: boolean }> => {
+  const locked = await lockProjectionInput(tx, subject);
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
+    tx,
+    subject.family,
+    generation,
+  );
+  const descriptor = deriveCorpusIndexProjectionDescriptor(
+    manifest,
+    locked.input,
+  );
+  if (descriptor.action !== "erase") {
+    return { changed: false };
+  }
+  const state = (
+    await tx
+      .select({
+        desiredAction: corpusIndexProjectionStates.desiredAction,
+        desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.family, subject.family),
+          eq(corpusIndexProjectionStates.generation, generation),
+          eq(corpusIndexProjectionStates.entityId, subject.entityId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (state === undefined || state.desiredAction === "erase") {
+    return { changed: false };
+  }
+  await writeDesiredStates(tx, [
+    buildCorpusIndexProjectionDesiredStateValues({
+      subject,
+      generation,
+      epoch: state.desiredEpoch,
+      descriptor,
+    }),
+  ]);
+  return { changed: true };
 };

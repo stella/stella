@@ -15,16 +15,18 @@ import type {
 } from "@/api/lib/tanstack-ai-generate";
 import type {
   createTanStackTextAdapterFactory,
+  getStructuredOutputFallbackModelId,
   getTanStackTextModelById,
   getTanStackTextModelForTask,
-  getTanStackTextModelInfoForTask,
   getTanStackTextModelInfoById,
+  getTanStackTextModelInfoForTask,
+  isModelSelectionAvailableForTask,
   requireTanStackAIAvailableForTask,
 } from "@/api/lib/tanstack-ai-models";
 import type { decide, decideMany } from "@/api/lib/workflow/decisions/decide";
 import type {
-  resolveDecisionModel,
   hasInstanceDecisionModel,
+  resolveDecisionModel,
 } from "@/api/lib/workflow/decisions/decision-model";
 
 type GenerationOptions = [
@@ -33,6 +35,7 @@ type GenerationOptions = [
   Parameters<typeof streamTanStackObjectForTask>[0],
   Parameters<typeof streamTanStackTextForTask>[0],
   Parameters<typeof resolveTanStackTextModel>[0],
+  Parameters<typeof getStructuredOutputFallbackModelId>[0],
   Parameters<typeof getTanStackTextModelForTask>[2],
   Parameters<typeof getTanStackTextModelById>[2],
   Parameters<typeof resolveChatSandboxPlan>[0],
@@ -53,6 +56,7 @@ test("adapter entries require the applicable request policy", () => {
 });
 
 type ClassifiedOptions = [
+  Parameters<typeof isModelSelectionAvailableForTask>[0],
   Parameters<typeof decide>[0],
   Parameters<typeof decideMany>[0],
   Parameters<typeof createTanStackAIAnalyticsCallbacks>[0],

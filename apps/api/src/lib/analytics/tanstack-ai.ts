@@ -1,7 +1,7 @@
 import {
-  EventType,
   type ChatMiddleware,
   type ChatMiddlewareContext,
+  EventType,
   type TokenUsage,
 } from "@tanstack/ai";
 import { Result } from "better-result";
@@ -34,6 +34,7 @@ import {
   finishReasonOf,
   type TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { sanitizeHandoffDiagnosticText } from "@/api/lib/errors/handoff-diagnostics";
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -43,8 +44,8 @@ import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-m
 import {
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForTask,
-  resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
+  resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
@@ -57,12 +58,12 @@ import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getServerAnalytics } from "./client";
 import {
-  SERVER_ANALYTICS_EVENTS,
-  type ServerAnalytics,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
   type SafeAIAnalyticsMetadata,
+  SERVER_ANALYTICS_EVENTS,
+  type ServerAnalytics,
   type TokenBucket,
 } from "./server-analytics";
 
@@ -151,6 +152,10 @@ type TanStackAIAnalyticsProps = {
 export type TanStackAIAnalyticsCallbacks = {
   /** Shared attribution for nested non-generative model calls. */
   readonly usageMetering?: AIUsageMetering | undefined;
+  /** Bind one request without changing callbacks shared by concurrent runs. */
+  forModel: (
+    model: Omit<ResolvedTanStackTextModelInfo, "availability">,
+  ) => TanStackAIAnalyticsCallbacks;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
 };
@@ -386,10 +391,10 @@ const recordTanStackConsumption = async ({
   }
 };
 
-export const createTanStackAIAnalyticsCallbacks = ({
-  analytics = getServerAnalytics(),
-  ...config
-}: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
+export const createTanStackAIAnalyticsCallbacks = (
+  { analytics = getServerAnalytics(), ...config }: TanStackAIAnalyticsProps,
+  resolvedModel?: Omit<ResolvedTanStackTextModelInfo, "availability">,
+): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelTask = config.modelTask ?? "chat";
   // Group attachment is derived centrally so call sites cannot forget it:
@@ -402,7 +407,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
       ? {}
       : { groups: { organization: analyticsOrganizationId } };
   const selectedModelId = config.selectedModelId;
-  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
+  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined =
+    resolvedModel === undefined
+      ? undefined
+      : { ...resolvedModel, availability: "available" };
   const startedAt = performance.now();
   // Per-run state, keyed by `ctx.runId`: one callbacks instance may serve
   // several `chat()` requests (template filling shares one across up to
@@ -512,7 +520,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
       context?.run?.providerStopReason ?? refusedFinish?.providerStopReason;
     const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
-      "ai.error_kind": sanitizeQueryErrorText(kind),
+      "ai.error_kind": sanitizeHandoffDiagnosticText(
+        sanitizeQueryErrorText(kind),
+      ),
       "ai.feature": config.feature,
       ...(typeof finishReason === "string"
         ? { "ai.finish_reason": finishReason }
@@ -789,6 +799,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
   return {
     captureError: captureGenerationError,
+    forModel: (model) =>
+      createTanStackAIAnalyticsCallbacks({ ...config, analytics }, model),
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",

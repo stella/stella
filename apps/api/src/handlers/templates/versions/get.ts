@@ -34,12 +34,14 @@ const config = {
 
 const getTemplateVersion = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params, recordAuditEvent }) {
+  async function* ({ scopedDb, session, params, user, recordAuditEvent }) {
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await getTemplateVersionHandler({
             scopedDb,
+            userId: user.id,
+            source: { kind: "request", sessionId: session.id },
             organizationId: session.activeOrganizationId,
             templateId: params.templateId,
             versionId: params.versionId,

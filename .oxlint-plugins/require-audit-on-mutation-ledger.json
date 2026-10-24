@@ -109,13 +109,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteUserFiles",
-    "writes": {
-      "delete:userFiles": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/account-deletion-steps.ts::reassignActiveTaskAssignmentsAndDropMemberships",
     "writes": {
       "delete:member": 1,
@@ -147,14 +140,6 @@
       "delete:apikey": 1,
       "delete:invitation": 2,
       "delete:twoFactor": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeOAuthTokensAndGrants",
-    "writes": {
-      "delete:oauthClient": 1,
-      "delete:oauthConsent": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },

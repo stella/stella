@@ -6,11 +6,12 @@ import {
   buildForbiddenRules,
   findDroppedExactSelectors,
   findDroppedPlurals,
+  findForbiddenGuidance,
   findForbiddenTerms,
-  hasInvalidCapitalizedStella,
   findIcuError,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  hasInvalidCapitalizedStella,
   isSuppressed,
 } from "./i18n-lint";
 import type { LintBaseline } from "./i18n-lint";
@@ -426,6 +427,67 @@ describe("terminology: forbiddenAlways", () => {
   test("still matches whole words only", () => {
     expect(
       findForbiddenTerms("Usage entitlement", "Nárok entitlement", "cs", rules),
+    ).toEqual([]);
+  });
+});
+
+describe("terminology: catalogue copy quality", () => {
+  const guidance =
+    "Use direct, specific, professional language instead of placeholder, promotional, or playful copy.";
+  const fill = (value: string): Record<string, string> =>
+    Object.fromEntries(LOCALES.map((locale) => [locale, value]));
+  const forbiddenAlways = Object.fromEntries(
+    ["en", ...LOCALES].map((locale) => [
+      locale,
+      ["Lorem ipsum", "seamless", "Oops", "\\p{Emoji}"],
+    ]),
+  );
+  const rules = buildForbiddenRules(
+    parseGlossary(
+      JSON.stringify({
+        verbs: [],
+        legalConcepts: [],
+        nouns: [
+          {
+            id: "catalogue-copy-quality",
+            en: "Catalogue copy quality",
+            guidance,
+            forbiddenAlways,
+            translations: fill("x"),
+          },
+        ],
+        ptBR: [],
+      }),
+    ),
+  );
+
+  test.each(["Lorem ipsum dolor sit amet", "A seamless workflow", "Oops!"])(
+    "rejects filler copy: %s",
+    (value) => {
+      expect(findForbiddenTerms(value, value, "en", rules)).not.toEqual([]);
+    },
+  );
+
+  test("rejects emoji code points in every locale", () => {
+    expect(findForbiddenTerms("Saved", "Uloženo ✅", "cs", rules)).toEqual([
+      "\\p{Emoji}",
+    ]);
+  });
+
+  test("reports the expected replacement tone", () => {
+    expect(
+      findForbiddenGuidance({
+        source: "Oops!",
+        target: "Oops!",
+        locale: "en",
+        rules,
+      }),
+    ).toEqual([guidance]);
+  });
+
+  test("allows concrete copy and non-emoji symbols", () => {
+    expect(
+      findForbiddenTerms("File saved", "Soubor uložen § 10", "cs", rules),
     ).toEqual([]);
   });
 });

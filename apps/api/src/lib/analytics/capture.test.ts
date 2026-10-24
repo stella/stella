@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
+import fc from "fast-check";
+
+import { classifyFailure } from "@stll/errors";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   captureError,
@@ -7,9 +11,10 @@ import {
 } from "@/api/lib/analytics/capture";
 import { setAnalyticsForTesting } from "@/api/lib/analytics/client";
 import {
-  extractionWorkerErrorCode,
   ExtractionWorkerError,
+  extractionWorkerErrorCode,
   type ExtractionWorkerTermination,
+  HandlerError,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -23,6 +28,19 @@ const captured: {
   groups?: Record<string, string>;
   properties: Record<string, unknown>;
 }[] = [];
+
+const firstExceptionValue = (): string | undefined => {
+  const list = captured.at(0)?.properties["$exception_list"];
+  if (!Array.isArray(list)) {
+    return undefined;
+  }
+  const entry: unknown = list.at(0);
+  if (typeof entry !== "object" || entry === null) {
+    return undefined;
+  }
+  const value = Reflect.get(entry, "value");
+  return typeof value === "string" ? value : undefined;
+};
 
 // The seam, not a module mock: a mock of `analytics/client` is process-wide
 // and would swallow `setAnalyticsForTesting` for every test file batched
@@ -65,14 +83,25 @@ const captureQueryFailure = (sqlState: string): void => {
   captureError(new Error("query failed", { cause: driverError }));
 };
 
+const errorAt = (className: "Error" | "TypeError", location: string): Error => {
+  const error =
+    className === "TypeError"
+      ? new TypeError("private detail")
+      : new Error("private detail");
+  error.stack = `${className}: private detail\n    at run (${location})`;
+  return error;
+};
+
 const extractionError = ({
   exitCode,
   message,
   termination,
+  workerErrorClass = null,
 }: {
   exitCode: number | null;
   message: string;
   termination: ExtractionWorkerTermination | null;
+  workerErrorClass?: string | null;
 }): ExtractionWorkerError =>
   new ExtractionWorkerError({
     code: extractionWorkerErrorCode(termination),
@@ -81,11 +110,20 @@ const extractionError = ({
     mimeType: "application/pdf",
     sizeBytes: 12_345,
     termination,
+    workerErrorClass,
   });
 
 beforeEach(() => {
   captured.length = 0;
   resetCaptureWindows();
+});
+
+test("error capture redacts handoff credentials from diagnostic context", () => {
+  const code = `sh1_${"a".repeat(43)}`;
+  captureError(new Error(`Request ${code} refused`), { requestId: code });
+  expect(captured).toHaveLength(1);
+  expect(captured.at(0)?.properties["requestId"]).toBe("[redacted]");
+  expect(JSON.stringify(captured)).not.toContain(code);
 });
 
 describe("captureError repeat suppression", () => {
@@ -196,6 +234,134 @@ describe("captureError issue grouping", () => {
     expect(typeof fingerprint).toBe("string");
     expect(fingerprint).not.toContain("Privileged");
   });
+
+  test("renders an actionable value from typed failure fields", () => {
+    captureError(
+      new HandlerError({
+        code: "upstream_unavailable",
+        message: "Alex Doe <alex@example.test> privileged document text",
+        status: 502,
+      }),
+    );
+
+    expect(firstExceptionValue()).toMatch(
+      /^HandlerError\[upstream_unavailable\] 502 transient at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
+    );
+  });
+
+  test("names and separates provider bodies by provider status and code", () => {
+    // The shape a provider stream forwards as its run error's raw event: a
+    // plain object, so it has no class, code or frame of its own.
+    const providerBody = {
+      status: 400,
+      error: {
+        code: "invalid_value",
+        message: "Alex Doe <alex@example.test> privileged document text",
+        param: "input[3].call_id",
+        type: "invalid_request_error",
+      },
+    };
+    classifyFailure(providerBody, "provider_request_rejected");
+    captureError(providerBody);
+    captureError({
+      status: 429,
+      error: {
+        code: "rate_limit_exceeded",
+        type: "requests",
+      },
+    });
+
+    const properties = captured.at(0)?.properties;
+    expect(captured).toHaveLength(2);
+    expect(firstExceptionValue()).toBe(
+      "UnknownError[invalid_value] 400 provider_request_rejected defect",
+    );
+    expect(properties).toMatchObject({
+      $exception_fingerprint: "UnknownError|||||invalid_value|400",
+      "error.provider.code": "invalid_value",
+      "error.provider.param": "input[3].call_id",
+      "error.provider.status": "400",
+      "error.provider.type": "invalid_request_error",
+    });
+    expect(captured.at(1)?.properties["$exception_fingerprint"]).toBe(
+      "UnknownError|||||rate_limit_exceeded|429",
+    );
+    expect(properties?.["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
+    expect(JSON.stringify(properties)).not.toContain("alex@example.test");
+  });
+
+  test("contains throwing provider field getters", () => {
+    const providerBody = {
+      status: 400,
+      error: {
+        get code(): string {
+          throw new Error("provider getter failed");
+        },
+        type: "invalid_request_error",
+      },
+    };
+
+    expect(() => captureError(providerBody)).not.toThrow();
+    expect(captured).toHaveLength(1);
+    expect(captured.at(0)?.properties).toMatchObject({
+      $exception_fingerprint: "UnknownError|||||invalid_request_error|400",
+      "error.provider.status": "400",
+      "error.provider.type": "invalid_request_error",
+    });
+  });
+
+  test.each([
+    "/workspace/stella/apps/api/src/lib/analytics/capture.ts:319:17",
+    "/app/apps/api/src/lib/analytics/capture.ts:319:17",
+    "/home/runner/work/stella/stella/apps/api/src/lib/analytics/capture.ts:319:17",
+  ])("keeps recognized absolute repository frames from %s", (location) => {
+    captureError(errorAt("Error", location));
+
+    expect(firstExceptionValue()).toBe(
+      "Error unclassified defect at apps/api/src/lib/analytics/capture.ts:319:17",
+    );
+  });
+
+  test.each(["Error", "TypeError"] as const)(
+    "does not render a class-derived code for %s",
+    (className) => {
+      captureError(
+        errorAt(className, "apps/api/src/lib/analytics/capture.test.ts:1:2"),
+      );
+
+      const value = firstExceptionValue();
+      expect(value).not.toContain(`[${className}]`);
+      expect(value).toBe(
+        `${className} unclassified defect at apps/api/src/lib/analytics/capture.test.ts:1:2`,
+      );
+    },
+  );
+
+  test("captured properties never carry arbitrary message text", () => {
+    assertProperty(
+      "captured properties never carry arbitrary message text",
+      fc.property(fc.string(), (message) => {
+        captured.length = 0;
+        resetCaptureWindows();
+        const privateMessage = `Alex Doe <alex@example.test> document ${JSON.stringify(message)}`;
+        captureError(
+          Object.assign(
+            new HandlerError({
+              code: "upstream_unavailable",
+              message: privateMessage,
+              status: 502,
+            }),
+            { unknownField: privateMessage },
+          ),
+        );
+
+        const properties = captured.at(0)?.properties;
+        expect(JSON.stringify(properties)).not.toContain(privateMessage);
+      }),
+    );
+  });
 });
 
 describe("captureRequestError organization attribution", () => {
@@ -271,6 +437,34 @@ describe("captureError extraction diagnostics", () => {
     expect(captured.at(0)?.properties).toMatchObject({
       "error.code": "parser_failed",
       exitCode: "1",
+    });
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
+  });
+
+  test("fingerprints distinct parser classes as distinct defects", () => {
+    captureError(
+      extractionError({
+        exitCode: 1,
+        message: "parser failed",
+        termination: null,
+        workerErrorClass: "PdfParseError",
+      }),
+    );
+    captureError(
+      extractionError({
+        exitCode: 1,
+        message: "parser failed",
+        termination: null,
+        workerErrorClass: "RangeError",
+      }),
+    );
+
+    expect(captured).toHaveLength(2);
+    expect(captured.at(0)?.properties).toMatchObject({
+      "error.code": "parser_failed:PdfParseError",
+      workerErrorClass: "PdfParseError",
     });
     expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
       captured.at(1)?.properties["$exception_fingerprint"],

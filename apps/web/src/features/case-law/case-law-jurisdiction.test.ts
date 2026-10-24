@@ -7,6 +7,7 @@ import {
   isPublicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountryFromParam,
+  publicCaseLawPageCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
 
@@ -34,5 +35,10 @@ describe("case-law launch readiness", () => {
     for (const country of PUBLIC_CASE_LAW_COUNTRIES) {
       expect(caseLawCountryRegion(country)).not.toBeNull();
     }
+  });
+
+  test("identity-only EU decisions do not open search or public pages", () => {
+    expect(publicCaseLawCountryFromParam("eu")).toBeNull();
+    expect(publicCaseLawPageCountryFromParam("eu")).toBeNull();
   });
 });

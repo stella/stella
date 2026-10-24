@@ -7,9 +7,9 @@ import { env } from "@/api/env";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -65,6 +65,10 @@ const requiresStandardResourceWrite = (permissions: Record<string, string[]>) =>
 
 // Every endpoint refused to the demo account; a change here is a policy change.
 const REVIEWED_STANDARD_OPERATIONS = [
+  "apps/api/src/handlers/account-exports/create.ts",
+  "apps/api/src/handlers/account-exports/download.ts",
+  "apps/api/src/handlers/account-exports/get.ts",
+  "apps/api/src/handlers/account-exports/status/get.ts",
   "apps/api/src/handlers/agent-auth/confirm.ts",
   "apps/api/src/handlers/ai-config/validate-provider.ts",
   "apps/api/src/handlers/api-keys/create.ts",
@@ -177,6 +181,10 @@ const REVIEWED_STANDARD_OPERATIONS = [
 // Endpoints the restricted review account is refused as well (a subset of the
 // list above); a change here is a policy change.
 const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
+  "apps/api/src/handlers/account-exports/create.ts",
+  "apps/api/src/handlers/account-exports/download.ts",
+  "apps/api/src/handlers/account-exports/get.ts",
+  "apps/api/src/handlers/account-exports/status/get.ts",
   "apps/api/src/handlers/agent-auth/confirm.ts",
   "apps/api/src/handlers/ai-config/validate-provider.ts",
   "apps/api/src/handlers/api-keys/create.ts",

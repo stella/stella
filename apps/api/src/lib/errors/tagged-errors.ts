@@ -1,3 +1,24 @@
+// parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-ncourt] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-courts] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-vfgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-vwgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-bvwg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-lvwg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-asylgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-ubas] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-uvs] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-verg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-umse] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-bks] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-findok] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [eu-ecj] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-kis] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-uodo] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-uokik] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [us-courtlistener] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: FlowStepError moved here from the flow executor; parsers neither throw nor read it.
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
@@ -227,11 +248,6 @@ export class Unreachable extends TaggedError("Unreachable")<{
 }> {}
 
 export const unreachable = (message: string): never => panic(message);
-
-export class ParseXmlError extends TaggedError("ParseXmlError")<{
-  message: string;
-  cause: unknown;
-}> {}
 
 export class ConfigurationError extends TaggedError("ConfigurationError")<{
   message: string;
@@ -469,8 +485,7 @@ export class ChatLoopDetectedError extends TaggedError(
  * `isAnticipatedAIFailure`.
  */
 export type ChatTerminalError =
-  | ChatEmptyCompletionError
-  | ChatLoopDetectedError;
+  ChatEmptyCompletionError | ChatLoopDetectedError;
 
 /**
  * A text generation ended because the abort signal its caller passed fired:
@@ -753,6 +768,8 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
+  /** Parser error class recovered from worker stderr; null for termination. */
+  workerErrorClass: string | null;
 }> {}
 
 /**

@@ -7,8 +7,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusUploadIntents,
-  caseLawDecisions,
   caseLawDecisionIdentifiers,
+  caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -20,9 +20,9 @@ import { processDecision as processDecisionWithDependencies } from "@/api/handle
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -36,8 +36,8 @@ import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   approveMetadataUrls,
@@ -162,8 +162,7 @@ let persistedCursor: string | null | undefined;
 let rowWrite: "ok" | "fault" | "timeout" = "ok";
 /** The row the dedup lookup finds; undefined makes this a new decision. */
 let existingDecision:
-  | (Record<string, unknown> & { hasStoredDocument: boolean })
-  | undefined;
+  (Record<string, unknown> & { hasStoredDocument: boolean }) | undefined;
 /** Whether the observation still owns the mirror when it settles. */
 let mirrorSettlementApplied = true;
 let intentStatus: "active" | "cleanup" = "active";
@@ -318,7 +317,7 @@ const scopedDb: ScopedDb = async (callback) => {
               new TimeoutError({
                 message: "decision write exceeded deadline",
                 label: "ingestion-db-transaction",
-                timeoutMs: 10,
+                timeoutMs: 10, // timeout under test
               }),
             );
           }

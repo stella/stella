@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { isPathStrictlyInside } from "../packages/portable-path/src/index.ts";
@@ -9,12 +9,11 @@ const CONFIG_PATH = path.resolve(
 );
 const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;
 
-// ci-plan runs with Node before dependency installation; report configuration
-// failures through the CLI's stderr/exit contract without importing packages.
+// ci-plan imports this before dependency installation, so configuration
+// failures throw without importing packages; the CLI entry reports and exits.
 /** @type {(message: string) => never} */
 const fail = (message) => {
-  process.stderr.write(`${message}\n`);
-  process.exit(1);
+  throw new Error(message);
 };
 
 // Read inputs without executing Playwright or installing dependencies: ci-plan
@@ -101,21 +100,29 @@ export const productionE2eInputs = (configPath) => {
   return { testDirectory, files };
 };
 
+/** @param {readonly string[]} changedFiles Paths relative to the working directory. */
+export const productionE2eChanged = (changedFiles) => {
+  const root = path.dirname(CONFIG_PATH);
+  const absoluteFiles = changedFiles.map((file) => path.resolve(file));
+  if (!absoluteFiles.some((file) => isPathStrictlyInside(root, file))) {
+    return false;
+  }
+  const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
+  return absoluteFiles.some(
+    (file) => isPathStrictlyInside(testDirectory, file) || files.has(file),
+  );
+};
+
 if (
   process.argv[1] !== undefined &&
   import.meta.filename === path.resolve(process.argv[1])
 ) {
-  const changedFiles = process.argv.slice(2);
-  const root = path.dirname(CONFIG_PATH);
-  const absoluteFiles = changedFiles.map((file) => path.resolve(file));
-  if (!absoluteFiles.some((file) => isPathStrictlyInside(root, file))) {
-    console.log(false);
-  } else {
-    const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
-    console.log(
-      absoluteFiles.some(
-        (file) => isPathStrictlyInside(testDirectory, file) || files.has(file),
-      ),
+  try {
+    console.log(productionE2eChanged(process.argv.slice(2)));
+  } catch (error) {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
     );
+    process.exit(1);
   }
 }

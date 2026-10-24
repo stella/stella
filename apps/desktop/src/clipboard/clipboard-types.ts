@@ -262,6 +262,22 @@ export type ClipboardEditorContext = {
   sourceAppVisual: ClipboardSourceAppVisual | null;
 };
 
+// Native event names; `fixtures/clipboard-contract.json` binds them to the
+// Rust constants.
+export const CLIPBOARD_HISTORY_CHANGED_EVENT = "clipboard-history-changed";
+export const CLIPBOARD_EDITOR_SESSION_EVENT = "clipboard-editor-session";
+
+/** What the reused editor window shows: one clip per session, or nothing. */
+export type ClipboardEditorSession =
+  { type: "open"; session: number } | { type: "idle" };
+
+export const isClipboardEditorSession = (
+  value: unknown,
+): value is ClipboardEditorSession =>
+  isRecord(value) &&
+  (value["type"] === "idle" ||
+    (value["type"] === "open" && Number.isSafeInteger(value["session"])));
+
 export const isClipboardEditorContext = (
   value: unknown,
 ): value is ClipboardEditorContext =>

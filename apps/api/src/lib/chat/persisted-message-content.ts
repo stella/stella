@@ -6,15 +6,20 @@ import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 /** JSON values are the only values that can survive the chat JSONB boundary. */
 export type PersistedJsonValue =
-  | boolean
-  | null
-  | number
-  | PersistedJsonObject
-  | PersistedJsonValue[]
-  | string;
+  boolean | null | number | PersistedJsonObject | PersistedJsonValue[] | string;
 
-type PersistedJsonObject = {
+export type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
+};
+
+/**
+ * Provider artefacts a writer stored beside a tool call (for example
+ * reasoning details or a thought signature), kept exactly as stored. Whether
+ * any of them is replayed on a continued turn is the runtime's decision.
+ */
+export type PersistedToolProviderMetadata = {
+  call?: PersistedJsonObject | undefined;
+  result?: PersistedJsonObject | undefined;
 };
 
 type PersistedToolCallMetadata = PersistedJsonObject & {
@@ -43,6 +48,8 @@ export const provePersistedToolCallMetadata = (
 declare const parsedToolInputProof: unique symbol;
 export type ParsedToolInput = {
   readonly [parsedToolInputProof]: true;
+  /** The call's argument text, kept only when it does not parse to `value`. */
+  rawArguments?: string;
   status: "parsed";
   value: PersistedJsonValue;
 };
@@ -54,8 +61,7 @@ export type ParsedToolOutput = {
 };
 
 export type PersistedToolInput =
-  | ParsedToolInput
-  | { rawArguments: string; status: "raw" };
+  ParsedToolInput | { rawArguments: string; status: "raw" };
 
 export type PersistedToolCallPart = {
   approval?: {
@@ -68,6 +74,7 @@ export type PersistedToolCallPart = {
   metadata: PersistedToolCallMetadata;
   name: string;
   output?: ParsedToolOutput | undefined;
+  providerMetadata?: PersistedToolProviderMetadata | undefined;
   state: ToolCallState;
   type: "tool-call";
 };
@@ -146,13 +153,36 @@ export const isPersistedJsonValue = (
   value: unknown,
 ): value is PersistedJsonValue => isPersistedJsonValueAt(value, new WeakSet());
 
+export const isPersistedJsonObject = (
+  value: unknown,
+): value is PersistedJsonObject =>
+  isPersistedJsonValue(value) &&
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value);
+
+export const isPersistedToolProviderMetadata = (
+  value: unknown,
+): value is PersistedToolProviderMetadata =>
+  isPersistedJsonObject(value) &&
+  Object.keys(value).every((key) => key === "call" || key === "result") &&
+  (value["call"] === undefined || isPersistedJsonObject(value["call"])) &&
+  (value["result"] === undefined || isPersistedJsonObject(value["result"]));
+
 const isParsedToolInput = (input: {
+  rawArguments?: string;
   status: "parsed";
   value: unknown;
 }): input is ParsedToolInput => isPersistedJsonValue(input.value);
 
-export const proveParsedToolInput = (value: unknown): ParsedToolInput => {
-  const input = { status: "parsed" as const, value };
+export const proveParsedToolInput = (
+  value: unknown,
+  rawArguments?: string,
+): ParsedToolInput => {
+  const input =
+    rawArguments === undefined
+      ? { status: "parsed" as const, value }
+      : { rawArguments, status: "parsed" as const, value };
   if (!isParsedToolInput(input)) {
     panic("Cannot mark an invalid tool input as parsed");
   }

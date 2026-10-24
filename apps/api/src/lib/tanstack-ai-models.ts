@@ -13,19 +13,19 @@ import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  getModelReasoningCapabilities,
   BYOK_MODEL_OPTIONS,
-  MODEL_TASK_OVERRIDE_GROUP,
-  resolveDefaultModel,
   getModelRate,
+  getModelReasoningCapabilities,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
+  MODEL_TASK_OVERRIDE_GROUP,
+  resolveDefaultModel,
   resolveReasoningEffort,
   shouldEmitTemperature,
   supportsStreamingToolUse,
@@ -34,24 +34,25 @@ import {
 import type {
   AIProvider,
   BYOKProvider,
-  ModelTask,
   ModelOverrideGroup,
+  ModelTask,
   ReasoningEffort,
   ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
-  resolveOrgAIModelForTask,
-  normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
+  normalizeProviderRegion,
   type OrgAIConfig,
   type OrgAIProviderConfig,
+  resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
@@ -102,8 +103,7 @@ type StellaOpenRouterTextModelOptions = Omit<
   // The request-level prompt-cache marker OpenRouter forwards to Anthropic
   // models; the adapter spreads it into the SDK request, whose type has it.
   cacheControl?:
-    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
-    | undefined;
+    { ttl?: "5m" | "1h" | undefined; type: "ephemeral" } | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.
@@ -206,8 +206,7 @@ type StellaOpenAITextProviderOptions = Omit<
 };
 
 export type TanStackAIProviderUnsupportedReason =
-  | "provider-not-implemented"
-  | "regional-routing-not-implemented";
+  "provider-not-implemented" | "regional-routing-not-implemented";
 
 export type TanStackAIProviderSupport =
   | { supported: true }
@@ -345,6 +344,96 @@ export const isAllowedBYOKModelForTask = ({
   );
 };
 
+type ModelSelectionAvailabilityOptions = {
+  dataClass: AIDataClass;
+  provider: AIProvider;
+  modelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+};
+
+export const isModelSelectionAvailableForTask = ({
+  dataClass,
+  provider,
+  modelId,
+  orgAIConfig,
+  task,
+}: ModelSelectionAvailabilityOptions): boolean => {
+  if (!isAllowedBYOKModelForTask({ provider, modelId, task })) {
+    return false;
+  }
+  if (orgAIConfig) {
+    return orgAIConfig.providers.some(
+      (providerConfig) => providerConfig.provider === provider,
+    );
+  }
+  return (
+    hasConfiguredTanStackInstanceProvider() &&
+    (isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, dataClass)) &&
+    getActiveProvider() === provider
+  );
+};
+
+type StructuredOutputFallbackModelOptions = {
+  failedModelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+  modelTier: ManagedModelTier;
+} & AIRequestPolicy;
+
+/** Select once in catalog order; dispatch still proves admission and policy. */
+export const getStructuredOutputFallbackModelId = ({
+  failedModelId,
+  orgAIConfig,
+  task,
+  modelTier,
+  dataClass,
+}: StructuredOutputFallbackModelOptions): string | null => {
+  // Managed fast-tier resolution pins every selection to the fast primary.
+  if (!orgAIConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return null;
+  }
+  const assignedProvider = orgAIConfig
+    ? resolveOrgAIModelForTask(orgAIConfig, task)?.provider
+    : getActiveProvider();
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    if (provider !== assignedProvider) {
+      continue;
+    }
+    for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+      if (
+        modelId === failedModelId ||
+        !isModelSelectionAvailableForTask({
+          dataClass,
+          provider,
+          modelId,
+          orgAIConfig,
+          task,
+        })
+      ) {
+        continue;
+      }
+      if (!orgAIConfig) {
+        if (
+          !isManagedProviderAvailable(provider, dataClass) ||
+          getModelRate(modelId) === undefined
+        ) {
+          continue;
+        }
+        if (
+          provider === "openrouter" &&
+          Result.isError(assertManagedOpenRouterModel(modelId))
+        ) {
+          continue;
+        }
+      }
+      return `${provider}::${modelId}`;
+    }
+  }
+  return null;
+};
+
 type ModelOverride = {
   modelId: string;
   provider?: AIProvider | undefined;
@@ -381,8 +470,7 @@ export const registerTanStackMockTextAdapterFactory = (
  * with the flag still set.
  */
 const activeMockTextAdapterFactory = ():
-  | TanStackTextAdapterFactory
-  | undefined =>
+  TanStackTextAdapterFactory | undefined =>
   env.USE_MOCK_AI === false ? undefined : mockTextAdapterFactory;
 
 /**
@@ -1135,6 +1223,7 @@ const byokProviderTaskUnsupportedError = (
   task: ModelTask,
 ): HandlerError<400> =>
   new HandlerError({
+    code: AI_FAILURE_CODES.provider_task_unsupported,
     status: 400,
     message:
       `${provider} is not available for the "${task}" AI task. ` +
@@ -1855,6 +1944,7 @@ export function tanStackModelOptionsForTask(
 
 const byokRoleNotConfiguredError = (task: ModelTask): HandlerError =>
   new HandlerError({
+    code: AI_FAILURE_CODES.role_not_configured,
     status: 403,
     message:
       `AI is not available for the "${task}" task on this deployment. ` +

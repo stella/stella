@@ -37,9 +37,9 @@ import {
 import type { ProposedReferencePosition } from "@/api/lib/document-review/reference-passages";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import {
+  type Position,
   POSITION_PURPOSE_MAX_LENGTH,
   POSITION_TERM_KINDS,
-  type Position,
 } from "@/api/lib/workflow/playbook-positions";
 
 const SOURCE_KEY = "F1";

@@ -19,6 +19,7 @@ import { atVwghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vwg
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { czUohsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
@@ -35,8 +36,8 @@ import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-c
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
   ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
@@ -58,6 +59,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.CZ_NSS]: czNssAdapter,
   [ADAPTER_KEYS.CZ_US]: czUsAdapter,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalAdapter,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsAdapter,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: skUsAdapter,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsAdapter,

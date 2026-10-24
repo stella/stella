@@ -17,11 +17,11 @@ import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
-  caseLawReplayBatches,
   caseLawReplayAuditEvents,
+  caseLawReplayBatches,
   caseLawReplayBlocked,
-  caseLawReplaySourceProgress,
   caseLawReplayDailyRows,
+  caseLawReplaySourceProgress,
   caseLawSources,
   databaseBackfillStates,
 } from "@/api/db/schema";
@@ -33,10 +33,10 @@ import {
   type StoredRawReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  runBackgroundReplayTick,
   type BackgroundReplayBatch,
   type BackgroundReplaySource,
   type BackgroundReplayTickReport,
+  runBackgroundReplayTick,
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import { createBackgroundReplayRunner } from "@/api/handlers/case-law/ingestion/background-replay-runner";
 import { createBackgroundReplayStore } from "@/api/handlers/case-law/ingestion/background-replay-store";
@@ -89,6 +89,7 @@ const startReplayFixtureStorage = () => {
 
 const applied = (batch: BackgroundReplayBatch): ReplayRunReport => ({
   visited: 1,
+  writeOutcomes: { unchanged: 0, rewritten: 1, failed: 0 },
   outcomes: {
     applied: 1,
     unchanged: 0,
@@ -376,8 +377,8 @@ if (!databaseUrl || !enabled) {
         } finally {
           await slots[0].close();
           await slots[1].close();
-          first.release();
-          second.release();
+          await first.release();
+          await second.release();
         }
       });
 

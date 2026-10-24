@@ -5,10 +5,10 @@ import * as v from "valibot";
 
 import {
   affectedPackages,
+  type CheckInputs,
   readCheckInputs,
   readSelectionGraph,
   selectChecks,
-  type CheckInputs,
 } from "./ci-affected-selection";
 import { GENERATORS } from "./generated-files";
 import { shardPackages, TEST_JOB_SHARDS } from "./test-shards";
@@ -188,7 +188,7 @@ test("test matrix admission has one graph owner and no independent path filter",
     "utf-8",
   );
   expect(workflow).toContain(
-    "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'",
+    "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'",
   );
   expect(workflow).toContain(
     `TEST_SCOPE: \${{ needs.ci-plan.outputs.test_scope }}`,

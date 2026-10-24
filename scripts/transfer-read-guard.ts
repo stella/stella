@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
@@ -622,9 +622,7 @@ const limitDisposition = ({
   cap,
   root,
 }: LimitDispositionOptions):
-  | "exempt"
-  | "fixed-page-size"
-  | "constant-limit" => {
+  "exempt" | "fixed-page-size" | "constant-limit" => {
   if (isOne(cap) || rejectsOverflow(node, cap)) {
     return "exempt";
   }
