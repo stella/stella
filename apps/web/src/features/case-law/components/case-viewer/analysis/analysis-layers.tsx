@@ -4,11 +4,20 @@ import { useTranslations } from "use-intl";
 
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
-import { analysisLayersOf } from "@stll/legal-ast/analysis";
+import {
+  analysisLayersOf,
+  significanceStatementOf,
+} from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
 
 type AnalysisLayersProps = {
   analysis: DecisionAnalysis;
+  /**
+   * The decision's citation summary shows a later citing decision. Until it
+   * does, no later-treatment note is drawn, whatever the stored analysis
+   * says: a note written before `none` existed may describe an empty graph.
+   */
+  citedLater: boolean;
 };
 
 /**
@@ -48,9 +57,17 @@ const Layer = ({
  * A stored analysis from before these layers existed carries none of them,
  * and then nothing renders: an absent layer is absent, never an empty box.
  */
-export const AnalysisLayers = ({ analysis }: AnalysisLayersProps) => {
+export const AnalysisLayers = ({
+  analysis,
+  citedLater,
+}: AnalysisLayersProps) => {
   const t = useTranslations();
-  const { significance, topics } = analysisLayersOf(analysis);
+  const layers = analysisLayersOf(analysis);
+  const { topics } = layers;
+  // `none`: no later decision cites this one, so the section is not drawn.
+  const significance = citedLater
+    ? significanceStatementOf(layers.significance)
+    : null;
 
   if (significance === null && topics.length === 0) {
     return null;

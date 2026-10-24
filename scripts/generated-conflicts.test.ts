@@ -22,7 +22,7 @@ import {
   plan,
   push,
 } from "./generated-conflicts";
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 
 const MESSAGES = "apps/landing/src/i18n/messages/messages.gen.ts";
 

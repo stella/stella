@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
@@ -16,6 +16,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "budget-ledger.ts",
   "database-access.ts",
   "eden-client.ts",
+  "icon-ownership.ts",
   "module-id.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",

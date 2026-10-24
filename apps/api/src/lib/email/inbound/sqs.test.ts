@@ -17,9 +17,9 @@ import {
 } from "@/api/lib/email/inbound/sqs";
 import {
   logger,
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 import { createFakeSqsQueue } from "@/api/tests/helpers/fake-sqs";
 

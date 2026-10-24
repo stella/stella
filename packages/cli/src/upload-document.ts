@@ -4,9 +4,9 @@ import path from "node:path";
 
 import {
   actionAdmissionRefusalLines,
+  type CliActionAdmissionRefusal,
   readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
-  type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { inferFileMimeType } from "./file-mime-type.js";
 import { formatCapabilityCommand } from "./generate-capability-tree.js";

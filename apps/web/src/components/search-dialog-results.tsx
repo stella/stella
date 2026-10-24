@@ -5,16 +5,17 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
+  AiActionIcon,
   HistoryIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -29,6 +30,10 @@ import {
 } from "@/components/search-dialog.shared";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import {
+  DocumentExtractionStatus,
+  readDocumentProcessingStatus,
+} from "@/components/workspaces/document-extraction-status";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { fileHasThumbnail } from "@/components/workspaces/entity-utils";
 import type { ResolvedCommandAction } from "@/features/command-palette/hooks/use-command-actions";
@@ -462,6 +467,11 @@ export const SearchResultItem = ({
           />
         )}
       </div>
+      {isEntityKind(hit.type) ? (
+        <DocumentExtractionStatus
+          processingStatus={readDocumentProcessingStatus(hit)}
+        />
+      ) : null}
       <span className="text-foreground-subtle mt-0.5 shrink-0 px-1 text-xs tabular-nums">
         {resultNumber}
       </span>

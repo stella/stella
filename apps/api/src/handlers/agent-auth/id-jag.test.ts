@@ -40,9 +40,9 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { createHumanSession as createHumanSessionWithJar } from "@/api/tests/helpers/human-session";

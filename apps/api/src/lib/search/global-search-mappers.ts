@@ -1,4 +1,4 @@
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
@@ -65,6 +65,7 @@ export const mapEntityHit = (row: RawRow): ScoredEntityGlobalSearchHit => {
     fileFieldId: toNullableString(row["file_field_id"]),
     filePropertyId: toNullableString(row["file_property_id"]),
     mimeType: toNullableString(row["mime_type"]),
+    processingStatus: null,
   };
 
   return { hit, score: Number(row["score"]) };
