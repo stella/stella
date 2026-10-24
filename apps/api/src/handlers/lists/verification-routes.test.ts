@@ -17,9 +17,9 @@ import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 
 const FEATURE_ID = "list-verification";
@@ -128,7 +128,7 @@ describe("list verification route admission", () => {
     expect(handlers).toHaveLength(
       routeFor({ verificationEnabled: false }).routes.length,
     );
-    expect(handlers).toHaveLength(9);
+    expect(handlers).toHaveLength(13);
   });
 
   test.each([

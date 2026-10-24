@@ -52,7 +52,11 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
-import { useFormatter } from "@/i18n/formatting-context";
+import {
+  useFormatter,
+  useLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
@@ -186,6 +190,8 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
 
 function ContactImportStudio() {
   const t = useTranslations();
+  const formattingLocale = useLocale();
+  const markerStyle = useStepsMarkerStyle();
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
   });
@@ -314,6 +320,8 @@ function ContactImportStudio() {
             </p>
           </div>
           <Steps
+            lang={formattingLocale}
+            markerStyle={markerStyle}
             aria-label={t("contacts.importStudio.title")}
             variant="progress"
           >

@@ -47,10 +47,10 @@ import type { PlaybookSnapshot } from "@/features/knowledge/playbook-editor/play
 import {
   canAutosave,
   draftToAdopt,
-  resolvePaneSaveStatus,
-  resolveServerFollow,
-  resolveSavedPlaybookState,
   resolveLocalPlaybookIntent,
+  resolvePaneSaveStatus,
+  resolveSavedPlaybookState,
+  resolveServerFollow,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
 import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
@@ -62,9 +62,9 @@ import type {
 import {
   buildPlaybookSavePayload,
   createPlaybookBaseline,
+  detailSeedGate,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
-  detailSeedGate,
   invalidPositionIds,
   latchedSeedGate,
   refetchSupersededDetail,
@@ -74,16 +74,16 @@ import {
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
+  clearPlaybookPaneDraft,
   readParkedPlaybookPane,
   useParkedPlaybookPaneSavePending,
-  clearPlaybookPaneDraft,
 } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
 import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
 import {
-  usePlaybookSaveQueue,
   usePlaybookDetailSaveSubscription,
+  usePlaybookSaveQueue,
 } from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
 import type {
   SaveOutcome,
@@ -93,9 +93,10 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
+import { useLocale, useStepsMarkerStyle } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -107,8 +108,8 @@ import {
   newGradedPosition,
   type Position,
   type PositionErrors,
-  type PositionSeverity,
   positionReferencePassages,
+  type PositionSeverity,
   positionTiers,
   validatePosition,
 } from "@/lib/knowledge/playbook-types";
@@ -1905,6 +1906,8 @@ const OutlineRail = ({
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();
+  const formattingLocale = useLocale();
+  const markerStyle = useStepsMarkerStyle();
   return (
     <nav
       aria-label={t("knowledge.playbooks.outline")}
@@ -1913,7 +1916,11 @@ const OutlineRail = ({
       <p className="text-foreground-label mb-2 px-2 text-xs font-semibold">
         {t("knowledge.playbooks.outline")}
       </p>
-      <Steps variant="compact">
+      <Steps
+        lang={formattingLocale}
+        markerStyle={markerStyle}
+        variant="compact"
+      >
         {positions.map((position) => {
           const issue = position.issue.trim();
           return (

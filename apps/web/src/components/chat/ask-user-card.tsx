@@ -24,7 +24,10 @@ import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
+import {
+  useLocale as useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
@@ -57,8 +60,7 @@ type AskUserCardProps = {
    * competing follow-up suggestions). Reports `false` on unmount.
    */
   onEditingChange?:
-    | ((toolCallId: string, isEditing: boolean) => void)
-    | undefined;
+    ((toolCallId: string, isEditing: boolean) => void) | undefined;
   discardsDownstream?: boolean | undefined;
   workspaceId?: string | undefined;
   /**
@@ -168,6 +170,7 @@ export const AskUserCard = ({
 }: AskUserCardProps) => {
   const t = useTranslations();
   const formattingLocale = useFormattingLocale();
+  const markerStyle = useStepsMarkerStyle();
   // Stable empty fallback so useMemo deps don't churn when the
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
@@ -403,7 +406,7 @@ export const AskUserCard = ({
       <form onSubmit={handleFormSubmit}>
         {/* Questions */}
         <div className="border-border/50 border-t px-3 py-3">
-          <Steps lang={formattingLocale}>
+          <Steps lang={formattingLocale} markerStyle={markerStyle}>
             {input.questions.map((q, i) => {
               const hasOptions = (q.options?.length ?? 0) > 0;
               return (

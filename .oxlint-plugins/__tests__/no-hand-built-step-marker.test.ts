@@ -15,6 +15,14 @@ describe.serial(RULE, () => {
     ).toEqual([1, 2, 3]);
   });
 
+  test("reports a padded marker followed by punctuation once", async () => {
+    expect(
+      await lint(
+        'const marker = <p>{String(i + 1).padStart(2, "0")}. Item</p>;',
+      ),
+    ).toEqual([1]);
+  });
+
   test("accepts list-owned numbering inside Steps", async () => {
     expect(
       await lint(

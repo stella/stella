@@ -10,19 +10,19 @@ import {
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  PUBLIC_LAW_MAX_PAGE,
   DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+  PUBLIC_LAW_MAX_PAGE,
+  PUBLIC_LAW_PAGE_REST,
   publicLawNumberedPagerModel,
   publicLawPageIndex,
   type PublicLawPageItem,
-  PUBLIC_LAW_PAGE_REST,
-  publicLawPageWindow,
   publicLawPageNumber,
-  publicLawPagesToWalk,
+  publicLawPagerModel,
   publicLawPageSearchValue,
   publicLawPageSize,
   publicLawPageSizeSearchValue,
-  publicLawPagerModel,
+  publicLawPagesToWalk,
+  publicLawPageWindow,
   reachablePublicLawPage,
 } from "./public-law-pagination.logic";
 

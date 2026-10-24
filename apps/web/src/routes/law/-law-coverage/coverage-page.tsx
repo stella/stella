@@ -288,6 +288,7 @@ const CAPITAL_BY_JURISDICTION = {
   AUT: [48.21, 16.37],
   CZE: [50.08, 14.44],
   EU: [49.62, 6.13],
+  GBR: [51.51, -0.13],
   HUN: [47.5, 19.04],
   POL: [52.23, 21.01],
   SVK: [48.15, 17.11],
@@ -307,6 +308,7 @@ const COLOR_BY_JURISDICTION = {
   AUT: "#ed2939",
   CZE: "#d7141a",
   EU: "#003399",
+  GBR: "#012169",
   HUN: "#477050",
   POL: "#dc143c",
   SVK: "#0b4ea2",
@@ -687,15 +689,29 @@ const SourceCoverageDetails = ({
   // it cannot; unknown is still never shown as "no gaps recorded".
   let gaps: string | null;
   switch (source.knownGaps.type) {
-    case "unknown":
+    case "not_reconciled":
       gaps = null;
       break;
-    case "none-recorded":
-      gaps = t("caseLaw.coverage.noGapsRecorded");
+    case "reconciled": {
+      // Decisions and listing periods are different units: each keeps its
+      // own label rather than adding into one number.
+      const { missing, unlistedSlices } = source.knownGaps.summary;
+      const parts = [
+        ...(missing > 0
+          ? [`${t("caseLaw.coverage.knownGaps")}: ${formatter.number(missing)}`]
+          : []),
+        ...(unlistedSlices > 0
+          ? [
+              `${t("caseLaw.coverage.unreadListingPeriods")}: ${formatter.number(unlistedSlices)}`,
+            ]
+          : []),
+      ];
+      gaps =
+        parts.length === 0
+          ? t("caseLaw.coverage.noGapsRecorded")
+          : parts.join(" · ");
       break;
-    case "known":
-      gaps = `${t("caseLaw.coverage.knownGaps")}: ${formatter.number(source.knownGaps.gaps.length)}`;
-      break;
+    }
     default:
       source.knownGaps satisfies never;
       return panic("Unhandled case-law source gap state");

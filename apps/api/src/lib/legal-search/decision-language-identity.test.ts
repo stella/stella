@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
@@ -57,6 +57,7 @@ describe("decision language identity", () => {
       "AUT",
       "CZE",
       "EU",
+      "GBR",
       "HUN",
       "POL",
       "SVK",

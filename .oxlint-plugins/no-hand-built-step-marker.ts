@@ -61,8 +61,10 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const reported = new WeakSet<Ranged>();
         const report = (node: Ranged) => {
-          if (!isInsideSteps(node)) {
+          if (!isInsideSteps(node) && !reported.has(node)) {
+            reported.add(node);
             context.report({ node, messageId: "marker" });
           }
         };
@@ -91,7 +93,7 @@ export default eslintCompatPlugin({
                 isAstNode(current) &&
                 current.type === "JSXExpressionContainer"
               ) {
-                report(node);
+                report(current);
               }
             }
           },

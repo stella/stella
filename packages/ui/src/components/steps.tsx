@@ -17,13 +17,22 @@ const stepsVariants = cva("list-decimal ps-6 marker:font-medium", {
 });
 
 type StepsProps = React.ComponentProps<"ol"> &
-  VariantProps<typeof stepsVariants>;
+  VariantProps<typeof stepsVariants> & {
+    markerStyle: NonNullable<React.CSSProperties["listStyleType"]>;
+  };
 
 /** A meaningful procedure, timeline, or ranking. The list owns its numbers. */
-const Steps = ({ className, variant, ...props }: StepsProps) => (
+const Steps = ({
+  className,
+  variant,
+  markerStyle,
+  style,
+  ...props
+}: StepsProps) => (
   <ol
     className={cn(stepsVariants({ variant }), className)}
     data-slot="steps"
+    style={{ ...style, listStyleType: markerStyle }}
     {...props}
   />
 );
