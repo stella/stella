@@ -12,7 +12,7 @@ import type {
   AppSnapshot,
   DesktopAccountSnapshot,
   DesktopNotificationPreferences,
-} from "../shared/rpc";
+} from "../src/shared/rpc";
 
 GlobalRegistrator.register({ url: "http://localhost/#notifications" });
 
@@ -20,8 +20,8 @@ const { act, fireEvent, render } = await import("@testing-library/react");
 const { clearMocks, mockIPC, mockWindows } =
   await import("@tauri-apps/api/mocks");
 const { emit } = await import("@tauri-apps/api/event");
-const { DesktopIntlProvider, defaultMessages } = await import("../i18n");
-const { default: App } = await import("./App");
+const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
+const { default: App } = await import("../src/mainview/App");
 
 afterAll(async () => {
   await GlobalRegistrator.unregister();
