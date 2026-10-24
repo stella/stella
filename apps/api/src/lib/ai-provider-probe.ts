@@ -22,8 +22,8 @@ import { PROVIDER_ERROR_TEXT_MAX_BYTES } from "@/api/lib/errors/redacted-provide
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
 import { sanitizeCredentialText } from "@/api/lib/observability/credential-text";
 import type {
-  SafeOutboundFetchResponse,
   SafeOutboundFetchBody,
+  SafeOutboundFetchResponse,
   SafeOutboundHeaders,
 } from "@/api/lib/safe-outbound-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";

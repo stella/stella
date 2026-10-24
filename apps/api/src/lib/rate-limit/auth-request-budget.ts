@@ -14,8 +14,8 @@ import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import type { AuthRateLimitReservation } from "@/api/lib/rate-limit/auth-admission-reservations";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
-  recordBudgetRejection,
   type BudgetObservation,
+  recordBudgetRejection,
 } from "@/api/lib/rate-limit/budget-observability";
 import { isRecord } from "@/api/lib/type-guards";
 

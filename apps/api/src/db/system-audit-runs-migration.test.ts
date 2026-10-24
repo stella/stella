@@ -1,12 +1,12 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
 import type { SQLWrapper } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { Temporal } from "@stll/time";
 
 import { systemAuditRuns } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   purgeSystemAuditRuns,
@@ -54,7 +54,7 @@ const insertSql = (counts: { sweptUploads: number }) => {
   if (row === null) {
     throw new TypeError("Expected a row");
   }
-  return drizzle.mock().insert(systemAuditRuns).values(row).toSQL();
+  return createMockDatabase().insert(systemAuditRuns).values(row).toSQL();
 };
 
 const deniedOrEmpty = async (run: () => Promise<{ rows: unknown[] }>) => {

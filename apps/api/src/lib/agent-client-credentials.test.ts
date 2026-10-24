@@ -9,9 +9,9 @@ import {
 import { env } from "@/api/env";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 
 let priorStorageSetting = false;

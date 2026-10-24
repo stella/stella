@@ -15,18 +15,18 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
+  type CorpusIndexManifest,
   corpusIndexManifestScopeJurisdictions,
   requireCorpusIndexManifest,
-  type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
   caseLawProjectionInputFromCanonical,
+  type CorpusIndexProjectionSubject,
   LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
   legislationProjectionInputFromCanonical,
   lockActiveCorpusProjectionManifestForMutation,
-  type CorpusIndexProjectionSubject,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";

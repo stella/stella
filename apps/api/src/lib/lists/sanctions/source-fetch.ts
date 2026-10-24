@@ -1,10 +1,9 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { load } from "cheerio";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
 import {
-  SANCTIONS_SOURCES,
   parseCzList,
   parseEuList,
   parseOfacList,
@@ -18,6 +17,7 @@ import {
   readSourceEditionMarker,
   readUkListVersion,
   readUnListVersion,
+  SANCTIONS_SOURCES,
 } from "@stll/sanctions";
 import type {
   ListVersion,
@@ -25,7 +25,7 @@ import type {
   SanctionsListParseError,
   SanctionsSource,
 } from "@stll/sanctions";
-import { sha256Hex as hashSha256Hex, createSha256 } from "@stll/sha256/bun";
+import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
