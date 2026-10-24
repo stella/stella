@@ -1,6 +1,7 @@
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: Judgment-date walk windows now also reject nonexistent calendar dates; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
