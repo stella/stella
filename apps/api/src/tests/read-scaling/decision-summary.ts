@@ -111,6 +111,7 @@ export const decisionSummaryScalingScenario = {
             request: new Request(
               `https://example.test/v1/case/decisions/${first.id}/summary`,
             ),
+            route: "/v1/case/decisions/:decisionId/summary",
             set: { headers: {} },
           }),
         );
