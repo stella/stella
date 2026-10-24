@@ -184,10 +184,14 @@ describe("shared lazy decision analysis", () => {
       expect(client.getQueryState(queryKey)?.fetchStatus).toBe("idle");
     });
     await act(async () => {
-      client.setQueryData(queryKey, {
-        kind: "done",
-        analysis,
-      } satisfies AnalysisQueryResult);
+      client.setQueryData(
+        queryKey,
+        () =>
+          ({
+            kind: "done",
+            analysis,
+          }) satisfies AnalysisQueryResult,
+      );
     });
     await waitFor(() =>
       expect(mounted.result.current.state.status).toBe("done"),

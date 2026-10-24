@@ -19,6 +19,7 @@ import {
   significanceStatementOf,
 } from "./analysis";
 import type {
+  AnalysisGenerating,
   AnalysisHeading,
   AnalysisSignificance,
   DecisionAnalysis,
@@ -54,7 +55,7 @@ describe("parsePersistedDecisionAnalysis", () => {
       partialTree: [],
       startedAt: "2026-04-30T12:00:00.000Z",
       inputFingerprint: FINGERPRINT,
-    } as const;
+    } satisfies AnalysisGenerating;
 
     expect(parsePersistedDecisionAnalysis(sentinel)).toEqual(sentinel);
     expect(isAnalysisGenerating(sentinel)).toBe(true);
