@@ -2,6 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
+import {
+  INSPECTOR_PANE_DEFAULT_WIDTH,
+  INSPECTOR_PANE_MAX_WIDTH,
+  INSPECTOR_PANE_MIN_WIDTH,
+} from "./pane-width";
 import { useInspectorPaneWidth } from "./use-pane-width";
 
 // The handle owns a pointer stream, so what it hands back has to cover every
@@ -32,3 +37,30 @@ describe("useInspectorPaneWidth", () => {
     expect(() => renderToStaticMarkup(<HandleProbe />)).not.toThrow();
   });
 });
+
+test.each([
+  [Number.NaN, INSPECTOR_PANE_DEFAULT_WIDTH],
+  [Number.POSITIVE_INFINITY, INSPECTOR_PANE_DEFAULT_WIDTH],
+  [Number.NEGATIVE_INFINITY, INSPECTOR_PANE_DEFAULT_WIDTH],
+  [0, INSPECTOR_PANE_MIN_WIDTH],
+  [Number.MAX_SAFE_INTEGER, INSPECTOR_PANE_MAX_WIDTH],
+])(
+  "normalizes persisted width %s before exposing a handle",
+  (saved, expected) => {
+    const WidthProbe = () => {
+      const { resizeHandleProps, width } = useInspectorPaneWidth({
+        persistence: { read: () => saved, write: () => undefined },
+        sidebarWidth: 240,
+        viewportWidth: 2560,
+      });
+      return (
+        <span role="separator" {...resizeHandleProps} data-width={width} />
+      );
+    };
+
+    const markup = renderToStaticMarkup(<WidthProbe />);
+
+    expect(markup).toContain(`aria-valuenow="${expected}"`);
+    expect(markup).toContain(`data-width="${expected}"`);
+  },
+);
