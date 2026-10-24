@@ -11,12 +11,12 @@ import {
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
+import { isTokenRejectionError } from "@/api/lib/auth/token-verification-errors";
 import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
-import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -175,19 +175,6 @@ export const extractMcpSession = (
     ...(rawMemberId === undefined ? {} : { memberId: rawMemberId }),
   });
 };
-
-/**
- * A genuine token rejection surfaces as a better-call `APIError` with an
- * `UNAUTHORIZED` (401) status: `verifyBearerToken` maps expired tokens, invalid
- * signatures, wrong audience/issuer, no-matching-key, and a missing payload to
- * that shape. Everything else the verifier can throw is an infrastructure fault
- * (a JWKS fetch/network error re-thrown as a plain `Error`, or a jose JWKS
- * timeout/invalid error) and must not be reported to the caller as a bad token.
- */
-const isTokenRejectionError = (error: unknown): boolean =>
-  isRecord(error) &&
-  error["name"] === "APIError" &&
-  (error["status"] === "UNAUTHORIZED" || error["statusCode"] === 401);
 
 /**
  * Classify a failure thrown while resolving the bearer token. A genuine token

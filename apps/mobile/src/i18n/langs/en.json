@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Chat",
+    "tasks": "Tasks",
+    "matters": "Matters",
+    "settings": "Settings"
+  },
+  "chat": {
+    "description": "Keep ongoing work close and continue from any device.",
+    "emptyTitle": "No conversations yet",
+    "emptyDescription": "New conversations and recent threads will appear here."
+  },
+  "tasks": {
+    "description": "See what needs attention without opening the full workspace.",
+    "emptyTitle": "No open tasks",
+    "emptyDescription": "Assigned and upcoming work will appear here."
+  },
+  "matters": {
+    "description": "Find a matter and get the essential context quickly.",
+    "emptyTitle": "No matters yet",
+    "emptyDescription": "Your recent matters will appear here.",
+    "loadFailed": "Your matters could not be loaded.",
+    "retry": "Try again"
+  },
+  "signIn": {
+    "title": "Sign in to stella",
+    "description": "Enter the address of your stella server. You approve the sign-in in your browser.",
+    "serverLabel": "Server address",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Continue",
+    "sessionEnded": "Your session ended. Sign in again.",
+    "errors": {
+      "address": "Enter an https address, such as stella.example.com.",
+      "unreachable": "No stella server answered at this address.",
+      "denied": "The sign-in was not approved.",
+      "failed": "The sign-in did not finish. Try again."
+    }
+  },
+  "settings": {
+    "accountTitle": "Account",
+    "server": "Server",
+    "signOut": "Sign out"
+  }
+}

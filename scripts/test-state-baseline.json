@@ -399,7 +399,7 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/oauth-cli-client-document.db.test.ts": {
+  "apps/api/src/lib/oauth-native-client-documents.db.test.ts": {
     "count": 1,
     "owner": "security",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
