@@ -307,6 +307,27 @@ describe("check-migration-safety", () => {
   });
 
   describe("expand-only pre-deploy migrations", () => {
+    it("treats UPDATE as a privilege or trigger event, not a row update, before ON, OF or a column list", () => {
+      for (const sql of [
+        `GRANT SELECT, INSERT, UPDATE ON TABLE "time_daily_targets" TO stella;`,
+        `GRANT UPDATE ("status") ON "documents" TO stella;`,
+        `REVOKE UPDATE ON "documents" FROM stella;`,
+        `CREATE TRIGGER "documents_touch" AFTER INSERT OR UPDATE OF "status" ON "documents" FOR EACH ROW EXECUTE FUNCTION touch();`,
+      ]) {
+        const result = runChecker(sql);
+        expect(result.stdout + result.stderr, sql).not.toContain(
+          "pre-deploy-update",
+        );
+      }
+      // A real UPDATE in the same migration is still refused.
+      expectFinding(
+        runChecker(
+          `GRANT UPDATE ON "documents" TO stella;\nUPDATE "documents" SET "status" = 'ready';`,
+        ),
+        "pre-deploy-update",
+      );
+    });
+
     it("rejects every operation owned by the online phase", () => {
       const refused = [
         [
