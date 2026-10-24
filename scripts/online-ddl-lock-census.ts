@@ -534,12 +534,12 @@ const provesConcurrentCreateSql = (
   source: ts.SourceFile,
   call: ts.CallExpression,
 ): boolean => {
-  const sourceNodes: ts.Node[] = [];
-  const collectSourceNodes = (node: ts.Node): void => {
-    sourceNodes.push(node);
-    ts.forEachChild(node, collectSourceNodes);
-  };
-  collectSourceNodes(source);
+  const sourceNodes = source.statements.flatMap((statement) =>
+    ts.isVariableStatement(statement) &&
+    (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
+      ? [...statement.declarationList.declarations]
+      : [],
+  );
   const anchoredPattern = sourceNodes.some(
     (node) =>
       ts.isVariableDeclaration(node) &&
@@ -569,30 +569,17 @@ const provesConcurrentCreateSql = (
   ) {
     return false;
   }
-  const functionNodes: ts.Node[] = [];
-  const collectFunctionNodes = (node: ts.Node): void => {
-    functionNodes.push(node);
-    ts.forEachChild(node, collectFunctionNodes);
-  };
-  collectFunctionNodes(current.initializer.body);
-  const execInput = functionNodes.some((node) => {
-    if (
-      !ts.isCallExpression(node) ||
-      !ts.isPropertyAccessExpression(node.expression) ||
-      node.expression.name.text !== "exec" ||
-      !ts.isIdentifier(node.expression.expression) ||
-      node.expression.expression.text !== "createSqlTarget"
-    ) {
-      return false;
-    }
-    const input = node.arguments.at(0);
-    return (
-      node.arguments.length === 1 &&
-      input !== undefined &&
-      isCreateSqlIdentifier(input)
-    );
-  });
-  const guardedTarget = functionNodes.some((node) => {
+  const body = current.initializer.body;
+  if (!ts.isBlock(body)) {
+    return false;
+  }
+  const declarations = body.statements.flatMap((statement) =>
+    ts.isVariableStatement(statement) &&
+    (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
+      ? [...statement.declarationList.declarations]
+      : [],
+  );
+  const guardedTarget = body.statements.some((node) => {
     if (
       !ts.isIfStatement(node) ||
       !sameSyntax(
@@ -622,7 +609,7 @@ const provesConcurrentCreateSql = (
   const boundTargets = bindings.every(
     ([name, expression]) =>
       expression !== undefined &&
-      functionNodes.some(
+      declarations.some(
         (node) =>
           ts.isVariableDeclaration(node) &&
           ts.isIdentifier(node.name) &&
@@ -633,7 +620,7 @@ const provesConcurrentCreateSql = (
       ),
   );
 
-  return anchoredPattern && execInput && guardedTarget && boundTargets;
+  return anchoredPattern && guardedTarget && boundTargets;
 };
 
 const provesDeclaredFunction = (context: SourceContext): boolean => {

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -209,6 +210,23 @@ describe("online DDL lock census", () => {
     expect(source).not.toBe(ownerSource);
     expect(censusOnlineDdlSource(source).length).toBeGreaterThan(0);
   });
+
+  test.each(["if (false)", "if (enabled)", "const unused = () =>"])(
+    "the concurrent target guard must execute before building SQL: %s",
+    (wrapper) => {
+      const guard =
+        ownerSource
+          .match(
+            /  if \(builtName !== name \|\| builtTable !== tableName\) \{[\s\S]*?\n  \}/u,
+          )
+          ?.at(0) ?? panic("Missing concurrent-index target guard");
+      const source = ownerSource.replace(guard, `${wrapper} {\n${guard}\n}`);
+      expect(source).not.toBe(ownerSource);
+      expect(censusOnlineDdlSource(source)).toContain(
+        "createSql pass-through lacks an anchored concurrent-index AST proof",
+      );
+    },
+  );
 
   test("a private policy SQL builder cannot escape the branded execution path", () => {
     const source = `${ownerSource}\nconst escaped = createPolicyText(policy);`;
