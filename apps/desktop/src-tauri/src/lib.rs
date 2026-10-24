@@ -1,3 +1,4 @@
+mod accessibility_guide;
 mod account;
 mod activity;
 mod activity_calls;
@@ -224,6 +225,9 @@ pub fn run() {
           Arc::new(move |app, feature, enabled| match feature {
             feature_gate::DesktopFeature::ActivityTimeline => {
               activity::apply_feature_gate(app, enabled);
+              if enabled {
+                onboarding::feature_enabled(app, feature);
+              }
               let manager = Arc::clone(&manager);
               let app = app.clone();
               tauri::async_runtime::spawn(async move {
