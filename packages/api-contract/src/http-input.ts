@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 /**
@@ -85,13 +86,12 @@ export const jsonFromString = <TSchema extends v.GenericSchema>(
     v.string(),
     wireMarker<string>(schema),
     v.rawTransform(({ dataset, addIssue, NEVER }) => {
-      try {
-        const parsed: unknown = JSON.parse(dataset.value);
-        return parsed;
-      } catch {
+      const parsed = Result.try((): unknown => JSON.parse(dataset.value));
+      if (parsed.isErr()) {
         addIssue({ message: "Expected JSON" });
         return NEVER;
       }
+      return parsed.value;
     }),
     schema,
   );

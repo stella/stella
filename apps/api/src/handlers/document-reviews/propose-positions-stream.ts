@@ -23,7 +23,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
-import { sseResponse } from "@/api/lib/sse";
+import { memberSessionStreamBinding, sseResponse } from "@/api/lib/sse";
 
 const config = {
   contract: "patch",
@@ -207,11 +207,7 @@ const proposePositionsStream = createSafeHandler(
     });
 
     return Result.ok(
-      sseResponse(sse, {
-        kind: "session",
-        sessionId: session.id,
-        userId: user.id,
-      }),
+      sseResponse(sse, memberSessionStreamBinding({ session, user })),
     );
   },
 );

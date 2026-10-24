@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import {
-  type DesktopTimeEntryBatchStatus,
   desktopTimeEntryBatchStatusRequestSchema,
   desktopTimeEntryBatchStatusSchema,
 } from "@stll/api-contract/desktop-time-entries";

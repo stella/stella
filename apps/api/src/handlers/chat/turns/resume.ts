@@ -28,7 +28,7 @@ import {
 } from "@/api/lib/chat/run-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withSseHeartbeat } from "@/api/lib/sse";
+import { memberSessionStreamBinding, withSseHeartbeat } from "@/api/lib/sse";
 
 const config = {
   contract: "patch",
@@ -217,7 +217,7 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
           durability: { adapter: replay },
           abortController: new AbortController(),
         }),
-        { kind: "session", sessionId: session.id, userId: user.id },
+        memberSessionStreamBinding({ session, user }),
       ),
     );
   };

@@ -30,6 +30,7 @@ import {
   closeRateLimitContexts,
   InMemoryRateLimitContext,
   isRateLimitMiddleware,
+  rateLimit,
   scopedGenerator,
   scopedRateLimitKey,
 } from "@/api/lib/rate-limit/rate-limit";

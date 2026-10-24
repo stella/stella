@@ -9,10 +9,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  API_CALENDAR_DATE_CHECK,
-  apiDateSchema,
-} from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {

@@ -294,6 +294,7 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import { memberSessionStreamBinding } from "@/api/lib/sse";
 import {
   requireTanStackAIAvailableForTask,
   validateTanStackDevModelOverride,
@@ -3336,11 +3337,7 @@ export const createSendMessage = (
                   systemSafe,
                   systemUntrusted,
                   userId: user.id,
-                  viewer: {
-                    kind: "session",
-                    sessionId: session.id,
-                    userId: user.id,
-                  },
+                  viewer: memberSessionStreamBinding({ session, user }),
                   workspaceId,
                 });
 

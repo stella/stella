@@ -9,12 +9,9 @@ type FirmKnowledgeResponses = RouteTree<
   RoutesOf<typeof devRoute>
 >["dev"]["seed-firm-knowledge"]["post"]["response"];
 
-test("firm-knowledge text errors coexist with auth macro rejection bodies", () => {
-  expectTypeOf<FirmKnowledgeForbiddenText>().not.toBeNever();
-  expectTypeOf<FirmKnowledgeForbiddenText>().toBeString();
-  expectTypeOf<FirmKnowledgeForbiddenMacroError>().not.toBeNever();
-  expectTypeOf<FirmKnowledgeForbiddenMacroError["code"]>().toBeString();
-  expectTypeOf<FirmKnowledgeForbiddenMacroError["message"]>().toBeString();
-  expectTypeOf<FirmKnowledgeConflictText>().not.toBeNever();
-  expectTypeOf<FirmKnowledgeConflictText>().toBeString();
+test("firm-knowledge text errors keep their statuses in the route type", () => {
+  expectTypeOf<FirmKnowledgeResponses[403]>().not.toBeNever();
+  expectTypeOf<FirmKnowledgeResponses[403]>().toBeString();
+  expectTypeOf<FirmKnowledgeResponses[409]>().not.toBeNever();
+  expectTypeOf<FirmKnowledgeResponses[409]>().toBeString();
 });

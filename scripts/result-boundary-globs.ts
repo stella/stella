@@ -221,6 +221,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // route, a hidden feature) into sanitized answers at its error boundary.
   "apps/api/src/http/**/*.ts",
   "apps/api/src/lib/observability/request-lifecycle.ts",
+  // A rate-limit stage refunds its charges when a later stage throws.
+  "apps/api/src/lib/rate-limit/rate-limit.ts",
   "apps/api/src/lib/auth/feature-access/route.ts",
   "apps/api/src/lib/deployment-feature-route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;

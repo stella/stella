@@ -147,5 +147,5 @@ test("coverage responses accept more than 100 recorded years", () => {
     })),
   };
 
-  expect(Value.Check(coverageResponseSchema, response)).toBe(true);
+  expect(v.is(coverageResponseSchema, response)).toBe(true);
 });

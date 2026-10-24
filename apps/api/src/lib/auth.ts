@@ -2694,8 +2694,6 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
-type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set">;
-
 /**
  * Account routes confirm the session still exists in storage. Organization
  * routes may serve the cached cookie snapshot because their member lookup runs

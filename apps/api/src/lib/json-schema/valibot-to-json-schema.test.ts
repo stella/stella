@@ -296,7 +296,9 @@ describe("toRouteJsonSchema", () => {
   });
 
   test("a file states its size cap", () => {
-    expect(toRouteJsonSchema(fileSchema({ maxBytes: 1024 }))).toEqual({
+    // The cap is a vendor keyword the JSON Schema type does not name.
+    const schema: object = toRouteJsonSchema(fileSchema({ maxBytes: 1024 }));
+    expect(schema).toEqual({
       $schema: "http://json-schema.org/draft-07/schema#",
       type: "string",
       format: "binary",

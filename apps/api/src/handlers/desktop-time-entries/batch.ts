@@ -4,7 +4,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
 import {
   type DesktopTimeEntryBatch,
-  type DesktopTimeEntryBatchResponse,
   desktopTimeEntryBatchResponseSchema,
   desktopTimeEntryBatchSchema,
 } from "@stll/api-contract/desktop-time-entries";

@@ -8,7 +8,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
-import { sseResponse } from "@/api/lib/sse";
+import { memberSessionStreamBinding, sseResponse } from "@/api/lib/sse";
 import { streamTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 const MAX_PREFIX_CHARS = 8000;
@@ -202,11 +202,7 @@ const autocompleteStream = createSafeRootHandler(
     const sse = createAutocompleteEventStream(admittedStream(), request.signal);
 
     return Result.ok(
-      sseResponse(sse, {
-        kind: "session",
-        sessionId: session.id,
-        userId: user.id,
-      }),
+      sseResponse(sse, memberSessionStreamBinding({ session, user })),
     );
   },
 );
