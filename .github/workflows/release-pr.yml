@@ -153,6 +153,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
+          no-cache: true
 
       - name: Decide whether the release takes main
         id: plan
@@ -199,6 +200,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
+          no-cache: true
 
       - name: Mint release refresh token
         id: app-token
@@ -218,7 +220,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
-          NUMBER: ${{ needs.refresh-release-plan.outputs.number }}
+          RELEASE_PULL_REQUEST: ${{ needs.refresh-release-plan.outputs.number }}
           HEAD_SHA: ${{ needs.refresh-release-plan.outputs.head }}
         run: bun scripts/release-pull-request-refresh.ts update
 
@@ -245,6 +247,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
+          no-cache: true
 
       # Install hooks run before a write-capable credential exists in the job.
       - name: Install dependencies

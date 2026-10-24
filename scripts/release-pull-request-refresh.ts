@@ -319,7 +319,7 @@ const main = async () => {
       const head = await updateReleaseBranch({
         request: ghRetryRequest,
         repo,
-        number: Number(requiredEnv("NUMBER")),
+        number: Number(requiredEnv("RELEASE_PULL_REQUEST")),
         head: requiredEnv("HEAD_SHA"),
       });
       writeOutputs({ head });
