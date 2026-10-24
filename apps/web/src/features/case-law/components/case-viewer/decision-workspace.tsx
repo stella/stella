@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -177,7 +177,8 @@ type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
 };
 
 export type DecisionWorkspaceProps =
-  EnabledDecisionWorkspaceProps | GatedDecisionWorkspaceProps;
+  | EnabledDecisionWorkspaceProps
+  | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
 /** A decision without a parsed body has no blocks to range over. */
@@ -528,7 +529,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
       mode: props.aiMode,
     });
-  const generate = useCallback(async () => {
+  const generate = async () => {
     if (!ensureAIAvailable) {
       return;
     }
@@ -539,7 +540,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     }
 
     generateDecisionAnalysis();
-  }, [ensureAIAvailable, generateDecisionAnalysis]);
+  };
 
   const hasAnalysis =
     analysisState.status === "done" ||
