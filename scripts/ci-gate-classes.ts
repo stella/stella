@@ -262,6 +262,10 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
     steps: {
       "Write required-jobs record": { class: "advisory", owner: "ci" },
       "Upload required-jobs record": { class: "advisory", owner: "ci" },
+      "Re-run metadata mirrors of an earlier attempt": {
+        class: "advisory",
+        owner: "ci",
+      },
     },
   },
 };
