@@ -84,7 +84,12 @@ describe("registered adapters classify source availability", () => {
   test("a successful landing without the required session is an adapter error", async () => {
     // A successful response with an unexpected session shape is a contract
     // failure; availability cannot be inferred from a missing cookie.
-    globalThis.fetch = asFetchMock(async () => new Response("<html></html>"));
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(
+          "<html><body>The publisher session landing page.</body></html>",
+        ),
+    );
     const adapter = await ADAPTER_MODULES["pl-tk"]();
     const page = await adapter.fetchPage(null, {
       cacheDirectory: createCacheDirectory(),
@@ -92,6 +97,9 @@ describe("registered adapters classify source availability", () => {
     expect(page.isErr()).toBe(true);
     if (page.isErr()) {
       expect(page.error.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      expect(page.error.message).toContain(
+        "the portal opened no session (200)",
+      );
     }
   });
 });

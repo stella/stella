@@ -6,12 +6,13 @@ import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { AI_ERROR_KINDS } from "@stll/api-contract";
-import { FAILURE_GRADES } from "@stll/errors";
+import { FAILURE_GRADES, FAILURE_REASON_GRADE } from "@stll/errors";
 
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import {
   classifyAIError,
   providerErrorBody,
+  providerFailureFacts,
   providerStatusCode,
 } from "@/api/lib/ai-error";
 import {
@@ -20,11 +21,15 @@ import {
   ModelOutputInvalidError,
   ModelOutputModeratedError,
   ModelRunUnfinishedError,
+  PROVIDER_CALL_FAILURE_REASON,
+  ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  HandlerError,
+  WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
 import {
   failureSink,
@@ -202,6 +207,64 @@ test("provider message recovery accepts only complete known envelopes", () => {
 });
 
 describe("wrapped provider message evidence", () => {
+  test("wrappers retain every declared provider kind without losing response facts", () => {
+    const model = { provider: "google", keySource: "byok" } as const;
+    for (const kind of AI_ERROR_KINDS) {
+      for (const status of [403, 503]) {
+        const classified = new ProviderCallError({
+          model,
+          status: 502,
+          kind,
+          facts: { status, isRetryable: true },
+        });
+        const wrappers = [
+          new Error("Adapter failed", { cause: classified }),
+          new HandlerError({
+            message: "Adapter failed",
+            status: 502,
+            cause: classified,
+          }),
+          new WorkflowIntegrationError({
+            message: "Adapter failed",
+            cause: classified,
+          }),
+        ];
+        for (const evidence of wrappers) {
+          expect(classifyAIError(evidence)).toBe(kind);
+          expect(providerFailureFacts(evidence)).toEqual({
+            status,
+            isRetryable: true,
+          });
+          const rebuilt = createProviderCallError({
+            model,
+            evidence,
+            status: 502,
+          });
+          expect(rebuilt.kind).toBe(kind);
+          expect(rebuilt.providerStatus).toBe(status);
+          expect(gradeFailure(readEvidence(rebuilt), sink).grade).toBe(
+            FAILURE_REASON_GRADE[PROVIDER_CALL_FAILURE_REASON[kind]],
+          );
+        }
+      }
+    }
+  });
+
+  test("an outer provider response precedes a nested declared kind", () => {
+    const classified = new ProviderCallError({
+      model: { provider: "google", keySource: "byok" },
+      status: 502,
+      kind: "provider_stream_incomplete",
+      facts: { status: 503 },
+    });
+    const evidence = Object.assign(
+      new Error("Forbidden", { cause: classified }),
+      { status: 403 },
+    );
+    expect(classifyAIError(evidence)).toBe("unknown");
+    expect(providerFailureFacts(evidence)).toEqual({ status: 403 });
+  });
+
   test("keeps an unmapped selected status authoritative over a mapped cause", () => {
     const quota = Object.assign(new Error("quota"), { status: 429 });
     for (const evidence of [

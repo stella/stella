@@ -25,8 +25,8 @@ import {
   ModelOutputInvalidError,
   ModelOutputModeratedError,
   ModelRunUnfinishedError,
-  ProviderCallError,
   PROVIDER_CALL_FAILURE_REASON,
+  ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
@@ -141,12 +141,20 @@ const PROVIDER_CREDENTIAL_REJECTION_MARKERS = new Set([
 const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
   typeof value === "string" && PROVIDER_CREDENTIAL_REJECTION_MARKERS.has(value);
 
-/** Select one authoritative response for both classification and preserved facts. */
-const selectProviderResponse = (error: unknown) => {
+type ProviderResponsePurpose = "classification" | "facts";
+
+/** A classified provider error owns its kind; its response still owns the facts. */
+const selectProviderResponse = (
+  error: unknown,
+  purpose: ProviderResponsePurpose,
+) => {
   const seen = new Set<object>();
   let current = error;
   while (isNonNullObject(current) && !seen.has(current)) {
     seen.add(current);
+    if (purpose === "classification" && current instanceof ProviderCallError) {
+      return undefined;
+    }
     const { status } = providerResponseEvidence(current);
     if (status !== undefined) {
       return { status: status.status, source: current };
@@ -157,7 +165,7 @@ const selectProviderResponse = (error: unknown) => {
 };
 
 export const providerFailureFacts = (error: unknown) => {
-  const response = selectProviderResponse(error);
+  const response = selectProviderResponse(error, "facts");
   if (response === undefined) {
     return undefined;
   }
@@ -293,7 +301,7 @@ const errorCause = (error: unknown): unknown => {
 };
 
 const providerResponseKind = (error: unknown): AIErrorKind | null => {
-  const response = selectProviderResponse(error);
+  const response = selectProviderResponse(error, "classification");
   const statusCode = response?.status ?? null;
   const { credentialsRejected } = providerResponseEvidence(error);
   if (response === undefined && !credentialsRejected) {
