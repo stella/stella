@@ -60,17 +60,13 @@ const UPDATED_FIELDS = [
 
 type LineAmountPatch = Pick<
   Static<typeof updateLineBodySchema>,
-  "quantity" | "unit" | "unitPriceMinor"
+  "quantity" | "unitPriceMinor"
 >;
-type StoredLineAmount = Pick<
-  InvoiceLineDraft,
-  "quantity" | "unit" | "unitPrice"
->;
+type StoredLineAmount = Pick<InvoiceLineDraft, "quantity" | "unitPrice">;
 
 const changesLineAmount = (changed: LineAmountPatch, line: StoredLineAmount) =>
   (changed.quantity !== undefined &&
     quantityText(changed.quantity) !== quantityText(line.quantity)) ||
-  (changed.unit !== undefined && changed.unit !== line.unit) ||
   (changed.unitPriceMinor !== undefined &&
     changed.unitPriceMinor !== line.unitPrice);
 
@@ -165,7 +161,11 @@ const updateInvoiceLine = createSafeHandler(
           }
 
           const changesAmount = changesLineAmount(changed, line);
-          if (changesAmount && invoice.billingMode === "flat_fee") {
+          if (
+            invoice.billingMode === "flat_fee" &&
+            (changesAmount ||
+              (changed.unit !== undefined && changed.unit !== line.unit))
+          ) {
             return Result.err(flatFeeInvoiceRefusal());
           }
           const recorded = {
@@ -193,7 +193,7 @@ const updateInvoiceLine = createSafeHandler(
           let draft: InvoiceLineDraft = {
             description: values.description ?? line.description,
             quantity: line.quantity,
-            unit: line.unit,
+            unit: values.unit === undefined ? line.unit : values.unit,
             unitPrice: line.unitPrice,
             netAmount: cents(Math.abs(line.netAmount)),
             ...vat,

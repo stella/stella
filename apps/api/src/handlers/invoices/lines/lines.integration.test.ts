@@ -47,7 +47,7 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { cents } from "@/api/lib/money";
+import { cents, type CentsAmount } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -829,9 +829,13 @@ describe("invoice lines", () => {
         fc.integer({ min: 1, max: 480 }),
         fc.integer({ min: 0, max: 100_000 }),
         fc.integer({ min: 0, max: 40 }),
-        async (billedMinutes, unitPriceMinor, hours) => {
+        fc.integer({ min: 1, max: 1_000_000 }),
+        async (billedMinutes, unitPriceMinor, hours, recordedRateMinor) => {
           const invoiceId = await seedInvoice();
-          const timeEntryId = await seedTimeEntry({ billedMinutes });
+          const timeEntryId = await seedTimeEntry({
+            billedMinutes,
+            rateAtEntry: cents(recordedRateMinor),
+          });
           const lineId = await expectCreated(invoiceId, {
             source: { type: "time_entry", timeEntryId },
             vatRateBps: STANDARD_RATE,
@@ -862,6 +866,48 @@ describe("invoice lines", () => {
             .from(invoiceLines)
             .where(eq(invoiceLines.id, lineId));
           expect(narrativeRows.at(0)?.netAmount).toBe(recorded.netAmount);
+          const totalsBeforeUnitEdit = await testDb.query.invoices.findFirst({
+            where: { id: { eq: invoiceId } },
+            columns: { netAmount: true, vatAmount: true, totalAmount: true },
+          });
+          if (billedMinutes === 1 && recordedRateMinor === 600_000) {
+            expect(recorded).toMatchObject({
+              quantity: "0.0167",
+              netAmount: 10_000,
+              vatAmount: 2100,
+              grossAmount: 12_100,
+            });
+          }
+          for (const unit of ["hours", null]) {
+            expect(await runUpdate(invoiceId, lineId, { unit })).toHaveProperty(
+              "id",
+              lineId,
+            );
+            expect(
+              await testDb.query.invoiceLines.findFirst({
+                where: { id: { eq: lineId } },
+              }),
+            ).toMatchObject({
+              unit,
+              quantity: recorded.quantity,
+              unitPrice: recorded.unitPrice,
+              netAmount: recorded.netAmount,
+              vatAmount: recorded.vatAmount,
+              grossAmount: recorded.grossAmount,
+              recordedUnit: recorded.unit,
+              recordedNetAmount: recorded.netAmount,
+            });
+            expect(
+              await testDb.query.invoices.findFirst({
+                where: { id: { eq: invoiceId } },
+                columns: {
+                  netAmount: true,
+                  vatAmount: true,
+                  totalAmount: true,
+                },
+              }),
+            ).toEqual(totalsBeforeUnitEdit);
+          }
           expect(
             await runUpdate(invoiceId, lineId, {
               description: "Adjusted invoice narrative",
@@ -883,6 +929,7 @@ describe("invoice lines", () => {
             description: "Adjusted invoice narrative",
             recordedDescription: recorded?.description,
             recordedQuantity: recorded?.quantity,
+            recordedUnit: recorded?.unit,
             recordedUnitPrice: recorded?.unitPrice,
             recordedNetAmount: recorded?.netAmount,
           });
@@ -896,6 +943,7 @@ describe("invoice lines", () => {
           expect(resetRows.at(0)).toMatchObject({
             description: recorded?.description,
             quantity: recorded?.quantity,
+            unit: recorded?.unit,
             unitPrice: recorded?.unitPrice,
             netAmount: recorded?.netAmount,
           });
@@ -907,7 +955,7 @@ describe("invoice lines", () => {
           ).toEqual(sourceRows);
         },
       ),
-      { numRuns: 10 },
+      { numRuns: 10, examples: [[1, 0, 0, 600_000]] },
     );
   });
 
@@ -1541,13 +1589,16 @@ const setStatus = async (
     .where(eq(invoices.id, invoiceId));
 };
 
+type SeedTimeEntryOptions = {
+  billedMinutes: number;
+  noCharge?: boolean;
+  rateAtEntry?: CentsAmount;
+};
 const seedTimeEntry = async ({
   billedMinutes,
   noCharge = false,
-}: {
-  billedMinutes: number;
-  noCharge?: boolean;
-}) => {
+  rateAtEntry = cents(20_000),
+}: SeedTimeEntryOptions) => {
   const id = createSafeId<"timeEntry">();
   seededTimeEntryIds.push(id);
   await testDb.insert(timeEntries).values({
@@ -1560,7 +1611,7 @@ const seedTimeEntry = async ({
     timezoneId: "UTC",
     durationMinutes: billedMinutes,
     billedMinutes,
-    rateAtEntry: cents(20_000),
+    rateAtEntry,
     currency: "USD",
     narrative: noCharge ? "Courtesy work" : "Drafted the response",
     noCharge,

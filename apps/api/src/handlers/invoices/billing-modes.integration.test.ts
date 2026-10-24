@@ -269,6 +269,7 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
   if (!line) {
     panic("Flat fee line missing");
   }
+  expect(line.unit).not.toBe("hours");
   const entry = await seedEntry();
   const attempts = [
     await createLine.handler(
@@ -294,6 +295,13 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
       context(
         updateLine.handler,
         { unitPriceMinor: 999 },
+        { invoiceId, lineId: line.id },
+      ),
+    ),
+    await updateLine.handler(
+      context(
+        updateLine.handler,
+        { unit: "hours" },
         { invoiceId, lineId: line.id },
       ),
     ),
