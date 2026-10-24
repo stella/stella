@@ -59,6 +59,19 @@ type SelectOptions = {
   apiImpact?: typeof selectApiTestImpact;
 };
 
+const packageTestIgnores = (flags: readonly string[], file: string) => {
+  const ignored = flags.flatMap((flag, index) => {
+    if (flag === "--path-ignore-patterns") {
+      const pattern = flags.at(index + 1);
+      return pattern === undefined ? [] : [pattern];
+    }
+    return flag.startsWith("--path-ignore-patterns=")
+      ? [flag.slice("--path-ignore-patterns=".length)]
+      : [];
+  });
+  return ignored.some((pattern) => new Bun.Glob(pattern).match(file));
+};
+
 export const selectTargets = ({
   root: repo,
   changed,
@@ -180,6 +193,13 @@ export const selectTargets = ({
       skipped.push({
         file,
         reason: `not gated (unsupported test script: ${parsed.reason})`,
+      });
+      continue;
+    }
+    if (packageTestIgnores(parsed.flags, repoRelativePath(cwd, absolute))) {
+      skipped.push({
+        file,
+        reason: "not gated (excluded by package test script)",
       });
       continue;
     }

@@ -2283,6 +2283,7 @@
     "scopeKnowledgeWrite": "Záradékok létrehozása, szerkesztése és törlése, valamint playbookok futtatása",
     "scopeLawRead": "Nyilvános jogszabályok és ítélkezési gyakorlat olvasása",
     "scopeMattersWrite": "Ügyek és feladatok létrehozása és szerkesztése",
+    "scopeMemoryWrite": "Az asszisztens emlékeinek létrehozása és módosítása",
     "scopeOfflineAccess": "A bejelentkezés fenntartása ismételt jóváhagyás nélkül",
     "scopeOnboarding": "A szervezet praxisának joghatóságainak beállítása",
     "scopeProfile": "Hozzáférés a profiladataihoz",
@@ -2310,6 +2311,7 @@
     "summaryLineRead": "<group>Olvasás:</group> {items}",
     "summaryLineUse": "<group>Használat:</group> {items}",
     "summaryMattersWrite": "ügyek és feladatok",
+    "summaryMemoryWrite": "az asszisztens emlékei",
     "summaryProfile": "profil",
     "summaryRead": "dokumentumok, ügyek és kapcsolatok",
     "summaryReadAnonymized": "anonimizált dokumentumok és ügyek",
@@ -2675,6 +2677,7 @@
       "admissionUnavailable": "Ez a művelet átmenetileg szünetel. Kérjük, próbálja újra hamarosan.",
       "concurrencyBusy": "Más műveletek folyamatban vannak. Kérjük, próbálja újra hamarosan.",
       "contact": "Lépjen kapcsolatba velünk",
+      "featureDisabled": "Ez a funkció átmenetileg ki van kapcsolva.",
       "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
       "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
     },

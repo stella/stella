@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -623,6 +626,37 @@ describe("request.failed severity", () => {
     );
     // An answered client outcome is logged, not reported.
     expect(exceptions).toHaveLength(0);
+  });
+
+  test("an operator feature refusal is a warning without exception capture", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.featureDisabled];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.featureDisabled,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toEqual([]);
+  });
+
+  test("an unavailable admission service remains a captured server fault", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.admissionUnavailable];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures.at(0)?.severityText).toBe("ERROR");
+    expect(exceptions).toHaveLength(1);
   });
 
   test("grades a database failure as a server fault", async () => {

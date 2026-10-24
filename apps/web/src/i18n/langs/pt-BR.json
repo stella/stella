@@ -2283,6 +2283,7 @@
     "scopeKnowledgeWrite": "Criar, editar e excluir suas cláusulas e executar playbooks",
     "scopeLawRead": "Ler legislação pública e jurisprudência",
     "scopeMattersWrite": "Criar e editar seus casos e tarefas",
+    "scopeMemoryWrite": "Criar e atualizar as memórias do assistente",
     "scopeOfflineAccess": "Manter você conectado sem exigir aprovação repetida",
     "scopeOnboarding": "Configure as jurisdições de atuação da sua organização",
     "scopeProfile": "Acesse as informações do seu perfil",
@@ -2310,6 +2311,7 @@
     "summaryLineRead": "<group>Ler:</group> {items}",
     "summaryLineUse": "<group>Usar:</group> {items}",
     "summaryMattersWrite": "casos e tarefas",
+    "summaryMemoryWrite": "memórias do assistente",
     "summaryProfile": "perfil",
     "summaryRead": "documentos, casos e contatos",
     "summaryReadAnonymized": "documentos e casos anonimizados",
@@ -2675,6 +2677,7 @@
       "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
       "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
       "contact": "Entre em contato",
+      "featureDisabled": "Este recurso está temporariamente desativado.",
       "notEnabled": "Esta ação não está habilitada para sua organização.",
       "periodExhausted": "Esta ação está pausada para sua organização."
     },

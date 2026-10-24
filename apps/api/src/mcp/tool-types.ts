@@ -298,6 +298,7 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:contacts_write": "contacts_write",
   "stella:matters_write": "matters_write",
   "stella:chat": "chat",
+  "stella:memory_write": "memory_write",
   "stella:documents_write": "documents_write",
   "stella:knowledge_write": "knowledge_write",
   "stella:search": "search",

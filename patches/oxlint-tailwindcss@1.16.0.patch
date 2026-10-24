@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0cbe51a036c30092a6d607e8e2de03016f56ef1a 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5790244af 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2480,7 +2480,8 @@ function isFatalError(err) {
@@ -35,7 +35,141 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0cbe51a036c30092a6d607e8e2de0301
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3973,6 +3988,26 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -2890,11 +2905,25 @@ const PRECOMPUTE_SCRIPT = `
+ // -1=error), mirroring sort-service.ts / canonicalize-service.ts.
+ const { workerData } = require('worker_threads');
+ const { tailwindNodePath, cssPath: WD_CSS_PATH, cachePath: WD_CACHE_PATH, tmpPath: WD_TMP_PATH, sharedBuffer } = workerData;
+-const control = new Int32Array(sharedBuffer, 0, 4);
++const control = new Int32Array(sharedBuffer, 0, 6);
++const errLengthView = new DataView(sharedBuffer, 24, 4);
++const errDataArea = new Uint8Array(sharedBuffer, 28);
++let heartbeatTimer;
++const setPhase = (phase) => Atomics.store(control, 4, phase);
++let lastSynchronousBeat = performance.now();
++const synchronousBeat = () => {
++  const now = performance.now();
++  if (now - lastSynchronousBeat >= 1000) { Atomics.add(control, 5, 1); lastSynchronousBeat = now; }
++};
++const startHeartbeat = () => {
++  Atomics.add(control, 5, 1);
++  heartbeatTimer = setInterval(() => Atomics.add(control, 5, 1), 5000);
++  heartbeatTimer.unref();
++};
++setPhase(1);
++startHeartbeat();
+ // On failure, write the error message into the data region so the main thread
+ // can surface the real cause instead of a bare "undefined".
+-const errLengthView = new DataView(sharedBuffer, 16, 4);
+-const errDataArea = new Uint8Array(sharedBuffer, 20);
+ function signalError(e) {
+   try {
+     const msg = Buffer.from(String((e && e.message) || e || 'unknown precompute error'), 'utf-8');
+@@ -2902,9 +2931,12 @@ function signalError(e) {
+     errDataArea.set(msg.subarray(0, n), 0);
+     errLengthView.setUint32(0, n);
+   } catch {}
++  clearInterval(heartbeatTimer);
+   Atomics.store(control, 2, -1);
+   Atomics.notify(control, 2);
+ }
++process.on('uncaughtException', signalError);
++process.on('unhandledRejection', signalError);
+ // Everything below — including the top-level require()s — runs inside this try
+ // so any SYNCHRONOUS module-scope failure (a broken @tailwindcss/node install,
+ // missing fs/path) is routed through signalError. Without it the worker would
+@@ -2916,6 +2948,7 @@ try {
+ // workspaces (the module lives under node_modules/.pnpm/... which is not on the
+ // resolution path from the consumer's project root).
+ const { __unstable__loadDesignSystem } = require(tailwindNodePath);
++setPhase(2);
+ const { readFileSync, writeFileSync, renameSync } = require('fs');
+ const { dirname, resolve } = require('path');
+ 
+@@ -3069,7 +3102,9 @@ async function main() {
+ 
+   const cssPath = WD_CSS_PATH;
+   const css = readFileSync(cssPath, 'utf-8');
++  setPhase(3);
+   const base = dirname(cssPath);
++  setPhase(4);
+-  const ds = await __unstable__loadDesignSystem(css, { base });
++  const ds = await __unstable__loadDesignSystem(css, { base }); setPhase(8);
+   phase('load');
+ 
+@@ -3104,6 +3139,7 @@ async function main() {
+   // invisible to no-conflicting-classes (\`rounded rounded-lg\` never reported).
+   const declCss = {};
+   for (let i = 0; i < classNames.length; i++) {
++    synchronousBeat();
+     if (cssResults[i] != null) declCss[classNames[i]] = cssResults[i];
+   }
+ 
+@@ -3149,6 +3185,7 @@ async function main() {
+     // without the prefix (the prefix only affects the selector).
+     const arbResults = ds.candidatesToCss(arbForms.map(pfx));
+     for (let i = 0; i < candidates.length; i++) {
++    synchronousBeat();
+       if (!arbResults[i]) continue;
+       if (extractDeclarations(arbResults[i]) === extractDeclarations(candidates[i].namedCss)) {
+         arbitraryEquivalents[candidates[i].arbitraryForm] = candidates[i].namedCls;
+@@ -3211,6 +3248,7 @@ async function main() {
+   if (extraCandidates.length > 0) {
+     const extraResults = ds.candidatesToCss(extraCandidates.map(pfx));
+     for (let i = 0; i < extraCandidates.length; i++) {
++    synchronousBeat();
+       if (extraResults[i] != null) {
+         validClasses.push(extraCandidates[i]);
+         validSet.add(extraCandidates[i]);
+@@ -3233,6 +3271,7 @@ async function main() {
+   if (negativeProbes.length > 0) {
+     const negResults = ds.candidatesToCss(negativeProbes.map(pfx));
+     for (let i = 0; i < negativeProbes.length; i++) {
++    synchronousBeat();
+       if (negResults[i] != null && !validSet.has(negativeProbes[i])) {
+         validClasses.push(negativeProbes[i]);
+         validSet.add(negativeProbes[i]);
+@@ -3425,6 +3464,7 @@ async function main() {
+   const declIds = new Map();
+   const table = [];
+   for (let i = 0; i < sortedKeys.length; i++) {
++    synchronousBeat();
+     declIds.set(sortedKeys[i], i);
+     const parts = sortedKeys[i].split('|');
+     table.push(
+@@ -3479,6 +3519,7 @@ async function main() {
+   const variantOrder = {};
+   const variants = ds.getVariants();
+   for (let i = 0; i < variants.length; i++) {
++    synchronousBeat();
+     if (!variants[i].isArbitrary) {
+       variantOrder[variants[i].name] = i;
+     }
+@@ -3544,6 +3585,7 @@ async function main() {
+   // pushing one entry per occurrence only inflated the cache artifact.
+   const attrClassRe = /\\[class~="([^"]+)"\\]/g;
+   for (let i = 0; i < cssResults.length; i++) {
++    synchronousBeat();
+     if (cssResults[i]) {
+       let acm;
+       attrClassRe.lastIndex = 0;
+@@ -3631,6 +3673,7 @@ async function main() {
+     const probes = [...knownPrefixes];
+     const probeResults = ds.candidatesToCss(probes.map(p => pfx(p + '-1')));
+     for (let i = 0; i < probes.length; i++) {
++    synchronousBeat();
+       const css = probeResults[i];
+       if (!css) continue;
+       // \`size-1\` emits width AND height, both reading the unit — one match is enough.
+@@ -3668,7 +3711,7 @@ async function main() {
+   renameSync(WD_TMP_PATH, WD_CACHE_PATH);
+ }
+ main()
+-  .then(() => { Atomics.store(control, 2, 1); Atomics.notify(control, 2); })
++  .then(() => { setPhase(5); clearInterval(heartbeatTimer); Atomics.store(control, 2, 1); Atomics.notify(control, 2); })
+   .catch((e) => signalError(e));
+ } catch (e) {
+   signalError(e);
+@@ -3973,6 +4016,48 @@ function precomputeLoadError(resolvedPath, cause) {
  	return new DesignSystemLoadError(`Failed to precompute design system from "${resolvedPath}": ${causeError?.message ?? String(cause)}`, precomputeHint(cause), { cause: causeError });
  }
  /**
@@ -50,94 +184,285 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0cbe51a036c30092a6d607e8e2de0301
 +*/
 +const WORKER_WAIT_NOTICE_MS = 3e4;
 +const WORKER_WAIT_LIMIT_MS = 6e5;
++const WORKER_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS) ?? 6e4;
++const WORKER_LOAD_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS) ?? 18e4;
++const WORKER_PHASES = ["not started", "started", "Tailwind node module loaded", "stylesheet read", "compiling the design system", "ready", "warming up", "answering a request", "precomputing declarations"];
++function workerPhase(control) {
++	return WORKER_PHASES[Atomics.load(control, 4)] ?? `unknown phase ${Atomics.load(control, 4)}`;
++}
 +function waitForWorkerSignal(control, index, describe, stopped = () => false) {
 +	const started = Date.now();
++	let heartbeat = Atomics.load(control, 5);
++	let heartbeatAt = started;
++	let noticeAt = started + WORKER_WAIT_NOTICE_MS;
 +	while (Atomics.load(control, index) === 0) {
-+		if (stopped() || Date.now() - started >= WORKER_WAIT_LIMIT_MS) return false;
-+		if (Atomics.wait(control, index, 0, WORKER_WAIT_NOTICE_MS) === "timed-out") process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++		const now = Date.now();
++		const nextHeartbeat = Atomics.load(control, 5);
++		if (nextHeartbeat !== heartbeat) {
++			heartbeat = nextHeartbeat;
++			heartbeatAt = now;
++		}
++		const heartbeatLimitMs = Atomics.load(control, 4) < 5 || Atomics.load(control, 4) === 8 ? WORKER_LOAD_HEARTBEAT_LIMIT_MS : WORKER_HEARTBEAT_LIMIT_MS;
++		if (stopped()) return { answered: false, reason: "stopped", phase: workerPhase(control), silentMs: now - heartbeatAt };
++		if (now - started >= WORKER_WAIT_LIMIT_MS) return { answered: false, reason: "bound", phase: workerPhase(control), silentMs: now - heartbeatAt };
++		if (now - heartbeatAt >= heartbeatLimitMs) return { answered: false, reason: "heartbeat", phase: workerPhase(control), silentMs: now - heartbeatAt };
++		const waitMs = Math.max(1, Math.min(noticeAt - now, heartbeatLimitMs - (now - heartbeatAt), WORKER_WAIT_LIMIT_MS - (now - started)));
++		if (Atomics.wait(control, index, 0, waitMs) === "timed-out" && Date.now() >= noticeAt) {
++			process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} while ${workerPhase(control)} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++			noticeAt = Date.now() + WORKER_WAIT_NOTICE_MS;
++		}
 +	}
-+	return true;
++	return { answered: true };
 +}
 +/**
  * Run the precompute in a worker_thread (not a forked child). The worker loads
  * the design system in-process, writes the JSON straight to `cachePath`, and
  * signals completion over a SharedArrayBuffer; the main thread blocks on
-@@ -4012,7 +4047,7 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+@@ -3986,9 +4071,9 @@ function precomputeLoadError(resolvedPath, cause) {
+ */
+ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
+ 	const sharedBuffer = new SharedArrayBuffer(ERR_BUFFER_SIZE);
+-	const control = new Int32Array(sharedBuffer, 0, 4);
+-	const errLengthView = new DataView(sharedBuffer, 16, 4);
+-	const errDataArea = new Uint8Array(sharedBuffer, 20);
++	const control = new Int32Array(sharedBuffer, 0, 6);
++	const errLengthView = new DataView(sharedBuffer, 24, 4);
++	const errDataArea = new Uint8Array(sharedBuffer, 28);
+ 	const tmpPath = `${cachePath}.tmp.${process.pid}.${node_worker_threads.threadId}.${precomputeSeq++}`;
+ 	try {
+ 		new Function(PRECOMPUTE_SCRIPT);
+@@ -4012,7 +4097,8 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
  	}
  	worker.on("error", () => {});
  	try {
 -		if (Atomics.wait(control, PRECOMPUTE_SIGNAL_INDEX, 0, timeout) === "timed-out") throw new DesignSystemLoadError(`Timed out precomputing design system from "${resolvedPath}" after ${timeout}ms.`, "Raise `settings.tailwindcss.timeout` if your machine or CI runner is slow, or verify the CSS imports resolve.");
-+		if (!waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`)) throw new DesignSystemLoadError(`The design-system precompute of "${resolvedPath}" gave no answer within ${WORKER_WAIT_LIMIT_MS}ms.`, "The precompute worker stopped answering; verify the CSS imports resolve.");
++		const outcome = waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`);
++		if (!outcome.answered) throw new DesignSystemLoadError(`The design-system precompute stopped answering while ${outcome.phase} from "${resolvedPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The precompute worker stopped answering; verify the CSS imports resolve.");
  		if (control[PRECOMPUTE_SIGNAL_INDEX] === -1) {
  			const len = errLengthView.getUint32(0);
  			throw precomputeLoadError(resolvedPath, len > 0 ? new Error(Buffer.from(errDataArea.slice(0, len)).toString("utf-8")) : /* @__PURE__ */ new Error("precompute worker exited without reporting a cause (it may have been killed by the OS, e.g. under memory pressure)"));
-@@ -4434,6 +4469,7 @@ function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
+@@ -4388,9 +4474,9 @@ function allowUntestedEngineFromSettings(settings) {
+ * the DS-optional caller of the declaration service catches it and degrades.
+ */
+ const BUFFER_SIZE = 4194304;
+-const HEADER_INTS = 4;
+-const LENGTH_OFFSET = 16;
+-const DATA_OFFSET = 20;
++const HEADER_INTS = 6;
++const LENGTH_OFFSET = 24;
++const DATA_OFFSET = 28;
+ const INIT_TIMEOUT = 6e4;
+ const REQUEST_TIMEOUT = 3e4;
+ const MAX_CONSECUTIVE_REQUEST_FAILURES = 3;
+@@ -4432,46 +4518,77 @@ const MAX_WORKERS = 8;
+ */
+ function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
  	return `
- ${preamble}
+-${preamble}
  const { workerData } = require('worker_threads');
+-async function main() {
+-  const { sharedBuffer, cssPath } = workerData;
+-  const control = new Int32Array(sharedBuffer, 0, ${HEADER_INTS});
+-  const lengthView = new DataView(sharedBuffer, ${LENGTH_OFFSET}, 4);
+-  const dataArea = new Uint8Array(sharedBuffer, ${DATA_OFFSET});
+-
+-  // On load failure, write the real cause into the data region so the host can
+-  // report it instead of a bare "failed to load the design system".
+-  function signalLoadError(e) {
+-    try {
+-      const msg = Buffer.from(String((e && e.message) || e || 'unknown design-system load error'), 'utf-8');
+-      const n = Math.min(msg.length, dataArea.length);
+-      dataArea.set(msg.subarray(0, n), 0);
+-      lengthView.setUint32(0, n);
+-    } catch {}
+-    Atomics.store(control, 2, -1);
+-    Atomics.notify(control, 2);
++const control = new Int32Array(workerData.sharedBuffer, 0, ${HEADER_INTS});
++const lengthView = new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4);
++const dataArea = new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET});
 +let requestPending = false;
- async function main() {
-   const { sharedBuffer, cssPath } = workerData;
-   const control = new Int32Array(sharedBuffer, 0, ${HEADER_INTS});
-@@ -4498,6 +4534,7 @@ async function main() {
++let heartbeatTimer;
++const setPhase = (phase) => Atomics.store(control, 4, phase);
++let lastSynchronousBeat = performance.now();
++function synchronousBeat() {
++  const now = performance.now();
++  if (now - lastSynchronousBeat >= 1000) { Atomics.add(control, 5, 1); lastSynchronousBeat = now; }
++}
++function stopHeartbeat() { if (heartbeatTimer) clearInterval(heartbeatTimer); }
++function signalLoadError(e) {
++  try {
++    const msg = Buffer.from(String((e && e.message) || e || 'unknown design-system load error'), 'utf-8');
++    const n = Math.min(msg.length, dataArea.length);
++    dataArea.set(msg.subarray(0, n), 0);
++    lengthView.setUint32(0, n);
++  } catch {}
++  stopHeartbeat();
++  Atomics.store(control, 2, -1);
++  Atomics.notify(control, 2);
++}
++function signalUnexpectedError(e) {
++  if (Atomics.load(control, 2) === 0) return signalLoadError(e);
++  stopHeartbeat();
++  Atomics.store(control, 3, 1);
++  if (requestPending) {
++    const reply = Buffer.from('null', 'utf-8');
++    dataArea.set(reply, 0);
++    lengthView.setUint32(0, reply.length);
++    Atomics.store(control, 1, 1);
+   }
+-
++  Atomics.notify(control, 1);
++}
++process.on('uncaughtException', signalUnexpectedError);
++process.on('unhandledRejection', signalUnexpectedError);
++setPhase(1);
++Atomics.add(control, 5, 1);
++heartbeatTimer = setInterval(() => Atomics.add(control, 5, 1), 5000);
++heartbeatTimer.unref();
++if (workerData.testHook === 'throw-outside-main') throw new Error('injected worker failure outside main');
++${preamble}
++async function main() {
+   let ds;
+   let loadDesignSystem;
+   let base;
+   try {
+     ({ __unstable__loadDesignSystem: loadDesignSystem } = require(workerData.tailwindNodePath));
++    setPhase(2);
+     const { readFileSync } = require('fs');
+     const { dirname } = require('path');
+-    const css = readFileSync(cssPath, 'utf-8');
+-    base = dirname(cssPath);
++    const css = readFileSync(workerData.cssPath, 'utf-8');
++    setPhase(3);
++    base = dirname(workerData.cssPath);
++    setPhase(4);
++    if (workerData.testHook === 'stop-heartbeat') {
++      stopHeartbeat();
++      await new Promise(() => {});
++    }
++    if (workerData.testHook === 'slow-heartbeat') await new Promise((resolve) => setTimeout(resolve, workerData.testDelayMs));
++    if (workerData.testHook === 'busy-load') {
++      const until = performance.now() + workerData.testDelayMs;
++      while (performance.now() < until) {}
++    }
+     ds = await loadDesignSystem(css, { base });
+   } catch (e) {
+     signalLoadError(e);
+     return;
+   }
+-
+-  // What a handler may need besides the project's design system. \`loadStock\`:
+-  // plain \`@import "tailwindcss"\` from the same place, on the same engine — the
+-  // baseline that tells what the project's own CSS changed. Loaded the first
+-  // time a handler asks, never otherwise.
+   let stockPromise = null;
+   const env = {
+     loadStock() {
+@@ -4479,50 +4596,47 @@ async function main() {
+       return stockPromise;
+     },
+   };
+-
++  setPhase(5);
+   Atomics.store(control, 2, 1);
+   Atomics.notify(control, 2);
+-
+-  // A worker started ahead of its first request (\`prewarm\`) warms up after
+-  // saying it's ready: a request that arrives meanwhile waits in control[0]
+-  // and is picked up as soon as the loop starts.
+   const warmup = ${warmupExpr || "null"};
+   if (warmup && workerData.warm !== undefined) {
++    setPhase(6);
++    synchronousBeat();
+     try { await warmup(ds, workerData.warm, env); } catch {}
++    synchronousBeat();
++    setPhase(5);
+   }
+-
+   const handler = ${handlerExpr};
+-
+   while (true) {
+     Atomics.wait(control, 0, 0);
      const len = lengthView.getUint32(0);
      const requestStr = Buffer.from(dataArea.slice(0, len)).toString('utf-8');
      Atomics.store(control, 0, 0);
+-
 +    requestPending = true;
- 
++    setPhase(7);
      let response;
      try {
-@@ -4518,11 +4555,33 @@ async function main() {
- 
+       const request = JSON.parse(requestStr);
++      if (workerData.testHook === 'busy-request') {
++        const until = performance.now() + workerData.testDelayMs;
++        while (performance.now() < until) synchronousBeat();
++      }
+       const result = await handler(ds, request, env);
+       response = Buffer.from(JSON.stringify(result), 'utf-8');
+     } catch {
+       response = Buffer.from('null', 'utf-8');
+     }
+-
+-    // DS-M6: if the response doesn't fit the shared buffer, reply with a
+-    // sentinel the host reads as a rejected request, instead of letting
+-    // dataArea.set throw and kill the worker (which would hang the caller
+-    // until the request timeout and then report a misleading timeout).
+-    if (response.length > dataArea.length) {
+-      response = Buffer.from('null', 'utf-8');
+-    }
+-
++    if (response.length > dataArea.length) response = Buffer.from('null', 'utf-8');
      dataArea.set(response, 0);
      lengthView.setUint32(0, response.length);
 +    requestPending = false;
++    setPhase(5);
      Atomics.store(control, 1, 1);
      Atomics.notify(control, 1);
    }
  }
 -main().catch(() => {});
-+main().catch(() => {
-+  // An unexpected exit must still answer the host: a load not yet signaled
-+  // fails. After the load the worker marks itself stopped (control[3]), so the
-+  // host drops it instead of sending another request; only a request it had
-+  // taken gets a rejected reply, so an idle exit never fakes a response.
-+  try {
-+    const control = new Int32Array(workerData.sharedBuffer, 0, ${HEADER_INTS});
-+    if (Atomics.load(control, 2) === 0) {
-+      Atomics.store(control, 2, -1);
-+      Atomics.notify(control, 2);
-+      return;
-+    }
-+    Atomics.store(control, 3, 1);
-+    if (requestPending) {
-+      const reply = Buffer.from('null', 'utf-8');
-+      new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET}).set(reply, 0);
-+      new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4).setUint32(0, reply.length);
-+      Atomics.store(control, 1, 1);
-+    }
-+    Atomics.notify(control, 1);
-+  } catch {}
-+});
++main().catch(signalUnexpectedError);
  `;
  }
  var DesignSystemWorker = class {
-@@ -4650,9 +4709,9 @@ var DesignSystemWorker = class {
+@@ -4616,7 +4730,7 @@ var DesignSystemWorker = class {
+ 		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
+ 		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
+ 		const controlArray = new Int32Array(sharedBuffer, 0, HEADER_INTS);
+-		const lengthView = new DataView(sharedBuffer, 16, 4);
++		const lengthView = new DataView(sharedBuffer, LENGTH_OFFSET, 4);
+ 		const dataArea = new Uint8Array(sharedBuffer, DATA_OFFSET);
+ 		let worker;
+ 		try {
+@@ -4626,7 +4740,9 @@ var DesignSystemWorker = class {
+ 					sharedBuffer,
+ 					cssPath,
+ 					tailwindNodePath,
+-					warm
++					warm,
++					testHook: process.env.OXLINT_TAILWINDCSS_WORKER_TEST_HOOK,
++					testDelayMs: parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS) ?? 0
+ 				}
+ 			});
+ 		} catch (cause) {
+@@ -4650,9 +4766,10 @@ var DesignSystemWorker = class {
  	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
  	waitReady(state) {
  		const { worker, controlArray, lengthView, dataArea, cssPath } = state;
 -		if (Atomics.wait(controlArray, 2, 0, INIT_TIMEOUT) === "timed-out") {
-+		if (!waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`)) {
++		const outcome = waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`);
++		if (!outcome.answered) {
  			this.terminateWorker(worker);
 -			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker timed out loading the design system from "${cssPath}" after ${INIT_TIMEOUT}ms.`, "Verify the CSS imports resolve; this can also happen if the machine or CI runner is heavily loaded."));
-+			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker gave no answer loading the design system from "${cssPath}" within ${WORKER_WAIT_LIMIT_MS}ms.`, "The worker stopped answering; verify the CSS imports resolve."));
++			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The worker stopped answering; verify the CSS imports resolve."));
  		}
  		if (controlArray[2] === -1) {
  			const len = lengthView.getUint32(0);
-@@ -4680,11 +4739,14 @@ var DesignSystemWorker = class {
+@@ -4679,12 +4796,16 @@ var DesignSystemWorker = class {
+ 	callSync(cssPath, req) {
  		const state = this.ensure(cssPath);
  		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
- 		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
+-		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
++		if (requestBytes.length > state.dataArea.length) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > ${state.dataArea.length} bytes).`, "This is unexpected with typical class lists; please open an issue.");
 +		// A worker that exited after its load marks itself stopped (control[3]);
 +		// drop it so the next request starts a fresh one.
 +		if (Atomics.load(state.controlArray, 3) === 1) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker exited after loading the design system.`, "The next request starts a new worker; please open an issue if this repeats."));
@@ -146,12 +471,21 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..0cbe51a036c30092a6d607e8e2de0301
  		Atomics.store(state.controlArray, 0, 1);
  		Atomics.notify(state.controlArray, 0);
 -		if (Atomics.wait(state.controlArray, 1, 0, this.requestTimeoutMs) === "timed-out") throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker request timed out after ${this.requestTimeoutMs}ms.`, "A slow machine or CI runner can cause this. If the class lists are valid, raise OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT; otherwise please open an issue."));
-+		if (!waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`, () => Atomics.load(state.controlArray, 3) === 1)) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped before answering a request.`, "The next request starts a new worker; please open an issue if this repeats."));
++		const outcome = waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`, () => Atomics.load(state.controlArray, 3) === 1);
++		if (!outcome.answered) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The next request starts a new worker; please open an issue if this repeats."));
  		const responseLen = state.lengthView.getUint32(0);
  		const responseStr = Buffer.from(state.dataArea.slice(0, responseLen)).toString("utf-8");
  		Atomics.store(state.controlArray, 1, 0);
+@@ -5503,6 +5624,7 @@ const declWorker = new DesignSystemWorker({
+   // stays lenient instead of flagging a transient false "unknown class") from a
+   // FALSY result (compiles to nothing → invalid).
+   for (let i = 0; i < request.classes.length; i++) {
++    synchronousBeat();
+     const cls = request.classes[i];
+     let one;
+     try {
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..aed51813958ea7b323010e4fa689cfe925ae36fb 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3eaca0a90b 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -2483,7 +2483,8 @@ function isFatalError(err) {
@@ -187,7 +521,141 @@ index 61c624233238edcc998099f3d496c04caa7ba154..aed51813958ea7b323010e4fa689cfe9
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3976,6 +3991,26 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -2893,11 +2908,25 @@ const PRECOMPUTE_SCRIPT = `
+ // -1=error), mirroring sort-service.ts / canonicalize-service.ts.
+ const { workerData } = require('worker_threads');
+ const { tailwindNodePath, cssPath: WD_CSS_PATH, cachePath: WD_CACHE_PATH, tmpPath: WD_TMP_PATH, sharedBuffer } = workerData;
+-const control = new Int32Array(sharedBuffer, 0, 4);
++const control = new Int32Array(sharedBuffer, 0, 6);
++const errLengthView = new DataView(sharedBuffer, 24, 4);
++const errDataArea = new Uint8Array(sharedBuffer, 28);
++let heartbeatTimer;
++const setPhase = (phase) => Atomics.store(control, 4, phase);
++let lastSynchronousBeat = performance.now();
++const synchronousBeat = () => {
++  const now = performance.now();
++  if (now - lastSynchronousBeat >= 1000) { Atomics.add(control, 5, 1); lastSynchronousBeat = now; }
++};
++const startHeartbeat = () => {
++  Atomics.add(control, 5, 1);
++  heartbeatTimer = setInterval(() => Atomics.add(control, 5, 1), 5000);
++  heartbeatTimer.unref();
++};
++setPhase(1);
++startHeartbeat();
+ // On failure, write the error message into the data region so the main thread
+ // can surface the real cause instead of a bare "undefined".
+-const errLengthView = new DataView(sharedBuffer, 16, 4);
+-const errDataArea = new Uint8Array(sharedBuffer, 20);
+ function signalError(e) {
+   try {
+     const msg = Buffer.from(String((e && e.message) || e || 'unknown precompute error'), 'utf-8');
+@@ -2905,9 +2934,12 @@ function signalError(e) {
+     errDataArea.set(msg.subarray(0, n), 0);
+     errLengthView.setUint32(0, n);
+   } catch {}
++  clearInterval(heartbeatTimer);
+   Atomics.store(control, 2, -1);
+   Atomics.notify(control, 2);
+ }
++process.on('uncaughtException', signalError);
++process.on('unhandledRejection', signalError);
+ // Everything below — including the top-level require()s — runs inside this try
+ // so any SYNCHRONOUS module-scope failure (a broken @tailwindcss/node install,
+ // missing fs/path) is routed through signalError. Without it the worker would
+@@ -2919,6 +2951,7 @@ try {
+ // workspaces (the module lives under node_modules/.pnpm/... which is not on the
+ // resolution path from the consumer's project root).
+ const { __unstable__loadDesignSystem } = require(tailwindNodePath);
++setPhase(2);
+ const { readFileSync, writeFileSync, renameSync } = require('fs');
+ const { dirname, resolve } = require('path');
+ 
+@@ -3072,7 +3105,9 @@ async function main() {
+ 
+   const cssPath = WD_CSS_PATH;
+   const css = readFileSync(cssPath, 'utf-8');
++  setPhase(3);
+   const base = dirname(cssPath);
++  setPhase(4);
+-  const ds = await __unstable__loadDesignSystem(css, { base });
++  const ds = await __unstable__loadDesignSystem(css, { base }); setPhase(8);
+   phase('load');
+ 
+@@ -3107,6 +3142,7 @@ async function main() {
+   // invisible to no-conflicting-classes (\`rounded rounded-lg\` never reported).
+   const declCss = {};
+   for (let i = 0; i < classNames.length; i++) {
++    synchronousBeat();
+     if (cssResults[i] != null) declCss[classNames[i]] = cssResults[i];
+   }
+ 
+@@ -3152,6 +3188,7 @@ async function main() {
+     // without the prefix (the prefix only affects the selector).
+     const arbResults = ds.candidatesToCss(arbForms.map(pfx));
+     for (let i = 0; i < candidates.length; i++) {
++    synchronousBeat();
+       if (!arbResults[i]) continue;
+       if (extractDeclarations(arbResults[i]) === extractDeclarations(candidates[i].namedCss)) {
+         arbitraryEquivalents[candidates[i].arbitraryForm] = candidates[i].namedCls;
+@@ -3214,6 +3251,7 @@ async function main() {
+   if (extraCandidates.length > 0) {
+     const extraResults = ds.candidatesToCss(extraCandidates.map(pfx));
+     for (let i = 0; i < extraCandidates.length; i++) {
++    synchronousBeat();
+       if (extraResults[i] != null) {
+         validClasses.push(extraCandidates[i]);
+         validSet.add(extraCandidates[i]);
+@@ -3236,6 +3274,7 @@ async function main() {
+   if (negativeProbes.length > 0) {
+     const negResults = ds.candidatesToCss(negativeProbes.map(pfx));
+     for (let i = 0; i < negativeProbes.length; i++) {
++    synchronousBeat();
+       if (negResults[i] != null && !validSet.has(negativeProbes[i])) {
+         validClasses.push(negativeProbes[i]);
+         validSet.add(negativeProbes[i]);
+@@ -3428,6 +3467,7 @@ async function main() {
+   const declIds = new Map();
+   const table = [];
+   for (let i = 0; i < sortedKeys.length; i++) {
++    synchronousBeat();
+     declIds.set(sortedKeys[i], i);
+     const parts = sortedKeys[i].split('|');
+     table.push(
+@@ -3482,6 +3522,7 @@ async function main() {
+   const variantOrder = {};
+   const variants = ds.getVariants();
+   for (let i = 0; i < variants.length; i++) {
++    synchronousBeat();
+     if (!variants[i].isArbitrary) {
+       variantOrder[variants[i].name] = i;
+     }
+@@ -3547,6 +3588,7 @@ async function main() {
+   // pushing one entry per occurrence only inflated the cache artifact.
+   const attrClassRe = /\\[class~="([^"]+)"\\]/g;
+   for (let i = 0; i < cssResults.length; i++) {
++    synchronousBeat();
+     if (cssResults[i]) {
+       let acm;
+       attrClassRe.lastIndex = 0;
+@@ -3634,6 +3676,7 @@ async function main() {
+     const probes = [...knownPrefixes];
+     const probeResults = ds.candidatesToCss(probes.map(p => pfx(p + '-1')));
+     for (let i = 0; i < probes.length; i++) {
++    synchronousBeat();
+       const css = probeResults[i];
+       if (!css) continue;
+       // \`size-1\` emits width AND height, both reading the unit — one match is enough.
+@@ -3671,7 +3714,7 @@ async function main() {
+   renameSync(WD_TMP_PATH, WD_CACHE_PATH);
+ }
+ main()
+-  .then(() => { Atomics.store(control, 2, 1); Atomics.notify(control, 2); })
++  .then(() => { setPhase(5); clearInterval(heartbeatTimer); Atomics.store(control, 2, 1); Atomics.notify(control, 2); })
+   .catch((e) => signalError(e));
+ } catch (e) {
+   signalError(e);
+@@ -3976,6 +4019,48 @@ function precomputeLoadError(resolvedPath, cause) {
  	return new DesignSystemLoadError(`Failed to precompute design system from "${resolvedPath}": ${causeError?.message ?? String(cause)}`, precomputeHint(cause), { cause: causeError });
  }
  /**
@@ -202,94 +670,285 @@ index 61c624233238edcc998099f3d496c04caa7ba154..aed51813958ea7b323010e4fa689cfe9
 +*/
 +const WORKER_WAIT_NOTICE_MS = 3e4;
 +const WORKER_WAIT_LIMIT_MS = 6e5;
++const WORKER_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS) ?? 6e4;
++const WORKER_LOAD_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS) ?? 18e4;
++const WORKER_PHASES = ["not started", "started", "Tailwind node module loaded", "stylesheet read", "compiling the design system", "ready", "warming up", "answering a request", "precomputing declarations"];
++function workerPhase(control) {
++	return WORKER_PHASES[Atomics.load(control, 4)] ?? `unknown phase ${Atomics.load(control, 4)}`;
++}
 +function waitForWorkerSignal(control, index, describe, stopped = () => false) {
 +	const started = Date.now();
++	let heartbeat = Atomics.load(control, 5);
++	let heartbeatAt = started;
++	let noticeAt = started + WORKER_WAIT_NOTICE_MS;
 +	while (Atomics.load(control, index) === 0) {
-+		if (stopped() || Date.now() - started >= WORKER_WAIT_LIMIT_MS) return false;
-+		if (Atomics.wait(control, index, 0, WORKER_WAIT_NOTICE_MS) === "timed-out") process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++		const now = Date.now();
++		const nextHeartbeat = Atomics.load(control, 5);
++		if (nextHeartbeat !== heartbeat) {
++			heartbeat = nextHeartbeat;
++			heartbeatAt = now;
++		}
++		const heartbeatLimitMs = Atomics.load(control, 4) < 5 || Atomics.load(control, 4) === 8 ? WORKER_LOAD_HEARTBEAT_LIMIT_MS : WORKER_HEARTBEAT_LIMIT_MS;
++		if (stopped()) return { answered: false, reason: "stopped", phase: workerPhase(control), silentMs: now - heartbeatAt };
++		if (now - started >= WORKER_WAIT_LIMIT_MS) return { answered: false, reason: "bound", phase: workerPhase(control), silentMs: now - heartbeatAt };
++		if (now - heartbeatAt >= heartbeatLimitMs) return { answered: false, reason: "heartbeat", phase: workerPhase(control), silentMs: now - heartbeatAt };
++		const waitMs = Math.max(1, Math.min(noticeAt - now, heartbeatLimitMs - (now - heartbeatAt), WORKER_WAIT_LIMIT_MS - (now - started)));
++		if (Atomics.wait(control, index, 0, waitMs) === "timed-out" && Date.now() >= noticeAt) {
++			process.stderr.write(`[oxlint-tailwindcss] still waiting for ${describe()} while ${workerPhase(control)} (${Math.round((Date.now() - started) / 1e3)}s); a slow load delays lint, it does not fail it.\n`);
++			noticeAt = Date.now() + WORKER_WAIT_NOTICE_MS;
++		}
 +	}
-+	return true;
++	return { answered: true };
 +}
 +/**
  * Run the precompute in a worker_thread (not a forked child). The worker loads
  * the design system in-process, writes the JSON straight to `cachePath`, and
  * signals completion over a SharedArrayBuffer; the main thread blocks on
-@@ -4015,7 +4050,7 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+@@ -3989,9 +4074,9 @@ function precomputeLoadError(resolvedPath, cause) {
+ */
+ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
+ 	const sharedBuffer = new SharedArrayBuffer(ERR_BUFFER_SIZE);
+-	const control = new Int32Array(sharedBuffer, 0, 4);
+-	const errLengthView = new DataView(sharedBuffer, 16, 4);
+-	const errDataArea = new Uint8Array(sharedBuffer, 20);
++	const control = new Int32Array(sharedBuffer, 0, 6);
++	const errLengthView = new DataView(sharedBuffer, 24, 4);
++	const errDataArea = new Uint8Array(sharedBuffer, 28);
+ 	const tmpPath = `${cachePath}.tmp.${process.pid}.${threadId}.${precomputeSeq++}`;
+ 	try {
+ 		new Function(PRECOMPUTE_SCRIPT);
+@@ -4015,7 +4100,8 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
  	}
  	worker.on("error", () => {});
  	try {
 -		if (Atomics.wait(control, PRECOMPUTE_SIGNAL_INDEX, 0, timeout) === "timed-out") throw new DesignSystemLoadError(`Timed out precomputing design system from "${resolvedPath}" after ${timeout}ms.`, "Raise `settings.tailwindcss.timeout` if your machine or CI runner is slow, or verify the CSS imports resolve.");
-+		if (!waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`)) throw new DesignSystemLoadError(`The design-system precompute of "${resolvedPath}" gave no answer within ${WORKER_WAIT_LIMIT_MS}ms.`, "The precompute worker stopped answering; verify the CSS imports resolve.");
++		const outcome = waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`);
++		if (!outcome.answered) throw new DesignSystemLoadError(`The design-system precompute stopped answering while ${outcome.phase} from "${resolvedPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The precompute worker stopped answering; verify the CSS imports resolve.");
  		if (control[PRECOMPUTE_SIGNAL_INDEX] === -1) {
  			const len = errLengthView.getUint32(0);
  			throw precomputeLoadError(resolvedPath, len > 0 ? new Error(Buffer.from(errDataArea.slice(0, len)).toString("utf-8")) : /* @__PURE__ */ new Error("precompute worker exited without reporting a cause (it may have been killed by the OS, e.g. under memory pressure)"));
-@@ -4437,6 +4472,7 @@ function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
+@@ -4391,9 +4477,9 @@ function allowUntestedEngineFromSettings(settings) {
+ * the DS-optional caller of the declaration service catches it and degrades.
+ */
+ const BUFFER_SIZE = 4194304;
+-const HEADER_INTS = 4;
+-const LENGTH_OFFSET = 16;
+-const DATA_OFFSET = 20;
++const HEADER_INTS = 6;
++const LENGTH_OFFSET = 24;
++const DATA_OFFSET = 28;
+ const INIT_TIMEOUT = 6e4;
+ const REQUEST_TIMEOUT = 3e4;
+ const MAX_CONSECUTIVE_REQUEST_FAILURES = 3;
+@@ -4435,46 +4521,77 @@ const MAX_WORKERS = 8;
+ */
+ function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
  	return `
- ${preamble}
+-${preamble}
  const { workerData } = require('worker_threads');
+-async function main() {
+-  const { sharedBuffer, cssPath } = workerData;
+-  const control = new Int32Array(sharedBuffer, 0, ${HEADER_INTS});
+-  const lengthView = new DataView(sharedBuffer, ${LENGTH_OFFSET}, 4);
+-  const dataArea = new Uint8Array(sharedBuffer, ${DATA_OFFSET});
+-
+-  // On load failure, write the real cause into the data region so the host can
+-  // report it instead of a bare "failed to load the design system".
+-  function signalLoadError(e) {
+-    try {
+-      const msg = Buffer.from(String((e && e.message) || e || 'unknown design-system load error'), 'utf-8');
+-      const n = Math.min(msg.length, dataArea.length);
+-      dataArea.set(msg.subarray(0, n), 0);
+-      lengthView.setUint32(0, n);
+-    } catch {}
+-    Atomics.store(control, 2, -1);
+-    Atomics.notify(control, 2);
++const control = new Int32Array(workerData.sharedBuffer, 0, ${HEADER_INTS});
++const lengthView = new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4);
++const dataArea = new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET});
 +let requestPending = false;
- async function main() {
-   const { sharedBuffer, cssPath } = workerData;
-   const control = new Int32Array(sharedBuffer, 0, ${HEADER_INTS});
-@@ -4501,6 +4537,7 @@ async function main() {
++let heartbeatTimer;
++const setPhase = (phase) => Atomics.store(control, 4, phase);
++let lastSynchronousBeat = performance.now();
++function synchronousBeat() {
++  const now = performance.now();
++  if (now - lastSynchronousBeat >= 1000) { Atomics.add(control, 5, 1); lastSynchronousBeat = now; }
++}
++function stopHeartbeat() { if (heartbeatTimer) clearInterval(heartbeatTimer); }
++function signalLoadError(e) {
++  try {
++    const msg = Buffer.from(String((e && e.message) || e || 'unknown design-system load error'), 'utf-8');
++    const n = Math.min(msg.length, dataArea.length);
++    dataArea.set(msg.subarray(0, n), 0);
++    lengthView.setUint32(0, n);
++  } catch {}
++  stopHeartbeat();
++  Atomics.store(control, 2, -1);
++  Atomics.notify(control, 2);
++}
++function signalUnexpectedError(e) {
++  if (Atomics.load(control, 2) === 0) return signalLoadError(e);
++  stopHeartbeat();
++  Atomics.store(control, 3, 1);
++  if (requestPending) {
++    const reply = Buffer.from('null', 'utf-8');
++    dataArea.set(reply, 0);
++    lengthView.setUint32(0, reply.length);
++    Atomics.store(control, 1, 1);
+   }
+-
++  Atomics.notify(control, 1);
++}
++process.on('uncaughtException', signalUnexpectedError);
++process.on('unhandledRejection', signalUnexpectedError);
++setPhase(1);
++Atomics.add(control, 5, 1);
++heartbeatTimer = setInterval(() => Atomics.add(control, 5, 1), 5000);
++heartbeatTimer.unref();
++if (workerData.testHook === 'throw-outside-main') throw new Error('injected worker failure outside main');
++${preamble}
++async function main() {
+   let ds;
+   let loadDesignSystem;
+   let base;
+   try {
+     ({ __unstable__loadDesignSystem: loadDesignSystem } = require(workerData.tailwindNodePath));
++    setPhase(2);
+     const { readFileSync } = require('fs');
+     const { dirname } = require('path');
+-    const css = readFileSync(cssPath, 'utf-8');
+-    base = dirname(cssPath);
++    const css = readFileSync(workerData.cssPath, 'utf-8');
++    setPhase(3);
++    base = dirname(workerData.cssPath);
++    setPhase(4);
++    if (workerData.testHook === 'stop-heartbeat') {
++      stopHeartbeat();
++      await new Promise(() => {});
++    }
++    if (workerData.testHook === 'slow-heartbeat') await new Promise((resolve) => setTimeout(resolve, workerData.testDelayMs));
++    if (workerData.testHook === 'busy-load') {
++      const until = performance.now() + workerData.testDelayMs;
++      while (performance.now() < until) {}
++    }
+     ds = await loadDesignSystem(css, { base });
+   } catch (e) {
+     signalLoadError(e);
+     return;
+   }
+-
+-  // What a handler may need besides the project's design system. \`loadStock\`:
+-  // plain \`@import "tailwindcss"\` from the same place, on the same engine — the
+-  // baseline that tells what the project's own CSS changed. Loaded the first
+-  // time a handler asks, never otherwise.
+   let stockPromise = null;
+   const env = {
+     loadStock() {
+@@ -4482,50 +4599,47 @@ async function main() {
+       return stockPromise;
+     },
+   };
+-
++  setPhase(5);
+   Atomics.store(control, 2, 1);
+   Atomics.notify(control, 2);
+-
+-  // A worker started ahead of its first request (\`prewarm\`) warms up after
+-  // saying it's ready: a request that arrives meanwhile waits in control[0]
+-  // and is picked up as soon as the loop starts.
+   const warmup = ${warmupExpr || "null"};
+   if (warmup && workerData.warm !== undefined) {
++    setPhase(6);
++    synchronousBeat();
+     try { await warmup(ds, workerData.warm, env); } catch {}
++    synchronousBeat();
++    setPhase(5);
+   }
+-
+   const handler = ${handlerExpr};
+-
+   while (true) {
+     Atomics.wait(control, 0, 0);
      const len = lengthView.getUint32(0);
      const requestStr = Buffer.from(dataArea.slice(0, len)).toString('utf-8');
      Atomics.store(control, 0, 0);
+-
 +    requestPending = true;
- 
++    setPhase(7);
      let response;
      try {
-@@ -4521,11 +4558,33 @@ async function main() {
- 
+       const request = JSON.parse(requestStr);
++      if (workerData.testHook === 'busy-request') {
++        const until = performance.now() + workerData.testDelayMs;
++        while (performance.now() < until) synchronousBeat();
++      }
+       const result = await handler(ds, request, env);
+       response = Buffer.from(JSON.stringify(result), 'utf-8');
+     } catch {
+       response = Buffer.from('null', 'utf-8');
+     }
+-
+-    // DS-M6: if the response doesn't fit the shared buffer, reply with a
+-    // sentinel the host reads as a rejected request, instead of letting
+-    // dataArea.set throw and kill the worker (which would hang the caller
+-    // until the request timeout and then report a misleading timeout).
+-    if (response.length > dataArea.length) {
+-      response = Buffer.from('null', 'utf-8');
+-    }
+-
++    if (response.length > dataArea.length) response = Buffer.from('null', 'utf-8');
      dataArea.set(response, 0);
      lengthView.setUint32(0, response.length);
 +    requestPending = false;
++    setPhase(5);
      Atomics.store(control, 1, 1);
      Atomics.notify(control, 1);
    }
  }
 -main().catch(() => {});
-+main().catch(() => {
-+  // An unexpected exit must still answer the host: a load not yet signaled
-+  // fails. After the load the worker marks itself stopped (control[3]), so the
-+  // host drops it instead of sending another request; only a request it had
-+  // taken gets a rejected reply, so an idle exit never fakes a response.
-+  try {
-+    const control = new Int32Array(workerData.sharedBuffer, 0, ${HEADER_INTS});
-+    if (Atomics.load(control, 2) === 0) {
-+      Atomics.store(control, 2, -1);
-+      Atomics.notify(control, 2);
-+      return;
-+    }
-+    Atomics.store(control, 3, 1);
-+    if (requestPending) {
-+      const reply = Buffer.from('null', 'utf-8');
-+      new Uint8Array(workerData.sharedBuffer, ${DATA_OFFSET}).set(reply, 0);
-+      new DataView(workerData.sharedBuffer, ${LENGTH_OFFSET}, 4).setUint32(0, reply.length);
-+      Atomics.store(control, 1, 1);
-+    }
-+    Atomics.notify(control, 1);
-+  } catch {}
-+});
++main().catch(signalUnexpectedError);
  `;
  }
  var DesignSystemWorker = class {
-@@ -4653,9 +4712,9 @@ var DesignSystemWorker = class {
+@@ -4619,7 +4733,7 @@ var DesignSystemWorker = class {
+ 		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
+ 		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
+ 		const controlArray = new Int32Array(sharedBuffer, 0, HEADER_INTS);
+-		const lengthView = new DataView(sharedBuffer, 16, 4);
++		const lengthView = new DataView(sharedBuffer, LENGTH_OFFSET, 4);
+ 		const dataArea = new Uint8Array(sharedBuffer, DATA_OFFSET);
+ 		let worker;
+ 		try {
+@@ -4629,7 +4743,9 @@ var DesignSystemWorker = class {
+ 					sharedBuffer,
+ 					cssPath,
+ 					tailwindNodePath,
+-					warm
++					warm,
++					testHook: process.env.OXLINT_TAILWINDCSS_WORKER_TEST_HOOK,
++					testDelayMs: parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS) ?? 0
+ 				}
+ 			});
+ 		} catch (cause) {
+@@ -4653,9 +4769,10 @@ var DesignSystemWorker = class {
  	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
  	waitReady(state) {
  		const { worker, controlArray, lengthView, dataArea, cssPath } = state;
 -		if (Atomics.wait(controlArray, 2, 0, INIT_TIMEOUT) === "timed-out") {
-+		if (!waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`)) {
++		const outcome = waitForWorkerSignal(controlArray, 2, () => `the ${this.opts.serviceName} worker to load the design system from "${cssPath}"`);
++		if (!outcome.answered) {
  			this.terminateWorker(worker);
 -			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker timed out loading the design system from "${cssPath}" after ${INIT_TIMEOUT}ms.`, "Verify the CSS imports resolve; this can also happen if the machine or CI runner is heavily loaded."));
-+			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker gave no answer loading the design system from "${cssPath}" within ${WORKER_WAIT_LIMIT_MS}ms.`, "The worker stopped answering; verify the CSS imports resolve."));
++			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The worker stopped answering; verify the CSS imports resolve."));
  		}
  		if (controlArray[2] === -1) {
  			const len = lengthView.getUint32(0);
-@@ -4683,11 +4742,14 @@ var DesignSystemWorker = class {
+@@ -4682,12 +4799,16 @@ var DesignSystemWorker = class {
+ 	callSync(cssPath, req) {
  		const state = this.ensure(cssPath);
  		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
- 		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
+-		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
++		if (requestBytes.length > state.dataArea.length) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > ${state.dataArea.length} bytes).`, "This is unexpected with typical class lists; please open an issue.");
 +		// A worker that exited after its load marks itself stopped (control[3]);
 +		// drop it so the next request starts a fresh one.
 +		if (Atomics.load(state.controlArray, 3) === 1) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker exited after loading the design system.`, "The next request starts a new worker; please open an issue if this repeats."));
@@ -298,7 +957,16 @@ index 61c624233238edcc998099f3d496c04caa7ba154..aed51813958ea7b323010e4fa689cfe9
  		Atomics.store(state.controlArray, 0, 1);
  		Atomics.notify(state.controlArray, 0);
 -		if (Atomics.wait(state.controlArray, 1, 0, this.requestTimeoutMs) === "timed-out") throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker request timed out after ${this.requestTimeoutMs}ms.`, "A slow machine or CI runner can cause this. If the class lists are valid, raise OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT; otherwise please open an issue."));
-+		if (!waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`, () => Atomics.load(state.controlArray, 3) === 1)) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped before answering a request.`, "The next request starts a new worker; please open an issue if this repeats."));
++		const outcome = waitForWorkerSignal(state.controlArray, 1, () => `a ${this.opts.serviceName} worker response`, () => Atomics.load(state.controlArray, 3) === 1);
++		if (!outcome.answered) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The next request starts a new worker; please open an issue if this repeats."));
  		const responseLen = state.lengthView.getUint32(0);
  		const responseStr = Buffer.from(state.dataArea.slice(0, responseLen)).toString("utf-8");
  		Atomics.store(state.controlArray, 1, 0);
+@@ -5506,6 +5627,7 @@ const declWorker = new DesignSystemWorker({
+   // stays lenient instead of flagging a transient false "unknown class") from a
+   // FALSY result (compiles to nothing → invalid).
+   for (let i = 0; i < request.classes.length; i++) {
++    synchronousBeat();
+     const cls = request.classes[i];
+     let one;
+     try {
