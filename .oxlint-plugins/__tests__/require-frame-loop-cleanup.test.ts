@@ -45,6 +45,51 @@ test("explicit resource declarations dispose their interval handles", async () =
   ).toEqual([3]);
 });
 
+test("effects own directly invoked component frame helpers", async () => {
+  const cases = [
+    ["useMountEffect(() => { tick(); });", false],
+    ["useMountEffect(() => { tick(); return stop; });", true],
+    ["const alias = tick; useMountEffect(() => { alias(); });", false],
+    ["const begin = () => tick(); useMountEffect(() => { begin(); });", false],
+    [
+      "const begin = () => tick(); useMountEffect(() => { begin(); return stop; });",
+      true,
+    ],
+    ["const unused = () => tick(); useMountEffect(() => {});", true],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([startup]) =>
+      lintSingleRule(
+        RULE,
+        `const Comp = () => { const frame = { current: 0 }; const tick = () => { if (visible()) frame.current = requestAnimationFrame(tick); }; const stop = () => cancelAnimationFrame(frame.current); ${startup} };`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
+test("effects own invoked component interval helpers", async () => {
+  const cases = [
+    ["useMountEffect(() => { begin(); });", false],
+    ["useMountEffect(() => { begin(); return stop; });", true],
+    ["const alias = begin; useMountEffect(() => { alias(); });", false],
+    ["const unused = () => begin(); useMountEffect(() => {});", true],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([startup]) =>
+      lintSingleRule(
+        RULE,
+        `const Comp = () => { const timer = { current: 0 }; const begin = () => { timer.current = setInterval(tick, 10); }; const stop = () => clearInterval(timer.current); ${startup} };`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
 test("requires the effect cleanup to clear an interval the effect starts", async () => {
   expect(
     await lintSingleRule(
@@ -783,6 +828,18 @@ test("a frame callback retains each newly scheduled handle until cancellation", 
 
 test("recursive frame writes cannot replace another pending frame", async () => {
   const cases = [
+    [
+      "if (visible()) { frame = requestAnimationFrame(tick); return; } if (moving()) { frame = requestAnimationFrame(tick); return; }",
+      true,
+    ],
+    [
+      "if (visible()) { frame = requestAnimationFrame(tick); } if (moving()) { frame = requestAnimationFrame(tick); return; }",
+      false,
+    ],
+    [
+      "try { if (visible()) { frame = requestAnimationFrame(tick); return; } } finally { if (moving()) frame = requestAnimationFrame(tick); }",
+      false,
+    ],
     [
       "if (visible()) for (let i = 0; i < 2; i++) frame = requestAnimationFrame(tick);",
       false,

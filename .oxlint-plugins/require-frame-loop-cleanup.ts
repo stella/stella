@@ -298,6 +298,7 @@ type LoopContext = ScopeContext & { sourceCode: { text: string } };
 type LoopStart = { kind: LoopKind; node: AstNode };
 
 type LoopCalls = {
+  effectInvocations: AstNode[];
   cancels: Record<LoopKind, Cancel[]>;
   starts: LoopStart[];
 };
@@ -981,11 +982,34 @@ const resetsConsumedFrame = ({
 };
 
 const mutuallyExclusiveBranches = (left: AstNode, right: AstNode): boolean => {
+  const owner = enclosingFunctions(left).at(0);
+  let returnsBeforeRight = false;
+  let crossesTry = false;
   for (
     let parent = parentOf(left);
-    parent !== null;
+    parent !== null && parent !== owner;
     parent = parentOf(parent)
   ) {
+    if (parent.type === "TryStatement") {
+      crossesTry = true;
+    }
+    if (parent.type === "IfStatement" && right.range[0] > parent.range[1]) {
+      const branch =
+        isAstNode(parent.consequent) && isWithin(left, parent.consequent)
+          ? parent.consequent
+          : parent.alternate;
+      if (
+        isAstNode(branch) &&
+        isWithin(left, branch) &&
+        branch.type === "BlockStatement" &&
+        Array.isArray(branch.body)
+      ) {
+        const last = branch.body.at(-1);
+        if (isAstNode(last) && last.type === "ReturnStatement") {
+          returnsBeforeRight = true;
+        }
+      }
+    }
     if (
       (parent.type === "IfStatement" ||
         parent.type === "ConditionalExpression") &&
@@ -999,7 +1023,7 @@ const mutuallyExclusiveBranches = (left: AstNode, right: AstNode): boolean => {
       return true;
     }
   }
-  return false;
+  return returnsBeforeRight && !crossesTry;
 };
 
 const sameHandle = (left: Handle, right: Handle | null): boolean => {
@@ -1328,7 +1352,11 @@ const isOwned = (
       cancels:
         effect === null ? [...matching, ...startupTransfers] : startupTransfers,
       completed: new Map(),
-      setup: { effect: owner, start, returns },
+      setup: {
+        effect: owner,
+        start: effect === null ? start : effectAnchor,
+        returns,
+      },
     },
     owner.body,
   );
@@ -1609,6 +1637,26 @@ const frameLoops = (
   return loops;
 };
 
+const invokesFunction = (
+  context: LoopContext,
+  invocation: AstNode,
+  target: AstNode,
+  visiting: ReadonlySet<AstNode> = new Set(),
+): boolean => {
+  const called = namedCallTarget(context, invocation);
+  if (called === target) {
+    return true;
+  }
+  if (called === null || visiting.has(called)) {
+    return false;
+  }
+  const active = new Set(visiting);
+  active.add(called);
+  return directFunctionCalls(called).some((call) =>
+    invokesFunction(context, call, target, active),
+  );
+};
+
 const hasGuardedFrameCallback = (
   context: LoopContext,
   call: AstNode,
@@ -1629,7 +1677,7 @@ const hasGuardedFrameCallback = (
 
 const frameLoopReports = (
   context: LoopContext,
-  { cancels, starts }: LoopCalls,
+  { cancels, starts, effectInvocations }: LoopCalls,
 ): Report[] => {
   const reports: Report[] = [];
   for (const [loop, calls] of frameLoops(context, starts)) {
@@ -1656,6 +1704,28 @@ const frameLoopReports = (
     if (bounded) {
       continue;
     }
+    if (enclosingEffect(loop) === null) {
+      for (const invocation of effectInvocations) {
+        if (
+          invokesFunction(context, invocation, loop) &&
+          calls.some(
+            (start) =>
+              isWithin(start, loop) &&
+              !isOwned(context, cancels.frame, {
+                effectAnchor: invocation,
+                loopBody: loop,
+                start,
+              }),
+          )
+        ) {
+          reports.push({
+            kind: "frame",
+            messageId: "unownedLoop",
+            node: invocation,
+          });
+        }
+      }
+    }
     for (const call of calls) {
       if (
         !isOwned(context, cancels.frame, {
@@ -1673,12 +1743,12 @@ const frameLoopReports = (
 
 const intervalReports = (
   context: LoopContext,
-  { cancels, starts }: LoopCalls,
-): Report[] =>
-  starts
+  { cancels, starts, effectInvocations }: LoopCalls,
+): Report[] => {
+  const intervals = starts.filter(({ kind }) => kind === "interval");
+  const reports: Report[] = intervals
     .filter(
-      ({ kind, node }) =>
-        kind === "interval" &&
+      ({ node }) =>
         !isOwned(context, cancels.interval, {
           effectAnchor: node,
           loopBody: functionFor(context, callArguments(node).at(0)),
@@ -1686,6 +1756,30 @@ const intervalReports = (
         }),
     )
     .map(({ node }) => ({ kind: "interval", messageId: "unownedLoop", node }));
+  for (const { node } of intervals) {
+    const owner = enclosingFunctions(node).at(0);
+    if (owner === undefined || enclosingEffect(node) !== null) {
+      continue;
+    }
+    for (const invocation of effectInvocations) {
+      if (
+        invokesFunction(context, invocation, owner) &&
+        !isOwned(context, cancels.interval, {
+          effectAnchor: invocation,
+          loopBody: functionFor(context, callArguments(node).at(0)),
+          start: node,
+        })
+      ) {
+        reports.push({
+          kind: "interval",
+          messageId: "unownedLoop",
+          node: invocation,
+        });
+      }
+    }
+  }
+  return reports;
+};
 
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
@@ -1710,12 +1804,14 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const calls: LoopCalls = {
+          effectInvocations: [],
           cancels: { frame: [], interval: [] },
           starts: [],
         };
         return {
           before() {
             calls.starts.length = 0;
+            calls.effectInvocations.length = 0;
             calls.cancels.frame.length = 0;
             calls.cancels.interval.length = 0;
             const { text } = context.sourceCode;
@@ -1728,6 +1824,10 @@ export default eslintCompatPlugin({
             const call: unknown = node;
             if (!isAstNode(call)) {
               return;
+            }
+            const effect = enclosingEffect(call);
+            if (effect !== null && enclosingFunctions(call).at(0) === effect) {
+              calls.effectInvocations.push(call);
             }
             for (const kind of ["frame", "interval"] as const) {
               if (isGlobalCall(context, call, START_NAMES[kind])) {
