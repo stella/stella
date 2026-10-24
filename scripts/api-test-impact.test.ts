@@ -305,6 +305,7 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       star: 'new Bun.Glob("apps/*/src/**/*.ts").scanSync();',
       brace: 'new Bun.Glob("apps/{web,api}/src/**/*.ts").scanSync();',
       starstar: 'new Bun.Glob("apps/**").scanSync();',
+      starsuffix: 'new Bun.Glob("apps/web*/src/**/*.ts").scanSync();',
       template:
         // The fixture source holds a template literal; `$` and `{` are joined
         // so this file's own string is not mistaken for one.
@@ -331,6 +332,7 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       "src/root.test.ts",
       "src/star.test.ts",
       "src/starstar.test.ts",
+      "src/starsuffix.test.ts",
       "src/template.test.ts",
     ]);
   });

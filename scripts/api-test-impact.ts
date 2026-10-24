@@ -236,6 +236,11 @@ const textReach = (file: string, source: string): ModuleReach => {
     /(?:apps\/|\.\.\/)([^/'"`$}\s]+)(?=\/|["'`]|$)/gu,
   )) {
     const app = match[1];
+    // A glob character anywhere in the app segment (`apps/web*`) can match
+    // any app name.
+    if (app !== undefined && /[*?[{]/u.test(app)) {
+      return "all";
+    }
     if (app !== undefined && app !== "api" && app !== "..") {
       apps.add(app);
     }
