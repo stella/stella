@@ -146,6 +146,7 @@ export const applyAnalysisUpdate = async ({
     analysis,
     contentHash: decision.contentHash,
     decisionId,
+    ownership: { type: "generation", sentinel },
   });
   return wrote ? { kind: "saved", analysis } : { kind: "claim-lost" };
 };

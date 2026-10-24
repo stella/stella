@@ -276,6 +276,7 @@ describe("case-law analysis writer role", () => {
         const wrote = await store.save({
           decisionId,
           contentHash: null,
+          ownership: { type: "generation", sentinel },
           analysis: {
             version: 4,
             generatedAt: "2026-09-01T12:00:00.000Z",

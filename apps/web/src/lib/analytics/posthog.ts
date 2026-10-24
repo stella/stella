@@ -825,6 +825,52 @@ type CreatePostHogAnalyticsOptions = {
   uiHost?: string | undefined;
 };
 
+/** Drops events outside the analytics contract and strips URL context from the rest. */
+const sanitizeBeforeSend = (
+  event: CaptureResult | null,
+  routeTemplateHistory: RouteTemplateHistory,
+  localDebugEnabled: boolean,
+): CaptureResult | null => {
+  if (import.meta.env.DEV && !localDebugEnabled) {
+    return null;
+  }
+  if (!event || !isWebAnalyticsEvent(event.event)) {
+    return null;
+  }
+  switch (event.event) {
+    case WEB_ANALYTICS_EVENTS.exception:
+      return isNoiseException(event)
+        ? null
+        : sanitizeExceptionEvent(event, routeTemplateHistory);
+    case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
+      return routeErrorLifecycleSanitizer?.(event) ?? null;
+    case WEB_ANALYTICS_EVENTS.webVitals:
+      return sanitizeWebVitalsEvent(event, routeTemplateHistory);
+    case WEB_ANALYTICS_EVENTS.pageViewed:
+      return sanitizeSdkUrlContext(
+        event,
+        routeTemplateHistory,
+        "route-template",
+      );
+    case WEB_ANALYTICS_EVENTS.pageLeft:
+    case WEB_ANALYTICS_EVENTS.identify:
+    case WEB_ANALYTICS_EVENTS.guideStepSkipped:
+    case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
+    case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
+    case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+    case WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming:
+    case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
+    case WEB_ANALYTICS_EVENTS.followupShown:
+    case WEB_ANALYTICS_EVENTS.followupSelected:
+    case WEB_ANALYTICS_EVENTS.keyActionTimed:
+      return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
+    default: {
+      event.event satisfies never;
+      return panic(`Unhandled event: ${String(event.event)}`);
+    }
+  }
+};
+
 export const createPostHogAnalytics = ({
   host,
   key,
@@ -866,45 +912,8 @@ export const createPostHogAnalytics = ({
     // duration from; the default ties it to `capture_pageview`, which stays
     // off because page views are captured manually with route templates.
     capture_pageleave: true,
-    before_send: (event) => {
-      if (import.meta.env.DEV && !localDebugEnabled) {
-        return null;
-      }
-      if (!event || !isWebAnalyticsEvent(event.event)) {
-        return null;
-      }
-      switch (event.event) {
-        case WEB_ANALYTICS_EVENTS.exception:
-          return isNoiseException(event)
-            ? null
-            : sanitizeExceptionEvent(event, routeTemplateHistory);
-        case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
-          return routeErrorLifecycleSanitizer?.(event) ?? null;
-        case WEB_ANALYTICS_EVENTS.webVitals:
-          return sanitizeWebVitalsEvent(event, routeTemplateHistory);
-        case WEB_ANALYTICS_EVENTS.pageViewed:
-          return sanitizeSdkUrlContext(
-            event,
-            routeTemplateHistory,
-            "route-template",
-          );
-        case WEB_ANALYTICS_EVENTS.pageLeft:
-        case WEB_ANALYTICS_EVENTS.identify:
-        case WEB_ANALYTICS_EVENTS.guideStepSkipped:
-        case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
-        case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
-        case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
-        case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
-        case WEB_ANALYTICS_EVENTS.followupShown:
-        case WEB_ANALYTICS_EVENTS.followupSelected:
-        case WEB_ANALYTICS_EVENTS.keyActionTimed:
-          return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
-        default: {
-          event.event satisfies never;
-          return panic(`Unhandled event: ${String(event.event)}`);
-        }
-      }
-    },
+    before_send: (event) =>
+      sanitizeBeforeSend(event, routeTemplateHistory, localDebugEnabled),
   });
 
   // Attach build metadata as super-properties so every captured
@@ -1010,6 +1019,9 @@ export const createPostHogAnalytics = ({
     },
     captureProvisionPlacementGaps: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+    },
+    captureCaseLawAnalysisTiming: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming, properties);
     },
     captureInspectorRestoreRecovered: (properties) => {
       posthog.capture(

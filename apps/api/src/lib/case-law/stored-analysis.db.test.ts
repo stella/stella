@@ -78,10 +78,11 @@ if (!databaseUrl || !runPostgresTests) {
     const claim = async (
       decisionId: SafeId<"caseLawDecision">,
       observed: unknown,
+      sentinel = analysisSentinel(CURRENT, NOW),
     ): Promise<boolean> => {
       const updated = await db
         .update(caseLawDecisions)
-        .set({ analysis: analysisSentinel(CURRENT, NOW) })
+        .set({ analysis: sentinel })
         .where(
           claimableAnalysisRowFor(caseLawDecisions, { decisionId, observed }),
         )
@@ -128,11 +129,12 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("an empty row is taken by observing null, and only once", async () => {
       const decisionId = await insertDecision(null);
-      expect(await claim(decisionId, null)).toBe(true);
+      // Each sentinel carries its own run id, so the stored value proves
+      // the first claim won and the second never overwrote it.
+      const winner = analysisSentinel(CURRENT, NOW);
+      expect(await claim(decisionId, null, winner)).toBe(true);
       expect(await claim(decisionId, null)).toBe(false);
-      expect(await readBack(decisionId)).toEqual(
-        analysisSentinel(CURRENT, NOW),
-      );
+      expect(await readBack(decisionId)).toEqual(winner);
     });
 
     test("a JSON null in the column reads as null and is taken the same way", async () => {
