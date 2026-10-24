@@ -92,7 +92,13 @@ for arg in "$@"; do
     *) endpoint=$arg ;;
   esac
 done
-jq -ce --arg key "$endpoint" '.[$key]' "$FIXTURES" || {
+printf '%s\\n' "$endpoint" >> "$FIXTURES.requests"
+# A {"sequence": [...]} fixture answers its nth request with its nth entry
+# (the last one from then on).
+count=$(grep -cxF -- "$endpoint" "$FIXTURES.requests")
+jq -ce --arg key "$endpoint" --argjson n "$count" '.[$key]
+  | if type == "object" and has("sequence")
+    then .sequence[([$n, (.sequence | length)] | min) - 1] else . end' "$FIXTURES" || {
   echo "unexpected request: $endpoint" >&2
   exit 1
 }
