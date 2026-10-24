@@ -51,6 +51,28 @@ describe("migration lock census", () => {
     );
   });
 
+  test("a nonconcurrent index on an existing relation requires review", () => {
+    expect(
+      checkMigrationLocks({
+        sources: source("CREATE INDEX probe_idx ON existing_probe (id);"),
+        baseline: [],
+        allowances: [],
+      }).errors.join("\n"),
+    ).toContain("SHARE create-index needs");
+  });
+
+  test("a nonconcurrent index on a newly created relation has no existing writer to block", () => {
+    expect(
+      checkMigrationLocks({
+        sources: source(
+          "CREATE TABLE probe(id int); CREATE INDEX probe_idx ON probe (id);",
+        ),
+        baseline: [],
+        allowances: [],
+      }).errors,
+    ).toEqual([]);
+  });
+
   test("unknown DDL fails even in a migration with historical forms", () => {
     const sources = source(
       "CREATE TABLE probe(id int); CREATE MATERIALIZED VIEW probe_view AS SELECT 1;",

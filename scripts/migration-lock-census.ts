@@ -461,6 +461,7 @@ const relationReferences = (tokens: StatementTokens) => {
 };
 
 const requiresRelationReview = (lockMode: LockMode) =>
+  lockMode === "SHARE" ||
   lockMode === "SHARE ROW EXCLUSIVE" ||
   lockMode === "EXCLUSIVE" ||
   lockMode === "ACCESS EXCLUSIVE";
@@ -695,7 +696,7 @@ export type MigrationLockAllowance = {
   form: DdlForm;
   reason: string;
 };
-// New ACCESS EXCLUSIVE work without an existing safety acknowledgement needs a
+// New writer-blocking work without an existing safety acknowledgement needs a
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
