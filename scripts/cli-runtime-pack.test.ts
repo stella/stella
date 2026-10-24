@@ -40,7 +40,8 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_DIRECTORY = "packages/cli";
 const COMMAND_TIMEOUT_MS = 180_000;
-const TEST_TIMEOUT_MS = 600_000;
+// Measured p95 is 20.8 s; this test must perform a fresh real CLI build and pack.
+const TEST_TIMEOUT_MS = 45_000;
 const RUNTIME_SOURCES = [
   "src/generated/route-map.ts",
   "src/generated/tool-annotations.ts",
