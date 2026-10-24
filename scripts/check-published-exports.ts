@@ -29,9 +29,11 @@ import {
   toPublishedManifest,
 } from "./publish-manifest";
 import {
+  importMetaUrlTargets,
   isExpectedPublishedExportResolution,
   isOwnDistLoadFailure,
   isPublishedTestArtifact,
+  isShippedUrlTarget,
   resolvePublishedExport,
 } from "./published-export-guards";
 
@@ -184,16 +186,26 @@ try {
     );
   }
 
-  const bundledTestRuntimes = (
-    await Promise.all(
-      [...packed]
-        .filter((file) => file.startsWith("dist/") && file.endsWith(".js"))
-        .map(async (file) => ({
-          contents: await Bun.file(path.join(pkgDir, file)).text(),
-          file,
-        })),
-    )
-  )
+  const distModules = await Promise.all(
+    [...packed]
+      .filter((file) => file.startsWith("dist/") && file.endsWith(".js"))
+      .map(async (file) => ({
+        contents: await Bun.file(path.join(pkgDir, file)).text(),
+        file,
+      })),
+  );
+
+  for (const module of distModules) {
+    for (const target of importMetaUrlTargets(module)) {
+      if (!isShippedUrlTarget({ target, packed })) {
+        failures.push(
+          `${module.file}: new URL(…, import.meta.url) names ${target}, which the tarball does not ship`,
+        );
+      }
+    }
+  }
+
+  const bundledTestRuntimes = distModules
     .filter(({ contents }) =>
       /from\s*["'](?:node:|@playwright\/test|playwright)["']/u.test(contents),
     )

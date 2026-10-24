@@ -1848,12 +1848,16 @@ jobs:
           bun scripts/check-published-exports.ts packages/stable-stringify
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
-          bun scripts/check-published-exports.ts packages/fetch
-          bun scripts/check-published-exports.ts packages/scan-engine
 
       - name: MCP kit published export map guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: bun scripts/check-published-exports.ts packages/mcp-kit
+
+      - name: Fetch and scan engine published export map guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        run: |
+          bun scripts/check-published-exports.ts packages/fetch
+          bun scripts/check-published-exports.ts packages/scan-engine
 
       - name: Load merge base measurement
         timeout-minutes: 6
