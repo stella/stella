@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 13,
+  "reason": "Lifecycle and data-integrity changes add atomic cleanup leases, reconciliation claims, derived projection writes, and parent-audited lifecycle bookkeeping; each suppression documents why a second audit record would be redundant or recursive."
+}

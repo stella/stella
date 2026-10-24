@@ -48,7 +48,7 @@ import { acquireReplayLease } from "@/api/handlers/case-law/ingestion/replay";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 
@@ -63,9 +63,7 @@ type ErasedSupplementHolderOutcome =
    * Its document is taken back and it awaits a rebuild by the repair lane
    * or a later run: the payload could not be read, or the lease was busy.
    */
-  | { type: "withheld"; judgmentId: SafeId<"caseLawDecision">; reason: string }
-  /** A corpus object still holds its document: run the erasure again. */
-  | { type: "withhold-incomplete"; judgmentId: SafeId<"caseLawDecision"> };
+  | { type: "withheld"; judgmentId: SafeId<"caseLawDecision">; reason: string };
 
 export type RedactWithSupplementHoldersOutcome = {
   redaction: RedactCaseLawDecisionOutcome;
@@ -81,6 +79,10 @@ type RedactWithSupplementHoldersOptions = {
   leaseWaitMs?: number;
   /** Test seam; production rebuilds through the source's own adapter. */
   reparseStoredRaw?: NonNullable<SourceAdapter["reparseStoredRaw"]>;
+  /** Test seam; production uses the durable decision redaction path. */
+  redactDecision?: typeof redactCaseLawDecision;
+  /** Test seam; production withdraws through the corpus tombstone path. */
+  withdrawDocument?: typeof withdrawCaseLawDecisionDocument;
 };
 
 /** Live judgments whose composed document still holds the given row. */
@@ -132,8 +134,9 @@ const selectHolders = async (
 const withholdHolder = async (
   scopedDb: ScopedDb,
   judgmentId: SafeId<"caseLawDecision">,
+  withdrawDocument: typeof withdrawCaseLawDecisionDocument,
 ): Promise<Result<"withheld" | "incomplete", DatabaseError>> => {
-  const withdrawn = await withdrawCaseLawDecisionDocument({
+  const withdrawn = await withdrawDocument({
     decisionId: judgmentId,
     reason: `a supplement composed into decision ${judgmentId} was erased`,
     scopedDb,
@@ -293,10 +296,43 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
   readStoredRaw = readStoredRawFromS3,
   leaseWaitMs = HOLDER_LEASE_WAIT_MS,
   reparseStoredRaw,
+  redactDecision = redactCaseLawDecision,
+  withdrawDocument = withdrawCaseLawDecisionDocument,
 }: RedactWithSupplementHoldersOptions): Promise<
   Result<RedactWithSupplementHoldersOutcome, DatabaseError>
 > => {
-  const redaction = await redactCaseLawDecision({ decisionId, scopedDb });
+  const holders = await selectHolders(scopedDb, decisionId);
+  // Withhold every copied projection before the named row can record a
+  // successful erasure. If this process stops at any later point, the
+  // holders remain unpublished and a rerun rediscovers them from metadata.
+  const withheld = await mapWithConcurrency({
+    items: holders,
+    limit: 1,
+    operation: async (holder) => {
+      const result = await withholdHolder(
+        scopedDb,
+        holder.id,
+        withdrawDocument,
+      );
+      return { holder, result };
+    },
+  });
+  const failedWithhold = withheld.find(({ result }) => Result.isError(result));
+  if (failedWithhold !== undefined && Result.isError(failedWithhold.result)) {
+    return failedWithhold.result;
+  }
+  const incomplete = withheld.find(
+    ({ result }) => Result.isOk(result) && result.value === "incomplete",
+  );
+  if (incomplete !== undefined) {
+    return Result.err(
+      new DatabaseError({
+        message: `Case-law supplement holder ${incomplete.holder.id} could not be withheld`,
+      }),
+    );
+  }
+
+  const redaction = await redactDecision({ decisionId, scopedDb });
   if (Result.isError(redaction)) {
     return redaction;
   }
@@ -305,21 +341,11 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
   }
   // One at a time: each takes the citation graph lock and the source lease.
   const settled = await mapWithConcurrency({
-    items: await selectHolders(scopedDb, decisionId),
+    items: holders,
     limit: 1,
     operation: async (
       holder,
     ): Promise<Result<ErasedSupplementHolderOutcome, DatabaseError>> => {
-      const withheld = await withholdHolder(scopedDb, holder.id);
-      if (Result.isError(withheld)) {
-        return withheld;
-      }
-      if (withheld.value === "incomplete") {
-        return Result.ok({
-          type: "withhold-incomplete",
-          judgmentId: holder.id,
-        });
-      }
       const recomposed = await recomposeHolder({
         scopedDb,
         judgmentId: holder.id,

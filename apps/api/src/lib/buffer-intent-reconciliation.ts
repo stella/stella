@@ -16,13 +16,27 @@ import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import {
+  withAggregateParentBatch,
+  withAggregateRowQuery,
+} from "@/api/lib/db/aggregate-lock";
 import { createFileKey } from "@/api/lib/file-key";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  insertWritingObjectCleanupIntents,
+  lockOrganizationObjectIntentsForWriter,
+} from "@/api/lib/files/object-cleanup-intent-fence";
 import { LIMITS } from "@/api/lib/limits";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+export {
+  insertWritingObjectCleanupIntents,
+  lockOrganizationObjectIntentsForLifecycle,
+  lockOrganizationObjectIntentsForWriter,
+} from "@/api/lib/files/object-cleanup-intent-fence";
 
 type DeleteObject = (
   key: string,
@@ -121,28 +135,6 @@ class BufferIntentOwnershipError extends TaggedError(
   "BufferIntentOwnershipError",
 )<{ message: string }> {}
 
-const organizationObjectIntentLockKey = (
-  organizationId: SafeId<"organization">,
-): string => `buffer-object:${organizationId}`;
-
-export const lockOrganizationObjectIntentsForWriter = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock_shared(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
-};
-
-export const lockOrganizationObjectIntentsForLifecycle = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
-};
-
 type ActiveWorkspaceBufferIntentOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -158,19 +150,26 @@ export const lockActiveWorkspaceForBufferIntent = async (
   options: ActiveWorkspaceBufferIntentOptions,
 ): Promise<void> => {
   const { tx, workspaceId } = options;
-  const rows =
-    options.mode === "share"
-      ? await tx
-          .select({ status: workspaces.status })
+  const organizationId =
+    options.mode === "update"
+      ? options.organizationId
+      : await tx
+          .select({ organizationId: workspaces.organizationId })
           .from(workspaces)
           .where(eq(workspaces.id, workspaceId))
           .limit(1)
-          .for("share")
+          .then((rows) => rows.at(0))
+          .then((row) =>
+            row ? brandPersistedOrganizationId(row.organizationId) : undefined,
+          );
+  const rows =
+    organizationId === undefined
+      ? []
       : (
           await withAggregateRowQuery({
             tx,
             aggregate: "workspace",
-            id: { id: workspaceId, organizationId: options.organizationId },
+            id: { id: workspaceId, organizationId },
             mode: options.mode,
             select: (lockTx) =>
               lockTx
@@ -217,6 +216,12 @@ export const reserveObjectCleanupIntents = async ({
     await lockOrganizationObjectIntentsForWriter(tx, organizationId);
 
     if (uniqueWorkspaceIds.length > 0) {
+      await withAggregateParentBatch({
+        mode: "share",
+        organizationIds: [],
+        tx,
+        workspaceIds: uniqueWorkspaceIds,
+      });
       const lockedWorkspaces = await tx
         .select({ id: workspaces.id, status: workspaces.status })
         .from(workspaces)
@@ -227,8 +232,7 @@ export const reserveObjectCleanupIntents = async ({
           ),
         )
         .orderBy(asc(workspaces.id))
-        .limit(LIMITS.workspacesCount)
-        .for("share");
+        .limit(LIMITS.workspacesCount);
       if (
         lockedWorkspaces.length !== uniqueWorkspaceIds.length ||
         lockedWorkspaces.some(({ status }) =>
@@ -242,8 +246,8 @@ export const reserveObjectCleanupIntents = async ({
         });
       }
     }
-    // audit: skip; crash-recovery ownership for the later audited mutation.
-    await tx.insert(bufferObjectCleanupIntents).values(
+    await insertWritingObjectCleanupIntents(
+      tx,
       intents.map(({ id, ownerWorkspaceId }) => ({
         chatThreadId: chatThreadId ?? null,
         id,
@@ -253,7 +257,6 @@ export const reserveObjectCleanupIntents = async ({
         ),
         objectKey,
         organizationId,
-        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
         workspaceId: ownerWorkspaceId,
       })),
     );

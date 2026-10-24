@@ -23,6 +23,7 @@ import {
   deletePersonalAiMemories,
   deletePersonalBillingRates,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
+  deletePrivateLegalReaderAnswers,
   deleteSearchHistory,
   deleteUserFiles,
   reassignActiveTaskAssignmentsAndDropMemberships,
@@ -341,6 +342,7 @@ export const verifyAndDeleteUser = async (
             s3KeysToDelete,
           });
           await deleteChatThreadsAndFileLinks(tx, currentUserId);
+          await deletePrivateLegalReaderAnswers(tx, currentUserId);
           await deletePersonalAiMemories(tx, currentUserId);
           await deletePersonalWorkspaceViewTemplatesAndAgentSkills(
             tx,

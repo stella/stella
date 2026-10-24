@@ -10,6 +10,10 @@ import { isRecord } from "@/api/lib/type-guards";
 
 export const EMAIL_OTP_ALLOWED_ATTEMPTS = 3;
 const EMAIL_OTP_SIGN_IN_PATH = "/sign-in/email-otp";
+const NO_EMAIL_OTP_ACCESS_RESET = { type: "none" } as const;
+
+type EmailOtpResetConfirmation =
+  typeof NO_EMAIL_OTP_ACCESS_RESET | { type: "confirmed"; userId: string };
 
 type EmailOtpResetConfirmationOptions = {
   path: string;
@@ -25,17 +29,16 @@ export const requireEmailOtpResetConfirmation = async ({
   body,
   internalAdapter,
   adapter,
-}: EmailOtpResetConfirmationOptions) => {
+}: EmailOtpResetConfirmationOptions): Promise<
+  Result<EmailOtpResetConfirmation, APIError>
+> => {
   if (path !== EMAIL_OTP_SIGN_IN_PATH || !isRecord(body)) {
-    return Result.ok(undefined);
-  }
-  if (body["confirmReset"] === true) {
-    return Result.ok(undefined);
+    return Result.ok(NO_EMAIL_OTP_ACCESS_RESET);
   }
   const email = body["email"];
   const otp = body["otp"];
   if (typeof email !== "string" || typeof otp !== "string") {
-    return Result.ok(undefined);
+    return Result.ok(NO_EMAIL_OTP_ACCESS_RESET);
   }
 
   const verifications = await adapter.findMany<Verification>({
@@ -48,7 +51,7 @@ export const requireEmailOtpResetConfirmation = async ({
   });
   const verification = verifications.at(0);
   if (!verification || verification.expiresAt < new Date()) {
-    return Result.ok(undefined);
+    return Result.ok(NO_EMAIL_OTP_ACCESS_RESET);
   }
   const separator = verification.value.lastIndexOf(":");
   const storedOtp =
@@ -58,17 +61,20 @@ export const requireEmailOtpResetConfirmation = async ({
   const attempts =
     separator === -1 ? "0" : verification.value.slice(separator + 1);
   if (Number.parseInt(attempts || "0", 10) >= EMAIL_OTP_ALLOWED_ATTEMPTS) {
-    return Result.ok(undefined);
+    return Result.ok(NO_EMAIL_OTP_ACCESS_RESET);
   }
   if (!timingSafeEqual(sha256Bytes(otp), sha256Bytes(storedOtp))) {
-    return Result.ok(undefined);
+    return Result.ok(NO_EMAIL_OTP_ACCESS_RESET);
   }
 
   const account = await internalAdapter.findUserByEmail(email.toLowerCase(), {
     includeAccounts: true,
   });
   if (!account || account.user.emailVerified || account.accounts.length === 0) {
-    return Result.ok(undefined);
+    return Result.ok(NO_EMAIL_OTP_ACCESS_RESET);
+  }
+  if (body["confirmReset"] === true) {
+    return Result.ok({ type: "confirmed" as const, userId: account.user.id });
   }
   return Result.err(
     new APIError("CONFLICT", {

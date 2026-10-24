@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 /**
  * The `uploads` source of `compare_documents`: redline two DOCX files stella
  * does not store. The bytes arrive through `prepare_file_comparison`'s signed
@@ -15,6 +15,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
+import { resultTx } from "@/api/db/safe-db";
 import { fileComparisonUploads } from "@/api/db/schema";
 import {
   compareDocxBuffers,
@@ -27,10 +28,14 @@ import type {
   CompareMode,
   TrackedChangeDisposition,
 } from "@/api/handlers/documents/compare";
-import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  claimFileComparisonInputTransitions,
+  releaseFileComparisonInputTransitions,
+} from "@/api/lib/db/transitions";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
   scanUpload,
@@ -42,6 +47,8 @@ import {
   detectFileEncryption,
   ENCRYPTED_CONTENT_MESSAGE,
 } from "@/api/lib/files/detect-file-encryption";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { headObject } from "@/api/lib/s3-presign";
 import {
@@ -53,7 +60,10 @@ import type {
   DeliverTemporaryRedlineDependencies,
   TemporaryRedlineDelivery,
 } from "@/api/lib/uploads/file-comparison/deliver-redline";
-import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
+import {
+  FILE_COMPARISON_CLAIM_TTL_MS,
+  fileComparisonObjectKey,
+} from "@/api/lib/uploads/file-comparison/uploads";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
@@ -63,6 +73,23 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 const PREPARE_HINT =
   "Call prepare_file_comparison, PUT both files to the urls it returns, then " +
   "pass its next.source back to compare_documents.";
+
+const DISCARD_ROW_FAILURE_SINK = failureSink({
+  event: "file_comparison.discard_row_failed",
+  expected: [],
+});
+const DELIVERY_FAILURE_SINK = failureSink({
+  event: "file_comparison.deliver_failed",
+  expected: [],
+});
+const AUDIT_FAILURE_SINK = failureSink({
+  event: "file_comparison.audit_failed",
+  expected: [],
+});
+const RELEASE_CLAIM_FAILURE_SINK = failureSink({
+  event: "file_comparison.release_claim_failed",
+  expected: [],
+});
 
 /**
  * `preview` reports the change summary and writes nothing; `download` writes
@@ -160,12 +187,14 @@ export type FileComparisonRunOutcome =
  * is why the row is expired now rather than left on its original deadline.
  */
 const discardInput = async ({
+  claimId,
   context,
   deleteObject,
   signal,
   status,
   uploadId,
 }: {
+  claimId: string;
   context: McpRequestContext;
   deleteObject: FileComparisonRunDependencies["deleteObject"];
   signal: AbortSignal;
@@ -178,15 +207,28 @@ const discardInput = async ({
   });
   const marked = await Result.tryPromise(
     async () =>
-      await context.scopedDb(async (tx) => {
-        // audit: skip — the comparison's own event answers for both inputs.
-        await tx
-          .update(fileComparisonUploads)
-          .set({ expiresAt: new Date(), status })
-          .where(eq(fileComparisonUploads.id, uploadId));
-      }),
+      await context.scopedDb(
+        async (tx) =>
+          // audit: skip — the comparison's own event answers for both inputs.
+          await tx
+            .update(fileComparisonUploads)
+            .set({
+              claimExpiresAt: null,
+              claimId: null,
+              expiresAt: new Date(),
+              status,
+            })
+            .where(
+              and(
+                eq(fileComparisonUploads.id, uploadId),
+                eq(fileComparisonUploads.status, "processing"),
+                eq(fileComparisonUploads.claimId, claimId),
+              ),
+            )
+            .returning({ id: fileComparisonUploads.id }),
+      ),
   );
-  if (Result.isError(marked)) {
+  if (Result.isError(marked) || marked.value.length === 0) {
     return;
   }
 
@@ -210,9 +252,9 @@ const discardInput = async ({
   );
   if (Result.isError(removed)) {
     // The object is gone and the row is expired, so the sweep removes it.
-    captureError(removed.error, {
-      fileComparisonUploadId: uploadId,
-      stage: "file-comparison.discard-row",
+    observeFailure(removed.error, {
+      sink: DISCARD_ROW_FAILURE_SINK,
+      ctx: { stage: "discard-row" },
     });
   }
 };
@@ -228,12 +270,14 @@ type LoadOutcome =
  * terms a stored version does.
  */
 const loadInput = async ({
+  claimId,
   context,
   dependencies,
   path,
   row,
   signal,
 }: {
+  claimId: string;
   context: McpRequestContext;
   dependencies: FileComparisonRunDependencies;
   path: string;
@@ -249,6 +293,7 @@ const loadInput = async ({
     hint: string,
   ): Promise<LoadOutcome> => {
     await discardInput({
+      claimId,
       context,
       deleteObject: dependencies.deleteObject,
       signal,
@@ -354,6 +399,7 @@ const loadInput = async ({
     }
     const { rejection } = scanError;
     await discardInput({
+      claimId,
       context,
       deleteObject: dependencies.deleteObject,
       signal,
@@ -435,9 +481,9 @@ const deliver = async ({
     dependencies,
   );
   if (Result.isError(delivered)) {
-    captureError(delivered.error.cause, {
-      stage: "file-comparison.deliver",
-      step: delivered.error.step,
+    observeFailure(delivered.error.cause, {
+      sink: DELIVERY_FAILURE_SINK,
+      ctx: { stage: "deliver", step: delivered.error.step },
     });
     return {
       status: "error",
@@ -488,56 +534,237 @@ const recordComparisonAudit = async ({
       }),
   );
   if (Result.isError(recorded)) {
-    captureError(recorded.error, {
-      fileComparisonUploadId: base.id,
-      stage: "file-comparison.audit",
+    observeFailure(recorded.error, {
+      sink: AUDIT_FAILURE_SINK,
+      ctx: { stage: "audit" },
     });
   }
 };
 
-const loadInputRows = async ({
+const claimInputRows = async ({
   baseUploadId,
+  claimId,
+  context,
+  renew,
+  targetUploadId,
+}: {
+  baseUploadId: SafeId<"fileComparisonUpload">;
+  claimId: string;
+  context: McpRequestContext;
+  renew: boolean;
+  targetUploadId: SafeId<"fileComparisonUpload">;
+}) => {
+  const now = new Date();
+  return await resultTx(context.safeDb, async (tx) => {
+    // RLS pins the same organization and user. Repeating them in the
+    // transition keeps a policy change from widening this claim.
+    const rows = await claimFileComparisonInputTransitions(tx, {
+      baseUploadId,
+      claimId,
+      now,
+      organizationId: context.organizationId,
+      renew,
+      targetUploadId,
+      ttlMs: FILE_COMPARISON_CLAIM_TTL_MS,
+      userId: context.userId,
+    });
+    if (rows.length !== 2) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Comparison input pair is unavailable",
+        }),
+      );
+    }
+    return Result.ok(rows);
+  });
+};
+
+const releaseInputClaim = async ({
+  baseUploadId,
+  claimId,
   context,
   targetUploadId,
 }: {
   baseUploadId: SafeId<"fileComparisonUpload">;
+  claimId: string;
   context: McpRequestContext;
   targetUploadId: SafeId<"fileComparisonUpload">;
-}): Promise<Result<InputRow[], unknown>> =>
-  await Result.tryPromise(
-    async () =>
-      await context.scopedDb(
-        async (tx) =>
-          await tx
-            .select({
-              declaredName: fileComparisonUploads.declaredName,
-              declaredSha256: fileComparisonUploads.declaredSha256,
-              declaredSize: fileComparisonUploads.declaredSize,
-              id: fileComparisonUploads.id,
-            })
-            .from(fileComparisonUploads)
-            .where(
-              and(
-                inArray(fileComparisonUploads.id, [
-                  baseUploadId,
-                  targetUploadId,
-                ]),
-                // RLS pins the same two columns. Repeating them keeps the
-                // refusal a `not_found` this query decided, rather than a
-                // zero-row read that a policy change could widen.
-                eq(fileComparisonUploads.userId, context.userId),
-                eq(
-                  fileComparisonUploads.organizationId,
-                  context.organizationId,
-                ),
-                eq(fileComparisonUploads.kind, "input"),
-                inArray(fileComparisonUploads.status, ["pending", "ready"]),
-                gt(fileComparisonUploads.expiresAt, new Date()),
-              ),
-            )
-            .limit(2),
-      ),
+}): Promise<void> => {
+  const released = await context.safeDb(
+    async (tx) =>
+      await releaseFileComparisonInputTransitions(tx, {
+        baseUploadId,
+        claimId,
+        organizationId: context.organizationId,
+        targetUploadId,
+        userId: context.userId,
+      }),
   );
+  if (Result.isError(released)) {
+    observeFailure(released.error, {
+      sink: RELEASE_CLAIM_FAILURE_SINK,
+      ctx: { stage: "release-claim" },
+    });
+  }
+};
+
+type CompareClaimedInputsOptions = {
+  author: string;
+  base: InputRow;
+  claimId: string;
+  dependencies: FileComparisonRunDependencies;
+  loadedBase: LoadedInput;
+  loadedTarget: LoadedInput;
+  options: FileComparisonRunOptions;
+  target: InputRow;
+};
+
+const compareClaimedInputs = async ({
+  author,
+  base,
+  claimId,
+  dependencies,
+  loadedBase,
+  loadedTarget,
+  options: {
+    baseTrackedChanges,
+    baseUploadId,
+    context,
+    granularity,
+    mode,
+    outputMode,
+    signal,
+    targetTrackedChanges,
+    targetUploadId,
+  },
+  target,
+}: CompareClaimedInputsOptions): Promise<FileComparisonRunOutcome> => {
+  const compared = await dependencies.compareDocxBuffers({
+    author,
+    base: { file: loadedBase.file, trackedChanges: baseTrackedChanges },
+    granularity,
+    mode,
+    signal,
+    target: { file: loadedTarget.file, trackedChanges: targetTrackedChanges },
+    // The files are not versions, so there is no stored timestamp to stamp the
+    // revisions with; the comparison itself is when they were written.
+    timestamp: Temporal.Now.instant().toString(),
+  });
+
+  const consumeInputs = async (): Promise<void> => {
+    await Promise.all([
+      discardInput({
+        claimId,
+        context,
+        deleteObject: dependencies.deleteObject,
+        signal,
+        status: "consumed",
+        uploadId: base.id,
+      }),
+      discardInput({
+        claimId,
+        context,
+        deleteObject: dependencies.deleteObject,
+        signal,
+        status: "consumed",
+        uploadId: target.id,
+      }),
+    ]);
+  };
+
+  if (Result.isError(compared)) {
+    await consumeInputs();
+    await recordComparisonAudit({ base, changeCount: null, context, target });
+    return {
+      status: "ok",
+      result: {
+        status: "upload_failed",
+        baseUploadId,
+        error: compared.error,
+        targetUploadId,
+      },
+    };
+  }
+
+  // Fence delivery separately from comparison. A process paused past the
+  // first lease cannot wake and publish after a retry reclaimed the pair.
+  const renewed = await claimInputRows({
+    baseUploadId,
+    claimId,
+    context,
+    renew: true,
+    targetUploadId,
+  });
+  if (Result.isError(renewed)) {
+    await releaseInputClaim({
+      baseUploadId,
+      claimId,
+      context,
+      targetUploadId,
+    });
+    return {
+      status: "error",
+      response: structuredErrorResult({
+        code: HandlerError.is(renewed.error) ? "conflict" : "internal_error",
+        message: "The comparison input claim could not be renewed",
+        hint: "Retry the comparison.",
+        retryable: true,
+      }),
+    };
+  }
+
+  const delivered = await deliver({
+    compared: compared.value,
+    context,
+    dependencies,
+    outputMode,
+    signal,
+    targetName: target.declaredName,
+  });
+  await recordComparisonAudit({
+    base,
+    changeCount: compared.value.changes.length,
+    context,
+    target,
+  });
+  if (delivered.status === "error") {
+    await releaseInputClaim({
+      baseUploadId,
+      claimId,
+      context,
+      targetUploadId,
+    });
+    return delivered;
+  }
+  await consumeInputs();
+
+  const scanWarnings = [loadedBase.warnings, loadedTarget.warnings]
+    .filter((warnings): warnings is string[] => warnings !== null)
+    .flat();
+  const { delivery } = delivered;
+  return {
+    status: "ok",
+    result:
+      delivery === null
+        ? {
+            status: "upload_previewed",
+            baseUploadId,
+            comparison: compared.value,
+            scanWarnings,
+            targetUploadId,
+          }
+        : {
+            status: "upload_downloadable",
+            baseUploadId,
+            comparison: compared.value,
+            download: delivery.download,
+            fileName: delivery.fileName,
+            scanWarnings,
+            targetUploadId,
+          },
+  };
+};
 
 export const runFileComparison = async (
   {
@@ -570,32 +797,6 @@ export const runFileComparison = async (
     };
   }
 
-  const rows = await loadInputRows({ baseUploadId, context, targetUploadId });
-  if (Result.isError(rows)) {
-    return {
-      status: "error",
-      response: structuredErrorResult({
-        code: "internal_error",
-        message: "The staged comparison could not be read",
-        hint: "Retry the comparison.",
-        retryable: true,
-      }),
-    };
-  }
-
-  const byId = new Map(rows.value.map((row) => [String(row.id), row]));
-  const base = byId.get(baseUploadId);
-  const target = byId.get(targetUploadId);
-  if (base === undefined || target === undefined) {
-    return {
-      status: "error",
-      response: notFoundResult(
-        "One of these comparison uploads is unknown, already used, or expired",
-        PREPARE_HINT,
-      ),
-    };
-  }
-
   const author = await dependencies.resolveDocxEditAuthorName({
     safeDb: context.safeDb,
     userId: context.userId,
@@ -611,8 +812,59 @@ export const runFileComparison = async (
     };
   }
 
+  const claimId = Bun.randomUUIDv7();
+  const rows = await claimInputRows({
+    baseUploadId,
+    claimId,
+    context,
+    renew: false,
+    targetUploadId,
+  });
+  if (Result.isError(rows)) {
+    return {
+      status: "error",
+      response: HandlerError.is(rows.error)
+        ? notFoundResult(
+            "One of these comparison uploads is unknown, already used, or expired",
+            PREPARE_HINT,
+          )
+        : structuredErrorResult({
+            code: "internal_error",
+            message: "The staged comparison could not be claimed",
+            hint: "Retry the comparison.",
+            retryable: true,
+          }),
+    };
+  }
+
+  const byId = new Map(rows.value.map((row) => [String(row.id), row]));
+  const base =
+    byId.get(baseUploadId) ??
+    // The two-row transaction proves this map lookup; keep a refusal instead
+    // of letting a future projection edit turn the proof into a crash.
+    null;
+  const target = byId.get(targetUploadId) ?? null;
+  if (base === null || target === null) {
+    await releaseInputClaim({
+      baseUploadId,
+      claimId,
+      context,
+      targetUploadId,
+    });
+    return {
+      status: "error",
+      response: structuredErrorResult({
+        code: "internal_error",
+        message: "The claimed comparison inputs could not be read",
+        hint: "Retry the comparison.",
+        retryable: true,
+      }),
+    };
+  }
+
   const [loadedBase, loadedTarget] = await Promise.all([
     loadInput({
+      claimId,
       context,
       dependencies,
       path: "source.base_upload_id",
@@ -620,6 +872,7 @@ export const runFileComparison = async (
       signal,
     }),
     loadInput({
+      claimId,
       context,
       dependencies,
       path: "source.target_upload_id",
@@ -628,111 +881,42 @@ export const runFileComparison = async (
     }),
   ]);
   if (loadedBase.status === "error") {
+    await releaseInputClaim({
+      baseUploadId,
+      claimId,
+      context,
+      targetUploadId,
+    });
     return loadedBase;
   }
   if (loadedTarget.status === "error") {
+    await releaseInputClaim({
+      baseUploadId,
+      claimId,
+      context,
+      targetUploadId,
+    });
     return loadedTarget;
   }
 
-  const compared = await dependencies.compareDocxBuffers({
+  return await compareClaimedInputs({
     author,
-    base: {
-      file: loadedBase.loaded.file,
-      trackedChanges: baseTrackedChanges,
-    },
-    granularity,
-    mode,
-    signal,
-    target: {
-      file: loadedTarget.loaded.file,
-      trackedChanges: targetTrackedChanges,
-    },
-    // The files are not versions, so there is no stored timestamp to stamp the
-    // revisions with; the comparison itself is when they were written.
-    timestamp: Temporal.Now.instant().toString(),
-  });
-
-  /** Read once, then gone, whatever the comparison decided. */
-  const consumeInputs = async (): Promise<void> => {
-    await Promise.all([
-      discardInput({
-        context,
-        deleteObject: dependencies.deleteObject,
-        signal,
-        status: "consumed",
-        uploadId: base.id,
-      }),
-      discardInput({
-        context,
-        deleteObject: dependencies.deleteObject,
-        signal,
-        status: "consumed",
-        uploadId: target.id,
-      }),
-    ]);
-  };
-
-  if (Result.isError(compared)) {
-    await consumeInputs();
-    await recordComparisonAudit({ base, changeCount: null, context, target });
-    return {
-      status: "ok",
-      result: {
-        status: "upload_failed",
-        baseUploadId,
-        error: compared.error,
-        targetUploadId,
-      },
-    };
-  }
-
-  const delivered = await deliver({
-    compared: compared.value,
-    context,
-    dependencies,
-    outputMode,
-    signal,
-    targetName: target.declaredName,
-  });
-  await recordComparisonAudit({
     base,
-    changeCount: compared.value.changes.length,
-    context,
+    claimId,
+    dependencies,
+    loadedBase: loadedBase.loaded,
+    loadedTarget: loadedTarget.loaded,
+    options: {
+      baseTrackedChanges,
+      baseUploadId,
+      context,
+      granularity,
+      mode,
+      outputMode,
+      signal,
+      targetTrackedChanges,
+      targetUploadId,
+    },
     target,
   });
-  if (delivered.status === "error") {
-    // The inputs stay staged: the error tells the caller to retry, and the
-    // retry has to find them. Their own deadline still expires them.
-    return delivered;
-  }
-  await consumeInputs();
-
-  const scanWarnings = [
-    loadedBase.loaded.warnings,
-    loadedTarget.loaded.warnings,
-  ]
-    .filter((warnings): warnings is string[] => warnings !== null)
-    .flat();
-  const { delivery } = delivered;
-  return {
-    status: "ok",
-    result:
-      delivery === null
-        ? {
-            status: "upload_previewed",
-            baseUploadId,
-            comparison: compared.value,
-            scanWarnings,
-            targetUploadId,
-          }
-        : {
-            status: "upload_downloadable",
-            baseUploadId,
-            comparison: compared.value,
-            download: delivery.download,
-            fileName: delivery.fileName,
-            scanWarnings,
-            targetUploadId,
-          },
-  };
 };

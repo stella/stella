@@ -9,6 +9,7 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { SANCTIONS_EDITION_FANOUT_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
@@ -218,7 +219,7 @@ const queueFreshnessTransitions = async (
   now: Date,
   recordTransitionAuditEvent: (count: number) => void,
 ) =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const owner =
       (await tx.execute<{ role: string }>(sql`SELECT current_user AS role`)).at(
         0,
@@ -258,13 +259,22 @@ const queueFreshnessTransitions = async (
     const changed = rows.filter(({ source, status, edition }) => {
       const current =
         currentBySource.get(source) ?? panic("Freshness fanout missing");
+      const desiredEditionId = edition?.id ?? null;
       return (
         insertedIds.has(source) ||
-        (current.editionId === (edition?.id ?? null) &&
-          current.freshnessStatus !== status)
+        current.editionId !== desiredEditionId ||
+        current.freshnessStatus !== status
       );
     });
     if (changed.length > 0) {
+      // The fanout is a durable projection of the source's desired edition and
+      // freshness. Read the edition again in the transition statement so each
+      // source row binds the current value even when multiple sources change.
+      const desiredEditionId = sql`(
+        SELECT ${sanctionsSources.activeEditionId}
+        FROM ${sanctionsSources}
+        WHERE ${sanctionsSources.id} = ${sanctionsEditionFanouts.sourceId}
+      )`;
       const changesByFreshness = {
         fresh: changed.filter(({ status }) => status === "fresh"),
         unavailable: changed.filter(({ status }) => status === "unavailable"),
@@ -280,7 +290,7 @@ const queueFreshnessTransitions = async (
             to: "fresh",
           },
         },
-        set: { cursorOrganizationId: null },
+        set: { editionId: desiredEditionId, cursorOrganizationId: null },
         recordTransitionAuditEvent: async (_auditTx, { ids }) => {
           recordTransitionAuditEvent(ids.length);
           await Promise.resolve();
@@ -297,7 +307,7 @@ const queueFreshnessTransitions = async (
             to: "unavailable",
           },
         },
-        set: { cursorOrganizationId: null },
+        set: { editionId: desiredEditionId, cursorOrganizationId: null },
         recordTransitionAuditEvent: async (_auditTx, { ids }) => {
           recordTransitionAuditEvent(ids.length);
           await Promise.resolve();

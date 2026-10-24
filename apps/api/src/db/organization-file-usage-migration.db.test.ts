@@ -17,14 +17,20 @@ import {
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-const MIGRATION_PATH = nodePath.resolve(
-  import.meta.dir,
+const MIGRATION_PATHS = [
   "../../drizzle/20261003122400_organization_file_usage/migration.sql",
-);
-const migrationSql = readFileSync(MIGRATION_PATH, "utf-8").replaceAll(
-  "--> statement-breakpoint",
-  "",
-);
+  "../../drizzle/20261023155000_file_reservation_reconciliation_state/migration.sql",
+];
+const migrationSql = MIGRATION_PATHS.map((path) =>
+  readFileSync(nodePath.resolve(import.meta.dir, path), "utf-8")
+    .replaceAll("--> statement-breakpoint", "")
+    .replaceAll(" CONCURRENTLY", "")
+    .replaceAll(/-- squawk-ignore transaction-nesting\s+COMMIT;/gu, "")
+    .replaceAll(
+      /-- squawk-ignore transaction-nesting, ban-uncommitted-transaction\s+BEGIN;/gu,
+      "",
+    ),
+).join("\n");
 
 // Only the pre-existing objects referenced by this migration belong in the fixture.
 const PRE_MIGRATION_SQL = `
@@ -151,13 +157,16 @@ test("global tuple pages use keyset indexes and stale claims support ordered sca
     await database.exec(`
       insert into organization select 'tenant-' || tenant from generate_series(1, 20) tenant;
       insert into organization_file_objects
-        (organization_id, object_key, size_bytes, status, pending_size_bytes, write_id, reservation_started_at, updated_at)
+        (organization_id, object_key, size_bytes, status, pending_size_bytes, write_id, reservation_started_at, reconciliation_state, reconciliation_attempt_count, reconcile_after, updated_at)
       select 'tenant-' || tenant,
         'tenant-' || tenant || '/file-' || lpad(file::text, 5, '0'),
         1,
         case when file % 3 = 0 then 'reserved' else 'committed' end,
         case when file % 3 = 1 then 2 else null end,
         case when file % 3 < 2 then 'write-' || tenant || '-' || file else null end,
+        case when file % 3 < 2 then '2020-01-01'::timestamptz else null end,
+        'active',
+        0,
         case when file % 3 < 2 then '2020-01-01'::timestamptz else null end,
         '2020-01-01'::timestamptz + (file || ' seconds')::interval
       from generate_series(1, 20) tenant cross join generate_series(1, 5000) file;
@@ -188,8 +197,8 @@ test("global tuple pages use keyset indexes and stale claims support ordered sca
     }
     const options = {
       db: queryDb,
+      reconcileBefore: new Date("2021-01-01T00:00:00.000Z"),
       staleBefore: new Date("2021-01-01T00:00:00.000Z"),
-      retryBefore: new Date("2021-01-01T00:00:00.000Z"),
       limit: 50,
     };
     const globalClaim = await planFor(
@@ -204,10 +213,10 @@ test("global tuple pages use keyset indexes and stale claims support ordered sca
       }).toSQL(),
     );
     expect(globalClaim).toContain(
-      "organization_file_objects_pending_reconcile_idx",
+      "organization_file_objects_active_reconcile_idx",
     );
     expect(tenantClaim).toContain(
-      "organization_file_objects_org_pending_reconcile_idx",
+      "organization_file_objects_org_active_reconcile_idx",
     );
     for (const plan of [globalClaim, tenantClaim]) {
       expect(plan).not.toMatch(/\bSort\b/u);

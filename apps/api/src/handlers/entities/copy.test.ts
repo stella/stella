@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -16,6 +16,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { isRecord } from "@/api/lib/type-guards";
@@ -28,6 +29,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
+import type { copyFileObjects, FileMapping } from "./copy-utils";
 
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
@@ -54,7 +56,41 @@ const syncWorkspaceSearchActivityMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => undefined);
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => undefined);
 
+const copyFileObjectsMock = mock(
+  async ({
+    copiedS3Keys,
+    organizationId,
+    sources,
+    targetWorkspaceId,
+  }: Parameters<typeof copyFileObjects>[0]) => {
+    const { copyObject } = await import("@/api/lib/s3-presign");
+    const mappings: FileMapping[] = [];
+    for (const source of sources) {
+      const newFileId = allocateFileObject();
+      const targetKey = createFileKey({
+        fileId: newFileId,
+        mimeType: source.mimeType,
+        organizationId,
+        workspaceId: targetWorkspaceId,
+      });
+      copiedS3Keys.push(targetKey);
+      const copied = await copyObject(source.sourceKey, targetKey);
+      if (Result.isError(copied)) {
+        panic("Seeded source object copy failed", copied.error);
+      }
+      mappings.push({
+        ...source,
+        cleanupIntentIds: [],
+        newFileId,
+        targetKey,
+      });
+    }
+    return Result.ok(mappings);
+  },
+);
+
 const copyToWorkspace = createCopyToWorkspace({
+  copyFileObjects: copyFileObjectsMock,
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,

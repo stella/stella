@@ -444,7 +444,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Backfill durable case-law redaction tombstones and search cleanup",
-    id: "caseLaw.backfillRedactionTombstones.v2",
+    id: "caseLaw.backfillRedactionTombstones.v3",
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
@@ -631,7 +631,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: RECONCILE_REPORT_EXPORTS_TASK,
   },
   {
-    description: "Delete style set packages a replacement left behind",
+    description:
+      "Delete packages recorded by style set replacements and deletions",
     id: "styleSets.reconcilePackageCleanups.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },

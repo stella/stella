@@ -14,6 +14,7 @@ describe("browser control chat tool", () => {
     expect(tool.description).toContain(
       "Passwords, login, and MFA remain manual",
     );
+    expect(tool.description).toContain("including `absent`");
 
     const schema = convertSchemaToJsonSchema(tool.inputSchema);
     if (

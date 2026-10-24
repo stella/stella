@@ -1,11 +1,16 @@
 import { Result } from "better-result";
 import { beforeEach, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
+import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  workspaces,
+} from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { toSafeId } from "@/api/lib/branded-types";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -44,6 +49,28 @@ type UpdateValues = {
   claimedAt?: Date | undefined;
   finalizedAt?: Date | undefined;
   status?: string | undefined;
+};
+
+const workspaceAggregateQuery = (status: "active" | "deleting") => {
+  const query = createMockDatabase()
+    .select({
+      id: workspaces.id,
+      organizationId: workspaces.organizationId,
+      status: workspaces.status,
+    })
+    .from(workspaces);
+  return {
+    as: (alias: string) => query.as(alias),
+    toSQL: () => query.toSQL(),
+    where: (predicate: SQL) => {
+      const scoped = query.where(predicate);
+      return {
+        as: (alias: string) => scoped.as(alias),
+        for: async () => [{ id: workspaceId, organizationId, status }],
+        toSQL: () => scoped.toSQL(),
+      };
+    },
+  };
 };
 
 const createReconciliationSafeDb = (updates: UpdateValues[]): SafeDb => {
@@ -96,19 +123,37 @@ beforeEach(() => {
 
 test("share-locks an active workspace before reserving a writer intent", async () => {
   const locks: unknown[] = [];
+  let selectCount = 0;
   const tx = asTestRaw<Transaction>({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: () => ({
-            for: async (strength: unknown) => {
-              locks.push(strength);
-              return [{ status: "active" }];
-            },
+    select: () => {
+      selectCount += 1;
+      if (selectCount === 1) {
+        return {
+          from: () => ({
+            where: () => ({
+              limit: async () => [{ organizationId }],
+            }),
           }),
+        };
+      }
+      const query = workspaceAggregateQuery("active");
+      return {
+        ...query,
+        from: () => ({
+          ...query,
+          where: (predicate: SQL) => {
+            const scoped = query.where(predicate);
+            return {
+              ...scoped,
+              for: async (strength: unknown) => {
+                locks.push(strength);
+                return await scoped.for();
+              },
+            };
+          },
         }),
-      }),
-    }),
+      };
+    },
   });
 
   await lockActiveWorkspaceForBufferIntent({ tx, workspaceId, mode: "share" });
@@ -117,14 +162,22 @@ test("share-locks an active workspace before reserving a writer intent", async (
 });
 
 test("rejects a writer reservation after workspace deletion seals", async () => {
+  let selectCount = 0;
   const tx = asTestRaw<Transaction>({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: () => ({ for: async () => [{ status: "deleting" }] }),
-        }),
-      }),
-    }),
+    select: () => {
+      selectCount += 1;
+      if (selectCount === 1) {
+        return {
+          from: () => ({
+            where: () => ({
+              limit: async () => [{ organizationId }],
+            }),
+          }),
+        };
+      }
+      const query = workspaceAggregateQuery("deleting");
+      return { ...query, from: () => query };
+    },
   });
 
   const rejection: unknown = await lockActiveWorkspaceForBufferIntent({
@@ -144,12 +197,14 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
 });
 
 test("reserves multi-workspace ownership under one ordered lock", async () => {
-  let advisoryLocks = 0;
-  const locks: unknown[] = [];
+  let lockQueries = 0;
   const insertedRows: unknown[] = [];
   const tx = asTestRaw<Transaction>({
     execute: async () => {
-      advisoryLocks += 1;
+      lockQueries += 1;
+      return lockQueries === 1
+        ? [{ id: organizationId }]
+        : [{ id: workspaceId }, { id: otherWorkspaceId }];
     },
     insert: () => ({
       values: async (rows: unknown[]) => {
@@ -159,22 +214,11 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => ({
-            for: async (strength: unknown) => {
-              locks.push(strength);
-              return [{ id: organizationId }];
-            },
-          }),
           orderBy: () => ({
-            limit: () => ({
-              for: async (strength: unknown) => {
-                locks.push(strength);
-                return [
-                  { id: workspaceId, status: "active" },
-                  { id: otherWorkspaceId, status: "active" },
-                ];
-              },
-            }),
+            limit: async () => [
+              { id: workspaceId, status: "active" },
+              { id: otherWorkspaceId, status: "active" },
+            ],
           }),
         }),
       }),
@@ -198,8 +242,7 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
   if (Result.isError(result)) {
     throw result.error;
   }
-  expect(advisoryLocks).toBe(1);
-  expect(locks).toEqual(["share"]);
+  expect(lockQueries).toBe(2);
   expect(insertedRows).toEqual([
     expect.objectContaining({ workspaceId }),
     expect.objectContaining({ workspaceId: otherWorkspaceId }),
@@ -207,11 +250,12 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
 });
 
 test("reserves organization-scoped ownership without inventing a matter", async () => {
-  let advisoryLocks = 0;
+  let lockQueries = 0;
   const insertedRows: unknown[] = [];
   const tx = asTestRaw<Transaction>({
     execute: async () => {
-      advisoryLocks += 1;
+      lockQueries += 1;
+      return [{ id: organizationId }];
     },
     insert: () => ({
       values: async (rows: unknown[]) => {
@@ -235,16 +279,22 @@ test("reserves organization-scoped ownership without inventing a matter", async 
   });
 
   expect(result.status).toBe("ok");
-  expect(advisoryLocks).toBe(1);
+  expect(lockQueries).toBe(1);
   expect(insertedRows).toEqual([
     expect.objectContaining({ workspaceId: null }),
   ]);
 });
 
 test("reserves chat ownership for archived scope while deletion stays fenced", async () => {
+  let lockQueries = 0;
   const insertedRows: unknown[] = [];
   const tx = asTestRaw<Transaction>({
-    execute: async () => undefined,
+    execute: async () => {
+      lockQueries += 1;
+      return lockQueries === 1
+        ? [{ id: organizationId }]
+        : [{ id: workspaceId }];
+    },
     insert: () => ({
       values: async (rows: unknown[]) => {
         insertedRows.push(...rows);
@@ -254,9 +304,7 @@ test("reserves chat ownership for archived scope while deletion stays fenced", a
       from: () => ({
         where: () => ({
           orderBy: () => ({
-            limit: () => ({
-              for: async () => [{ id: workspaceId, status: "archived" }],
-            }),
+            limit: async () => [{ id: workspaceId, status: "archived" }],
           }),
         }),
       }),

@@ -24,9 +24,16 @@ const scope = {
   entityId: toSafeId<"entity">("entity_1"),
 };
 const file = {
+  entityVersionId: toSafeId<"entityVersion">("version_1"),
+  fieldId: toSafeId<"field">("field_1"),
   sourceFileId: "file_1",
+  sourceSha256Hex: "a".repeat(64),
   storageMimeType: EML_MIME_TYPE,
-  mimeType: EML_MIME_TYPE,
+  extractionMimeType: EML_MIME_TYPE,
+};
+const source = {
+  ...scope,
+  ...file,
 };
 const database = asTestRaw<Parameters<typeof fileUploadedMail>[0]["database"]>(
   {},
@@ -122,8 +129,7 @@ describe("uploaded mail filing job", () => {
       await processUploadedMailJob({ data, database, readFile, fileMail }),
     ).toEqual(FILED);
     expect(fileMail.mock.calls.at(0)?.[0]).toMatchObject({
-      mimeType: EML_MIME_TYPE,
-      scope,
+      source,
     });
   });
 

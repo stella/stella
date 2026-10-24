@@ -317,7 +317,7 @@ impl AccountStore {
     {
       // Retried on every read until the Keychain lets go; the first failure
       // already reached the caller of `invalidate`.
-      if self.clear().await.is_err() {
+      if self.clear_ended_link().await.is_err() {
         tracing::warn!(
           target: crate::logging::TRAIL_TARGET,
           event = "account.keychain_clear_failed",
@@ -380,6 +380,16 @@ impl AccountStore {
         *fixture = AccountFixture::default();
         Ok(())
       }
+    }
+  }
+
+  async fn clear_ended_link(&mut self) -> Result<(), String> {
+    match self {
+      Self::Keychain => {
+        crate::device_proof::unlink(crate::keychain::delete_account_connection()).await
+      }
+      #[cfg(test)]
+      Self::Memory(_) | Self::ReadOnly(_) | Self::Fixture(_) => self.clear().await,
     }
   }
 
@@ -905,7 +915,7 @@ pub async fn invalidate(
     .await?
     .is_some_and(|current| current.credential.key == account.credential.key)
   {
-    store.clear().await.map_err(|cause| {
+    store.clear_ended_link().await.map_err(|cause| {
       tracing::warn!(
         target: crate::logging::TRAIL_TARGET,
         event = "account.keychain_clear_failed",
@@ -1015,11 +1025,7 @@ pub async fn account_disconnect(
     .await?;
   }
   let mut store = state.lock().await;
-  if matches!(*store, AccountStore::Keychain) {
-    crate::device_proof::unlink(store.clear()).await?;
-  } else {
-    store.clear().await?;
-  }
+  store.clear_ended_link().await?;
   drop(store);
   *BROWSER_CONNECTION
     .lock()

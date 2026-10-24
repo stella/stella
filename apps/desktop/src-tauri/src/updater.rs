@@ -1,8 +1,7 @@
 // Auto-updater wiring.
 //
-// The Tauri updater plugin only fetches `latest.json` and verifies
-// signatures; it doesn't decide *when* to check or *how* to surface
-// the result. This module owns those decisions:
+// The Tauri updater plugin fetches `latest.json`; this module owns bounded
+// package download, signature verification, scheduling, and user feedback:
 //
 // - On startup, run a delayed background check (so the launch path
 //   isn't blocked by network I/O).
@@ -21,6 +20,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
+use futures_util::StreamExt;
+use minisign_verify::{PublicKey, Signature};
+use reqwest::header::{ACCEPT, HeaderValue};
 use tauri::{AppHandle, async_runtime};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
@@ -30,6 +33,7 @@ use crate::session_manager::SessionManager;
 
 const STARTUP_CHECK_DELAY: Duration = Duration::from_secs(10);
 const WAKE_CHECK_TICK: Duration = Duration::from_secs(30);
+const MAX_UPDATE_PACKAGE_BYTES: usize = 256 * 1024 * 1024;
 static LAST_CHECK: AtomicU64 = AtomicU64::new(0);
 static CHECK_LOCK: Mutex<()> = Mutex::const_new(());
 
@@ -199,10 +203,17 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
     &format!("Installing v{version}…"),
   );
 
-  if let Err(err) = update
-    .download_and_install(|_chunk, _total| {}, || {})
-    .await
-  {
+  let package = match download_update_package(&update).await {
+    Ok(package) => package,
+    Err(err) => {
+      #[cfg(windows)]
+      crate::desktop_crash::resume_after_failed_update(handle);
+      notify(handle, "Stella update failed", &err);
+      return CheckOutcome::Failed(err);
+    }
+  };
+
+  if let Err(err) = update.install(&package) {
     #[cfg(windows)]
     crate::desktop_crash::resume_after_failed_update(handle);
     let msg = err.to_string();
@@ -226,6 +237,119 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
   CheckOutcome::Installed { version }
 }
 
+fn updater_public_key() -> Result<String, String> {
+  let config: serde_json::Value =
+    serde_json::from_str(include_str!("../tauri.conf.json"))
+      .map_err(|error| format!("Updater configuration is invalid: {error}"))?;
+  config
+    .pointer("/plugins/updater/pubkey")
+    .and_then(serde_json::Value::as_str)
+    .map(str::to_owned)
+    .ok_or_else(|| "Updater public key is missing".to_string())
+}
+
+fn decode_base64_text(value: &str) -> Result<String, String> {
+  let decoded = base64::engine::general_purpose::STANDARD
+    .decode(value)
+    .map_err(|error| format!("Updater signature encoding is invalid: {error}"))?;
+  String::from_utf8(decoded)
+    .map_err(|_| "Updater signature encoding is not UTF-8".to_string())
+}
+
+fn signed_version(trusted_comment: &str) -> Option<&str> {
+  trusted_comment
+    .split('\t')
+    .find_map(|field| field.strip_prefix("version:"))
+}
+
+fn verify_update_package(
+  package: &[u8],
+  signature: &str,
+  announced_version: &str,
+) -> Result<(), String> {
+  let public_key = PublicKey::decode(&decode_base64_text(&updater_public_key()?)?)
+    .map_err(|error| format!("Updater public key is invalid: {error}"))?;
+  let signature = Signature::decode(&decode_base64_text(signature)?)
+    .map_err(|error| format!("Updater signature is invalid: {error}"))?;
+  public_key
+    .verify(package, &signature, true)
+    .map_err(|error| format!("Updater signature verification failed: {error}"))?;
+  let signed = signed_version(signature.trusted_comment())
+    .ok_or_else(|| "Updater signature does not bind a release version".to_string())?;
+  if signed.trim_start_matches('v') != announced_version.trim_start_matches('v') {
+    return Err(
+      "Updater signature version does not match the announced release".to_string(),
+    );
+  }
+  Ok(())
+}
+
+fn checked_update_size(current: usize, chunk: usize) -> Result<usize, String> {
+  let next = current
+    .checked_add(chunk)
+    .ok_or_else(|| "Update package size overflowed".to_string())?;
+  if next > MAX_UPDATE_PACKAGE_BYTES {
+    return Err(format!(
+      "Update package exceeds the {} byte limit",
+      MAX_UPDATE_PACKAGE_BYTES
+    ));
+  }
+  Ok(next)
+}
+
+async fn download_update_package(
+  update: &tauri_plugin_updater::Update,
+) -> Result<Vec<u8>, String> {
+  let mut headers = update.headers.clone();
+  if !headers.contains_key(ACCEPT) {
+    headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
+  }
+  let mut client = reqwest::Client::builder().user_agent("stella-desktop-updater");
+  if let Some(timeout) = update.timeout {
+    client = client.timeout(timeout);
+  }
+  if update.no_proxy {
+    client = client.no_proxy();
+  } else if let Some(proxy) = &update.proxy {
+    client = client.proxy(
+      reqwest::Proxy::all(proxy.as_str())
+        .map_err(|error| format!("Updater proxy is invalid: {error}"))?,
+    );
+  }
+  let response = client
+    .build()
+    .map_err(|error| format!("Updater client failed: {error}"))?
+    .get(update.download_url.clone())
+    .headers(headers)
+    .send()
+    .await
+    .map_err(|error| format!("Update download failed: {error}"))?;
+  if !response.status().is_success() {
+    return Err(format!(
+      "Update download returned HTTP {}",
+      response.status().as_u16()
+    ));
+  }
+  if let Some(content_length) = response.content_length()
+    && content_length > MAX_UPDATE_PACKAGE_BYTES as u64
+  {
+    return Err(format!(
+      "Update package exceeds the {} byte limit",
+      MAX_UPDATE_PACKAGE_BYTES
+    ));
+  }
+
+  let mut package = Vec::new();
+  let mut stream = response.bytes_stream();
+  while let Some(chunk) = stream.next().await {
+    let chunk = chunk.map_err(|error| format!("Update download failed: {error}"))?;
+    checked_update_size(package.len(), chunk.len())?;
+    package.extend_from_slice(&chunk);
+  }
+  verify_update_package(&package, &update.signature, &update.version)?;
+  Ok(package)
+}
+
 fn notify(handle: &AppHandle, title: &str, body: &str) {
   if let Err(err) = handle
     .notification()
@@ -241,6 +365,25 @@ fn notify(handle: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn update_package_limit_accepts_the_boundary_and_rejects_one_more_byte() {
+    assert_eq!(
+      checked_update_size(0, MAX_UPDATE_PACKAGE_BYTES),
+      Ok(MAX_UPDATE_PACKAGE_BYTES)
+    );
+    assert!(checked_update_size(MAX_UPDATE_PACKAGE_BYTES, 1).is_err());
+    assert!(checked_update_size(usize::MAX, 1).is_err());
+  }
+
+  #[test]
+  fn signed_version_requires_an_explicit_version_field() {
+    assert_eq!(
+      signed_version("timestamp:1\tversion:v1.2.3"),
+      Some("v1.2.3")
+    );
+    assert_eq!(signed_version("timestamp:1"), None);
+  }
 
   #[test]
   fn presence_task_is_started_independently_of_updater_work() {

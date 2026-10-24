@@ -102,6 +102,12 @@ type CreateEntityFromBufferInput = {
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /**
+   * Authorization for a delayed actor, acquired before the workspace lock.
+   * The callback may lock current membership and matter access for the whole
+   * insert transaction; immediate request paths authorize before calling.
+   */
+  authorizeInTransaction?: ((tx: Transaction) => Promise<void>) | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -183,6 +189,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  authorizeInTransaction,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
@@ -378,6 +385,10 @@ export const createEntityFromBuffer = async ({
     const transactionState = { durableReferencePrepared: false };
     try {
       await scopedDb(async (tx) => {
+        // Delayed actors must lock their current authority before the
+        // workspace cap/lifecycle row. This preserves the canonical member →
+        // assignment → workspace lock order used by role and access changes.
+        await authorizeInTransaction?.(tx);
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         const workspaceStatus = await lockWorkspaceForEntityCreate(

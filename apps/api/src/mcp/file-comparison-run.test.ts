@@ -80,6 +80,7 @@ const scanResult = (verdict: ScanVerdict): ScanResult =>
 
 type HarnessOptions = {
   bytesByKey?: Record<string, Uint8Array>;
+  compareBarrier?: Promise<void>;
   deleteFails?: boolean;
   putFails?: boolean;
   headChecksum?: "match" | "absent" | "mismatch";
@@ -92,6 +93,7 @@ type HarnessOptions = {
 
 const createHarness = ({
   bytesByKey,
+  compareBarrier,
   deleteFails = false,
   putFails = false,
   headChecksum = "match",
@@ -109,6 +111,16 @@ const createHarness = ({
   const updates: Record<string, unknown>[] = [];
   const deletedRows = { count: 0 };
   const audited: { metadata?: Record<string, unknown> }[] = [];
+  let activeClaim: string | null = null;
+  let compareCalls = 0;
+  let markComparisonStarted: (() => void) | undefined;
+  let markTwoComparisonsStarted: (() => void) | undefined;
+  const comparisonStarted = new Promise<void>((resolve) => {
+    markComparisonStarted = resolve;
+  });
+  const twoComparisonsStarted = new Promise<void>((resolve) => {
+    markTwoComparisonsStarted = resolve;
+  });
 
   const keyOf = (id: string) => `${ORGANIZATION_ID}/tmp/comparisons/${id}`;
   const bytes =
@@ -132,9 +144,32 @@ const createHarness = ({
     }),
     update: () => ({
       set: (values: Record<string, unknown>) => ({
-        where: async () => {
+        where: () => {
           updates.push(values);
-          await Promise.resolve();
+          let resultRows = rows;
+          if (values["status"] === "processing") {
+            const requestedClaim = String(values["claimId"]);
+            if (
+              rows.length !== 2 ||
+              (activeClaim !== null && activeClaim !== requestedClaim)
+            ) {
+              resultRows = [];
+            } else {
+              activeClaim = requestedClaim;
+            }
+          }
+          if (values["status"] === "ready") {
+            activeClaim = null;
+          }
+          if (
+            values["status"] === "consumed" ||
+            values["status"] === "failed"
+          ) {
+            activeClaim = null;
+          }
+          return {
+            returning: async () => await Promise.resolve(resultRows),
+          };
         },
       }),
     }),
@@ -161,8 +196,17 @@ const createHarness = ({
   });
 
   const dependencies: FileComparisonRunDependencies = {
-    compareDocxBuffers: async () =>
-      await Promise.resolve(Result.ok(comparedResult(["insert", "delete"]))),
+    compareDocxBuffers: async () => {
+      compareCalls += 1;
+      markComparisonStarted?.();
+      if (compareCalls === 2) {
+        markTwoComparisonsStarted?.();
+      }
+      if (compareBarrier !== undefined) {
+        await compareBarrier;
+      }
+      return Result.ok(comparedResult(["insert", "delete"]));
+    },
     deleteObject: async (key) => {
       if (deleteFails) {
         throw new Error("s3 delete failed");
@@ -243,11 +287,17 @@ const createHarness = ({
 
   return {
     audited,
+    comparisonStarted,
+    compareCalls: () => compareCalls,
     deletedKeys,
     deletedRows,
+    expireClaim: () => {
+      activeClaim = null;
+    },
     insertedRows,
     keyOf,
     putKeys,
+    twoComparisonsStarted,
     updates,
     run: async (
       overrides: Partial<Parameters<typeof runFileComparison>[0]> = {},
@@ -341,7 +391,9 @@ describe("compare_documents uploads source", () => {
     expect(error.hint).toBe("Retry the comparison.");
     // The retry the hint promises has to find the inputs where it left them.
     expect(harness.deletedKeys).toHaveLength(0);
-    expect(harness.updates).toHaveLength(0);
+    expect(harness.updates).toContainEqual(
+      expect.objectContaining({ status: "ready", claimId: null }),
+    );
     expect(harness.deletedRows.count).toBe(0);
     expect(harness.audited).toHaveLength(1);
   });
@@ -358,6 +410,48 @@ describe("compare_documents uploads source", () => {
     expect(harness.putKeys).toHaveLength(0);
   });
 
+  test("atomically admits only one concurrent consumer for an input pair", async () => {
+    let releaseComparison: (() => void) | undefined;
+    const compareBarrier = new Promise<void>((resolve) => {
+      releaseComparison = resolve;
+    });
+    const harness = createHarness({ compareBarrier });
+
+    const first = harness.run();
+    await harness.comparisonStarted;
+    const competing = await harness.run();
+
+    expect(errorOf(competing).code).toBe("not_found");
+    expect(harness.compareCalls()).toBe(1);
+    releaseComparison?.();
+    expect(resultOf(await first).status).toBe("upload_downloadable");
+    expect(harness.compareCalls()).toBe(1);
+    expect(harness.putKeys).toHaveLength(1);
+  });
+
+  test("an expired claim can be recovered while fencing the old worker from delivery", async () => {
+    let releaseComparison: (() => void) | undefined;
+    const compareBarrier = new Promise<void>((resolve) => {
+      releaseComparison = resolve;
+    });
+    const harness = createHarness({ compareBarrier });
+
+    const stale = harness.run();
+    await harness.comparisonStarted;
+    harness.expireClaim();
+    const recovered = harness.run();
+    await harness.twoComparisonsStarted;
+    releaseComparison?.();
+
+    const [staleOutcome, recoveredOutcome] = await Promise.all([
+      stale,
+      recovered,
+    ]);
+    expect(errorOf(staleOutcome).code).toBe("conflict");
+    expect(resultOf(recoveredOutcome).status).toBe("upload_downloadable");
+    expect(harness.putKeys).toHaveLength(1);
+  });
+
   test("refuses a size that disagrees with what was declared", async () => {
     const harness = createHarness({
       headSizes: {
@@ -371,7 +465,9 @@ describe("compare_documents uploads source", () => {
     expect(error.issues?.map(({ path }) => path)).toContain(
       "source.base_upload_id",
     );
-    expect(harness.updates.at(0)).toMatchObject({ status: "failed" });
+    expect(harness.updates).toContainEqual(
+      expect.objectContaining({ status: "failed" }),
+    );
     expect(harness.putKeys).toHaveLength(0);
   });
 
@@ -400,7 +496,9 @@ describe("compare_documents uploads source", () => {
 
     expect(error.code).toBe("validation_error");
     expect(error.issues?.at(0)?.message).toContain("corrupt-zip");
-    expect(harness.updates.at(0)).toMatchObject({ status: "failed" });
+    expect(harness.updates).toContainEqual(
+      expect.objectContaining({ status: "failed" }),
+    );
     expect(harness.deletedKeys.length).toBeGreaterThan(0);
     expect(harness.putKeys).toHaveLength(0);
   });
@@ -425,7 +523,9 @@ describe("compare_documents uploads source", () => {
     expect(result.status).toBe("upload_downloadable");
     // Expired now rather than on the original deadline, so the next sweep
     // tick retries the key instead of waiting the row out.
-    expect(harness.updates.at(0)).toMatchObject({ status: "consumed" });
+    expect(harness.updates).toContainEqual(
+      expect.objectContaining({ status: "consumed" }),
+    );
     expect(harness.deletedRows.count).toBe(0);
   });
 
@@ -476,7 +576,9 @@ describe("compare_documents uploads source", () => {
           { path: "source.base_upload_id", message: ENCRYPTED_CONTENT_MESSAGE },
         ],
       });
-      expect(harness.updates.at(0)).toMatchObject({ status: "failed" });
+      expect(harness.updates).toContainEqual(
+        expect.objectContaining({ status: "failed" }),
+      );
       expect(harness.putKeys).toHaveLength(0);
     });
   }

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -28,6 +28,7 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { copyObject } from "@/api/lib/s3-presign";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -35,9 +36,40 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { createCopyToWorkspace } from "./copy";
+import type { copyFileObjects, FileMapping } from "./copy-utils";
 
 const noAudit = async () => undefined;
+const copyFileObjectsForTest = async ({
+  copiedS3Keys,
+  organizationId,
+  sources,
+  targetWorkspaceId,
+}: Parameters<typeof copyFileObjects>[0]) => {
+  const mappings: FileMapping[] = [];
+  for (const source of sources) {
+    const newFileId = allocateFileObject();
+    const targetKey = createFileKey({
+      fileId: newFileId,
+      mimeType: source.mimeType,
+      organizationId,
+      workspaceId: targetWorkspaceId,
+    });
+    copiedS3Keys.push(targetKey);
+    const copied = await copyObject(source.sourceKey, targetKey);
+    if (Result.isError(copied)) {
+      return panic("Seeded source object copy failed", copied.error);
+    }
+    mappings.push({
+      ...source,
+      cleanupIntentIds: [],
+      newFileId,
+      targetKey,
+    });
+  }
+  return Result.ok(mappings);
+};
 const handler = createCopyToWorkspace({
+  copyFileObjects: copyFileObjectsForTest,
   enqueueDocumentProcessingRun: async () => undefined,
   enqueueEntitySearchRepairs: async () => undefined,
   enqueueImageThumbnailOrMarkFailed: async () => undefined,

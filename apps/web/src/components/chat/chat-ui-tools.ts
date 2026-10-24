@@ -427,7 +427,14 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   add_comment: false,
+  boe_find_related_laws: false,
+  boe_get_law: false,
+  boe_get_law_block: false,
+  boe_get_law_structure: false,
   boe_search_legislation: false,
+  borme_get_summary: false,
+  business_registry_lookup: false,
+  counterparty_check: false,
   "create-current-skill-resource": false,
   create_matter_document: false,
   create_reader_annotation: true,
@@ -440,6 +447,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   delete_time_entry: true,
   fetch_url: false,
   fill_template: true,
+  infosoud_lookup_case: false,
   link_matter_contact: true,
   add_matter_member: true,
   remove_matter_member: true,

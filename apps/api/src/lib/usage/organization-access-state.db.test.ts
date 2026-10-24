@@ -23,6 +23,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
+  ORGANIZATION_ACCESS_STATE_ORIGIN,
   organizationAccessStates,
   organizationSettings,
   usagePolicies,
@@ -77,12 +78,14 @@ const evaluatingOrgId = mintAuthProviderId<"organization">();
 const expiredOrgId = mintAuthProviderId<"organization">();
 const unrecordedOrgId = mintAuthProviderId<"organization">();
 const createdOrgId = mintAuthProviderId<"organization">();
+const reconciledOrgId = mintAuthProviderId<"organization">();
 const fixtureOrgIds = [
   selfManagedOrgId,
   evaluatingOrgId,
   expiredOrgId,
   unrecordedOrgId,
   createdOrgId,
+  reconciledOrgId,
 ];
 
 const requestScope = (organizationId: SafeId<"organization">): ScopedDb =>
@@ -375,6 +378,37 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       expect(await authStatus(createdOrgId)).toBe(
         ORG_AI_CONFIG_STATUS.ownKeyRequired,
       );
+    });
+  });
+
+  test("enabled creation supersedes only a legacy reconciler row", async () => {
+    const reconciledAt = new Date(Date.now() - DAY_IN_MS);
+    await ownerDb().insert(organizationAccessStates).values({
+      organizationId: reconciledOrgId,
+      state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+      origin: ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
+      createdAt: reconciledAt,
+      updatedAt: reconciledAt,
+    });
+
+    await withAccessStateEnforced(async () => {
+      const now = new Date();
+      await recordNewOrganizationAccessState(ownerDb(), {
+        organizationId: reconciledOrgId,
+        now,
+      });
+      expect(await readState(reconciledOrgId)).toMatchObject({
+        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+        origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+        evaluationStartedAt: now,
+      });
+
+      const started = await readState(reconciledOrgId);
+      await recordNewOrganizationAccessState(ownerDb(), {
+        organizationId: reconciledOrgId,
+        now: new Date(now.getTime() + DAY_IN_MS),
+      });
+      expect(await readState(reconciledOrgId)).toEqual(started);
     });
   });
 

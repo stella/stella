@@ -464,6 +464,7 @@ const RateEntriesView = ({
       workspaceId: string;
       rateTableId: string;
       userId?: string | null;
+      currency: string;
       hourlyRate: number;
       effectiveFrom: string;
       effectiveTo?: string | null;
@@ -551,6 +552,7 @@ const RateEntriesView = ({
 
       <Button
         className="self-end"
+        disabled={!table}
         onClick={() => setShowForm(!showForm)}
         size="sm"
         variant="outline"
@@ -559,14 +561,19 @@ const RateEntriesView = ({
         {t("billing.rates.addRate")}
       </Button>
 
-      {showForm && (
+      {showForm && table && (
         <CreateRateEntryForm
-          currency={table?.currency ?? "USD"}
+          currency={table.currency}
           members={members}
           onCancel={() => setShowForm(false)}
           onSubmit={(values) => {
             createEntry.mutate(
-              { workspaceId, rateTableId, ...values },
+              {
+                workspaceId,
+                rateTableId,
+                currency: table.currency,
+                ...values,
+              },
               {
                 onSuccess: () => setShowForm(false),
                 onError: (error) => {
@@ -579,7 +586,7 @@ const RateEntriesView = ({
         />
       )}
 
-      {entries && entries.length > 0 ? (
+      {entries && table && entries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (
             <div
@@ -595,10 +602,7 @@ const RateEntriesView = ({
                       name={entry.userName}
                     />
                     <span className="text-sm tabular-nums">
-                      {formatCurrencyAmount(
-                        entry.hourlyRate,
-                        table?.currency ?? "USD",
-                      )}
+                      {formatCurrencyAmount(entry.hourlyRate, table.currency)}
                       {t("billing.rates.perHour")}
                     </span>
                   </div>
@@ -608,10 +612,7 @@ const RateEntriesView = ({
                       {t("billing.rates.defaultRate")}
                     </span>
                     <span className="text-sm tabular-nums">
-                      {formatCurrencyAmount(
-                        entry.hourlyRate,
-                        table?.currency ?? "USD",
-                      )}
+                      {formatCurrencyAmount(entry.hourlyRate, table.currency)}
                       {t("billing.rates.perHour")}
                     </span>
                   </div>

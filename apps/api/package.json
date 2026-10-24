@@ -211,7 +211,7 @@
     "parse5": "catalog:",
     "parse5-htmlparser2-tree-adapter": "catalog:",
     "pkijs": "3.4.1",
-    "postal-mime": "4.0.4",
+    "postal-mime": "4.0.8",
     "posthog-node": "^5.55.0",
     "prosemirror-commands": "catalog:",
     "prosemirror-dropcursor": "catalog:",

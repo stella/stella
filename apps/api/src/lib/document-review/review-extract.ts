@@ -99,6 +99,7 @@ export type ExtractAskContentsArgs = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
+  authorizeModelDispatch?: (() => Promise<void>) | undefined;
 };
 
 const EMPTY_RESULT: ReviewExtractionResult = {
@@ -223,6 +224,7 @@ export const extractAskContents = async ({
   promptCachingEnabled,
   serviceTier,
   usageMetering,
+  authorizeModelDispatch,
 }: ExtractAskContentsArgs): Promise<
   Result<ReviewExtractionResult, WorkflowIntegrationError>
 > =>
@@ -277,6 +279,7 @@ export const extractAskContents = async ({
       });
     }
 
+    await authorizeModelDispatch?.();
     const output = yield* Result.await(
       generateWorkflowData({
         files: preparedFiles,

@@ -20,6 +20,8 @@ import {
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per page. */
@@ -45,6 +47,77 @@ const RECONCILE_MAX_PAGES = 20;
 export type ReconcileScanResult = {
   handedOff: number;
   scanned: number;
+};
+
+export const MEMBER_RUN_AUTHORITY_REVOKED = "authority_revoked" as const;
+
+const MEMBER_RUN_EXECUTION_FAILED_SINK = failureSink({
+  event: "member_run.execution_failed",
+  expected: [],
+});
+
+type MemberRunActor = {
+  runId: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+type ProcessClaimedMemberRunOptions<
+  Actor extends MemberRunActor,
+  ClaimedRun extends object,
+  ErrorCode extends string,
+> = {
+  actor: Actor;
+  claim: (
+    actor: Actor,
+  ) => Promise<ClaimedRun | typeof MEMBER_RUN_AUTHORITY_REVOKED | null>;
+  execute: (claimed: ClaimedRun) => Promise<ErrorCode | null>;
+  internalErrorCode: ErrorCode;
+  setFailed: (actor: Actor, errorCode: ErrorCode) => Promise<void>;
+};
+
+/**
+ * Close a claimed member run on revoked authority, an execution failure, or a
+ * domain failure code. Claim errors still escape to the queue's own failed
+ * handler; only errors after a successful claim belong to the run lifecycle.
+ */
+export const processClaimedMemberRun = async <
+  Actor extends MemberRunActor,
+  ClaimedRun extends object,
+  ErrorCode extends string,
+>({
+  actor,
+  claim,
+  execute,
+  internalErrorCode,
+  setFailed,
+}: ProcessClaimedMemberRunOptions<
+  Actor,
+  ClaimedRun,
+  ErrorCode
+>): Promise<void> => {
+  const claimed = await claim(actor);
+  if (claimed === MEMBER_RUN_AUTHORITY_REVOKED) {
+    await setFailed(actor, internalErrorCode);
+    return;
+  }
+  if (claimed === null) {
+    return;
+  }
+  const outcome = await Result.tryPromise({
+    try: async () => await execute(claimed),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(outcome)) {
+    observeFailure(outcome.error, {
+      sink: MEMBER_RUN_EXECUTION_FAILED_SINK,
+      ctx: { runId: actor.runId, workspaceId: actor.workspaceId },
+    });
+    await setFailed(actor, internalErrorCode);
+    return;
+  }
+  if (outcome.value !== null) {
+    await setFailed(actor, outcome.value);
+  }
 };
 
 /**

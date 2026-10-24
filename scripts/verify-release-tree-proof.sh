@@ -200,12 +200,15 @@ if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
 else
   [[ "$allow_pr_head" == true && "$sha" == "$proof" ]] || refuse 'target is not on main'
   pulls=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/pulls?per_page=100")
-  jq -e --arg repo "$repo" --arg sha "$sha" --arg base "$main" '
-    [.[][] | select(.merged_at == null and .state == "open" and (.title | startswith("chore: release v")) and
+  release_version=$(git show "$sha:VERSION" | tr -d '[:space:]')
+  jq -e --arg repo "$repo" --arg sha "$sha" --arg base "$main" --arg title "chore: release v$release_version" '
+    [.[][] | select(.merged_at == null and .state == "open" and .title == $title and
       .head.sha == $sha and .head.repo.full_name == $repo and .base.repo.full_name == $repo and
       .base.ref == "main")] | length == 1
   ' <<< "$pulls" >/dev/null || refuse 'open release PR relation is unverified'
   git merge-base --is-ancestor "$main" "$proof" || refuse 'PR head does not contain current main tip'
+  candidate_tree_verifier="${RELEASE_CANDIDATE_TREE_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-candidate-tree.mjs}"
+  node "$candidate_tree_verifier" "$main" "$proof" || refuse 'release PR changes executable or unbound build input'
   relation=pr-head
 fi
 if [[ "$sha" != "$proof" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

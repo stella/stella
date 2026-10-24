@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
@@ -190,6 +190,7 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
                   AND ${caseLawIndexJobs.operation} = 'redact'
               )`,
               sections: null,
+              sourceRaw: null,
               textS3Key: null,
             })
             .where(
@@ -199,6 +200,18 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
               ),
             )
             .returning({ id: caseLawDecisions.id });
+
+    // v1/v2 already tombstoned the derived payload and corpus pointers. v3
+    // also erases the inline publisher payload those versions left behind.
+    await tx
+      .update(caseLawDecisions)
+      .set({ sourceRaw: null })
+      .where(
+        and(
+          inArray(caseLawDecisions.id, decisionIds),
+          isNotNull(caseLawDecisions.sourceRaw),
+        ),
+      );
 
     await extendRepairedDecisions(tx, repaired);
 

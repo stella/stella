@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -33,6 +34,8 @@ import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { LIMITS } from "@/api/lib/limits";
 import { MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS } from "@/api/lib/matter-reference";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { copyObject } from "@/api/lib/s3-presign";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -44,6 +47,7 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 import { createDuplicateWorkspace } from "./duplicate";
+import type { DuplicateWorkspaceDependencies } from "./duplicate";
 
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
@@ -66,7 +70,51 @@ const flushWorkspaceSearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
+const copyWorkspaceFilesMock: NonNullable<
+  DuplicateWorkspaceDependencies["copyWorkspaceFiles"]
+> = async ({
+  copiedS3Keys,
+  copies,
+  organizationId,
+  sourceWorkspaceId,
+  targetWorkspaceId,
+}) => {
+  const copied = await Promise.all(
+    copies.map(async (copy) => {
+      const sourceKey = createFileKey({
+        organizationId,
+        workspaceId: sourceWorkspaceId,
+        fileId: copy.sourceFileId,
+        mimeType: copy.mimeType,
+      });
+      const targetKey = createFileKey({
+        organizationId,
+        workspaceId: targetWorkspaceId,
+        fileId: copy.targetFileId,
+        mimeType: copy.mimeType,
+      });
+      copiedS3Keys.push(targetKey);
+      return await copyObject(sourceKey, targetKey);
+    }),
+  );
+  const completed = Result.all(copied);
+  return Result.isError(completed)
+    ? Result.err(completed.error)
+    : Result.ok([]);
+};
+const cleanupCopiedS3KeysMock: NonNullable<
+  DuplicateWorkspaceDependencies["cleanupCopiedS3Keys"]
+> = async ({ copiedS3Keys }) => {
+  await Promise.all(
+    copiedS3Keys.map(
+      async (key) =>
+        await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000)),
+    ),
+  );
+};
 const duplicateWorkspace = createDuplicateWorkspace({
+  cleanupCopiedS3Keys: cleanupCopiedS3KeysMock,
+  copyWorkspaceFiles: copyWorkspaceFilesMock,
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
   enqueueWorkspaceSearchRepairs: enqueueWorkspaceSearchRepairsMock,

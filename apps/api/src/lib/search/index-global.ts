@@ -19,11 +19,13 @@ import type {
   ContactPhone,
 } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
@@ -56,6 +58,8 @@ import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
+import { lockCurrentSearchProjectionRepair } from "@/api/lib/search/projection-repair-fence";
+import type { SearchProjectionRepairFence } from "@/api/lib/search/projection-repair-fence";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
 import { typedPgArray } from "@/api/lib/search/sql";
@@ -1599,6 +1603,13 @@ type SearchDocumentDatabase = Pick<
   "query" | "select" | "transaction"
 >;
 
+type SupplementalProjectionPublication =
+  | { type: "direct" }
+  | {
+      type: "repair";
+      fence: SearchProjectionRepairFence<"contact" | "workspace">;
+    };
+
 // Contact and matter projections are rebuilt in batches of at most
 // `REINDEX_BATCH_SIZE` sources. A batch is one read of the sources and their
 // relations, then one transaction: parent locks, the projection upsert,
@@ -1610,6 +1621,7 @@ type SearchDocumentDatabase = Pick<
 const writeContactProjections = async (
   contactIds: readonly SafeId<"contact">[],
   database: SearchDocumentDatabase,
+  publication: SupplementalProjectionPublication,
 ): Promise<void> => {
   if (contactIds.length === 0) {
     return;
@@ -1670,7 +1682,7 @@ const writeContactProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withAggregateTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ contact }) => contact.organizationId,
@@ -1680,6 +1692,12 @@ const writeContactProjections = async (
       parents.organizationIds.has(contact.organizationId),
     );
     if (projections.length === 0) {
+      return;
+    }
+    if (
+      publication.type === "repair" &&
+      !(await lockCurrentSearchProjectionRepair(tx, publication.fence))
+    ) {
       return;
     }
     const ids = projections.map(({ contact }) => contact.id);
@@ -1746,6 +1764,7 @@ const writeContactProjections = async (
 const writeWorkspaceProjections = async (
   workspaceIds: readonly SafeId<"workspace">[],
   database: SearchDocumentDatabase,
+  publication: SupplementalProjectionPublication,
 ): Promise<void> => {
   if (workspaceIds.length === 0) {
     return;
@@ -1847,7 +1866,7 @@ const writeWorkspaceProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withAggregateTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ workspace }) => workspace.organizationId,
@@ -1860,6 +1879,12 @@ const writeWorkspaceProjections = async (
         parents.workspaceIds.has(workspace.id),
     );
     if (projections.length === 0) {
+      return;
+    }
+    if (
+      publication.type === "repair" &&
+      !(await lockCurrentSearchProjectionRepair(tx, publication.fence))
+    ) {
       return;
     }
     const ids = projections.map(({ workspace }) => workspace.id);
@@ -1928,7 +1953,18 @@ export const upsertContactSearchDocument = async (
   contactId: SafeId<"contact">,
   database: SearchDocumentDatabase,
 ): Promise<void> => {
-  await writeContactProjections([contactId], database);
+  await writeContactProjections([contactId], database, { type: "direct" });
+};
+
+export const repairContactSearchDocument = async (
+  fence: SearchProjectionRepairFence<"contact">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeContactProjections(
+    [toSafeId<"contact">(fence.sourceId)],
+    database,
+    { fence, type: "repair" },
+  );
 };
 
 export const upsertWorkspaceSearchDocuments = async (
@@ -1940,7 +1976,7 @@ export const upsertWorkspaceSearchDocuments = async (
   // deadlocking.
   const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
   for (const itemBatch of chunkItems(pending, REINDEX_BATCH_SIZE)) {
-    await writeWorkspaceProjections(itemBatch, database);
+    await writeWorkspaceProjections(itemBatch, database, { type: "direct" });
   }
 };
 
@@ -1948,7 +1984,18 @@ export const upsertWorkspaceSearchDocument = async (
   workspaceId: SafeId<"workspace">,
   database: SearchDocumentDatabase,
 ): Promise<void> => {
-  await writeWorkspaceProjections([workspaceId], database);
+  await writeWorkspaceProjections([workspaceId], database, { type: "direct" });
+};
+
+export const repairWorkspaceSearchDocument = async (
+  fence: SearchProjectionRepairFence<"workspace">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeWorkspaceProjections(
+    [toSafeId<"workspace">(fence.sourceId)],
+    database,
+    { fence, type: "repair" },
+  );
 };
 
 type SearchActivityDatabase = {
@@ -2036,6 +2083,7 @@ const rebuildContactPage = async (
   await writeContactProjections(
     page.map(({ id }) => id),
     database,
+    { type: "direct" },
   );
   return {
     last: page.at(-1)?.id ?? after,
@@ -2065,6 +2113,7 @@ const rebuildWorkspacePage = async (
   await writeWorkspaceProjections(
     page.map(({ id }) => id),
     database,
+    { type: "direct" },
   );
   return {
     last: page.at(-1)?.id ?? after,

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
@@ -30,7 +31,13 @@ const ORIGIN = "https://app.stella.test";
 const click = {
   action: "click",
   page: { revision: "revision-1", url: "https://example.com/" },
-  target: { name: "Submit", ref: "e:0:0.1", role: "button" },
+  target: {
+    context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    name: "Submit",
+    ref: "e:0:0.1",
+    role: "button",
+  },
 } satisfies BrowserControlCommand;
 const snapshot = { action: "snapshot" } satisfies BrowserControlCommand;
 

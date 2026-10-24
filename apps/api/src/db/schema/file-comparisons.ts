@@ -24,12 +24,14 @@ export type FileComparisonUploadKind =
 /**
  * `pending`  the presigned URL was issued, the bytes may not be there yet.
  * `ready`    the object exists and matches what the row declared.
+ * `processing` one comparison invocation holds a short, renewable claim.
  * `consumed` the comparison read it; the object is being deleted.
  * `failed`   verification or the security scan refused the bytes.
  */
 export const FILE_COMPARISON_UPLOAD_STATUSES = [
   "pending",
   "ready",
+  "processing",
   "consumed",
   "failed",
 ] as const;
@@ -71,6 +73,10 @@ export const fileComparisonUploads = p.pgTable(
       .text({ enum: FILE_COMPARISON_UPLOAD_STATUSES })
       .notNull()
       .default("pending"),
+    /** Fences the one comparison invocation allowed to consume this input. */
+    claimId: p.uuid("claim_id"),
+    /** A crashed invocation becomes reclaimable without holding a DB lock. */
+    claimExpiresAt: timestamptz("claim_expires_at"),
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
@@ -93,6 +99,10 @@ export const fileComparisonUploads = p.pgTable(
     p
       .index("file_comparison_uploads_org_created_idx")
       .on(table.organizationId, table.createdAt),
+    // Reservation admission counts organization and caller retained capacity.
+    p
+      .index("file_comparison_uploads_org_user_idx")
+      .on(table.organizationId, table.userId),
     // The sweep reads only what has expired, across every organization.
     p.index("file_comparison_uploads_expires_idx").on(table.expiresAt),
     p.check(
@@ -109,6 +119,10 @@ export const fileComparisonUploads = p.pgTable(
     p.check(
       "file_comparison_uploads_sha256_check",
       sql`(${table.kind} = 'input') = (${table.declaredSha256} IS NOT NULL)`,
+    ),
+    p.check(
+      "file_comparison_uploads_claim_check",
+      sql`(${table.status} = 'processing') = (${table.claimId} IS NOT NULL AND ${table.claimExpiresAt} IS NOT NULL)`,
     ),
     ...userOrganizationPolicies(),
   ],

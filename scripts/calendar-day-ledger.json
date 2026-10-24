@@ -125,16 +125,6 @@
     "reason": "Elapsed-time window (lease, staleness or retention cutoff) measured from now; no calendar day is involved, so a late tick only widens the window."
   },
   {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/hosted-usage-webhook-retention.ts::drainWebhookEvents::new Date()",
-    "count": 1,
-    "reason": "Continuation or run budget: schedules the next batch or bounds this run in elapsed time, not a calendar decision."
-  },
-  {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/hosted-usage-webhook-retention.ts::redact::new Date()",
-    "count": 1,
-    "reason": "Elapsed-time window (lease, staleness or retention cutoff) measured from now; no calendar day is involved, so a late tick only widens the window."
-  },
-  {
     "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts::createLegislationExpressionIdBackfill::Temporal.Now.instant()",
     "count": 1,
     "reason": "Injected clock default of a long-running backfill: measures elapsed run time and throttling, not which slot is due."

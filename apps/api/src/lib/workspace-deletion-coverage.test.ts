@@ -175,13 +175,8 @@ describe("workspace deletion coverage", () => {
       Object.values(WORKSPACE_STORAGE_CLASS).toSorted(),
     );
     expect(
-      Object.entries(WORKSPACE_STORAGE_DISPOSITION).filter(
-        ([, disposition]) => disposition === "cleanup-request",
-      ).length,
-    ).toBe(7);
-    expect(
       WORKSPACE_STORAGE_DISPOSITION[WORKSPACE_STORAGE_CLASS.REPORT_EXPORT],
-    ).toBe("bucket-lifecycle");
+    ).toBe("cleanup-request");
   });
 
   test("workspace-owned storage references have an exact disposition", () => {

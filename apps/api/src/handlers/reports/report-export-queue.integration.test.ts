@@ -97,6 +97,7 @@ const actor = {
   exportId,
 };
 
+const buildReportData = reportData.buildReportData;
 const reportDataSpy = spyOn(reportData, "buildReportData");
 const textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
 const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
@@ -152,7 +153,10 @@ afterEach(async () => {
   await testDb
     .insert(member)
     .values(originalOrganizationMember)
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: member.id,
+      set: { role: originalOrganizationMember.role },
+    });
   await testDb
     .insert(workspaceMembers)
     .values(originalMatterMember)
@@ -200,6 +204,77 @@ describe("report export run", () => {
   test("a run stops when its requester has left the organization", async () => {
     await testDb.delete(member).where(eq(member.id, ids.memberA1org));
     await expectStoppedBeforeReading();
+  });
+
+  test("a run stops when its requester loses entity-create permission", async () => {
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
+
+  test("a workspace export rechecks create permission at the artifact write", async () => {
+    await testDb
+      .update(reportExports)
+      .set({ aiNarrative: false, mode: "workspace" })
+      .where(eq(reportExports.id, exportId));
+    reportDataSpy.mockImplementationOnce(async (options) => {
+      const result = await buildReportData(options);
+      await testDb
+        .update(member)
+        .set({ role: "external" })
+        .where(eq(member.id, ids.memberA1org));
+      return result;
+    });
+
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
+
+    expect(await readExport()).toMatchObject({
+      status: "failed",
+      error: "The report source is no longer available.",
+      resultEntityId: null,
+      resultS3Key: null,
+    });
+    expect(reportDataSpy).toHaveBeenCalledTimes(1);
+    expect(objectWrites()).toEqual([]);
+  });
+
+  test("a workspace export refuses role loss after its object write starts", async () => {
+    await testDb
+      .update(reportExports)
+      .set({ aiNarrative: false, mode: "workspace" })
+      .where(eq(reportExports.id, exportId));
+    const heldWrite = fakeS3.holdNext({
+      method: "PUT",
+      keyIncludes: `${ids.orgA}/${ids.wsA1}/`,
+    });
+
+    const running = processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
+    await heldWrite.reached;
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    heldWrite.release();
+    await running;
+
+    expect(await readExport()).toMatchObject({
+      status: "failed",
+      resultEntityId: null,
+      resultS3Key: null,
+    });
+    expect(heldWrite.isReached).toBe(true);
   });
 
   test("a run completes while its requester keeps access", async () => {

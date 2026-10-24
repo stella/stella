@@ -308,7 +308,7 @@ describe("public corpus admission policy", () => {
       mounted,
       classified: Object.keys(PUBLIC_CORPUS_ROUTE_POLICY),
     });
-    for (const [route, routeClass] of Object.entries(
+    for (const [route, routePolicy] of Object.entries(
       PUBLIC_CORPUS_ROUTE_POLICY,
     )) {
       const separator = route.indexOf(" ");
@@ -322,6 +322,10 @@ describe("public corpus admission policy", () => {
         request,
         getPublicReadStatementTimeoutMs,
       );
+      const routeClass =
+        routePolicy.type === "static"
+          ? routePolicy.class
+          : routePolicy.defaultClass;
       expect(budget, route).toBe(PUBLIC_READ_STATEMENT_TIMEOUT_MS[routeClass]);
       expect(budget, route).toBeGreaterThan(0);
     }
@@ -501,7 +505,7 @@ describe("public corpus admission policy", () => {
   });
 
   test("every mounted route resolves with query strings, trailing slashes and GET HEAD parity", () => {
-    for (const [route, admissionClass] of Object.entries(
+    for (const [route, admissionPolicy] of Object.entries(
       PUBLIC_CORPUS_ROUTE_POLICY,
     )) {
       const [method, path] = route.split(" ");
@@ -509,6 +513,10 @@ describe("public corpus admission policy", () => {
         panic("Invalid policy route");
       }
       const concretePath = path.replace(/:[^/]+/gu, "record-id");
+      const admissionClass =
+        admissionPolicy.type === "static"
+          ? admissionPolicy.class
+          : admissionPolicy.defaultClass;
       for (const suffix of ["", "/", "?country=cz", "/?country=cz"]) {
         const url = `https://example.test${STELLA_API_VERSION_PREFIX}${concretePath}${suffix}`;
         expect(resolvePublicCorpusPolicy({ method, url })).toMatchObject({
@@ -524,6 +532,25 @@ describe("public corpus admission policy", () => {
     }
   });
 
+  test("query-bearing statute lists use search admission", () => {
+    for (const method of ["GET", "HEAD"] as const) {
+      for (const query of ["constitution", " constitution ", "&query=law"]) {
+        const url = `https://example.test${STELLA_API_VERSION_PREFIX}/law/statutes?query=${query}`;
+        expect(resolvePublicCorpusPolicy({ method, url })).toMatchObject({
+          route: "GET /law/statutes",
+          class: "search",
+        });
+      }
+      for (const query of ["", " "]) {
+        const url = `https://example.test${STELLA_API_VERSION_PREFIX}/law/statutes?query=${query}`;
+        expect(resolvePublicCorpusPolicy({ method, url })).toMatchObject({
+          route: "GET /law/statutes",
+          class: "browse",
+        });
+      }
+    }
+  });
+
   test("literal routes take precedence over identifier paths", () => {
     for (const route of [
       "GET /law/statutes/facets",
@@ -534,12 +561,16 @@ describe("public corpus admission policy", () => {
       "GET /case/decisions/latest",
     ] as const) {
       const path = route.slice(4);
+      const policy = PUBLIC_CORPUS_ROUTE_POLICY[route];
       expect(
         resolvePublicCorpusPolicy({
           method: "GET",
           url: `https://example.test${STELLA_API_VERSION_PREFIX}${path}`,
         }),
-      ).toMatchObject({ route, class: PUBLIC_CORPUS_ROUTE_POLICY[route] });
+      ).toMatchObject({
+        route,
+        class: policy.class,
+      });
     }
   });
 

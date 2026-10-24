@@ -34,6 +34,10 @@ import type { ReaderAnnotation } from "@/components/legal-reader/annotations/rea
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import {
+  isCurrentStorageOwner,
+  storageOwner,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -279,12 +283,16 @@ export const useReaderAnnotations = (
     if (store.items.length === 0) {
       return;
     }
+    const migrationOwner = storageOwner();
     detached(
       (async () => {
         const results = await mapWithConcurrency({
           items: store.items,
           limit: GUEST_ANNOTATION_MIGRATION_CONCURRENCY,
           operation: async (item) => {
+            if (!isCurrentStorageOwner(migrationOwner)) {
+              return Result.ok(undefined);
+            }
             const migrated = await Result.tryPromise(async () => {
               const response = await api.reader.annotations.post({
                 ...item.input,
@@ -301,6 +309,9 @@ export const useReaderAnnotations = (
               });
               return migrated;
             }
+            if (!isCurrentStorageOwner(migrationOwner)) {
+              return Result.ok(undefined);
+            }
             const removed = removeGuestAnnotation(storage, item.requestId);
             if (Result.isError(removed)) {
               getAnalytics().captureError(removed.error, {
@@ -312,6 +323,9 @@ export const useReaderAnnotations = (
             return Result.ok(undefined);
           },
         });
+        if (!isCurrentStorageOwner(migrationOwner)) {
+          return;
+        }
         setStore(readGuestAnnotationStore(storage));
         await queryClient.invalidateQueries({
           queryKey: readerAnnotationKeys.all,

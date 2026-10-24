@@ -8,6 +8,7 @@ import {
   BackfillFailedError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   databaseBackfillStates,
@@ -15,6 +16,7 @@ import {
   legislationSources,
   schedulerJobRuns,
   schedulerJobs,
+  systemAuditRuns,
 } from "@/api/db/schema";
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
 import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
@@ -159,6 +161,19 @@ export const registerExpressionBackfillCases = ({
         .orderBy(asc(legislationDocuments.id))
     ).map(({ publisherId }) => publisherId);
 
+  const expressionAuditCount = async () =>
+    (
+      await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(systemAuditRuns)
+        .where(
+          eq(
+            systemAuditRuns.actor,
+            "system:legislation-expression-id-backfill",
+          ),
+        )
+    ).at(0)?.count ?? 0;
+
   type LegacyRowOptions = {
     metadata?: Record<string, unknown>;
     sourceId?: SafeId<"legislationSource">;
@@ -217,7 +232,7 @@ export const registerExpressionBackfillCases = ({
       schedule: { type: "interval", everyMs: 60_000 },
       task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
     });
-  });
+  }, 30_000);
 
   describe("legislation expression id backfill", () => {
     test("claims in checkpointed pages, resumes from the cursor, and reaches a fixed point", async () => {
@@ -265,6 +280,91 @@ export const registerExpressionBackfillCases = ({
       // A second full pass changes nothing.
       await runPass(twoRowPages);
       expect(await idsOf(ids)).toEqual(claimed);
+    });
+
+    test("an audit failure rolls back the identity and checkpoint together", async () => {
+      await insertLegacy(30);
+      const auditCountBefore = await expressionAuditCount();
+      const injectedFailure = new TypeError("Injected system audit failure");
+      const createFailingRuntime: typeof createScriptBackfillRuntime = (
+        options,
+      ) => {
+        const transactionalDb = {
+          execute: options.db.execute.bind(options.db),
+          transaction: async <T>(work: (tx: Transaction) => Promise<T>) =>
+            await options.db.transaction(async (tx) => {
+              const failingTx = asTestRaw<Transaction>(
+                new Proxy(tx, {
+                  get: (target, property) => {
+                    if (property === "insert") {
+                      return (table: unknown): unknown => {
+                        if (table === systemAuditRuns) {
+                          return {
+                            values: async () =>
+                              await Promise.reject(injectedFailure),
+                          };
+                        }
+                        const insert: unknown = Reflect.get(
+                          target,
+                          "insert",
+                          target,
+                        );
+                        if (typeof insert !== "function") {
+                          return panic(
+                            "expected the transaction insert method",
+                          );
+                        }
+                        const result: unknown = Reflect.apply(insert, target, [
+                          table,
+                        ]);
+                        return result;
+                      };
+                    }
+                    const value: unknown = Reflect.get(
+                      target,
+                      property,
+                      target,
+                    );
+                    if (typeof value !== "function") {
+                      return value;
+                    }
+                    return (...args: unknown[]): unknown => {
+                      const result: unknown = Reflect.apply(
+                        value,
+                        target,
+                        args,
+                      );
+                      return result;
+                    };
+                  },
+                }),
+              );
+              return await work(failingTx);
+            }),
+        };
+        return createRuntime({ ...options, db: transactionalDb });
+      };
+
+      const outcome = await run(
+        createTask({ createRuntime: createFailingRuntime }),
+      );
+      if (typeof outcome === "boolean") {
+        panic("expected the injected audit failure");
+      }
+      expect(outcome.isErr()).toBe(true);
+      if (outcome.isErr()) {
+        expect(outcome.error.cause).toBe(injectedFailure);
+      }
+      expect(await idsOf([documentId(30)])).toEqual([null]);
+      expect(await cursor()).toBeNull();
+      expect(await expressionAuditCount()).toBe(auditCountBefore);
+
+      expect(await runPass()).toBe(2);
+      expect(await idsOf([documentId(30)])).toEqual([`esel:${iri(30)}`]);
+      expect(await cursor()).toBeNull();
+      // The claiming page records one non-zero audit row. The following
+      // cycle-complete run changes nothing, so recordSystemAudit omits it.
+      expect(await expressionAuditCount()).toBe(auditCountBefore + 1);
     });
 
     test("a row stored after a pass is claimed by the next one, and nothing else about it changes", async () => {

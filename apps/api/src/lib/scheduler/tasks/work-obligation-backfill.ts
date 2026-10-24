@@ -1,19 +1,24 @@
 import { panic } from "better-result";
 import { and, eq, gt, inArray } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
 import { isUuid } from "@stll/uuid-codec";
 
+import type { Transaction } from "@/api/db/root";
 import {
   entities,
   schedulerJobs,
   taskAssignees,
   workObligationEvents,
   workObligations,
-  workspaceMembers,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateEntityBatch,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   brandPersistedEntityId,
@@ -21,6 +26,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { lockTaskAssignmentMembers } from "@/api/lib/tasks/assignment-membership";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 import {
   legacyWorkObligationCreatedEvents,
@@ -31,6 +37,63 @@ export const BACKFILL_WORK_OBLIGATIONS_TASK =
   "workObligations.backfillLegacyTasks" as const;
 
 const BACKFILL_LIMIT = 1000;
+
+type CandidateTaskIdentity = {
+  id: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const lockCandidateTaskAssignees = async ({
+  tx,
+  tasks,
+}: {
+  tx: Transaction;
+  tasks: readonly CandidateTaskIdentity[];
+}) => {
+  const assignments = await tx
+    .select({
+      entityId: taskAssignees.entityId,
+      userId: taskAssignees.userId,
+      workspaceId: taskAssignees.workspaceId,
+    })
+    .from(taskAssignees)
+    .where(
+      and(
+        inArray(
+          taskAssignees.entityId,
+          tasks.map(({ id }) => id),
+        ),
+        inArray(
+          taskAssignees.workspaceId,
+          tasks.map((task) => task.workspaceId),
+        ),
+      ),
+    );
+  const userIdsByWorkspace = new Map<SafeId<"workspace">, string[]>();
+  for (const assignment of assignments) {
+    const userIds = userIdsByWorkspace.get(assignment.workspaceId);
+    if (userIds === undefined) {
+      userIdsByWorkspace.set(assignment.workspaceId, [assignment.userId]);
+      continue;
+    }
+    userIds.push(assignment.userId);
+  }
+  const liveUsersByWorkspace = new Map<
+    SafeId<"workspace">,
+    ReadonlySet<string>
+  >();
+  for (const [workspaceId, userIds] of [...userIdsByWorkspace].toSorted(
+    ([left], [right]) => compareCodeUnit(left, right),
+  )) {
+    liveUsersByWorkspace.set(
+      workspaceId,
+      await lockTaskAssignmentMembers({ tx, workspaceId, userIds }),
+    );
+  }
+  return assignments.filter((assignment) =>
+    liveUsersByWorkspace.get(assignment.workspaceId)?.has(assignment.userId),
+  );
+};
 
 const backfillCursor = (
   payload: Record<string, unknown> | null,
@@ -65,7 +128,7 @@ export const backfillWorkObligations: SchedulerTask = async ({
   const leaseToken =
     job.lockedBy ??
     panic("Work-obligation backfill requires a scheduler lease");
-  const outcome = await db.transaction(async (tx) => {
+  const outcome = await withAggregateTransaction(db, async (tx) => {
     const entityPage = await tx
       .select({
         id: entities.id,
@@ -108,7 +171,7 @@ export const backfillWorkObligations: SchedulerTask = async ({
       return { status: "cycle_complete" as const, inserted: 0, scanned: 0 };
     }
 
-    const tasks = entityPage.filter(
+    const candidateTasks = entityPage.filter(
       ({ kind, listItemType, obligationEntityId }) =>
         kind === "task" &&
         obligationEntityId === null &&
@@ -116,71 +179,102 @@ export const backfillWorkObligations: SchedulerTask = async ({
     );
     await lockWorkspacesForEntityCap(
       tx,
-      tasks.map((task) => brandPersistedWorkspaceId(task.workspaceId)),
+      candidateTasks.map((task) => brandPersistedWorkspaceId(task.workspaceId)),
     );
 
     let insertedCount = 0;
-    if (tasks.length > 0) {
-      const assignments = await tx
+    if (candidateTasks.length > 0) {
+      const assignments = await lockCandidateTaskAssignees({
+        tx,
+        tasks: candidateTasks.map((task) => ({
+          id: task.id,
+          workspaceId: brandPersistedWorkspaceId(task.workspaceId),
+        })),
+      });
+      await withAggregateEntityBatch({
+        tx,
+        ids: candidateTasks.map((task) => ({
+          id: task.id,
+          workspaceId: brandPersistedWorkspaceId(task.workspaceId),
+        })),
+        mode: "update",
+        limit: BACKFILL_LIMIT,
+      });
+      const currentTasks = await tx
         .select({
-          entityId: taskAssignees.entityId,
-          userId: taskAssignees.userId,
+          id: entities.id,
+          workspaceId: entities.workspaceId,
+          kind: entities.kind,
+          listItemType: entities.listItemType,
+          agendaKind: entities.agendaKind,
+          agendaSource: entities.agendaSource,
+          status: entities.status,
+          dueDate: entities.dueDate,
+          createdBy: entities.createdBy,
+          createdAt: entities.createdAt,
+          updatedAt: entities.updatedAt,
+          obligationEntityId: workObligations.entityId,
         })
-        .from(taskAssignees)
-        .innerJoin(
-          workspaceMembers,
+        .from(entities)
+        .leftJoin(
+          workObligations,
           and(
-            eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
-            eq(workspaceMembers.userId, taskAssignees.userId),
+            eq(workObligations.entityId, entities.id),
+            eq(workObligations.workspaceId, entities.workspaceId),
           ),
         )
         .where(
-          and(
-            inArray(
-              taskAssignees.entityId,
-              tasks.map(({ id }) => id),
-            ),
-            inArray(
-              taskAssignees.workspaceId,
-              tasks.map((task) => brandPersistedWorkspaceId(task.workspaceId)),
-            ),
+          inArray(
+            entities.id,
+            candidateTasks.map(({ id }) => id),
           ),
-        )
-        .for("update", { of: workspaceMembers });
-      const assigneesByEntity = new Map<SafeId<"entity">, SafeId<"user">[]>();
-      for (const assignment of assignments) {
-        const assignees = assigneesByEntity.get(assignment.entityId);
-        if (assignees) {
-          assignees.push(brandPersistedUserId(assignment.userId));
-        } else {
-          assigneesByEntity.set(assignment.entityId, [
-            brandPersistedUserId(assignment.userId),
-          ]);
+        );
+      const tasks = currentTasks.filter(
+        ({ kind, listItemType, obligationEntityId }) =>
+          kind === "task" &&
+          obligationEntityId === null &&
+          isWorkObligationEligible(listItemType),
+      );
+      if (tasks.length > 0) {
+        const taskIds = new Set(tasks.map(({ id }) => id));
+        const assigneesByEntity = new Map<SafeId<"entity">, SafeId<"user">[]>();
+        for (const assignment of assignments) {
+          if (!taskIds.has(assignment.entityId)) {
+            continue;
+          }
+          const assignees = assigneesByEntity.get(assignment.entityId);
+          if (assignees) {
+            assignees.push(brandPersistedUserId(assignment.userId));
+          } else {
+            assigneesByEntity.set(assignment.entityId, [
+              brandPersistedUserId(assignment.userId),
+            ]);
+          }
         }
-      }
 
-      const inserted = await tx
-        .insert(workObligations)
-        .values(
-          tasks.map((task) =>
-            legacyWorkObligationValues({
-              ...task,
-              workspaceId: brandPersistedWorkspaceId(task.workspaceId),
-              assigneeUserIds: arrayOrEmpty(assigneesByEntity.get(task.id)),
-            }),
-          ),
-        )
-        .onConflictDoNothing({ target: workObligations.entityId })
-        .returning({
-          entityId: workObligations.entityId,
-          workspaceId: workObligations.workspaceId,
-          createdByUserId: workObligations.createdByUserId,
-        });
-      insertedCount = inserted.length;
-      if (inserted.length > 0) {
-        await tx
-          .insert(workObligationEvents)
-          .values(legacyWorkObligationCreatedEvents(inserted, new Date()));
+        const inserted = await tx
+          .insert(workObligations)
+          .values(
+            tasks.map((task) =>
+              legacyWorkObligationValues({
+                ...task,
+                workspaceId: brandPersistedWorkspaceId(task.workspaceId),
+                assigneeUserIds: arrayOrEmpty(assigneesByEntity.get(task.id)),
+              }),
+            ),
+          )
+          .onConflictDoNothing({ target: workObligations.entityId })
+          .returning({
+            entityId: workObligations.entityId,
+            workspaceId: workObligations.workspaceId,
+            createdByUserId: workObligations.createdByUserId,
+          });
+        insertedCount = inserted.length;
+        if (inserted.length > 0) {
+          await tx
+            .insert(workObligationEvents)
+            .values(legacyWorkObligationCreatedEvents(inserted, new Date()));
+        }
       }
     }
 

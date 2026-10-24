@@ -1,3 +1,4 @@
+// parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
 // parser-output-unchanged: excluding the native timeout option only narrows the request type.
@@ -36,6 +37,7 @@ import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
+import { limitPublisherResponse } from "./publisher-response-limit";
 import { publisherTarget } from "./publisher-target";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
@@ -85,10 +87,10 @@ export const fetchPublisher = async (
   url: string | URL,
   { retryPolicy, ...init }: PublisherFetchInit,
 ): Promise<Response> => {
-  if (retryPolicy === "publisher-backoff") {
-    return await retryPublisherRequest(url, init);
-  }
-  const response = await fetchPublisherRequest(url, init);
+  const response =
+    retryPolicy === "publisher-backoff"
+      ? await retryPublisherRequest(url, init)
+      : await fetchPublisherRequest(url, init);
   if (isStopStatus(init.refusalMode, response.status)) {
     const retryAfter = response.headers.get("Retry-After");
     await response.body?.cancel();
@@ -100,7 +102,7 @@ export const fetchPublisher = async (
       ...(retryAfter === null ? {} : { retryAfter }),
     });
   }
-  return response;
+  return limitPublisherResponse(response);
 };
 
 type PublisherRateLimitRefusalErrorOptions = {

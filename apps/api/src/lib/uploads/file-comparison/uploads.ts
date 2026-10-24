@@ -11,6 +11,25 @@ import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 export const FILE_COMPARISON_INPUT_TTL_SECONDS = 60 * 60;
 
 /**
+ * One claim spans two bounded reads, scans, comparison and delivery. Each
+ * external stage has its own shorter timeout; five minutes leaves room for
+ * scheduling delay while still making a crashed invocation retryable.
+ */
+export const FILE_COMPARISON_CLAIM_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Reservations keep counting until object-before-row cleanup succeeds. The
+ * row limit bounds tiny-file churn, while the byte limit bounds signed object
+ * capacity. The organization-scoped lock in the reservation transaction makes
+ * both the caller and organization limits safe under concurrent prepares.
+ */
+export const FILE_COMPARISON_OUTSTANDING_ROW_LIMIT = 100;
+export const FILE_COMPARISON_OUTSTANDING_BYTE_LIMIT = 1024 * 1024 * 1024;
+export const FILE_COMPARISON_ORGANIZATION_OUTSTANDING_ROW_LIMIT = 500;
+export const FILE_COMPARISON_ORGANIZATION_OUTSTANDING_BYTE_LIMIT =
+  5 * 1024 * 1024 * 1024;
+
+/**
  * How long the redline stays downloadable. It is the download URL's own
  * lifetime: once the link is dead the object is unreachable, so keeping the
  * object would keep bytes nothing can name.

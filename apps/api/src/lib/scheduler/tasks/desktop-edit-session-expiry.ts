@@ -1,17 +1,27 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 
-import { desktopEditSessions, workspaces } from "@/api/db/schema";
+import {
+  bufferObjectCleanupIntents,
+  desktopEditSessions,
+  workspaces,
+} from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   buildExpiryAuditEvents,
   selectTransitionedExpirableSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
+import { buildDesktopEditCheckpointCleanupIntents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-cleanup";
 import {
+  type DesktopEditSessionExpiryNotificationPublisher,
   type ExpiredDesktopEditSessionNotification,
   publishDesktopEditSessionExpiryNotificationsWithRetry,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
-import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import type {
+  SchedulerDb,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
 import {
   publishSessionEvent,
   publishWorkspaceEvent,
@@ -23,6 +33,12 @@ export const EXPIRE_DESKTOP_EDIT_SESSIONS_TASK =
 /** Sweep in bounded batches so each transaction stays small. */
 const EXPIRE_SWEEP_BATCH_SIZE = 200;
 
+type DesktopEditSessionExpiryDependencies = {
+  publisher?: DesktopEditSessionExpiryNotificationPublisher;
+};
+
+const defaultPublisher = { publishSessionEvent, publishWorkspaceEvent };
+
 /**
  * Transition abandoned desktop edit sessions whose liveness TTL has lapsed
  * from "open" to "expired". Live desktop event streams refresh the TTL, and
@@ -31,11 +47,10 @@ const EXPIRE_SWEEP_BATCH_SIZE = 200;
  * something closes it: it keeps holding the partial unique index that blocks
  * re-opening the same file. This sweep is that "something".
  */
-export const expireDesktopEditSessions: SchedulerTask = async ({
-  db,
-  logger,
-  signal,
-}) => {
+export const expireDesktopEditSessions = async (
+  { db, logger, signal }: SchedulerTaskContext,
+  { publisher = defaultPublisher }: DesktopEditSessionExpiryDependencies = {},
+): Promise<void> => {
   let expired = 0;
 
   while (!signal.aborted) {
@@ -56,7 +71,11 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
       .limit(EXPIRE_SWEEP_BATCH_SIZE);
 
     // db-await-in-loop: page loop: one batched publish per page of sessions
-    await publishAndMarkExpiryNotifications(db, unnotifiedExpiredSessions);
+    await publishAndMarkExpiryNotifications(
+      db,
+      unnotifiedExpiredSessions,
+      publisher,
+    );
 
     if (unnotifiedExpiredSessions.length === EXPIRE_SWEEP_BATCH_SIZE) {
       continue;
@@ -68,6 +87,9 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     // db-await-in-loop: keyset page per iteration; the page is the batch
     const batch = await db
       .select({
+        checkpointFileId: desktopEditSessions.checkpointFileId,
+        checkpointSizeBytes: desktopEditSessions.checkpointSizeBytes,
+        fileType: desktopEditSessions.fileType,
         id: desktopEditSessions.id,
         workspaceId: desktopEditSessions.workspaceId,
         createdBy: desktopEditSessions.createdBy,
@@ -91,10 +113,14 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     const batchIds = batch.map((session) => session.id);
 
     // db-await-in-loop: one transition per swept page
-    const expiredSessions = await db.transaction(async (tx) => {
+    const expiredSessions = await withAggregateTransaction(db, async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)
         .set({
+          checkpointScanWarnings: null,
+          checkpointSha256Hex: null,
+          checkpointSizeBytes: null,
+          checkpointUpdatedAt: null,
           status: "expired",
           closedAt: now,
         })
@@ -112,6 +138,15 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
         .returning({ id: desktopEditSessions.id });
 
       const expiredIds = new Set(transitioned.map((row) => row.id));
+      const cleanupIntents = buildDesktopEditCheckpointCleanupIntents({
+        now,
+        sessions: batch.filter(({ id }) => expiredIds.has(id)),
+      });
+      if (cleanupIntents.length > 0) {
+        // audit: skip; exact-key cleanup is atomically owned by the audited
+        // open-to-expired transition and retried by the cleanup scheduler.
+        await tx.insert(bufferObjectCleanupIntents).values(cleanupIntents);
+      }
       const auditEvents = buildExpiryAuditEvents(batch, expiredIds);
       const auditEventsByActor = new Map<
         string,
@@ -159,7 +194,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
     expired += expiredSessions.length;
     // db-await-in-loop: page loop: one batched publish per page of sessions
-    await publishAndMarkExpiryNotifications(db, expiredSessions);
+    await publishAndMarkExpiryNotifications(db, expiredSessions, publisher);
 
     if (batch.length < EXPIRE_SWEEP_BATCH_SIZE) {
       break;
@@ -178,13 +213,14 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 const publishAndMarkExpiryNotifications = async (
   db: SchedulerDb,
   sessions: ExpiredDesktopEditSessionNotification[],
+  publisher: DesktopEditSessionExpiryNotificationPublisher,
 ): Promise<void> => {
   if (sessions.length === 0) {
     return;
   }
 
   await publishDesktopEditSessionExpiryNotificationsWithRetry({
-    publisher: { publishSessionEvent, publishWorkspaceEvent },
+    publisher,
     sessions,
   });
 

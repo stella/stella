@@ -45,7 +45,10 @@ const heartbeatFolioCollabRoom = createSafeTokenHandler(
       );
     }
 
-    return Result.ok({ activeAt: heartbeat.activeAt.toISOString() });
+    return Result.ok({
+      activeAt: heartbeat.activeAt.toISOString(),
+      canEdit: room.canEdit,
+    });
   },
 );
 

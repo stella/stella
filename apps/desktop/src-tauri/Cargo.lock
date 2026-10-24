@@ -4784,6 +4784,7 @@ dependencies = [
  "icns",
  "image",
  "keyring-core",
+ "minisign-verify",
  "notify",
  "objc2",
  "objc2-app-kit",

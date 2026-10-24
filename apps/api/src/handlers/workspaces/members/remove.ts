@@ -25,6 +25,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockChatOwnerStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -232,6 +233,20 @@ export const removeWorkspaceMemberHandler = async function* ({
   // member rows so concurrent removals serialize.
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      const authorityRows = await tx
+        .select({ organizationId: workspaces.organizationId })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1);
+      const authority = authorityRows.at(0);
+      if (!authority) {
+        throw new HandlerError({ status: 404, message: "Member not found" });
+      }
+      await lockChatOwnerStoredContentTransitionOnTx(tx, {
+        organizationId: authority.organizationId,
+        userId,
+      });
+
       // Timer starts take this lock before inserting. Hold it through the
       // active-timer check and member deletion so removal cannot strand a
       // timer that starts concurrently.

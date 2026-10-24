@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 11,
+  "reason": "Lifecycle and data-integrity changes add fail-closed typed boundary errors and panic invariant checks for external response identity, provider-visible structured data, account and session lifecycle, rate membership writes, and conversion inputs; these framework boundary modules require thrown errors."
+}

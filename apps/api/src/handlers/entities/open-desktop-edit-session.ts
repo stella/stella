@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -9,6 +9,7 @@ import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  bufferObjectCleanupIntents,
   desktopEditSessions,
   entityVersions,
   folioCollabRooms,
@@ -21,6 +22,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import {
   expiredOwnDesktopEditSessionTargetPredicates,
   liveDesktopEditSessionPredicates,
@@ -43,6 +45,7 @@ import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-ro
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import type { SignedDownloadSource } from "@/api/lib/s3-presign";
+import { buildDesktopEditCheckpointCleanupIntents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-cleanup";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 const openDesktopEditSessionBodySchema = t.Object({
@@ -123,8 +126,7 @@ const readExistingOpenDesktopEditSession = async ({
         }),
       ),
     )
-    .limit(1)
-    .for("update");
+    .limit(1);
 
   return existingSessions.at(0) ?? null;
 };
@@ -132,6 +134,7 @@ const readExistingOpenDesktopEditSession = async ({
 const expireStaleOwnDesktopEditSessions = async ({
   entityId,
   now,
+  organizationId,
   propertyId,
   recordAuditEvent,
   tx,
@@ -140,6 +143,7 @@ const expireStaleOwnDesktopEditSessions = async ({
 }: {
   entityId: SafeId<"entity">;
   now: Date;
+  organizationId: SafeId<"organization">;
   propertyId: SafeId<"property">;
   recordAuditEvent: AuditRecorder;
   tx: Transaction;
@@ -147,10 +151,43 @@ const expireStaleOwnDesktopEditSessions = async ({
   workspaceId: SafeId<"workspace">;
 }) => {
   const expiredSessions = await tx
-    .update(desktopEditSessions)
-    .set({ status: "expired", closedAt: now })
+    .select({
+      checkpointFileId: desktopEditSessions.checkpointFileId,
+      checkpointSizeBytes: desktopEditSessions.checkpointSizeBytes,
+      fileType: desktopEditSessions.fileType,
+      id: desktopEditSessions.id,
+    })
+    .from(desktopEditSessions)
     .where(
       and(
+        ...expiredOwnDesktopEditSessionTargetPredicates({
+          entityId,
+          now,
+          propertyId,
+          userId,
+          workspaceId,
+        }),
+      ),
+    );
+
+  if (expiredSessions.length === 0) {
+    return;
+  }
+
+  const expiredSessionIds = expiredSessions.map(({ id }) => id);
+  const transitioned = await tx
+    .update(desktopEditSessions)
+    .set({
+      checkpointScanWarnings: null,
+      checkpointSha256Hex: null,
+      checkpointSizeBytes: null,
+      checkpointUpdatedAt: null,
+      status: "expired",
+      closedAt: now,
+    })
+    .where(
+      and(
+        inArray(desktopEditSessions.id, expiredSessionIds),
         ...expiredOwnDesktopEditSessionTargetPredicates({
           entityId,
           now,
@@ -162,13 +199,31 @@ const expireStaleOwnDesktopEditSessions = async ({
     )
     .returning({ id: desktopEditSessions.id });
 
-  if (expiredSessions.length === 0) {
+  const transitionedIds = new Set(transitioned.map(({ id }) => id));
+  const transitionedSessions = expiredSessions.filter(({ id }) =>
+    transitionedIds.has(id),
+  );
+  if (transitionedSessions.length === 0) {
     return;
+  }
+
+  const cleanupIntents = buildDesktopEditCheckpointCleanupIntents({
+    now,
+    sessions: transitionedSessions.map((session) => ({
+      ...session,
+      organizationId,
+      workspaceId,
+    })),
+  });
+  if (cleanupIntents.length > 0) {
+    // audit: skip; exact-key cleanup is atomically owned by the audited
+    // open-to-expired transition and retried by the cleanup scheduler.
+    await tx.insert(bufferObjectCleanupIntents).values(cleanupIntents);
   }
 
   await recordAuditEvent(
     tx,
-    expiredSessions.map((session) => ({
+    transitionedSessions.map((session) => ({
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
       resourceId: session.id,
@@ -200,8 +255,7 @@ const hasActiveFolioCollabRoom = async ({
         sql`${folioCollabRooms.lastActivityAt} > now() - (${FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS} * interval '1 millisecond')`,
       ),
     )
-    .limit(1)
-    .for("update");
+    .limit(1);
 
   return rooms.at(0) !== undefined;
 };
@@ -358,7 +412,7 @@ export const openDesktopEditSessionHandler = async function* ({
   // checkpoint. Uses SELECT + UPDATE-by-ID to avoid updating multiple
   // sessions if duplicates exist.
   if (force) {
-    yield* Result.await(
+    const takenOverSessionId = yield* Result.await(
       safeDb(async (tx) => {
         await lockDesktopEditTarget({
           entityId,
@@ -367,6 +421,7 @@ export const openDesktopEditSessionHandler = async function* ({
           workspaceId,
         });
 
+        const takeoverDecisionAt = new Date();
         const existing = await tx
           .select({
             id: desktopEditSessions.id,
@@ -378,37 +433,53 @@ export const openDesktopEditSessionHandler = async function* ({
               eq(desktopEditSessions.entityId, entityId),
               eq(desktopEditSessions.propertyId, propertyId),
               eq(desktopEditSessions.workspaceId, workspaceId),
-              ...liveDesktopEditSessionPredicates(new Date()),
+              ...liveDesktopEditSessionPredicates(takeoverDecisionAt),
             ),
           )
           .orderBy(desktopEditSessions.createdAt)
           .limit(1);
 
         const target = existing.at(0);
-        if (target) {
-          await tx
-            .update(desktopEditSessions)
-            .set({
-              createdBy: userId,
-              sessionTokenHash,
-              tokenExpiresAt: computeTokenExpiresAt(),
-              takeoverRequestedBy: null,
-              takeoverRequestedAt: null,
-            })
-            .where(eq(desktopEditSessions.id, target.id));
-
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-            resourceId: target.id,
-            changes: {
-              createdBy: { old: target.createdBy, new: userId },
-            },
-            metadata: { reason: "force_takeover" },
-          });
+        if (!target) {
+          return null;
         }
+
+        const updated = await tx
+          .update(desktopEditSessions)
+          .set({
+            createdBy: userId,
+            sessionTokenHash,
+            tokenExpiresAt: computeTokenExpiresAt(),
+            takeoverRequestedBy: null,
+            takeoverRequestedAt: null,
+          })
+          .where(
+            and(
+              eq(desktopEditSessions.id, target.id),
+              ...liveDesktopEditSessionPredicates(takeoverDecisionAt),
+            ),
+          )
+          .returning({ id: desktopEditSessions.id });
+        if (!updated.at(0)) {
+          return null;
+        }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+          resourceId: target.id,
+          changes: {
+            createdBy: { old: target.createdBy, new: userId },
+          },
+          metadata: { reason: "force_takeover" },
+        });
+
+        return target.id;
       }),
     );
+    if (takenOverSessionId !== null) {
+      closeSessionConnections(takenOverSessionId);
+    }
   }
 
   type RunOpenSessionResult = Result<
@@ -435,6 +506,7 @@ export const openDesktopEditSessionHandler = async function* ({
       await expireStaleOwnDesktopEditSessions({
         entityId,
         now,
+        organizationId,
         propertyId,
         recordAuditEvent,
         tx,

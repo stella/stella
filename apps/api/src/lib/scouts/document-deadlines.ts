@@ -7,6 +7,7 @@ import {
   SIGNAL_KIND,
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
+import type { PermissionInput } from "@stll/permissions";
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -23,15 +24,27 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
 import {
   isCurrentDeadlineSource,
-  loadCurrentDeadlineSource,
+  loadCurrentDeadlineSourceReader,
 } from "@/api/lib/document-content-provenance";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import {
+  createRootMembershipScopedDb,
+  createRootSafeDb,
+  createRootScopedDb,
+} from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
+import {
+  DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
+  deadlineScoutDue,
+} from "@/api/lib/scouts/document-deadline-skip";
 import {
   capText,
   DEADLINE_SYSTEM_PROMPT,
@@ -53,6 +66,9 @@ const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // Ten bounded excerpts plus reasoning share the provider's output ceiling.
 // A 2,000-token allowance truncated valid extractions before JSON could close.
 const DEADLINE_MAX_OUTPUT_TOKENS = 8192;
+const DEADLINE_SCOUT_PERMISSIONS = {
+  workspace: ["read"],
+} as const satisfies PermissionInput;
 const DEADLINE_SCOUT_ERROR_CODE = {
   NO_ACTOR: "no_actor",
   OBSERVATION_FAILED: "observation_failed",
@@ -79,6 +95,133 @@ export type RunDocumentDeadlineScoutArgs = {
 };
 
 type ClaimedRun = typeof documentProcessingRuns.$inferSelect;
+type DeadlineScoutActor = {
+  inputDb: ReturnType<typeof createRootMembershipScopedDb>;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+  writeDb: ReturnType<typeof createRootScopedDb>;
+  writeSafeDb: ReturnType<typeof createRootSafeDb>;
+};
+
+type DeadlineScoutClaim = Pick<ClaimedRun, "id" | "deadlineScoutClaimedAt">;
+
+const claimStartedAt = (run: DeadlineScoutClaim): Date =>
+  run.deadlineScoutClaimedAt ?? panic("Claimed deadline scout has no lease");
+
+const currentClaimWhere = (run: DeadlineScoutClaim, now: Date) =>
+  and(
+    eq(documentProcessingRuns.id, run.id),
+    eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+    sql`${documentProcessingRuns.deadlineScoutClaimedAt} IS NOT DISTINCT FROM ${claimStartedAt(run)}::timestamptz`,
+    sql`${documentProcessingRuns.deadlineScoutClaimedAt} > ${now}::timestamptz - (${DEADLINE_SCOUT_LEASE_TIMEOUT_MS} * INTERVAL '1 millisecond')`,
+  ) ?? panic("Expected the deadline scout claim predicate");
+
+/** Refresh only the exact live claim; an expired or recovered worker stops. */
+const heartbeatClaim = async (
+  db: DeadlineScoutDb,
+  run: ClaimedRun,
+): Promise<boolean> => {
+  const now = new Date();
+  // audit: skip — ephemeral worker-lease bookkeeping; settlement records the durable outcome.
+  const refreshed = await db
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutClaimedAt: now, updatedAt: now })
+    .where(currentClaimWhere(run, now))
+    .returning({ claimedAt: documentProcessingRuns.deadlineScoutClaimedAt });
+  const claimedAt = refreshed.at(0)?.claimedAt;
+  if (claimedAt === undefined || claimedAt === null) {
+    return false;
+  }
+  run.deadlineScoutClaimedAt = claimedAt;
+  return true;
+};
+
+/** Lock claim authority through signal emission in the caller's transaction. */
+const lockCurrentClaim = async (
+  tx: Transaction,
+  run: ClaimedRun,
+): Promise<boolean> => {
+  const locked = await withAggregateRowQuery({
+    tx,
+    aggregate: "processingClaim",
+    id: { id: run.id, workspaceId: run.workspaceId },
+    mode: "update",
+    select: (queryTx) =>
+      queryTx
+        .select({
+          id: documentProcessingRuns.id,
+          workspaceId: documentProcessingRuns.workspaceId,
+        })
+        .from(documentProcessingRuns),
+    where: currentClaimWhere(run, new Date()),
+  });
+  return locked.rows.length === 1;
+};
+
+const hasDeadlineScoutAuthority = async (
+  actor: DeadlineScoutActor,
+  db: Transaction,
+): Promise<boolean> =>
+  await hasCurrentActiveWorkspaceMemberPermission({
+    db,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    permissions: DEADLINE_SCOUT_PERMISSIONS,
+  });
+
+const requireDeadlineScoutAuthority = async (
+  actor: DeadlineScoutActor,
+  db: Transaction,
+): Promise<void> => {
+  await requireCurrentActiveWorkspaceMemberPermission({
+    db,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    permissions: DEADLINE_SCOUT_PERMISSIONS,
+  });
+};
+
+const loadAuthorizedSource = async (
+  actor: DeadlineScoutActor,
+  run: ClaimedRun,
+) => {
+  const source = await actor.inputDb(async (tx) => {
+    await requireDeadlineScoutAuthority(actor, tx);
+    return await loadCurrentDeadlineSourceReader(tx, "deadline-scout", run);
+  });
+  return source
+    ? { entityName: source.entityName, text: await source.readText() }
+    : null;
+};
+
+const loadAuthorizedAISettings = async (actor: DeadlineScoutActor) =>
+  await actor.inputDb(async (tx) => {
+    await requireDeadlineScoutAuthority(actor, tx);
+    return await loadOrgAISettings(tx, actor);
+  });
+
+const createDeadlineScoutActor = (
+  run: ClaimedRun,
+  userId: SafeId<"user">,
+  database: RlsDatabase<Transaction> | undefined,
+): DeadlineScoutActor => {
+  const member = { organizationId: run.organizationId, userId };
+  const pinned = { ...member, workspaceIds: [run.workspaceId] };
+  return {
+    ...member,
+    workspaceId: run.workspaceId,
+    inputDb: createRootMembershipScopedDb(member, database),
+    writeDb: createRootScopedDb(pinned, database),
+    writeSafeDb: createRootSafeDb(pinned, database),
+  };
+};
+
+const admittedDeadlineScan = (): { admission: DeadlineScanAdmission } => ({
+  admission: { type: "admitted" },
+});
 
 const claimRun = async (
   db: DeadlineScoutDb,
@@ -266,7 +409,7 @@ const settleRun = async ({
   settlement,
 }: {
   db: Pick<DeadlineScoutDb, "update">;
-  run: Pick<ClaimedRun, "id">;
+  run: DeadlineScoutClaim;
   settlement: DeadlineScanSettlement;
 }): Promise<void> => {
   const { attemptRefund, errorCode, skippedUntil, status } =
@@ -281,12 +424,7 @@ const settleRun = async ({
       deadlineScoutStatus: status,
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(documentProcessingRuns.id, run.id),
-        eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-      ),
-    );
+    .where(currentClaimWhere(run, new Date()));
 };
 
 type RejectDeadlineObservationOptions = {
@@ -317,19 +455,21 @@ const rejectDeadlineObservation = async ({
 
 type SkipDeadlineScanOptions = {
   db: Pick<DeadlineScoutDb, "update">;
+  claimedAt: Date;
   runId: ClaimedRun["id"];
   skippedUntil: Date;
 };
 
 /** Settle a running scan that an exhausted action period refused. */
 export const skipDeadlineScan = async ({
+  claimedAt,
   db,
   runId,
   skippedUntil,
 }: SkipDeadlineScanOptions): Promise<void> => {
   await settleRun({
     db,
-    run: { id: runId },
+    run: { id: runId, deadlineScoutClaimedAt: claimedAt },
     settlement: { status: "skipped", skippedUntil },
   });
 };
@@ -347,6 +487,7 @@ const settleFailedObservation = async ({
   switch (admission.type) {
     case "period_exhausted":
       await skipDeadlineScan({
+        claimedAt: claimStartedAt(run),
         db,
         runId: run.id,
         skippedUntil: admission.skippedUntil,
@@ -388,46 +529,37 @@ export const runDocumentDeadlineScout = async ({
     return;
   }
 
-  const member = {
-    organizationId: run.organizationId,
-    userId: actorUserId,
-    workspaceIds: [run.workspaceId],
-  };
-  const scopedDb = createRootScopedDb(member, database);
-  const safeDb = createRootSafeDb(member, database);
-
-  const scan: { admission: DeadlineScanAdmission } = {
-    admission: { type: "admitted" },
-  };
-  // The config is read before the scout run opens: an organization barred
-  // from the instance provider without a key of its own cannot observe.
+  const actor = createDeadlineScoutActor(run, actorUserId, database);
+  const scan = admittedDeadlineScan();
   const observed = Result.flatten(
     await Result.tryPromise(async () => {
-      const orgAIConfigResult = await loadOrgAISettings(db, {
-        organizationId: run.organizationId,
-        userId: actorUserId,
-      });
+      const orgAIConfigResult = await loadAuthorizedAISettings(actor);
       if (Result.isError(orgAIConfigResult)) {
         return Result.err(orgAIConfigResult.error);
       }
       const { orgAIConfig, managedAIResidency } = orgAIConfigResult.value;
       return Result.ok(
         await runScout({
-          db: scopedDb,
+          db: actor.writeDb,
           organizationId: run.organizationId,
           scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
           observe: async () => {
-            // Deadline scouting is system work bound to its persisted run source.
-            const source = await loadCurrentDeadlineSource(
-              db,
-              "deadline-scout",
-              run,
-            );
+            const source = await loadAuthorizedSource(actor, run);
             if (!source) {
               return [];
             }
             const text = capText(source.text);
             if (text.length < DEADLINE_TEXT_MIN_CHARS) {
+              return [];
+            }
+            if (!(await heartbeatClaim(db, run))) {
+              return [];
+            }
+            if (
+              !(await actor.inputDb(
+                async (tx) => await hasDeadlineScoutAuthority(actor, tx),
+              ))
+            ) {
               return [];
             }
 
@@ -447,7 +579,7 @@ export const runDocumentDeadlineScout = async ({
                   usageMetering: {
                     actionType: "background",
                     organizationId: run.organizationId,
-                    safeDb,
+                    safeDb: actor.writeSafeDb,
                     serviceTier: "flex",
                     userId: actorUserId,
                     workspaceId: run.workspaceId,
@@ -457,7 +589,7 @@ export const runDocumentDeadlineScout = async ({
               orgAIConfig,
               prompt: `Document "${source.entityName}":\n\n${text}`,
               run,
-              scopedDb,
+              scopedDb: actor.writeDb,
               userId: actorUserId,
               onRefused: (admission) => {
                 scan.admission = admission;
@@ -516,7 +648,15 @@ export const runDocumentDeadlineScout = async ({
               };
             });
           },
-          validate: async (tx) => await isCurrentDeadlineSource(tx, run),
+          validate: async (tx) => {
+            if (!(await lockCurrentClaim(tx, run))) {
+              return false;
+            }
+            if (!(await hasDeadlineScoutAuthority(actor, tx))) {
+              return false;
+            }
+            return await isCurrentDeadlineSource(tx, run);
+          },
         }),
       );
     }),

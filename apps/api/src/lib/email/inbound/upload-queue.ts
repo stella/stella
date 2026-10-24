@@ -14,7 +14,10 @@ import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import {
   brandPersistedEntityId,
+  brandPersistedEntityVersionId,
+  brandPersistedFieldId,
   brandPersistedOrganizationId,
+  brandPersistedUserFileId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 
@@ -44,29 +47,34 @@ export const processUploadedMailJob = async ({
   readFile = readStoredFile,
   fileMail = fileUploadedMail,
 }: ProcessUploadedMailJobOptions) => {
-  const scope = {
+  const source = {
     organizationId: brandPersistedOrganizationId(data.organizationId),
     workspaceId: brandPersistedWorkspaceId(data.workspaceId),
     entityId: brandPersistedEntityId(data.entityId),
+    entityVersionId: brandPersistedEntityVersionId(data.entityVersionId),
+    fieldId: brandPersistedFieldId(data.fieldId),
+    sourceFileId: brandPersistedUserFileId(data.sourceFileId),
+    sourceSha256Hex: data.sourceSha256Hex,
+    storageMimeType: data.storageMimeType,
+    extractionMimeType: data.extractionMimeType,
   };
   const stored = await readFile({
     key: createFileKey({
-      organizationId: scope.organizationId,
-      workspaceId: scope.workspaceId,
-      fileId: data.sourceFileId,
+      organizationId: source.organizationId,
+      workspaceId: source.workspaceId,
+      fileId: source.sourceFileId,
       mimeType: data.storageMimeType,
     }),
-    mimeType: data.mimeType,
+    mimeType: data.extractionMimeType,
     scope: {
-      organizationId: scope.organizationId,
-      workspaceId: scope.workspaceId,
+      organizationId: source.organizationId,
+      workspaceId: source.workspaceId,
     },
     signal: AbortSignal.timeout(LIMITS.documentProcessingObjectReadTimeoutMs),
   });
   const filed = await fileMail({
     bytes: stored.bytes,
-    mimeType: data.mimeType,
-    scope,
+    source,
     database,
   });
   if (filed.isErr()) {

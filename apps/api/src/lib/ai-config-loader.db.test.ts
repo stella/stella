@@ -7,7 +7,7 @@
  */
 
 import { Result } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -31,6 +31,7 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -53,6 +54,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -226,29 +229,28 @@ describe("organization settings under the request scope", () => {
       ),
     ).toEqual(["model-a-key"]);
     expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAIConfig(tx, {
-              organizationId: ids.orgB,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toBeNull();
+      await scope(
+        async (tx) =>
+          await loadOrgAIConfig(tx, {
+            organizationId: ids.orgB,
+            userId: ids.userA1,
+          }),
+      ),
+    ).toMatchObject({
+      status: "error",
+      error: { code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE },
+    });
   });
 
-  test("another organization's prompt-caching preference reads as the default", async () => {
+  test("another organization's AI settings are refused", async () => {
     const scope = requestScope(ids.orgB, ids.userB1);
 
-    // orgB stores `true`; orgA stores `false`. Under orgB's scope the orgA row
-    // is invisible, so the read falls back to the default rather than false.
     const own = (
       await scope(
         async (tx) =>
           await loadOrgAISettings(tx, {
             organizationId: ids.orgB,
-            userId: ids.userA1,
+            userId: ids.userB1,
           }),
       )
     ).unwrap();
@@ -256,19 +258,16 @@ describe("organization settings under the request scope", () => {
     expect(own.promptCachingEnabled).toBe(true);
     expect(own.managedAIResidency).toBe("eu");
     expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAISettings(tx, {
-              organizationId: ids.orgA,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toEqual({
-      orgAIConfig: null,
-      promptCachingEnabled: true,
-      managedAIResidency: "eu",
+      await scope(
+        async (tx) =>
+          await loadOrgAISettings(tx, {
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+      ),
+    ).toMatchObject({
+      status: "error",
+      error: { code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE },
     });
   });
 
@@ -285,7 +284,7 @@ describe("organization settings under the request scope", () => {
     expect(unset).toBe("eu");
   });
 
-  test("loadOrgAISettings reads both values in one select", async () => {
+  test("loadOrgAISettings reads config and preferences together", async () => {
     const scope = requestScope(ids.orgA, ids.userA1);
 
     const own = (
@@ -301,19 +300,16 @@ describe("organization settings under the request scope", () => {
     expect(own.promptCachingEnabled).toBe(false);
     expect(own.managedAIResidency).toBe("us");
     expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAISettings(tx, {
-              organizationId: ids.orgB,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toEqual({
-      orgAIConfig: null,
-      promptCachingEnabled: true,
-      managedAIResidency: "eu",
+      await scope(
+        async (tx) =>
+          await loadOrgAISettings(tx, {
+            organizationId: ids.orgB,
+            userId: ids.userA1,
+          }),
+      ),
+    ).toMatchObject({
+      status: "error",
+      error: { code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE },
     });
   });
 
@@ -341,7 +337,7 @@ describe("organization settings under the request scope", () => {
       ),
     ).toEqual({
       orgAIConfig: null,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
       managedAIResidency: "eu",
       promptCachingEnabled: true,
     });

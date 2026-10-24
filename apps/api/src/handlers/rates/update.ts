@@ -16,6 +16,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
+import { lockRateTableWorkspace } from "./rate-table-lock";
+
 const updateRateTableBodySchema = t.Object({
   id: tSafeId("rateTable"),
   name: t.Optional(tDefaultVarchar),
@@ -73,9 +75,7 @@ const updateRateTable = createSafeHandler(
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
+        await lockRateTableWorkspace(tx, workspaceId);
         // The currency the rates are currently stored in, read under a row
         // lock BEFORE anything is written. The `existing` read above happened
         // outside this transaction, so a currency change that landed in
@@ -94,8 +94,7 @@ const updateRateTable = createSafeHandler(
               eq(rateTables.id, body.id),
               eq(rateTables.workspaceId, workspaceId),
             ),
-          )
-          .for("update");
+          );
         const locked = lockedRows.at(0);
         if (!locked) {
           return { status: "rate-not-found" as const };

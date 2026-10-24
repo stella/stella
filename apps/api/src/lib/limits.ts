@@ -500,6 +500,9 @@ export const LIMITS = {
    *  working set grows with it, so this bounds both. Larger files keep their
    *  original as the preview and record `failed`/`too-large`. */
   fileDerivativeSourceMaxBytes: 25 * 1024 * 1024,
+  /** Maximum PDF bytes a derivative conversion may return or native
+   * extraction may read. Matches the largest accepted document upload. */
+  fileDerivativePdfMaxBytes: 50 * 1024 * 1024,
   /** Derivative jobs one API process runs at once. Each conversion holds a
    *  whole source plus its output and, for images, a decoded surface: the
    *  largest single allocations the process makes. Running them one at a time
@@ -862,6 +865,11 @@ export const LIMITS = {
    *  retryable. The wait comes before the upload is claimed, so it never
    *  counts against the claim timeout. */
   uploadFinalizeAdmissionWaitMs: 20_000,
+  /** CPU-heavy archive scans allowed concurrently in one API process. Other
+   * replicas retain independent capacity. */
+  fileScanConcurrentMax: 1,
+  /** How long a request waits for the process-local scan slot. */
+  fileScanAdmissionWaitMs: 20_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */
