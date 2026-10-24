@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { ChatInputMentionSource } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -81,6 +81,8 @@ const createClient = () => {
   });
   client.setQueryData(aiAvailabilityOptions({ organizationId }).queryKey, {
     available: true,
+    unavailableReason: null,
+    providerConfiguration: "allowed",
     deferredServiceTierAvailable: false,
     instanceProvisioned: false,
     mockAnswers: false,

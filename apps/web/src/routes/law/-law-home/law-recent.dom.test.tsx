@@ -250,6 +250,51 @@ test("recent controls render in Arabic with the same court identity", async () =
   ).toBe("NS");
 });
 
+test("recents stay a placeholder until the session says who is visiting", async () => {
+  const { QueryClient, QueryClientProvider } =
+    await import("@tanstack/react-query");
+  // The session read is held, as it is through the server render, until the
+  // test answers it: nobody is signed in.
+  const session = Promise.withResolvers<Response>();
+  const transport = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(async () => session.promise, {
+      preconnect: () => undefined,
+    }),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  try {
+    await act(async () => {
+      render(
+        <QueryClientProvider client={client}>
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <LawRecent onSearch={() => undefined} />
+            </FormattingProvider>
+          </IntlProvider>
+        </QueryClientProvider>,
+      );
+    });
+    expect(
+      screen.getByRole("status", { name: messages.common.loading }),
+    ).toBeTruthy();
+    expect(screen.queryByText(messages.lawHome.noRecent)).toBeNull();
+    expect(screen.queryByText(messages.common.loading)).toBeNull();
+
+    await act(async () => {
+      session.resolve(Response.json(null));
+    });
+    await waitFor(() =>
+      expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy(),
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+  } finally {
+    client.clear();
+    transport.mockRestore();
+  }
+});
+
 test("signed-in recents import local data once and always display server data", async () => {
   const { QueryClient, QueryClientProvider } =
     await import("@tanstack/react-query");

@@ -9,6 +9,7 @@ export const LEGISLATION_DOCUMENT_STATUSES = [
   "historical",
   "repealed",
   "draft",
+  "unknown",
 ] as const;
 
 export type LegislationDocumentStatus =

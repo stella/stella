@@ -28,6 +28,7 @@ import {
 } from "@stll/folio-core/prosemirror/commands/comments";
 import { Button } from "@stll/ui/button";
 import {
+  AiActionIcon,
   BoldIcon,
   CheckIcon,
   Heading1Icon,
@@ -39,7 +40,6 @@ import {
   Redo2Icon,
   RotateCcwIcon,
   Undo2Icon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";

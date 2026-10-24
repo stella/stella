@@ -4,13 +4,13 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
-  FILTER_NAMES,
   classifyMarker,
-  scanMarkers,
+  FILTER_NAMES,
   type FilterArgument,
   type FilterCall,
   type MarkerForm,
   type MarkerPrefix,
+  scanMarkers,
 } from "./markers.js";
 import {
   renderConditionTag,

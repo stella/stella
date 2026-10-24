@@ -3,8 +3,8 @@ import { panic } from "better-result";
 import {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
-  foldToAscii,
   arabicNormalize,
+  foldToAscii,
 } from "@stll/text-normalize";
 
 // Non-HTML delimiters injected by ts_headline / pdb.snippet(). Keep these
