@@ -718,6 +718,12 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "The policies install tenant and table-owner boundaries on the new empty export table before publication, using session settings and table-ownership catalog reads only; lock acquisition is bounded by 1s and each statement by 5s.",
   },
   {
+    migration: "20261024193000_owner_erasure_paths",
+    form: "create-policy",
+    reason:
+      "The eighteen policies add only table-owner SELECT/DELETE access fenced to the reset organization; catalog-only policy creation performs no row scan, with transaction-local 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261019010000_invoice_party_tax_vat_ids",
     form: "add-column",
     reason:

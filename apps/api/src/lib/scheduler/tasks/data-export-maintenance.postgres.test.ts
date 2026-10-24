@@ -7,7 +7,7 @@ import {
   DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
 } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DATA_EXPORT_HEARTBEAT_STALE_MS } from "@/api/lib/data-export-queue";
 import { logger } from "@/api/lib/observability/logger";
@@ -54,7 +54,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               email: `${userId}@example.test`,
             });
             const scopedDb = createScopedDb(
-              observer.db,
+              markRlsDatabase(observer.db),
               [],
               organizationId,
               userId,

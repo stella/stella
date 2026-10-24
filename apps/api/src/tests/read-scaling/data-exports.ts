@@ -4,7 +4,7 @@ import { ElysiaCustomStatusResponse } from "elysia";
 
 import { organization, user } from "@/api/db/auth-schema";
 import { auditLogs, organizationDataExports } from "@/api/db/schema";
-import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import downloadDataExport from "@/api/handlers/data-exports/download";
 import readDataExport from "@/api/handlers/data-exports/get";
 import listDataExports from "@/api/handlers/data-exports/list";
@@ -14,6 +14,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { dataExportObjectKey } from "@/api/lib/data-export-queue";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -34,8 +35,9 @@ export const seedDataExportReadScaling = async (
   );
   const exportId =
     exportIds.at(0) ?? panic("Export scaling requires an export");
-  const scopedDb = createScopedDb(db, [], organizationId, userId);
-  const safeDb = createSafeDb(db, [], organizationId, userId);
+  const rlsDb = markRlsDatabase(db);
+  const scopedDb = createScopedDb(rlsDb, [], organizationId, userId);
+  const safeDb = createSafeDb(rlsDb, [], organizationId, userId);
   const recordAuditEvent = createBackgroundAuditRecorder({
     execution: {
       performer: { id: userId, type: "user" },
@@ -224,8 +226,13 @@ export const dataExportReadScalingScenarios = [
         }
         const signed = new URL(response.url);
         if (
-          !signed.pathname.includes(
-            `exports/${fixture.organizationId}/${fixture.exportId}/`,
+          !signed.pathname.endsWith(
+            `/${dataExportObjectKey({
+              organizationId: fixture.organizationId,
+              exportId: fixture.exportId,
+              attempt: 1,
+              fileName: "part-0001.zip",
+            })}`,
           ) ||
           signed.searchParams.get("X-Amz-Expires") !== "900" ||
           !signed.searchParams.has("X-Amz-Signature") ||
