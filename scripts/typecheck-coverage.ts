@@ -118,6 +118,7 @@ const OXC_PROJECT_PROXIES = [
 const OXC_NATIVE_ONLY_PROJECTS = [
   "apps/api/tsconfig.src.json",
   "apps/api/tsconfig.tests.json",
+  "apps/mobile/tsconfig.test.json",
   "tsconfig.scripts.json",
   "tsconfig.tooling.json",
   "tsconfig.oxlint-plugins.json",

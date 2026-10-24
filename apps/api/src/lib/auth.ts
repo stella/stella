@@ -259,6 +259,7 @@ import {
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { isMemberRole } from "@/api/lib/member-roles";
+import type { MemberRole } from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
   ownerRequiredError,
@@ -2697,17 +2698,20 @@ const PROFESSIONAL_USE_REJECTION_BODY = {
   message: "Accept the professional-use statement in stella to continue.",
 } as const;
 
-const VALIDATE_AUTH_REJECTION_BODY = {
-  401: AUTH_REJECTION_BODY[401],
-  403: PROFESSIONAL_USE_REJECTION_BODY,
-  500: AUTH_REJECTION_BODY[500],
-} as const satisfies Record<
-  Extract<
-    Awaited<ReturnType<typeof resolveValidateAuth>>,
-    { ok: false }
-  >["statusCode"],
-  { code: string; message: string }
->;
+/**
+ * How validateAuth refuses a request. Only the professional-use refusal has a
+ * body of its own; an app token refused a route gets the shared 403, never
+ * the professional-use prompt.
+ */
+type ValidateAuthRejection = {
+  ok: false;
+  statusCode: Exclude<AuthRejectionStatus, 404>;
+  body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
+};
+
+const rejectValidateAuth = (
+  rejection: Omit<ValidateAuthRejection, "ok">,
+): ValidateAuthRejection => ({ ok: false, ...rejection });
 
 type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set">;
 
@@ -3338,9 +3342,8 @@ type ResolvedIdentity = {
   /** Set when the browser session came from an MCP web handoff. */
   originConsentId: string | null;
   organizationId: SafeId<"organization">;
-  authorization: Pick<
+  authorization: { role: MemberRole } & Pick<
     MemberAuthorization,
-    | "role"
     | "workspace"
     | "email"
     | "emailVerified"
@@ -3353,7 +3356,7 @@ type ResolvedIdentity = {
 
 type IdentityResolution =
   | { ok: true; identity: ResolvedIdentity }
-  | { ok: false; statusCode: AuthRejectionStatus };
+  | Omit<ValidateAuthRejection, "body">;
 
 const resolveSessionIdentity = async ({
   getSession,
@@ -3541,7 +3544,7 @@ const resolveValidateAuth = async ({
           responseHeaders,
         });
   if (!resolved.ok) {
-    return { ok: false as const, statusCode: resolved.statusCode };
+    return rejectValidateAuth({ statusCode: resolved.statusCode });
   }
   const {
     authorization,
@@ -3561,7 +3564,10 @@ const resolveValidateAuth = async ({
     case PROFESSIONAL_USE_STATUS.accepted:
       break;
     case PROFESSIONAL_USE_STATUS.required:
-      return { ok: false as const, statusCode: 403 as const };
+      return rejectValidateAuth({
+        statusCode: 403,
+        body: PROFESSIONAL_USE_REJECTION_BODY,
+      });
     default:
       authorization.professionalUse satisfies never;
       return panic("Unhandled professional-use state");
@@ -3820,7 +3826,7 @@ export const createAuthMacro = ({
           if (!result.ok) {
             return status(
               result.statusCode,
-              VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
+              result.body ?? AUTH_REJECTION_BODY[result.statusCode],
             );
           }
 

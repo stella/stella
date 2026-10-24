@@ -175,25 +175,32 @@ export const withAuthRetention = ({
           });
         }
         await admitClient();
-        const client = await create({
-          ...args,
-          data: { ...args.data, registrationOrigin: "open-client" },
-        });
         // In the provider's registration transaction, so the client never
-        // exists without the links it is owed.
-        const clientId = args.data["clientId"];
-        if (
-          typeof clientId === "string" &&
-          typeof args.data["clientDiscoveryId"] === "string"
-        ) {
-          for (const resourceId of ownClientResources(clientId)) {
-            await create({
-              model: "oauthClientResource",
-              data: { clientId, resourceId, createdAt: new Date() },
-            });
+        // exists without the links it is owed. The created row passes
+        // through unchanged, keeping the adapter's result type.
+        const linkOwnResources = async <Client>(
+          client: Client,
+        ): Promise<Client> => {
+          const clientId = args.data["clientId"];
+          if (
+            typeof clientId === "string" &&
+            typeof args.data["clientDiscoveryId"] === "string"
+          ) {
+            for (const resourceId of ownClientResources(clientId)) {
+              await create({
+                model: "oauthClientResource",
+                data: { clientId, resourceId, createdAt: new Date() },
+              });
+            }
           }
-        }
-        return client;
+          return client;
+        };
+        return await linkOwnResources(
+          await create({
+            ...args,
+            data: { ...args.data, registrationOrigin: "open-client" },
+          }),
+        );
       },
     };
   };
