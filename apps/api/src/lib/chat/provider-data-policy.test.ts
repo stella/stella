@@ -20,10 +20,10 @@ import type {
 } from "@/api/lib/chat/ai-data-policy";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
-  PROVIDER_DATA_POLICY,
   assertManagedOpenRouterModel,
   isManagedProviderAvailable,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
@@ -33,8 +33,8 @@ import {
 } from "@/api/lib/observability/failure-evidence";
 import {
   createTanStackTextAdapterFactory,
-  getTanStackTextModelById,
   getStructuredOutputFallbackModelId,
+  getTanStackTextModelById,
   getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForTask,

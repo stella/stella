@@ -622,9 +622,7 @@ const limitDisposition = ({
   cap,
   root,
 }: LimitDispositionOptions):
-  | "exempt"
-  | "fixed-page-size"
-  | "constant-limit" => {
+  "exempt" | "fixed-page-size" | "constant-limit" => {
   if (isOne(cap) || rejectsOverflow(node, cap)) {
     return "exempt";
   }

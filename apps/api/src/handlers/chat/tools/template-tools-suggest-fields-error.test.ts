@@ -71,9 +71,9 @@ describe("suggest_template_fields tool error handling", () => {
     });
 
     // SAFETY: invoke the tool's execute directly with a stub call context.
-    const execute = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
-      .execute as unknown as SuggestFieldsExecute;
+    const tool = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME];
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
+    const execute = tool.execute as unknown as SuggestFieldsExecute;
 
     const rejection: unknown = await execute(
       { instructions: null, text: "Granted by Example Corp." },

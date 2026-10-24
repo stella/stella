@@ -7,11 +7,11 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
   buildClaimMemoryExtractionQueueQuery,
   buildSettleMemoryExtractionQueueQuery,
+  type ClaimedMemoryExtractionOrganization,
   interleaveClaimedMemoryCompactions,
   MEMORY_EXTRACTION_BATCH_SIZE,
   MEMORY_EXTRACTION_ORGANIZATION_BATCH_SIZE,
   MEMORY_EXTRACTION_PER_ORGANIZATION_LIMIT,
-  type ClaimedMemoryExtractionOrganization,
   type QueuedMemoryCompaction,
 } from "./memory-extractor-queue";
 

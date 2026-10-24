@@ -72,6 +72,7 @@ export const callMcpToolOverHttp = async ({
           listOfferedStaticMcpToolDefinitions({
             context: listContext,
             mode: listMode,
+            enabledRegistrySlugs: undefined,
           }),
           { mode: listMode, context: listContext },
         ),

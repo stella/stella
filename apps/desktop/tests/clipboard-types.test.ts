@@ -10,9 +10,9 @@ import {
   isClipboardCopyError,
   isClipboardEditorContext,
   isClipboardEditorSession,
+  isClipboardGroup,
   isClipboardGroupColor,
   isClipboardImagePreviewDataUrl,
-  isClipboardGroup,
   isClipboardItem,
   isClipboardSnapshot,
 } from "../src/clipboard/clipboard-types";

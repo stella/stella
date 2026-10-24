@@ -36,6 +36,7 @@ const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => {
 }) satisfies ClipboardSnapshot["items"];
 
 const SNAPSHOT = {
+  revision: 0,
   captureStatus: "active",
   groupLimit: 24,
   groups: [{ color: DEFAULT_CLIPBOARD_GROUP_COLOR, id: "work", name: "Work" }],

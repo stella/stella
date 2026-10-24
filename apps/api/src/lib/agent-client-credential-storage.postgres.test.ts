@@ -16,9 +16,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   logger,
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {

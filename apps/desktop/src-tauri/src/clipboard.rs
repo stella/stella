@@ -1505,7 +1505,6 @@ impl ClipboardManager {
         .collect(),
       source_app_visuals: item
         .source_visual_keys()
-        .into_iter()
         .filter_map(|key| self.source_app_visuals.get(key).cloned())
         .collect(),
     })
@@ -1568,8 +1567,10 @@ impl ClipboardManager {
     &mut self,
     identifier: &str,
   ) -> Result<bool, String> {
-    let identifier = normalized_identifier(identifier)
-      .map_err(|_| "clipboard source application identifier is invalid".to_string())?;
+    let identifier =
+      normalized_identifier(identifier).map_err(crate::logging::with_cause_logged(
+        "clipboard source application identifier is invalid",
+      ))?;
     let checkpoint = self.checkpoint();
     let original_len = self.source_app_exclusions.len();
     self
@@ -3563,8 +3564,9 @@ fn read_bounded_image_file(path: &Path) -> Result<Vec<u8>, String> {
   if !metadata.is_file() {
     return Err("clipboard image file is not a regular file".to_string());
   }
-  let byte_size = usize::try_from(metadata.len())
-    .map_err(|_| "clipboard image source is too large".to_string())?;
+  let byte_size = usize::try_from(metadata.len()).map_err(
+    crate::logging::with_cause_logged("clipboard image source is too large"),
+  )?;
   validate_clipboard_image_source_size(byte_size)?;
   // The file can grow between the metadata check and the read, so the read
   // itself stops one byte past the cap rather than trusting the length.
@@ -4014,7 +4016,7 @@ mod tests {
         .len();
       let update = manager.capture_update(&previous_ids).unwrap();
       let after = serde_json::to_vec(&update).unwrap().len();
-      println!(
+      tracing::debug!(
         "clipboard capture IPC at {count} items: before={before} after={after} bytes"
       );
       assert!(

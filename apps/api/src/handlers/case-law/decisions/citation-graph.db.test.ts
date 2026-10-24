@@ -5,8 +5,8 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
-  caseLawCitations,
   caseLawCitationDoctrineReviews,
+  caseLawCitations,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";

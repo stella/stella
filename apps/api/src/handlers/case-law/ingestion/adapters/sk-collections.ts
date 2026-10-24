@@ -13,11 +13,11 @@ import {
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  SK_COLLECTION_SERIES,
   SK_COLLECTION_PARSER_VERSION,
-  SkCollectionIssueError,
+  SK_COLLECTION_SERIES,
   type SkCollectionIssue,
   type SkCollectionIssueCache,
+  SkCollectionIssueError,
   type SkCollectionReadOptions,
   type SkCollectionReadOutcome,
   type SkCollectionSeries,

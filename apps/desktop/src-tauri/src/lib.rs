@@ -1,5 +1,6 @@
 mod account;
 mod activity;
+mod activity_calls;
 mod activity_commands;
 mod activity_details;
 mod activity_store;
@@ -40,6 +41,7 @@ mod keychain;
 mod local_store;
 mod local_window;
 mod logging;
+mod managed_policy;
 mod marker_file;
 mod onboarding;
 mod pdf_signing;
@@ -147,7 +149,9 @@ pub fn run() {
     .manage::<onboarding::OnboardingState>(std::sync::Mutex::new(
       onboarding::Onboarding::load(),
     ))
-    .manage(feature_gate::FeatureGates::default())
+    .manage(feature_gate::FeatureGates::blocking(
+      managed_policy::current().blocked_features(),
+    ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
@@ -169,7 +173,8 @@ pub fn run() {
         );
       // Clipboard history initializes on a dedicated thread because the OS
       // keychain can block on authorization and the watcher runs continuously.
-      {
+      // Managed policy can turn it off: then nothing is read or recorded.
+      if !managed_policy::current().clipboard_disabled {
         let clipboard_manager = Arc::clone(&clipboard_manager);
         let clipboard_handle = handle.clone();
         let watcher_telemetry = desktop_telemetry.clone();
@@ -197,7 +202,7 @@ pub fn run() {
       // Registration is intentionally non-fatal: the shortcut may already be
       // taken, and the clipboard stays reachable from the tray.
       if clipboard_shortcut::register_at_launch(&handle)
-        != clipboard_shortcut::ShortcutRegistration::Active
+        == clipboard_shortcut::ShortcutRegistration::Unavailable
       {
         desktop_telemetry.capture(desktop_telemetry::DesktopErrorReport {
           window: desktop_telemetry::DesktopTelemetryWindow::Clipboard,
@@ -337,6 +342,9 @@ pub fn run() {
                   }
                   updater::CheckOutcome::Failed(msg) => {
                     tracing::warn!(error = %msg, "tray-triggered updater check failed");
+                  }
+                  updater::CheckOutcome::Disabled => {
+                    tracing::debug!("tray updater check skipped: updates are managed");
                   }
                 }
               }

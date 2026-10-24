@@ -301,6 +301,11 @@ fn oversized_office_download_error() -> String {
   "stella desktop refused an oversized Office file download.".to_string()
 }
 
+fn oversized_office_download(overflow: std::num::TryFromIntError) -> String {
+  crate::logging::log_cause(&overflow, "Office download size does not fit");
+  oversized_office_download_error()
+}
+
 fn non_office_download_body_error(file_type: DesktopEditFileType) -> String {
   format!(
     "stella desktop refused a non-{} download body.",
@@ -342,9 +347,12 @@ fn validate_office_download_response(
     return Ok(());
   };
 
-  let content_type = content_type.to_str().map_err(|_| {
-    "stella desktop received an invalid Office file content type.".to_string()
-  })?;
+  let content_type =
+    content_type
+      .to_str()
+      .map_err(crate::logging::with_cause_logged(
+        "stella desktop received an invalid Office file content type.",
+      ))?;
 
   if is_allowed_download_content_type(file_type, content_type) {
     return Ok(());
@@ -363,10 +371,8 @@ async fn read_office_download_bytes(
     let chunk = chunk.map_err(|e| {
       format!("stella desktop could not read the Office file download: {e}")
     })?;
-    let current_size =
-      u64::try_from(bytes.len()).map_err(|_| oversized_office_download_error())?;
-    let chunk_size =
-      u64::try_from(chunk.len()).map_err(|_| oversized_office_download_error())?;
+    let current_size = u64::try_from(bytes.len()).map_err(oversized_office_download)?;
+    let chunk_size = u64::try_from(chunk.len()).map_err(oversized_office_download)?;
     let next_size = current_size
       .checked_add(chunk_size)
       .ok_or_else(oversized_office_download_error)?;
@@ -385,8 +391,7 @@ fn validate_office_download_bytes(
   file_type: DesktopEditFileType,
   bytes: &[u8],
 ) -> Result<(), String> {
-  let size =
-    u64::try_from(bytes.len()).map_err(|_| oversized_office_download_error())?;
+  let size = u64::try_from(bytes.len()).map_err(oversized_office_download)?;
   if size > MAX_OFFICE_DOWNLOAD_BYTES {
     return Err(oversized_office_download_error());
   }
@@ -395,8 +400,10 @@ fn validate_office_download_bytes(
     return Err(non_office_download_body_error(file_type));
   }
 
-  let archive = ZipArchive::new(Cursor::new(bytes))
-    .map_err(|_| non_office_download_body_error(file_type))?;
+  let archive = ZipArchive::new(Cursor::new(bytes)).map_err(|error| {
+    crate::logging::log_cause(&error, "Office download is not a zip archive");
+    non_office_download_body_error(file_type)
+  })?;
   let has_content_types = archive.index_for_name(CONTENT_TYPES_ENTRY).is_some();
   let required_entry = file_type.main_part_path();
 
@@ -1059,6 +1066,18 @@ impl SessionManager {
     true
   }
 
+  fn finish_confirmed_closed_session(&mut self, session_id: &str) -> bool {
+    let confirmed = self.sessions.get(session_id).is_some_and(|session| {
+      session.local_open_seen
+        && session.closed_recheck_count >= CLOSED_RECHECK_COUNT
+        && !session.pending_finalize
+        && !session.checkpoint_in_flight
+        && !session.finalize_in_flight
+        && !session.takeover_detected
+    });
+    confirmed && self.finish_session(session_id)
+  }
+
   pub fn retry_session_now(&mut self, session_id: &str) -> bool {
     let session = match self.sessions.get_mut(session_id) {
       Some(s) if !s.takeover_detected => s,
@@ -1699,9 +1718,7 @@ impl SessionManager {
         _ => return None,
       };
 
-      let Some(checkpoint_sha) = session.last_checkpoint_sha.clone() else {
-        return None;
-      };
+      let checkpoint_sha = session.last_checkpoint_sha.clone()?;
 
       if session.last_local_sha != checkpoint_sha {
         return None;
@@ -2572,6 +2589,11 @@ pub async fn retry_session(manager: Arc<Mutex<SessionManager>>, session_id: &str
     if checkpoint_ready {
       let input = {
         let mut mgr = manager.lock().await;
+        // A confirmed close remains pending when its last probe overlapped
+        // the upload. The save owner resumes finalization after it settles.
+        if mgr.finish_confirmed_closed_session(session_id) {
+          mgr.persist_sessions().await;
+        }
         if mgr
           .sessions
           .get(session_id)
@@ -3037,7 +3059,7 @@ mod tests {
     run_retry_clock(Arc::clone(&manager), &mut clock).await;
     assert_eq!(clock.elapsed, Duration::from_secs(60));
     assert_eq!(manager.lock().await.sessions.len(), 5);
-    eprintln!(
+    tracing::debug!(
       "idle minute / 5 sessions: reads={} writes={} emits={}",
       fs.reads.load(Ordering::Relaxed),
       costs.writes.load(Ordering::Relaxed),
@@ -3167,6 +3189,54 @@ mod tests {
     std::fs::remove_file(&manager.lock().await.store_path).unwrap();
   }
 
+  #[tokio::test(start_paused = true)]
+  async fn confirmed_close_finishes_after_in_flight_checkpoint_settles() {
+    use axum::{Router, routing::post};
+    let (manager, _, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(|| async {
+        (
+          axum::http::StatusCode::SERVICE_UNAVAILABLE,
+          axum::Json(serde_json::json!({"message": "retry fixture"})),
+        )
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let ids = {
+      let mut mgr = manager.lock().await;
+      for session in mgr.sessions.values_mut() {
+        session.api_base_url = base_url.clone();
+        session.last_checkpoint_sha = Some(session.last_local_sha.clone());
+        session.local_open_seen = true;
+        session.closed_recheck_count = CLOSED_RECHECK_COUNT;
+        session.checkpoint_in_flight = true;
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      assert!(!manager.lock().await.sessions[id].pending_finalize);
+    }
+    tokio::time::advance(OPEN_PROBE_INTERVAL * u32::from(CLOSED_RECHECK_COUNT)).await;
+    {
+      let mut mgr = manager.lock().await;
+      for session in mgr.sessions.values_mut() {
+        session.checkpoint_in_flight = false;
+      }
+    }
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      assert!(manager.lock().await.sessions[id].pending_finalize);
+    }
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
   #[tokio::test]
   async fn idle_cost_stale_responses_preserve_the_current_generation() {
     use std::sync::atomic::Ordering;
@@ -3264,6 +3334,7 @@ mod tests {
       assert_eq!(mgr.sessions[id].status, SessionStatus::Ready);
       assert!(mgr.prepare_checkpoint(id).await.is_none());
     }
+    drop(mgr);
     assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
     assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
   }
@@ -3817,6 +3888,8 @@ mod tests {
     assert_eq!(parsed["sessions"]["pendingFinalize"], 1);
     assert_eq!(parsed["sessions"]["takeoverDetected"], 1);
     assert_eq!(parsed["cleanupPathsQueued"], 1);
+    assert!(parsed["managedPolicy"]["updatesDisabled"].is_boolean());
+    assert!(parsed["managedPolicy"]["serverConfigured"].is_boolean());
   }
 
   #[test]

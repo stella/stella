@@ -1,6 +1,6 @@
 import {
-  caseLawPublicReadDb,
   type CaseLawPublicReadDb,
+  caseLawPublicReadDb,
 } from "@/api/lib/case-law-public-read-db";
 import {
   type CaseLawConfigReadTransaction,

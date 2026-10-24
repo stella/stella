@@ -182,6 +182,11 @@ impl ClipboardStore {
 
   pub fn load(&self) -> Result<Option<PersistedClipboardState>, String> {
     let Some(value) = self.history_file().load::<serde_json::Value>()? else {
+      Self::remove_records(&self.path)?;
+      *self
+        .checkpoint
+        .lock()
+        .map_err(|_| "clipboard checkpoint lock is poisoned".to_string())? = None;
       return Ok(None);
     };
     // Convert the encrypted snapshot once at startup. The replacement manifest
@@ -321,6 +326,13 @@ impl ClipboardStore {
     ))
   }
 
+  #[cfg_attr(
+    not(test),
+    expect(
+      clippy::unused_self,
+      reason = "the receiver owns test-only encrypted-write accounting"
+    )
+  )]
   fn write_record<T: Serialize>(
     &self,
     file: &EncryptedJsonFile,
@@ -380,7 +392,7 @@ impl ClipboardStore {
 
   fn image_path(&self, blob_id: &str, suffix: &str) -> Result<PathBuf, String> {
     uuid::Uuid::parse_str(blob_id)
-      .map_err(|_| "clipboard image identifier is invalid".to_string())?;
+      .map_err(|error| format!("clipboard image identifier is invalid: {error}"))?;
     Ok(self.image_directory().join(format!("{blob_id}{suffix}")))
   }
 
@@ -390,7 +402,7 @@ impl ClipboardStore {
     associated_data: &[u8],
   ) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| "clipboard encryption key is invalid".to_string())?;
+      .map_err(|error| format!("clipboard encryption key is invalid: {error}"))?;
     let nonce = Nonce::generate();
     let ciphertext = cipher
       .encrypt(
@@ -400,7 +412,7 @@ impl ClipboardStore {
           aad: associated_data,
         },
       )
-      .map_err(|_| "clipboard image encryption failed".to_string())?;
+      .map_err(|error| format!("clipboard image encryption failed: {error}"))?;
     let mut blob = Vec::with_capacity(IMAGE_BLOB_HEADER_BYTES + ciphertext.len());
     blob.push(IMAGE_BLOB_VERSION);
     blob.extend_from_slice(nonce.as_slice());
@@ -417,9 +429,9 @@ impl ClipboardStore {
       return Err("clipboard image blob is invalid".to_string());
     }
     let nonce = Nonce::try_from(&blob[1..IMAGE_BLOB_HEADER_BYTES])
-      .map_err(|_| "clipboard image nonce is invalid".to_string())?;
+      .map_err(|error| format!("clipboard image nonce is invalid: {error}"))?;
     let cipher = Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|_| "clipboard encryption key is invalid".to_string())?;
+      .map_err(|error| format!("clipboard encryption key is invalid: {error}"))?;
     cipher
       .decrypt(
         &nonce,
@@ -428,7 +440,7 @@ impl ClipboardStore {
           aad: associated_data,
         },
       )
-      .map_err(|_| "clipboard image could not be decrypted".to_string())
+      .map_err(|error| format!("clipboard image could not be decrypted: {error}"))
   }
 
   fn write_encrypted_blob(
@@ -683,7 +695,7 @@ impl ClipboardStore {
     Ok(())
   }
 
-  pub fn remove(path: &Path) -> Result<(), String> {
+  fn remove_records(path: &Path) -> Result<(), String> {
     for directory in [
       path.with_extension("records"),
       path.with_extension("visuals"),
@@ -708,6 +720,11 @@ impl ClipboardStore {
         }
       }
     }
+    Ok(())
+  }
+
+  pub fn remove(path: &Path) -> Result<(), String> {
+    Self::remove_records(path)?;
     let image_directory = path.with_extension("images");
     match fs::remove_dir_all(image_directory) {
       Ok(()) => {}
@@ -866,7 +883,7 @@ mod tests {
       let before = fs::metadata(&baseline).unwrap().len();
       store.persist(&state).unwrap();
       let after = store.written_bytes.load(Ordering::Relaxed);
-      println!(
+      tracing::debug!(
         "clipboard capture at {count} items: before={before} after={after} encrypted bytes"
       );
       measured.push(after);
@@ -881,7 +898,7 @@ mod tests {
       assert_eq!(restarted, state);
       for entry in fs::read_dir(store.record_directory()).unwrap() {
         let raw = fs::read(entry.unwrap().path()).unwrap();
-        assert!(!raw.windows(64).any(|part| part == &[b'n'; 64]));
+        assert!(!raw.windows(64).any(|part| part == [b'n'; 64]));
       }
       state.source_app_visuals[0].icon_data_url =
         Some(format!("data:image/png;base64,{}", "B".repeat(49120)));
@@ -1145,6 +1162,38 @@ mod tests {
       );
       ClipboardStore::remove(&path).unwrap();
     }
+  }
+
+  #[test]
+  fn missing_history_retires_unreachable_records_before_a_new_capture() {
+    let path = unique_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let previous = stored_snapshot_fixture();
+    store.persist(&previous).unwrap();
+    fs::remove_file(&path).unwrap();
+    let staged_image_directory = path.with_extension("images");
+    fs::create_dir_all(&staged_image_directory).unwrap();
+    let staged_image = staged_image_directory.join("new-capture.image.enc");
+    fs::write(&staged_image, b"staged capture").unwrap();
+
+    assert!(store.load().unwrap().is_none());
+    // Capturing an image writes its blob before the first history commit.
+    assert!(staged_image.exists());
+    assert!(!store.record_directory().exists());
+    assert!(!store.visual_directory().exists());
+    assert!(!store.settings_file().path().exists());
+    assert!(!store.head_file().path().exists());
+
+    let mut next = previous;
+    next.items.clear();
+    next.source_app_visuals.clear();
+    store.persist(&next).unwrap();
+    let loaded = ClipboardStore::new([7; 32], path.clone())
+      .load()
+      .unwrap()
+      .unwrap();
+    assert_eq!(loaded, next);
+    ClipboardStore::remove(&path).unwrap();
   }
 
   #[test]
