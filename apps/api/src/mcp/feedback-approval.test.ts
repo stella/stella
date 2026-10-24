@@ -97,7 +97,7 @@ describe("feedback approval", () => {
   test("refuses alternate numeric spellings even with a valid approval signature", () => {
     const [prefix, expiresAt, mac] = approval.split(".");
     if (prefix === undefined || expiresAt === undefined || mac === undefined) {
-      return panic(
+      panic(
         "The approval fixture must contain a version, expiry, and signature",
       );
     }

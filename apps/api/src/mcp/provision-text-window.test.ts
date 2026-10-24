@@ -151,13 +151,11 @@ describe("provision text windows", () => {
       });
       expect(first.type).toBe("window");
       if (first.type !== "window" || first.nextTextCursor === null) {
-        return panic("Expected another text window");
+        panic("Expected another text window");
       }
       const [prefix, , binding] = first.nextTextCursor.split(".");
       if (prefix === undefined || binding === undefined) {
-        return panic(
-          "The text cursor fixture must contain a version and binding",
-        );
+        panic("The text cursor fixture must contain a version and binding");
       }
       const payload = `${offset}.${binding}`;
       const cursor = `${prefix}.${payload}.${sha256Base64Url(payload)}`;

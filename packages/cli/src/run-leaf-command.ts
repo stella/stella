@@ -1451,7 +1451,9 @@ export const runLeafCommand = async ({
     args["limit"] = parseIntegerToken(limitFlag, {
       sign: "unsigned",
       min: 1,
-    }).unwrap();
+    }).unwrap(
+      "Reserved pagination limit was validated before building the request",
+    );
   }
 
   if (allActive) {

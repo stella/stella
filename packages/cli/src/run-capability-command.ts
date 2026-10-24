@@ -157,7 +157,9 @@ export const runCapabilityCommand = async ({
       setPath(
         input,
         `${paginationPart}.limit`,
-        parseIntegerToken(limitFlag, { sign: "unsigned", min: 1 }).unwrap(),
+        parseIntegerToken(limitFlag, { sign: "unsigned", min: 1 }).unwrap(
+          "Reserved pagination limit was validated before building the request",
+        ),
       );
     }
   }
