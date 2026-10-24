@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] GBR adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: A grammar's format spells a reader's docket family only; ingestion reads acceptance and the case-file key, both from the input.
 import { panic } from "better-result";
