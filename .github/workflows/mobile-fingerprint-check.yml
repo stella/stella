@@ -71,7 +71,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/fingerprint"
           for platform in ios android; do
-            bun scripts/fingerprint.ts "$platform" > "$RUNNER_TEMP/fingerprint/head-$platform"
+            bun scripts/fingerprint.ts "$platform" --json > "$RUNNER_TEMP/fingerprint/head-$platform.json"
           done
 
       - name: Check out the base
@@ -89,9 +89,9 @@ jobs:
         run: |
           for platform in ios android; do
             if [ -f scripts/fingerprint.ts ]; then
-              bun scripts/fingerprint.ts "$platform" > "$RUNNER_TEMP/fingerprint/base-$platform"
+              bun scripts/fingerprint.ts "$platform" --json > "$RUNNER_TEMP/fingerprint/base-$platform.json"
             else
-              echo "none" > "$RUNNER_TEMP/fingerprint/base-$platform"
+              echo '{"hash":"none","sources":[]}' > "$RUNNER_TEMP/fingerprint/base-$platform.json"
             fi
           done
 
@@ -103,18 +103,27 @@ jobs:
             echo "## Mobile native fingerprint"
             echo
             for platform in ios android; do
-              head="$(cat "$RUNNER_TEMP/fingerprint/head-$platform")"
-              base="$(cat "$RUNNER_TEMP/fingerprint/base-$platform")"
+              head_json="$RUNNER_TEMP/fingerprint/head-$platform.json"
+              base_json="$RUNNER_TEMP/fingerprint/base-$platform.json"
+              head="$(jq -r .hash "$head_json")"
+              base="$(jq -r .hash "$base_json")"
               if [ "$head" = "$base" ]; then
                 echo "- **$platform**: unchanged (\`$head\`). Over-the-air updates keep reaching current builds."
-              else
-                changed="$changed $platform"
-                echo "- **$platform**: \`$base\` → \`$head\`. After merging, a new TestFlight build must ship before updates reach phones."
+                continue
               fi
+              changed="$changed $platform"
+              echo "- **$platform**: \`$base\` → \`$head\`. After merging, a new TestFlight build must ship before updates reach phones. Sources that moved it:"
+              # Added, changed and removed sources alike.
+              jq -r -n --slurpfile h "$head_json" --slurpfile b "$base_json" '
+                ($h[0].sources | map({ (.source): . }) | add // {}) as $hm
+                | ($b[0].sources | map({ (.source): . }) | add // {}) as $bm
+                | ($hm + $bm | keys[])
+                | select($hm[.].hash != $bm[.].hash)
+                | "  - \(($hm[.] // $bm[.]).type) `\(.)`\(if $hm[.] == null then " (removed)" elif $bm[.] == null then " (added)" else "" end)"'
             done
           } >> "$GITHUB_STEP_SUMMARY"
           echo "changed=${changed# }" >> "$GITHUB_OUTPUT"
-          echo "ios=$(cat "$RUNNER_TEMP/fingerprint/head-ios")" >> "$GITHUB_OUTPUT"
+          echo "ios=$(jq -r .hash "$RUNNER_TEMP/fingerprint/head-ios.json")" >> "$GITHUB_OUTPUT"
 
   fingerprint-macos:
     name: Native fingerprint on macOS
