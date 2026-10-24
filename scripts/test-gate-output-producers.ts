@@ -202,7 +202,6 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
       "reuse_static_check_116",
       "reuse_static_check_117",
       "reuse_static_check_118",
-      "reuse_static_check_122",
     ],
     semantics: "content-reuse",
     proofTest: "scripts/ci-static-checks.test.ts",
