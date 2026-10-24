@@ -76,7 +76,7 @@ const loadWasmBindings = async () => {
 
 const createWorkerEngine = ({
   createWorker = () =>
-    new Worker(new URL("./scan-engine.worker.js", import.meta.url), {
+    new Worker(new URL("scan-engine.worker.js", import.meta.url), {
       type: "module",
     }),
   requestTimeoutMs = WORKER_REQUEST_TIMEOUT_MS,
