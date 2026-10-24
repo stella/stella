@@ -287,8 +287,19 @@ const writeOutputs = (outputs: Record<string, string>) => {
   process.stdout.write(lines);
 };
 
+const COMMANDS = ["plan", "update"] as const;
+type Command = (typeof COMMANDS)[number];
+
+const isCommand = (value: string | undefined): value is Command =>
+  COMMANDS.some((command) => command === value);
+
 const main = async () => {
   const command = process.argv.at(2);
+  if (!isCommand(command)) {
+    throw new ReleaseRefreshError(
+      `usage: release-pull-request-refresh.ts ${COMMANDS.join("|")}`,
+    );
+  }
   const repo = requiredEnv("REPOSITORY");
   switch (command) {
     case "plan": {
@@ -325,10 +336,10 @@ const main = async () => {
       writeOutputs({ head });
       return;
     }
-    default:
-      throw new ReleaseRefreshError(
-        "usage: release-pull-request-refresh.ts plan|update",
-      );
+    default: {
+      command satisfies never;
+      throw new ReleaseRefreshError(`Unhandled command: ${String(command)}`);
+    }
   }
 };
 
