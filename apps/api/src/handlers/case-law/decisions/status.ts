@@ -5,8 +5,8 @@ import type { Static } from "elysia";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
-  publicCaseLawCountry,
   type PublicCaseLawCountry,
+  publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { publishedCaseLawDecisions } from "@/api/db/schema";

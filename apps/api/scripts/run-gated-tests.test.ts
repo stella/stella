@@ -9,10 +9,10 @@ import {
   assertPostgresWorkerBudget,
   planPostgresWorkers,
   POSTGRES_IDENTIFIER_BYTES,
+  type PostgresAdmin,
   PostgresTemplateConnectionError,
   PostgresWorkerBudgetError,
   runPostgresWorkers,
-  type PostgresAdmin,
   workerDatabaseName,
 } from "./postgres-test-workers";
 import { runTestBatches } from "./run-gated-tests";
@@ -307,7 +307,7 @@ test("template cloning precedes workers and databases drop in cleanup on success
   const create = calls.findIndex((call) => call.startsWith("CREATE DATABASE"));
   const terminate = calls.findIndex((call) =>
     call.startsWith(
-      'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 ["template_db_test_',
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend' [\"template_db_test_",
     ),
   );
   const drop = calls.findIndex((call) =>

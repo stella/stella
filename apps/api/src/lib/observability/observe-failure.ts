@@ -12,7 +12,7 @@
 
 import { Result } from "better-result";
 
-import { sanitizeQueryErrorText, type FailureGrade } from "@stll/errors";
+import { type FailureGrade, sanitizeQueryErrorText } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {

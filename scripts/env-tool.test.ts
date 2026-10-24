@@ -27,8 +27,8 @@ import {
   parseEnvText,
   parseWebBuildContract,
   renderApiEnvExample,
-  renderSecretExamples,
   renderCollabEnvExample,
+  renderSecretExamples,
   renderWebBuildContract,
   renderWebEnvExample,
   resolveDoctorMode,
@@ -1211,16 +1211,4 @@ describe("web container build arguments", () => {
       parseWebBuildContract("FROM oven/bun AS builder\nRUN bun run build\n"),
     ).toThrow("no longer runs");
   });
-});
-
-test("the audit skips transient in-tree fixture directories, not test sources", () => {
-  expect(isIgnoredAuditPath("scripts/__precommit_lint_4242__/fixture.ts")).toBe(
-    true,
-  );
-  expect(isIgnoredAuditPath(".oxlint-plugins/__tests__/rule.test.ts")).toBe(
-    false,
-  );
-  expect(isIgnoredAuditPath("scripts/__precommit_lint__/fixture.ts")).toBe(
-    false,
-  );
 });

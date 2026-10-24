@@ -16,10 +16,10 @@ import { EbsBalanceReadError } from "./ebs-balance-reader";
 import {
   createEbsReaderCache,
   createEbsSignalReader,
+  type EbsConfigurationEvent,
   EbsConfigurationMissingError,
   requireEbsConfiguration,
   resolveEbsConfiguration,
-  type EbsConfigurationEvent,
 } from "./ebs-signal-reader";
 
 const now = Temporal.Instant.from("2026-10-01T12:00:00Z").epochMilliseconds;

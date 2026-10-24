@@ -12,11 +12,13 @@ import { assertProperty } from "@stll/property-testing";
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
+  CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolRegistryPath,
+  checkPoolStepRun,
+  type ReadCheckPool,
   readCheckPool,
   readWorkingTreeCheckPool,
-  type ReadCheckPool,
 } from "./ci-check-pool-registry";
 import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
@@ -50,6 +52,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // Matrix metadata selects a disjoint slice of the same pool;
+                // it does not change the check represented by this step.
+                "CI_CHECK_POOL_PARTITION",
               ].includes(key),
           ),
         );
@@ -370,8 +375,42 @@ const jobs = v.parse(
     readFileSync(new URL(`../${workflowPath}`, import.meta.url), "utf-8"),
   ),
 ).jobs;
-const baseWorkflow: unknown = Bun.YAML.parse(
-  git(["show", `${mergeBase}:${workflowPath}`]),
+// Pool steps once ran `bun scripts/ci-check-pool.ts run <job>` with `needs`
+// in the environment; a merge base from before the file hand-over reads in
+// today's form, so its pooled checks still expand and compare. Matches only
+// the old form, so it is inert once the merge base carries the new one.
+const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+const withCurrentPoolSteps = (workflow: unknown): unknown => {
+  const parsed = v.parse(
+    v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
+    workflow,
+  );
+  for (const job of CHECK_POOL_JOBS) {
+    const body = parsed.jobs[job];
+    if (!v.is(v.looseObject({ steps: v.array(v.unknown()) }), body)) {
+      continue;
+    }
+    body.steps = body.steps.map((step) => {
+      if (
+        !v.is(
+          v.looseObject({
+            run: v.string(),
+            env: v.record(v.string(), v.unknown()),
+          }),
+          step,
+        ) ||
+        LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job
+      ) {
+        return step;
+      }
+      const { CI_CHECK_POOL_NEEDS: _needs, ...env } = step.env;
+      return { ...step, env, run: checkPoolStepRun(job) };
+    });
+  }
+  return parsed;
+};
+const baseWorkflow: unknown = withCurrentPoolSteps(
+  Bun.YAML.parse(git(["show", `${mergeBase}:${workflowPath}`])),
 );
 const baseJobs = v.parse(workflowSchema, baseWorkflow).jobs;
 const removedChecks = v.parse(
@@ -450,7 +489,6 @@ const CONTINUATION_PREFIXES = {
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
-  Format: "affected",
   "Changeset present for published package changes": "policy",
 };
 const preInstallGuards = new Map([
@@ -901,6 +939,9 @@ const conditionTokens = (condition: string) =>
     )
     .trim()
     .replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/u, "$1");
+const QUICK_GATED_NEEDS = ["ci-plan", "generated-sources", "pr-heavy-gate"];
+const QUICK_CHECK_GATE =
+  "!cancelled() && needs.ci-plan.result == 'success' && needs.generated-sources.result == 'success' && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success') && ";
 type ScopeOptions = {
   current: Record<string, unknown>;
   base: Record<string, unknown>;
@@ -913,8 +954,22 @@ const expectScope = ({
   job,
   releaseHoldRemoved,
 }: ScopeOptions) => {
-  const { if: condition, ...scope } = current;
-  const { if: originalCondition, ...originalScope } = base;
+  const { if: gatedCondition, ...scope } = current;
+  const { if: gatedOriginalCondition, ...originalScope } = base;
+  // A leg that waits for the quick checks names their gate and, running past
+  // `!cancelled()`, states its prerequisites itself. Compare the scope under
+  // that exact prefix; a gated leg without it fails.
+  const ungate = (target: Record<string, unknown>, value: unknown) => {
+    if (!isDeepStrictEqual(target["needs"], QUICK_GATED_NEEDS)) {
+      return value;
+    }
+    target["needs"] = ["ci-plan", "generated-sources"];
+    const tokens = conditionTokens(v.parse(v.string(), value));
+    expect(tokens.startsWith(QUICK_CHECK_GATE), tokens).toBe(true);
+    return tokens.slice(QUICK_CHECK_GATE.length);
+  };
+  const condition = ungate(scope, gatedCondition);
+  const originalCondition = ungate(originalScope, gatedOriginalCondition);
   // The generated-source producer is a job of its own, so its consumers
   // name both. A merge base may name the plan alone, the current producer, or
   // the retired producer that ran after the plan.
@@ -954,6 +1009,20 @@ const expectScope = ({
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     });
   const migrated = { ...scope };
+  // A check-pool matrix changes scheduling, not the inherited job scope.
+  // Accept only the exact exhaustive two-way partition used by the runner;
+  // arbitrary strategy changes remain visible to this comparison. Normalize
+  // only an added partition: a baseline that owns it must retain it.
+  if (
+    job === "ci-checks-rest" &&
+    originalScope["strategy"] === undefined &&
+    isDeepStrictEqual(migrated["strategy"], {
+      "fail-fast": false,
+      matrix: { partition: [1, 2] },
+    })
+  ) {
+    delete migrated["strategy"];
+  }
   // The retired changeset hold was the check legs' only pull-request reader.
   if (
     job !== undefined &&
@@ -1083,6 +1152,20 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  // Format checks the tracked tree with `bun fmt --check`; it no longer
+  // filters by affected packages, so it no longer waits on that step.
+  if (step.name === "Format" && fields.run?.includes("turbo run format")) {
+    const { AFFECTED_FLAG: _flag, ...env } = v.parse(
+      v.record(v.string(), v.unknown()),
+      step["env"] ?? {},
+    );
+    return {
+      ...step,
+      env,
+      if: fields.if?.replace(" && steps.affected.outcome == 'success'", ""),
+      run: "bun fmt --check",
+    };
+  }
   // The classification check derives its manifest instead of reading a
   // committed one, and exposes its sensitive-change output by step id.
   if (
@@ -1262,6 +1345,63 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
     base: baseSteps,
     removed: newRemovals.map(({ name }) => name),
   });
+});
+
+test("code-quality pool preserves every moved check exactly once", () => {
+  const movedNames = [
+    "Code quality (web)",
+    "Result consumption (web)",
+    "Code quality (rest)",
+    "Query cache types",
+    "Dead columns",
+    "Projection totality",
+    "Aggregate ownership",
+    "Split-button census",
+    "Database awaits in loops",
+    "API timeout mutation guard",
+    "Result consumption (rest)",
+  ];
+  const originalSteps = v.parse(
+    headJobSchema,
+    baseJobs["code-quality-web-rest"],
+  ).steps;
+  const originals = originalSteps.filter(({ name }) =>
+    movedNames.includes(name),
+  );
+  const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
+
+  const withoutPoolMetadata = (step: Record<string, unknown>) => {
+    const normalized = { ...step };
+    // An ordinary step's implicit success() is `!cancelled()` in the pool.
+    if (normalized["if"] === ["$", "{{ !cancelled() }}"].join("")) {
+      delete normalized["if"];
+    } else if (typeof normalized["if"] === "string") {
+      normalized["if"] = normalized["if"].replace(
+        /^\$\{\{\s*([\s\S]*?)\s*\}\}$/u,
+        "$1",
+      );
+    }
+    const env = normalized["env"];
+    if (typeof env === "object" && env !== null && !Array.isArray(env)) {
+      const originalEnv = Object.fromEntries(
+        Object.entries(env).filter(
+          ([key]) =>
+            !["CI_CHECK_KIND", "CI_CHECK_INPUTS", "CI_CHECK_CONTEXT"].includes(
+              key,
+            ),
+        ),
+      );
+      if (Object.keys(originalEnv).length === 0) {
+        delete normalized["env"];
+      } else {
+        normalized["env"] = originalEnv;
+      }
+    }
+    return normalized;
+  };
+
+  expect(pooled.map(({ name }) => name)).toEqual(movedNames);
+  expect(pooled.map(withoutPoolMetadata)).toEqual(originals);
 });
 
 test("task result cache checks belong exactly once to the rest leg", () => {
@@ -1542,6 +1682,28 @@ test("scope comparisons preserve queued certification and the underlying trust g
   }
 });
 
+test("a leg that waits for the quick checks keeps its scope and every prerequisite", () => {
+  const scope =
+    "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true )";
+  const base = { if: scope, needs: ["ci-plan", "generated-sources"] };
+  const gated = { if: `${QUICK_CHECK_GATE}${scope}`, needs: QUICK_GATED_NEEDS };
+  expectScope({ base, current: gated });
+  expectScope({ base: gated, current: gated });
+  for (const condition of [
+    gated.if.replace(" && needs.generated-sources.result == 'success'", ""),
+    gated.if.replace("needs.ci-plan.result == 'success' && ", ""),
+    gated.if.replace("!cancelled() && ", "always() && "),
+    scope,
+  ]) {
+    expect(() =>
+      expectScope({ base, current: { ...gated, if: condition } }),
+    ).toThrow("Expected:");
+  }
+  expect(() =>
+    expectScope({ base, current: { ...gated, needs: ["ci-plan"] } }),
+  ).toThrow("toEqual");
+});
+
 test("package scope narrows check legs while retaining baseline trust and completion gates", () => {
   const trust =
     "inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' )";
@@ -1679,6 +1841,8 @@ test("producer scope regression rejects a mutation that normalizes an already-ow
         v,
         isDeepStrictEqual,
         conditionTokens,
+        QUICK_CHECK_GATE,
+        QUICK_GATED_NEEDS,
         options: { current: handoff, base: handoff },
       }),
     ),

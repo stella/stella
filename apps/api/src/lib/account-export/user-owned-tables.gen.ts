@@ -71,6 +71,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "matter_inbound_addresses",
   "mcp_oauth_state",
   "mcp_user_connections",
+  "mcp_web_handoff",
   "member",
   "notifications",
   "oauth_access_token",

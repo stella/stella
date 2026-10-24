@@ -19,9 +19,9 @@ import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  docxSuggestions,
   documentReviewFindings,
   documentReviewRuns,
+  docxSuggestions,
 } from "@/api/db/schema";
 import type { DocxSuggestionSeverity } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";

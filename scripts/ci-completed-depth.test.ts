@@ -18,6 +18,7 @@ import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
 import { PILOT_ALWAYS } from "./ci-pr-pilot-plan";
+import { renderResultInputs } from "./ci-result-inputs";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
 import {
   ARMED_LABEL,
@@ -252,6 +253,8 @@ const decide = async ({
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
+  // Metadata events mirror the head's earlier code run; one exists here.
+  const listWorkflowRuns = () => {};
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
     Buffer,
     require: (name: string) => {
@@ -302,7 +305,18 @@ const decide = async ({
       paginate: async (
         method: (request: unknown) => Promise<{ data: unknown }>,
         request: unknown,
-      ) => (await method(request)).data,
+      ) =>
+        method === listWorkflowRuns
+          ? [
+              {
+                id: 50,
+                head_sha: pull.head.sha,
+                status: "completed",
+                conclusion: "success",
+                pull_requests: [{ number: pull.number }],
+              },
+            ]
+          : (await method(request)).data,
       rest: {
         pulls: {
           get: async (request: { pull_number: number }) => {
@@ -323,6 +337,7 @@ const decide = async ({
           },
         },
         actions: {
+          listWorkflowRuns,
           downloadArtifact: async (request: { artifact_id: number }) => {
             requests.push(request);
             if (downloadFailure) {
@@ -336,7 +351,12 @@ const decide = async ({
               ),
             };
           },
-          listJobsForWorkflowRun: async (request: unknown) => {
+          listJobsForWorkflowRun: async (request: { run_id: number }) => {
+            // Run 50 is the head's earlier code run that metadata mirrors;
+            // only evidence lookups are recorded.
+            if (request.run_id === 50) {
+              return { data: [{ name: "ci-plan" }, { name: "ci-result" }] };
+            }
             requests.push(request);
             return { data: runJobs };
           },
@@ -626,6 +646,9 @@ const recordEvidence = (
 ) => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-evidence-"));
   const output = nodePath.join(directory, "output");
+  // The gate's prelude writes the plan outputs to PLAN_FILE; this block runs on its own.
+  const planFile = nodePath.join(directory, "plan.json");
+  writeFileSync(planFile, JSON.stringify(plan));
   try {
     const child = Bun.spawnSync(["bash", "-eu", "-c", script], {
       env: {
@@ -651,7 +674,7 @@ const recordEvidence = (
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify(plan),
+        PLAN_FILE: planFile,
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [
@@ -1172,6 +1195,7 @@ test("thin groups certify only normal-profile completion on a head included in t
   }
 });
 
+// Measured p95 is 33.8 s; this test must evaluate every queued job through the real aggregator.
 test("thin groups require queued code checks regardless of normal PR completion", async () => {
   const admitted = queueAdmittedJobs(workflow);
   expect(admitted).toContain("ci-browser");
@@ -1229,6 +1253,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.ci-plan.outputs.queue_depth": "thin",
           "needs.ci-plan.result": "success",
           "needs.pr-heavy-gate.result": "skipped",
+          "needs.generated-sources.result": "success",
           "needs.web-build.result": "success",
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
@@ -1278,32 +1303,41 @@ test("thin groups require queued code checks regardless of normal PR completion"
     );
     dependencies["ci-plan"] = { result: "success" };
     const runAggregation = (needs: typeof dependencies, plan = allScopes) =>
-      Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
-        env: {
-          ...process.env,
-          ...env,
-          EVENT: "merge_group",
-          QUEUE_DEPTH: "thin",
-          SUITE_DEPTH: "full",
-          HEAVY_ONLY: "false",
-          COVERAGE_PROFILE: "normal-v1",
-          PATCH_ID: patchId,
-          WORKFLOW_VERSION: pr.head.sha,
-          PLAN_CONFIG: planConfig,
-          PR_DEPTH_JOBS: JSON.stringify(prDepth),
-          GITHUB_STEP_SUMMARY: "/dev/null",
-          PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
-          PR_DEPTH_SOURCE_RUN_ID:
-            evidence.outputs.get("pr_depth_source_run_id") ?? "",
-          QUEUE_VALIDATION: "false",
-          PLAN_RESULT: "success",
-          TRUSTED: "true",
-          THIN_JOBS: JSON.stringify(thin),
-          QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
-          PLAN: JSON.stringify(plan),
-          NEEDS: JSON.stringify(needs),
+      Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          renderResultInputs(aggregation.run ?? "", {
+            needs: JSON.stringify(needs),
+            plan: JSON.stringify(plan),
+          }),
+        ],
+        {
+          env: {
+            ...process.env,
+            ...env,
+            EVENT: "merge_group",
+            QUEUE_DEPTH: "thin",
+            SUITE_DEPTH: "full",
+            HEAVY_ONLY: "false",
+            COVERAGE_PROFILE: "normal-v1",
+            PATCH_ID: patchId,
+            WORKFLOW_VERSION: pr.head.sha,
+            PLAN_CONFIG: planConfig,
+            PR_DEPTH_JOBS: JSON.stringify(prDepth),
+            GITHUB_STEP_SUMMARY: "/dev/null",
+            PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
+            PR_DEPTH_SOURCE_RUN_ID:
+              evidence.outputs.get("pr_depth_source_run_id") ?? "",
+            QUEUE_VALIDATION: "false",
+            PLAN_RESULT: "success",
+            TRUSTED: "true",
+            THIN_JOBS: JSON.stringify(thin),
+            QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
+          },
         },
-      });
+      );
     const successfulAggregation = runAggregation(dependencies);
     expect(
       successfulAggregation.exitCode,
@@ -1335,7 +1369,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
       }
     }
   }
-}, 35_000);
+}, 70_000);
 
 test("a metadata event without completed evidence starts no suites", async () => {
   for (const action of ["labeled", "unlabeled"]) {

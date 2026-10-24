@@ -15,10 +15,10 @@ import { isCorpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
 import { corpusIndexQueryDiffClientForGeneration } from "@/api/scripts/corpus-index-query-diff-client";
 import {
+  diffRankedDocuments,
   divergedQueries,
   type GoldenQuery,
   type GoldenQueryDiffRow,
-  diffRankedDocuments,
   goldenQueryRequest,
   parseGoldenQueryFile,
   type QueryRunOutcome,

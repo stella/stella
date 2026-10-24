@@ -18,9 +18,9 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  toPersistedChatMessageContentV3,
   getAwaitingUserInteractions,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   claimChatTurnForExecution,
@@ -41,9 +41,9 @@ import {
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import {
-  createApprovalHarness,
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
+  createApprovalHarness,
   HARNESS_CHAT_MODEL_ID,
 } from "@/api/tests/helpers/chat-approval-harness";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";

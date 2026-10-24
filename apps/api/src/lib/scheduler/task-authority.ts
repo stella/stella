@@ -93,6 +93,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
   ),
+  "caseLaw.reportFreshness": platform(
+    "case-law-freshness-report.ts",
+    "Reports public legal corpus freshness metrics.",
+  ),
   "caseLaw.reconcileCorpusUploadIntents": platform(
     "case-law-corpus-upload-cleanup.ts",
     "Public legal corpus upload cleanup.",
@@ -150,6 +154,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "documentProcessing.dispatchOcr": platform(
     "document-processing-ocr.ts",
     "Hands queued document processing runs to their queue.",
+  ),
+  "documentProcessing.dispatchNativeExtraction": platform(
+    "document-processing-native-extraction.ts",
+    "Hands queued native extraction runs to their queue.",
   ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
@@ -254,6 +262,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",
+  ),
+  "scheduler.auditPauses": platform(
+    "scheduler-pause-audit.ts",
+    "Reports overdue scheduler operator pauses.",
   ),
   "scheduler.dispatchBullMq": {
     authority: "unclassified",
