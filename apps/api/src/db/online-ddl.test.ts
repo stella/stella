@@ -307,7 +307,9 @@ const POLICY = {
 test("exhausted statement retries report the same deferred outcome as the gate", async () => {
   const records: MigrationLockEvent[] = [];
   const lockTelemetry = createMigrationLockTelemetry();
-  lockTelemetry.emit = (record) => records.push(record);
+  lockTelemetry.emit = (record) => {
+    records.push(record);
+  };
   const observedAt = "2026-10-02T12:00:00.000Z";
   let attempts = 0;
   const connection: OnlineMigrationConnection = {
