@@ -657,16 +657,17 @@ const workspaceDocNames: Record<string, readonly string[]> = {
  * the supplier agreement derived from its tracked-change paragraphs, and
  * the data room's generated review extracts.
  */
-const documentTexts: Record<string, string> = {
-  ...SEED_CONTENT.documentTexts,
-  [SUPPLIER_AGREEMENT.fileName]: buildSupplierAgreementText(),
-  ...Object.fromEntries(
-    EXPORT_REVIEW_DOC_NAMES.map((fileName, index) => [
-      fileName,
-      buildExportReviewDocumentText(EXPORT_REVIEW_COPY, fileName, index),
-    ]),
+const documentTexts = new Map([
+  ...Object.entries(SEED_CONTENT.documentTexts),
+  [SUPPLIER_AGREEMENT.fileName, buildSupplierAgreementText()],
+  ...EXPORT_REVIEW_DOC_NAMES.map(
+    (fileName, index) =>
+      [
+        fileName,
+        buildExportReviewDocumentText(EXPORT_REVIEW_COPY, fileName, index),
+      ] as const,
   ),
-};
+]);
 
 // ─── Contacts ───────────────────────────────────────────
 
@@ -3322,7 +3323,7 @@ export async function seed(organizationId?: string, userId?: string) {
       const title = fileName.replace(fileExtRe, "").replaceAll("_", " ");
 
       // Single source of truth for document content
-      const configuredDocText = documentTexts[fileName];
+      const configuredDocText = documentTexts.get(fileName);
 
       // ── S3 file ──
       // The Supplier Agreement ships real tracked changes and comments, so

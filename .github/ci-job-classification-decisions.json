@@ -37,7 +37,7 @@
   "candidate:.github/workflows/api-test-memory.yml/refresh": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "fd870683fe550e5683dcb1e8ec7b3d1eb34155218b37ba0735275e0f8cbf564d"
+    "reviewedDigest": "d784ae4c2db6b62285a3029eb91b62570c01293814c8225f18f4b4be7c75530d"
   },
   "candidate:.github/workflows/audit-branch-protection.yml/audit-branch": {
     "kind": "ordinary",
@@ -112,7 +112,7 @@
   "candidate:.github/workflows/catalogue-upstream.yml/catalogue-upstream": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "8dfbbb26e00643113e21d5e9d60fcd5ab9f551d20b643b8e4085c60f048c86dd"
+    "reviewedDigest": "bae11daefc19d5eb31179756a5de5ca93ca18e20ec340f06954515deaf70b717"
   },
   "candidate:.github/workflows/ci.yml/ci-plan": {
     "kind": "support",
@@ -147,7 +147,7 @@
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "b564af7f14c6770fc394d1819699d578796a8f60c6aefa5b26fd9e8237a034d9"
+    "reviewedDigest": "b0c13018cbe366649ecdd19179611f55c5d6724e67162848e2e04483f1aaf806"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
@@ -439,11 +439,6 @@
     "qualifier": "Checks; no publication, tag creation, or deployment.",
     "reviewedDigest": "0958863416799fe380db35383ffeff93aa8705895a386920fc688e8e7e6fc92f"
   },
-  "candidate:.github/workflows/docs-source-policy.yml/docs-source-policy": {
-    "kind": "ordinary",
-    "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "60597d6004cd0347cd6154b2b8f8f2f36d38db33c16767f64be48bcd9f4ba732"
-  },
   "candidate:.github/workflows/fetch-public-documents.yml/fetch": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
@@ -472,7 +467,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "46e2aa0eabd5a350c6bab76b3373ff01645004c6d3ab4e9977e1b53053f01148"
+    "reviewedDigest": "7e1475ffccf0e736e193b895453f56014eae407a5384f20e38578bb6aa47aeec"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +482,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "e77cf09358907c2e666ab6f0a22a2601858b1dea4997d70a726d081a3b7bfcd2"
+    "reviewedDigest": "2d7f023f54d1cc156f8c43b810f9db0a14197f500f03026f14c8b2b80e81b0c2"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -517,7 +512,7 @@
   "candidate:.github/workflows/marketing-screenshots-publish.yml/publish": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "9fde72b58370d3444c64577e216d5b5e12030152e9b1764866bad51902905945"
+    "reviewedDigest": "c7ed7fc5db472afcdb2332502b9e09d4e0b2d4a222056edad2569b717ef14c7f"
   },
   "candidate:.github/workflows/marketing-screenshots-update.yml/update": {
     "kind": "ordinary",
@@ -547,7 +542,7 @@
   "candidate:.github/workflows/model-catalog-check.yml/model-catalog-check": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "9ea7a90a44e59589a76155024a3d339feed91dbfb682a8dcc6ff89cc11150100"
+    "reviewedDigest": "d28de561ae0300fd52932d907abcf79b28214dbb6ae4b39599be3d883de618c4"
   },
   "candidate:.github/workflows/network-baseline-deliver.yml/deliver": {
     "kind": "ordinary",
@@ -712,7 +707,7 @@
   "candidate:.github/workflows/quarantine-prune.yml/prune": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "b7b75997008417d373d7abf5c6461541e6d9e7f3257848c32da0b796ee9cf389"
+    "reviewedDigest": "37fc127896ec40bfef4202103a7872f89dcfa31e347edd3c625450cf00d95ff4"
   },
   "candidate:.github/workflows/query-perf.yml/query-perf": {
     "kind": "support",
@@ -832,7 +827,7 @@
   "candidate:.github/workflows/scheduled-run-alerts.yml/notify": {
     "kind": "ordinary",
     "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment.",
-    "reviewedDigest": "93f0abb577f41d97d2ccb9a34001bed9eef9fc13b4dc96a7c17fb88446ec3b44"
+    "reviewedDigest": "5b64fe66faba4e14b21ad3a2e26365a6879c9acb7e89263564a1f7a3e9866738"
   },
   "candidate:.github/workflows/scorecard.yml/scorecard": {
     "kind": "ordinary",
@@ -922,7 +917,7 @@
   "candidate:.github/workflows/flaky-test-quarantine.yml/propose": {
     "kind": "ordinary",
     "qualifier": "Scans flake history and opens or refreshes a review-required quarantine proposal; no release publication or deployment.",
-    "reviewedDigest": "538b9da9de8e865ff800d669235e6ad56ebc2f912e92836cc6729c6bf852e45c"
+    "reviewedDigest": "85de2b13d44fa0efe4fc5ebd21685b638ac4cc0120b844b643057f8c3b15906e"
   },
   "candidate:.github/workflows/release-health.yml/window": {
     "kind": "support",

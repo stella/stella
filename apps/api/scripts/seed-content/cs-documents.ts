@@ -9,7 +9,7 @@ const MARKERS = MARKETING_LOCALE_MARKERS.cs;
 
 export const CS_SPA_DOCUMENT_NAME = "Smlouva_o_koupi_podilu.pdf";
 
-export const CS_EMAIL_FILE_NAMES = [
+const CS_EMAIL_FILE_NAMES = [
   "Closing_zitra_kontrolni_seznam.eml",
   "Fwd_ERU_podminka_c_7.eml",
   "Aktualizace_pro_klienta.eml",
