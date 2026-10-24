@@ -615,6 +615,7 @@ const createReadDecisionResult = () => ({
     },
   ],
   citationsNextCursor: null,
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   country: "CZE",
   court: "Nejvyšší soud",
   courtAbbreviation: "NS",

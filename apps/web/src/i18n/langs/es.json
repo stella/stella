@@ -1142,6 +1142,7 @@
       "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
+      "caseFileDocuments": "Documentos de este expediente judicial",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
       "citedDecisionPassage": "Pasaje de la resolución",

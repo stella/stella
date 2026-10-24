@@ -17,6 +17,7 @@ import {
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import { listCaseFileDocuments } from "@/api/handlers/case-law/decisions/case-file";
 import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
@@ -98,10 +99,12 @@ export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
 );
 
 export const readDecisionQuerySchema = t.Object({
+  caseFileCursor: t.Optional(tPaginationCursor()),
   citationsCursor: t.Optional(tPaginationCursor()),
 });
 
 type ReadDecisionOptions = {
+  caseFileCursor?: string | null | undefined;
   citationsCursor?: string | null | undefined;
   /**
    * The court registry the chip beside the court's name is drawn from. The
@@ -313,6 +316,7 @@ export const decisionRecordQuery = (
   tx
     .select({
       id: publishedCaseLawDecisions.id,
+      sourceId: publishedCaseLawDecisions.sourceId,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       caseNumberType: publishedCaseLawDecisions.caseNumberType,
       slug: publishedCaseLawDecisions.slug,
@@ -369,6 +373,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
     citationsCursor,
+    caseFileCursor,
     readCourtWeights,
     subject,
   }: ReadDecisionOptions) => {
@@ -401,6 +406,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       judges,
       citationsFromPage,
       citationsToPage,
+      caseFile,
     ] = await Promise.all([
       // Bounded and degraded to no badge: a slow registry read must cost the
       // decision its chip, not the reader its decision.
@@ -427,8 +433,12 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             decisionId,
             countries: subject.countries,
           }),
+      listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
     ]);
 
+    if (caseFile === false) {
+      return status(400, { message: "Invalid cursor" });
+    }
     if (!("items" in citationsFromPage)) {
       return citationsFromPage;
     }
@@ -584,6 +594,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       citationsTo: citationsToPage.items,
       citationsNextCursor,
       languageAlternates,
+      caseFile,
       fulltext,
     };
   },

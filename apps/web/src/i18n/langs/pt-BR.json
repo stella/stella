@@ -1142,6 +1142,7 @@
       "appliedVersionStatedAmendmentCompact": "Informado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redação vigente em {date}} until {Redação vigente até {date}} from {Redação vigente desde {date}} other {Redação vigente em {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Informado: {date}} until {Informado: até {date}} from {Informado: a partir de {date}} other {Informado: {date}}}",
+      "caseFileDocuments": "Documentos deste processo",
       "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",
       "citedBy": "Citado por",
       "citedDecisionPassage": "Trecho da decisão",

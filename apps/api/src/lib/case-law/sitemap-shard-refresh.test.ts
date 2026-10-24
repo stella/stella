@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
@@ -67,7 +67,7 @@ const decision = (
   overrides: Partial<typeof caseLawDecisions.$inferInsert> & {
     caseNumber: string;
   },
-): typeof caseLawDecisions.$inferInsert => ({
+) => ({
   id: createSafeId<"caseLawDecision">(),
   sourceId: openSourceId,
   court: "Nejvyšší soud",
@@ -531,6 +531,144 @@ for (const phase of ["dated", "undated"] as const) {
     DB_TEST_TIMEOUT_MS,
   );
 }
+
+test(
+  "language versions occupy one document across sitemap months and buckets",
+  async () => {
+    const ids = Array.from({ length: 7 }, () =>
+      createSafeId<"caseLawDecision">(),
+    ).toSorted();
+    const [
+      withheld,
+      listingOnly,
+      redacted,
+      judgment,
+      translation,
+      opinion,
+      opinionTranslation,
+    ] = ids;
+    if (
+      !withheld ||
+      !listingOnly ||
+      !redacted ||
+      !judgment ||
+      !translation ||
+      !opinion ||
+      !opinionTranslation
+    ) {
+      panic("Expected seven document version ids");
+    }
+    const versions = [
+      decision({
+        id: withheld,
+        caseNumber: "1 Cdo 1/2016",
+        languageGroupKey: "sitemap-judgment",
+        sourceId: closedSourceId,
+        decisionDate: "2016-01-01",
+      }),
+      decision({
+        id: listingOnly,
+        caseNumber: "1 Cdo 1/2016",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-01-01",
+        metadata: {
+          [PARTIAL_OBSERVATION_KEY]: {
+            [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+          },
+        },
+      }),
+      decision({
+        id: redacted,
+        caseNumber: "1 Cdo 1/2016",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-01-01",
+        redactedAt: new Date("2016-03-01"),
+        fulltext: null,
+        documentAst: null,
+        sections: null,
+        contentHash: null,
+      }),
+      decision({
+        id: judgment,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "judgment",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-01-01",
+      }),
+      decision({
+        id: translation,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "judgment",
+        language: "en",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-02-01",
+      }),
+      decision({
+        id: opinion,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "opinion",
+        languageGroupKey: "sitemap-opinion",
+        decisionDate: "2016-01-01",
+      }),
+      decision({
+        id: opinionTranslation,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "opinion",
+        language: "en",
+        languageGroupKey: "sitemap-opinion",
+        decisionDate: "2016-02-01",
+      }),
+    ];
+    // Settle counts an earlier run left staged, so the refresh below counts
+    // these versions rather than reusing a count taken before they existed.
+    await swappedRefresh(refreshDb);
+    await db.insert(caseLawDecisions).values(
+      versions.map((version) => ({
+        ...version,
+        sourceDocumentId: version.id,
+      })),
+    );
+    try {
+      await swappedRefresh(refreshDb);
+      const shards = (await listedShards()).filter(
+        ({ year }) => year === "2016",
+      );
+      expect(shards.map(({ month }) => month)).toEqual(["01"]);
+      const counts = await db
+        .select({ total: caseLawSitemapShards.total })
+        .from(caseLawSitemapShards)
+        .where(eq(caseLawSitemapShards.year, "2016"));
+      expect(counts).toEqual([{ total: 2 }]);
+      const served: string[] = [];
+      // Every hashed bucket is read, including those that only a translation
+      // would occupy. Deduplicating after bucketing cannot pass this guard.
+      for (const month of ["01", "02"]) {
+        for (let bucket = 0; bucket < 64; bucket += 1) {
+          // db-await-in-loop: exercise the crawler's full bucket partition
+          const page = await listSitemapShardDecisionsHandler(
+            {
+              country: "cze",
+              year: "2016",
+              month,
+              bucket: String(bucket).padStart(2, "0"),
+            },
+            caseLawDb,
+          );
+          if (!("items" in page)) {
+            panic("Expected a readable sitemap bucket");
+          }
+          served.push(...page.items.map(({ id }) => id));
+        }
+      }
+      expect(served.toSorted()).toEqual([judgment, opinion].toSorted());
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, ids));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
 
 const stagedCountries = async () =>
   (
