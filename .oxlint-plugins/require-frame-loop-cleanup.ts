@@ -827,9 +827,24 @@ const cleanupFunctionPaths = (
   return paths;
 };
 
+const cancelledBeforeWrite = (proof: CleanupProof, write: AstNode): boolean => {
+  const statement = parentOf(write);
+  const block = statement === null ? null : parentOf(statement);
+  if (block?.type !== "BlockStatement" || !Array.isArray(block.body)) {
+    return false;
+  }
+  const index = block.body.indexOf(statement);
+  let paths = new Set<UncancelledPath>(["continues"]);
+  for (const preceding of block.body.slice(0, Math.max(index, 0))) {
+    paths = continueCleanupPaths(paths, () => cleanupPaths(proof, preceding));
+  }
+  return paths.size === 0;
+};
+
 // A shared binding cannot prove ownership when another write replaces its
 // handle. Frame loops retain one kick-off and their own pending-frame updates.
 type AmbiguousHandleOptions = {
+  cancels: Cancel[];
   context: LoopContext;
   handle: Handle;
   start: AstNode;
@@ -837,6 +852,7 @@ type AmbiguousHandleOptions = {
 };
 
 const hasAmbiguousHandleWrites = ({
+  cancels,
   context,
   handle,
   start,
@@ -845,6 +861,13 @@ const hasAmbiguousHandleWrites = ({
   if (handle.kind !== "binding") {
     return false;
   }
+  const proof: CleanupProof = {
+    context,
+    handle,
+    cancels: cancels.filter((cancel) => cancelsHandle(context, cancel, handle)),
+    visiting: new Set(),
+    completed: new Map(),
+  };
   let frameKickOffs = 0;
   for (const reference of handle.variable.references) {
     if (!reference.isWrite()) {
@@ -865,7 +888,10 @@ const hasAmbiguousHandleWrites = ({
         ((value.type === "Literal" &&
           (value.value === 0 || value.value === null)) ||
           isGlobalName(context, value, "undefined")));
-    if (reference.init && empty) {
+    if (
+      empty &&
+      (reference.init || (write !== null && cancelledBeforeWrite(proof, write)))
+    ) {
       continue;
     }
     const frame = isGlobalCall(context, start, START_NAMES.frame);
@@ -915,7 +941,7 @@ const isOwned = (
   const handle = handleOf(context, start);
   if (
     handle === null ||
-    hasAmbiguousHandleWrites({ context, handle, start, loopBody })
+    hasAmbiguousHandleWrites({ cancels, context, handle, start, loopBody })
   ) {
     return false;
   }

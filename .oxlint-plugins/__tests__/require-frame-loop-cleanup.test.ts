@@ -522,6 +522,34 @@ test("ownership does not follow an overwritten timer handle", async () => {
   );
 });
 
+test("a frame handle resets only after cancellation has executed", async () => {
+  const cases = [
+    ["cancelAnimationFrame(frame); frame = 0;", true],
+    ["if (ready()) cancelAnimationFrame(frame); frame = 0;", false],
+    ["frame = 0; cancelAnimationFrame(frame);", false],
+    [
+      "if (ready()) cancelAnimationFrame(frame); else cancelAnimationFrame(frame); frame = 0;",
+      true,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([cancel]) =>
+      lintSingleRule(
+        RULE,
+        `const start = () => {
+      let frame = 0;
+      const tick = () => { frame = 0; if (visible()) frame = requestAnimationFrame(tick); };
+      const cancel = () => { ${cancel} };
+      return { cancel, run: () => { frame = requestAnimationFrame(tick); } };
+    };`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
 test("an earlier handle handoff does not own a subsequently started timer", async () => {
   expect(
     await lintSingleRule(
