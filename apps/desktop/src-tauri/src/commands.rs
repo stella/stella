@@ -57,9 +57,51 @@ pub(crate) fn browser_connect_server(manager: &SessionManager) -> String {
 }
 
 #[tauri::command]
-pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String> {
-  let mgr = state.lock().await;
+pub async fn get_state(
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<AppSnapshot, String> {
+  let mut mgr = state.lock().await;
+  let current = crate::account::current(&account).await?;
+  mgr
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  let ids = mgr.session_ids_needing_watchers();
+  drop(mgr);
+  for id in &ids {
+    SessionManager::attach_watcher(state.inner(), id).await;
+  }
+  let mut mgr = state.lock().await;
+  for id in &ids {
+    mgr.ensure_sse_listener(state.inner(), id);
+  }
   Ok(mgr.get_snapshot())
+}
+
+#[tauri::command]
+pub async fn open_recovery_folder(
+  target: crate::types::RecoveryTarget,
+  window: tauri::WebviewWindow,
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<(), String> {
+  if window.label() != "main" {
+    return Err("document recovery is unavailable in this window".into());
+  }
+  let mut manager = state.lock().await;
+  let current = crate::account::current(&account).await?;
+  manager
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  manager.open_recovery_folder(target)
 }
 
 #[tauri::command]
@@ -98,7 +140,7 @@ pub async fn open_session_file(
   session_id: String,
   state: State<'_, AppState>,
 ) -> Result<bool, String> {
-  let mgr = state.lock().await;
+  let mut mgr = state.lock().await;
   Ok(mgr.open_session_file(&session_id))
 }
 
@@ -274,14 +316,10 @@ pub async fn set_autostart(
   enabled: bool,
   app: tauri::AppHandle,
 ) -> Result<bool, String> {
-  use tauri_plugin_autostart::ManagerExt;
   if enabled {
     crate::autostart::enable(&app)?;
   } else {
-    app
-      .autolaunch()
-      .disable()
-      .map_err(|e| format!("autostart disable failed: {e}"))?;
+    crate::local_store::disable_autostart(&app)?;
   }
   Ok(enabled)
 }

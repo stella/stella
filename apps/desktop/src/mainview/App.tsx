@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -39,7 +40,9 @@ import type {
   AppSnapshot,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
+  DocumentRecoverySnapshot,
   LinkedAccountSnapshot,
+  RecoveryTarget,
 } from "../shared/rpc";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -209,6 +212,102 @@ const PanelGroup = ({
     </div>
   </section>
 );
+
+const DocumentRecovery = ({
+  recovery,
+  onRefresh,
+}: {
+  recovery: DocumentRecoverySnapshot;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations("settings");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const act = async (target: RecoveryTarget | "retry") => {
+    setBusy(true);
+    const result = await Result.tryPromise(async () =>
+      target === "retry"
+        ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
+        : invoke("open_recovery_folder", { target }),
+    );
+    setError(result.isErr() ? t("recoveryError") : null);
+    setBusy(false);
+  };
+  if (
+    !recovery.edits.length &&
+    !recovery.unassigned &&
+    !recovery.pending &&
+    recovery.access === "available"
+  ) {
+    return null;
+  }
+  return (
+    <PanelGroup title={t("recoveryTitle")}>
+      <div className="space-y-3 px-4 py-3 text-sm">
+        {recovery.edits.length ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryBody")}</p>
+            <ul className="space-y-1">
+              {recovery.edits.map((edit) => (
+                <li key={edit.id} className="wrap-break-word">
+                  <BidiText>{edit.fileName}</BidiText>
+                  {edit.status === "pending"
+                    ? ` (${t("recoveryFilePending")})`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("account");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenFolder")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.access === "signInRequired" ? (
+          <p className="text-muted-foreground">{t("recoverySignIn")}</p>
+        ) : null}
+        {recovery.unassigned ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("unassigned");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenUnassigned")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.pending ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryPending")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("retry");
+              }}
+              variant="outline"
+            >
+              {t("tryAgain")}
+            </Button>
+          </>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </PanelGroup>
+  );
+};
 
 type TelemetryPreferenceState =
   | { status: "loading" }
@@ -586,6 +685,8 @@ const App = () => {
   });
   const accountRefresh = useRef<() => void>(() => undefined);
   const accountGeneration = useRef(0);
+  const snapshotGeneration = useRef(0);
+  const snapshotRefresh = useRef<() => void>(() => undefined);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
 
   useEffect(() => {
@@ -618,41 +719,22 @@ const App = () => {
   useEffect(() => {
     let disposed = false;
 
-    const stopListening = subscribeDesktopEvent<AppSnapshot>({
-      event: "state-changed",
-      handler: (event) => {
-        // Unsubscribing is itself an IPC round trip, so an event can still
-        // arrive after the effect was cleaned up.
-        if (disposed) {
-          return;
-        }
-
-        const detail = event.payload;
-        if (!isAppSnapshot(detail)) {
-          return;
-        }
-
-        startTransition(() => {
-          setError(null);
-          setState(detail);
-        });
-      },
-      onError: reportSubscriptionFailure,
-    });
-
     const syncState = async () => {
+      const request = ++snapshotGeneration.current;
       try {
         const nextState = await invoke<AppSnapshot>("get_state");
-        if (disposed) {
+        if (disposed || request !== snapshotGeneration.current) {
           return;
         }
 
         startTransition(() => {
           setError(null);
-          setState(nextState);
+          if (isAppSnapshot(nextState)) {
+            setState(nextState);
+          }
         });
       } catch (fetchError) {
-        if (disposed) {
+        if (disposed || request !== snapshotGeneration.current) {
           return;
         }
 
@@ -660,10 +742,19 @@ const App = () => {
       }
     };
 
+    snapshotRefresh.current = () => {
+      void syncState();
+    };
+    const stopListening = subscribeDesktopEvent<AppSnapshot>({
+      event: "state-changed",
+      handler: () => snapshotRefresh.current(),
+      onError: reportSubscriptionFailure,
+    });
     void syncState();
 
     return () => {
       disposed = true;
+      snapshotGeneration.current += 1;
       stopListening();
     };
   }, [t]);
@@ -672,6 +763,9 @@ const App = () => {
     let disposed = false;
     const refresh = () => {
       const request = ++accountGeneration.current;
+      snapshotGeneration.current += 1;
+      setState(null);
+      snapshotRefresh.current();
       void invoke<
         Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
       >("account_get_state")
@@ -909,6 +1003,12 @@ const App = () => {
                       void handleLanguageChange(nextLanguage);
                     }}
                   />
+                  {state ? (
+                    <DocumentRecovery
+                      recovery={state.documentRecovery}
+                      onRefresh={() => snapshotRefresh.current()}
+                    />
+                  ) : null}
                 </div>
               </ScrollArea>
             </TabsPanel>
