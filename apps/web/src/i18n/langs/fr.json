@@ -4388,6 +4388,7 @@
     "aiTitle": "Connectez votre fournisseur d'IA",
     "appsSubtitle": "stella fonctionne aussi en dehors du navigateur : sur votre bureau et dans votre assistant IA. Vous pourrez revenir à cette configuration à tout moment.",
     "appsTitle": "Obtenez stella partout",
+    "browserExtensionCardDescription": "Laissez la conversation travailler avec les sites web que vous utilisez déjà, dans un onglet Chrome de votre choix.",
     "catalogueAlwaysOn": "Toujours actif",
     "catalogueCommunityHeading": "Autres",
     "catalogueContinueWithCount": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} peut",
       "browseIntegrations": "Ajouter un service",
+      "browserExtensionConnectHint": "Après l'installation, ouvrez l'extension dans cet onglet stella, autorisez l'accès aux sites web et connectez l'onglet.",
+      "browserExtensionDescription": "La conversation stella peut lire et utiliser des sites web dans un onglet Chrome de votre choix. Chaque action attend votre approbation.",
+      "browserExtensionInstall": "Ajouter à Chrome",
+      "browserExtensionTitle": "Extension du navigateur",
       "cliDescription": "Installez le client en ligne de commande stella et connectez-vous pour scripter dossiers, documents et modèles depuis un terminal.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Connexion",

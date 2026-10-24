@@ -183,13 +183,18 @@ export const CHAT_SKILL_NEED_MESSAGE_KEY = {
 
 /**
  * The needs this composer can meet in one click: turning web search on where
- * the organization offers it, and queueing an open document's edits for
- * review where the composer has an edit-mode switch.
+ * the organization offers it, queueing an open document's edits for review
+ * where the composer has an edit-mode switch, and opening the extension's
+ * store listing where the released extension connects.
  */
 export const oneClickSkillNeeds = (
   chat: ComposerSkillChatContext | undefined,
+  browserExtensionStoreUrl: string | null,
 ): ReadonlySet<ChatSkillContextNeed> =>
   new Set([
+    ...(browserExtensionStoreUrl === null
+      ? []
+      : [CHAT_SKILL_CONTEXT_NEED.browserExtension]),
     ...(chat?.webSearch?.available === true
       ? [CHAT_SKILL_CONTEXT_NEED.webSearch]
       : []),

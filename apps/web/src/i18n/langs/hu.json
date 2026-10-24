@@ -4388,6 +4388,7 @@
     "aiTitle": "Kapcsolja össze AI-szolgáltatóját",
     "appsSubtitle": "A stella a böngészőn kívül is működik: az asztali gépén és az AI-asszisztensében. Ehhez a beállításhoz később bármikor visszatérhet.",
     "appsTitle": "Szerezze meg a stellát mindenhol",
+    "browserExtensionCardDescription": "A csevegés az Ön által választott Chrome-lapon dolgozhat a már használt webhelyekkel.",
     "catalogueAlwaysOn": "Mindig aktív",
     "catalogueCommunityHeading": "Egyéb",
     "catalogueContinueWithCount": "{count, plural, one {Folytatás # eszközzel} other {Folytatás # eszközzel}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} jogosult",
       "browseIntegrations": "Szolgáltatás hozzáadása",
+      "browserExtensionConnectHint": "Telepítés után nyissa meg a bővítményt ezen a stella-lapon, engedélyezze a webhelyek elérését, és csatlakoztassa a lapot.",
+      "browserExtensionDescription": "A stella csevegés az Ön által választott Chrome-lapon olvashat és használhat webhelyeket. Minden művelet az Ön jóváhagyására vár.",
+      "browserExtensionInstall": "Hozzáadás a Chrome-hoz",
+      "browserExtensionTitle": "Böngészőbővítmény",
       "cliDescription": "Telepítse a stella parancssori klienst, és jelentkezzen be, hogy terminálból szkriptelhessen ügyeket, dokumentumokat és sablonokat.",
       "cliInstallLabel": "Telepítés",
       "cliLoginLabel": "Bejelentkezés",

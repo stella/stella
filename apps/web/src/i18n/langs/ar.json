@@ -4388,6 +4388,7 @@
     "aiTitle": "اربط مزوّد الذكاء الاصطناعي الخاص بك",
     "appsSubtitle": "تعمل stella أيضًا خارج المتصفح: على سطح مكتبك وداخل مساعد الذكاء الاصطناعي الخاص بك. يمكنك العودة إلى هذا الإعداد في أي وقت لاحقًا.",
     "appsTitle": "احصل على stella في كل مكان",
+    "browserExtensionCardDescription": "دع الدردشة تعمل مع المواقع التي تستخدمها بالفعل، في علامة تبويب Chrome التي تختارها.",
     "catalogueAlwaysOn": "مُفعَّل دائمًا",
     "catalogueCommunityHeading": "أخرى",
     "catalogueContinueWithCount": "المتابعة بـ {count, plural, zero {# أداة} one {# أداة} two {# أداتين} few {# أدوات} many {# أداة} other {# أداة}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "يمكن لـ {clientName}",
       "browseIntegrations": "إضافة خدمة",
+      "browserExtensionConnectHint": "بعد التثبيت، افتح الإضافة في علامة تبويب stella هذه، واسمح بالوصول إلى المواقع، ثم اربط علامة التبويب.",
+      "browserExtensionDescription": "يمكن لدردشة stella قراءة المواقع واستخدامها في علامة تبويب Chrome التي تختارها. كل إجراء ينتظر موافقتك.",
+      "browserExtensionInstall": "إضافة إلى Chrome",
+      "browserExtensionTitle": "إضافة المتصفح",
       "cliDescription": "ثبّت عميل سطر الأوامر الخاص بـ stella وسجّل الدخول لبرمجة الملفات القانونية والمستندات والقوالب من الطرفية.",
       "cliInstallLabel": "التثبيت",
       "cliLoginLabel": "تسجيل الدخول",

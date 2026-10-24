@@ -98,6 +98,7 @@ import {
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use-browser-extension-store-url";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -115,6 +116,7 @@ import {
   mcpConnectionsOptions,
   mcpConnectorsOptions,
 } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
   type ChatSkillRowState,
@@ -604,14 +606,17 @@ const WebSearchFixSkillItem = ({
 /**
  * One row of the Skills submenu. A skill this chat cannot run stays listed,
  * disabled, with what the chat lacks; where the composer can meet that need
- * in one click, the row does so and inserts the skill.
+ * in one click, the row does so and inserts the skill. A missing extension
+ * cannot be met in place: the row opens its store listing instead.
  */
 const ComposerSkillMenuItem = ({
+  browserExtensionStoreUrl,
   chat,
   item,
   onSelect,
   state,
 }: {
+  browserExtensionStoreUrl: string | null;
   chat: ComposerSkillChatContext | undefined;
   item: SlashItem;
   onSelect: (item: SlashItem) => void;
@@ -634,6 +639,21 @@ const ComposerSkillMenuItem = ({
     );
   }
   const message = t(state.messageKey);
+  if (
+    state.fixable &&
+    state.need === CHAT_SKILL_CONTEXT_NEED.browserExtension &&
+    browserExtensionStoreUrl !== null
+  ) {
+    return (
+      <MenuItem
+        onClick={() => {
+          openIsolatedWindow(browserExtensionStoreUrl);
+        }}
+      >
+        <ComposerSkillItemBody blocked item={item} secondary={message} />
+      </MenuItem>
+    );
+  }
   if (state.fixable && chat !== undefined) {
     if (state.need === CHAT_SKILL_CONTEXT_NEED.webSearch) {
       return (
@@ -710,7 +730,8 @@ export const ComposerSkillsMenu = ({
   // Only skills no chat can run leave the menu; one this chat alone cannot
   // run stays, disabled, with what the chat lacks.
   const unavailableSkillIds = availability?.hidden;
-  const oneClickNeeds = oneClickSkillNeeds(chat);
+  const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
+  const oneClickNeeds = oneClickSkillNeeds(chat, browserExtensionStoreUrl);
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
@@ -778,6 +799,7 @@ export const ComposerSkillsMenu = ({
   } else {
     skillItemsContent = filteredItems.map((item) => (
       <ComposerSkillMenuItem
+        browserExtensionStoreUrl={browserExtensionStoreUrl}
         chat={chat}
         item={item}
         key={itemKey(item)}

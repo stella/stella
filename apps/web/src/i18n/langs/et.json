@@ -4388,6 +4388,7 @@
     "aiTitle": "Ühendage oma AI teenusepakkuja",
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
+    "browserExtensionCardDescription": "Laske vestlusel töötada juba kasutatavate veebisaitidega teie valitud Chrome'i vahekaardil.",
     "catalogueAlwaysOn": "Alati sees",
     "catalogueCommunityHeading": "Muud",
     "catalogueContinueWithCount": "{count, plural, one {Jätka # tööriistaga} other {Jätka # tööriistaga}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} saab",
       "browseIntegrations": "Lisa teenus",
+      "browserExtensionConnectHint": "Pärast installimist avage laiendus sellel stella vahekaardil, lubage juurdepääs veebisaitidele ja ühendage vahekaart.",
+      "browserExtensionDescription": "stella vestlus saab teie valitud Chrome'i vahekaardil veebisaite lugeda ja kasutada. Iga toiming ootab teie kinnitust.",
+      "browserExtensionInstall": "Lisa Chrome'i",
+      "browserExtensionTitle": "Brauserilaiendus",
       "cliDescription": "Installige stella käsurea klient ja logige sisse, et skriptida toimikuid, dokumente ja malle terminalist.",
       "cliInstallLabel": "Installimine",
       "cliLoginLabel": "Sisselogimine",

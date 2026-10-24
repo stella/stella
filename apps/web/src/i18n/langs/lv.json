@@ -4388,6 +4388,7 @@
     "aiTitle": "Pievienojiet savu AI pakalpojumu sniedzēju",
     "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu AI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
     "appsTitle": "Iegūstiet stella visur",
+    "browserExtensionCardDescription": "Ļaujiet tērzēšanai strādāt ar jau izmantotajām vietnēm jūsu izvēlētā Chrome cilnē.",
     "catalogueAlwaysOn": "Vienmēr ieslēgts",
     "catalogueCommunityHeading": "Citi",
     "catalogueContinueWithCount": "{count, plural, zero {Turpināt ar # rīkiem} one {Turpināt ar # rīku} other {Turpināt ar # rīkiem}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} var",
       "browseIntegrations": "Pievienot pakalpojumu",
+      "browserExtensionConnectHint": "Pēc instalēšanas atveriet paplašinājumu šajā stella cilnē, atļaujiet piekļuvi vietnēm un savienojiet cilni.",
+      "browserExtensionDescription": "stella tērzēšana var lasīt un izmantot vietnes jūsu izvēlētā Chrome cilnē. Katra darbība gaida jūsu apstiprinājumu.",
+      "browserExtensionInstall": "Pievienot pārlūkam Chrome",
+      "browserExtensionTitle": "Pārlūka paplašinājums",
       "cliDescription": "Instalējiet stella komandrindas klientu un piesakieties, lai no termināļa varētu skriptot lietas, dokumentus un veidnes.",
       "cliInstallLabel": "Instalēšana",
       "cliLoginLabel": "Pieteikšanās",

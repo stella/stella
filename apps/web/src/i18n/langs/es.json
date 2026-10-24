@@ -4388,6 +4388,7 @@
     "aiTitle": "Conecte su proveedor de IA",
     "appsSubtitle": "stella también funciona fuera del navegador: en su escritorio y dentro de su asistente de IA. Puede volver a esta configuración en cualquier momento.",
     "appsTitle": "Obtenga stella en todas partes",
+    "browserExtensionCardDescription": "Deja que el chat trabaje con los sitios web que ya usas, en una pestaña de Chrome que elijas.",
     "catalogueAlwaysOn": "Siempre activo",
     "catalogueCommunityHeading": "Otros",
     "catalogueContinueWithCount": "{count, plural, one {Continuar con # herramienta} other {Continuar con # herramientas}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} puede",
       "browseIntegrations": "Añadir un servicio",
+      "browserExtensionConnectHint": "Tras instalarla, abre la extensión en esta pestaña de stella, permite el acceso a los sitios web y conecta la pestaña.",
+      "browserExtensionDescription": "El chat de stella puede leer y usar sitios web en una pestaña de Chrome que elijas. Cada acción espera tu aprobación.",
+      "browserExtensionInstall": "Añadir a Chrome",
+      "browserExtensionTitle": "Extensión del navegador",
       "cliDescription": "Instale el cliente de línea de comandos de stella e inicie sesión para automatizar asuntos, documentos y plantillas desde una terminal.",
       "cliInstallLabel": "Instalación",
       "cliLoginLabel": "Inicio de sesión",

@@ -2152,7 +2152,7 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx::DOWNLOAD_TARGETS::domain:[\"desktop\",\"assistant\"]::1",
+    "id": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx::DOWNLOAD_TARGETS::domain:[\"desktop\",\"assistant\",\"browser\"]::1",
     "reason": "Existing DOWNLOAD_TARGETS domain; contract ownership pending migration."
   },
   {

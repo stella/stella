@@ -4388,6 +4388,7 @@
     "aiTitle": "Connect your AI provider",
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.",
     "appsTitle": "Get stella everywhere",
+    "browserExtensionCardDescription": "Let chat work with the websites you already use, in a Chrome tab you choose.",
     "catalogueAlwaysOn": "Always on",
     "catalogueCommunityHeading": "Others",
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} can",
       "browseIntegrations": "Add a service",
+      "browserExtensionConnectHint": "After installing, open the extension on this stella tab, allow website access, and connect the tab.",
+      "browserExtensionDescription": "stella chat can read and use websites in a Chrome tab you choose. Every action waits for your approval.",
+      "browserExtensionInstall": "Add to Chrome",
+      "browserExtensionTitle": "Browser extension",
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.",
       "cliInstallLabel": "Install",
       "cliLoginLabel": "Log in",

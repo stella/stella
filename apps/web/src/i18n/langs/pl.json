@@ -4388,6 +4388,7 @@
     "aiTitle": "Połącz swojego dostawcę AI",
     "appsSubtitle": "stella działa też poza przeglądarką: na komputerze i w asystencie AI. Do tej konfiguracji możesz wrócić w dowolnym momencie.",
     "appsTitle": "Korzystaj ze stelli wszędzie",
+    "browserExtensionCardDescription": "Czat może pracować na stronach, z których już korzystasz, w wybranej przez Ciebie karcie Chrome.",
     "catalogueAlwaysOn": "Zawsze włączone",
     "catalogueCommunityHeading": "Pozostałe",
     "catalogueContinueWithCount": "{count, plural, one {Kontynuuj z # narzędziem} few {Kontynuuj z # narzędziami} many {Kontynuuj z # narzędziami} other {Kontynuuj z # narzędziami}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} może",
       "browseIntegrations": "Dodaj usługę",
+      "browserExtensionConnectHint": "Po instalacji otwórz rozszerzenie na tej karcie stella, zezwól na dostęp do witryn i połącz kartę.",
+      "browserExtensionDescription": "Czat stella może czytać strony i z nich korzystać w wybranej przez Ciebie karcie Chrome. Każda czynność czeka na Twoją zgodę.",
+      "browserExtensionInstall": "Dodaj do Chrome",
+      "browserExtensionTitle": "Rozszerzenie przeglądarki",
       "cliDescription": "Zainstaluj klienta wiersza poleceń stella i zaloguj się, aby skryptować sprawy, dokumenty i szablony z terminala.",
       "cliInstallLabel": "Instalacja",
       "cliLoginLabel": "Logowanie",

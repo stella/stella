@@ -4388,6 +4388,7 @@
     "aiTitle": "Prijunkite savo DI teikėją",
     "appsSubtitle": "stella veikia ir už naršyklės ribų: jūsų kompiuteryje ir jūsų DI asistente. Prie šio nustatymo galite bet kada grįžti vėliau.",
     "appsTitle": "Gaukite stella visur",
+    "browserExtensionCardDescription": "Leiskite pokalbiui dirbti su jau naudojamomis svetainėmis jūsų pasirinktoje Chrome kortelėje.",
     "catalogueAlwaysOn": "Visada įjungta",
     "catalogueCommunityHeading": "Kiti",
     "catalogueContinueWithCount": "{count, plural, one {Tęsti su # įrankiu} few {Tęsti su # įrankiais} other {Tęsti su # įrankių}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} gali",
       "browseIntegrations": "Pridėti paslaugą",
+      "browserExtensionConnectHint": "Įdiegę atidarykite plėtinį šioje „stella“ kortelėje, leiskite pasiekti svetaines ir prijunkite kortelę.",
+      "browserExtensionDescription": "„stella“ pokalbis gali skaityti ir naudoti svetaines jūsų pasirinktoje Chrome kortelėje. Kiekvienas veiksmas laukia jūsų patvirtinimo.",
+      "browserExtensionInstall": "Pridėti prie Chrome",
+      "browserExtensionTitle": "Naršyklės plėtinys",
       "cliDescription": "Įdiekite stella komandinės eilutės klientą ir prisijunkite, kad iš terminalo galėtumėte scenarijais valdyti bylas, dokumentus ir šablonus.",
       "cliInstallLabel": "Diegimas",
       "cliLoginLabel": "Prisijungimas",

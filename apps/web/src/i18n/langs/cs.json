@@ -4388,6 +4388,7 @@
     "aiTitle": "Připojte svého poskytovatele AI",
     "appsSubtitle": "stella funguje i mimo prohlížeč: v aplikaci pro počítač a ve vašem AI asistentovi. K tomuto nastavení se můžete kdykoliv později vrátit.",
     "appsTitle": "Získejte stellu všude",
+    "browserExtensionCardDescription": "Chat může pracovat s weby, které už používáte, v kartě Chromu, kterou zvolíte.",
     "catalogueAlwaysOn": "Vždy zapnuto",
     "catalogueCommunityHeading": "Ostatní",
     "catalogueContinueWithCount": "{count, plural, one {Pokračovat s # nástrojem} few {Pokračovat se # nástroji} other {Pokračovat s # nástroji}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} může",
       "browseIntegrations": "Přidat službu",
+      "browserExtensionConnectHint": "Po instalaci otevřete rozšíření na této kartě stelly, povolte přístup k webům a kartu připojte.",
+      "browserExtensionDescription": "Chat ve stelle může číst weby a pracovat s nimi v kartě Chromu, kterou zvolíte. Každá akce čeká na vaše schválení.",
+      "browserExtensionInstall": "Přidat do Chromu",
+      "browserExtensionTitle": "Rozšíření prohlížeče",
       "cliDescription": "Nainstalujte si příkazový řádek stella a přihlaste se, abyste mohli z terminálu skriptovat spisy, dokumenty a vzory.",
       "cliInstallLabel": "Instalace",
       "cliLoginLabel": "Přihlášení",

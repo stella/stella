@@ -4388,6 +4388,7 @@
     "aiTitle": "Verbinden Sie Ihren KI-Anbieter",
     "appsSubtitle": "stella funktioniert auch außerhalb des Browsers: auf Ihrem Desktop und in Ihrem KI-Assistenten. Sie können jederzeit später zu dieser Einrichtung zurückkehren.",
     "appsTitle": "Holen Sie sich stella überall",
+    "browserExtensionCardDescription": "Der Chat arbeitet mit Websites, die Sie bereits nutzen, in einem Chrome-Tab Ihrer Wahl.",
     "catalogueAlwaysOn": "Immer aktiv",
     "catalogueCommunityHeading": "Weitere",
     "catalogueContinueWithCount": "{count, plural, one {Mit # Tool fortfahren} other {Mit # Tools fortfahren}}",
@@ -4974,6 +4975,10 @@
     "connections": {
       "accessTitle": "{clientName} darf",
       "browseIntegrations": "Dienst hinzufügen",
+      "browserExtensionConnectHint": "Öffnen Sie die Erweiterung nach der Installation in diesem stella-Tab, erlauben Sie den Zugriff auf Websites und verbinden Sie den Tab.",
+      "browserExtensionDescription": "Der stella-Chat kann Websites in einem Chrome-Tab Ihrer Wahl lesen und bedienen. Jede Aktion wartet auf Ihre Freigabe.",
+      "browserExtensionInstall": "Zu Chrome hinzufügen",
+      "browserExtensionTitle": "Browsererweiterung",
       "cliDescription": "Installieren Sie den stella-Kommandozeilen-Client und melden Sie sich an, um Akten, Dokumente und Vorlagen per Terminal zu automatisieren.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Anmeldung",
