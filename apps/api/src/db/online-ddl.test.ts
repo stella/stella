@@ -318,9 +318,12 @@ test("exhausted statement retries report the same deferred outcome as the gate",
       }
     },
     query: async (text) => {
-      if (text.includes("advisory")) return [{ acquired: true }];
-      if (text.includes("pg_backend_pid"))
+      if (text.includes("advisory")) {
+        return [{ acquired: true }];
+      }
+      if (text.includes("pg_backend_pid")) {
         return [{ pid: 11, database: "test" }];
+      }
       return [];
     },
     terminate: async () => undefined,
@@ -329,11 +332,18 @@ test("exhausted statement retries report the same deferred outcome as the gate",
   const observer: OnlineMigrationConnection = {
     execute: async () => undefined,
     query: async (text) => {
-      if (text === LONG_TRANSACTION_SQL) return [{ ageMs: 0, observedAt }];
-      if (text === AUTOVACUUM_SQL) return [{ active: false, observedAt }];
-      if (text.includes('"stateAgeMs"')) return [];
-      if (text.includes("pg_backend_pid"))
+      if (text === LONG_TRANSACTION_SQL) {
+        return [{ ageMs: 0, observedAt }];
+      }
+      if (text === AUTOVACUUM_SQL) {
+        return [{ active: false, observedAt }];
+      }
+      if (text.includes('"stateAgeMs"')) {
+        return [];
+      }
+      if (text.includes("pg_backend_pid")) {
         return [{ pid: 12, database: "test" }];
+      }
       return [];
     },
     release: () => undefined,
@@ -370,9 +380,11 @@ test("exhausted statement retries report the same deferred outcome as the gate",
       },
       wait: async (_milliseconds, signal) =>
         await new Promise<void>((resolve) => {
-          if (signal.aborted) resolve();
-          else
+          if (signal.aborted) {
+            resolve();
+          } else {
             signal.addEventListener("abort", () => resolve(), { once: true });
+          }
         }),
     },
     work: async (session) => await session.run(createPolicy(POLICY)),
