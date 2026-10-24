@@ -13,6 +13,7 @@ import {
   manualLineDraft,
   priceLines,
   recalculateInvoiceTotals,
+  tExemptionReason,
   tInvoiceLineQuantity,
   tLineDescription,
   tLineUnit,
@@ -40,6 +41,7 @@ const updateLineBodySchema = v.object({
   unitPriceMinor: v.optional(minorUnitAmountSchema(0)),
   vatRateBps: v.optional(tVatRateBps),
   vatTreatment: v.optional(tVatTreatment),
+  exemptionReason: v.optional(tExemptionReason),
 });
 
 const lineParamsSchema = workspaceParams({
@@ -56,6 +58,7 @@ const UPDATED_FIELDS = [
   "unitPriceMinor",
   "vatRateBps",
   "vatTreatment",
+  "exemptionReason",
 ] as const;
 
 const updateInvoiceLine = createSafeHandler(
@@ -154,6 +157,10 @@ const updateInvoiceLine = createSafeHandler(
           const vat = {
             vatRateBps: changed.vatRateBps ?? line.vatRateBps,
             vatTreatment: changed.vatTreatment ?? line.vatTreatment,
+            exemptionReason:
+              changed.exemptionReason === undefined
+                ? line.exemptionReason
+                : changed.exemptionReason,
           };
           let draft: InvoiceLineDraft = {
             description: changed.description ?? line.description,
@@ -200,6 +207,7 @@ const updateInvoiceLine = createSafeHandler(
               netAmount: pricedLine.netAmount,
               vatRateBps: pricedLine.vatRateBps,
               vatTreatment: pricedLine.vatTreatment,
+              exemptionReason: pricedLine.exemptionReason,
               vatAmount: pricedLine.vatAmount,
               grossAmount: pricedLine.grossAmount,
               updatedAt: now,

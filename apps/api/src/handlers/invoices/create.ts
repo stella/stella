@@ -921,6 +921,7 @@ const createDraftInvoice = async (
         : {
             vatTreatment: prefill.vat.vatTreatment,
             vatRateBps: prefill.vat.vatRateBps,
+            exemptionReason: null,
           },
     documentType,
     originalInvoiceId,

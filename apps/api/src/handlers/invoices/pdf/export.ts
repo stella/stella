@@ -189,6 +189,7 @@ export const createInvoicePdfExport = (
                     grossAmount: line.grossAmountMinor,
                     vatRateBps: line.vatRateBps,
                     vatTreatment: line.vatTreatment,
+                    exemptionReason: line.exemptionReason,
                   })),
                 },
                 totals: amounts.totals,

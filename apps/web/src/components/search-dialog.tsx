@@ -14,7 +14,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
@@ -216,6 +216,23 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
 
+const observeSearchResultsRect: typeof observeElementRect = (
+  instance,
+  callback,
+) => {
+  const element = instance.scrollElement;
+  return observeElementRect(instance, (rect) => {
+    const offsetHeight =
+      element instanceof HTMLElement ? element.offsetHeight : 0;
+    const offsetWidth =
+      element instanceof HTMLElement ? element.offsetWidth : 0;
+    callback({
+      height: rect.height === 0 ? offsetHeight : rect.height,
+      width: rect.width === 0 ? offsetWidth : rect.width,
+    });
+  });
+};
+
 type SearchColumnsStyle = CSSProperties & {
   "--search-facets-w"?: string;
   "--search-preview-w"?: string;
@@ -296,7 +313,8 @@ const filtersForMode = (
     : filters;
 
 type SearchFiltersUpdate =
-  SearchFilters | ((filters: SearchFilters) => SearchFilters);
+  | SearchFilters
+  | ((filters: SearchFilters) => SearchFilters);
 
 type SearchResultsStatus =
   | { type: "hidden" }
@@ -857,6 +875,7 @@ export const SearchDialog = ({
     estimateSize: () => VIRTUAL_HIT_ESTIMATE_PX,
     getItemKey: getHitVirtualKey,
     getScrollElement: () => resultsElement,
+    observeElementRect: observeSearchResultsRect,
     overscan: VIRTUAL_HIT_OVERSCAN,
     scrollMargin: hitsScrollMargin,
   });
