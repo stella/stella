@@ -33,21 +33,36 @@ export const readerAnswersOptions = ({
   queryOptions({
     queryKey: ["reader-answers", organizationId, userId, decisionId],
     queryFn: async ({ signal }): Promise<ReaderAnswer[]> => {
+      const queryDecisionId = toSafeId<"caseLawDecision">(decisionId);
       const answers: ReaderAnswer[] = [];
       const cursors = new Set<string>();
       let cursor: string | undefined;
       do {
-        const page = unwrapEden(
+        const pageRequest = {
+          query: {
+            decisionId: queryDecisionId,
+            limit: 50,
+            ...(cursor === undefined ? {} : { cursor }),
+          },
+          fetch: { signal },
+        };
+        const fetched = await Result.tryPromise(async () => {
           // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
-          await api.reader.answers.get({
-            query: {
-              decisionId: toSafeId<"caseLawDecision">(decisionId),
-              limit: 50,
-              ...(cursor === undefined ? {} : { cursor }),
-            },
-            fetch: { signal },
-          }),
-        );
+          const { data, error } = await api.reader.answers.get(pageRequest);
+          return error === null ? { data, error: null } : { data: null, error };
+        });
+        const requested = fetched.mapError((error) => {
+          const { cause } = error;
+          if (cause instanceof TypeError) {
+            return new ReaderAnswerFailure({
+              kind: "request",
+              message: "Reader answer request failed",
+              cause,
+            });
+          }
+          return cause instanceof Error ? cause : error;
+        });
+        const page = unwrapEden(readQueryResult(requested));
         answers.push(...page.items);
         cursor = page.nextCursor ?? undefined;
         if (cursor !== undefined) {

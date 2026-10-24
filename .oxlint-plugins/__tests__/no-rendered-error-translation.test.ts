@@ -23,3 +23,25 @@ const treatment = <span className="text-destructive">{t("caseLaw.negativeTreatme
     ),
   ).toEqual([]);
 });
+
+test("checks static JSX expression attributes through rendered ancestors", async () => {
+  expect(
+    await lintSingleRule(
+      "no-rendered-error-translation",
+      `const alert = <p role={"alert"}><span>{t("errors.actionFailed")}</span></p>;
+const destructive = <p className={"text-destructive text-sm"}><b>{t("readerAnswers.networkError")}</b></p>;
+const template = <p role={\`alert\`}><span>{t("readerAnswers.modelError")}</span></p>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([1, 2, 3]);
+});
+
+test("does not treat an event handler translation as rendered alert content", async () => {
+  expect(
+    await lintSingleRule(
+      "no-rendered-error-translation",
+      `const view = <p role="alert"><button onClick={() => notifyUserError(error, t("errors.actionFailed"))}>Retry</button></p>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([]);
+});

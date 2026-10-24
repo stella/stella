@@ -98,7 +98,6 @@ import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
@@ -114,6 +113,7 @@ import {
   ReaderAnswerFailure,
   readerAnswerFailureKind,
 } from "./reader-answers.logic";
+import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 import { useReaderAnswers } from "./use-reader-answers";
 
 type DecisionWorkspaceDecision = Pick<
@@ -183,7 +183,6 @@ export type DecisionWorkspaceProps =
 /** What the margin's source filter means for the reader's own marks. */
 /** A decision without a parsed body has no blocks to range over. */
 const NO_BLOCKS: DocumentAst["blocks"] = [];
-const SERVER_ERROR_STATUS = 500;
 
 const decisionBlocks = (ast: DocumentAst | null): DocumentAst["blocks"] =>
   ast?.blocks ?? NO_BLOCKS;
@@ -218,7 +217,7 @@ export const ReaderStatusNotices = ({
   isCreatingAnswer,
   paragraphLanding,
 }: {
-  answerFailures: readonly unknown[];
+  answerFailures: readonly ReaderAnswerFailureNotice[];
   foreignDecisionError: unknown;
   isCreatingAnswer: boolean;
   paragraphLanding: ParagraphLanding;
@@ -226,15 +225,14 @@ export const ReaderStatusNotices = ({
   const t = useTranslations();
   const reported = useRef(new Set<unknown>());
   useExternalSyncEffect(() => {
-    for (const error of answerFailures) {
-      if (
-        error === null ||
-        error === undefined ||
-        reported.current.has(error)
-      ) {
+    for (const notice of answerFailures) {
+      const identity =
+        notice.type === "message" ? notice.messageId : notice.error;
+      if (reported.current.has(identity)) {
         continue;
       }
-      reported.current.add(error);
+      reported.current.add(identity);
+      const { error } = notice;
       const kind = readerAnswerFailureKind(error);
       let fallback = t("readerAnswers.modelError");
       if (kind === "budget") {
@@ -243,9 +241,6 @@ export const ReaderStatusNotices = ({
         fallback = t("readerAnswers.networkError");
       } else if (kind === "timeout") {
         fallback = t("readerAnswers.timeoutError");
-      }
-      if (APIError.is(error) && error.status < SERVER_ERROR_STATUS) {
-        fallback = error.message;
       }
       notifyUserError(error, fallback);
     }
@@ -906,7 +901,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             )}
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
               <ReaderStatusNotices
-                answerFailures={[answers.error, ...answers.errors.values()]}
+                answerFailures={answers.failureNotices}
                 foreignDecisionError={foreignDecisionError}
                 isCreatingAnswer={answers.isCreating}
                 paragraphLanding={paragraphLanding}

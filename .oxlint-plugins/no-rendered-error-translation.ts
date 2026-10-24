@@ -55,7 +55,10 @@ const attributeValue = (node: unknown, name: string): string | null => {
     ) {
       continue;
     }
-    return staticStringValue(attribute.value);
+    const value = attribute.value;
+    return isAstNode(value) && value.type === "JSXExpressionContainer"
+      ? staticStringValue(value.expression)
+      : staticStringValue(value);
   }
   return null;
 };
@@ -93,19 +96,29 @@ export default eslintCompatPlugin({
               return;
             }
             let parent: unknown = node.parent;
-            while (isAstNode(parent) && parent.type !== "JSXElement") {
+            while (isAstNode(parent)) {
+              if (
+                parent.type === "ArrowFunctionExpression" ||
+                parent.type === "FunctionExpression" ||
+                parent.type === "FunctionDeclaration"
+              ) {
+                return;
+              }
+              if (parent.type === "JSXElement") {
+                const role = attributeValue(parent.openingElement, "role");
+                const className = attributeValue(
+                  parent.openingElement,
+                  "className",
+                );
+                if (
+                  role === "alert" ||
+                  className?.includes("text-destructive")
+                ) {
+                  context.report({ node: parent, messageId: "owned" });
+                  return;
+                }
+              }
               parent = parent.parent;
-            }
-            if (!isAstNode(parent) || parent.type !== "JSXElement") {
-              return;
-            }
-            const role = attributeValue(parent.openingElement, "role");
-            const className = attributeValue(
-              parent.openingElement,
-              "className",
-            );
-            if (role === "alert" || className?.includes("text-destructive")) {
-              context.report({ node: parent, messageId: "owned" });
             }
           },
         };
