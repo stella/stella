@@ -19,17 +19,17 @@ import {
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
   caseLawManifestGroups,
-  COURT_PARTITION_FIELD,
   corpusIndexGroupConfig,
   corpusIndexGroupContractForJurisdiction,
   corpusIndexReadTarget,
-  registeredCorpusIndexGroups,
+  COURT_PARTITION_FIELD,
+  type CourtPartitionGroupContract,
   courtPartitionsForCourtFilter,
   enrolledCorpusIndexGroupContracts,
+  type ProvisionKeysGroupContract,
+  registeredCorpusIndexGroups,
   requireCourtPartitionIdentity,
   resolveCorpusIndexGroupContract,
-  type CourtPartitionGroupContract,
-  type ProvisionKeysGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,

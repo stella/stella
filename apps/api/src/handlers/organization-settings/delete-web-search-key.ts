@@ -7,9 +7,9 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
+  WEB_SEARCH_KEY_KINDS,
   webSearchKeyAuditField,
   webSearchKeyColumns,
-  WEB_SEARCH_KEY_KINDS,
 } from "@/api/lib/web-search/keys";
 
 const deleteWebSearchKeyBody = t.Object({

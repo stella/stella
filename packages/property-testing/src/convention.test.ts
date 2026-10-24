@@ -261,9 +261,7 @@ const SPAWN_MODULES: Record<string, ReadonlySet<string> | "all"> = {
 const PROPERTY_BUILDERS = new Set(["asyncProperty", "property"]);
 
 type FunctionNode =
-  | ts.ArrowFunction
-  | ts.FunctionDeclaration
-  | ts.FunctionExpression;
+  ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
 
 // Reports property predicates that spawn a process, directly or through a
 // function declared in the same file.

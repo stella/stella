@@ -24,17 +24,21 @@ export const savedTimeNarrativesRoute = new Elysia({
   .get("/", listSavedTimeNarratives.handler, {
     query: listSavedTimeNarratives.config.query,
     permissions: listSavedTimeNarratives.config.permissions,
+    accountAccess: listSavedTimeNarratives.config.accountAccess,
   })
   .post("/", createSavedTimeNarrative.handler, {
     body: createSavedTimeNarrative.config.body,
     permissions: createSavedTimeNarrative.config.permissions,
+    accountAccess: createSavedTimeNarrative.config.accountAccess,
   })
   .patch("/:id", updateSavedTimeNarrative.handler, {
     params: updateSavedTimeNarrative.config.params,
     body: updateSavedTimeNarrative.config.body,
     permissions: updateSavedTimeNarrative.config.permissions,
+    accountAccess: updateSavedTimeNarrative.config.accountAccess,
   })
   .delete("/:id", deleteSavedTimeNarrative.handler, {
     params: deleteSavedTimeNarrative.config.params,
     permissions: deleteSavedTimeNarrative.config.permissions,
+    accountAccess: deleteSavedTimeNarrative.config.accountAccess,
   });

@@ -18,12 +18,12 @@ import {
 } from "@stll/api-contract";
 import {
   CASE_LAW_RESULT_DEPTH_MAX,
-  SEARCH_QUERY_MAX_LENGTH,
-  SEARCH_HISTORY_TITLE_MAX_LENGTH,
-  SEARCH_HISTORY_IMPORT_MAX,
   READER_PAGE_MAX_CHARS,
-  READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  SEARCH_HISTORY_IMPORT_MAX,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_QUERY_MAX_LENGTH,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -46,8 +46,6 @@ export {
   API_RATE_LIMITS,
 } from "@/api/lib/rate-limit/budget-config";
 
-/** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
- *  object literal instead of restating the page size. */
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
 
 export const LIMITS = {
@@ -133,11 +131,6 @@ export const LIMITS = {
    *  the `before` cursor, so a heavily-revised entity never loses access to
    *  older versions. */
   versionsPageSizeDefault: VERSIONS_PAGE_SIZE_DEFAULT,
-  /** Worst-case file fields scanned for one page of an entity's version
-   *  history (versionsPageSizeDefault * propertiesCount). The reader pages
-   *  versions, so the scan follows the page size, not versionsPerEntity. */
-  versionFieldsScanLimit:
-    VERSIONS_PAGE_SIZE_DEFAULT * PROPERTIES_PER_WORKSPACE_MAX,
   calendarTasksMax: 200,
   /** Default page size for the signed-in user's assigned tasks. */
   myTasksPageSizeDefault: 50,
@@ -309,6 +302,10 @@ export const LIMITS = {
    *  after 60 s without a byte, so the interval leaves room for three writes
    *  inside one of their windows. */
   sseHeartbeatMs: 15_000,
+  /** How long an event stream may outlive the credential that opened it: the
+   *  interval of the sweep that ends every stream whose session or other
+   *  credential no longer holds. */
+  sseCredentialRecheckMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   /** OOXML numbering levels are zero-based and bounded to nine levels. */

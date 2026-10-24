@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
-  SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 

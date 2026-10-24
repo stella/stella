@@ -4,8 +4,8 @@ import { Fragment, isValidElement } from "react";
 import { useTranslations } from "use-intl";
 
 import {
-  parseCanonicalChatSourceCitationHref,
   type ChatSourceCitationTarget,
+  parseCanonicalChatSourceCitationHref,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
@@ -183,6 +183,7 @@ const ReferenceCitationLink = ({
       anchorId={decision?.paragraph?.anchorId}
       fallback={fallback}
       interactive={interactive}
+      linkIconSource={{ kind: "tool-source" }}
       source={source}
       workspaceId={workspaceId}
     >
@@ -288,7 +289,11 @@ export const StreamdownMentionLink = ({
 
   // Keep the id: footnote back-links point at the reference anchor.
   return (
-    <ProxyChatLink href={href} id={props.id}>
+    <ProxyChatLink
+      href={href}
+      iconSource={{ kind: "model-text" }}
+      id={props.id}
+    >
       {children}
     </ProxyChatLink>
   );
@@ -692,6 +697,10 @@ const ExternalCitationLink = ({
       appearance="inline"
       interactive={interactive}
       externalHref={href}
+      // A link the source store does not know came from model text only.
+      linkIconSource={
+        source === undefined ? { kind: "model-text" } : { kind: "tool-source" }
+      }
       source={source ?? { title: inlineLabel || hostname, url: url.toString() }}
       workspaceId={workspaceId}
     >

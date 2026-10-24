@@ -5,10 +5,10 @@ import path from "node:path";
 import {
   admitLocal,
   BOTH_GATES_REFUSED,
+  type HostConfig,
   hostConfig,
   probeRemote,
   withCheckAdmission,
-  type HostConfig,
 } from "./verify-admission";
 import { VerifyError } from "./verify-error";
 import { readVerifyWorkflow, type VerifyWorkflowStep } from "./verify-workflow";

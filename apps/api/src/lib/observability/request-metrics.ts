@@ -59,10 +59,7 @@ const REQUEST_STAGE_FAMILY = {
 } as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
 
 export type RequestStageOutcome =
-  | "completed"
-  | "failed"
-  | "refused"
-  | "cancelled";
+  "completed" | "failed" | "refused" | "cancelled";
 
 type RequestStageRecordInput = {
   route: string;

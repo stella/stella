@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseQueryPerfBaselineFile } from "../apps/api/src/tests/query-perf/baseline";

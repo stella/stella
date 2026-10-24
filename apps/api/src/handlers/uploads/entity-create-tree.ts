@@ -7,8 +7,8 @@ import { sha256HexToBase64 } from "@stll/sha256";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  pendingUploads,
   type PendingUploadPurposeData,
+  pendingUploads,
   workspaces,
 } from "@/api/db/schema";
 import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";

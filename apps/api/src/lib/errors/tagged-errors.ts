@@ -485,8 +485,7 @@ export class ChatLoopDetectedError extends TaggedError(
  * `isAnticipatedAIFailure`.
  */
 export type ChatTerminalError =
-  | ChatEmptyCompletionError
-  | ChatLoopDetectedError;
+  ChatEmptyCompletionError | ChatLoopDetectedError;
 
 /**
  * A text generation ended because the abort signal its caller passed fired:
@@ -769,6 +768,8 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
+  /** Parser error class recovered from worker stderr; null for termination. */
+  workerErrorClass: string | null;
 }> {}
 
 /**

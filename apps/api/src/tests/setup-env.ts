@@ -1,3 +1,4 @@
+import "../register-schema-formats";
 import { envApiServerSchema } from "../env-schema";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 

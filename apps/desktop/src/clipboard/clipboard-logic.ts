@@ -76,6 +76,39 @@ export const clipboardItemLink = (
   return { host: url.hostname.replace(/^www\./u, "") };
 };
 
+/** The cap the native side holds a clip name to. */
+export const MAX_CLIPBOARD_ITEM_NAME_CHARACTERS = 80;
+
+export type ClipboardEditorNameDraft =
+  { type: "unchanged"; value: string } | { type: "edited"; value: string };
+
+/** External history updates own the name until the user edits this field. */
+export const refreshClipboardEditorName = (
+  draft: ClipboardEditorNameDraft,
+  name: string | null,
+): ClipboardEditorNameDraft =>
+  draft.type === "edited" ? draft : { type: "unchanged", value: name ?? "" };
+
+/**
+ * What an unnamed clip is called: the page a browser copy came from, else the
+ * host a link points to, else its kind.
+ */
+export const clipboardUntitledName = (
+  item: ClipboardItem,
+  kindLabels: { image: string; text: string },
+) => {
+  const pageLabel = item.sourceApp?.page
+    ? clipboardSourceLabel(item.sourceApp)
+    : "";
+  if (pageLabel) {
+    return pageLabel;
+  }
+  if (item.type === "image") {
+    return kindLabels.image;
+  }
+  return clipboardItemLink(item)?.host ?? kindLabels.text;
+};
+
 export const CLIPBOARD_ITEM_DRAG_TYPE =
   "application/x-stella-clipboard-item-id";
 export const CLIPBOARD_GROUP_DRAG_TYPE =

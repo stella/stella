@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   afterAll,
   afterEach,
-  setDefaultTimeout,
   describe,
   expect,
   jest,
+  setDefaultTimeout,
   test,
 } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";

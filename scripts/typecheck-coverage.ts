@@ -20,8 +20,8 @@ import { panic } from "better-result";
 import {
   type Dirent,
   existsSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   statSync,
 } from "node:fs";
 import path from "node:path";

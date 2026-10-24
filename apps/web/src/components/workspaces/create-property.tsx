@@ -11,9 +11,9 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -67,8 +67,8 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
-  WorkspaceProperty,
   SelectPropertyOption,
+  WorkspaceProperty,
 } from "@/lib/types";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
@@ -98,12 +98,7 @@ type CreatePropertyProps = {
    *    column popover's "Edit column…" item).
    */
   triggerVariant?:
-    | "icon"
-    | "labelled"
-    | "panel"
-    | "blank-cell"
-    | "rail"
-    | "none";
+    "icon" | "labelled" | "panel" | "blank-cell" | "rail" | "none";
   extractionContext?: {
     entityId: string;
     filePropertyId: string | null;
@@ -808,7 +803,7 @@ const PropertyComposerBody = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-base font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full text-base font-semibold tracking-tight"
           maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {

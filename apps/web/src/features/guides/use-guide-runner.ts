@@ -20,9 +20,9 @@ import {
 import type { GuideEngine } from "@/features/guides/guide-engine";
 import { resolveGuideWorkspaceViewId } from "@/features/guides/guide-route";
 import type {
-  GuideSeed,
   GuideInteraction,
   GuideRoute,
+  GuideSeed,
   GuideStep,
   GuideTour,
   GuideTourId,
@@ -116,8 +116,7 @@ const REVEALED_SURFACE_SELECTOR =
   '[role="menu"],[role="listbox"],[role="dialog"]';
 
 type GuideRunnerState =
-  | { status: "idle" }
-  | { status: "running"; tourId: GuideTourId };
+  { status: "idle" } | { status: "running"; tourId: GuideTourId };
 
 // Which way the run is walking the tour. A walk only ever moves one way until
 // the user clicks again; see `resolveFrom`.

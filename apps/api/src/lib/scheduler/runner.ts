@@ -7,8 +7,8 @@ import {
   isNull,
   lte,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 

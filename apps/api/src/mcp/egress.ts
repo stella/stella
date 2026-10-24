@@ -9,8 +9,8 @@ import { projectionPayload } from "@/api/lib/projection-totality";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { AnonymizedTextFields } from "@/api/mcp/anonymization-core";
 import {
-  COMPAT_SEARCH_OUTPUT_SCHEMA,
   COMPAT_FETCH_OUTPUT_SCHEMA,
+  COMPAT_SEARCH_OUTPUT_SCHEMA,
 } from "@/api/mcp/compat-contract";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -70,11 +70,9 @@ type EgressDependencies = {
   /** Provider boundary for anonymizing tenant-authored text. */
   anonymizeTextFields?: typeof anonymizeTextFields | undefined;
   loadAnonymizationAllowlistCanonicalsByWorkspace?:
-    | typeof loadAnonymizationAllowlistCanonicalsByWorkspace
-    | undefined;
+    typeof loadAnonymizationAllowlistCanonicalsByWorkspace | undefined;
   loadAnonymizationGazetteerEntriesByWorkspace?:
-    | typeof loadAnonymizationGazetteerEntriesByWorkspace
-    | undefined;
+    typeof loadAnonymizationGazetteerEntriesByWorkspace | undefined;
 };
 
 export function finalizeToolEgress<TData>(
@@ -143,8 +141,7 @@ class EgressAnonymizerFailedError extends TaggedError(
 
 /** Why a payload's anonymization did not complete. */
 type EgressAnonymizationError =
-  | AnonymizedFieldBoundaryError
-  | EgressAnonymizerFailedError;
+  AnonymizedFieldBoundaryError | EgressAnonymizerFailedError;
 
 type EgressAnonymize = (
   input: Parameters<typeof anonymizeTextFields>[0],

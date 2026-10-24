@@ -18,16 +18,17 @@ import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
 import { parseChangesetEntry } from "./changeset-entry";
 import {
+  assertReleaseCutReady,
   changesetVersionEnv,
   foldSupersededChangelog,
-  MaintenanceReleaseError,
   maintenanceChangelog,
+  MaintenanceReleaseError,
   nextPatchVersion,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
-  readPreviousRelease,
   readPendingChangesets,
+  readPreviousRelease,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -543,6 +544,7 @@ describe("maintenance release preparation", () => {
 
   test("defaults the recording attestation and keeps an explicit one overridable", () => {
     expect(parseMaintenanceReleaseOptions([])).toEqual({
+      allowUnprovenMain: false,
       recordingReviewReason: "Patch release, UX diff negligible",
     });
     expect(() =>
@@ -558,8 +560,25 @@ describe("maintenance release preparation", () => {
         "Current recordings remain representative.",
       ]),
     ).toEqual({
+      allowUnprovenMain: false,
       recordingReviewReason: "Current recordings remain representative.",
     });
+  });
+
+  test("takes the unproven-main override only when it is spelled out, once", () => {
+    expect(parseMaintenanceReleaseOptions(["--allow-unproven-main"])).toEqual({
+      allowUnprovenMain: true,
+      recordingReviewReason: "Patch release, UX diff negligible",
+    });
+    expect(() =>
+      parseMaintenanceReleaseOptions([
+        "--allow-unproven-main",
+        "--allow-unproven-main",
+      ]),
+    ).toThrow("may be passed only once");
+    expect(() => parseMaintenanceReleaseOptions(["--allow-unproven"])).toThrow(
+      "Unknown argument",
+    );
   });
 
   test("writes the complete release file set", () => {
@@ -1126,3 +1145,295 @@ const isReleaseDates = (
   value: unknown,
 ): value is Partial<Record<string, string | null>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const CUT_SHA = "d".repeat(40);
+const RUN_PREFIX = "https://github.com/stella/stella/actions/runs/";
+const STATUSES_PATH = `/commits/${CUT_SHA}/statuses?per_page=100&page=1`;
+const SCHEDULED_PR_DEPTH_PATH = `/actions/workflows/main-pr-depth.yml/runs?head_sha=${CUT_SHA}&event=schedule&per_page=1`;
+const jobsPath = (runId: number) =>
+  `/actions/runs/${String(runId)}/jobs?filter=latest&per_page=100&page=1`;
+
+const commitStatus = (
+  context: string,
+  state: string,
+  runId: number,
+  login = "github-actions[bot]",
+) => ({
+  context,
+  creator: { login },
+  state,
+  target_url: `${RUN_PREFIX}${String(runId)}`,
+});
+
+const HEAVY_GREEN = commitStatus("main/heavy", "success", 11);
+const PR_DEPTH_GREEN = commitStatus("main/pr-depth", "success", 22);
+
+const job = (
+  name: string,
+  conclusion: string | null,
+  status = "completed",
+) => ({
+  conclusion,
+  name,
+  status,
+});
+
+// Every GitHub read the gate makes, by path; any other read fails the test.
+const fakeGitHub = (responses: Record<string, unknown>) => {
+  const paths: string[] = [];
+  const read = async (path: string): Promise<unknown> => {
+    paths.push(path);
+    if (!(path in responses)) {
+      throw new Error(`Unexpected GitHub read: ${path}`);
+    }
+    const response = responses[path];
+    if (response instanceof Error) {
+      throw response;
+    }
+    return response;
+  };
+  return Object.assign(read, { paths });
+};
+
+const cutRefusal = async (
+  responses: Record<string, unknown>,
+): Promise<string> => {
+  const written: string[] = [];
+  try {
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      fakeGitHub(responses),
+      (text) => {
+        written.push(text);
+      },
+    );
+  } catch (error) {
+    expect(error).toBeInstanceOf(MaintenanceReleaseError);
+    expect(written).toEqual([]);
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error(
+    `Expected the cut to be refused; it printed ${written.join("")}`,
+  );
+};
+
+describe("release cut readiness", () => {
+  test("cuts when main/heavy and main/pr-depth are green on the commit", async () => {
+    const read = fakeGitHub({
+      [STATUSES_PATH]: [PR_DEPTH_GREEN, HEAVY_GREEN],
+    });
+    const written: string[] = [];
+
+    await assertReleaseCutReady(CUT_SHA, false, read, (text) => {
+      written.push(text);
+    });
+
+    expect(written).toEqual([
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+    expect(read.paths).toEqual([STATUSES_PATH]);
+  });
+
+  test("refuses a red gate and names its failing jobs and the rerun", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "failure", 11),
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(11)]: {
+        jobs: [
+          job("suites / api-tests (2)", "failure"),
+          job("suites / web-tests", "success"),
+          job("suites / docker-checks", "skipped"),
+          job("suites / e2e", "cancelled"),
+          job("status", null, "in_progress"),
+        ],
+      },
+    });
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / api-tests (2) (failure)",
+        "    failing job: suites / e2e (cancelled)",
+        "    failing job: status (in_progress)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+  });
+
+  test("reads only the newest status of each gate", async () => {
+    const newerRed = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/pr-depth", "failure", 23),
+        HEAVY_GREEN,
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(23)]: { jobs: [job("suites / lint", "failure")] },
+    });
+    expect(newerRed).toContain("main/pr-depth: failure");
+    expect(newerRed).toContain("failing job: suites / lint (failure)");
+    expect(newerRed).not.toContain("main/heavy");
+
+    const newerGreen = fakeGitHub({
+      [STATUSES_PATH]: [
+        HEAVY_GREEN,
+        PR_DEPTH_GREEN,
+        commitStatus("main/heavy", "failure", 10),
+      ],
+    });
+    await assertReleaseCutReady(CUT_SHA, false, newerGreen, () => undefined);
+  });
+
+  test("refuses a missing main/heavy status and says how to run it", async () => {
+    const message = await cutRefusal({ [STATUSES_PATH]: [PR_DEPTH_GREEN] });
+
+    expect(message).toContain(
+      "  main/heavy: missing (no status on the commit)",
+    );
+    expect(message).toContain(
+      `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+    );
+  });
+
+  test("refuses a pending gate", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        HEAVY_GREEN,
+        commitStatus("main/pr-depth", "pending", 24),
+      ],
+      [jobsPath(24)]: { jobs: [job("suites / lint", null, "queued")] },
+    });
+
+    expect(message).toContain("main/pr-depth: pending (status pending)");
+    expect(message).toContain("failing job: suites / lint (queued)");
+    expect(message).not.toContain("run it:");
+  });
+
+  test("does not take a success reported by anyone but the workflow bot", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        HEAVY_GREEN,
+        commitStatus("main/pr-depth", "success", 25, "someone"),
+      ],
+      [jobsPath(25)]: { jobs: [] },
+    });
+
+    expect(message).toContain(
+      "main/pr-depth: failure (status success set by someone, not github-actions[bot])",
+    );
+  });
+
+  test("answers a missing main/pr-depth status with its latest scheduled run", async () => {
+    const scheduledRun = (status: string, conclusion: string | null) => ({
+      workflow_runs: [
+        {
+          conclusion,
+          event: "schedule",
+          head_sha: CUT_SHA,
+          html_url: `${RUN_PREFIX}30`,
+          status,
+        },
+      ],
+    });
+    const read = fakeGitHub({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("completed", "success"),
+    });
+    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    expect(read.paths).toEqual([STATUSES_PATH, SCHEDULED_PR_DEPTH_PATH]);
+
+    const failed = await cutRefusal({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("completed", "failure"),
+      [jobsPath(30)]: { jobs: [job("suites / typecheck", "failure")] },
+    });
+    expect(failed).toContain(
+      `main/pr-depth: failure (no status; latest scheduled run completed/failure) ${RUN_PREFIX}30`,
+    );
+    expect(failed).toContain("failing job: suites / typecheck (failure)");
+
+    const running = await cutRefusal({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("in_progress", null),
+      [jobsPath(30)]: {
+        jobs: [job("suites / typecheck", null, "in_progress")],
+      },
+    });
+    expect(running).toContain("main/pr-depth: pending");
+
+    const none = await cutRefusal({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+    });
+    expect(none).toContain(
+      "main/pr-depth: missing (no status and no scheduled run on the commit)",
+    );
+    expect(none).toContain(
+      `run it: gh workflow run main-pr-depth.yml --ref main -f sha=${CUT_SHA}`,
+    );
+  });
+
+  test("fails closed when GitHub cannot be read", async () => {
+    const unreadable = await cutRefusal({
+      [STATUSES_PATH]: new Error("HTTP 502"),
+    });
+    expect(unreadable).toContain("main/heavy: unreadable (HTTP 502)");
+    expect(unreadable).toContain("main/pr-depth: unreadable (HTTP 502)");
+
+    const malformed = await cutRefusal({ [STATUSES_PATH]: { statuses: [] } });
+    expect(malformed).toContain("main/heavy: unreadable");
+
+    const jobsDown = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "error", 12),
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(12)]: new Error("HTTP 500"),
+    });
+    expect(jobsDown).toContain("main/heavy: failure (status error)");
+    expect(jobsDown).toContain("failing job: (jobs unreadable: HTTP 500)");
+  });
+
+  test("reads every page of statuses before calling a gate missing", async () => {
+    const unrelated = Array.from({ length: 100 }, (_unused, index) =>
+      commitStatus(`other/${String(index)}`, "success", 40 + index),
+    );
+    const read = fakeGitHub({
+      [STATUSES_PATH]: unrelated,
+      [`/commits/${CUT_SHA}/statuses?per_page=100&page=2`]: [
+        HEAVY_GREEN,
+        PR_DEPTH_GREEN,
+      ],
+    });
+
+    await assertReleaseCutReady(CUT_SHA, false, read, () => undefined);
+    expect(read.paths).toHaveLength(2);
+  });
+
+  test("an explicit override prints the same refusal and lets the cut go on", async () => {
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      true,
+      fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(written).toEqual([
+      [
+        "maintenance-release: --allow-unproven-main passed; cutting anyway.",
+        `main is not release-ready at ${CUT_SHA}:`,
+        "  main/heavy: missing (no status on the commit)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "",
+      ].join("\n"),
+    ]);
+  });
+});

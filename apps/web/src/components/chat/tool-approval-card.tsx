@@ -21,8 +21,8 @@ import { cn } from "@stll/ui/utils";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
-  getChatToolTitleKey,
   getApprovalToolName,
+  getChatToolTitleKey,
   isApprovalOnceChatToolName,
   isExternalInputChatToolName,
   isExternalMcpToolName,
@@ -48,8 +48,8 @@ import {
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
   formatReadableInputValue,
-  getReaderAnnotationEditTargetId,
   getReadableInputRows,
+  getReaderAnnotationEditTargetId,
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
@@ -68,8 +68,8 @@ import {
   useBrowserCommandAutoApproved,
 } from "@/features/chat/browser-control/browser-approval-mode";
 import {
-  getBrowserApprovalDetails,
   type BrowserApprovalDetail,
+  getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";

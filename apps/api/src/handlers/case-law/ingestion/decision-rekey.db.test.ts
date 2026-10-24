@@ -13,8 +13,8 @@ import { asc, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawSources,
 } from "@/api/db/schema";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
@@ -29,15 +29,15 @@ import {
   resolveDecisionIdentityTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
-  sourceContractForAdapter,
   type SourceContract,
+  sourceContractForAdapter,
 } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";

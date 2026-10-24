@@ -22,8 +22,8 @@ import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-p
 import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
 import {
   passthroughId,
-  publicUrl,
   projectionBranch,
+  publicUrl,
 } from "./projection-fields";
 
 /**

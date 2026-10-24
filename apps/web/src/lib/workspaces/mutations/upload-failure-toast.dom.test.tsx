@@ -10,6 +10,7 @@ const { act } = await import("react");
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { ToastProvider, stellaToast } = await import("@stll/ui/toast");
 const { toAPIError } = await import("@/lib/errors/api");
+const { readQueryResult } = await import("@/lib/errors/query-result");
 const { ACTION_ADMISSION_CODES, ACTION_ADMISSION_REFUSALS } =
   await import("@stll/api-contract/action-admission");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -76,6 +77,84 @@ test("permanent rejections show each safe reason without a Retry action", async 
   expect(view.getByText("private.pdf").parentElement?.textContent).toContain(
     "permission",
   );
+});
+
+test("a mixed upload batch explains an empty file without presigning or retrying it", async () => {
+  const { UploadQueue } = await import("@/lib/upload-queue");
+  const { EmptyUploadFileError } =
+    await import("@/lib/files/upload-file-validation");
+  const { buildEntityCreatePresignPayload } =
+    await import("./create-file-upload-payload.logic");
+  const presignedNames: string[] = [];
+  const queue = new UploadQueue(async (file) => {
+    const payload = readQueryResult(
+      buildEntityCreatePresignPayload({
+        propertyId: "property_upload",
+        name: file.name,
+        mimeType: file.type,
+        size: file.size,
+        sha256Hex: "a".repeat(64),
+      }),
+    );
+    presignedNames.push(payload.name);
+    if (file.name === "wrong.pdf") {
+      throw toAPIError({
+        status: 422,
+        value: {
+          code: "file_security_rejected",
+          message: "File rejected by security check",
+        },
+      });
+    }
+    return file.name;
+  });
+  const finished = new Promise<void>((resolve) => {
+    queue.on("done", () => resolve());
+  });
+  queue.enqueue([
+    new File([], "empty.pdf", { type: "application/pdf" }),
+    new File(["wrong content"], "wrong.pdf", { type: "application/pdf" }),
+    new File(["content"], "accepted.pdf", { type: "application/pdf" }),
+  ]);
+  await finished;
+
+  expect(presignedNames).toEqual(["wrong.pdf", "accepted.pdf"]);
+  expect(queue.getProgress()).toEqual({ completed: 1, failed: 2, total: 3 });
+  expect(
+    queue.getFailedFiles().some(({ error }) => EmptyUploadFileError.is(error)),
+  ).toBe(true);
+  expect(
+    queue
+      .getFailedFiles()
+      .every(({ disposition }) => disposition === "permanent"),
+  ).toBe(true);
+
+  const view = render(<ToastProvider />);
+  await act(async () => {
+    showUploadFailureToast({
+      toastId: stellaToast.loading("Uploading"),
+      title: "Some uploads failed",
+      type: "warning",
+      failures: queue.getFailedFiles(),
+      labels: {
+        reasonFallback: "Upload failed",
+        additionalFailures: (count) => `and ${String(count)} more`,
+        retryFailed: (count) => `Retry ${String(count)} files`,
+      },
+      onRetry: () => queue.retryFailed(),
+    });
+    await sleep(20);
+  });
+
+  expect(view.getByText("empty.pdf").parentElement?.textContent).toContain(
+    messages.workspaces.files.emptyFile,
+  );
+  expect(view.getByText("wrong.pdf").parentElement?.textContent).toContain(
+    messages.errors.apiCodes.fileSecurityRejected,
+  );
+  expect(view.queryByRole("button", { name: /Retry/u })).toBeNull();
+  queue.retryFailed();
+  expect(presignedNames).toEqual(["wrong.pdf", "accepted.pdf"]);
 });
 
 test("a batch refused only by action admission keeps the refusal notice", async () => {

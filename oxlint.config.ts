@@ -19,13 +19,13 @@ import {
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
+  designLintBacklogOverrides,
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
   SIZE_LINT_POLICY_OVERRIDES,
   SIZE_LINT_RULES,
-  designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";
@@ -187,6 +187,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
+  fixtureRuleOverride("require-stable-geometry.fixture.ts", [
+    "require-stable-geometry/require-stable-geometry",
+  ]),
   fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
     "no-raw-eden-telemetry/no-raw-eden-telemetry",
   ]),
@@ -344,6 +347,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
   ]),
+  fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
+    "no-raw-mcp-error-result/no-raw-mcp-error-result",
+  ]),
   fixtureRuleOverride("failure-sink-handle.fixture.ts", [
     "failure-sink-handle/failure-sink-handle",
   ]),
@@ -385,6 +391,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
     "no-banned-glyph/no-banned-glyph",
+  ]),
+  fixtureRuleOverride("no-decorative-heading-accent.fixture.tsx", [
+    "no-decorative-heading-accent/no-decorative-heading-accent",
   ]),
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
@@ -1516,6 +1525,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
     "./.oxlint-plugins/no-raw-error-output.ts",
+    "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
@@ -1541,6 +1551,7 @@ const config = defineConfig({
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
@@ -1669,6 +1680,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
@@ -1679,11 +1691,13 @@ const config = defineConfig({
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/require-json-import-attribute.ts",
+    "./.oxlint-plugins/require-stable-geometry.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
@@ -1692,6 +1706,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/require-polite-publisher-fetch.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
+    "./.oxlint-plugins/require-frame-loop-cleanup.ts",
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
@@ -1849,6 +1864,15 @@ const config = defineConfig({
       files: ["apps/web/e2e/**", "scripts/**"],
       rules: {
         "require-json-import-attribute/require-json-import-attribute": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/e2e/**/*.geometry.spec.ts",
+        "apps/web/e2e/**/*-geometry.spec.ts",
+      ],
+      rules: {
+        "require-stable-geometry/require-stable-geometry": "error",
       },
     },
     {
@@ -2178,6 +2202,17 @@ const config = defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      // Every Bun SQL client and bun-sql drizzle database comes from the
+      // owner, which decodes int8 by column mode (Bun 1.4.4 returns strings).
+      files: [
+        "apps/**/*.{ts,tsx,mts}",
+        "packages/**/*.{ts,tsx,mts}",
+        "scripts/**/*.{ts,mts}",
+        ".oxlint-plugins/__fixtures__/sql-client-owner.fixture.ts",
+      ],
+      rules: { "sql-client-owner/sql-client-owner": "error" },
     },
     {
       files: [
@@ -2633,6 +2668,23 @@ const config = defineConfig({
       rules: {
         "no-object-url-leak/no-object-url-leak": "error",
         "no-auth-token-in-web-storage/no-auth-token-in-web-storage": "error",
+      },
+    },
+    {
+      // Interval timers and self-scheduling frame loops in the web app and
+      // the React packages stop when their owner goes away, and frame loops
+      // reschedule only while there is work to draw.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/mcp-apps/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-frame-loop-cleanup.fixture.ts",
+      ],
+      rules: {
+        "require-frame-loop-cleanup/require-frame-loop-cleanup": "error",
       },
     },
     {
@@ -3372,6 +3424,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-decorated-search-input/no-decorated-search-input": "error",
+      },
+    },
+    {
+      // A heading is one typographic statement. A differently styled fragment
+      // must communicate interaction or independently documented meaning.
+      files: [
+        "apps/landing/src/**/*.tsx",
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-decorative-heading-accent.fixture.tsx",
+      ],
+      rules: {
+        "no-decorative-heading-accent/no-decorative-heading-accent": "error",
       },
     },
     {
@@ -4851,6 +4915,12 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: {
+        "no-raw-mcp-error-result/no-raw-mcp-error-result": "error",
+      },
+    },
+    {
       // This sink contract deliberately injects unsafe records and verifies redaction.
       files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
       rules: {
@@ -5388,6 +5458,17 @@ const config = defineConfig({
       },
     },
     {
+      // Rule tests only: the shared runner (lint-single-rule.ts) owns the
+      // one-oxlint-process slot and runs its lone fallbacks in turn.
+      files: [
+        ".oxlint-plugins/__tests__/*.test.ts",
+        ".oxlint-plugins/__fixtures__/no-serial-lint-case.fixture.ts",
+      ],
+      rules: {
+        "no-serial-lint-case/no-serial-lint-case": "error",
+      },
+    },
+    {
       // Throw assertions must name the error they expect. Scoped to test
       // files (and the module-named fixture, which is not one) because
       // `expect(...).toThrow()` only appears there.
@@ -5909,13 +5990,16 @@ const config = defineConfig({
       // test asserts on class strings rather than rendering chrome.
       files: [
         "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
         "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
         ".oxlint-plugins/__fixtures__/no-raw-overflow-scroll.fixture.tsx",
       ],
       excludeFiles: [
         "**/*.{test,spec}.tsx",
         "**/__tests__/**",
         "packages/ui/src/components/scroll-area.tsx",
+        "packages/ui/src/components/horizontal-scroller.tsx",
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",

@@ -14,11 +14,11 @@ import type { TimeZoneId } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  DOCUMENT_PROCESSING_MODE,
   DEFAULT_DOCUMENT_PROCESSING_MODE,
   DEFAULT_TIME_EDIT_WINDOW_DAYS,
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   DEFAULT_TIME_NARRATIVE_REQUIRED,
+  DOCUMENT_PROCESSING_MODE,
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";

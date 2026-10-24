@@ -12,8 +12,7 @@ import type {
 import { SK_PROFILE } from "./sk-provision-citation-profile";
 
 type TableEntry =
-  | { kind: "alias"; spec: ActAliasSpec }
-  | { kind: "title"; spec: ActTitleSpec };
+  { kind: "alias"; spec: ActAliasSpec } | { kind: "title"; spec: ActTitleSpec };
 
 const PROFILES = [
   { name: "Czech", profile: CZ_PROFILE },

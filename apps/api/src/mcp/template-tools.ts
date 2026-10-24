@@ -59,9 +59,9 @@ import {
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
+  type AdmittedModelAction,
   createModelActionAdmitter,
   modelActionRefusal,
-  type AdmittedModelAction,
 } from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedEntityId,
@@ -84,8 +84,8 @@ import {
 import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {
-  templateConditionPreviewSchema,
   decideTemplateConditions,
+  templateConditionPreviewSchema,
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
 import type {

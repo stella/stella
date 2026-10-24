@@ -6,8 +6,8 @@ import type { InvoiceTotals } from "@stll/invoicing";
 import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
-  INVOICE_ATTACHMENT,
   expenses,
+  INVOICE_ATTACHMENT,
   invoiceLines,
   timeEntries,
 } from "@/api/db/schema";

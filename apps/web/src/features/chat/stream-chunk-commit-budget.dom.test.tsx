@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -12,6 +12,9 @@ import {
 } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { installRenderProbe } from "@stll/render-probe";
+import { formatRenderReport } from "@stll/render-probe/report";
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import {
   STREAM_CHUNK_COMMIT_BUDGET,
@@ -33,10 +36,19 @@ const sessionArea = () =>
 // of tiny deltas, a few milliseconds apart, through the page's real runtime
 // and messages view; a fake server stands where the network is, and a
 // `Profiler` at the page's root counts its commits while the deltas arrive.
+// The render probe names what each of those commits rendered, so a failure
+// says which components a kind kept re-rendering.
 
 // A DOM for this file only. Everything that touches the DOM is loaded after
 // it exists.
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
+// React DOM reads its DevTools hook once, when it loads: before any import
+// below reaches it.
+const probe = installRenderProbe();
+// The page renders as it ships: compiled by the React Compiler, as the Vite
+// build compiles it. Without it the page would render far wider than in the
+// app, and a width budget would hold the wrong program.
+Bun.plugin(reactCompilerBunPlugin);
 
 const ORACLE = "chat.render.stream-commits-bounded";
 
@@ -433,6 +445,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     organizationId: ORGANIZATION_ID,
     threadId: THREAD_ID,
   });
+  probe.reset();
   const sent = Result.tryPromise(
     async () =>
       await page.session().sendMessage({
@@ -453,8 +466,10 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
   const commits = commitTimes.filter(
     (at) => at >= firstAt && at <= lastAt,
   ).length;
+  const renders = probe.snapshot();
   return {
     commits,
+    renders,
     commitsPerSecond: Math.round((commits * 1000) / (lastAt - firstAt)),
     finished: server.finished(),
     kindEvents: eventsOfKind(events, kind).length,
@@ -488,14 +503,23 @@ describe(`${ORACLE}: the thread page's commit rate while each kind of chunk stre
   });
 
   for (const kind of KINDS) {
-    const { commitsPerSecond: budget, streams } =
-      STREAM_CHUNK_COMMIT_BUDGET[kind];
+    const {
+      commitsPerSecond: budget,
+      streams,
+      unchangedPropsRendersPerCommit,
+    } = STREAM_CHUNK_COMMIT_BUDGET[kind];
     test(`the thread page commits at a bounded rate while ${kind} streams`, async () => {
       const measured = await commitRateWhileStreaming(kind);
       expect(measured.unexpected).toEqual([]);
       expect(measured.finished).toBe(true);
-      const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s`;
+      // The probe saw the page's commits: React loaded after it.
+      expect(measured.renders.commits).toBeGreaterThan(0);
+      const detail = `${ORACLE}: ${String(measured.commits)} commits while ${streams} streamed (${String(measured.kindEvents)} events), budget ${String(budget)}/s\n${formatRenderReport(measured.renders)}`;
       expect(measured.commitsPerSecond, detail).toBeLessThanOrEqual(budget);
+      expect(
+        measured.renders.causes.parent / measured.renders.commits,
+        `${ORACLE}: components rendered with unchanged props while ${streams} streamed, budget ${String(unchangedPropsRendersPerCommit)} a commit\n${formatRenderReport(measured.renders)}`,
+      ).toBeLessThanOrEqual(unchangedPropsRendersPerCommit);
     }, 30_000);
   }
 });

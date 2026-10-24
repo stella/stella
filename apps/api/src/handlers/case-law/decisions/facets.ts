@@ -72,8 +72,7 @@ export const listDecisionFacetsHandler = async ({
 };
 
 type BrowseFacetsReadError =
-  | LegalBrowseFacetsError
-  | NonRedistributableSourcesError;
+  LegalBrowseFacetsError | NonRedistributableSourcesError;
 
 export type BrowseFacetsUnderPolicyRead = {
   country: string;

@@ -15,9 +15,9 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   buildSkUsDecision,
+  SK_US_FIRST_SLICE,
   skUsAdapter,
   skUsListingIdentity,
-  SK_US_FIRST_SLICE,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
@@ -26,9 +26,9 @@ import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   isReadRefusal,
   READ_OUTCOME_METADATA_KEY,
-  type ReadRefusal,
   readAbsent,
   readPresent,
+  type ReadRefusal,
 } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,

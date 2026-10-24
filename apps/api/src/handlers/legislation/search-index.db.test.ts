@@ -19,8 +19,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
-  packKeyForMembers,
   corpusMemberDigest,
+  packKeyForMembers,
 } from "@/api/lib/legal-search/corpus-pack";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type {

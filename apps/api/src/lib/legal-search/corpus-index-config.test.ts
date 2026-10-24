@@ -16,8 +16,8 @@ import {
   TAG_FIELD_VALUE_LIMIT,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
-  corpusIndexGroupConfig,
   caseLawManifestGroups,
+  corpusIndexGroupConfig,
   resolveCorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";

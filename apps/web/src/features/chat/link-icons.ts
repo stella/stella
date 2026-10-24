@@ -23,8 +23,7 @@ export const exactIconOptions = (url: string) =>
   iconOptions({ type: "url", value: url });
 
 type IconTarget =
-  | { type: "hostname"; value: string }
-  | { type: "url"; value: string };
+  { type: "hostname"; value: string } | { type: "url"; value: string };
 
 function iconOptions(target: IconTarget) {
   const options = queryOptions({

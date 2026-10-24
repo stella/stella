@@ -18,8 +18,8 @@ import {
 import {
   dispatchEvent,
   handleHostedAllocation,
-  handleUsageEntitlementStatusChange,
   handleHostedEntitlementUpsert,
+  handleUsageEntitlementStatusChange,
 } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

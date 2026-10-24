@@ -60,13 +60,13 @@ import { toSafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
 import {
   legalListActivityOptions,
-  legalListItemsOptions,
   legalListCandidatesOptions,
   legalListGenerationsOptions,
+  legalListItemsOptions,
   legalListKeys,
   legalListOptions,
-  legalListSourcesOptions,
   legalListsOptions,
+  legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { ListSourceAction } from "@/routes/_protected.workspaces/$workspaceId/-components/list-source-action";

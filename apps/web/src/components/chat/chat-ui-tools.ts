@@ -79,8 +79,7 @@ export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
  * unknown.
  */
 export type RegisteredChatUIToolCallPart =
-  | BuiltInChatToolCallPart
-  | ExternalMcpChatToolCallPart;
+  BuiltInChatToolCallPart | ExternalMcpChatToolCallPart;
 type RegisteredFolioAgentToolName = Extract<
   keyof ChatUITools,
   FolioAgentToolName
@@ -96,11 +95,9 @@ export type RegisteredFolioAgentToolCallPart<
   };
 }[TName];
 export type ChatUIToolCallPart =
-  | RegisteredChatUIToolCallPart
-  | OpaquePersistedChatToolCallPart;
+  RegisteredChatUIToolCallPart | OpaquePersistedChatToolCallPart;
 export type ChatUIPart =
-  | Exclude<TanStackChatPart, { type: "tool-call" }>
-  | ChatUIToolCallPart;
+  Exclude<TanStackChatPart, { type: "tool-call" }> | ChatUIToolCallPart;
 export type ChatUIMessage = Omit<PersistedChatMessage, "parts"> & {
   parts: ChatUIPart[];
 };
@@ -127,8 +124,7 @@ type BuiltInApprovalToolName = Exclude<
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
-  | ApprovalToolName
-  | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
+  ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
 export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
   name: ApprovalToolName;
   approval: {
@@ -1012,9 +1008,7 @@ type ServerChatTurnOutcome = NonNullable<
 >;
 
 export type ResolvedChatAssistantTurnOutcome =
-  | ServerChatTurnOutcome
-  | { type: "incomplete" }
-  | { type: "legacy-completed" };
+  ServerChatTurnOutcome | { type: "incomplete" } | { type: "legacy-completed" };
 
 type ChatAssistantTurnMessage = Pick<ChatMessage, "metadata" | "role"> & {
   parts: readonly ChatPart[];
@@ -1128,16 +1122,46 @@ const isCanonicalBuiltInToolCall = (
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isCanonicalChatUIMessage = (
+const isCanonicalChatUIPart = (part: PersistedChatPart): boolean =>
+  part.type !== "tool-call" ||
+  isExternalMcpToolName(part.name) ||
+  isOpaquePersistedChatToolCallPart(part) ||
+  isCanonicalBuiltInToolCall(part);
+
+/** Whether every part of `message` is canonical, checked afresh. */
+export const isCanonicalChatUIMessage = (
   message: PersistedChatMessage,
-): message is ChatUIMessage =>
-  message.parts.every(
-    (part) =>
-      part.type !== "tool-call" ||
-      isExternalMcpToolName(part.name) ||
-      isOpaquePersistedChatToolCallPart(part) ||
-      isCanonicalBuiltInToolCall(part),
-  );
+): message is ChatUIMessage => message.parts.every(isCanonicalChatUIPart);
+
+/** Messages and parts already checked. The client replaces an object rather
+ *  than changing it, so a streamed chunk checks only the parts it replaced,
+ *  and a message rebuilt around the same parts reads none of them. */
+const canonicalChatUIMessages = new WeakSet<PersistedChatMessage>();
+const canonicalChatUIParts = new WeakSet<PersistedChatPart>();
+
+const isKnownCanonicalChatUIPart = (part: PersistedChatPart): boolean => {
+  if (canonicalChatUIParts.has(part)) {
+    return true;
+  }
+  if (!isCanonicalChatUIPart(part)) {
+    return false;
+  }
+  canonicalChatUIParts.add(part);
+  return true;
+};
+
+const isKnownCanonicalChatUIMessage = (
+  message: PersistedChatMessage,
+): message is ChatUIMessage => {
+  if (canonicalChatUIMessages.has(message)) {
+    return true;
+  }
+  if (!message.parts.every(isKnownCanonicalChatUIPart)) {
+    return false;
+  }
+  canonicalChatUIMessages.add(message);
+  return true;
+};
 
 /**
  * Project known tool names and protocol-shaped payloads into the UI.
@@ -1151,7 +1175,7 @@ export const projectCanonicalChatUIMessages = (
 ): ChatUIMessage[] => {
   const projected: ChatUIMessage[] = [];
   for (const message of messages) {
-    if (!isCanonicalChatUIMessage(message)) {
+    if (!isKnownCanonicalChatUIMessage(message)) {
       return panic("Chat runtime produced a non-canonical tool call");
     }
     projected.push(message);

@@ -19,8 +19,7 @@ import { logger } from "@/api/lib/observability/logger";
  * rather than leaving it to be inferred from a hole in a table.
  */
 export type SourceRegistryMembership =
-  | { type: "registered"; adapterKey: AdapterKey }
-  | { type: "unrecognized" };
+  { type: "registered"; adapterKey: AdapterKey } | { type: "unrecognized" };
 
 const isRegisteredAdapterKey = (key: string): key is AdapterKey =>
   Object.values(ADAPTER_KEYS).some((candidate) => candidate === key);

@@ -10,8 +10,8 @@ import {
 } from "@/lib/account/user-scoped-storage";
 
 import {
-  BROWSER_APPROVAL_MODE,
   beginBrowserCommand,
+  BROWSER_APPROVAL_MODE,
   createBrowserApprovalStore,
   getBrowserApprovalMode,
   isBrowserCommandAutoApproved,

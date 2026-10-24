@@ -20,8 +20,8 @@ import {
   CLASSIFIABLE_POLARITIES,
   isClassifiablePolarity,
   POLARITY_PRECEDENCE,
-  RULE_SOURCE,
   REPORTED_PARTY_SUBMISSION_GROUP,
+  RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import type {
   ClassifiablePolarity,

@@ -12,7 +12,7 @@ import { Result } from "better-result";
 
 import type {
   DecisionAnalysis,
-  DecisionAnalysisV3,
+  DecisionAnalysisV4,
 } from "@stll/legal-ast/analysis";
 import { isSignificanceCurrent } from "@stll/legal-ast/analysis";
 import { Temporal } from "@stll/time";
@@ -39,10 +39,10 @@ import {
 import {
   graphFingerprintOf,
   readCitationGraphFacts,
+  SIGNIFICANCE_PROMPT_VERSION,
   significanceOutputSchema,
   significanceSystemPrompt,
   significanceUserMessage,
-  SIGNIFICANCE_PROMPT_VERSION,
 } from "./significance";
 import type { CitationGraphFacts } from "./significance";
 
@@ -89,9 +89,9 @@ const readPublicGraphFacts = async (decisionId: SafeId<"caseLawDecision">) =>
     async (tx) => await readCitationGraphFacts({ decisionId, tx }),
   );
 
-/** Only a version 3 analysis has a slot to write the statement into. */
-const asV3 = (analysis: DecisionAnalysis): DecisionAnalysisV3 | null =>
-  analysis.version === 3 ? analysis : null;
+/** Only a version 4 analysis has a slot to write the statement into. */
+const asV4 = (analysis: DecisionAnalysis): DecisionAnalysisV4 | null =>
+  analysis.version === 4 ? analysis : null;
 
 export const refreshSignificance = async ({
   admitModelAction,
@@ -111,7 +111,7 @@ export const refreshSignificance = async ({
   if (!derivedAi) {
     return;
   }
-  const current = asV3(analysis);
+  const current = asV4(analysis);
   if (current === null) {
     return;
   }
@@ -189,8 +189,7 @@ export const refreshSignificance = async ({
   const language = current.holding.language;
   // Built once admission states the tier; absent when admission refused.
   let aiAnalytics:
-    | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
-    | undefined;
+    ReturnType<typeof createTanStackAIAnalyticsCallbacks> | undefined;
   const written = await admitModelAction(async ({ admission }) => {
     aiAnalytics = createTanStackAIAnalyticsCallbacks({
       dataClass: "public_corpus",

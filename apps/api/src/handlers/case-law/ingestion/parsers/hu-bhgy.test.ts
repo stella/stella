@@ -3,8 +3,8 @@ import fc from "fast-check";
 
 import type {
   BlockContent,
-  Footnote,
   Document as FolioDocument,
+  Footnote,
   Paragraph,
   ParagraphAlignment,
 } from "@stll/docx-core/model";
@@ -33,22 +33,22 @@ import {
   parseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import {
-  readRtfString,
   readRtf as readRtfDocument,
+  readRtfString,
 } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
-  VISIBLE_RUN_CASES,
   VISIBLE_FIELD_DOCUMENT,
+  VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 
 import {
-  noteTableRtf,
-  furnitureRtf,
-  NOTE_PATHS,
-  LINE_BOUNDARIES,
-  notePathDocument,
   assertNotePath,
+  furnitureRtf,
+  LINE_BOUNDARIES,
+  NOTE_PATHS,
+  notePathDocument,
+  noteTableRtf,
 } from "./document-note-paths.fixtures";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";

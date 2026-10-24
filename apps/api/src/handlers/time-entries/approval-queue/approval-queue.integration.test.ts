@@ -8,7 +8,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { PermissionInput } from "@stll/permissions";
@@ -19,11 +19,11 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   billingArrangements,
+  featureEnrolments,
   organizationSettings,
   timeEntries,
   timeTimers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";

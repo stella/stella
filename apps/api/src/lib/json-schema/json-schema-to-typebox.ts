@@ -1,4 +1,4 @@
-import { Type, type SchemaOptions, type TSchema } from "@sinclair/typebox";
+import { type SchemaOptions, type TSchema, Type } from "@sinclair/typebox";
 import type { JsonSchema } from "@valibot/to-json-schema";
 import { panic } from "better-result";
 

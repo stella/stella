@@ -15,11 +15,11 @@ import { formatAppError, LocalizedAppError } from "../shared/app-error";
 import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
-  isUploadRecord,
-  createUploadTranslator,
+  bindUploadSdkErrors,
   connectUploadApp,
   createUploadSubscriptions,
-  bindUploadSdkErrors,
+  createUploadTranslator,
+  isUploadRecord,
 } from "../shared/upload-bridge";
 import { createUploadTargetController } from "./upload-target";
 import type { UploadTarget } from "./upload-target";

@@ -23,13 +23,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import {
-  failureMatchesGuard,
   type AnalysisFailureRecord,
   type FailureClaimGuard,
+  failureMatchesGuard,
 } from "./analysis-failure";
 import {
-  createDbAnalysisStore,
   type AnalysisStore,
+  createDbAnalysisStore,
 } from "./analysis-store-core";
 import { analysisSentinel } from "./stored-analysis";
 

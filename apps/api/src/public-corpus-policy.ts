@@ -31,6 +31,7 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /case/decisions/status": "browse",
   "GET /case/decisions/latest": "browse",
   "GET /case/decisions/by-slug/:slug": "browse",
+  "GET /case/decisions/:decisionId/summary": "browse",
   "GET /case/decisions/:decisionId": "browse",
   "GET /case/decisions/:decisionId/citations": "browse",
   "GET /case/decisions/:decisionId/citations/summary": "browse",

@@ -1,4 +1,4 @@
-import { useState, type PropsWithChildren } from "react";
+import { type PropsWithChildren, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -43,9 +43,9 @@ import {
 } from "@/lib/workspaces/store";
 import { AICellSourceCard } from "@/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card";
 import {
+  type AIExtractionTarget,
   isAIExtractionProperty,
   resolveAiCellTargets,
-  type AIExtractionTarget,
   type SourceFileTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
 

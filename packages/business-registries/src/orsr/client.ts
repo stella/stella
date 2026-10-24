@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 
 import {
-  hasOptionalNumber,
   hasOptionalNullableString,
+  hasOptionalNumber,
   hasOptionalString,
-  isRecord,
   isOptionalArrayOf,
+  isRecord,
 } from "../shared/guards.js";
 import {
   DEFAULT_REGISTRY_TIMEOUT_MS,

@@ -4,6 +4,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
+import { renderResultInputs } from "./ci-result-inputs";
 import { evaluate } from "./github-expression";
 
 const schema = v.object({
@@ -608,24 +609,32 @@ test("pilot-fast aggregation requires its planned jobs and accepts deferred skip
     ]),
   );
   const aggregate = (needs: typeof successful) =>
-    Bun.spawnSync(["bash", "-c", run], {
-      env: {
-        ...process.env,
-        ...aggregation.env,
-        COVERAGE_PROFILE: "pilot-fast-v1",
-        PILOT_FAST_JOBS: JSON.stringify(selected),
-        NEEDS: JSON.stringify(needs),
-        PLAN: JSON.stringify(plan),
-        PLAN_RESULT: "success",
-        TRUSTED: "true",
-        EVENT: "pull_request",
-        SUITE_DEPTH: "fast",
-        QUEUE_DEPTH: "full",
-        QUEUE_VALIDATION: "false",
-        HEAVY_ONLY: "false",
-        RUN_REQUIRED: "true",
+    Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        renderResultInputs(run, {
+          needs: JSON.stringify(needs),
+          plan: JSON.stringify(plan),
+        }),
+      ],
+      {
+        env: {
+          ...process.env,
+          ...aggregation.env,
+          COVERAGE_PROFILE: "pilot-fast-v1",
+          PILOT_FAST_JOBS: JSON.stringify(selected),
+          PLAN_RESULT: "success",
+          TRUSTED: "true",
+          EVENT: "pull_request",
+          SUITE_DEPTH: "fast",
+          QUEUE_DEPTH: "full",
+          QUEUE_VALIDATION: "false",
+          HEAVY_ONLY: "false",
+          RUN_REQUIRED: "true",
+        },
       },
-    });
+    );
   // ci-result remains in the profile but is absent from its own dependency map.
   expect(successful).not.toHaveProperty("ci-result");
   const passed = aggregate(successful);

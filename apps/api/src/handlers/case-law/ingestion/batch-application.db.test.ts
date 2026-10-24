@@ -34,13 +34,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
   admitPageDecisions,
+  type BoundedCaseLawIngestionBatch,
   CASE_LAW_BATCH_BOUNDS_REASON,
   CASE_LAW_BATCH_FAILURE,
   CASE_LAW_INGESTION_BATCH_LIMITS,
   DECISION_ADMISSION,
   encodedIngestionResultBytes,
   prepareCaseLawIngestionBatch,
-  type BoundedCaseLawIngestionBatch,
   type RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
@@ -53,9 +53,9 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";

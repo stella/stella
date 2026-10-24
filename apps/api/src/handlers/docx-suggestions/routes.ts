@@ -1,7 +1,7 @@
 import Elysia from "elysia";
 
 import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
 import rejectPendingDocxSuggestions from "@/api/handlers/docx-suggestions/reject-pending";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
@@ -29,11 +29,13 @@ export const docxSuggestionsRoute = new Elysia({
     body: createDocxSuggestions.config.body,
     params: createDocxSuggestions.config.params,
     permissions: createDocxSuggestions.config.permissions,
+    accountAccess: createDocxSuggestions.config.accountAccess,
   })
   .get("/entity/:entityId", listDocxSuggestions.handler, {
     params: listDocxSuggestions.config.params,
     query: listDocxSuggestions.config.query,
     permissions: listDocxSuggestions.config.permissions,
+    accountAccess: listDocxSuggestions.config.accountAccess,
   })
   .patch(
     "/entity/:entityId/reject-pending",
@@ -42,6 +44,7 @@ export const docxSuggestionsRoute = new Elysia({
       body: rejectPendingDocxSuggestions.config.body,
       params: rejectPendingDocxSuggestions.config.params,
       permissions: rejectPendingDocxSuggestions.config.permissions,
+      accountAccess: rejectPendingDocxSuggestions.config.accountAccess,
     },
   )
   .patch(
@@ -51,6 +54,7 @@ export const docxSuggestionsRoute = new Elysia({
       body: resolveDocxSuggestion.config.body,
       params: resolveDocxSuggestion.config.params,
       permissions: resolveDocxSuggestion.config.permissions,
+      accountAccess: resolveDocxSuggestion.config.accountAccess,
     },
   )
   .patch(
@@ -59,5 +63,6 @@ export const docxSuggestionsRoute = new Elysia({
     {
       params: revertDocxSuggestion.config.params,
       permissions: revertDocxSuggestion.config.permissions,
+      accountAccess: revertDocxSuggestion.config.accountAccess,
     },
   );

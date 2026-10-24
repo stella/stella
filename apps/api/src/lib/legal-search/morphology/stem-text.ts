@@ -1,7 +1,7 @@
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import {
-  stemLegalTerm,
   type MorphologyLanguage,
+  stemLegalTerm,
 } from "@/api/lib/legal-search/morphology/stem";
 
 /**

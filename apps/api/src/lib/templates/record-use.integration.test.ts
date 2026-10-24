@@ -100,8 +100,7 @@ const failingRecorder: AuditRecorder = async () => {
 };
 
 type FillOutcome =
-  | { type: "returned"; text: unknown }
-  | { type: "failed"; error: unknown };
+  { type: "returned"; text: unknown } | { type: "failed"; error: unknown };
 
 type Transport = {
   name: string;

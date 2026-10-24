@@ -30,11 +30,7 @@ export const TextMark = ({
 );
 
 export type TextMarkVariant =
-  | "fill"
-  | "underline"
-  | "dotted"
-  | "wavy"
-  | "strike";
+  "fill" | "underline" | "dotted" | "wavy" | "strike";
 
 export type TextMarkTone =
   | "warning"

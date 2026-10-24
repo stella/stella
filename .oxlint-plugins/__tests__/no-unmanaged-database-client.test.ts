@@ -40,6 +40,17 @@ describe.serial("no-unmanaged-database-client", () => {
     ).toEqual([5, 6]);
   });
 
+  test("flags the SQL client owner's factory like the Bun constructor it wraps", async () => {
+    expect(
+      await lint(
+        'import { createDatabase, createSqlClient } from "@/api/db/sql-client";',
+        "declare const url: string;",
+        "export const opened = createSqlClient({ url });",
+        "export const wrapped = createDatabase({ client: opened });",
+      ),
+    ).toEqual([3]);
+  });
+
   test("leaves a local function named like a constructor alone", async () => {
     expect(
       await lint(

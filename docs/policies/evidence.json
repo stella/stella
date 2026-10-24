@@ -79,15 +79,15 @@
             "name: CI Checks",
             "name: Code quality",
             "name: Test",
-            "run: bun scripts/ci-check-pool.ts run ci-checks-policy",
-            "run: bun scripts/ci-check-pool.ts run ci-checks-rest",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" bun scripts/ci-check-pool.ts run ci-checks-policy",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" bun scripts/ci-check-pool.ts run ci-checks-rest",
             "bun run code-check:affected -- --leg",
             "bun run test -- --concurrency=2 --output-logs=full"
           ]
         },
         {
           "path": ".github/ci-checks/ci-checks-policy.yml",
-          "contains": ["name: Format", "bun --bun turbo run format"]
+          "contains": ["name: Format", "run: bun fmt --check"]
         },
         {
           "path": ".github/ci-checks/ci-checks-rest.yml",

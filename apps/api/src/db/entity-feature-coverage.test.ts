@@ -11,10 +11,11 @@ import {
 import { entityFeatureCoverageViolations } from "@/api/db/entity-feature-coverage";
 import {
   entityFeaturePolicies,
-  entityFeaturePolicyStatements,
+  entityFeaturePolicyDefinitions,
 } from "@/api/db/entity-feature-policies";
 import { wsPolicies } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
+import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
 test("every app-readable entity relation inherits feature visibility", () => {
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
@@ -196,7 +197,9 @@ test("the committed migration matches every schema-owned visibility policy", asy
     ...migration.matchAll(/CREATE POLICY "workspace_entity_feature"[^\n]+/gu),
   ].map((match) => match[0].trim());
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
-  expect(statements).toEqual(entityFeaturePolicyStatements(tables));
+  expect(statements).toEqual(
+    await createPolicyStatementsOf(entityFeaturePolicyDefinitions(tables)),
+  );
   expect(
     statements.some((statement) =>
       statement.includes('ON "public"."time_entries"'),

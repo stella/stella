@@ -4,15 +4,19 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  caseLawCoverageSlices,
   caseLawDecisions,
-  publishedCaseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
@@ -22,6 +26,10 @@ import {
 } from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
+import {
+  readCaseLawCoverageYearsQuery,
+  summarizeCaseLawCoverageYears,
+} from "@/api/handlers/case-law/decisions/coverage-years";
 import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
@@ -352,6 +360,10 @@ const loadCoverage = async (
         async (tx) =>
           await readCaseLawArrivalsQuery(tx, { sourceIds, now: NOW }),
       ),
+    readYearCompleteness: async (sources) =>
+      await readAsReader(
+        async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
+      ),
     readFacets: async (country) =>
       Result.ok({
         country: [{ value: country, count: 3 }],
@@ -366,7 +378,183 @@ const loadCoverage = async (
   });
 
 test(
-  "unindexed, withdrawn and listing-only decisions cannot widen either served year bound",
+  "slice ledgers report complete, short, and unlisted years while unsliced sources are explicit",
+  async () => {
+    const db = drizzle({ client });
+    await db.insert(caseLawCoverageSlices).values([
+      {
+        sourceId: czSourceId,
+        slice: "2023-01-01",
+        reported: 2,
+        collected: 2,
+        checkedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2024-01-01",
+        reported: 5,
+        collected: 3,
+        checkedAt: new Date("2026-01-02T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-02",
+        walkError: "publisher_unavailable",
+        checkedAt: new Date("2026-01-03T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-03",
+        walkError: "rate_limited",
+        checkedAt: new Date("2026-01-04T00:00:00.000Z"),
+      },
+    ]);
+
+    try {
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      expect(czech?.knownGaps).toEqual({
+        type: "reconciled",
+        summary: { missing: 2, shortSlices: 1, unlistedSlices: 2 },
+        years: [
+          { year: 2023, type: "complete" },
+          {
+            year: 2024,
+            type: "gaps",
+            missing: 2,
+            shortSlices: 1,
+          },
+          {
+            year: 2025,
+            type: "unlisted",
+            missing: 0,
+            shortSlices: 0,
+            unlistedSlices: 2,
+          },
+        ],
+      });
+
+      const unsliced = await readAsReader(
+        async (tx) =>
+          await readCaseLawCoverageYearsQuery(tx, [
+            { id: czSourceId, adapterKey: ADAPTER_KEYS.PL_NSA },
+          ]),
+      );
+      expect(unsliced.get(String(czSourceId))).toEqual({
+        type: "not_reconciled",
+        reason:
+          "The source listing is not partitioned into calendar-date slices.",
+      });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a walk error never reaches the public coverage response",
+  async () => {
+    const db = drizzle({ client });
+    const secret = "k3y-6348-walk";
+    await db.insert(caseLawCoverageSlices).values({
+      sourceId: czSourceId,
+      slice: "2022-03-04",
+      walkError: `AdapterFetchError: GET https://listing.example/rozhodnuti?key=${secret}&strana=2 refused`,
+      checkedAt: new Date("2026-01-05T00:00:00.000Z"),
+    });
+
+    try {
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      // The failed walk still counts as an unread listing period.
+      expect(
+        czech?.knownGaps.type === "reconciled"
+          ? czech.knownGaps.years.find(({ year }) => year === 2022)
+          : undefined,
+      ).toEqual({
+        year: 2022,
+        type: "unlisted",
+        missing: 0,
+        shortSlices: 0,
+        unlistedSlices: 1,
+      });
+      const body = JSON.stringify(coverage.value);
+      for (const leaked of [
+        secret,
+        "key=",
+        "listing.example",
+        "AdapterFetchError",
+      ]) {
+        expect(body).not.toContain(leaked);
+      }
+      // The public role holds no grant on the column at all.
+      // Drizzle wraps the driver error, so the refusal is on the cause.
+      expect(
+        await rejectionOf(
+          readAsReader(
+            async (tx) =>
+              await tx.execute(
+                sql`SELECT walk_error FROM case_law_coverage_slices LIMIT 1`,
+              ),
+          ),
+        ),
+      ).toMatchObject({
+        cause: { message: expect.stringContaining("permission denied") },
+      });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test("per-year missing counts sum to the source missing count", () => {
+  assertProperty(
+    "per-year missing counts sum to the source missing count",
+    fc.property(
+      fc.array(
+        fc.record({
+          year: fc.integer({ min: 1900, max: 2100 }),
+          missing: fc.nat({ max: 10_000 }),
+          shortSlices: fc.nat({ max: 366 }),
+          unlistedSlices: fc.nat({ max: 366 }),
+        }),
+      ),
+      (rows) => {
+        const result = summarizeCaseLawCoverageYears(rows);
+        let missingFromYears = 0;
+        for (const year of result.years) {
+          if (year.type === "gaps") {
+            missingFromYears += year.missing;
+          }
+          if (year.type === "unlisted") {
+            missingFromYears += year.missing;
+          }
+        }
+        expect(missingFromYears).toBe(result.summary.missing);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+test(
+  "year bounds span every held decision, indexed or not",
   async () => {
     const db = drizzle({ client });
     const sourceId = createSafeId<"caseLawSource">();
@@ -497,18 +685,13 @@ test(
         ),
       );
       const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
+        readCaseLawCoverageSourcesQuery(tx),
       );
-      const unknown = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
-      );
-      expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: null,
-        decisionYearTo: null,
-      });
+      // Held, not searchable: the unindexed endpoints still bound the years,
+      // while withdrawn and listing-only decisions never do.
       expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: 2000,
-        decisionYearTo: 2010,
+        decisionYearFrom: 1800,
+        decisionYearTo: 2020,
         pendingTextCount: 0,
       });
       expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({

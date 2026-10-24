@@ -213,6 +213,7 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
           durability: { adapter: replay },
           abortController: new AbortController(),
         }),
+        { kind: "session", sessionId: session.id, userId: user.id },
       ),
     );
   };

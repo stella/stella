@@ -13,8 +13,8 @@ import type { DockedChatWorld } from "../helpers/docked-chat-fixtures";
 import { readDockedChatHosts } from "../helpers/docked-chat-hosts";
 import type { DockedChatHost } from "../helpers/docked-chat-hosts";
 import {
-  installDockedLegalFixtures,
   dockedLegalPath,
+  installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
 import { installDockedChatPageFixtures } from "../helpers/docked-chat-page-fixtures";
 import { expect, test as base } from "../helpers/test";

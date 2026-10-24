@@ -7,12 +7,12 @@ import { compareCodeUnit } from "@stll/collation";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
-  correspondenceAttachments,
-  entities,
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
+  correspondenceAttachments,
   correspondenceDropLogs,
   correspondenceFilers,
+  entities,
   matterInboundAddresses,
   workspaceMembers,
   workspaces,
@@ -23,8 +23,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
 import {
-  ingestInboundMail,
   InboundPersistenceError,
+  ingestInboundMail,
 } from "@/api/lib/email/inbound/ingest";
 import { parseInboundMessage } from "@/api/lib/email/inbound/message";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
@@ -33,8 +33,8 @@ import {
   SesInboundError,
 } from "@/api/lib/email/inbound/ses";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,

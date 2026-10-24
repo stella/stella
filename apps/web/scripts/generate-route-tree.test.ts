@@ -1,10 +1,10 @@
 import { Generator, getConfig } from "@tanstack/router-generator";
 import { describe, expect, test } from "bun:test";
 import {
-  mkdtemp,
   mkdir,
-  readFile,
+  mkdtemp,
   readdir,
+  readFile,
   rm,
   stat,
   writeFile,

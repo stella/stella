@@ -11,8 +11,8 @@ import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
-  projectMcpFeatureInput,
   isMcpDescriptorFeatureEnabled,
+  projectMcpFeatureInput,
 } from "@/api/mcp/feature-access";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";

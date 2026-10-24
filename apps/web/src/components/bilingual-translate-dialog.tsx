@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 /**
  * Bilingual-translation trigger + dialog.
  *
@@ -16,10 +16,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -30,19 +30,19 @@ import { BookOpenCheckIcon } from "@stll/ui/icons";
 
 import {
   BilingualReviewGlossary,
+  type GlossaryDraft,
   glossaryDraftsFrom,
   glossaryIssue,
   toGlossaryEntries,
-  type GlossaryDraft,
 } from "@/components/bilingual-review-glossary";
 import { BilingualReviewRows } from "@/components/bilingual-review-rows";
 import { BilingualRunPanel } from "@/components/bilingual-run-panel";
 import {
   BILINGUAL_FORMS_MAX,
-  createBilingualRun,
-  prepareBilingualTranslation,
   type BilingualPreparedRow,
   type BilingualRowDisposition,
+  createBilingualRun,
+  prepareBilingualTranslation,
 } from "@/components/bilingual-translate-queries";
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { defaultLanguagePair } from "@/components/document-language-picker.logic";
@@ -77,9 +77,7 @@ type BilingualReviewState = {
  * mirrored here.
  */
 type BilingualTranslateState =
-  | { step: "pick" }
-  | BilingualReviewState
-  | { step: "run"; runId: string };
+  { step: "pick" } | BilingualReviewState | { step: "run"; runId: string };
 
 export const BilingualTranslateDialog = ({
   workspaceId,

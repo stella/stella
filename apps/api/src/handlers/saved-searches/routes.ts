@@ -13,17 +13,21 @@ export const savedSearchesRoute = new Elysia({ prefix: "/saved-searches" })
   .get("/", listSavedSearches.handler, {
     query: listSavedSearches.config.query,
     permissions: listSavedSearches.config.permissions,
+    accountAccess: listSavedSearches.config.accountAccess,
   })
   .post("/", createSavedSearch.handler, {
     body: createSavedSearch.config.body,
     permissions: createSavedSearch.config.permissions,
+    accountAccess: createSavedSearch.config.accountAccess,
   })
   .patch("/:savedSearchId", updateSavedSearch.handler, {
     body: updateSavedSearch.config.body,
     params: updateSavedSearch.config.params,
     permissions: updateSavedSearch.config.permissions,
+    accountAccess: updateSavedSearch.config.accountAccess,
   })
   .delete("/:savedSearchId", deleteSavedSearch.handler, {
     params: deleteSavedSearch.config.params,
     permissions: deleteSavedSearch.config.permissions,
+    accountAccess: deleteSavedSearch.config.accountAccess,
   });

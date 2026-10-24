@@ -12,11 +12,11 @@ import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
   expenses,
+  featureEnrolments,
   INVOICE_STATUS,
   invoices,
   numberSeries,
   timeEntries,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";

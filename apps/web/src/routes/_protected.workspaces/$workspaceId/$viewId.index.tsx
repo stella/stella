@@ -22,9 +22,9 @@ import {
   overviewOptions,
 } from "@/lib/workspaces/queries";
 import {
+  CORRESPONDENCE_PAGE_SIZE,
   correspondenceAddressOptions,
   correspondenceInfiniteOptions,
-  CORRESPONDENCE_PAGE_SIZE,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   filesystemEntitiesOptions,

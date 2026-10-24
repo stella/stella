@@ -1,4 +1,4 @@
-import { Result, TaggedError, type Result as ResultType } from "better-result";
+import { Result, type Result as ResultType, TaggedError } from "better-result";
 import path from "node:path";
 import type { SourceFile } from "typescript/unstable/ast";
 import { API, type Snapshot } from "typescript/unstable/async";

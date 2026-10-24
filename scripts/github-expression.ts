@@ -25,12 +25,7 @@ const panic: (message: string) => never = (message) => {
 
 export const UNKNOWN = Symbol("unknown");
 export type Value =
-  | string
-  | number
-  | boolean
-  | null
-  | Value[]
-  | { [key: string]: Value };
+  string | number | boolean | null | Value[] | { [key: string]: Value };
 export type Result = Value | typeof UNKNOWN;
 
 type Token =

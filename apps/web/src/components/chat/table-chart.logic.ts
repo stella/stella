@@ -5,9 +5,9 @@ import * as v from "valibot";
 import {
   isTableChartPlanUsable,
   parseTableChartNumber,
-  tableChartRequestSchema,
   type TableChartPlan,
   type TableChartRequest,
+  tableChartRequestSchema,
 } from "@stll/api-contract/table-chart";
 import type { TableChartPoint } from "@stll/ui/table-chart";
 

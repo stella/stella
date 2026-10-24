@@ -6,8 +6,8 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import {
   auditLogs,
   correspondence,
-  desktopEditSessions,
   desktopEditHandoffs,
+  desktopEditSessions,
   timeEntries,
   workspaceMembers,
   workspaces,

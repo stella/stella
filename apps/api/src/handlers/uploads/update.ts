@@ -17,7 +17,7 @@
  * can re-claim it because both `claimed_at` and the row's status
  * are atomically compared in the WHERE.
  */
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { Err } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 

@@ -13,17 +13,17 @@ import type {
 import { SOFT_LAW_AUTHORITY_POLICIES } from "@/api/lib/legal-search/soft-law-authority-policy";
 import { extractSoftLawPdfText } from "@/api/lib/legal-search/soft-law-document-text";
 import {
+  SOFT_LAW_BATCH_LIMIT,
   SoftLawIngestionError,
   SoftLawItemError,
-  SOFT_LAW_BATCH_LIMIT,
   softLawItemErrorRejection,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
-  SoftLawEntry,
   SoftLawDocumentInput,
+  SoftLawEntry,
   SoftLawMetadata,
-  SoftLawStage,
   SoftLawSourceAdapter,
+  SoftLawStage,
 } from "@/api/lib/legal-search/soft-law-types";
 
 const ORIGIN = "https://ec.europa.eu";

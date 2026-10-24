@@ -49,6 +49,14 @@ const DENIED_NPM_DEPENDENCIES = new Set([
   "rapidfuzz",
   "fuzzywuzzy",
 ]);
+const DENIED_TEST_RUNNER_DEPENDENCIES = new Set([
+  "jest",
+  "vitest",
+  "mocha",
+  "@types/jest",
+  "@types/vitest",
+  "@types/mocha",
+]);
 const DENIED_CARGO_DEPENDENCIES = new Set([
   "strsim",
   "levenshtein",
@@ -97,7 +105,7 @@ const BABEL_TOOLCHAINS = [
 // supports only TypeScript 5 and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
   oxlint: "1.87.0",
-  oxlintConfig: "1.4.0",
+  oxlintConfig: "1.7.0",
   tsgolint: "7.0.2003",
   typescript: "7.0.2",
   typescript6Api: "npm:typescript@6.0.3",
@@ -209,6 +217,13 @@ const validateDeniedNpmDependencies = (
               ?.groups?.["name"]
           : undefined;
       const actualName = npmAlias ?? name;
+      if (DENIED_TEST_RUNNER_DEPENDENCIES.has(actualName)) {
+        issues.push({
+          message: `${actualName} is blocked; tests run on bun test`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
       const deniedName = DENIED_NPM_DEPENDENCIES.has(actualName)
         ? actualName
         : undefined;

@@ -24,8 +24,8 @@ import {
   registerOfficeEditIntentKeystroke,
 } from "@/components/office/office-edit-intent";
 import type {
-  OfficeViewerNavigationRequest,
   OfficeViewerFormat,
+  OfficeViewerNavigationRequest,
   OfficeViewerSpreadsheetSelection,
   OfficeViewerStatus,
 } from "@/components/office/silurus-office-viewer";

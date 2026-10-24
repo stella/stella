@@ -19,8 +19,8 @@ import {
   passageReadingOrder,
   proseReadingOrder,
   readerParagraph,
-  selectClaimPresentation,
   segmentProse,
+  selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
 

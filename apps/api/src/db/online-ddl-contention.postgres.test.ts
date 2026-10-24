@@ -8,14 +8,15 @@ import type { OnlineIndexConfig } from "../env-online-index";
 import { isRecord } from "../lib/type-guards";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import {
+  createEntityFeatureGateRepair,
   ENTITY_FEATURE_GATE_CONSTRAINT_NAMES,
-  ENTITY_FEATURE_GATE_REPAIR,
 } from "./entity-feature-gate-repair";
 import {
   createOnlineTableGate,
   declaresOnlineBuild,
   validateOnlineConstraints,
 } from "./online-ddl";
+import type { PolicyDefinition } from "./online-ddl";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
   OnlineMigrationConnection,
@@ -82,7 +83,9 @@ const adapter = (
     executed.push(statement);
     await connection.unsafe(statement, [...parameters]);
   },
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
   terminate: async () => {
     await terminateReserved(connection);
   },
@@ -94,12 +97,10 @@ const quoted = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
 const declaredTables = (): Map<string, string[]> => {
   const tables = new Map<string, string[]>();
   const declare = (tableName: string, ...texts: (string | undefined)[]) => {
-    const declared = texts.filter((text) => text !== undefined);
-    const known = tables.get(tableName);
-    tables.set(
-      tableName,
-      known === undefined ? declared : [...known, ...declared],
-    );
+    tables.set(tableName, [
+      ...(tables.get(tableName) ?? []),
+      ...texts.filter((text) => text !== undefined),
+    ]);
   };
   for (const index of ONLINE_MIGRATION_INDEXES) {
     declare(index.tableName, index.definitionBody, index.createSql);
@@ -231,19 +232,19 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
   for (const [, functionName] of texts.matchAll(
     /\b([a-z_][a-z0-9_]*)\s*\(/gu,
   )) {
-    if (functionName === undefined) {
-      continue;
-    }
+    const matchedName =
+      functionName ??
+      panic("installFixtureSchema: missing matched function name");
     for (const row of rowsOf(
       await main.unsafe(
         `SELECT pg_get_functiondef(p.oid) AS definition
          FROM pg_catalog.pg_proc p
          JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname = $1`,
-        [functionName],
+        [matchedName],
       ),
     )) {
-      once(`function:${functionName}`, stringField(row, "definition"));
+      once(`function:${matchedName}`, stringField(row, "definition"));
     }
   }
   for (const statement of [...statements, ...tableStatements]) {
@@ -253,7 +254,7 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
 
 const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
   if (databaseUrl === undefined) {
-    panic("DATABASE_URL is required");
+    return panic("DATABASE_URL is required");
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
     const main = openClient().sql;
@@ -284,7 +285,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
               >`SELECT extract(epoch FROM clock_timestamp())::double precision * 1000 AS now`
             ).at(0)?.now;
             if (pid === undefined || now === undefined) {
-              panic("Missing scratch session state");
+              return panic("Missing scratch session state");
             }
             // Ahead of the database clock, so no catalog reading is in the
             // future; advancing, so a held wait has a duration.
@@ -308,12 +309,13 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
               }),
               clock: () => Date.now() + offset,
             });
+            return undefined;
           } finally {
             await blocker`ROLLBACK`;
-            owner.release();
-            builder.release();
-            observer.release();
-            blocker.release();
+            await owner.release();
+            await builder.release();
+            await observer.release();
+            await blocker.release();
           }
         },
         { closeMode: "force" },
@@ -322,6 +324,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
       await main.unsafe(`DROP DATABASE ${quoted(name)}`);
     }
   });
+  return undefined;
 };
 
 const healthyEbs = (clock: () => number): OnlineIndexGateOptions["ebs"] => ({
@@ -342,6 +345,8 @@ const gateConfig = (maxSnapshotWaitMs: number): OnlineIndexConfig => ({
   retryMs: RETRY_MS,
   maxSnapshotWaitMs,
   clientConnectionCheckMs: 10,
+  idleHolderMs: 3_600_000,
+  longHolderMs: 3_600_000,
   parallelWorkers: 1,
   maintenanceWorkMemMb: 16,
 });
@@ -611,37 +616,58 @@ describe.skipIf(!enabled)("online lock-taking steps under contention", () => {
     });
   }, 60_000);
 
-  test("the entity feature gate analyzes and validates each relation under a maintenance lock by deferring", async () => {
+  test("the entity feature gate analyzes and validates each relation under a maintenance lock, and cuts its policy over under a writer, by deferring", async () => {
     await withScratch(async (scratch) => {
+      const gatePolicy = `"${ENTITY_TABLE}"."entity_feature_gate" = 'open'`;
+      const policy: PolicyDefinition = {
+        tableName: ENTITY_TABLE,
+        name: "workspace_entity_feature",
+        as: "restrictive",
+        for: "all",
+        role: "stella",
+        using: gatePolicy,
+        withCheck: gatePolicy,
+      };
+      const legacyPolicy = `CREATE POLICY workspace_entity_feature ON public.${ENTITY_TABLE} AS RESTRICTIVE FOR ALL TO stella USING (true) WITH CHECK (true)`;
       // The repair reads its relations, and their backfill state, from the
       // functions its migration installs; these stand-ins report one fully
-      // backfilled relation.
+      // backfilled relation, still on its legacy policy.
       for (const statement of [
-        `CREATE TABLE public.${ENTITY_TABLE} (id integer PRIMARY KEY, ${PROBE_COLUMN} integer)`,
+        `CREATE TABLE public.${ENTITY_TABLE} (id integer PRIMARY KEY, entity_feature_gate text, ${PROBE_COLUMN} integer)`,
         `CREATE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$ SELECT jsonb_build_object('${ENTITY_TABLE}', jsonb_build_object('order', 1, 'primaryKey', jsonb_build_array('id'))) $$`,
         `CREATE FUNCTION public.entity_feature_gate_backfill(relation text, after text, size integer) RETURNS TABLE ("cursor" text, "count" integer, pending boolean) LANGUAGE sql AS $$ SELECT NULL::text, 0, false $$`,
-        "CREATE FUNCTION public.entity_feature_gate_finish() RETURNS void LANGUAGE plpgsql AS $$ BEGIN END $$",
         ...ENTITY_FEATURE_GATE_CONSTRAINT_NAMES.map(
           (constraintName) =>
             `ALTER TABLE public.${ENTITY_TABLE} ADD CONSTRAINT ${quoted(constraintName)} CHECK (${PROBE_COLUMN} IS NULL OR ${PROBE_COLUMN} >= 0) NOT VALID`,
         ),
+        legacyPolicy,
       ]) {
         await scratch.owner.unsafe(statement);
       }
+      const repair = createEntityFeatureGateRepair({
+        readPolicies: () => [policy],
+      });
+      const run = async (gate: OnlineIndexGateOptions) =>
+        await repair.repair(
+          scratch.connection,
+          createOnlineTableGate({
+            connection: scratch.connection,
+            gate,
+            reserveObserver: scratch.reserveObserver,
+          }),
+        );
+      const readPolicy = async () =>
+        (
+          await scratch.owner<
+            { qual: string }[]
+          >`SELECT qual FROM pg_policies WHERE tablename = ${ENTITY_TABLE} AND policyname = 'workspace_entity_feature'`
+        ).map(({ qual }) => qual);
       await expectDefersThenCompletes({
         scratch,
         name: `${ENTITY_TABLE}.entity_feature_gate`,
         tableName: ENTITY_TABLE,
         contention: "maintenance",
-        run: async (gate) =>
-          await ENTITY_FEATURE_GATE_REPAIR.repair(
-            scratch.connection,
-            createOnlineTableGate({
-              connection: scratch.connection,
-              gate,
-              reserveObserver: scratch.reserveObserver,
-            }),
-          ),
+        run,
         // Until its cutover, every call refreshes the relation's statistics;
         // the phase stops calling it once the policies are in place.
         rerunIsNoop: false,
@@ -650,6 +676,45 @@ describe.skipIf(!enabled)("online lock-taking steps under contention", () => {
         { validated: boolean }[]
       >`SELECT bool_and(convalidated) AS validated FROM pg_constraint WHERE conrelid = ${`public.${ENTITY_TABLE}`}::regclass AND contype = 'c'`;
       expect(validated.at(0)?.validated).toBe(true);
+      expect(await readPolicy()).toEqual([
+        `(entity_feature_gate = 'open'::text)`,
+      ]);
+
+      const cutover = `${ENTITY_TABLE}.workspace_entity_feature`;
+      await scratch.owner.unsafe(
+        `DROP POLICY workspace_entity_feature ON public.${ENTITY_TABLE}`,
+      );
+      await scratch.owner.unsafe(legacyPolicy);
+      // Unwatched, the replacement's bounded retry ladder runs out behind
+      // the writer, so it defers with the legacy policy still in place.
+      await contend(scratch, ENTITY_TABLE, "writer");
+      try {
+        expect(await run(healthyGate(scratch))).toEqual({
+          type: "deferred",
+          step: cutover,
+          retryAfterMs: RETRY_MS,
+        });
+      } finally {
+        await scratch.blocker`COMMIT`;
+      }
+      expect(await readPolicy()).toEqual(["true"]);
+      await expectDefersThenCompletes({
+        scratch,
+        name: cutover,
+        tableName: ENTITY_TABLE,
+        contention: "writer",
+        run,
+        rerunIsNoop: false,
+      });
+      expect(await readPolicy()).toEqual([
+        `(entity_feature_gate = 'open'::text)`,
+      ]);
+      // A cut-over relation costs the rerun one catalog read.
+      scratch.executed.length = 0;
+      expect(await run(healthyGate(scratch))).toEqual({ type: "complete" });
+      expect(
+        scratch.executed.filter((statement) => statement.includes("POLICY")),
+      ).toEqual([]);
     });
   }, 60_000);
 });

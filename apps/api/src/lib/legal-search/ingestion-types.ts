@@ -13,8 +13,8 @@ import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
-  TextField,
   ReadDecisionTextFields,
+  TextField,
 } from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_TEXT_FIELD,
@@ -33,11 +33,11 @@ import type {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import {
-  toPlainText,
-  PlainTextError,
-  toPlainTextMetadataObject,
   type PlainText,
+  PlainTextError,
   type PlainTextMetadataValue,
+  toPlainText,
+  toPlainTextMetadataObject,
 } from "@/api/lib/case-law/plain-text";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -45,8 +45,8 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
-  withDocumentStageWindow,
   type DocumentStagePageOptions,
+  withDocumentStageWindow,
 } from "@/api/lib/legal-search/document-stage-observation";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
@@ -260,8 +260,7 @@ export type RawIngestionResult = {
    * address it wrote them at; the adapter states only the bytes.
    */
   sourceRawObjects?:
-    | Readonly<Record<string, SourceRawObjectPayload>>
-    | undefined;
+    Readonly<Record<string, SourceRawObjectPayload>> | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
 };
@@ -300,8 +299,7 @@ type PlainTextResultFields = {
 };
 
 type PlainTextOutcome =
-  | { type: "accepted" }
-  | { type: "item_build_failed"; error: PlainTextError };
+  { type: "accepted" } | { type: "item_build_failed"; error: PlainTextError };
 
 export type IngestionResult = Omit<
   RawIngestionResult,
@@ -1228,8 +1226,7 @@ export type SourceReconciliation = SourceSliceWalk & {
   ) => Promise<ReconciliationBuildOutcome>;
   /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
   createSliceBuildDecision?:
-    | (() => SourceReconciliation["buildDecision"])
-    | undefined;
+    (() => SourceReconciliation["buildDecision"]) | undefined;
 };
 
 /**
@@ -1421,9 +1418,7 @@ export type BacklogSourceSurface = {
  * because the inventory only ever sees the pages already fetched.
  */
 export type SourceSurfaceDisposition =
-  | StoredSourceSurface
-  | ExcludedSourceSurface
-  | BacklogSourceSurface;
+  StoredSourceSurface | ExcludedSourceSurface | BacklogSourceSurface;
 
 /** A response the crawl fetches with the decision and keeps as `part`. */
 export const storedSourceSurface = (part: string): StoredSourceSurface => ({

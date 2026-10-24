@@ -129,7 +129,10 @@ import {
   type UnreadPublisherOutcome,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { buildSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import {
+  buildSkUsDecision,
+  skUsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -1316,13 +1319,13 @@ const readGzipText = async (url: URL): Promise<string> =>
  * transport would answer for the fetch instead. It also keeps the
  * publisher's five-hundred-millisecond gate out of every run.
  */
-export const euEcjFixture = (): EnrolledAdapterFixture => ({
+export const euEcjFixture = (
+  documentUrl = new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     const parts = ecjRawParts({
       binding: { ...EU_ECJ_BINDING },
-      html: await readGzipText(
-        new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
-      ),
+      html: await readGzipText(documentUrl),
       notice: await readGzipText(
         new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
       ),
@@ -1610,8 +1613,52 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  * closes it, through the same derivation, so the guards read the envelope a
  * stored row holds rather than one this helper invented.
  */
-export const skUsFixture = (): EnrolledAdapterFixture => ({
+export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
   buildDecision: async () => {
+    if (documentUrl !== undefined) {
+      const payload = await readGzipJson(documentUrl);
+      const content = isRecord(payload) ? payload["content"] : undefined;
+      if (typeof content !== "string") {
+        return panic("the sk-us capture has no document content");
+      }
+      const listing = {
+        ...SK_US_LISTING_ROW,
+        documentId: "695d557a-08eb-41d2-8cea-2b895f9860e7",
+        mkRSAPNumberOfFile: "III. ÚS 265/2026",
+        mkDateOfDecision: "04/23/2026 00:00:00",
+        mkECLI: null,
+        mkFormOfDecision: "Uznesenie",
+      };
+      const reparse = skUsAdapter.reparseStoredRaw;
+      if (reparse === undefined) {
+        return panic("the sk-us parity capture requires stored-raw replay");
+      }
+      const result = await reparse({
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope({
+            listing: JSON.stringify(listing),
+            document: Buffer.from(content, "base64").toString("utf-8"),
+          }),
+        ),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: listing.mkRSAPNumberOfFile,
+        sourceDocumentId: listing.documentId,
+        language: "sk",
+        court: "Ústavný súd SR",
+        ecli: null,
+        decisionDate: "2026-04-23",
+        decisionType: listing.mkFormOfDecision,
+        sourceUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
+        documentUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
+        metadata: {},
+      });
+      return result.type === "parsed"
+        ? result.result
+        : panic(`the sk-us capture did not parse: ${result.type}`);
+    }
+    const documentContent = JSON.stringify({
+      content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
+    });
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
@@ -1619,9 +1666,7 @@ export const skUsFixture = (): EnrolledAdapterFixture => ({
         );
         const body = ((): string | Uint8Array => {
           if (url.pathname === "/o/v1/dms/content") {
-            return JSON.stringify({
-              content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
-            });
+            return documentContent;
           }
           if (url.pathname === "/o/v1/dms/search") {
             const request: unknown = JSON.parse(
@@ -2186,11 +2231,11 @@ const HU_BHGY_DOCUMENT = new URL(
  * writer: the guards read the header labels back out of the stored document,
  * so a fixture that skipped the file would certify half the inventory.
  */
-export const huBhgyFixture = (): EnrolledAdapterFixture => ({
+export const huBhgyFixture = (
+  documentUrl = HU_BHGY_DOCUMENT,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const bytes = new Uint8Array(
-      await Bun.file(HU_BHGY_DOCUMENT).arrayBuffer(),
-    );
+    const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
     const document =
       huBhgyDocumentOf(bytes) ??
       panic("the hu-bhgy fixture is not a decision file");
@@ -2304,9 +2349,11 @@ const PL_NSA_ROWS = new URL(
  * opinion — in the form the dataset prints them, so every column the source
  * states is stated here.
  */
-export const plNsaFixture = (): EnrolledAdapterFixture => ({
+export const plNsaFixture = (
+  documentUrl = PL_NSA_ROWS,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const recorded: unknown = await Bun.file(PL_NSA_ROWS).json();
+    const recorded: unknown = await Bun.file(documentUrl).json();
     const entry = isUnknownArray(recorded)
       ? recorded.find(
           (candidate: unknown) =>
@@ -2497,7 +2544,9 @@ const plUodoUnionRow = (
  * Built from the captured record and body through the adapter's own
  * assembly, so the guards read back exactly the envelope a crawl stores.
  */
-export const plUodoFixture = (): EnrolledAdapterFixture => ({
+export const plUodoFixture = (
+  documentUrl = PL_UODO_BODY,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     const listed = await readGzipJson(PL_UODO_LISTING);
     const rows: unknown[] = Array.isArray(listed) ? listed : [];
@@ -2511,7 +2560,7 @@ export const plUodoFixture = (): EnrolledAdapterFixture => ({
     const row = normalizePlUodoRow(listing);
     const body = plUodoBodyFrom(
       row,
-      new Uint8Array(await Bun.file(PL_UODO_BODY).arrayBuffer()),
+      new Uint8Array(await Bun.file(documentUrl).arrayBuffer()),
     );
     const built = assemblePlUodoDecision({
       row,

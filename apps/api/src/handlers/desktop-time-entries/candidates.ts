@@ -4,8 +4,8 @@ import { and, eq, sql } from "drizzle-orm";
 
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
-  desktopMatterCandidatesResponseSchema,
   type DesktopMatterCandidatesResponse,
+  desktopMatterCandidatesResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
 
 import {

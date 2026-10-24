@@ -6,12 +6,15 @@ import {
   createExactIconOrigin,
   createLinkIconOrigin,
   isCanonicalIconHostname,
+  toRegistrableIconSite,
 } from "@/api/handlers/chat/link-icons/origin";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 
 type FetchBytes = typeof safeOutboundFetchBytes;
+const iconSite = (hostname: string) => toRegistrableIconSite(hostname).unwrap();
+
 const redirectResponse = (location: string) =>
   Result.ok({
     status: 302,
@@ -146,11 +149,9 @@ test("invalid ASCII IDN labels cannot consume origin capacity", async () => {
     },
   });
   expect(isCanonicalIconHostname("xn--a.com")).toBe(false);
-  expect(await origin("xn--a.com", grantThirdPartyOutboundPermit())).toEqual({
-    type: "no-icon",
-  });
+  expect(Result.isError(toRegistrableIconSite("xn--a.com"))).toBe(true);
   expect(calls).toBe(0);
-  await origin("example.com", grantThirdPartyOutboundPermit());
+  await origin(iconSite("example.com"), grantThirdPartyOutboundPermit());
   expect(calls).toBe(1);
 });
 
@@ -169,7 +170,7 @@ for (const status of [301, 302, 303, 307, 308]) {
       },
     });
     expect(
-      await origin("example.com", grantThirdPartyOutboundPermit()),
+      await origin(iconSite("example.com"), grantThirdPartyOutboundPermit()),
     ).toEqual({
       type: "no-icon",
     });
@@ -195,7 +196,9 @@ test("bounds redirect hops and shares one remaining deadline", async () => {
     return redirectResponse("https://cdn.example.com/favicon.ico");
   };
   const origin = createLinkIconOrigin({ fetchBytes, now: () => elapsed });
-  expect(await origin("example.com", grantThirdPartyOutboundPermit())).toEqual({
+  expect(
+    await origin(iconSite("example.com"), grantThirdPartyOutboundPermit()),
+  ).toEqual({
     type: "no-icon",
   });
   expect(timeouts).toEqual([3000, 2500, 2000]);
@@ -212,7 +215,9 @@ test("does not begin another hop after the total deadline", async () => {
       return redirectResponse("https://cdn.example.com/favicon.ico");
     },
   });
-  expect(await origin("example.com", grantThirdPartyOutboundPermit())).toEqual({
+  expect(
+    await origin(iconSite("example.com"), grantThirdPartyOutboundPermit()),
+  ).toEqual({
     type: "temporary",
   });
   expect(calls).toBe(1);
@@ -233,7 +238,9 @@ test("redirect bodies consume the same wire byte budget", async () => {
       });
     },
   });
-  expect(await origin("example.com", grantThirdPartyOutboundPermit())).toEqual({
+  expect(
+    await origin(iconSite("example.com"), grantThirdPartyOutboundPermit()),
+  ).toEqual({
     type: "no-icon",
   });
   expect(limits).toEqual([65_536, 32_768]);
@@ -258,13 +265,15 @@ test("admits at most two concurrent origin requests and releases capacity", asyn
     },
   });
   const permit = grantThirdPartyOutboundPermit();
-  const first = origin("example.com", permit);
-  const second = origin("example.org", permit);
-  expect(await origin("example.net", permit)).toEqual({ type: "temporary" });
+  const first = origin(iconSite("example.com"), permit);
+  const second = origin(iconSite("example.org"), permit);
+  expect(await origin(iconSite("example.net"), permit)).toEqual({
+    type: "temporary",
+  });
   expect(calls).toBe(2);
   finish?.();
   await Promise.all([first, second]);
-  await origin("example.net", permit);
+  await origin(iconSite("example.net"), permit);
   expect(calls).toBe(3);
 });
 
@@ -280,7 +289,7 @@ for (const status of [408, 425, 429, 500, 501, 502, 503, 504, 599]) {
         }),
     });
     expect(
-      await origin("example.com", grantThirdPartyOutboundPermit()),
+      await origin(iconSite("example.com"), grantThirdPartyOutboundPermit()),
     ).toEqual({ type: "temporary" });
   });
 }

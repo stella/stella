@@ -1066,10 +1066,10 @@ export const createDuplicateWorkspace = (
           },
         });
 
-        await dependencies.enqueueEntitySearchRepairs(
-          tx,
-          duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
-        );
+        await dependencies.enqueueEntitySearchRepairs(tx, [
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.durableExtraction],
+        ]);
         const nativeExtractionRunIds =
           await dependencies.requestNativeExtractionRuns({
             requests: nativeExtractionRequests,
@@ -1102,9 +1102,10 @@ export const createDuplicateWorkspace = (
         .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
         .catch(captureError);
       dependencies
-        .flushEntitySearchRepairs(
-          txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
-        )
+        .flushEntitySearchRepairs([
+          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
+          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.durableExtraction],
+        ])
         .catch(captureError);
 
       handoffCommittedDocumentProcessingRuns({

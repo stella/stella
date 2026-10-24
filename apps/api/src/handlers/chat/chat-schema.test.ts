@@ -10,36 +10,36 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
-  isServerChatToolCall,
   createChatPastedTextPart,
+  isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  toPersistedChatMessageContentV3,
-  createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  normalizePersistedChatMessageContent,
+  createChatAttachmentPart,
   getAwaitingUserInteractions,
   isChatPart,
+  normalizePersistedChatMessageContent,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
 import {
   ACTIVE_CONTEXT_SCHEMAS,
   activeDecisionSchema,
+  activeDraftSchema,
   activeExternalSchema,
   activeFileSchema,
-  activeDraftSchema,
   activeSkillSchema,
   activeStatuteSchema,
   activeTemplateSchema,
@@ -47,8 +47,8 @@ import {
   parseMessage,
   resolveBrowserClientCapability,
   sendMessageBodySchema,
-  validateToolCallParts,
   validateMessage as validateMessageWithPersistence,
+  validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";

@@ -3,9 +3,9 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpConnectors,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

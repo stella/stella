@@ -23,7 +23,7 @@ const runtimeAggregateOwners = new Set([
   "packages/scripts/src/prepared-generated-sources.test.ts",
   // Literal fixtures prove generated aggregates cannot enter the Git index.
   "scripts/check-mcp-generated-tracking.test.ts",
-  ".oxfmtrc.json",
+  "bunfig.toml",
   "knip.json",
   "turbo.json",
 ]);

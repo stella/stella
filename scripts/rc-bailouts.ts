@@ -6,8 +6,11 @@
 // therefore be load-bearing: removing it may create unstable references that
 // re-fire effects every render, causing loops that typecheck and lint miss.
 //
-// This runs the actual compiler over apps/web/src and guards each bailed-out
-// component or hook independently. A file-level baseline is not sufficient:
+// This runs the actual compiler over apps/web/src and every workspace package
+// that ships React components (any `.tsx` source), read from the root
+// manifest's `workspaces` so a new package joins on its own, and guards each
+// bailed-out component or hook independently. Each baseline entry records the
+// compiler's reasons, which must match the current run. A file-level baseline is not sufficient:
 // a new bailout in an already-listed file or a memo added to one component
 // could otherwise hide a regression in another component.
 //
@@ -19,11 +22,16 @@
 //
 // Wired into .github/workflows/ci.yml, not oxlint.config: this guards every
 // compiler skip, including unsupported syntax that is valid React.
+import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
-import { transformSync, type OxcError } from "oxc-transform-react";
+import path from "node:path";
+import { type OxcError, transformSync } from "oxc-transform-react";
 import ts from "typescript6";
 
-import { REACT_COMPILER_OPTIONS } from "../packages/scripts/src/react-compiler-options";
+import {
+  REACT_COMPILER_EXCLUDE,
+  REACT_COMPILER_OPTIONS,
+} from "../packages/scripts/src/react-compiler-options";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const BASELINE_PATH = BASELINE_PATHS.reactCompilerBailouts;
@@ -33,7 +41,91 @@ const MEMO_HOOK = /\buseMemo\(|\buseCallback\(/gu;
 const OPT_OUT_DIRECTIVES = new Set(["use no forget", "use no memo"]);
 
 type BailoutRecord = { reasons: Set<string>; memos: number };
-type Baseline = Record<string, number>;
+type BaselineEntry = { memos: number; reasons: string[] };
+type Baseline = Record<string, BaselineEntry>;
+
+/** The web app's sources; other apps do not build through the compiler. */
+const WEB_APP_ROOT = "apps/web/src";
+const ROOT_MANIFEST = "package.json";
+const SKIPPED_PATH = /(?:^|\/)(?:node_modules|dist|__tests__)\//u;
+
+const isScannedSource = (file: string): boolean =>
+  !SKIPPED_PATH.test(file) &&
+  !REACT_COMPILER_EXCLUDE.some((pattern) => pattern.test(file)) &&
+  !file.includes(".test.") &&
+  !file.includes(".spec.") &&
+  !file.endsWith(".d.ts") &&
+  !file.endsWith(".gen.ts") &&
+  !file.endsWith(".gen.tsx");
+
+const sourcesUnder = (root: string): string[] =>
+  [...new Bun.Glob(`${root}/**/*.{ts,tsx}`).scanSync(".")]
+    .map((file) => file.replaceAll("\\", "/"))
+    .filter(isScannedSource);
+
+const workspacePatterns = (manifest: unknown): string[] => {
+  const workspaces =
+    typeof manifest === "object" && manifest !== null
+      ? Reflect.get(manifest, "workspaces")
+      : undefined;
+  if (!Array.isArray(workspaces) || workspaces.length === 0) {
+    return panic(`${ROOT_MANIFEST} declares no workspaces array`);
+  }
+  return workspaces.filter((pattern): pattern is string => {
+    if (typeof pattern !== "string") {
+      return panic(`${ROOT_MANIFEST} workspaces must be strings`);
+    }
+    return true;
+  });
+};
+
+const isReasonList = (value: unknown): value is string[] =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every((reason) => typeof reason === "string" && reason !== "");
+
+/** Every baseline entry carries its memo count and at least one reason. */
+const parseBaseline = (raw: unknown): Baseline => {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return panic(`${BASELINE_PATH} must be an object`);
+  }
+  const baseline: Baseline = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const memos =
+      typeof value === "object" && value !== null
+        ? Reflect.get(value, "memos")
+        : undefined;
+    const reasons =
+      typeof value === "object" && value !== null
+        ? Reflect.get(value, "reasons")
+        : undefined;
+    if (!Number.isInteger(memos) || typeof memos !== "number" || memos < 0) {
+      return panic(`${BASELINE_PATH} ${key}: memos must be a count`);
+    }
+    if (!isReasonList(reasons)) {
+      return panic(`${BASELINE_PATH} ${key}: reasons must be non-empty`);
+    }
+    Object.defineProperty(baseline, key, {
+      enumerable: true,
+      value: { memos, reasons },
+    });
+  }
+  return baseline;
+};
+
+/**
+ * Workspace packages that ship React components: every manifest workspace
+ * outside `apps/` with a `.tsx` source. The web app is its own root.
+ */
+const reactPackageRoots = (): string[] =>
+  workspacePatterns(JSON.parse(readFileSync(ROOT_MANIFEST, "utf-8")))
+    .flatMap((pattern) => [
+      ...new Bun.Glob(`${pattern}/package.json`).scanSync("."),
+    ])
+    .map((manifest) => path.dirname(manifest).replaceAll("\\", "/"))
+    .filter((root) => !root.startsWith("apps/"))
+    .filter((root) => sourcesUnder(root).some((file) => file.endsWith(".tsx")))
+    .toSorted();
 
 type FunctionLocation = {
   end: number;
@@ -227,6 +319,9 @@ const scanFile = (
       reactCompiler: {
         ...REACT_COMPILER_OPTIONS,
         outputMode: "lint",
+        // Bailouts are recoverable diagnostics: without this the compiler
+        // reports only fatal errors and every bailout goes unseen.
+        reportDiagnostics: true,
       },
     });
     for (const error of result.errors) {
@@ -269,37 +364,87 @@ const byKey = (
 
 const toBaseline = (bailouts: Map<string, BailoutRecord>): Baseline => {
   const current: Baseline = {};
-  for (const [key, { memos }] of [...bailouts.entries()].toSorted(byKey)) {
-    current[key] = memos;
+  for (const [key, { memos, reasons }] of [...bailouts.entries()].toSorted(
+    byKey,
+  )) {
+    current[key] = { memos, reasons: [...reasons].toSorted() };
   }
   return current;
 };
 
 type BaselineDiff = {
   added: string[];
+  reasonsChanged: string[];
   regressed: string[];
   stale: string[];
 };
 
+const sameReasons = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length &&
+  left.every((reason, index) => reason === right[index]);
+
 const diffBaseline = (current: Baseline, baseline: Baseline): BaselineDiff => {
   const added: string[] = [];
+  const reasonsChanged: string[] = [];
   const regressed: string[] = [];
-  for (const [key, memos] of Object.entries(current)) {
-    if (!(key in baseline)) {
+  for (const [key, { memos, reasons }] of Object.entries(current)) {
+    const previous = Object.hasOwn(baseline, key) ? baseline[key] : undefined;
+    if (previous === undefined) {
       added.push(key);
       continue;
     }
-    const previous = baseline[key];
-    if (previous !== undefined && memos < previous) {
-      regressed.push(`${key}: ${previous} -> ${memos} useMemo/useCallback`);
+    if (memos < previous.memos) {
+      regressed.push(
+        `${key}: ${previous.memos} -> ${memos} useMemo/useCallback`,
+      );
+    }
+    if (!sameReasons(reasons, previous.reasons)) {
+      reasonsChanged.push(key);
     }
   }
   // Baseline entries the compiler no longer bails out on. These are not
   // harmless leftovers: a stale key pre-authorizes that exact component to bail
   // out again, so the guard would stay silent on the very regression it exists
   // to catch. Treat the baseline as a ratchet that may only tighten.
-  const stale = Object.keys(baseline).filter((key) => !(key in current));
-  return { added, regressed, stale };
+  const stale = Object.keys(baseline).filter(
+    (key) => !Object.hasOwn(current, key),
+  );
+  return { added, reasonsChanged, regressed, stale };
+};
+
+const selfTestDiff = (firstKey: string, secondKey: string) => {
+  const entry = (memos: number, reason = "refs in render") => ({
+    memos,
+    reasons: [reason],
+  });
+  const diff = diffBaseline(
+    {
+      [firstKey]: entry(0),
+      "fixture.tsx::Third": entry(1),
+      "fixture.tsx::Fourth": entry(0, "try/finally"),
+    },
+    {
+      [firstKey]: entry(1),
+      [secondKey]: entry(0),
+      "fixture.tsx::Fourth": entry(0),
+    },
+  );
+  const isolationWorks =
+    diff.regressed.length === 1 &&
+    diff.regressed[0]?.startsWith(firstKey) === true &&
+    diff.added.length === 1 &&
+    diff.added[0] === "fixture.tsx::Third";
+  const reasonDriftWorks =
+    diff.reasonsChanged.length === 1 &&
+    diff.reasonsChanged[0] === "fixture.tsx::Fourth";
+  // `secondKey` is in the baseline but absent from current: exactly the stale
+  // entry that used to pass unnoticed.
+  const staleDetectionWorks =
+    diff.stale.length === 1 && diff.stale[0] === secondKey;
+  return {
+    diff,
+    diffWorks: isolationWorks && reasonDriftWorks && staleDetectionWorks,
+  };
 };
 
 const runSelfTest = (): number => {
@@ -379,19 +524,15 @@ const runSelfTest = (): number => {
   const compilerDiagnosticWorks = compilerBailouts.has(
     "compiler.tsx::RefReader",
   );
-  const diff = diffBaseline(
-    { [firstKey]: 0, "fixture.tsx::Third": 1 },
-    { [firstKey]: 1, [secondKey]: 0 },
-  );
-  const isolationWorks =
-    diff.regressed.length === 1 &&
-    diff.regressed[0]?.startsWith(firstKey) === true &&
-    diff.added.length === 1 &&
-    diff.added[0] === "fixture.tsx::Third";
-  // `secondKey` is in the baseline but absent from current: exactly the stale
-  // entry that used to pass unnoticed.
-  const staleDetectionWorks =
-    diff.stale.length === 1 && diff.stale[0] === secondKey;
+  const { diff, diffWorks } = selfTestDiff(firstKey, secondKey);
+  const sourceFilterWorks =
+    isScannedSource("apps/web/src/components/globe.tsx") &&
+    !isScannedSource("apps/web/src/hooks/use-effect.ts");
+  const roots = reactPackageRoots();
+  const packageScopeWorks =
+    roots.includes("packages/ui") &&
+    roots.includes("packages/workspace-ui") &&
+    !roots.some((root) => root.startsWith("apps/"));
 
   if (
     identityWorks &&
@@ -400,8 +541,9 @@ const runSelfTest = (): number => {
     optOutWorks &&
     moduleOptOutWorks &&
     compilerDiagnosticWorks &&
-    isolationWorks &&
-    staleDetectionWorks
+    diffWorks &&
+    packageScopeWorks &&
+    sourceFilterWorks
   ) {
     console.log("rc-bailouts --self-test: PASS");
     return 0;
@@ -419,7 +561,9 @@ const runSelfTest = (): number => {
     optOutWorks,
     moduleOptOutWorks,
     compilerDiagnosticWorks,
+    sourceFilterWorks,
     diff,
+    roots,
   });
   return 1;
 };
@@ -435,16 +579,8 @@ const run = (): number => {
   } else if (process.argv.includes("--check")) {
     mode = "check";
   }
-  const files = [
-    ...new Bun.Glob("apps/web/src/**/*.{ts,tsx}").scanSync("."),
-  ].filter(
-    (file) =>
-      !file.includes("/__tests__/") &&
-      !file.includes(".test.") &&
-      !file.includes(".spec.") &&
-      !file.endsWith(".gen.ts") &&
-      !file.endsWith(".gen.tsx"),
-  );
+  const roots = [WEB_APP_ROOT, ...reactPackageRoots()];
+  const files = roots.flatMap(sourcesUnder);
   const bailouts = new Map<string, BailoutRecord>();
   for (const file of files) {
     scanFile(file, readFileSync(file, "utf-8"), bailouts);
@@ -464,14 +600,24 @@ const run = (): number => {
       console.log(`${key}\t${[...reasons].toSorted().join(", ")}`);
     }
     console.log(
-      `\nscanned ${files.length} files | bailout functions ${bailouts.size}`,
+      `\nscanned ${files.length} files in ${roots.join(", ")} | bailout functions ${bailouts.size}`,
     );
     return 0;
   }
 
-  const baseline: Baseline = JSON.parse(readFileSync(BASELINE_PATH, "utf-8"));
-  const { added, regressed, stale } = diffBaseline(current, baseline);
-  if (regressed.length === 0 && added.length === 0 && stale.length === 0) {
+  const baseline = parseBaseline(
+    JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+  );
+  const { added, reasonsChanged, regressed, stale } = diffBaseline(
+    current,
+    baseline,
+  );
+  if (
+    regressed.length === 0 &&
+    added.length === 0 &&
+    reasonsChanged.length === 0 &&
+    stale.length === 0
+  ) {
     console.log(
       `OK: ${Object.keys(current).length} React Compiler bailout functions, memoization intact.`,
     );
@@ -502,6 +648,17 @@ const run = (): number => {
       "\nThese functions opted out of compiler optimization. Keep any required\n" +
         "manual memoization, then run `bun scripts/rc-bailouts.ts\n" +
         "--write-baseline` and commit the baseline.",
+    );
+  }
+  if (reasonsChanged.length > 0) {
+    console.error("\nReact Compiler bailout reasons differ from the baseline:");
+    for (const key of reasonsChanged) {
+      console.error(`  ${key}`);
+    }
+    console.error(
+      "\nEach entry records why the compiler skips that function. Review the\n" +
+        "new reasons, then run `bun scripts/rc-bailouts.ts --write-baseline`\n" +
+        "and commit the baseline.",
     );
   }
   if (stale.length > 0) {

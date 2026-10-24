@@ -9,6 +9,7 @@
       "noOtherSessions": "Keine weiteren aktiven Sitzungen",
       "revokeOtherSessions": "Andere Geräte abmelden",
       "revokeOtherSessionsConfirm": "Dadurch werden alle Sitzungen außer Ihrer aktuellen beendet.",
+      "signedInFrom": "Angemeldet über {clientName}",
       "unknownDevice": "Unbekanntes Gerät"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
+      "accountRestricted": "Die Einstellungen des KI-Anbieters sind für dieses Konto nicht verfügbar.",
+      "configUnreadable": "Die Konfiguration des KI-Anbieters kann nicht gelesen werden. Bitten Sie eine Organisationsadministration, ihn erneut zu verbinden.",
       "cta": "KI-Einstellungen öffnen",
       "description": "Fügen Sie Anbieter-Zugangsdaten hinzu, um KI-Funktionen zu nutzen.",
+      "permissionRequired": "Nur eine Organisationsadministration kann einen KI-Anbieter verbinden.",
+      "seatRequired": "Bitten Sie eine Organisationsadministration, Ihnen einen Platz zuzuweisen.",
       "title": "KI-Anbieter verbinden"
     },
     "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
@@ -137,6 +142,8 @@
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
+    "handoffAccount": "Als <account>{email}</account> in <organization>{organizationName}</organization> fortfahren?",
+    "handoffTitle": "Weiter zu stella",
     "headline": "Klarheit für jeden Fall.",
     "invitation": {
       "declined": "Einladung abgelehnt",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Meine Organisation",
     "password": "Passwort",
     "professionalUse": {
-      "description": "Bei der Einrichtung Ihres Kontos wurde Ihnen diese Erklärung nicht angezeigt. Nehmen Sie sie an, um fortzufahren.",
       "title": "Berufliche Nutzung bestätigen"
     },
     "professionalUseStatement": "Mit der Erstellung eines Kontos bestätigen Sie, dass Sie stella für berufliche Zwecke nutzen, und nehmen zur Kenntnis, dass stella ein Werkzeug für Rechtsfachleute ist und keine Rechtsberatung ersetzt.",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
+    "reauthenticationRequired": "Melden Sie sich erneut an, um diese Aktion fortzusetzen.",
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
@@ -637,6 +644,7 @@
         "eso9": "ESO9-Importtabelle (XLSX)",
         "exporting": "Export wird vorbereitet…",
         "isdoc": "ISDOC-E-Rechnung (ABRA Gen u. a.)",
+        "ksefFa3": "KSeF-E-Rechnung FA(3) (XML)",
         "spreadsheets": "Tabellen",
         "xlsx": "Rechnungen (XLSX)",
         "xlsxLines": "Rechnungspositionen (XLSX)"
@@ -926,13 +934,10 @@
     },
     "coverage": {
       "completeness": "Vollständigkeit",
-      "countedOn": "Gezählt am {date}",
       "courtsHeading": "Nach Gericht",
       "courtsUnavailable": "Die Aufschlüsselung nach Gerichten ist derzeit nicht verfügbar.",
       "decisionYears": "Entscheidungsjahre",
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
-      "exceedsReportedTotal": "Enthält mehr als die zuletzt vom Herausgeber genannte Gesamtzahl vom {date}",
-      "gapStatusUnknown": "Lückenstatus unbekannt",
       "generatedAt": "Zahlen vom {date}",
       "globeLabel": "Länder, deren Rechtsprechung der Korpus enthält, auf einem Globus",
       "healthCurrent": "Aktuell",
@@ -953,7 +958,8 @@
       "searchable": "Durchsuchbar",
       "title": "Abdeckung der Rechtsprechung",
       "totalFrom": "Gesamtzahl vom {date}",
-      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
+      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar.",
+      "unreadListingPeriods": "Nicht gelesene Zeiträume der Liste"
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "decisionTypes": {
@@ -1022,7 +1028,10 @@
       "pageOfCount": "Seite {page} von {pageCount}",
       "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
       "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
+      "pageWithEstimatedMatchCounts": "Seite {page} · etwa {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+      "pageWithMatchCounts": "Seite {page} · {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
+      "pageWithPartialMatchCount": "Seite {page} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite",
       "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
@@ -1591,6 +1600,7 @@
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
     "sendErrorConnectionFailed": "Die Verbindung zum Chat ist fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "sendErrorContinuationRejected": "Der Chat konnte nicht fortgesetzt werden. Senden Sie eine neue Nachricht, um neu zu beginnen.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuchen Sie es mit einer enger gefassten Anfrage erneut.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitten Sie Ihren Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
@@ -2277,6 +2287,7 @@
     "scopeKnowledgeWrite": "Ihre Klauseln erstellen, bearbeiten und löschen und Playbooks ausführen",
     "scopeLawRead": "Öffentliche Rechtsvorschriften und Rechtsprechung lesen",
     "scopeMattersWrite": "Ihre Akten und Aufgaben erstellen und bearbeiten",
+    "scopeMemoryWrite": "Erinnerungen des Assistenten erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
     "scopeProfile": "Auf Ihre Profilinformationen zugreifen",
@@ -2304,6 +2315,7 @@
     "summaryLineRead": "<group>Lesen:</group> {items}",
     "summaryLineUse": "<group>Verwenden:</group> {items}",
     "summaryMattersWrite": "Akten und Aufgaben",
+    "summaryMemoryWrite": "Erinnerungen des Assistenten",
     "summaryProfile": "Profil",
     "summaryRead": "Dokumente, Akten und Kontakte",
     "summaryReadAnonymized": "anonymisierte Dokumente und Akten",
@@ -2670,6 +2682,7 @@
       "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
       "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
       "contact": "Kontaktieren Sie uns",
+      "featureDisabled": "Diese Funktion ist vorübergehend deaktiviert.",
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
       "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
     },
@@ -3525,6 +3538,12 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
+      "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
+      "unsupportedField": "Dieses Dokument enthält ein {fieldType}-Feld, das nicht konvertiert werden kann.",
+      "unsupportedReference": "Dieses Dokument verweist in {element} {attribute} auf eine externe Ressource und kann daher nicht konvertiert werden."
+    },
     "external": {
       "confirmDescription": "Sie sind dabei, eine externe Website zu besuchen.",
       "confirmTitle": "Externen Link öffnen?",
@@ -4224,6 +4243,22 @@
       "guestStorageUnavailable": "Hervorhebungen und Notizen konnten in diesem Tab nicht gespeichert werden.",
       "highlight": "Hervorheben",
       "highlightedPassage": "Hervorgehobene Textstelle",
+      "history": {
+        "colorRestored": "Farbe wiederhergestellt",
+        "commentRemoved": "Kommentar entfernt",
+        "commentRestored": "Kommentar wiederhergestellt",
+        "highlightRemoved": "Hervorhebung entfernt",
+        "highlightRestored": "Hervorhebung wiederhergestellt",
+        "markChanged": "Diese Hervorhebung oder dieser Kommentar wurde inzwischen an anderer Stelle geändert und bleibt daher unverändert.",
+        "markGone": "Diese Hervorhebung oder dieser Kommentar existiert nicht mehr.",
+        "nothingToRedo": "Nichts zum Wiederholen",
+        "nothingToUndo": "Nichts zum Rückgängigmachen",
+        "redoShortcut": "Änderung an Hervorhebung oder Kommentar wiederholen",
+        "styleRestored": "Stil wiederhergestellt",
+        "textRestored": "Kommentartext wiederhergestellt",
+        "undoShortcut": "Änderung an Hervorhebung oder Kommentar rückgängig machen",
+        "visibilityRestored": "Freigabe wiederhergestellt"
+      },
       "removeHighlight": "Hervorhebung entfernen",
       "sharedBadge": "Geteilt",
       "styleHighlight": "Markierung",
@@ -4735,6 +4770,7 @@
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
+    "caseLawEmptyState": "Tippen Sie, um Gerichtsentscheidungen zu durchsuchen.",
     "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
     "continueInChat": "Im Chat fortsetzen",
@@ -4792,6 +4828,7 @@
     "savedSearchesEmpty": "Speichern Sie eine Suche, um sie erneut zu verwenden.",
     "scopeFilter": "Suchbereich",
     "scopePlaceholderAll": "In allen <scope>Quellen</scope> suchen …",
+    "scopePlaceholderCaseLaw": "In der <scope>Rechtsprechung</scope> suchen …",
     "scopePlaceholderMatters": "In allen <scope>Akten</scope> suchen …",
     "scopePlaceholderRegistries": "In <scope>Registern</scope> suchen …",
     "scopeRegistries": "Register",
@@ -4941,7 +4978,7 @@
       "description": "Nutzen Sie stella in Ihrem KI-Assistenten und sehen Sie, was auf Ihr Konto zugreifen kann.",
       "developerDescription": "Serveradressen und das Kommandozeilen-Tool für technische Einrichtungen.",
       "developerTitle": "Entwicklerzugang",
-      "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden.",
+      "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden. Browsersitzungen, die über diese Verbindung erstellt wurden, werden ebenfalls abgemeldet.",
       "disconnectConfirmTitle": "{clientName} trennen?",
       "disconnectSuccess": "{clientName} wurde getrennt",
       "integrationsDescription": "Externe Dienste, die die KI für Sie nutzen kann, etwa Ihre Dokumentenablage.",
@@ -5994,6 +6031,7 @@
       "downloadFailed": "Download fehlgeschlagen",
       "downloadPdf": "Als PDF herunterladen",
       "downloadSearchablePdf": "Durchsuchbare PDF",
+      "emptyFile": "Die Datei ist leer.",
       "includeReferenceNumber": "Aktenzeichen einfügen",
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",

@@ -48,9 +48,9 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  buildLegislationDocumentAppUrl,
   errorResult,
   legalCitationLinkFields,
-  buildLegislationDocumentAppUrl,
   searchIndexUnavailableResult,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";

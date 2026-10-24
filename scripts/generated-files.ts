@@ -1,7 +1,7 @@
 import {
+  CAPABILITY_RUNTIME_INPUTS,
   CI_GENERATED_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
-  CAPABILITY_RUNTIME_INPUTS,
 } from "../packages/scripts/src/generated-files";
 
 export {
@@ -63,6 +63,23 @@ const MODEL_CATALOG_INPUTS = [
 ] as const;
 
 const GENERATOR_DECLARATIONS = [
+  {
+    id: "migration-lock-baseline",
+    outputKind: "committed",
+    outputs: ["scripts/migration-lock-baseline.ts"],
+    inputs: [
+      "scripts/check-migration-locks.ts",
+      "scripts/check-migration-safety.ts",
+      "scripts/migration-lock-census.ts",
+      "scripts/online-ddl-lock-census.ts",
+      "apps/api/src/db/online-ddl.ts",
+      "apps/api/drizzle/**/*.sql",
+    ],
+    write: ["bun", "scripts/check-migration-locks.ts", "--write-baseline"],
+    check: ["bun", "scripts/check-migration-locks.ts"],
+    autofix: false,
+    after: [],
+  },
   {
     id: "cloud-setup",
     outputKind: "committed",
@@ -232,7 +249,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/lib/**",
       "packages/cli/src/**",
       "packages/**",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "apps/api/scripts/export-capability-catalog.ts"],
     check: null,
@@ -286,7 +303,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       "packages/api-contract/src/mcp-capability-executors.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "packages/cli/src/**",
       "packages/cli/package.json",
       "packages/cli/capabilities/**",
@@ -334,7 +351,7 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
       "apps/api/src/mcp/app-contracts.ts",
       "apps/api/src/mcp/decision-reader-contract.ts",
@@ -402,7 +419,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/api/src/lib/chat/legislation-result-projections.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "packages/api-contract/src/case-law-court-year.ts",
@@ -497,7 +514,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/ownership-loader.ts",
       "scripts/ownership-types.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/**",
       "packages/**",
     ],
@@ -515,11 +532,11 @@ const GENERATOR_DECLARATIONS = [
     // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
     id: "ci-job-classification-digests",
     outputKind: "committed",
-    outputs: [".github/ci-job-classification-decisions.json"],
+    outputs: [".github/ci-job-classification-decisions/**"],
     inputs: [
       ".github/workflows/**",
       ".github/actions/**",
-      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-decisions/**",
       ".github/ci-job-classification-sources.json",
       "scripts/check-ci-job-classification.ts",
       "scripts/ci-job-classification/**",
@@ -556,7 +573,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/ui/src/styles/theme.css",
       "scripts/design-tokens-doc.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "scripts/design-tokens-doc.ts", "--write"],
     check: null,
@@ -755,7 +772,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/scripts/src/glossary-gen.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "packages/text-normalize/src/**",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [
@@ -847,7 +864,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "apps/api/src/db/role-names.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
       "apps/api/src/env*.ts",
@@ -1079,10 +1096,15 @@ const GENERATOR_DECLARATIONS = [
       ".agents/skills/**/SKILL.md",
       ".claude/skills/**/SKILL.md",
     ],
-    inputs: [".ai/manifest.json", ".ai/local/**", ".ai/shared"],
+    inputs: [
+      ".ai/manifest.json",
+      ".ai/local/**",
+      ".ai/local-skills/**",
+      ".ai/shared",
+    ],
     write: ["bun", "run", "sync-ai"],
     check: ["bash", ".ai/shared/scripts/sync-ai-skills.sh", "--check", "."],
-    autofix: false,
+    autofix: true,
     after: [],
   },
 ] as const satisfies readonly Generator[];

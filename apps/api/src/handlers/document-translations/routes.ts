@@ -31,13 +31,16 @@ export const documentTranslationsRoute = new Elysia({
     body: prepareDocumentTranslation.config.body,
     params: prepareDocumentTranslation.config.params,
     permissions: prepareDocumentTranslation.config.permissions,
+    accountAccess: prepareDocumentTranslation.config.accountAccess,
   })
   .post("/runs", createDocumentTranslationRun.handler, {
     body: createDocumentTranslationRun.config.body,
     params: createDocumentTranslationRun.config.params,
     permissions: createDocumentTranslationRun.config.permissions,
+    accountAccess: createDocumentTranslationRun.config.accountAccess,
   })
   .get("/runs/:runId", readDocumentTranslationRun.handler, {
     params: readDocumentTranslationRun.config.params,
     permissions: readDocumentTranslationRun.config.permissions,
+    accountAccess: readDocumentTranslationRun.config.accountAccess,
   });

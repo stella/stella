@@ -7,11 +7,11 @@ import { compareCodeUnit } from "../packages/collation/src/collation";
 import {
   checkRegistry,
   classifyPackage,
+  type NpmRunner,
   readPackageManifest,
   readPublishablePackages,
-  versionBumpTime,
-  type NpmRunner,
   type RegistryResult,
+  versionBumpTime,
 } from "./check-npm-publish-lag";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 

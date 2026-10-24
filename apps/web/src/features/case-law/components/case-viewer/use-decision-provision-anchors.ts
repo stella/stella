@@ -15,8 +15,8 @@ import {
 import { locateAbbreviatedProvisionCitations } from "@stll/decision-reader/fallback-legal-anchors";
 import { provisionOccurrenceContexts } from "@stll/decision-reader/provision-anchors";
 import type {
-  ExternalDecisionProvisionAnchor,
   DecisionProvisionAnchor,
+  ExternalDecisionProvisionAnchor,
 } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";

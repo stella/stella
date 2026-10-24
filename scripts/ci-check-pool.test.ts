@@ -9,9 +9,14 @@ import { assertProperty } from "@stll/property-testing";
 import {
   blockingFailures,
   checkLogText,
+  type CheckResult,
+  conditionHolds,
   continueOnErrorHolds,
   failedCheckAnnotation,
+  type Launched,
+  partitionChecks,
   planChecks,
+  type PlannedCheck,
   POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
@@ -19,17 +24,15 @@ import {
   runChecks,
   selectChecks,
   summaryTable,
-  type CheckResult,
-  type Launched,
-  type PlannedCheck,
 } from "./ci-check-pool";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolJob,
+  checkPoolStepRun,
   parseCheckPool,
-  readCheckPool,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { evaluate, type Value } from "./github-expression";
@@ -61,6 +64,20 @@ test("an exact named subset retains manifest order", () => {
   expect(selectChecks(checks, undefined)).toEqual(checks);
   expect(() => selectChecks(checks, "First,Missing")).toThrow(
     "Unknown check name(s): Missing",
+  );
+});
+
+test("matrix partitions cover every pooled check exactly once", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  const selected = ["1/2", "2/2"].flatMap((partition) =>
+    partitionChecks(checks, partition),
+  );
+  expect(selected.map(({ name }) => name).toSorted()).toEqual(
+    checks.map(({ name }) => name).toSorted(),
+  );
+  expect(new Set(selected).size).toBe(checks.length);
+  expect(() => partitionChecks(checks, "3/2")).toThrow(
+    "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
   );
 });
 
@@ -168,6 +185,8 @@ test("each pooled job runs its registry from exactly one pool step", () => {
     expect(pools.map((step) => [step["name"], checkPoolJob(step)])).toEqual([
       [CHECK_POOL_STEP_NAMES[job], job],
     ]);
+    expect(pools.at(0)?.["run"]).toBe(checkPoolStepRun(job));
+    expect(checkPoolJob({ run: checkPoolStepRun(job) })).toBe(job);
     // Guards see every pooled check as a step of the job, right after the pool.
     const index = steps.indexOf(pools[0] ?? {});
     const pooled = readCheckPool(job).map(({ name }) => name);
@@ -568,6 +587,21 @@ test("every real pooled continue-on-error is decidable in both events", () => {
         ),
         pooled.name,
       ).toBe(false);
+    }
+  }
+});
+
+test("every real pooled condition is decidable in both events", () => {
+  // The pool decides `cancelled()` but no other status function, so a
+  // condition such as `success()` would fail the pool step at run time.
+  for (const job of CHECK_POOL_JOBS) {
+    for (const pooled of readCheckPool(job)) {
+      for (const event of ["pull_request", "merge_group"]) {
+        expect(
+          () => conditionHolds(pooled.condition, context(event, "")),
+          `${job}: ${pooled.name}`,
+        ).not.toThrow();
+      }
     }
   }
 });

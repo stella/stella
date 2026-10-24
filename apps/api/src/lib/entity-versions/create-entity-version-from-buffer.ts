@@ -1,7 +1,7 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
@@ -12,9 +12,9 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  abandonBufferIntent,
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
-  abandonBufferIntent,
   reserveBufferIntent,
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
@@ -46,6 +46,8 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
@@ -95,6 +97,8 @@ export type CreateEntityVersionFromBufferDependencies = {
   writeFileVersion: typeof writeFileVersion;
   processExtraction: typeof processExtraction;
   requestNativeExtractionRun: typeof requestNativeExtractionRun;
+  enqueueEntitySearchRepairs: typeof enqueueEntitySearchRepairs;
+  flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
   enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
   enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
   computeVersionDiffStats: typeof computeVersionDiffStats;
@@ -110,6 +114,8 @@ const CREATE_ENTITY_VERSION_FROM_BUFFER_DEPENDENCIES: CreateEntityVersionFromBuf
     processExtraction,
     requestNativeExtractionRun: async (options) =>
       await requestNativeExtractionRun(options),
+    enqueueEntitySearchRepairs,
+    flushEntitySearchRepairs,
     enqueuePdfDerivativeOrMarkFailed,
     enqueueImageThumbnailOrMarkFailed,
     computeVersionDiffStats,
@@ -364,6 +370,7 @@ export const createEntityVersionFromBuffer = async ({
           filePropertyId: versionWriteResult.filePropertyId,
           tx,
         });
+        await dependencies.enqueueEntitySearchRepairs(tx, [entityId]);
       }
       // Set last, after every fallible write in this transaction: the flag
       // means a committed row may reference the object, so cleanup must be
@@ -426,6 +433,7 @@ export const createEntityVersionFromBuffer = async ({
     .catch((error: unknown) => {
       captureError(error, { entityId });
     });
+  dependencies.flushEntitySearchRepairs([entityId]).catch(captureError);
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
       encrypted: encryption.encrypted,

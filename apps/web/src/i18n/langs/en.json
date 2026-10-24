@@ -9,6 +9,7 @@
       "noOtherSessions": "No other active sessions",
       "revokeOtherSessions": "Sign out other devices",
       "revokeOtherSessionsConfirm": "This will end all sessions except your current one.",
+      "signedInFrom": "Signed in from {clientName}",
       "unknownDevice": "Unknown device"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountRestricted": "AI provider settings are unavailable for this account.",
+      "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
       "description": "Add provider credentials to start using AI features.",
+      "permissionRequired": "Only an organization admin can connect an AI provider.",
+      "seatRequired": "Ask an organization admin to assign you a seat.",
       "title": "Connect AI provider"
     },
     "refinePlaceholder": "How should the AI adjust the wording?",
@@ -137,6 +142,8 @@
       "generic": "Something went wrong while signing you in. Please try again.",
       "title": "We couldn't sign you in"
     },
+    "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",
+    "handoffTitle": "Continue to stella",
     "headline": "Clarity for every case.",
     "invitation": {
       "declined": "Invitation declined",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "My organization",
     "password": "Password",
     "professionalUse": {
-      "description": "Your account was set up without showing you this statement. Accept it to continue.",
       "title": "Confirm professional use"
     },
     "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.",
     "rateLimitExceeded": "Too many attempts. Please try again later.",
+    "reauthenticationRequired": "Sign in again to continue with this action.",
     "resendCode": "Send code again to <email>{emailAddress}</email>",
     "selectOrganization": "Select an organization",
     "signIn": "Sign in",
@@ -637,6 +644,7 @@
         "eso9": "ESO9 import sheet (XLSX)",
         "exporting": "Preparing export…",
         "isdoc": "ISDOC e-invoice (ABRA Gen and others)",
+        "ksefFa3": "KSeF e-invoice FA(3) (XML)",
         "spreadsheets": "Spreadsheets",
         "xlsx": "Invoices (XLSX)",
         "xlsxLines": "Invoice lines (XLSX)"
@@ -926,13 +934,10 @@
     },
     "coverage": {
       "completeness": "Completeness",
-      "countedOn": "Counted {date}",
       "courtsHeading": "By court",
       "courtsUnavailable": "The per-court breakdown is unavailable right now.",
       "decisionYears": "Decision years",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
-      "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}",
-      "gapStatusUnknown": "Gap status unknown",
       "generatedAt": "Figures from {date}",
       "globeLabel": "Countries whose case law the corpus holds, on a globe",
       "healthCurrent": "Up to date",
@@ -953,7 +958,8 @@
       "searchable": "Searchable",
       "title": "Case-law coverage",
       "totalFrom": "Total from {date}",
-      "unavailable": "Coverage figures are unavailable right now."
+      "unavailable": "Coverage figures are unavailable right now.",
+      "unreadListingPeriods": "Listing periods not read"
     },
     "decisionNotFound": "Decision not found",
     "decisionTypes": {
@@ -1022,7 +1028,10 @@
       "pageOfCount": "Page {page} of {pageCount}",
       "pageOfEstimatedCount": "Page {page} of ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page {page} · about {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}",
+      "pageWithMatchCounts": "Page {page} · {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithPartialMatchCount": "Page {page} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}",
       "perPage": "Per page",
       "refineForMore": "Refine your search to see more results"
@@ -1591,6 +1600,7 @@
     "sendError": "There was an issue sending your message. Contact support if the error persists.",
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.",
     "sendErrorConnectionFailed": "The connection to chat failed. Check your connection and try again.",
+    "sendErrorContinuationRejected": "The chat could not continue. Send a new message to start again.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
@@ -2277,6 +2287,7 @@
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks",
     "scopeLawRead": "Read public statutes and case law",
     "scopeMattersWrite": "Create and edit your matters and tasks",
+    "scopeMemoryWrite": "Create and update assistant memories",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
     "scopeProfile": "Access your profile information",
@@ -2304,6 +2315,7 @@
     "summaryLineRead": "<group>Read:</group> {items}",
     "summaryLineUse": "<group>Use:</group> {items}",
     "summaryMattersWrite": "matters and tasks",
+    "summaryMemoryWrite": "assistant memories",
     "summaryProfile": "profile",
     "summaryRead": "documents, matters and contacts",
     "summaryReadAnonymized": "anonymized documents and matters",
@@ -2670,6 +2682,7 @@
       "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
       "contact": "Contact us",
+      "featureDisabled": "This feature is temporarily turned off.",
       "notEnabled": "This action is not enabled for your organization.",
       "periodExhausted": "This action is paused for your organization."
     },
@@ -3525,6 +3538,12 @@
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
+      "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
+      "unsupportedField": "This document contains {fieldType}, which can't be converted.",
+      "unsupportedReference": "This document refers to an external resource in {element} {attribute}, so it can't be converted."
+    },
     "external": {
       "confirmDescription": "You're about to visit an external website.",
       "confirmTitle": "Open external link?",
@@ -4224,6 +4243,22 @@
       "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.",
       "highlight": "Highlight",
       "highlightedPassage": "Highlighted passage",
+      "history": {
+        "colorRestored": "Color restored",
+        "commentRemoved": "Comment removed",
+        "commentRestored": "Comment restored",
+        "highlightRemoved": "Highlight removed",
+        "highlightRestored": "Highlight restored",
+        "markChanged": "This highlight or comment was changed elsewhere, so it was left as it is.",
+        "markGone": "This highlight or comment no longer exists.",
+        "nothingToRedo": "Nothing to redo",
+        "nothingToUndo": "Nothing to undo",
+        "redoShortcut": "Redo highlight or comment change",
+        "styleRestored": "Style restored",
+        "textRestored": "Comment text restored",
+        "undoShortcut": "Undo highlight or comment change",
+        "visibilityRestored": "Sharing restored"
+      },
       "removeHighlight": "Remove highlight",
       "sharedBadge": "Shared",
       "styleHighlight": "Highlight",
@@ -4735,6 +4770,7 @@
   },
   "search": {
     "aiRefine": "Improve query with AI",
+    "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
     "continueInChat": "Continue in chat",
@@ -4792,6 +4828,7 @@
     "savedSearchesEmpty": "Save a search to reuse it.",
     "scopeFilter": "Search scope",
     "scopePlaceholderAll": "Search across all <scope>sources</scope>…",
+    "scopePlaceholderCaseLaw": "Search in <scope>case law</scope>…",
     "scopePlaceholderMatters": "Search across all <scope>matters</scope>…",
     "scopePlaceholderRegistries": "Search in <scope>registries</scope>…",
     "scopeRegistries": "Registries",
@@ -4941,7 +4978,7 @@
       "description": "Use stella from your AI assistant and see what can access your account.",
       "developerDescription": "Server addresses and the command-line tool, for technical setups.",
       "developerTitle": "Developer access",
-      "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time.",
+      "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time. Browser sessions created from this connection will also be signed out.",
       "disconnectConfirmTitle": "Disconnect {clientName}?",
       "disconnectSuccess": "Disconnected {clientName}",
       "integrationsDescription": "Outside services the AI can use for you, such as your document drive.",
@@ -5994,6 +6031,7 @@
       "downloadFailed": "Download failed",
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
+      "emptyFile": "The file is empty.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",

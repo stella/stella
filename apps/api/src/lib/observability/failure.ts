@@ -708,7 +708,10 @@ export const identityFields = (
   }
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
-    "error.code": root.code ?? root.awsName ?? root.tag,
+    "error.code":
+      root.extraction?.["workerErrorClass"] === undefined
+        ? (root.code ?? root.awsName ?? root.tag)
+        : `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`,
   };
   const frame = frameValue(root.frame);
   if (frame !== undefined) {
@@ -830,10 +833,7 @@ export const providerStatusFieldsOf = ({
 };
 
 export type FingerprintDegradation =
-  | "class_generic"
-  | "frame_absent"
-  | "read_failed"
-  | "truncated";
+  "class_generic" | "frame_absent" | "read_failed" | "truncated";
 
 /**
  * Why a grouping identity is weaker than it should be, if it is. A plain

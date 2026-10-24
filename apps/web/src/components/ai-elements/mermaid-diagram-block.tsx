@@ -32,8 +32,7 @@ import { detached } from "@/lib/detached";
  * a half-drawn or engine-provided error diagram.
  */
 export type DiagramBlockState =
-  | { kind: "source" }
-  | { kind: "settled"; render: DiagramRender };
+  { kind: "source" } | { kind: "settled"; render: DiagramRender };
 
 const CONTAINER_CLASS = "my-4 rounded-xl border p-4";
 

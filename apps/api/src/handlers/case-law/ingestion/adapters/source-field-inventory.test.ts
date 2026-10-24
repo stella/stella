@@ -69,8 +69,8 @@ import {
   isClassifiedMetadataKey,
   METADATA_TEXT_DISPOSITIONS,
   metadataDisplayTextOf,
-  metadataTextAddressDispositionsForAdapter,
   metadataNullOnlyAddressesForAdapter,
+  metadataTextAddressDispositionsForAdapter,
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 
@@ -272,7 +272,8 @@ describe("every adapter accounts for the fields its source states", () => {
           { field: `sections.${section.index}.text`, value: section.text },
         ]),
         ...metadataCensus.texts,
-        ...("blocks" in decision.documentAst
+        ...("blocks" in decision.documentAst &&
+        decision.documentAst.metadata.type !== "guidance"
           ? [
               ...decision.documentAst.metadata.keywords.map((value, index) => ({
                 field: `documentAst.metadata.keywords.${index}`,

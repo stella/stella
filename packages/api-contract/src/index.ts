@@ -1,6 +1,8 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
+export type { ConversionRefusal } from "./conversion-refusal";
+
 export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
 export {
   currencyCodeSchema,

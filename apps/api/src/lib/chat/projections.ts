@@ -10,8 +10,8 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
-  DECISION_TEXT_WITHHELD_REASON,
   DECISION_TEXT_SOURCE,
+  DECISION_TEXT_WITHHELD_REASON,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -1442,20 +1442,46 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
             knownGaps: v.variant("type", [
-              projectionBranch(v.strictObject({ type: v.literal("unknown") })),
               projectionBranch(
-                v.strictObject({ type: v.literal("none-recorded") }),
+                v.strictObject({
+                  type: v.literal("not_reconciled"),
+                  reason: v.string(),
+                }),
               ),
               projectionBranch(
                 v.strictObject({
-                  type: v.literal("known"),
-                  gaps: v.array(
-                    v.strictObject({
-                      from: v.string(),
-                      to: v.string(),
-                      reason: v.string(),
-                      evidenceRef: v.string(),
-                    }),
+                  type: v.literal("reconciled"),
+                  summary: v.strictObject({
+                    missing: v.number(),
+                    shortSlices: v.number(),
+                    unlistedSlices: v.number(),
+                  }),
+                  years: v.array(
+                    v.variant("type", [
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("complete"),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("gaps"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("unlisted"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                          unlistedSlices: v.number(),
+                        }),
+                      ),
+                    ]),
                   ),
                 }),
               ),

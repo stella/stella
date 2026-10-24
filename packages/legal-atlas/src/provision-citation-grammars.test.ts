@@ -6,8 +6,8 @@ import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publi
 
 import {
   createProvisionCitationGrammar,
-  PROVISION_CITATION_GRAMMARS,
   locateGazetteCitations,
+  PROVISION_CITATION_GRAMMARS,
 } from "./provision-citation-grammars";
 
 type GrammarFixture = {

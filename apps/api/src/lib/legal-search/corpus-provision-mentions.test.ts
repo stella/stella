@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { assertProperty } from "@stll/property-testing";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import { readCorpusProvisionMentions } from "./corpus-provision-mentions";
 import { tokenizeCorpusFreeText } from "./corpus-query";

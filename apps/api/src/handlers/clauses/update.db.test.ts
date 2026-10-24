@@ -13,8 +13,8 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   clauses,
   clauseVersions,
-  templates,
   templateClauses,
+  templates,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -27,8 +27,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

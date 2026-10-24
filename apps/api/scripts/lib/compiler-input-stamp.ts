@@ -5,7 +5,7 @@
 // from it is still current. Replaying costs some thousands of stat calls and
 // file hashes instead of a full parse and type check.
 import { Result } from "better-result";
-import { type Stats, readFileSync, realpathSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, type Stats, statSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript6";

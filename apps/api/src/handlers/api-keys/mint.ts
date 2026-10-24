@@ -19,10 +19,10 @@ import {
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
 import type {
-  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
-  MachineApiKeyScope,
   ApiKeyKind,
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MachineApiKeyMetadata,
+  MachineApiKeyScope,
 } from "@/api/lib/machine-api-key-config";
 import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries";
 import type { MachineApiKeyRow } from "@/api/lib/machine-api-key-queries";
@@ -152,8 +152,7 @@ export const machineApiKeyAlreadyRevoked = (): HandlerError =>
   });
 
 type ValidatedPermissions =
-  | { type: "ok" }
-  | { type: "error"; error: HandlerError };
+  { type: "ok" } | { type: "error"; error: HandlerError };
 
 /**
  * The no-escalation gate. Two independent checks, both required:

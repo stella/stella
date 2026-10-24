@@ -2,11 +2,11 @@ import { panic, Result } from "better-result";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
+  type Generator,
   GENERATORS,
   GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
-  type Generator,
 } from "./generated-files";
 
 const ROOT = new URL("..", import.meta.url);

@@ -7,9 +7,9 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   fetchUrlOutputSchema,
-  webSearchOutputSchema,
   WEB_SEARCH_FRESHNESS,
   WEB_SEARCH_JURISDICTIONS,
+  webSearchOutputSchema,
 } from "@/api/lib/web-search/types";
 import type {
   FetchUrlOutput,

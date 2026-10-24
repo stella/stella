@@ -10,23 +10,23 @@ import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
-  CHAT_EDIT_APPLY_MODE,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserClientCapability,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_EDIT_APPLY_MODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
-  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type ChatEditApplyMode,
+  type ChatRunMode,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   DOCX_EDIT_REPRESENTATION,
+  type DocxEditRepresentation,
   isSafeIdValue,
   parseResourceRef,
-  resourceRef,
   RESOURCE_TYPE,
-  type BrowserClientCapability,
-  type ChatEditApplyMode,
-  type ChatRunMode,
-  type DocxEditRepresentation,
+  resourceRef,
 } from "@stll/api-contract";
 import {
   isChatPastedTextPart,
@@ -46,8 +46,8 @@ import {
   hasServerOwnedChatPartType,
   isApprovedClientCallAwaitingResult,
   isChatPart,
-  isIncomingChatPart,
   isChatTextPart,
+  isIncomingChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
@@ -65,9 +65,9 @@ import type {
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  registeredChatTool,
   type ChatTool,
   type ChatToolMap,
+  registeredChatTool,
 } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -894,8 +894,8 @@ const applyValidatedContinuationTransitions = ({
  * keeps only the adapter-normalized input and recomputes `arguments` from it,
  * while the client echoes the raw provider text, which strict tool schemas widen
  * with nulls for absent optionals. Both are the same call, so `input` is
- * compared by value with that null-widening folded on both sides, and the server
- * copy is restored onto the accepted call.
+ * compared after applying the tool schema on both sides, including its defaults
+ * and placeholder rules, and the server copy is restored onto the accepted call.
  */
 type ValidatedContinuationToolCall =
   | { type: "transitioned"; call: ChatToolCallPart }
@@ -1103,18 +1103,27 @@ const canonicalToolCallBase = (
 };
 
 /**
- * The continuation's input compared under the placeholder rule of the tool's
- * own schema, so a `null` a nullable field admits is a value, not absence.
+ * The continuation's input under the same schema that validated the stored
+ * call. The browser echoes provider arguments before defaults were applied.
+ * Fold placeholders before parsing, so nullable values remain values while
+ * absent optional fields receive the same defaults as the stored input.
  * A call with no known schema (a tool this request does not register, or one
  * without an input schema) keeps the schema-blind fold of every `null`.
  */
-const withContinuationInputFolded = (
+const normalizeContinuationInput = (
   tool: ChatTool | undefined,
   value: unknown,
-): unknown =>
-  tool?.inputSchema === undefined
-    ? withNullsOmitted(value)
-    : withToolInputPlaceholdersOmitted(tool.inputSchema, value);
+): Result<unknown, HandlerError<400>> => {
+  if (tool?.inputSchema === undefined) {
+    return Result.ok(withNullsOmitted(value));
+  }
+  return validateToolPayload({
+    payload: withToolInputPlaceholdersOmitted(tool.inputSchema, value),
+    payloadName: "input",
+    schema: tool.inputSchema,
+    toolName: tool.name,
+  });
+};
 
 const validateContinuationToolCallTransition = ({
   canonicalCall,
@@ -1131,12 +1140,13 @@ const validateContinuationToolCallTransition = ({
       call: canonicalizeToolCall(canonicalCall),
     });
   }
+  const incomingInput = normalizeContinuationInput(tool, incomingCall.input);
+  const canonicalInput = normalizeContinuationInput(tool, canonicalCall.input);
   if (
     incomingCall.name !== canonicalCall.name ||
-    !deepEquals(
-      withContinuationInputFolded(tool, incomingCall.input),
-      withContinuationInputFolded(tool, canonicalCall.input),
-    )
+    Result.isError(incomingInput) ||
+    Result.isError(canonicalInput) ||
+    !deepEquals(incomingInput.value, canonicalInput.value)
   ) {
     return invalidContinuationToolCall();
   }

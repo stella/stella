@@ -1417,6 +1417,41 @@ describe("describe_capability", () => {
     expect(payload.inputSchema.body).toBeDefined();
   });
 
+  test("advertises every capability's input exactly as the catalog does", async () => {
+    // The executors read `matterId` and refuse `workspaceId`, so a described
+    // schema naming the internal field would send an agent into a refusal.
+    // The catalog (and the CLI generated from it) is the reference spelling.
+    const { expandSchemaDefs } =
+      await import("../../../../packages/cli/src/expand-schema-defs.ts");
+    // The default context leaves conditional features off, the state the
+    // catalog is exported in; a capability its caller may not reach is hidden
+    // by describe, and only a feature-required one may be.
+    const drift: string[] = [];
+    for (const entry of capabilityCatalog) {
+      if (entry.inputSchema === undefined) {
+        continue;
+      }
+      const described = parseToolPayload<{ inputSchema?: unknown }>(
+        await call("describe_capability", { capability: entry.id }),
+      );
+      if (described.inputSchema === undefined) {
+        if (!("featureAccess" in entry) || entry.featureAccess !== "required") {
+          drift.push(entry.id);
+        }
+        continue;
+      }
+      if (
+        !Bun.deepEquals(
+          described.inputSchema,
+          expandSchemaDefs(entry.inputSchema),
+        )
+      ) {
+        drift.push(entry.id);
+      }
+    }
+    expect(drift).toEqual([]);
+  });
+
   test("unknown id -> not_found with a suggestion hint", async () => {
     const result = await call("describe_capability", {
       capability: "time-entries.creat",

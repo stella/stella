@@ -27,9 +27,9 @@ import {
   writeDevQuickStartAttempt,
 } from "./dev-quick-start-storage";
 import {
+  createDevQuickStartIdentity,
   DEV_QUICK_START_PHASE,
   DEV_QUICK_START_STAGE,
-  createDevQuickStartIdentity,
   type DevQuickStartAttempt,
   type DevQuickStartIdentity,
   type DevQuickStartPhase,

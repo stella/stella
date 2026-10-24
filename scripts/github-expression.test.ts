@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  UNKNOWN,
   contextFromNested,
   contextWithPlanOutputs,
   definitelyFalse,
   evaluate,
+  UNKNOWN,
 } from "./github-expression";
 
 const none = { values: {} };

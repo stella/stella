@@ -199,7 +199,13 @@ const autocompleteStream = createSafeRootHandler(
     };
     const sse = createAutocompleteEventStream(admittedStream(), request.signal);
 
-    return Result.ok(sseResponse(sse));
+    return Result.ok(
+      sseResponse(sse, {
+        kind: "session",
+        sessionId: session.id,
+        userId: user.id,
+      }),
+    );
   },
 );
 

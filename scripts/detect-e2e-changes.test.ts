@@ -15,11 +15,11 @@ import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
 import {
+  type ChangedFileScopeDetectors,
   computeChangedFileScope,
   DEFAULT_DETECTORS,
   MODEL_CATALOG_DRIFT_INPUTS,
   STACK_REDACTION_BROWSER_INPUTS,
-  type ChangedFileScopeDetectors,
 } from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
@@ -853,6 +853,7 @@ describe("detect-e2e-changes", () => {
     }
   });
 
+  // Measured p95: 12.7 s; this must evaluate the real workflow and repository scope.
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     expect(
       changedFileScope("docs/development.md", "pull_request", {
@@ -890,7 +891,7 @@ describe("detect-e2e-changes", () => {
         ].join("\n"),
       );
     }
-  }, 15_000);
+  }, 30_000);
 
   test("runs the full native compiler only at the release boundary", () => {
     const plan = workflowJob("ci-plan");

@@ -37,8 +37,8 @@ import {
 } from "@/api/lib/files/pdf-signing/stamp-glyphs";
 import {
   FIRST_STRONG_ISOLATE,
-  LEFT_TO_RIGHT_ISOLATE,
   layoutStampRow,
+  LEFT_TO_RIGHT_ISOLATE,
   POP_DIRECTIONAL_ISOLATE,
   STAMP_UNITS_PER_EM,
 } from "@/api/lib/files/pdf-signing/stamp-layout";
@@ -93,10 +93,7 @@ export type ViewerBox = {
 };
 
 export type StampPlacementRejection =
-  | "page_not_found"
-  | "off_page"
-  | "too_small"
-  | "too_large";
+  "page_not_found" | "off_page" | "too_small" | "too_large";
 
 export type StampPlacement =
   | {

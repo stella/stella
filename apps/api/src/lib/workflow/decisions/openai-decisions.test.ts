@@ -15,8 +15,8 @@ import {
 } from "@/api/lib/workflow/decisions/openai-decisions";
 import {
   choice,
-  noul,
   createSystemOneClient,
+  noul,
 } from "@/api/lib/workflow/decisions/system-one";
 import { failingDecisionGenerator } from "@/api/tests/helpers/decision-generator";
 import {

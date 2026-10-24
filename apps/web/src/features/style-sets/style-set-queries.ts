@@ -21,8 +21,7 @@ type StyleSetPreviewBody = Parameters<
 export type StyleSetPreviewContent = StyleSetPreviewBody["content"];
 
 export type StyleSetPreviewSource =
-  | { type: "stella" }
-  | { type: "saved"; styleSetId: string };
+  { type: "stella" } | { type: "saved"; styleSetId: string };
 
 type StyleSetPreviewOptions = {
   organizationId: string;

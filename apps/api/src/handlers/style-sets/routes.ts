@@ -35,47 +35,58 @@ export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
   .guard({ validateAuth: true })
   .get("/", listStyleSets.handler, {
     permissions: listStyleSets.config.permissions,
+    accountAccess: listStyleSets.config.accountAccess,
     query: listStyleSets.config.query,
   })
   .put("/", createStyleSet.handler, {
     body: createStyleSet.config.body,
     permissions: createStyleSet.config.permissions,
+    accountAccess: createStyleSet.config.accountAccess,
   })
   .get("/editor/stella", readStellaStyleEditor.handler, {
     permissions: readStellaStyleEditor.config.permissions,
+    accountAccess: readStellaStyleEditor.config.accountAccess,
   })
   .post("/editor/preview", previewStyleSetFromEditor.handler, {
     body: previewStyleSetFromEditor.config.body,
     permissions: previewStyleSetFromEditor.config.permissions,
+    accountAccess: previewStyleSetFromEditor.config.accountAccess,
   })
   .put("/editor", createStyleSetFromEditor.handler, {
     body: createStyleSetFromEditor.config.body,
     permissions: createStyleSetFromEditor.config.permissions,
+    accountAccess: createStyleSetFromEditor.config.accountAccess,
   })
   .get("/:styleSetId/download", downloadStyleSet.handler, {
     params: downloadStyleSet.config.params,
     permissions: downloadStyleSet.config.permissions,
+    accountAccess: downloadStyleSet.config.accountAccess,
   })
   .post("/:styleSetId", updateStyleSet.handler, {
     body: updateStyleSet.config.body,
     params: updateStyleSet.config.params,
     permissions: updateStyleSet.config.permissions,
+    accountAccess: updateStyleSet.config.accountAccess,
   })
   .post("/:styleSetId/source", replaceStyleSet.handler, {
     body: replaceStyleSet.config.body,
     params: replaceStyleSet.config.params,
     permissions: replaceStyleSet.config.permissions,
+    accountAccess: replaceStyleSet.config.accountAccess,
   })
   .get("/:styleSetId/editor", readStyleSetEditor.handler, {
     params: readStyleSetEditor.config.params,
     permissions: readStyleSetEditor.config.permissions,
+    accountAccess: readStyleSetEditor.config.accountAccess,
   })
   .post("/:styleSetId/editor", updateStyleSetFromEditor.handler, {
     body: updateStyleSetFromEditor.config.body,
     params: updateStyleSetFromEditor.config.params,
     permissions: updateStyleSetFromEditor.config.permissions,
+    accountAccess: updateStyleSetFromEditor.config.accountAccess,
   })
   .delete("/:styleSetId", deleteStyleSet.handler, {
     params: deleteStyleSet.config.params,
     permissions: deleteStyleSet.config.permissions,
+    accountAccess: deleteStyleSet.config.accountAccess,
   });

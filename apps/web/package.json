@@ -27,7 +27,6 @@
     "typecheck": "([ -n \"$TURBO_HASH\" ] || bun run --cwd ../.. generate) && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=e2e/tsconfig.json && bun check --no-pretty --all --project=e2e/unit/tsconfig.json",
     "lint": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/web",
     "lint:fix": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "i18n:check": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --unused-in=src --unused-in=scripts --unused-in=../../packages/ai-catalog/src && bun ../../packages/scripts/src/glossary-gen.ts src/i18n --check && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs && bun scripts/sync-prepaint-locales.ts --check",
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n && bun scripts/sync-prepaint-locales.ts",
     "test": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun scripts/run-tests.ts",
@@ -45,7 +44,8 @@
     "capture:product-story": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun e2e/marketing/record-product-story.ts",
     "test:e2e:staging": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.staging.config.ts",
     "test:e2e:ui": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.config.ts --ui",
-    "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts"
+    "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts",
+    "test:e2e:journeys": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.journeys.config.ts"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
@@ -190,6 +190,8 @@
     "@playwright/test": "^1.63.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
+    "@stll/render-probe": "workspace:*",
+    "@stll/sanctions": "workspace:*",
     "@stll/scripts": "workspace:*",
     "@stll/ssr-testkit": "workspace:^",
     "@stll/typescript-config": "workspace:*",
@@ -206,7 +208,7 @@
     "@vitejs/plugin-react": "catalog:",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "happy-dom": "21.0.1",
+    "happy-dom": "21.0.4",
     "oxc-transform-react": "catalog:",
     "rollup-plugin-visualizer": "^7.1.1",
     "tailwindcss": "catalog:",

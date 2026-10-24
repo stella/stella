@@ -37,7 +37,7 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -50,11 +50,11 @@ import {
 } from "@/api/lib/chat/compaction-summary";
 import type { IncrementalSummaryPrompt } from "@/api/lib/chat/compaction-summary";
 import {
+  compactionGenerationRequest,
+  estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_TEXT_PART_CHARS,
   MESSAGE_OVERHEAD_TOKENS,
-  compactionGenerationRequest,
-  estimateTextTokens,
   renderTaggedValue,
   safeStringify,
   truncateForCompaction,

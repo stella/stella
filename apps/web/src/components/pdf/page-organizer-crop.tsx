@@ -33,9 +33,9 @@ import {
   cropToMarginsMm,
   displayedCropBox,
   displayedPageSizeMm,
-  MIN_CROP_SIZE_MM,
   marginsFromDisplayedBox,
   marginsMmToCrop,
+  MIN_CROP_SIZE_MM,
 } from "./page-organizer-crop.logic";
 import type {
   CropAdjustMode,

@@ -6,10 +6,10 @@ import path from "node:path";
 
 import {
   createProcessMemoryReader,
-  parseProcessGroupMemory,
   parseLinuxProcessMemoryStatus,
-  testInvocationMemoryLimit,
+  parseProcessGroupMemory,
   TEST_INVOCATION_MEMORY_GIB_ENV,
+  testInvocationMemoryLimit,
   watchTestProcessMemory,
 } from "./process-memory";
 import { attachTestProcessShutdown } from "./process-shutdown";

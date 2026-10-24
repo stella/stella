@@ -116,6 +116,15 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    // OAuth consent that owns this handoff session and its revocation.
+    originConsentId: text("origin_consent_id").references(
+      () => oauthConsent.id,
+      {
+        onDelete: "cascade",
+      },
+    ),
+    // Fixed expiry for text handoffs; session refresh never extends this cap.
+    handoffAbsoluteExpiresAt: timestamptz("handoff_absolute_expires_at"),
     refreshMode: text("refresh_mode", { enum: SESSION_REFRESH_MODES })
       .default("automatic")
       .notNull(),
@@ -142,6 +151,7 @@ export const session = pgTable(
       table.activeOrganizationId,
     ),
     uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
+    index("session_originConsentId_idx").on(table.originConsentId),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -443,6 +453,10 @@ export const oauthClient = pgTable(
     clientId: text("client_id").notNull().unique(),
     clientSecret: text("client_secret"),
     clientDiscoveryId: text("client_discovery_id"),
+    // When this discovery-owned client's metadata document last passed a
+    // fetch and validation. It bounds how long the stored client keeps
+    // resolving while the document cannot be revalidated.
+    metadataValidatedAt: timestamptz("metadata_validated_at"),
     registrationOrigin: text("registration_origin", {
       enum: OAUTH_CLIENT_REGISTRATION_ORIGINS,
     })

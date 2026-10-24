@@ -148,8 +148,7 @@ const RATCHET_DOWN = 0.95;
 // reason scripts/verify.sh serializes typecheck tasks (--concurrency=1). The
 // measurement itself also uses one checker so its counters remain comparable.
 type RunResult =
-  | { ok: true; diagnostics: string }
-  | { ok: false; error: string };
+  { ok: true; diagnostics: string } | { ok: false; error: string };
 
 const runProject = (project: string, repoRoot: string): RunResult => {
   const proc = Bun.spawnSync(
@@ -183,8 +182,7 @@ const diagnosticField = (diagnostics: string, label: string): number | null => {
 };
 
 type ParseResult =
-  | { ok: true; counters: Counters }
-  | { ok: false; error: string };
+  { ok: true; counters: Counters } | { ok: false; error: string };
 
 const parseCounters = (diagnostics: string, project: string): ParseResult => {
   const types = diagnosticField(diagnostics, "Types");
@@ -214,8 +212,7 @@ const ungatedSummary = (diagnostics: string): string => {
 
 type Measured = { id: ProjectId; counters: Counters; context: string };
 type MeasureResult =
-  | { ok: true; measured: Measured[] }
-  | { ok: false; error: string };
+  { ok: true; measured: Measured[] } | { ok: false; error: string };
 
 // A project the change adds does not exist at its merge base; with
 // absentAsEmpty the base measurement records it as zero instead of failing.

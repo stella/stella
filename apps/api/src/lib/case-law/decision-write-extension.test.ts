@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 

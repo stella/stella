@@ -15,8 +15,8 @@ import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   lockTaskAssignmentMembers,
-  writeTaskAssignments,
   removeTaskAssignment,
+  writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
 
 const moveAssigneeBodySchema = t.Object({
@@ -33,8 +33,7 @@ export type MoveAssigneeHandlerProps = {
 };
 
 type MoveAssigneeTxResult =
-  | { ok: true }
-  | { ok: false; status: 400 | 404 | 409; message: string };
+  { ok: true } | { ok: false; status: 400 | 404 | 409; message: string };
 
 // Lock workspace -> membership -> task for both halves of a move. A failed
 // destination validation preserves the previous assignments and their audit.

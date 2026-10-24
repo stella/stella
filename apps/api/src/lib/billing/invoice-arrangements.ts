@@ -4,7 +4,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { invoiceLines, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import { INVOICE_BILLING_PURPOSE, invoiceLines } from "@/api/db/schema";
 import {
   lockBillingArrangement,
   readBillingUsage,

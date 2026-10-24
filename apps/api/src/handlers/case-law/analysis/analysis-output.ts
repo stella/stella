@@ -17,14 +17,16 @@ import type { JsonSchema } from "@valibot/to-json-schema";
 import * as v from "valibot";
 
 import type {
+  AnalysisCitedSpan,
   AnalysisHeading,
-  DecisionAnalysisV3,
+  DecisionAnalysisV4,
 } from "@stll/legal-ast/analysis";
 import {
-  analysisAbstractTextSchema,
+  analysisAbstractSpansSchema,
   analysisHeadingInputSchema,
-  analysisHoldingInputSchema,
+  analysisHoldingSpansSchema,
   analysisTopicsSchema,
+  citedPassageCitationCount,
   CURRENT_ANALYSIS_VERSION,
 } from "@stll/legal-ast/analysis";
 
@@ -41,8 +43,8 @@ import { normalizeAnalysisHeadingLabels } from "./category-catalog";
  */
 export const analysisOutputSchema = v.strictObject({
   headings: v.array(analysisHeadingInputSchema),
-  holding: analysisHoldingInputSchema,
-  abstract: analysisAbstractTextSchema,
+  holding: analysisHoldingSpansSchema,
+  abstract: analysisAbstractSpansSchema,
   topics: analysisTopicsSchema,
 });
 
@@ -69,35 +71,38 @@ type BuildAnalysisOptions = {
   generatedAt: Date;
   /**
    * Every anchor id the parse the analysis was computed over carries, in
-   * reading order. The holding's anchors are checked against it.
+   * reading order. Every cited span's anchors are checked against it.
    */
   anchorIds: readonly string[];
 };
 
 /**
- * The holding's anchors, reduced to the ranges that name real paragraphs of
- * this parse, in reading order.
+ * A passage's spans, each citing only the ranges that name real paragraphs
+ * of this parse. The text is kept whole: a dropped citation loses a link,
+ * never a word of the passage.
  *
  * A producer can return an id that does not exist, or a range that runs
  * backwards. Persisting one gives the reader a button that scrolls nowhere,
  * and no amount of care at the call site prevents it: the check belongs
- * here, where the parse is known, so a dead holding link is unrepresentable
+ * here, where the parse is known, so a dead citation is unrepresentable
  * rather than merely unlikely.
  */
-const usableAnchors = (
-  anchors: AnalysisOutput["holding"]["anchors"],
-  anchorIds: readonly string[],
-): AnalysisOutput["holding"]["anchors"] => {
-  const positions = new Map(anchorIds.map((id, index) => [id, index]));
-  const usable = anchors.filter((anchor) => {
-    const start = positions.get(anchor.startAnchorId);
-    const end = positions.get(anchor.endAnchorId);
-    return start !== undefined && end !== undefined && start <= end;
-  });
+const usableSpans = (
+  spans: readonly AnalysisCitedSpan[],
+  positions: ReadonlyMap<string, number>,
+): AnalysisCitedSpan[] => {
+  const usable = spans.map((span) => ({
+    text: span.text,
+    anchors: span.anchors.filter((anchor) => {
+      const start = positions.get(anchor.startAnchorId);
+      const end = positions.get(anchor.endAnchorId);
+      return start !== undefined && end !== undefined && start <= end;
+    }),
+  }));
   reportCaseLawIncompleteAnswer({
     surface: "analysis",
     reason: "invalid_output",
-    count: anchors.length - usable.length,
+    count: citedPassageCitationCount(spans) - citedPassageCitationCount(usable),
   });
   return usable;
 };
@@ -146,19 +151,18 @@ export const buildDecisionAnalysis = ({
   language,
   model,
   output,
-}: BuildAnalysisOptions): DecisionAnalysisV3 => ({
-  version: CURRENT_ANALYSIS_VERSION,
-  generatedAt: generatedAt.toISOString(),
-  model,
-  inputFingerprint,
-  tree: output.headings.map((heading) =>
-    createAnalysisHeading({ heading, language }),
-  ),
-  holding: {
-    text: output.holding.text,
-    language,
-    anchors: usableAnchors(output.holding.anchors, anchorIds),
-  },
-  abstract: { text: output.abstract, language },
-  topics: output.topics,
-});
+}: BuildAnalysisOptions): DecisionAnalysisV4 => {
+  const positions = new Map(anchorIds.map((id, index) => [id, index]));
+  return {
+    version: CURRENT_ANALYSIS_VERSION,
+    generatedAt: generatedAt.toISOString(),
+    model,
+    inputFingerprint,
+    tree: output.headings.map((heading) =>
+      createAnalysisHeading({ heading, language }),
+    ),
+    holding: { spans: usableSpans(output.holding, positions), language },
+    abstract: { spans: usableSpans(output.abstract, positions), language },
+    topics: output.topics,
+  };
+};

@@ -9,6 +9,7 @@
       "noOtherSessions": "No hay otras sesiones activas",
       "revokeOtherSessions": "Cerrar sesión en otros dispositivos",
       "revokeOtherSessionsConfirm": "Se cerrarán todas las sesiones excepto la actual.",
+      "signedInFrom": "Sesión iniciada desde {clientName}",
       "unknownDevice": "Dispositivo desconocido"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Opciones de reescritura",
     "editWithAI": "Editar con IA",
     "keyRequired": {
+      "accountRestricted": "La configuración del proveedor de IA no está disponible para esta cuenta.",
+      "configUnreadable": "No se puede leer la configuración del proveedor de IA. Pide a un administrador de la organización que vuelva a conectarlo.",
       "cta": "Abrir ajustes de IA",
       "description": "Añade credenciales de proveedor para empezar a usar funciones de IA.",
+      "permissionRequired": "Solo un administrador de la organización puede conectar un proveedor de IA.",
+      "seatRequired": "Pide a un administrador de la organización que te asigne una plaza.",
       "title": "Conectar proveedor de IA"
     },
     "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?",
@@ -137,6 +142,8 @@
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",
       "title": "No pudimos iniciar tu sesión"
     },
+    "handoffAccount": "¿Continuar como <account>{email}</account> en <organization>{organizationName}</organization>?",
+    "handoffTitle": "Continuar a stella",
     "headline": "Claridad en cada caso.",
     "invitation": {
       "declined": "Invitación rechazada",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Mi Organización",
     "password": "Contraseña",
     "professionalUse": {
-      "description": "Su cuenta se configuró sin mostrarle esta declaración. Acéptela para continuar.",
       "title": "Confirme el uso profesional"
     },
     "professionalUseStatement": "Al crear una cuenta, confirma que utiliza stella con fines profesionales y reconoce que stella es una herramienta para profesionales del derecho y no sustituye el asesoramiento jurídico.",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
+    "reauthenticationRequired": "Vuelva a iniciar sesión para continuar con esta acción.",
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
@@ -637,6 +644,7 @@
         "eso9": "Hoja de importación ESO9 (XLSX)",
         "exporting": "Preparando la exportación…",
         "isdoc": "Factura electrónica ISDOC (ABRA Gen y otros)",
+        "ksefFa3": "Factura electrónica KSeF FA(3) (XML)",
         "spreadsheets": "Hojas de cálculo",
         "xlsx": "Facturas (XLSX)",
         "xlsxLines": "Líneas de factura (XLSX)"
@@ -926,13 +934,10 @@
     },
     "coverage": {
       "completeness": "Exhaustividad",
-      "countedOn": "Contado el {date}",
       "courtsHeading": "Por tribunal",
       "courtsUnavailable": "El desglose por tribunal no está disponible en este momento.",
       "decisionYears": "Años de las resoluciones",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
-      "exceedsReportedTotal": "Contiene más que el último total indicado por el organismo el {date}",
-      "gapStatusUnknown": "Estado de lagunas desconocido",
       "generatedAt": "Datos a {date}",
       "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
@@ -953,7 +958,8 @@
       "searchable": "Consultables",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
-      "unavailable": "Los datos de cobertura no están disponibles ahora mismo."
+      "unavailable": "Los datos de cobertura no están disponibles ahora mismo.",
+      "unreadListingPeriods": "Periodos del listado no leídos"
     },
     "decisionNotFound": "Resolución no encontrada",
     "decisionTypes": {
@@ -1022,7 +1028,10 @@
       "pageOfCount": "Página {page} de {pageCount}",
       "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
       "pageOfEstimatedCountLabel": "Página {page} de aproximadamente {pageCount}",
+      "pageWithEstimatedMatchCounts": "Página {page} · aproximadamente {exactCount, plural, one {# coincidencia exacta} other {# coincidencias exactas}} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
       "pageWithEstimatedResultCount": "Página {page} · aproximadamente {count, plural, one {# resultado} other {# resultados}}",
+      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# coincidencia exacta} other {# coincidencias exactas}} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Acote la búsqueda para ver más resultados"
@@ -1591,6 +1600,7 @@
     "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
     "sendErrorAnonymizationBlocked": "stella no pudo anonimizar un archivo adjunto, así que no se envió nada. Quita el archivo o envía este mensaje sin anonimización.",
     "sendErrorConnectionFailed": "No se pudo conectar con el chat. Compruebe su conexión e inténtelo de nuevo.",
+    "sendErrorContinuationRejected": "No se pudo continuar el chat. Envía un nuevo mensaje para empezar de nuevo.",
     "sendErrorEmptyCompletion": "La IA devolvió una respuesta vacía. Inténtalo de nuevo o reformula tu mensaje.",
     "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
     "sendErrorModelUnavailable": "El modelo de IA configurado ya no está disponible. Pídele al administrador del espacio de trabajo que actualice el modelo en la configuración de la organización.",
@@ -2277,6 +2287,7 @@
     "scopeKnowledgeWrite": "Crear, editar y eliminar sus cláusulas y ejecutar playbooks",
     "scopeLawRead": "Leer legislación pública y jurisprudencia",
     "scopeMattersWrite": "Crear y editar sus asuntos y tareas",
+    "scopeMemoryWrite": "Crear y actualizar los recuerdos del asistente",
     "scopeOfflineAccess": "Mantenerlo con la sesión iniciada sin necesidad de aprobación repetida",
     "scopeOnboarding": "Configurar las jurisdicciones de práctica de su organización",
     "scopeProfile": "Acceder a la información de su perfil",
@@ -2304,6 +2315,7 @@
     "summaryLineRead": "<group>Leer:</group> {items}",
     "summaryLineUse": "<group>Usar:</group> {items}",
     "summaryMattersWrite": "asuntos y tareas",
+    "summaryMemoryWrite": "recuerdos del asistente",
     "summaryProfile": "perfil",
     "summaryRead": "documentos, asuntos y contactos",
     "summaryReadAnonymized": "documentos y asuntos anonimizados",
@@ -2670,6 +2682,7 @@
       "admissionUnavailable": "Esta acción está pausada temporalmente. Inténtelo de nuevo en unos momentos.",
       "concurrencyBusy": "Hay otras tareas en curso. Inténtelo de nuevo en unos momentos.",
       "contact": "Contáctenos",
+      "featureDisabled": "Esta función está desactivada temporalmente.",
       "notEnabled": "Esta acción no está habilitada para su organización.",
       "periodExhausted": "Esta acción está pausada para su organización."
     },
@@ -3525,6 +3538,12 @@
       "unsupportedVisualContent": "Este archivo contiene imágenes o gráficos vectoriales que no se pueden comprobar para detectar texto sensible. La exportación no está disponible.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Este es un archivo antiguo de {format}. Vuelve a guardarlo como {replacementExtension} para convertirlo.",
+      "unsupportedEncoding": "Este documento usa la codificación {encoding}, que no es compatible, por lo que no se puede convertir.",
+      "unsupportedField": "Este documento contiene un campo {fieldType} que no se puede convertir.",
+      "unsupportedReference": "Este documento hace referencia a un recurso externo en {element} {attribute}, por lo que no se puede convertir."
+    },
     "external": {
       "confirmDescription": "Estás a punto de visitar un sitio web externo.",
       "confirmTitle": "¿Abrir enlace externo?",
@@ -4224,6 +4243,22 @@
       "guestStorageUnavailable": "No se han podido guardar los resaltados y notas en esta pestaña.",
       "highlight": "Resaltar",
       "highlightedPassage": "Pasaje resaltado",
+      "history": {
+        "colorRestored": "Color restablecido",
+        "commentRemoved": "Comentario eliminado",
+        "commentRestored": "Comentario restaurado",
+        "highlightRemoved": "Resaltado quitado",
+        "highlightRestored": "Resaltado restaurado",
+        "markChanged": "Este resaltado o comentario se modificó en otro lugar, así que se ha dejado como está.",
+        "markGone": "Este resaltado o comentario ya no existe.",
+        "nothingToRedo": "No hay nada que rehacer",
+        "nothingToUndo": "No hay nada que deshacer",
+        "redoShortcut": "Rehacer cambio de resaltado o comentario",
+        "styleRestored": "Estilo restablecido",
+        "textRestored": "Texto del comentario restaurado",
+        "undoShortcut": "Deshacer cambio de resaltado o comentario",
+        "visibilityRestored": "Uso compartido restablecido"
+      },
       "removeHighlight": "Quitar resaltado",
       "sharedBadge": "Compartido",
       "styleHighlight": "Resaltado",
@@ -4735,6 +4770,7 @@
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",
+    "caseLawEmptyState": "Empiece a escribir para buscar resoluciones judiciales.",
     "caseLawMatchingDecisions": "{count, plural, one {# resolución coincidente} other {# resoluciones coincidentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ resolución coincidente} other {#+ resoluciones coincidentes}}",
     "continueInChat": "Continuar en el chat",
@@ -4792,6 +4828,7 @@
     "savedSearchesEmpty": "Guarda una búsqueda para volver a usarla.",
     "scopeFilter": "Ámbito de búsqueda",
     "scopePlaceholderAll": "Buscar en todas las <scope>fuentes</scope>…",
+    "scopePlaceholderCaseLaw": "Buscar en la <scope>jurisprudencia</scope>…",
     "scopePlaceholderMatters": "Buscar en todos los <scope>asuntos</scope>…",
     "scopePlaceholderRegistries": "Buscar en <scope>registros</scope>…",
     "scopeRegistries": "Registros",
@@ -4941,7 +4978,7 @@
       "description": "Usa stella desde tu asistente de IA y ve qué tiene acceso a tu cuenta.",
       "developerDescription": "Direcciones del servidor y la herramienta de línea de comandos, para configuraciones técnicas.",
       "developerTitle": "Acceso para desarrolladores",
-      "disconnectConfirmDescription": "Esto revoca el acceso de {clientName} a su cuenta, junto con cualquier token que haya emitido. Puede volver a conectarse en cualquier momento.",
+      "disconnectConfirmDescription": "Esto revoca el acceso de {clientName} a su cuenta, junto con cualquier token que haya emitido. Puede volver a conectarse en cualquier momento. También se cerrarán las sesiones del navegador creadas desde esta conexión.",
       "disconnectConfirmTitle": "¿Desconectar {clientName}?",
       "disconnectSuccess": "Se desconectó {clientName}",
       "integrationsDescription": "Servicios externos que la IA puede usar por ti, como tu almacén de documentos.",
@@ -5994,6 +6031,7 @@
       "downloadFailed": "Error al descargar",
       "downloadPdf": "Descargar como PDF",
       "downloadSearchablePdf": "PDF con texto buscable",
+      "emptyFile": "El archivo está vacío.",
       "includeReferenceNumber": "Incluir número de referencia",
       "itemLimitReached": "Este asunto ha alcanzado su límite de elementos.",
       "maxEntitiesReached": "Se ha alcanzado el número máximo de elementos",

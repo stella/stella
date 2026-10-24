@@ -5,8 +5,8 @@ import type { Static } from "elysia";
 import * as v from "valibot";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
 

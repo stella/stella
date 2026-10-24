@@ -25,8 +25,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   chatThreadNeedsCompaction,
   compactChatMessages,
-  compactModelMessagesForModel,
   compactModelMessages,
+  compactModelMessagesForModel,
   computeThreadContextUsage,
   planChatCompaction,
   planModelCompaction,

@@ -27,9 +27,9 @@ pre-commit:
       run: bun scripts/precommit-lint.ts {staged_files}
       stage_fixed: true
     format:
-      glob: "**/*.{ts,tsx,js,jsx,json,css}"
-      run: bun run format:guard && bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern {staged_files}
-      stage_fixed: true
+      # bun fmt re-stages what it formats and refuses a partially staged file
+      # whose staged text needs formatting.
+      run: bun fmt --staged
     i18n:
       glob: "apps/web/src/i18n/langs/*.{json,ts}"
       # The sync runs packages/scripts tools and an apps/web script.

@@ -9,9 +9,9 @@ import type * as YProseMirror from "y-prosemirror";
 import type * as Yjs from "yjs";
 
 import {
-  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_SEED_PREPARING_CODE,
 } from "@stll/api-contract/folio-collab";
@@ -39,8 +39,8 @@ import { createUuid } from "@/lib/uuid";
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
 import {
   completeFolioSeedReceipt,
-  waitForFolioCollaborationSeed,
   FolioCollaborationSeedPreparingError,
+  waitForFolioCollaborationSeed,
 } from "./folio-collaboration-seed-receipt";
 
 type ConnectedDocxEditorCollaboration = DocxEditorCollaboration & {

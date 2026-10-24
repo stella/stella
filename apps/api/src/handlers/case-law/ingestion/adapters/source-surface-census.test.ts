@@ -55,19 +55,21 @@ import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,
   atRisFixture,
+  type AtRisFixtureAdapter,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
   czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
   plCourtsSearchFixture,
   plKioFixture,
   plKisFixture,
-  plNsaFixture,
   plNcourtFixture,
+  plNsaFixture,
   plSnFixture,
   plTkFixture,
   plUodoFixture,
@@ -75,8 +77,6 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type AtRisFixtureAdapter,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";

@@ -6,9 +6,9 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -17,8 +17,8 @@ import {
 import {
   ClipboardCheckIcon,
   LibraryIcon,
-  PencilLineIcon,
   type LucideIcon,
+  PencilLineIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
@@ -36,10 +36,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 
 type SkillScope = "team" | "private";
 type BlueprintId =
-  | "check-against-rules"
-  | "intake-to-draft"
-  | "answer-from-sources"
-  | "blank";
+  "check-against-rules" | "intake-to-draft" | "answer-from-sources" | "blank";
 type BlueprintCardId = Exclude<BlueprintId, "blank">;
 
 export type BlueprintCreatedSkill = {

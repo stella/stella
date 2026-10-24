@@ -1,0 +1,32 @@
+{
+  "name": "@stll/render-probe",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Counts what React renders on every commit, per component and by cause, for render-width budgets in web and mobile tests",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": [
+    "./src/install.ts"
+  ],
+  "exports": {
+    ".": "./src/probe.ts",
+    "./install": "./src/install.ts",
+    "./report": "./src/report.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/render-probe",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/render-probe"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "21.0.1",
+    "@stll/typescript-config": "workspace:*",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19"
+  }
+}

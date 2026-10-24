@@ -9,6 +9,7 @@
       "noOtherSessions": "Teisi aktiivseid seansse pole",
       "revokeOtherSessions": "Logi teistest seadmetest välja",
       "revokeOtherSessionsConfirm": "See lõpetab kõik seansid peale praeguse.",
+      "signedInFrom": "Sisse logitud rakenduse {clientName} kaudu",
       "unknownDevice": "Tundmatu seade"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
+      "accountRestricted": "Tehisintellekti pakkuja seaded pole selle konto jaoks saadaval.",
+      "configUnreadable": "Tehisintellekti pakkuja seadistust ei saa lugeda. Paluge organisatsiooni administraatoril see uuesti ühendada.",
       "cta": "Ava AI seaded",
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
+      "permissionRequired": "Tehisintellekti pakkuja saab ühendada ainult organisatsiooni administraator.",
+      "seatRequired": "Paluge organisatsiooni administraatoril teile koht määrata.",
       "title": "Ühenda AI teenusepakkuja"
     },
     "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?",
@@ -137,6 +142,8 @@
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
+    "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",
+    "handoffTitle": "Jätka stellasse",
     "headline": "Selgus igas asjas.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "professionalUse": {
-      "description": "Teie konto loomisel seda kinnitust teile ei näidatud. Jätkamiseks nõustuge sellega.",
       "title": "Kinnitage kutsealane kasutus"
     },
     "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
+    "reauthenticationRequired": "Selle toimingu jätkamiseks logige uuesti sisse.",
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
@@ -637,6 +644,7 @@
         "eso9": "ESO9 impordileht (XLSX)",
         "exporting": "Eksporti valmistatakse ette…",
         "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "ksefFa3": "KSeF e-arve FA(3) (XML)",
         "spreadsheets": "Tabelid",
         "xlsx": "Arved (XLSX)",
         "xlsxLines": "Arveread (XLSX)"
@@ -926,13 +934,10 @@
     },
     "coverage": {
       "completeness": "Täielikkus",
-      "countedOn": "Loendatud {date} seisuga",
       "courtsHeading": "Kohtute kaupa",
       "courtsUnavailable": "Kohtute kaupa jaotus pole praegu saadaval.",
       "decisionYears": "Lahendite aastad",
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
-      "exceedsReportedTotal": "Sisaldab rohkem, kui avaldaja viimati {date} seisuga teatas",
-      "gapStatusUnknown": "Lünkade olek teadmata",
       "generatedAt": "Andmed seisuga {date}",
       "globeLabel": "Riigid, mille kohtupraktikat korpus sisaldab, gloobusel",
       "healthCurrent": "Ajakohane",
@@ -953,7 +958,8 @@
       "searchable": "Otsitavad",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
-      "unavailable": "Kaetuse andmed ei ole praegu saadaval."
+      "unavailable": "Kaetuse andmed ei ole praegu saadaval.",
+      "unreadListingPeriods": "Nimekirja lugemata perioodid"
     },
     "decisionNotFound": "Otsust ei leitud",
     "decisionTypes": {
@@ -1022,7 +1028,10 @@
       "pageOfCount": "Lehekülg {page}/{pageCount}",
       "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
       "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
+      "pageWithEstimatedMatchCounts": "Lehekülg {page} · ligikaudu {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
+      "pageWithMatchCounts": "Lehekülg {page} · {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
+      "pageWithPartialMatchCount": "Lehekülg {page} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
       "perPage": "Lehekülje kohta",
       "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
@@ -1591,6 +1600,7 @@
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorConnectionFailed": "Vestlusega ühenduse loomine ebaõnnestus. Kontrollige ühendust ja proovige uuesti.",
+    "sendErrorContinuationRejected": "Vestlust ei saanud jätkata. Uuesti alustamiseks saatke uus sõnum.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
@@ -2277,6 +2287,7 @@
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
     "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
+    "scopeMemoryWrite": "Assistendi mälestuste loomine ja muutmine",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
@@ -2304,6 +2315,7 @@
     "summaryLineRead": "<group>Lugemine:</group> {items}",
     "summaryLineUse": "<group>Kasutamine:</group> {items}",
     "summaryMattersWrite": "toimikud ja ülesanded",
+    "summaryMemoryWrite": "assistendi mälestused",
     "summaryProfile": "profiil",
     "summaryRead": "dokumendid, toimikud ja kontaktid",
     "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
@@ -2670,6 +2682,7 @@
       "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
       "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
       "contact": "Võtke meiega ühendust",
+      "featureDisabled": "See funktsioon on ajutiselt välja lülitatud.",
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
       "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
     },
@@ -3525,6 +3538,12 @@
       "unsupportedVisualContent": "See fail sisaldab pilte või vektorgraafikat, mida ei saa tundliku teksti suhtes kontrollida. Eksport pole saadaval.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
+      "unsupportedEncoding": "See dokument kasutab toetamata kodeeringut {encoding}, mistõttu ei saa seda teisendada.",
+      "unsupportedField": "See dokument sisaldab välja {fieldType}, mida ei saa teisendada.",
+      "unsupportedReference": "See dokument viitab välisele ressursile asukohas {element} {attribute}, mistõttu ei saa seda teisendada."
+    },
     "external": {
       "confirmDescription": "Oled avamas välist veebisaiti.",
       "confirmTitle": "Ava väline link?",
@@ -4224,6 +4243,22 @@
       "guestStorageUnavailable": "Esiletõstmisi ja märkusi ei õnnestunud sellel vahekaardil salvestada.",
       "highlight": "Tõsta esile",
       "highlightedPassage": "Esiletõstetud lõik",
+      "history": {
+        "colorRestored": "Värv taastatud",
+        "commentRemoved": "Kommentaar eemaldatud",
+        "commentRestored": "Kommentaar taastatud",
+        "highlightRemoved": "Esiletõst eemaldatud",
+        "highlightRestored": "Esiletõst taastatud",
+        "markChanged": "Seda esiletõstu või kommentaari on vahepeal mujal muudetud, seega jäeti see muutmata.",
+        "markGone": "Seda esiletõstu või kommentaari enam ei ole.",
+        "nothingToRedo": "Pole midagi uuesti teha",
+        "nothingToUndo": "Pole midagi tagasi võtta",
+        "redoShortcut": "Tee esiletõstu või kommentaari muudatus uuesti",
+        "styleRestored": "Stiil taastatud",
+        "textRestored": "Kommentaari tekst taastatud",
+        "undoShortcut": "Võta esiletõstu või kommentaari muudatus tagasi",
+        "visibilityRestored": "Jagamine taastatud"
+      },
       "removeHighlight": "Eemalda esiletõst",
       "sharedBadge": "Jagatud",
       "styleHighlight": "Esiletõst",
@@ -4735,6 +4770,7 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
     "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "continueInChat": "Jätka vestluses",
@@ -4792,6 +4828,7 @@
     "savedSearchesEmpty": "Salvesta otsing, et seda hiljem uuesti kasutada.",
     "scopeFilter": "Otsingu ulatus",
     "scopePlaceholderAll": "Otsi kõigist <scope>allikatest</scope>…",
+    "scopePlaceholderCaseLaw": "Otsi <scope>kohtupraktikast</scope>…",
     "scopePlaceholderMatters": "Otsi kõigist <scope>toimikutest</scope>…",
     "scopePlaceholderRegistries": "Otsi <scope>registritest</scope>…",
     "scopeRegistries": "Registrid",
@@ -4941,7 +4978,7 @@
       "description": "Kasuta stellat oma AI-assistendist ja vaata, millel on juurdepääs sinu kontole.",
       "developerDescription": "Serveriaadressid ja käsureatööriist tehniliseks seadistamiseks.",
       "developerTitle": "Arendaja juurdepääs",
-      "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua.",
+      "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua. Ka selle ühenduse kaudu loodud brauseriseansid logitakse välja.",
       "disconnectConfirmTitle": "Katkestada ühendus rakendusega {clientName}?",
       "disconnectSuccess": "Ühendus rakendusega {clientName} katkestatud",
       "integrationsDescription": "Välised teenused, mida AI saab sinu eest kasutada, näiteks dokumendihoidla.",
@@ -5994,6 +6031,7 @@
       "downloadFailed": "Allalaadimine ebaõnnestus",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
+      "emptyFile": "Fail on tühi.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",

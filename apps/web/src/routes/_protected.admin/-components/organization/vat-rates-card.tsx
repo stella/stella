@@ -31,9 +31,9 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import {
+  sendVatRateCommand,
   vatRatesKeys,
   vatRatesOptions,
-  sendVatRateCommand,
 } from "@/lib/organization/vat-rates";
 import type {
   VatRate,
@@ -41,10 +41,10 @@ import type {
   VatRateInput,
 } from "@/lib/organization/vat-rates";
 import {
-  VatRatePercentage,
   VatRateDate,
-  vatRateStatus,
+  VatRatePercentage,
   VatRateRefusal,
+  vatRateStatus,
 } from "@/routes/_protected.admin/-components/organization/vat-rate-display";
 import { VatRateForm } from "@/routes/_protected.admin/-components/organization/vat-rate-form";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";

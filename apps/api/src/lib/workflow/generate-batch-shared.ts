@@ -58,15 +58,11 @@ export type GenerateBatchProps = {
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
   onPartialAnswer?:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
 };
 
 export type BatchSettlement =
-  | "answered"
-  | "notStated"
-  | "unsupported"
-  | "refused";
+  "answered" | "notStated" | "unsupported" | "refused";
 
 export type GenerateBatchResult = Result<
   {

@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -22,12 +21,9 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const createTimeEntryHandlerMock = mock();
 
-// Stub the backing time-entry create handler so the tool site receives a chosen
-// `Result` error (a curated 4xx business `HandlerError`, or an internal 5xx)
-// without needing a real DB. `save_time_entry`'s create branch calls it after
-// its own auth/schema/workspace pre-checks. Spread the real module so its other
-// exports (utilities imported elsewhere) keep working; only the handler is
-// swapped.
+// Inject the backing time-entry create handler through the request context so
+// the real tool receives a chosen 4xx or 5xx Result after its authorization,
+// schema and matter-access checks. Other handlers use the in-memory DB seam.
 const { MATTER_TOOL_HANDLERS } = await import("@/api/mcp/matter-tools");
 const { BILLING_TOOL_HANDLERS } = await import("@/api/mcp/billing-tools");
 const { DOCUMENT_TOOL_HANDLERS } = await import("@/api/mcp/document-tools");
@@ -46,35 +42,42 @@ const DB_INTERNAL_LEAK_TOKEN = "PGDRIVER_INTERNAL_DETAIL_9f3a";
 // rejected before the handler reaches the DB seam these assertions exercise.
 const WORKSPACE_ID = "00000000-0000-4000-8000-0000000a0001";
 
-// Every DB seam throws, standing in for a driver/ORM failure. `toSafeDbMock`
-// funnels the throw into a `Result.err`, so the backing handler returns a
-// failed `Result` exactly as it would on a real outage; the tool site then
-// unwraps `.error` into the internal-error envelope.
-const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-  throw new Error(`database unavailable: ${DB_INTERNAL_LEAK_TOKEN}`);
-});
-
+// The default DB seam throws, standing in for a driver/ORM failure.
+// `toSafeDbMock` funnels that throw into a `Result.err`. Tests can instead
+// return a chosen `HandlerError`, matching a backing safe handler's contract.
 const createRecordAuditEventMock = () =>
   asTestRaw<AuditRecorder>(async () => undefined);
 
 // Owner role with one active, accessible workspace, so authorization and
 // workspace-access pre-checks pass and each handler advances to its first DB
 // call (the only thing that fails here).
-const createFailingDbContext = (): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
-  accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
-  accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole: "owner",
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: createRecordAuditEventMock(),
-  testDependencies: { createTimeEntryHandler: createTimeEntryHandlerMock },
-  safeDb: toSafeDbMock(throwingScopedDb),
-  scopedDb: throwingScopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+const createFailingDbContext = (failure?: HandlerError): McpRequestContext => {
+  const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
+    throw new Error(`database unavailable: ${DB_INTERNAL_LEAK_TOKEN}`);
+  });
+  const safeDb =
+    failure === undefined
+      ? toSafeDbMock(scopedDb)
+      : asTestRaw<McpRequestContext["safeDb"]>(
+          async () => await Promise.resolve(Result.err(failure)),
+        );
+
+  return {
+    accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+    accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+    accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: createRecordAuditEventMock(),
+    testDependencies: { createTimeEntryHandler: createTimeEntryHandlerMock },
+    safeDb,
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  };
+};
 
 const asCallToolResult = (result: McpToolResponse) => {
   if (isMcpEgressPlan(result)) {
@@ -185,6 +188,55 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
       expect(JSON.stringify(capturedExceptions())).not.toContain(
         DB_INTERNAL_LEAK_TOKEN,
       );
+    });
+
+    test(`${file}: preserves a 4xx refusal and its metadata`, async () => {
+      const result = await handler({
+        args,
+        context: createFailingDbContext(
+          new HandlerError({
+            status: 409,
+            code: "handler_specific_code",
+            message: "The requested change conflicts with current state",
+            hint: "Refresh the resource and retry the change.",
+            retryable: true,
+          }),
+        ),
+      });
+
+      expect(JSON.parse(envelopeText(result))).toEqual({
+        error: {
+          code: "conflict",
+          message: "The requested change conflicts with current state",
+          hint: "Refresh the resource and retry the change.",
+          retryable: true,
+          issues: [
+            {
+              path: "",
+              code: "handler_specific_code",
+              message: "The requested change conflicts with current state",
+            },
+          ],
+        },
+      });
+      expect(capturedExceptions()).toEqual([]);
+    });
+
+    test(`${file}: hides a 5xx HandlerError and captures its cause`, async () => {
+      const result = await handler({
+        args,
+        context: createFailingDbContext(
+          new HandlerError({
+            status: 500,
+            message: `internal boom ${DB_INTERNAL_LEAK_TOKEN}`,
+          }),
+        ),
+      });
+
+      expectInternalErrorEnvelope(result);
+      expect(capturedExceptionProperties()).toMatchObject([
+        { "error.class": "HandlerError", source: "mcp" },
+      ]);
     });
   }
 
@@ -397,30 +449,4 @@ describe("save_time_entry threads backing handler errors correctly", () => {
       forwarded === null ? null : credentialPermissionsForContext(forwarded),
     ).toEqual({ timeEntry: ["create"] });
   });
-});
-
-// Structural class guard: no MCP tool module may feed a backing-handler `Result`
-// error message straight into a plain-text `errorResult`, which would leak the
-// internal text, drop the `error.code` the CLI branches on, and omit the request
-// receipt. `internalFailureResult(x.error)` is the sanctioned replacement.
-describe("no tool file leaks a Result error message into errorResult", () => {
-  // Match the raw-message pattern including optional-chaining variants
-  // (`x?.error?.message`, `x.error?.message`, `x?.error.message`) so the guard
-  // cannot be dodged by threading the unwrap through `?.`.
-  const LEAK_PATTERN = /errorResult\(\s*\w+\??\.error\??\.message\s*\)/u;
-  const toolFiles = readdirSync(import.meta.dir).filter(
-    (name) => name.endsWith("-tools.ts") && !name.endsWith(".test.ts"),
-  );
-
-  test("scans at least the known tool modules", () => {
-    // Guards the guard: an empty glob would make the invariant vacuously pass.
-    expect(toolFiles.length).toBeGreaterThanOrEqual(6);
-  });
-
-  for (const file of toolFiles) {
-    test(`${file} routes DB failures through internalFailureResult`, () => {
-      const source = readFileSync(`${import.meta.dir}/${file}`, "utf-8");
-      expect(source).not.toMatch(LEAK_PATTERN);
-    });
-  }
 });

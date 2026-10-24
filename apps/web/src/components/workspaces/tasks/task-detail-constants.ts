@@ -17,13 +17,13 @@ import {
   AlertCircleIcon,
   ArrowDownIcon,
   ArrowUpIcon,
-  CheckCircle2Icon,
-  CircleDotIcon,
-  CircleIcon,
   MinusIcon,
-  XCircleIcon,
 } from "@stll/ui/icons";
 import type { OptionColor } from "@stll/ui/option-color";
+import {
+  TASK_STATUS_COLORS,
+  TASK_STATUS_ICONS,
+} from "@stll/workspace-ui/task-status";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -57,21 +57,18 @@ export const TASK_STATUS_OPTION_COLORS = {
   cancelled: "red",
 } as const satisfies Record<TaskStatus, OptionColor>;
 
-export const STATUS_ICONS = {
-  open: CircleIcon,
-  in_progress: CircleDotIcon,
-  in_review: CircleDotIcon,
-  done: CheckCircle2Icon,
-  cancelled: XCircleIcon,
-} as const satisfies Record<TaskStatus, typeof CircleIcon>;
+// The glyphs live in the shared package so the published feature previews
+// draw tasks exactly as the app does; binding them to the API's status union
+// here fails typecheck when a status has no glyph.
+export const STATUS_ICONS = TASK_STATUS_ICONS satisfies Record<
+  TaskStatus,
+  typeof MinusIcon
+>;
 
-export const STATUS_COLORS = {
-  open: "text-muted-foreground",
-  in_progress: "text-foreground dark:text-foreground-muted",
-  in_review: "text-warning",
-  done: "text-success dark:text-success",
-  cancelled: "text-destructive dark:text-destructive",
-} as const satisfies Record<TaskStatus, string>;
+export const STATUS_COLORS = TASK_STATUS_COLORS satisfies Record<
+  TaskStatus,
+  string
+>;
 
 export const PRIORITY_ICONS = {
   none: MinusIcon,

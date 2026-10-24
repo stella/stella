@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
-import { SparklesIcon, UploadIcon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon, SparklesIcon, UploadIcon } from "@stll/ui/icons";
 import { TextSeparator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 

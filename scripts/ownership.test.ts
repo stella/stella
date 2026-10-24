@@ -23,9 +23,9 @@ import {
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
+  renderOwnershipDocument,
   ROOT_CONNECTION_DOORS,
   SCHEMA_INTROSPECTION,
-  renderOwnershipDocument,
   validateOwnership,
 } from "./ownership";
 import { loadOwnershipDeclarations } from "./ownership-loader.ts";
@@ -127,7 +127,7 @@ test("independent row additions merge cleanly and pass the production check", ()
       ".oxlint-plugins/database-access.ts",
       "apps/api/src/lib/db/status-tables.gen.ts",
       "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ]) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       copyFileSync(path.join(repoRoot, file), path.join(root, file));

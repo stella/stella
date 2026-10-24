@@ -1,3 +1,5 @@
+import { panic, TaggedError } from "better-result";
+import type { SQL } from "bun";
 import type { Logger } from "drizzle-orm";
 // Per-request database query counter.
 //
@@ -17,9 +19,14 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
+export const DB_TRANSACTION_COUNT_HEADER = "x-db-transactions";
 
 type QueryCounter = {
   count: number;
+  transactions: number;
+  fingerprints: Map<string, number>;
+  detectRepeatedQueries: boolean;
+  countTransactions: boolean;
 };
 
 const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
@@ -44,14 +51,137 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
  */
 export const runWithQueryCounter = <TResult>(
   fn: (counter: Readonly<QueryCounter>) => TResult,
+  {
+    detectRepeatedQueries = false,
+    countTransactions = true,
+  }: { detectRepeatedQueries?: boolean; countTransactions?: boolean } = {},
 ): TResult => {
-  const counter: QueryCounter = { count: 0 };
+  const counter: QueryCounter = {
+    count: 0,
+    transactions: 0,
+    fingerprints: new Map(),
+    detectRepeatedQueries,
+    countTransactions,
+  };
   return queryCounterStore.run(counter, () => fn(counter));
 };
+
+export class RepeatedQueryFingerprintError extends TaggedError(
+  "RepeatedQueryFingerprintError",
+)<{ message: string; fingerprints: readonly string[] }> {}
+
+export const runWithMeasuredQueryCounter = async <TResult>(
+  fn: (counter: Readonly<QueryCounter>) => Promise<TResult>,
+  ledger: readonly { id: string; count: number }[] = [],
+): Promise<TResult> =>
+  await runWithQueryCounter(
+    async (counter) => {
+      const result = await fn(counter);
+      const allowed = new Map(ledger.map(({ id, count }) => [id, count]));
+      const fingerprints = [...counter.fingerprints]
+        .filter(
+          ([fingerprint, count]) =>
+            count > 1 && count > (allowed.get(fingerprint) ?? 0),
+        )
+        .map(([fingerprint]) => fingerprint);
+      if (fingerprints.length > 0) {
+        panic(
+          "Measured request exceeded its repeated SQL callsite budget",
+          new RepeatedQueryFingerprintError({
+            message: `Repeated SQL callsites detected: ${fingerprints.join("; ")}`,
+            fingerprints,
+          }),
+        );
+      }
+      return result;
+    },
+    { detectRepeatedQueries: true, countTransactions: true },
+  );
 
 /** Current active store's query count, or `undefined` when no store is active. */
 export const currentQueryCount = (): number | undefined =>
   queryCounterStore.getStore()?.count;
+
+export const currentTransactionCount = (): number | undefined =>
+  queryCounterStore.getStore()?.transactions;
+
+const recordTransactionRoundTrip = (): void => {
+  const counter = queryCounterStore.getStore();
+  if (counter?.countTransactions) {
+    counter.transactions += 1;
+  }
+};
+
+export const runCountedTransaction = async <T>(
+  operation: () => Promise<T>,
+): Promise<T> => {
+  recordTransactionRoundTrip();
+  try {
+    return await operation();
+  } finally {
+    recordTransactionRoundTrip();
+  }
+};
+
+export const instrumentSqlTransactionCounts = (client: SQL): SQL => {
+  const begin = client.begin.bind(client);
+  const countedBegin = async <const T>(
+    optionsOrCallback: string | SQL.TransactionContextCallback<T>,
+    callback?: SQL.TransactionContextCallback<T>,
+  ): Promise<SQL.ContextCallbackResult<T>> =>
+    await runCountedTransaction(async () => {
+      if (typeof optionsOrCallback !== "string") {
+        return await begin(optionsOrCallback);
+      }
+      if (callback === undefined) {
+        return panic("begin(options) needs a transaction callback");
+      }
+      return await begin(optionsOrCallback, callback);
+    });
+  Object.defineProperty(client, "begin", {
+    configurable: true,
+    value: countedBegin,
+  });
+  Object.defineProperty(client, "transaction", {
+    configurable: true,
+    value: countedBegin,
+  });
+  return client;
+};
+
+export const currentRepeatedQueryFingerprints = (): readonly string[] => {
+  const counter = queryCounterStore.getStore();
+  if (!counter) {
+    return [];
+  }
+  return [...counter.fingerprints]
+    .filter(([, count]) => count > 1)
+    .map(([key]) => key);
+};
+
+const normalizeSql = (query: string): string =>
+  query
+    .replace(/\$\d+|\?/gu, "?")
+    .replace(/\b\d+(?:\.\d+)?\b/gu, "?")
+    .replace(/'([^']|'')*'/gu, "?")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase();
+
+const queryCallsite = (): string => {
+  const frame = new Error("SQL query fingerprint callsite capture").stack
+    ?.split("\n")
+    .find(
+      (line) =>
+        line.includes(" at ") &&
+        !line.includes("db-query-counter.ts") &&
+        !line.includes("/node_modules/"),
+    );
+  return frame?.trim().replaceAll(`${process.cwd()}/`, "") ?? "unknown";
+};
+
+const isSessionConfigurationQuery = (query: string): boolean =>
+  /^\s*select\s+set_config\s*\(/iu.test(query);
 
 /**
  * Drizzle-compatible logger that increments the active store's count per query.
@@ -60,11 +190,24 @@ export const currentQueryCount = (): number | undefined =>
  * production only.
  */
 export const queryCountLogger: Logger = {
-  logQuery: (): void => {
+  logQuery: (query): void => {
     const counter = queryCounterStore.getStore();
     if (!counter) {
       return;
     }
+    if (/^\s*(begin|commit|rollback)\b/iu.test(query)) {
+      return;
+    }
     counter.count += 1;
+    // RLS installs session-local settings for every scoped transaction; their
+    // repetition is protocol setup, not per-row query work.
+    if (!counter.detectRepeatedQueries || isSessionConfigurationQuery(query)) {
+      return;
+    }
+    const fingerprint = `${queryCallsite()} :: ${normalizeSql(query)}`;
+    counter.fingerprints.set(
+      fingerprint,
+      (counter.fingerprints.get(fingerprint) ?? 0) + 1,
+    );
   },
 };

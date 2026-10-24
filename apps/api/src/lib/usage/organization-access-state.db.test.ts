@@ -476,7 +476,7 @@ describe("managed model tier", () => {
         signal: new AbortController().signal,
         run: async (admission) => await Promise.resolve(admission.modelTier),
       });
-      expect(modelTier).toBe(MANAGED_MODEL_TIER.fast);
+      expect(modelTier.unwrap()).toBe(MANAGED_MODEL_TIER.fast);
     });
   });
 

@@ -8,9 +8,9 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import {
+  type ConditionNode,
   emptyCondition,
   pruneIncomplete,
-  type ConditionNode,
 } from "@stll/conditions";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -64,8 +64,8 @@ import {
   PositionHeader,
 } from "@/components/ai-suggestions/review-position-header";
 import {
-  ReferencePassageList,
   type ReferenceNameLookup,
+  ReferencePassageList,
   SeverityChip,
 } from "@/components/ai-suggestions/review-position-row";
 import { openEntityInInspector } from "@/components/chat/entity-open";

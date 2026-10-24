@@ -238,10 +238,7 @@
         "src/dev-postgres.ts",
         // Test fixture processes are spawned by path from the tests.
         "src/test-fixtures/*.ts"
-      ],
-      // generated-artifact-format.ts runs the oxfmt binary as a process, which
-      // knip cannot see; filtered installs need it declared here.
-      "ignoreDependencies": ["oxfmt"]
+      ]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries
@@ -291,7 +288,7 @@
     "packages/infosoud/src/constants.ts": ["duplicates"]
   },
   "exclude": ["exports", "types"],
-  "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
+  "ignoreBinaries": ["docker", "tsc", "bun", "tail", "fmt"],
   "ignoreDependencies": [
     "@stll/typescript-config",
     // Declared ahead of the text-search engine migration so its PRs share one

@@ -54,8 +54,8 @@ import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type {
-  ChatHarnessProfile,
   ChatHarnessPhase,
+  ChatHarnessProfile,
 } from "@/api/tests/helpers/chat-harness-profile";
 import {
   findLiveViewViolations,
@@ -256,6 +256,7 @@ export const createApprovalHarness = ({
   beforeTurnSettles,
   boundaryAnonymizer,
   failingApprovalNames = [],
+  grantableApprovalConnectorId,
   ids,
   model,
   organizationAIConfig = orgAIConfig,
@@ -290,6 +291,12 @@ export const createApprovalHarness = ({
    * `executions`. None by default.
    */
   failingApprovalNames?: readonly string[] | undefined;
+  /**
+   * Serves `APPROVAL_TOOL_NAME` from this installed connector, so a stored
+   * grant on the connector covers it, as it covers a real connector's tools.
+   * None by default: no grant covers the tool.
+   */
+  grantableApprovalConnectorId?: SafeId<"mcpConnector"> | undefined;
   ids: TestIds;
   /**
    * Who sends, and the profile their page sends with each message
@@ -352,27 +359,30 @@ export const createApprovalHarness = ({
   const rootPoolConnectionsAtStart = rootPoolConnectionCount();
   const provider = model ?? installScriptedProvider();
   const executions: string[] = [];
-  const approvalTool = toolDefinition({
-    name: APPROVAL_TOOL_NAME,
-    description: "Server tool behind an approval",
-    // The optional field is what strict provider schemas send as null, and
-    // what a route that fills every field sends as "" (a note is never empty).
-    inputSchema: toTanStackToolSchema(
-      v.object({
-        name: v.string(),
-        note: v.optional(v.pipe(v.string(), v.minLength(1))),
-      }),
-    ),
-    needsApproval: true,
-  }).server(async ({ name }) => {
-    executions.push(name);
-    if (failingApprovalNames.includes(name)) {
-      throw new ApprovalToolFailure({
-        message: `The external service could not delete ${name}`,
-      });
-    }
-    return await Promise.resolve({ deleted: name });
-  });
+  // Built for each request, as a connector's tools are: a grant ungates the
+  // request's own tool object.
+  const createApprovalTool = () =>
+    toolDefinition({
+      name: APPROVAL_TOOL_NAME,
+      description: "Server tool behind an approval",
+      // The optional field is what strict provider schemas send as null, and
+      // what a route that fills every field sends as "" (a note is never empty).
+      inputSchema: toTanStackToolSchema(
+        v.object({
+          name: v.string(),
+          note: v.optional(v.pipe(v.string(), v.minLength(1))),
+        }),
+      ),
+      needsApproval: true,
+    }).server(async ({ name }) => {
+      executions.push(name);
+      if (failingApprovalNames.includes(name)) {
+        throw new ApprovalToolFailure({
+          message: `The external service could not delete ${name}`,
+        });
+      }
+      return await Promise.resolve({ deleted: name });
+    });
   const refLedger = createRefStabilityLedger();
   /** The registry the newest request built: the one a running tool uses. */
   let requestRegistry: ChatRefRegistry | undefined;
@@ -415,13 +425,25 @@ export const createApprovalHarness = ({
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
         close,
-        connectors: [],
+        connectors:
+          grantableApprovalConnectorId === undefined
+            ? []
+            : [
+                {
+                  connectorId: grantableApprovalConnectorId,
+                  description: "The harness's external service",
+                  displayName: "External",
+                  slug: "external",
+                  toolNames: ["delete"],
+                  exposedToolNames: [APPROVAL_TOOL_NAME],
+                },
+              ],
         source: createStellaMcpToolSource({
           closeClients: close,
           sourceTools: sources.lazyExternalTools ?? {},
         }),
         tools: {
-          [APPROVAL_TOOL_NAME]: approvalTool,
+          [APPROVAL_TOOL_NAME]: createApprovalTool(),
           ...(withDirectRefTool
             ? { [DIRECT_REF_TOOL_NAME]: directRefTool }
             : {}),
@@ -1647,6 +1669,8 @@ export const createApprovalHarness = ({
 
   return {
     approveContext,
+    /** Resolves once no turn on the thread is still accepted or running. */
+    awaitSettledTurns,
     checkWebClient,
     /**
      * Makes `threadId`'s next web request die mid-run: the process serving
@@ -1744,6 +1768,14 @@ export const createApprovalHarness = ({
     },
     send,
     sendContext,
+    /**
+     * The send route's answer to `ctx`, with nothing read around it: no
+     * oracle, no barrier. What a measurement of the route's own work drives;
+     * the caller reads the response and waits for its turn to settle.
+     */
+    sendUnchecked: handle,
+    /** The Stop route, as a web client's Stop button reaches it. */
+    stopTurn: postCancelTurn,
   };
 };
 

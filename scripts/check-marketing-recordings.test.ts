@@ -7,12 +7,12 @@ import path from "node:path";
 
 import { captureDefinitions } from "../apps/web/e2e/marketing/captures";
 import {
-  computeVerdicts,
   compareRenderedScreenshots,
-  type Verdict,
+  computeVerdicts,
   judgeEntry,
   manualVerificationMatches,
   recordingArtifactsHash,
+  type Verdict,
   watchedPathsHashAtHead,
 } from "./check-marketing-recordings";
 import {

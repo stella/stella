@@ -32,9 +32,9 @@ export const tExternalRef = t.Object(
   {
     additionalProperties: false,
     description:
-      "Identity of the record in the system it was imported from; " +
-      "re-importing the same source and id updates the record instead of " +
-      "creating another",
+      "Identity of the record in the system it was imported from. " +
+      "The importing operation decides whether an existing match is updated " +
+      "or refused",
   },
 );
 

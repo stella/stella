@@ -61,8 +61,8 @@ import {
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
@@ -76,18 +76,18 @@ import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fing
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
   READ_OUTCOME_METADATA_KEY,
+  type ReadOutcome,
   readPresent,
   readUnavailable,
-  storedReadUnavailable,
-  type ReadOutcome,
   type StoredReadOutcome,
+  storedReadUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
@@ -710,8 +710,7 @@ const retryFinaldocRead = async (
  * publisher's document path, which is never requested.
  */
 type CzRegionalFinaldocRead =
-  | ReadOutcome<CzRegionalDocumentPayload>
-  | { readonly type: "link-rejected" };
+  ReadOutcome<CzRegionalDocumentPayload> | { readonly type: "link-rejected" };
 
 /**
  * Fetch the document payload from /api/finaldoc/{uuid}.

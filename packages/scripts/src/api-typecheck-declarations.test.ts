@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import {
-  existsSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -19,8 +19,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { readApiTypecheckConfig } from "./api-typecheck-config";
 import {
   apiDeclarationCacheInputs,
-  missingDeclarationCacheInputs,
   emitApiTypecheckDeclarations,
+  missingDeclarationCacheInputs,
   regenerateApiDeclarationSurface,
   writeApiDeclarationSurface,
 } from "./api-typecheck-declarations";

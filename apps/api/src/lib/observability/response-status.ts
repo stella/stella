@@ -1,4 +1,4 @@
-import { StatusMap, type Context } from "elysia";
+import { type Context, StatusMap } from "elysia";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 const DEFAULT_RESPONSE_STATUS = 200;

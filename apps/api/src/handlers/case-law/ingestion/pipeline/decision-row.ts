@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
@@ -53,6 +53,7 @@ const insertedRowValues = (
     persistedDecisionDate,
     observedAt,
     observationOrder,
+    sourceFingerprintVersion,
     shape: { storesUnpublishedWithoutDocument },
     plan: { docketColumns, languageGroupKey, payloadColumns, preparedMetadata },
     rawArtifact: { sourceRawS3Key, sourceRawContentType },
@@ -84,6 +85,7 @@ const insertedRowValues = (
   sourceRawS3Key,
   sourceRawContentType,
   sourceHash: result.rawHash,
+  sourceHashVersion: sourceFingerprintVersion,
   sourceObservedAt: observedAt,
   sourceObservationOrder: observationOrder,
   sourceObservationHash: result.rawHash,

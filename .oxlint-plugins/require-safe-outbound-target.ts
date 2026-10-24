@@ -57,6 +57,7 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   filenameForContext,
   getPropertyName,
   isAstNode,
@@ -68,7 +69,6 @@ import {
   resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 // Fetch-shaped sinks (target first, request options second), keyed by the

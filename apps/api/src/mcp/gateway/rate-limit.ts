@@ -8,7 +8,7 @@ import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 type RedisLike = {
   send: (command: string, args: string[]) => Promise<unknown>;

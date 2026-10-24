@@ -110,6 +110,11 @@ describe("skill availability runs a fixed query plan", () => {
       orgName: "Skill queries",
       orgSlugPrefix: "skill-queries",
     });
+    // Session setup can record activity before the measured request.
+    await rootDb
+      .update(session)
+      .set({ lastSeenAt: null })
+      .where(eq(session.userId, userId));
     const withoutSnapshot = cookieHeader
       .split("; ")
       .filter((pair) => !pair.includes("session_data="))
@@ -134,6 +139,11 @@ describe("skill availability runs a fixed query plan", () => {
       orgName: "Skill queries",
       orgSlugPrefix: "skill-queries",
     });
+    // Session setup can record activity before the measured request.
+    await rootDb
+      .update(session)
+      .set({ lastSeenAt: null })
+      .where(eq(session.userId, userId));
     const credential =
       // The app names its cookies with its own prefix, not better-auth's default.
       getSessionCookie(new Headers({ cookie: cookieHeader }), {

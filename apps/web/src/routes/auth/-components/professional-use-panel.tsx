@@ -6,7 +6,6 @@ import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professio
 import { Button } from "@stll/ui/button";
 import {
   Frame,
-  FrameDescription,
   FrameFooter,
   FrameHeader,
   FramePanel,
@@ -25,11 +24,7 @@ type ProfessionalUsePanelProps = {
   userId: string;
 };
 
-/**
- * The professional-use statement for an account created where it was not
- * shown. Accepting records it exactly as creating an account on the sign-in
- * page does, then continues to where the visitor was going.
- */
+/** Records the displayed statement, then continues to the requested page. */
 export const ProfessionalUsePanel = ({
   redirectTo,
   userId,
@@ -60,9 +55,6 @@ export const ProfessionalUsePanel = ({
     <Frame className="w-full max-w-md">
       <FrameHeader>
         <FrameTitle>{t("auth.professionalUse.title")}</FrameTitle>
-        <FrameDescription>
-          {t("auth.professionalUse.description")}
-        </FrameDescription>
       </FrameHeader>
       <FramePanel>
         <p className="text-foreground text-sm text-pretty">

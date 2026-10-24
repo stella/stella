@@ -24,27 +24,33 @@ export const readerAnswersRoute = new Elysia({ prefix: "/answers" })
   .get("/", listReaderAnswers.handler, {
     query: listReaderAnswers.config.query,
     permissions: listReaderAnswers.config.permissions,
+    accountAccess: listReaderAnswers.config.accountAccess,
   })
   .post("/", createReaderAnswer.handler, {
     body: createReaderAnswer.config.body,
     permissions: createReaderAnswer.config.permissions,
+    accountAccess: createReaderAnswer.config.accountAccess,
   })
   .post("/:answerId/messages", followUpReaderAnswer.handler, {
     params: followUpReaderAnswer.config.params,
     body: followUpReaderAnswer.config.body,
     permissions: followUpReaderAnswer.config.permissions,
+    accountAccess: followUpReaderAnswer.config.accountAccess,
   })
   .post("/:answerId/regenerate", regenerateReaderAnswer.handler, {
     params: regenerateReaderAnswer.config.params,
     body: regenerateReaderAnswer.config.body,
     permissions: regenerateReaderAnswer.config.permissions,
+    accountAccess: regenerateReaderAnswer.config.accountAccess,
   })
   .patch("/:answerId", updateReaderAnswer.handler, {
     params: updateReaderAnswer.config.params,
     body: updateReaderAnswer.config.body,
     permissions: updateReaderAnswer.config.permissions,
+    accountAccess: updateReaderAnswer.config.accountAccess,
   })
   .delete("/:answerId", deleteReaderAnswer.handler, {
     params: deleteReaderAnswer.config.params,
     permissions: deleteReaderAnswer.config.permissions,
+    accountAccess: deleteReaderAnswer.config.accountAccess,
   });

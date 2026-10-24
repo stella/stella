@@ -27,8 +27,8 @@ import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
+  asc,
   eq,
-  or,
   gte,
   inArray,
   isNotNull,
@@ -36,8 +36,8 @@ import {
   lt,
   min,
   notInArray,
+  or,
   sql,
-  asc,
 } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -48,8 +48,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
@@ -75,11 +75,11 @@ import type {
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  floorSliceWalk,
+  partitionShortSliceCandidates,
   RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
-  floorSliceWalk,
-  partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
@@ -119,11 +119,11 @@ import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
   pruneUnlistedReconciliationItems,
+  refreshTrackedReconciliationItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
-  refreshTrackedReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";

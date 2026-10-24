@@ -43,14 +43,14 @@ import {
   getMonthWeekRows,
   getMonthWindowStartContaining,
   getUTCMonthKey,
-  startOfUTCMonth,
   MONTH_WINDOW_SHIFT,
+  startOfUTCMonth,
 } from "./calendar-scroll.logic";
 import type { MonthAnchor } from "./calendar-scroll.logic";
 import {
   formatMonthYearLabel,
-  getWeekDays,
   getWeekdayLabels,
+  getWeekDays,
   isInternalDateProperty,
   isTaskDateProperty,
   TASK_DATE_IDS,

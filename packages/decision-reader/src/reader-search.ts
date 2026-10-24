@@ -1,6 +1,6 @@
 import {
-  normalizeUnicode,
   applyArabicFolds,
+  normalizeUnicode,
   spacedLetterRunRegex,
   stripDiacritics,
 } from "@stll/text-normalize";

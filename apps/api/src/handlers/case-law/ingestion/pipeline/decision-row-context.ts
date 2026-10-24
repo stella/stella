@@ -34,6 +34,7 @@ export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
     composedSupplements: StoredSupplement[];
     observedAt: Date;
     observationOrder: bigint;
+    sourceFingerprintVersion: number;
     shape: ObservationShape;
     plan: DecisionWritePlan;
     rawArtifact: SourceRawArtifact;

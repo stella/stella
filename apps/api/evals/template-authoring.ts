@@ -130,8 +130,8 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
-  fieldConfigurationIssuePath,
   type FieldConfigurationIssue,
+  fieldConfigurationIssuePath,
 } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import {

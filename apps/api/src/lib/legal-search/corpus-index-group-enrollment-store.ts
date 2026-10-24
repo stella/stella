@@ -32,21 +32,21 @@ import {
   type ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
+  type CorpusIndexGroupContract,
   corpusIndexGroupContractForJurisdiction,
+  type CorpusIndexReadTarget,
   corpusIndexReadTarget,
   enrolledCorpusIndexGroupContracts,
-  registeredCorpusIndexGroups,
-  type CorpusIndexGroupContract,
-  type CorpusIndexReadTarget,
   type RegisteredCorpusIndexGroup,
+  registeredCorpusIndexGroups,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexContractDigest,
   corpusIndexGenerationField,
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
-  type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -459,8 +459,7 @@ export type ServingCorpusIndexTarget = CorpusIndexReadTarget & {
 
 /** Why a read of the serving generation reaches no index. */
 export type ServingCorpusIndexTargetError =
-  | CorpusServingGenerationAbsentError
-  | CorpusIndexGroupNotReadyError;
+  CorpusServingGenerationAbsentError | CorpusIndexGroupNotReadyError;
 
 /**
  * What a read of one generation reaches for a jurisdiction (`corpusIndexReadTarget`),

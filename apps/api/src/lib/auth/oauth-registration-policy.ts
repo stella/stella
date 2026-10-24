@@ -1,11 +1,11 @@
 import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import {
-  oauthProvider,
   type ClientDiscovery,
   type OAuthOptions,
+  oauthProvider,
   type OAuthProviderExtension,
-  type Scope,
   type SchemaClient,
+  type Scope,
 } from "@better-auth/oauth-provider";
 import type { HookEndpointContext } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
@@ -20,8 +20,8 @@ import {
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
 import {
-  isAuthRequestBudgetPath,
   type AuthRequestBudgetFrameworkApi,
+  isAuthRequestBudgetPath,
 } from "@/api/lib/rate-limit/auth-request-budget";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
@@ -39,6 +39,7 @@ export const OAUTH_REGISTRATION_SCOPE_POLICY = {
   "stella:matters_write": "open",
   "stella:contacts_write": "open",
   "stella:chat": "open",
+  "stella:memory_write": "elevated",
   "stella:knowledge_write": "open",
   "stella:billing_write": "open",
   "stella:admin_read": "elevated",

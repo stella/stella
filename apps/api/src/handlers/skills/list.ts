@@ -7,10 +7,10 @@ import { readSkillDisplayName } from "@stll/skills/frontmatter";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
-  agentSkillRevisions,
-  agentSkills,
   AGENT_SKILL_SCOPES,
   type AgentSkillOrigin,
+  agentSkillRevisions,
+  agentSkills,
   type AgentSkillScope,
 } from "@/api/db/schema";
 import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";

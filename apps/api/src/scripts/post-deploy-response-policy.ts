@@ -370,8 +370,7 @@ export const classifyPublicKnowledgeHead = (
 };
 
 type PublicKnowledgeProbe =
-  | { state: PublicKnowledgeState }
-  | { state: "inconsistent"; detail: string };
+  { state: PublicKnowledgeState } | { state: "inconsistent"; detail: string };
 
 /** API and web must agree on whether public Knowledge is enabled. */
 export const resolvePublicKnowledgeState = ({

@@ -12,11 +12,11 @@ import { eq, inArray } from "drizzle-orm";
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
+  featureEnrolments,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
   timeEntries,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createInvoice from "@/api/handlers/invoices/create";

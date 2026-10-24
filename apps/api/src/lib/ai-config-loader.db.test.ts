@@ -13,11 +13,11 @@ import { eq, inArray } from "drizzle-orm";
 import { member, organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  organizationSettings,
-  organizationAccessStates,
   ORGANIZATION_ACCESS_STATE,
-  usagePolicies,
+  organizationAccessStates,
+  organizationSettings,
   usageEntitlements,
+  usagePolicies,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";

@@ -13,8 +13,8 @@ import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   CHAT_SKILL_AVAILABILITY_STATUS,
-  resolveCallerChatSkillAvailability,
   type ChatSkillContext,
+  resolveCallerChatSkillAvailability,
 } from "@/api/handlers/chat/skill-availability/offered-tools";
 import { resolvesToBuiltInSkill } from "@/api/lib/agent-skills/skills";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";

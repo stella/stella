@@ -10,11 +10,11 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawReplayBatches,
-  caseLawReplayDailyRows,
-  caseLawReplayBlocked,
-  caseLawReplaySourceProgress,
   caseLawReplayAuditEvents,
+  caseLawReplayBatches,
+  caseLawReplayBlocked,
+  caseLawReplayDailyRows,
+  caseLawReplaySourceProgress,
   caseLawSources,
   databaseBackfillStates,
   systemAuditRuns,
@@ -38,14 +38,14 @@ import {
   createBackgroundReplayStore,
 } from "@/api/handlers/case-law/ingestion/background-replay-store";
 import {
-  CASE_LAW_REPLAY_SCOPE,
-  REPLAY_ROW_OUTCOME,
-  type ReplayRowReport,
-  replayCaseLawSource,
-  selectScopeEnd,
   buildBackgroundReplayProbe,
   buildReplayPageQuery,
   buildReplayScopeEndQuery,
+  CASE_LAW_REPLAY_SCOPE,
+  REPLAY_ROW_OUTCOME,
+  replayCaseLawSource,
+  type ReplayRowReport,
+  selectScopeEnd,
 } from "@/api/handlers/case-law/ingestion/replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
@@ -64,8 +64,8 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
-  withGatedTestClients,
   openGatedTestDatabase,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -778,8 +778,8 @@ if (!databaseUrl || !enabled) {
                 if (!cleanupState.killed) {
                   await firstSlot.close();
                 }
-                first.release();
-                rival.release();
+                await first.release();
+                await rival.release();
               }
             },
             { closeMode: "force" },

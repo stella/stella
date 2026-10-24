@@ -6,8 +6,8 @@ import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { parseHeadmatter } from "./html";
 import type { TextBudget } from "./outcome";
 import {
-  publishedTextDefects,
   type PublishedTextDefect,
+  publishedTextDefects,
 } from "./source-defects";
 import { courtListenerValidationPolicy } from "./validation-policy";
 

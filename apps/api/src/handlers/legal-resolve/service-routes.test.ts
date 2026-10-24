@@ -5,8 +5,8 @@ import Elysia from "elysia";
 import type { recordLegalResolveAudit } from "@/api/db/root";
 import { authorizeLegalResolveRequest } from "@/api/handlers/legal-resolve/authorization";
 import {
-  createLegalResolveRoute,
   createLegalResolveRateLimitOptions,
+  createLegalResolveRoute,
 } from "@/api/handlers/legal-resolve/routes";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";

@@ -122,6 +122,15 @@ the court. This enables re-parsing without re-downloading.
 
 ### 4. No heuristics where structure exists
 
+Bump a source's `SOURCE_FINGERPRINT_VERSIONS` entry only when its fingerprint
+changes over the same stored bytes: what the adapter passes to
+`sourceFingerprint` from bytes it already stores, or the hashing itself. A
+change to which bytes an adapter stores is not fingerprint-only; those rows
+must be rewritten through the normal changed path when next observed. Bump the
+parser version separately only when parser output changes. A fingerprint-only
+version lets ingestion refresh the stored hash from stored raw without parsing,
+rewriting the decision, or reindexing it.
+
 If the source gives you structure (HTML tags, JSON sections,
 RTF markers), use it. Do not write regex-based heuristics to
 split or classify text when the source already provides the

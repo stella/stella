@@ -1,10 +1,10 @@
 import {
   CancelledError,
+  type QueryClient,
   queryOptions,
   useMutation,
   useQuery,
   useQueryClient,
-  type QueryClient,
 } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
@@ -30,8 +30,8 @@ import { migrateLocalLawHistory } from "@/lib/law-search-history/law-search-hist
 import {
   LAW_HISTORY_DISPLAY_LIMIT,
   LAW_HISTORY_STORAGE_KEY,
-  readLawRecent,
   type LawRecentFilter,
+  readLawRecent,
 } from "@/lib/law-search-history/law-search-history.logic";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -46,8 +46,7 @@ type OpenedDocumentInput = {
   > & { title: SearchHistoryTitleParts };
 }[OpenedDocumentKind];
 type HistoryRecordInput =
-  | SearchRecordInput
-  | (OpenedDocumentInput & { path: string });
+  SearchRecordInput | (OpenedDocumentInput & { path: string });
 type LawHistoryScope = {
   userId: string | undefined;
   organizationId: string | null | undefined;
@@ -436,10 +435,16 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
         return panic("Unhandled law history list state");
     }
   })();
+  // Until the session says who is visiting (always so in the server render),
+  // their history is unknown, not empty.
+  const visitorList =
+    sessionView.type === "pending"
+      ? ({ status: "pending" } as const)
+      : ({ status: "ready", entries: [] } as const);
   return {
     enabled,
     scope,
-    list: enabled ? list : ({ status: "ready", entries: [] } as const),
+    list: enabled ? list : visitorList,
     importStatus: importView,
     record: { mutate: recordEntry },
     remove: { mutate: removeEntry, isPending: mutation.isPending },

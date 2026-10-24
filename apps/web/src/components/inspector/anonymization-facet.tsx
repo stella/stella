@@ -42,6 +42,7 @@ import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
 import {
@@ -176,7 +177,7 @@ type AnonymizationFacetProps = {
    * tab. Inactive document tabs stay mounted (just hidden), so
    * without this gate every parked Anonymization facet would
    * keep the global active counter bumped and the worker
-   * heartbeat firing even after the user switched away.
+   * detection running even after the user switched away.
    * Sidepeek leaves this defaulted (always visible).
    */
   isVisible?: boolean;
@@ -476,6 +477,12 @@ export const AnonymizationFacet = ({
 
   const handleDownloadAnonymized = async () => {
     if (!activeFieldId || !canDownloadAnonymized) {
+      return;
+    }
+    // Fail closed: when the open document changed since its last detection,
+    // this starts detection for the current version and the facet leaves its
+    // ready state; the user downloads once that run lands.
+    if (!confirmAnonymizationDetectionCurrent(activeFieldId)) {
       return;
     }
     setDownloadStatus("running");

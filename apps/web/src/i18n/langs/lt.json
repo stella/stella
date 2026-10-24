@@ -9,6 +9,7 @@
       "noOtherSessions": "Nėra kitų aktyvių sesijų",
       "revokeOtherSessions": "Atsijungti nuo kitų įrenginių",
       "revokeOtherSessionsConfirm": "Bus baigtos visos sesijos, išskyrus dabartinę.",
+      "signedInFrom": "Prisijungta per {clientName}",
       "unknownDevice": "Nežinomas įrenginys"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
+      "accountRestricted": "DI teikėjo nustatymai šiai paskyrai nepasiekiami.",
+      "configUnreadable": "DI teikėjo konfigūracijos nuskaityti nepavyko. Paprašykite organizacijos administratoriaus prijungti jį iš naujo.",
       "cta": "Atidaryti DI nustatymus",
       "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti DI funkcijas.",
+      "permissionRequired": "DI teikėją gali prijungti tik organizacijos administratorius.",
+      "seatRequired": "Paprašykite organizacijos administratoriaus priskirti jums vietą.",
       "title": "Prijungti DI teikėją"
     },
     "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?",
@@ -137,6 +142,8 @@
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
       "title": "Nepavyko jūsų prijungti"
     },
+    "handoffAccount": "Tęsti kaip <account>{email}</account> organizacijoje <organization>{organizationName}</organization>?",
+    "handoffTitle": "Tęsti į stella",
     "headline": "Aiškumas kiekvienai bylai.",
     "invitation": {
       "declined": "Kvietimas atmestas",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
     "professionalUse": {
-      "description": "Kuriant jūsų paskyrą šis pareiškimas jums nebuvo parodytas. Norėdami tęsti, jį priimkite.",
       "title": "Patvirtinkite profesinį naudojimą"
     },
     "professionalUseStatement": "Sukurdami paskyrą patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
+    "reauthenticationRequired": "Norėdami tęsti šį veiksmą, prisijunkite iš naujo.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
@@ -637,6 +644,7 @@
         "eso9": "ESO9 importo lentelė (XLSX)",
         "exporting": "Ruošiamas eksportas…",
         "isdoc": "ISDOC el. sąskaita (ABRA Gen ir kt.)",
+        "ksefFa3": "KSeF el. sąskaita FA(3) (XML)",
         "spreadsheets": "Skaičiuoklės",
         "xlsx": "Sąskaitos (XLSX)",
         "xlsxLines": "Sąskaitų eilutės (XLSX)"
@@ -926,13 +934,10 @@
     },
     "coverage": {
       "completeness": "Išsamumas",
-      "countedOn": "Suskaičiuota {date}",
       "courtsHeading": "Pagal teismą",
       "courtsUnavailable": "Suskirstymas pagal teismus šiuo metu nepasiekiamas.",
       "decisionYears": "Sprendimų metai",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
-      "exceedsReportedTotal": "Turi daugiau, nei paskutinis skelbėjo nurodytas skaičius {date}",
-      "gapStatusUnknown": "Spragų būsena nežinoma",
       "generatedAt": "Duomenys {date}",
       "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
@@ -953,7 +958,8 @@
       "searchable": "Prieinami paieškai",
       "title": "Teismų praktikos aprėptis",
       "totalFrom": "Bendras skaičius {date}",
-      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
+      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami.",
+      "unreadListingPeriods": "Neperskaityti sąrašo laikotarpiai"
     },
     "decisionNotFound": "Sprendimas nerastas",
     "decisionTypes": {
@@ -1022,7 +1028,10 @@
       "pageOfCount": "{page} psl. iš {pageCount}",
       "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page} psl. · apytiksliai {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "pageWithMatchCounts": "{page} psl. · {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
+      "pageWithPartialMatchCount": "{page} psl. · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje",
       "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
@@ -1591,6 +1600,7 @@
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorConnectionFailed": "Nepavyko prisijungti prie pokalbio. Patikrinkite ryšį ir bandykite dar kartą.",
+    "sendErrorContinuationRejected": "Pokalbio tęsti nepavyko. Norėdami pradėti iš naujo, išsiųskite naują žinutę.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
@@ -2277,6 +2287,7 @@
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",
     "scopeLawRead": "Skaityti viešus teisės aktus ir teismų praktiką",
     "scopeMattersWrite": "Kurti ir redaguoti jūsų bylas ir užduotis",
+    "scopeMemoryWrite": "Kurti ir atnaujinti asistento atmintį",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
     "scopeProfile": "Pasiekti jūsų profilio informaciją",
@@ -2304,6 +2315,7 @@
     "summaryLineRead": "<group>Skaitymas:</group> {items}",
     "summaryLineUse": "<group>Naudojimas:</group> {items}",
     "summaryMattersWrite": "bylos ir užduotys",
+    "summaryMemoryWrite": "asistento atmintis",
     "summaryProfile": "profilis",
     "summaryRead": "dokumentai, bylos ir kontaktai",
     "summaryReadAnonymized": "anonimizuoti dokumentai ir bylos",
@@ -2670,6 +2682,7 @@
       "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
       "contact": "Susisiekite su mumis",
+      "featureDisabled": "Ši funkcija laikinai išjungta.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },
@@ -3525,6 +3538,12 @@
       "unsupportedVisualContent": "Šiame faile yra vaizdų arba vektorinės grafikos, kurių neįmanoma patikrinti, ar juose nėra neskelbtino teksto. Eksportuoti negalima.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",
+      "unsupportedEncoding": "Šiame dokumente naudojama nepalaikoma {encoding} koduotė, todėl jo konvertuoti negalima.",
+      "unsupportedField": "Šiame dokumente yra {fieldType} laukas, kurio konvertuoti negalima.",
+      "unsupportedReference": "Šis dokumentas nurodo išorinį išteklių dalyje {element} {attribute}, todėl jo konvertuoti negalima."
+    },
     "external": {
       "confirmDescription": "Ketinate apsilankyti išorinėje svetainėje.",
       "confirmTitle": "Atidaryti išorinę nuorodą?",
@@ -4224,6 +4243,22 @@
       "guestStorageUnavailable": "Paryškinimų ir pastabų nepavyko išsaugoti šiame skirtuke.",
       "highlight": "Paryškinti",
       "highlightedPassage": "Paryškinta ištrauka",
+      "history": {
+        "colorRestored": "Spalva atkurta",
+        "commentRemoved": "Komentaras pašalintas",
+        "commentRestored": "Komentaras atkurtas",
+        "highlightRemoved": "Paryškinimas pašalintas",
+        "highlightRestored": "Paryškinimas atkurtas",
+        "markChanged": "Šis paryškinimas ar komentaras tuo metu buvo pakeistas kitur, todėl paliktas nepakeistas.",
+        "markGone": "Šio paryškinimo ar komentaro nebėra.",
+        "nothingToRedo": "Nėra ką grąžinti",
+        "nothingToUndo": "Nėra ką anuliuoti",
+        "redoShortcut": "Grąžinti paryškinimo ar komentaro pakeitimą",
+        "styleRestored": "Stilius atkurtas",
+        "textRestored": "Komentaro tekstas atkurtas",
+        "undoShortcut": "Anuliuoti paryškinimo ar komentaro pakeitimą",
+        "visibilityRestored": "Bendrinimas atkurtas"
+      },
       "removeHighlight": "Pašalinti paryškinimą",
       "sharedBadge": "Bendrinama",
       "styleHighlight": "Paryškinimas",
@@ -4735,6 +4770,7 @@
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
+    "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
     "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "continueInChat": "Tęsti pokalbyje",
@@ -4792,6 +4828,7 @@
     "savedSearchesEmpty": "Išsaugokite paiešką, kad galėtumėte ją naudoti vėl.",
     "scopeFilter": "Paieškos sritis",
     "scopePlaceholderAll": "Ieškoti visuose <scope>šaltiniuose</scope>…",
+    "scopePlaceholderCaseLaw": "Ieškoti <scope>teismų praktikoje</scope>…",
     "scopePlaceholderMatters": "Ieškoti visose <scope>bylose</scope>…",
     "scopePlaceholderRegistries": "Ieškoti <scope>registruose</scope>…",
     "scopeRegistries": "Registrai",
@@ -4941,7 +4978,7 @@
       "description": "Naudokite stella per savo DI asistentą ir matykite, kas turi prieigą prie jūsų paskyros.",
       "developerDescription": "Serverio adresai ir komandinės eilutės įrankis techniniams nustatymams.",
       "developerTitle": "Prieiga kūrėjams",
-      "disconnectConfirmDescription": "Tai panaikins {clientName} prieigą prie jūsų paskyros ir visus jos išduotus prieigos raktus. Bet kada galėsite prisijungti iš naujo.",
+      "disconnectConfirmDescription": "Tai panaikins {clientName} prieigą prie jūsų paskyros ir visus jos išduotus prieigos raktus. Bet kada galėsite prisijungti iš naujo. Taip pat bus atsijungta nuo naršyklės seansų, sukurtų per šį ryšį.",
       "disconnectConfirmTitle": "Atjungti {clientName}?",
       "disconnectSuccess": "{clientName} atjungta",
       "integrationsDescription": "Išorinės paslaugos, kurias DI gali naudoti jūsų vardu, pvz., dokumentų saugykla.",
@@ -5994,6 +6031,7 @@
       "downloadFailed": "Nepavyko atsisiųsti",
       "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
+      "emptyFile": "Failas tuščias.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",

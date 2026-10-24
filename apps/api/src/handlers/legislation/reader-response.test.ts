@@ -4,26 +4,26 @@ import Elysia, { t } from "elysia";
 import fc from "fast-check";
 
 import {
+  isEligibleLegislationExpression,
   LEGISLATION_EXPRESSION_KINDS,
   LEGISLATION_WINDOW_DISPOSITIONS,
-  isEligibleLegislationExpression,
 } from "@stll/api-contract/legislation-expression";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  PREVIEW_BLOCK_MAX,
+  PREVIEW_HEADING_MAX,
+  projectProvisionHistoryItem,
+  projectProvisionPreview,
   projectStatuteAmendments,
   projectStatuteReader,
   projectStatuteVersion,
-  projectProvisionHistoryItem,
-  projectProvisionPreview,
-  statuteReaderSuccessResponseSchema,
-  statuteVersionsSuccessResponseSchema,
   provisionHistorySuccessResponseSchema,
   provisionPreviewSuccessResponseSchema,
   readerTextBytes,
-  PREVIEW_BLOCK_MAX,
-  PREVIEW_HEADING_MAX,
+  statuteReaderSuccessResponseSchema,
+  statuteVersionsSuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
 import { createSafeId } from "@/api/lib/branded-types";
 import { effectOpensVersion } from "@/api/lib/legal-search/legislation-validity-window";

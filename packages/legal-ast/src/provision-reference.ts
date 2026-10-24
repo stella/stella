@@ -15,12 +15,7 @@ export type ProvisionUnit = "article" | "section";
 
 /** Named subdivisions, i.e. everything the catalog has a word for. */
 export type ProvisionPartKey =
-  | "article"
-  | "letter"
-  | "openEnded"
-  | "point"
-  | "sentence"
-  | "subsection";
+  "article" | "letter" | "openEnded" | "point" | "sentence" | "subsection";
 
 export type ProvisionReference = {
   letter: string | null;

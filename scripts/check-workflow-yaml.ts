@@ -142,6 +142,23 @@ export const validateNoRubyShell = (value: unknown, file: string): void => {
   }
 };
 
+export const validateWorkflowJobTimeouts = (
+  value: unknown,
+  file: string,
+): void => {
+  if (!isRecord(value) || !isRecord(value["jobs"])) {
+    return;
+  }
+  for (const [jobName, job] of Object.entries(value["jobs"])) {
+    if (isRecord(job) && "steps" in job && !("timeout-minutes" in job)) {
+      throw new WorkflowYamlError({
+        message: `${file}: job ${jobName} runs steps and must define timeout-minutes; every step-running workflow job requires a timeout`,
+        file,
+      });
+    }
+  }
+};
+
 export const validateNoRubyProcessSpawns = async (
   root: string,
 ): Promise<void> => {
@@ -324,6 +341,7 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
     const file = path.join(workflowDirectory, name);
     validateWorkflowSize(Bun.file(file).size, file);
     const value = await parseWorkflowYaml(file);
+    validateWorkflowJobTimeouts(value, file);
     validateNoRubyShell(value, file);
     validateLocalActionReferences({
       value,

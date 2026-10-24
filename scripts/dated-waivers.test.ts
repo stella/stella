@@ -21,9 +21,9 @@ import {
   uncoveredExpirySources,
 } from "./dated-waivers";
 import {
+  type QuarantineEntry,
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   serializeRegistry,
-  type QuarantineEntry,
 } from "./flaky-test-quarantine";
 
 const doc = {

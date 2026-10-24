@@ -14,8 +14,8 @@ import {
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
-  summarizeBillableAmountByMatterAndCurrency,
   summarizeBillableAmountByCurrency,
+  summarizeBillableAmountByMatterAndCurrency,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic";
 
 import {

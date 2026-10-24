@@ -2,17 +2,22 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { compareByLocale } from "@stll/collation";
-import { Field, FieldLabel } from "@stll/ui/field";
-import { CheckIcon, SearchIcon } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { isCountryCode } from "@stll/country-codes";
+import type { CountryCode } from "@stll/country-codes";
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/input-group";
-import { ScrollArea } from "@stll/ui/scroll-area";
-import { cn } from "@stll/ui/utils";
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+  ComboboxValue,
+} from "@stll/ui/combobox";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { SearchIcon } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { createCountryOptions } from "@/lib/jurisdictions";
@@ -26,7 +31,7 @@ type PersonDetailsFieldsProps = {
   birthDate: BirthDateDraft;
   onBirthDateChange: (value: BirthDateDraft) => void;
   nationalityCodes: readonly string[];
-  onNationalityCodesChange: (value: string[]) => void;
+  onNationalityCodesChange: (value: CountryCode[]) => void;
 };
 
 export const PersonDetailsFields = ({
@@ -39,17 +44,19 @@ export const PersonDetailsFields = ({
   const format = useFormatter();
   const locale = useLocale();
   const [query, setQuery] = useState("");
-  const selected = new Set(nationalityCodes);
-  const countries = filterNationalityOptions({
-    countries: createCountryOptions(locale, format.displayName),
+  const [open, setOpen] = useState(false);
+  const parsedNationalityCodes = nationalityCodes.filter(isCountryCode);
+  const allCountries = createCountryOptions(locale, format.displayName);
+  const nameByCode = new Map(
+    allCountries.map(({ code, name }) => [code, name]),
+  );
+  // Alphabetical, as `createCountryOptions` orders them; the popup is closed
+  // until the field is focused, so the full list is never on screen at rest.
+  const visibleCodes = filterNationalityOptions({
+    countries: allCountries,
     query,
     locale,
-  }).toSorted((a, b) => {
-    if (selected.has(a.code) !== selected.has(b.code)) {
-      return selected.has(a.code) ? -1 : 1;
-    }
-    return compareByLocale(locale)(a.name, b.name);
-  });
+  }).map(({ code }) => code);
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,49 +136,57 @@ export const PersonDetailsFields = ({
       </Field>
       <Field>
         <FieldLabel>{t("contacts.fields.nationalities")}</FieldLabel>
-        <InputGroup>
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            aria-label={t("contacts.searchCountries")}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("contacts.searchCountries")}
-            value={query}
-          />
-        </InputGroup>
-        <div className="border-border rounded-md border">
-          <ScrollArea
-            aria-label={t("contacts.fields.nationalities")}
-            className="h-40 max-h-40"
-          >
-            {countries.map(({ code, name }) => {
-              const isSelected = selected.has(code);
-              return (
-                <button
-                  aria-pressed={isSelected}
-                  className={cn(
-                    "hover:bg-accent flex min-h-11 w-full items-center gap-2 px-3 text-start text-sm",
-                    isSelected && "bg-accent",
-                  )}
-                  key={code}
-                  onClick={() =>
-                    onNationalityCodesChange(
-                      isSelected
-                        ? nationalityCodes.filter((item) => item !== code)
-                        : [...nationalityCodes, code],
-                    )
-                  }
-                  type="button"
-                >
-                  <span className="flex-1">{name}</span>
-                  <bdi className="text-muted-foreground text-xs">{code}</bdi>
-                  {isSelected && <CheckIcon aria-hidden className="size-4" />}
-                </button>
-              );
-            })}
-          </ScrollArea>
-        </div>
+        <Combobox
+          filter={null}
+          inputValue={query}
+          itemToStringLabel={(code) => nameByCode.get(code) ?? code}
+          items={visibleCodes}
+          multiple
+          onInputValueChange={setQuery}
+          onOpenChange={setOpen}
+          onValueChange={onNationalityCodesChange}
+          open={open}
+          value={parsedNationalityCodes}
+        >
+          <ComboboxChips startAddon={<SearchIcon />}>
+            <ComboboxValue>
+              {(codes: CountryCode[]) =>
+                codes.map((code: CountryCode) => (
+                  <ComboboxChip
+                    aria-label={nameByCode.get(code) ?? code}
+                    key={code}
+                  >
+                    {nameByCode.get(code) ?? code}
+                  </ComboboxChip>
+                ))
+              }
+            </ComboboxValue>
+            <ComboboxChipsInput
+              aria-label={t("contacts.searchCountries")}
+              onFocus={() => setOpen(true)}
+              placeholder={
+                parsedNationalityCodes.length === 0
+                  ? t("contacts.searchCountries")
+                  : undefined
+              }
+            />
+          </ComboboxChips>
+          <ComboboxPopup>
+            <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
+            <ComboboxList>
+              {(code: CountryCode) => (
+                <ComboboxItem key={code} value={code}>
+                  <span className="flex items-center gap-2">
+                    <span className="flex-1">
+                      {nameByCode.get(code) ?? code}
+                    </span>
+                    <bdi className="text-muted-foreground text-xs">{code}</bdi>
+                  </span>
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxPopup>
+        </Combobox>
       </Field>
     </div>
   );

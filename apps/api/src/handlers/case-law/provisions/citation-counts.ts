@@ -8,16 +8,17 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
-  publishedCaseLawDecisions,
   caseLawProvisionCitations,
+  caseLawSources,
   caseLawStatuteCitationCounts,
   caseLawStatuteCitationCountState,
-  caseLawSources,
+  publishedCaseLawDecisions,
   STATUTE_CITATION_COUNT_STATE_KEY,
   STATUTE_CITATION_COUNT_STATUS,
   STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { provisionAnchorLineageSql } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   readPublicLawCountry,
@@ -66,14 +67,17 @@ export const readStatuteCitationCountsHandler = async (
     if (jurisdiction === "EU") {
       // The source-level count projection cannot distinguish citing countries.
       // EU targets span countries, so count the indexed target links under the
-      // same publication and country gates as the cited-by list.
-      const rows = await tx
+      // same publication and country gates as the cited-by list. A link counts
+      // toward its provision and every provision above it, as the stored
+      // projection does, and a decision once per provision however many of
+      // its links fall under it.
+      const lineage = tx
         .select({
-          anchor: caseLawProvisionCitations.anchor,
-          decisionCount:
-            sql<number>`count(DISTINCT ${caseLawProvisionCitations.decisionId})::integer`.as(
-              "decision_count",
-            ),
+          anchor: sql<string>`unnest(${provisionAnchorLineageSql(
+            caseLawProvisionCitations.jurisdiction,
+            caseLawProvisionCitations.anchor,
+          )})`.as("lineage_anchor"),
+          decisionId: caseLawProvisionCitations.decisionId,
         })
         .from(caseLawProvisionCitations)
         .innerJoin(
@@ -98,8 +102,18 @@ export const readStatuteCitationCountsHandler = async (
             redistributableCaseLawSource,
           ),
         )
-        .groupBy(caseLawProvisionCitations.anchor)
-        .orderBy(asc(caseLawProvisionCitations.anchor))
+        .as("provision_lineage");
+      const rows = await tx
+        .select({
+          anchor: lineage.anchor,
+          decisionCount:
+            sql<number>`count(DISTINCT ${lineage.decisionId})::integer`.as(
+              "decision_count",
+            ),
+        })
+        .from(lineage)
+        .groupBy(lineage.anchor)
+        .orderBy(asc(lineage.anchor))
         .limit(PROVISION_COUNT_LIMIT + 1);
       if (rows.length > PROVISION_COUNT_LIMIT) {
         return { status: "unavailable" as const };

@@ -77,14 +77,14 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  knowledgeKeys,
   invalidateTemplateClauseSources,
+  knowledgeKeys,
   templateCheckOptions,
   templateClausePreviewOptions,
   templateClausesOptions,
+  templateClauseSourceStamp,
   templateDetailOptions,
   templateFillDiscoverOptions,
-  templateClauseSourceStamp,
   templateRecipesOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -113,9 +113,9 @@ import {
 } from "@/routes/knowledge/-components/template-studio-fields";
 import {
   defaultStudioField,
-  useTemplateStudioStore,
   type OutlineNode,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 import { TemplateVersionsTab } from "@/routes/knowledge/-components/template-versions-tab";
 import { useTemplateNavStore } from "@/stores/knowledge/template-nav-store";

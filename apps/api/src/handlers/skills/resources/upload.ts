@@ -9,8 +9,8 @@ import {
   refreshSkillContentHash,
 } from "@/api/lib/agent-skills/content-hash";
 import {
-  RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
+  RESOURCE_PATH_PATTERN,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

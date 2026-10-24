@@ -7,8 +7,8 @@ import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
-  fields,
   featureEnrolments,
+  fields,
 } from "@/api/db/schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

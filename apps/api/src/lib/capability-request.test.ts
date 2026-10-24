@@ -9,8 +9,8 @@ import {
 import {
   buildCapabilityRouteIndex,
   capabilityRequestGuard,
-  resolveCapabilityRequest,
   type MountedRoute,
+  resolveCapabilityRequest,
 } from "@/api/lib/capability-request";
 
 const createThing = { id: "things.create", handler: () => "created" };

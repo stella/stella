@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
-  type DecisionParagraphRange,
   decisionParagraphFragment,
+  type DecisionParagraphRange,
 } from "@stll/api-contract/decision-paragraph-range";
 import { DECISION_READER_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -22,8 +22,8 @@ import {
   openDecisionOutput,
   previewProvisionArgs,
   provisionPreviewOutput,
-  READER_PAGE_MAX_CHARS,
   readDecisionBlocksArgs,
+  READER_PAGE_MAX_CHARS,
 } from "./decision-reader-contract";
 import {
   decodeReaderCursor,

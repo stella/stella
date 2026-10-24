@@ -8,9 +8,9 @@ import {
 } from "@/api/lib/auth";
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import {
-  VerifiedDesktopDeviceProof,
   desktopProofRequestUrl,
   deviceProofRefusal,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

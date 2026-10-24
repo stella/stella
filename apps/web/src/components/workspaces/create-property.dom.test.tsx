@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { aiUnavailableResponse } from "@/__fixtures__/ai-availability";
 import messages from "@/i18n/langs/en.json";
 import type { WorkspaceProperty } from "@/lib/types";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -91,10 +92,7 @@ for (const triggerVariant of Object.values(triggerVariants)) {
           request.method === "GET" &&
           path.endsWith("/organization-settings/ai-availability")
         ) {
-          return Response.json({
-            available: false,
-            deferredServiceTierAvailable: false,
-          });
+          return Response.json(aiUnavailableResponse());
         }
         if (
           request.method === "POST" &&

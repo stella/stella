@@ -17,10 +17,10 @@ import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/com
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import {
-  PRIORITY_COLORS,
-  PRIORITY_ICONS,
   ITEM_TYPE_TRANSLATION_KEYS,
   LIST_ITEM_TYPES,
+  PRIORITY_COLORS,
+  PRIORITY_ICONS,
   STATUS_COLORS,
   STATUS_ICONS,
   TASK_PRIORITIES,
@@ -81,6 +81,7 @@ export const StatusSelect = ({ value, onChange }: StatusSelectProps) => {
   return (
     <Select onValueChange={onChange} value={value}>
       <SelectTrigger
+        align="start"
         className="min-h-11 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
@@ -113,6 +114,7 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
   return (
     <Select onValueChange={onChange} value={value}>
       <SelectTrigger
+        align="start"
         className="h-7 min-h-7 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
@@ -146,6 +148,7 @@ export const WorkTypeSelect = ({ value, onChange }: WorkTypeSelectProps) => {
   return (
     <Select onValueChange={onChange} value={value}>
       <SelectTrigger
+        align="start"
         className="h-7 min-h-7 min-w-0 gap-1 border-none bg-transparent px-1.5 shadow-none"
         size="sm"
       >
@@ -180,6 +183,7 @@ export const ItemTypeSelect = ({
   return (
     <Select onValueChange={onChange} value={value}>
       <SelectTrigger
+        align="start"
         aria-label={ariaLabel}
         className="h-7 min-h-7 min-w-0 border-none bg-transparent px-1.5 shadow-none"
         size="sm"

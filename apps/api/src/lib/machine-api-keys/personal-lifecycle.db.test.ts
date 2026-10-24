@@ -22,9 +22,9 @@ import type { rootDb } from "@/api/db/root";
 import { auditLogs, organizationSettings } from "@/api/db/schema";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import {
-  createBackgroundAuditRecorder,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createAuthMacro } from "@/api/lib/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

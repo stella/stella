@@ -327,7 +327,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5889,7 +5889,7 @@
       "confirmPassthrough": true
     },
     "name": "write_capability",
-    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval. Read capabilities must use read_capability.",
+    "description": "Write one capability by id. Take a write id from list_capabilities or describe_capability. Pass input under input: { body, params, query }; matter-scoped capabilities take input.params.matterId. Required scopes and member permissions are checked per capability. Set validate_only: true to check input without running it; Capabilities declaring confirmation require confirm: true after human approval. Read capabilities must use read_capability.",
     "inputSchema": {
       "type": "object",
       "required": ["capability"],
@@ -5930,7 +5930,7 @@
         },
         "confirm": {
           "type": "boolean",
-          "description": "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action."
+          "description": "Must be true to run a capability that requires confirmation. Set it only after a human user approved this operation."
         }
       }
     },
@@ -5940,6 +5940,34 @@
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["web", "open"],
+      "excluded": true,
+      "scope": "read"
+    },
+    "name": "mint_web_handoff",
+    "description": "App-only: refresh a web link when the user opens it. Returns a plain link when sign-in handoff is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 8192,
+          "description": "Web URL the user chose to open."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Open web link",
+      "readOnlyHint": false,
+      "idempotentHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
     }
   }
 ]

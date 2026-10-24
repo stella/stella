@@ -4,8 +4,8 @@ import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import {
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
-  resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
+  resolveEntityActivityDestination,
   resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,

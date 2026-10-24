@@ -8,8 +8,8 @@ import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  timestampCasToken,
   type TimestampCasToken,
+  timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
@@ -53,8 +53,7 @@ type BackfillOptions = {
 };
 
 type ParseResult =
-  | { ok: true; options: BackfillOptions }
-  | { ok: false; message: string };
+  { ok: true; options: BackfillOptions } | { ok: false; message: string };
 
 const logInfo = (message: string): void => {
   void Bun.write(Bun.stdout, `${message}\n`);

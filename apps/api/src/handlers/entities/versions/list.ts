@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import {
@@ -33,6 +34,47 @@ type ReadVersionsHandlerProps = {
   before: string | undefined;
   filePropertyId: SafeId<"property"> | undefined;
 };
+
+type ReadVersionFileMetadataOptions = {
+  workspaceId: SafeId<"workspace">;
+  pageVersionIds: SafeId<"entityVersion">[];
+  filePropertyId: SafeId<"property"> | undefined;
+  pageSize: number;
+};
+
+export const readVersionFileMetadata = (
+  tx: Transaction,
+  {
+    workspaceId,
+    pageVersionIds,
+    filePropertyId,
+    pageSize,
+  }: ReadVersionFileMetadataOptions,
+) =>
+  tx
+    .selectDistinctOn([fields.entityVersionId], {
+      id: fields.id,
+      entityVersionId: fields.entityVersionId,
+      propertyId: fields.propertyId,
+      fileName: sql<string>`${fields.content}->>'fileName'`,
+      mimeType: sql<string>`${fields.content}->>'mimeType'`,
+      sizeBytes: sql<number>`(${fields.content}->>'sizeBytes')::double precision`,
+    })
+    .from(fields)
+    .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
+    .where(
+      and(
+        inArray(fields.entityVersionId, pageVersionIds),
+        eq(fields.workspaceId, workspaceId),
+        sql`${fields.content}->>'type' = 'file'`,
+        isNull(entityVersions.deletedAt),
+        filePropertyId === undefined
+          ? undefined
+          : eq(fields.propertyId, filePropertyId),
+      ),
+    )
+    .orderBy(fields.entityVersionId, fields.id)
+    .limit(pageSize);
 
 export const readVersionsHandler = async function* ({
   safeDb,
@@ -193,29 +235,12 @@ export const readVersionsHandler = async function* ({
       // pinning the fields read to a live version too closes the same-tx window
       // where a version tombstoned mid-request could still surface its field
       // content here.
-      const versionFields = await tx
-        .select({
-          id: fields.id,
-          entityVersionId: fields.entityVersionId,
-          propertyId: fields.propertyId,
-          content: fields.content,
-        })
-        .from(fields)
-        .innerJoin(
-          entityVersions,
-          eq(entityVersions.id, fields.entityVersionId),
-        )
-        .where(
-          and(
-            inArray(fields.entityVersionId, pageVersionIds),
-            eq(fields.workspaceId, workspaceId),
-            isNull(entityVersions.deletedAt),
-            filePropertyId === undefined
-              ? undefined
-              : eq(fields.propertyId, filePropertyId),
-          ),
-        )
-        .limit(LIMITS.versionFieldsScanLimit);
+      const versionFields = await readVersionFileMetadata(tx, {
+        workspaceId,
+        pageVersionIds,
+        filePropertyId,
+        pageSize,
+      });
 
       return {
         kind: "ok" as const,
@@ -264,9 +289,7 @@ export const readVersionsHandler = async function* ({
     });
   }
 
-  // Build version → file field map. Without a property request this preserves
-  // the historical first-file metadata; callers with a selected file property
-  // receive only that property's file from every version.
+  // One deterministic file per version; a selected property narrows that file.
   const versionFileMap = new Map<
     string,
     {
@@ -279,15 +302,13 @@ export const readVersionsHandler = async function* ({
   >();
 
   for (const f of versionFields) {
-    if (f.content.type === "file" && !versionFileMap.has(f.entityVersionId)) {
-      versionFileMap.set(f.entityVersionId, {
-        fieldId: f.id,
-        propertyId: f.propertyId,
-        fileName: f.content.fileName,
-        mimeType: f.content.mimeType,
-        sizeBytes: f.content.sizeBytes,
-      });
-    }
+    versionFileMap.set(f.entityVersionId, {
+      fieldId: f.id,
+      propertyId: f.propertyId,
+      fileName: f.fileName,
+      mimeType: f.mimeType,
+      sizeBytes: f.sizeBytes,
+    });
   }
 
   // Assemble response

@@ -1,8 +1,8 @@
 import { usePublicLawTableLayout } from "@/components/public-law-table/use-public-law-table-layout";
 import type { PublicLawTableLayoutStore } from "@/components/public-law-table/use-public-law-table-layout";
 import {
-  DEFAULT_DECISION_TABLE_LAYOUT,
   decisionTableLayouts,
+  DEFAULT_DECISION_TABLE_LAYOUT,
   StoredDecisionLayoutSchema,
 } from "@/features/case-law/decision-column-preferences.logic";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";

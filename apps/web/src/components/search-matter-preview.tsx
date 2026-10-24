@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -12,6 +14,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -24,6 +27,8 @@ import {
   UTC_MEDIUM_DATE_FORMAT,
 } from "@/lib/relative-time";
 import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
+
+const ICON_CLASS_NAME = "text-muted-foreground mt-0.5 size-4 shrink-0";
 
 export const SearchMatterPreview = ({
   workspaceId,
@@ -159,6 +164,7 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
         id: item.id,
         name: item.name,
         date: format.dateTime(new Date(item.dueDate), UTC_MEDIUM_DATE_FORMAT),
+        icon: <EntityKindIcon className={ICON_CLASS_NAME} kind="task" />,
       })),
     },
     {
@@ -168,12 +174,21 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
         id: item.id,
         name: item.name,
         date: format.dateTime(new Date(item.updatedAt), MEDIUM_DATE_FORMAT),
+        icon: (
+          <EntityKindIcon
+            className={ICON_CLASS_NAME}
+            fileName={item.name}
+            kind="document"
+            mimeType={item.mimeType}
+          />
+        ),
       })),
     },
   ] satisfies {
     label: TranslationKey;
     empty: TranslationKey;
-    items: { id: string; name: string; date: string }[] | undefined;
+    items:
+      { id: string; name: string; date: string; icon: ReactNode }[] | undefined;
   }[];
   return (
     <div className="mb-6 space-y-5" aria-busy={!data}>
@@ -193,9 +208,12 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
                     className="flex items-baseline justify-between gap-4 py-3 text-sm"
                     key={item.id}
                   >
-                    <BidiText className="min-w-0 wrap-break-word">
-                      {item.name}
-                    </BidiText>
+                    <span className="flex min-w-0 items-start gap-2">
+                      {item.icon}
+                      <BidiText className="min-w-0 wrap-break-word">
+                        {item.name}
+                      </BidiText>
+                    </span>
                     <BidiText className="text-muted-foreground shrink-0 text-xs tabular-nums">
                       {item.date}
                     </BidiText>

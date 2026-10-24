@@ -97,8 +97,7 @@ type PublicLawErrorInput = {
 };
 
 type PublicLawEdenResponse<T> =
-  | { data: T; error: null }
-  | { data: null; error: PublicLawErrorInput };
+  { data: T; error: null } | { data: null; error: PublicLawErrorInput };
 
 const isDisabledPublicLawResponse = (error: PublicLawErrorInput): boolean =>
   error.status === PUBLIC_LAW_DISABLED_STATUS &&

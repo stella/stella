@@ -628,8 +628,7 @@ jobs:
             fi
           fi
           if (( ${#format_paths[@]} > 0 )); then
-            bun run format:guard
-            bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
+            bun fmt --ignore-unknown "${format_paths[@]}"
           fi
 
       # Final outputs must reflect lint and formatting rewrites, including

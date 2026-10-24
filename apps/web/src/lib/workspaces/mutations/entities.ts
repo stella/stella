@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import type { StoreApi } from "zustand";
 

@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
-  createDocx,
-  createEmptyDocument,
   type CompareDocxError,
   type CompareResult,
+  createDocx,
+  createEmptyDocument,
 } from "@stll/folio-core";
 import { FolioDocxReviewer, parseDocx } from "@stll/folio-core/server";
 

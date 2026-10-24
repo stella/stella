@@ -5,11 +5,11 @@ import { TriangleAlertIcon } from "@stll/ui/icons";
 import type Messages from "@/i18n/langs/messages.gen";
 import type { TranslationKey } from "@/i18n/types";
 import {
-  type OAuthScopeGroup,
-  type OAuthScopeDisplayEntry,
-  type OAuthScopeSummaryGroup,
   groupOAuthScopeDisplayEntries,
   groupOAuthScopeSummaryEntries,
+  type OAuthScopeDisplayEntry,
+  type OAuthScopeGroup,
+  type OAuthScopeSummaryGroup,
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
   translateOAuthScopeSummary,

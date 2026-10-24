@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -20,6 +21,8 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { CitingDecisionItem } = await import("./citing-decision-item");
+const { decisionCardSummaryOptions } =
+  await import("@/features/case-law/queries/decisions");
 const { caseDecisionTabId, isCaseDecisionGenericTab } =
   await import("@/components/inspector/case-decision-view");
 const { useInspectorTabsStore } =
@@ -46,6 +49,18 @@ afterAll(async () => {
 
 const createClient = () => {
   const client = new QueryClient();
+  client.setQueryData(decisionCardSummaryOptions(decisionId).queryKey, {
+    id: decisionId,
+    caseNumber: decision.caseNumber,
+    court: decision.court,
+    courtAbbreviation: decision.courtAbbreviation,
+    courtTier: decision.courtTier,
+    decisionDate: decision.decisionDate,
+    decisionType: null,
+    headnote: { type: "absent", reason: "not_published" },
+    citationCount: 0,
+    publication: null,
+  } satisfies CaseLawDecisionSummary);
   clients.push(client);
   return client;
 };

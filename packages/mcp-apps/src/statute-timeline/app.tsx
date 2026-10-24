@@ -20,7 +20,7 @@ import {
   versionWording,
 } from "./model";
 import { parseStatuteTimelineHistory } from "./parse";
-import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
+import type { ProvisionVersion, StatuteTimelineHistory } from "./parse";
 import { TimelineChart, VersionLabel } from "./presentation";
 import "../shared/generated/style.css";
 

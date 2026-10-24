@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { DocxEditor, createEmptyDocument } from "@stll/folio-react";
+import { createEmptyDocument, DocxEditor } from "@stll/folio-react";
 import type {
   Document as FolioDocument,
   DocxEditorRef,

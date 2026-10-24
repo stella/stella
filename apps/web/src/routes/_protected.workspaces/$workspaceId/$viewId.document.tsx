@@ -17,8 +17,8 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import {
-  Navigate,
   createFileRoute,
+  Navigate,
   stripSearchParams,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";

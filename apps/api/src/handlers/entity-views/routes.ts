@@ -12,25 +12,33 @@ export const entityViewsRoute = new Elysia({ prefix: "/entity-views" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", list.handler, { permissions: list.config.permissions })
+  .get("/", list.handler, {
+    permissions: list.config.permissions,
+    accountAccess: list.config.accountAccess,
+  })
   .put("/", create.handler, {
     body: create.config.body,
     permissions: create.config.permissions,
+    accountAccess: create.config.accountAccess,
   })
   .patch("/:viewId", update.handler, {
     params: update.config.params,
     body: update.config.body,
     permissions: update.config.permissions,
+    accountAccess: update.config.accountAccess,
   })
   .delete("/:viewId", remove.handler, {
     params: remove.config.params,
     permissions: remove.config.permissions,
+    accountAccess: remove.config.accountAccess,
   })
   .post("/reorder", reorder.handler, {
     body: reorder.config.body,
     permissions: reorder.config.permissions,
+    accountAccess: reorder.config.accountAccess,
   })
   .post("/query-window", listRows.handler, {
     body: listRows.config.body,
     permissions: listRows.config.permissions,
+    accountAccess: listRows.config.accountAccess,
   });

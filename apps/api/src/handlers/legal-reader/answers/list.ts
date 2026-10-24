@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 
-import { legalReaderAnswers, legalReaderAnswerMessages } from "@/api/db/schema";
+import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { listAnswersQuerySchema } from "@/api/handlers/legal-reader/answers/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -14,8 +14,8 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {

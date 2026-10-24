@@ -1,0 +1,190 @@
+{
+  "fulltext": "Wyrok NSA\n\nTezy\n\nPrzepis art. 7 ust. 1 dekretu z dnia 26 października 1945 r. o własności i użytkowaniu gruntów na obszarze m.st. Warszawy (Dz. U. Nr 50, poz. 279 ze zm.) uprawnia do przyjęcia, że właścicielowi użytkowemu gruntów emfiteutycznych przysługiwała legitymacja do złożenia wniosku o ustanowienie prawa własności czasowej lub prawa zabudowy do gruntu ze skutkiem określonym w art. 7 ust. 2 dekretu.\n\nSentencja\n\nNaczelny Sąd Administracyjny w składzie: Przewodniczący: sędzia NSA Janina Antosiewicz (spr.) sędzia NSA Marek Stojanowski sędzia del. NSA Janusz Furmanek Protokolant starszy asystent sędziego Andrzej Nędzarek po rozpoznaniu w dniu 4 kwietnia 2013 roku na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej E. Spółki z o.o. w Warszawie od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 8 marca 2012 r. sygn. akt I SA/Wa 1427/11 w sprawie ze skargi E. Spółki z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r. nr [...] w przedmiocie stwierdzenia nieważności decyzji 1. oddala skargę kasacyjną, 2. oddala wniosek J. K. H. i K.\n\nUzasadnienie\n\nWyrokiem z dnia 8 marca 2012 r., sygn. akt I SA/Wa 1427/11 Wojewódzki Sąd Administracyjny w Warszawie oddalił skargę E. Sp. z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r., nr [...] w przedmiocie stwierdzenia nieważności decyzji.\n\nWyrok został wydany w następujących okolicznościach sprawy.\n\nZdanie odrębne\n\nNie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
+  "sections": [
+    {
+      "index": 0,
+      "type": "header",
+      "title": "Tezy",
+      "text": "Przepis art. 7 ust. 1 dekretu z dnia 26 października 1945 r. o własności i użytkowaniu gruntów na obszarze m.st. Warszawy (Dz. U. Nr 50, poz. 279 ze zm.) uprawnia do przyjęcia, że właścicielowi użytkowemu gruntów emfiteutycznych przysługiwała legitymacja do złożenia wniosku o ustanowienie prawa własności czasowej lub prawa zabudowy do gruntu ze skutkiem określonym w art. 7 ust. 2 dekretu."
+    },
+    {
+      "index": 1,
+      "type": "ruling",
+      "title": "Sentencja",
+      "text": "Naczelny Sąd Administracyjny w składzie: Przewodniczący: sędzia NSA Janina Antosiewicz (spr.) sędzia NSA Marek Stojanowski sędzia del. NSA Janusz Furmanek Protokolant starszy asystent sędziego Andrzej Nędzarek po rozpoznaniu w dniu 4 kwietnia 2013 roku na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej E. Spółki z o.o. w Warszawie od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 8 marca 2012 r. sygn. akt I SA/Wa 1427/11 w sprawie ze skargi E. Spółki z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r. nr [...] w przedmiocie stwierdzenia nieważności decyzji 1. oddala skargę kasacyjną, 2. oddala wniosek J. K. H. i K."
+    },
+    {
+      "index": 2,
+      "type": "argumentation",
+      "title": "Uzasadnienie",
+      "text": "Wyrokiem z dnia 8 marca 2012 r., sygn. akt I SA/Wa 1427/11 Wojewódzki Sąd Administracyjny w Warszawie oddalił skargę E. Sp. z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r., nr [...] w przedmiocie stwierdzenia nieważności decyzji.\n\nWyrok został wydany w następujących okolicznościach sprawy."
+    },
+    {
+      "index": 3,
+      "type": "dissent",
+      "title": "Zdanie odrębne",
+      "text": "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem."
+    }
+  ],
+  "documentAst": {
+    "version": 1,
+    "source": {
+      "system": "orzeczenia.nsa.gov.pl",
+      "documentId": "B51A16D504",
+      "webUrl": "https://orzeczenia.nsa.gov.pl/doc/B51A16D504",
+      "printUrl": ""
+    },
+    "metadata": {
+      "caseNumber": "I OSK 1769/12",
+      "ecli": null,
+      "court": "Naczelny Sąd Administracyjny",
+      "decisionDate": "2013-04-04",
+      "decisionType": "wyrok",
+      "keywords": ["Grunty warszawskie"],
+      "statutes": [
+        "Dz.U. 1945 nr 50 poz 279 art. 7 ust. 1, 2 ,5",
+        "Dz.U. 1946 nr 57 poz 321 art. XXXVI",
+        "Dz.U. 2000 nr 98 poz 1071 art. 156 par. 1 i 2",
+        "Dz.U. 2000 nr 98 poz 1071 art. 153, 184"
+      ]
+    },
+    "blocks": [
+      {
+        "id": "b0",
+        "anchorId": "h-title",
+        "type": "heading",
+        "level": 1,
+        "role": "decision-title",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Wyrok NSA"
+          }
+        ],
+        "plainText": "Wyrok NSA"
+      },
+      {
+        "id": "b1",
+        "anchorId": "h-thesis",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Tezy"
+          }
+        ],
+        "plainText": "Tezy"
+      },
+      {
+        "id": "b2",
+        "anchorId": "p-thesis-1",
+        "type": "paragraph",
+        "role": "headnotes",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Przepis art. 7 ust. 1 dekretu z dnia 26 października 1945 r. o własności i użytkowaniu gruntów na obszarze m.st. Warszawy (Dz. U. Nr 50, poz. 279 ze zm.) uprawnia do przyjęcia, że właścicielowi użytkowemu gruntów emfiteutycznych przysługiwała legitymacja do złożenia wniosku o ustanowienie prawa własności czasowej lub prawa zabudowy do gruntu ze skutkiem określonym w art. 7 ust. 2 dekretu."
+          }
+        ],
+        "plainText": "Przepis art. 7 ust. 1 dekretu z dnia 26 października 1945 r. o własności i użytkowaniu gruntów na obszarze m.st. Warszawy (Dz. U. Nr 50, poz. 279 ze zm.) uprawnia do przyjęcia, że właścicielowi użytkowemu gruntów emfiteutycznych przysługiwała legitymacja do złożenia wniosku o ustanowienie prawa własności czasowej lub prawa zabudowy do gruntu ze skutkiem określonym w art. 7 ust. 2 dekretu."
+      },
+      {
+        "id": "b3",
+        "anchorId": "h-sentence",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Sentencja"
+          }
+        ],
+        "plainText": "Sentencja"
+      },
+      {
+        "id": "b4",
+        "anchorId": "p-sentence-1",
+        "type": "paragraph",
+        "role": "holding",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Naczelny Sąd Administracyjny w składzie: Przewodniczący: sędzia NSA Janina Antosiewicz (spr.) sędzia NSA Marek Stojanowski sędzia del. NSA Janusz Furmanek Protokolant starszy asystent sędziego Andrzej Nędzarek po rozpoznaniu w dniu 4 kwietnia 2013 roku na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej E. Spółki z o.o. w Warszawie od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 8 marca 2012 r. sygn. akt I SA/Wa 1427/11 w sprawie ze skargi E. Spółki z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r. nr [...] w przedmiocie stwierdzenia nieważności decyzji 1. oddala skargę kasacyjną, 2. oddala wniosek J. K. H. i K."
+          }
+        ],
+        "plainText": "Naczelny Sąd Administracyjny w składzie: Przewodniczący: sędzia NSA Janina Antosiewicz (spr.) sędzia NSA Marek Stojanowski sędzia del. NSA Janusz Furmanek Protokolant starszy asystent sędziego Andrzej Nędzarek po rozpoznaniu w dniu 4 kwietnia 2013 roku na rozprawie w Izbie Ogólnoadministracyjnej skargi kasacyjnej E. Spółki z o.o. w Warszawie od wyroku Wojewódzkiego Sądu Administracyjnego w Warszawie z dnia 8 marca 2012 r. sygn. akt I SA/Wa 1427/11 w sprawie ze skargi E. Spółki z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r. nr [...] w przedmiocie stwierdzenia nieważności decyzji 1. oddala skargę kasacyjną, 2. oddala wniosek J. K. H. i K."
+      },
+      {
+        "id": "b5",
+        "anchorId": "h-reasons",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Uzasadnienie"
+          }
+        ],
+        "plainText": "Uzasadnienie"
+      },
+      {
+        "id": "b6",
+        "anchorId": "p-reasons-1",
+        "type": "paragraph",
+        "role": "argumentation",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Wyrokiem z dnia 8 marca 2012 r., sygn. akt I SA/Wa 1427/11 Wojewódzki Sąd Administracyjny w Warszawie oddalił skargę E. Sp. z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r., nr [...] w przedmiocie stwierdzenia nieważności decyzji."
+          }
+        ],
+        "plainText": "Wyrokiem z dnia 8 marca 2012 r., sygn. akt I SA/Wa 1427/11 Wojewódzki Sąd Administracyjny w Warszawie oddalił skargę E. Sp. z o.o. w Warszawie i B. S.A. w Warszawie na decyzję Ministra Infrastruktury z dnia [...] maja 2011 r., nr [...] w przedmiocie stwierdzenia nieważności decyzji."
+      },
+      {
+        "id": "b7",
+        "anchorId": "p-reasons-2",
+        "type": "paragraph",
+        "role": "argumentation",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Wyrok został wydany w następujących okolicznościach sprawy."
+          }
+        ],
+        "plainText": "Wyrok został wydany w następujących okolicznościach sprawy."
+      },
+      {
+        "id": "b8",
+        "anchorId": "h-dissent",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Zdanie odrębne"
+          }
+        ],
+        "plainText": "Zdanie odrębne"
+      },
+      {
+        "id": "b9",
+        "anchorId": "p-dissent-1",
+        "type": "paragraph",
+        "role": "dissent",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem."
+          }
+        ],
+        "plainText": "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem."
+      }
+    ]
+  },
+  "parserVersion": 8
+}

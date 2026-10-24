@@ -169,6 +169,7 @@ const CaseLawSourceRow = ({
       appearance="tray"
       fullTrayLabel
       interactive
+      linkIconSource={{ kind: "tool-source" }}
       source={source}
     >
       <span className="flex min-w-0 items-start gap-2">
@@ -228,6 +229,7 @@ const PublisherSourceChip = ({
   <LegalCitationLink
     appearance="tray"
     interactive
+    linkIconSource={{ kind: "tool-source" }}
     source={source}
     workspaceId={workspaceId}
   >

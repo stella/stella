@@ -11,13 +11,13 @@ import {
   readStatuteBySlugQuerySchema,
 } from "@/api/handlers/legislation/by-slug";
 import {
-  listStatutesSuccessResponseSchema,
-  legislationShelfSuccessResponseSchema,
   legislationFacetsSuccessResponseSchema,
+  legislationShelfSuccessResponseSchema,
+  listStatutesSuccessResponseSchema,
+  publisherWindowInconsistentResponseSchema,
   resolveStatutesSuccessResponseSchema,
   statuteSitemapShardsSuccessResponseSchema,
   statuteSitemapStatutesSuccessResponseSchema,
-  publisherWindowInconsistentResponseSchema,
 } from "@/api/handlers/legislation/catalog-response";
 import {
   legislationFacetsQuerySchema,
@@ -36,9 +36,9 @@ import {
 import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
 import searchPublicStatutes from "@/api/handlers/legislation/public-search";
 import {
+  provisionHistorySuccessResponseSchema,
   statuteReaderSuccessResponseSchema,
   statuteVersionsSuccessResponseSchema,
-  provisionHistorySuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
 import {
   resolveStatutesBodySchema,

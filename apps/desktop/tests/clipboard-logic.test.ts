@@ -2,22 +2,23 @@ import { describe, expect, test } from "bun:test";
 
 import {
   adjacentClipboardIndex,
+  adjacentClipboardScope,
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
-  adjacentClipboardScope,
-  clipboardControlsKeyAction,
-  clipboardScopeKeyAction,
-  clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
+  clipboardScopeKeyAction,
   clipboardSearchPreviewText,
   clipboardSourceTintIndex,
+  clipboardTimelineKeyAction,
+  clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
@@ -25,6 +26,7 @@ import {
   isClipboardCopyShortcut,
   isClipboardNameInput,
   quickCopyIndex,
+  refreshClipboardEditorName,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
@@ -978,5 +980,73 @@ describe("clipboardItemLink", () => {
         plainText: "https://example.com/exhibit",
       })?.host,
     ).toBe("example.com");
+  });
+});
+
+describe("clipboardUntitledName", () => {
+  const KIND_LABELS = { image: "Image", text: "Text" };
+  const BROWSER_SOURCE = {
+    identifier: "com.google.Chrome",
+    name: "Google Chrome",
+    page: {
+      host: "www.example.com",
+      origin: "https://www.example.com",
+      url: "https://www.example.com/ruling",
+    },
+    visualKey: null,
+  };
+
+  test("names a browser copy after its page", () => {
+    expect(
+      clipboardUntitledName(
+        { ...IMAGE_ITEM, sourceApp: BROWSER_SOURCE },
+        KIND_LABELS,
+      ),
+    ).toBe("example.com");
+  });
+
+  test("names a link after its host, else the clip after its kind", () => {
+    expect(
+      clipboardUntitledName(
+        { ...TEXT_ITEM, plainText: "https://court.example/decision" },
+        KIND_LABELS,
+      ),
+    ).toBe("court.example");
+    expect(clipboardUntitledName(TEXT_ITEM, KIND_LABELS)).toBe("Text");
+    expect(clipboardUntitledName(IMAGE_ITEM, KIND_LABELS)).toBe("Image");
+  });
+
+  test("skips an app source without a page", () => {
+    expect(
+      clipboardUntitledName(
+        {
+          ...TEXT_ITEM,
+          sourceApp: { ...BROWSER_SOURCE, name: "Word", page: null },
+        },
+        KIND_LABELS,
+      ),
+    ).toBe("Text");
+  });
+});
+
+describe("clipboard editor name ownership", () => {
+  test("history refreshes untouched names, including external clearing", () => {
+    let draft = refreshClipboardEditorName(
+      { type: "unchanged", value: "Original name" },
+      "Timeline rename",
+    );
+    expect(draft).toEqual({ type: "unchanged", value: "Timeline rename" });
+    draft = refreshClipboardEditorName(draft, null);
+    expect(draft).toEqual({ type: "unchanged", value: "" });
+  });
+
+  test("history refresh never replaces an explicit name edit or clear", () => {
+    for (const value of ["Editor rename", ""]) {
+      for (const externalName of ["Timeline rename", null]) {
+        expect(
+          refreshClipboardEditorName({ type: "edited", value }, externalName),
+        ).toEqual({ type: "edited", value });
+      }
+    }
   });
 });

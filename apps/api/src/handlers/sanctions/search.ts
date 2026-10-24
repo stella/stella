@@ -26,9 +26,9 @@ import {
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { SANCTIONS_SUBJECT_ERROR_MESSAGES } from "@/api/lib/lists/sanctions/screening-service";
 import type {
-  screenSanctionsSubject,
   SanctionsScreening,
   SanctionsScreeningSubject,
+  screenSanctionsSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -135,8 +135,7 @@ const screeningBusy = () =>
   });
 
 type PublicSanctionsSearchResult =
-  | PublicSanctionsScreening
-  | ReturnType<typeof screeningBusy>;
+  PublicSanctionsScreening | ReturnType<typeof screeningBusy>;
 
 const toPublicScreening = (
   screening: SanctionsScreening,

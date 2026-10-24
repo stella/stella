@@ -16,7 +16,7 @@ describe("upsert field content schema", () => {
   test.each([
     [{ version: 1, type: "text", value: "Clause 4" }, true],
     [{ version: 1, type: "date", value: "2026-02-28" }, true],
-    [{ version: 1, type: "date", value: "2026-02-30" }, true],
+    [{ version: 1, type: "date", value: "2026-02-30" }, false],
     [{ version: 1, type: "date", value: "22/10/2026" }, false],
     [{ version: 1, type: "int", value: 42, currency: null }, true],
     [{ version: 1, type: "int", value: 4.2, currency: null }, false],

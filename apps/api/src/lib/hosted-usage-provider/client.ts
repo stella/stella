@@ -7,8 +7,8 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import {
-  getHostedUsageProviderKind,
   getHostedUsageProviderApiVersion,
+  getHostedUsageProviderKind,
   type HostedUsageProviderApiCredentials,
 } from "@/api/lib/hosted-usage-provider/config";
 

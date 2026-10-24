@@ -33,10 +33,10 @@ import {
 import { MonthLockPicker } from "@/routes/_protected.admin/-components/organization/month-lock-picker";
 import {
   TIME_UNIT_OPTIONS,
+  type TimePolicy,
   timePolicyErrorKey,
   timePolicyFormSchema,
   timePolicyPatch,
-  type TimePolicy,
   type TimePolicySettings,
 } from "@/routes/_protected.admin/-components/organization/time-policy.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";

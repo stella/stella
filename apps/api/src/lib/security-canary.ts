@@ -85,8 +85,7 @@ class SecurityCanaryRedisReplyError extends TaggedError(
 }> {}
 
 type SecurityCanaryRedisClaim =
-  | { status: "claimed"; ttlMs: number }
-  | { status: "duplicate"; ttlMs: number };
+  { status: "claimed"; ttlMs: number } | { status: "duplicate"; ttlMs: number };
 
 const parseRedisClaim = (reply: unknown): SecurityCanaryRedisClaim => {
   if (!Array.isArray(reply) || reply.length !== 2) {

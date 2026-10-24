@@ -24,6 +24,7 @@ import {
   updateGuestAnnotation,
   writeGuestAnnotationStore,
 } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
+import type { ReaderAnnotationWrites } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
 import { readerAnnotationTargetKey } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import {
@@ -31,6 +32,8 @@ import {
   readerAnnotationsOptions,
 } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { useReaderAnnotationHistory } from "@/components/legal-reader/annotations/use-reader-annotation-history";
+import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
@@ -40,6 +43,7 @@ import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -54,13 +58,6 @@ export const isPendingAnnotationId = (id: string): boolean =>
 
 /** Guest migration is bounded so signing in never opens a request flood. */
 const GUEST_ANNOTATION_MIGRATION_CONCURRENCY = 4;
-
-/** The three things a reader does to a mark, wherever the mark is kept. */
-export type ReaderAnnotationController = {
-  create: (input: CreateAnnotationInput) => unknown;
-  remove: (id: string) => unknown;
-  update: (input: UpdateAnnotationInput) => unknown;
-};
 
 type ReaderAnnotations = {
   annotations: readonly ReaderAnnotation[];
@@ -333,29 +330,35 @@ export const useReaderAnnotations = (
     );
   }, [queryClient, signedIn, storage, t]);
 
-  if (user !== null) {
-    return {
-      annotations: optionalArray(data),
-      controller: {
-        create: create.mutateAsync,
-        remove: remove.mutateAsync,
-        update: update.mutateAsync,
-      },
-      guestCount: 0,
-      mode: "authenticated",
-    };
-  }
+  // Steps belong to one document under one account: signing in, switching
+  // organization or opening another document starts a fresh history.
+  const historyScope = [
+    user?.id ?? "guest",
+    user?.activeOrganizationId ?? "",
+    targetKey.targetType,
+    targetKey.targetId,
+  ].join(":");
+
+  // The tab's marks as they are now, not as this render saw them: a step
+  // taken right after another reads what that one left.
+  const currentGuestStore = () =>
+    storage === null ? guestStore : readGuestAnnotationStore(storage);
 
   const commit = (
     next: typeof guestStore,
     action: "create" | "delete" | "update",
-  ) => {
+  ): Result<void, Error> => {
     if (storage === null) {
       notifyUserError(
         undefined,
         t("legalReader.annotations.guestStorageUnavailable"),
       );
-      return;
+      return Result.err(
+        new ClientOperationError({
+          action: `${action}-guest-reader-annotation`,
+          message: "Guest annotation storage is unavailable",
+        }),
+      );
     }
     const stored = writeGuestAnnotationStore(storage, next);
     if (Result.isError(stored)) {
@@ -367,10 +370,87 @@ export const useReaderAnnotations = (
         stored.error,
         t("legalReader.annotations.guestStorageUnavailable"),
       );
-      return;
+      return Result.err(stored.error);
     }
     setStore(next);
+    return Result.ok(undefined);
   };
+
+  const guestWrites: ReaderAnnotationWrites = {
+    create: async (input: CreateAnnotationInput) => {
+      const before = currentGuestStore();
+      if (before.items.length >= GUEST_ANNOTATIONS_MAX_ITEMS) {
+        notifyUserError(
+          undefined,
+          t("legalReader.annotations.guestLimitReached", {
+            count: String(GUEST_ANNOTATIONS_MAX_ITEMS),
+          }),
+        );
+        return Result.err(
+          new ClientOperationError({
+            action: "create-guest-reader-annotation",
+            message: "Guest annotation limit reached",
+          }),
+        );
+      }
+      const next = createGuestAnnotation({
+        input,
+        newId: createUuid,
+        now: new Date(Temporal.Now.instant().epochMilliseconds),
+        store: before,
+        target: targetKey,
+      });
+      const created = optionalArray(next.items.at(-1)?.rowIds);
+      return await Promise.resolve(commit(next, "create").map(() => created));
+    },
+    remove: async (id: string) =>
+      await Promise.resolve(
+        commit(deleteGuestAnnotation(currentGuestStore(), id), "delete"),
+      ),
+    rows: () =>
+      guestAnnotationRows({
+        authorName: t("legalReader.annotations.guestAuthor"),
+        store: currentGuestStore(),
+        target: targetKey,
+      }),
+    update: async (input: UpdateAnnotationInput) =>
+      await Promise.resolve(
+        commit(updateGuestAnnotation(currentGuestStore(), input), "update"),
+      ),
+  };
+
+  // A failed write has already rolled the cache back and told the reader why
+  // (`settle.onError`); the result only says whether it held.
+  const accountWrites: ReaderAnnotationWrites = {
+    create: async (input: CreateAnnotationInput) =>
+      (await Result.tryPromise(async () => create.mutateAsync(input))).map(
+        (created) => created.ids,
+      ),
+    remove: async (id: string) =>
+      (await Result.tryPromise(async () => remove.mutateAsync(id))).map(
+        () => undefined,
+      ),
+    // The cache, not this render: it already holds what a write just stored.
+    rows: () => optionalArray(queryClient.getQueryData(queryKey)),
+    update: async (input: UpdateAnnotationInput) =>
+      (await Result.tryPromise(async () => update.mutateAsync(input))).map(
+        () => undefined,
+      ),
+  };
+
+  const controller = useReaderAnnotationHistory({
+    scope: historyScope,
+    writes: user === null ? guestWrites : accountWrites,
+  });
+
+  if (user !== null) {
+    return {
+      annotations: optionalArray(data),
+      controller,
+      guestCount: 0,
+      mode: "authenticated",
+    };
+  }
 
   return {
     annotations: guestAnnotationRows({
@@ -378,35 +458,7 @@ export const useReaderAnnotations = (
       store: guestStore,
       target: targetKey,
     }),
-    controller: {
-      create: (input: CreateAnnotationInput) => {
-        if (guestStore.items.length >= GUEST_ANNOTATIONS_MAX_ITEMS) {
-          notifyUserError(
-            undefined,
-            t("legalReader.annotations.guestLimitReached", {
-              count: String(GUEST_ANNOTATIONS_MAX_ITEMS),
-            }),
-          );
-          return;
-        }
-        commit(
-          createGuestAnnotation({
-            input,
-            newId: createUuid,
-            now: new Date(Temporal.Now.instant().epochMilliseconds),
-            store: guestStore,
-            target: targetKey,
-          }),
-          "create",
-        );
-      },
-      remove: (id: string) => {
-        commit(deleteGuestAnnotation(guestStore, id), "delete");
-      },
-      update: (input: UpdateAnnotationInput) => {
-        commit(updateGuestAnnotation(guestStore, input), "update");
-      },
-    },
+    controller,
     guestCount: guestAnnotationsOnTarget(guestStore, targetKey).length,
     mode: "guest",
   };

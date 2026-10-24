@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript6";
 
 import { PropertyTestConfigError } from "./index";
-import { REPO_ROOT, parsePinnedSeeds, readPinnedSeeds } from "./pinned-seeds";
+import { parsePinnedSeeds, readPinnedSeeds, REPO_ROOT } from "./pinned-seeds";
 
 const propertyIds = (file: string, source: string): Set<string> => {
   const parsed = ts.createSourceFile(

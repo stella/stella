@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import {
-  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BrowserClientCapability,
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ChatSourceScope,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
@@ -14,9 +14,9 @@ import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
+  type ChatEditApplyMode,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
-  type ChatEditApplyMode,
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -122,8 +122,8 @@ import type {
 } from "@/api/lib/entities/authorize-document-write";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
-  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
   AI_MEMORY_FEATURE_ID,
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
   FEATURE_REGISTRY,
   type FeatureRegistry,
 } from "@/api/lib/feature-access/registry";
@@ -228,8 +228,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
   workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -412,8 +411,7 @@ export type ChatBuiltinApprovalToolName = Exclude<
 >;
 
 type BuiltInChatToolPolicyName =
-  | keyof BuiltInChatTools
-  | CurrentSkillEditToolName;
+  keyof BuiltInChatTools | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
   /** Only the owning chat turn can issue and store displayed visual resources. */
@@ -585,8 +583,7 @@ export type GetChatToolsProps = {
    * registered by tools or subagents before the memory write.
    */
   resolveMemorySourceWorkspaceIds?:
-    | (() => readonly SafeId<"workspace">[])
-    | undefined;
+    (() => readonly SafeId<"workspace">[]) | undefined;
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Threaded
    * into the projected write tools' MCP context so their `ensureActiveWorkspace`
@@ -596,8 +593,7 @@ export type GetChatToolsProps = {
    * from `accessibleWorkspaces`.
    */
   workspaceStatusById?:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see

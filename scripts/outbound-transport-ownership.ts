@@ -5,8 +5,8 @@ import ts from "typescript6";
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
 import {
   OUTBOUND_PERMIT_GRANT_OWNERS,
-  OUTBOUND_TRANSPORT_CLASSES,
   OUTBOUND_TRANSPORT_CENSUS,
+  OUTBOUND_TRANSPORT_CLASSES,
   type OutboundTransportCensusEntry,
 } from "./outbound-transport-census.ts";
 import { parseSource } from "./parse-memo.ts";
@@ -63,6 +63,13 @@ const NETWORK_MODULES = new Set([
   "@opentelemetry/exporter-trace-otlp-http",
   "@opentelemetry/exporter-metrics-otlp-http",
 ]);
+// These exact Better Auth primitives perform in-process API, cookie, and adapter work.
+const LOCAL_BETTER_AUTH_MODULES = new Set([
+  "better-auth/api",
+  "better-auth/cookies",
+  "better-auth/adapters/drizzle",
+]);
+
 const NETWORK_PACKAGE_PREFIXES = [
   "@aws-sdk/client-",
   "@openrouter/sdk",
@@ -518,6 +525,9 @@ const registerModule = ({
     names !== null &&
     !names.includes("createRemoteJWKSet")
   ) {
+    return;
+  }
+  if (LOCAL_BETTER_AUTH_MODULES.has(module)) {
     return;
   }
   const isNetworkModule = NETWORK_MODULES.has(module);

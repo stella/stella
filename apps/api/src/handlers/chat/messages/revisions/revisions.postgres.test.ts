@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -10,13 +10,13 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
-  chatMessages,
   chatMessageRevisions,
+  chatMessages,
   chatThreadCompactions,
   chatThreads,
   chatTurns,
-  workspaces,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
@@ -25,8 +25,8 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
-  buildChatSystemPromptParts,
   buildChatRevisionNoteSection,
+  buildChatSystemPromptParts,
   CHAT_REVISION_NOTE_MAX_CHARS,
   estimateChatRevisionNoteTokens,
 } from "@/api/handlers/chat/chat-prompt";

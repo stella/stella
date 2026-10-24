@@ -3,8 +3,8 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import type { BackgroundReplaySource } from "@/api/handlers/case-law/ingestion/background-replay";
 import type { ReplayRowOutcome } from "@/api/handlers/case-law/ingestion/replay";
 import {
-  REPLAY_FAILURE_CODES,
   MAX_REPLAY_ROW_READMISSIONS,
+  REPLAY_FAILURE_CODES,
   type ReplayFailure,
   type ReplayPreviewFailure,
 } from "@/api/handlers/case-law/ingestion/replay-failure";

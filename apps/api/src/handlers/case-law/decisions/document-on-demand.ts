@@ -75,9 +75,7 @@ class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
 }> {}
 
 export type DocumentReadDeferral =
-  | PublisherPacingOutcome
-  | "ownership-busy"
-  | "ownership-lost";
+  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 

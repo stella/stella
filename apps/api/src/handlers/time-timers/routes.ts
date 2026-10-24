@@ -31,39 +31,48 @@ export const timeTimersRoute = new Elysia({ prefix: "/v1/time-timers" })
   .get("/", list.handler, {
     query: list.config.query,
     permissions: list.config.permissions,
+    accountAccess: list.config.accountAccess,
   })
   .get("/admin", adminList.handler, {
     query: adminList.config.query,
     permissions: adminList.config.permissions,
+    accountAccess: adminList.config.accountAccess,
   })
   .post("/admin/:id/stop", adminStop.handler, {
     params: adminStop.config.params,
     body: adminStop.config.body,
     permissions: adminStop.config.permissions,
+    accountAccess: adminStop.config.accountAccess,
   })
   .post("/start", start.handler, {
     body: start.config.body,
     permissions: start.config.permissions,
+    accountAccess: start.config.accountAccess,
   })
   .post("/:id/pause", pause.handler, {
     params: pause.config.params,
     permissions: pause.config.permissions,
+    accountAccess: pause.config.accountAccess,
   })
   .post("/:id/resume", resume.handler, {
     params: resume.config.params,
     permissions: resume.config.permissions,
+    accountAccess: resume.config.accountAccess,
   })
   .patch("/:id", update.handler, {
     params: update.config.params,
     body: update.config.body,
     permissions: update.config.permissions,
+    accountAccess: update.config.accountAccess,
   })
   .post("/:id/confirm", confirm.handler, {
     params: confirm.config.params,
     body: confirm.config.body,
     permissions: confirm.config.permissions,
+    accountAccess: confirm.config.accountAccess,
   })
   .delete("/:id", discard.handler, {
     params: discard.config.params,
     permissions: discard.config.permissions,
+    accountAccess: discard.config.accountAccess,
   });

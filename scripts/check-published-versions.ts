@@ -3,8 +3,8 @@ import {
   checkRegistry,
   DAY_SECONDS,
   readPackageManifest,
-  versionBumpTime,
   type RegistryResult,
+  versionBumpTime,
 } from "./check-npm-publish-lag";
 import {
   ALL_PACKAGE_ORDER,

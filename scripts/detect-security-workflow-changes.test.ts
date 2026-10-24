@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";

@@ -9,16 +9,16 @@ import { Temporal } from "@stll/time";
 import { readEuCompletionTickEnvironment } from "@/api/env-eu-completion";
 import {
   EU_COMPLETION_LIMITS,
-  EuCompletionStop,
   type EuCompletionReport,
+  EuCompletionStop,
 } from "@/api/handlers/case-law/ingestion/eu-completion";
 import { REPLAY_HEALTH_CONFIG } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { classifyReplayFailure } from "@/api/handlers/case-law/ingestion/replay-failure";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  type CaseLawScriptHandles,
   createCaseLawMaintenanceCleanupHandles,
   enterCaseLawMaintenanceLane,
-  type CaseLawScriptHandles,
 } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {

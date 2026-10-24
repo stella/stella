@@ -2,9 +2,9 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { afterEach, expect, test } from "bun:test";
 
 import {
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 import {
   resetMetricLineSinkForTesting,

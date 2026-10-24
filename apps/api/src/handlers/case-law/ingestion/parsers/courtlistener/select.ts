@@ -33,8 +33,8 @@ import {
 import { parsePlainText, parsePreformatted } from "./plain-text";
 import { plainTextStructureOf } from "./plain-text-structure";
 import {
-  publishedTextDefects,
   type PublishedTextDefect,
+  publishedTextDefects,
 } from "./source-defects";
 import {
   classifyCourtListenerText,

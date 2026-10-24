@@ -33,21 +33,26 @@ export const memoriesRoute = new Elysia({
   .get("/", listMemories.handler, {
     query: listMemories.config.query,
     permissions: listMemories.config.permissions,
+    accountAccess: listMemories.config.accountAccess,
   })
   .post("/", createMemory.handler, {
     body: createMemory.config.body,
     permissions: createMemory.config.permissions,
+    accountAccess: createMemory.config.accountAccess,
   })
   .post("/firm", createFirmMemory.handler, {
     body: createFirmMemory.config.body,
     permissions: createFirmMemory.config.permissions,
+    accountAccess: createFirmMemory.config.accountAccess,
   })
   .patch("/:memoryId", updateMemory.handler, {
     body: updateMemory.config.body,
     params: updateMemory.config.params,
     permissions: updateMemory.config.permissions,
+    accountAccess: updateMemory.config.accountAccess,
   })
   .delete("/:memoryId", deleteMemory.handler, {
     params: deleteMemory.config.params,
     permissions: deleteMemory.config.permissions,
+    accountAccess: deleteMemory.config.accountAccess,
   });

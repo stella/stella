@@ -49,7 +49,7 @@ structure.
 ### Typechecking
 
 Run `bun run typecheck` for workspace checks or `bun run typecheck:repo` for
-repository tooling. These commands use Bun 1.4.3’s native checker locally and in
+repository tooling. These commands use Bun’s native checker locally and in
 CI. For a direct project check, use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for a
 solution config with project references. `bun run check:typecheck-parity` compares
@@ -209,7 +209,7 @@ unprefixed global names.
   for TypeScript; `bun run lint:css` runs Stylelint's correctness checks over
   authored CSS. CSS checks also run in `lint`, `code-check`, and affected CI.
   Tailwind v4 directives and deliberate fallback declarations are supported;
-  embedded Astro styles are not scanned. **Formatting**: Oxfmt.
+  embedded Astro styles are not scanned. **Formatting**: `bun fmt`.
 - **Tests**: write tests for new functionality when applicable.
 
 ## Changesets

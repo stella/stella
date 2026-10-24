@@ -51,6 +51,7 @@ export const ClientGroupHeader = ({
           <span>{personalLabel}</span>
         ) : (
           <span
+            aria-label={group.clientName}
             className="hover:underline"
             onClick={(e) => {
               e.stopPropagation();

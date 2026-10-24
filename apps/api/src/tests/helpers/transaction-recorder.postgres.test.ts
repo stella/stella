@@ -1,4 +1,4 @@
-import { panic, Panic, Result } from "better-result";
+import { Panic, panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { DrizzleQueryError, eq, sql } from "drizzle-orm";
 import { integer, pgTable } from "drizzle-orm/pg-core";

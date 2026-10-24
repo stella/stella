@@ -4,12 +4,13 @@ import { DrizzleQueryError } from "drizzle-orm";
 
 import { validateLedger } from "../lib/db/migration-ledger";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
+import { DEFAULT_LOCK_RETRY_CONFIG } from "./lock-retry-ladder";
 import {
   applyPendingRetryingLockWaits,
+  applySchemaMigrationsRetryingLockWaits,
   decideLedgerAheadPolicy,
   MIGRATION_LOCK_WAIT_FAILURE,
   MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
-  MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
   MigrationLockWaitError,
 } from "./migration-runner";
 
@@ -145,10 +146,12 @@ const runScripted = async ({
   let attempts = 0;
   let clock = 0;
   const sleeps: number[] = [];
+  const lockTimeouts: number[] = [];
   const stdout = spyOn(process.stdout, "write").mockImplementation(() => true);
   try {
     const outcome = await applyPendingRetryingLockWaits({
-      apply: async () => {
+      apply: async (lockTimeoutMs) => {
+        lockTimeouts.push(lockTimeoutMs);
         const failure = script.at(attempts);
         attempts += 1;
         clock += attemptMs;
@@ -162,8 +165,8 @@ const runScripted = async ({
       },
       ledgerUnchanged: async () => await Promise.resolve(ledgerUnchanged),
       retry: {
-        delaysMs: MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
-        budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
+        ...DEFAULT_LOCK_RETRY_CONFIG,
+        random: () => 0.5,
         now: () => clock,
         sleep: async (ms) => {
           sleeps.push(ms);
@@ -178,13 +181,14 @@ const runScripted = async ({
     const events: unknown[] = stdout.mock.calls.map((call) =>
       JSON.parse(String(call.at(0))),
     );
-    return { outcome, attempts, sleeps, events };
+    return { outcome, attempts, sleeps, events, lockTimeouts };
   } finally {
     stdout.mockRestore();
   }
 };
 
-const ATTEMPTS = MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS.length + 1;
+const ATTEMPTS = DEFAULT_LOCK_RETRY_CONFIG.lockTimeoutsMs.length;
+const JITTERED_PAUSES_MS = [50, 100, 200, 400];
 
 describe("a pending set that loses a lock wait", () => {
   test("reruns whole after each pause and stops once an attempt applies", async () => {
@@ -193,27 +197,32 @@ describe("a pending set that loses a lock wait", () => {
     const run = await runScripted({ script: [lockWaitLoss(), nested, null] });
     expect(run.outcome).toBeNull();
     expect(run.attempts).toBe(3);
-    expect(run.sleeps).toEqual(MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS.slice(0, 2));
+    expect(run.lockTimeouts).toEqual(
+      DEFAULT_LOCK_RETRY_CONFIG.lockTimeoutsMs.slice(0, 3),
+    );
+    expect(run.sleeps).toEqual(JITTERED_PAUSES_MS.slice(0, 2));
     expect(run.events).toEqual(
-      MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS.slice(0, 2).map((delayMs, index) => ({
+      JITTERED_PAUSES_MS.slice(0, 2).map((delayMs, index) => ({
         event: "migrate.lock_wait_retry",
         level: "warn",
         attempt: index + 1,
         attempts: ATTEMPTS,
         delayMs,
+        lockTimeoutMs: DEFAULT_LOCK_RETRY_CONFIG.lockTimeoutsMs.at(index),
       })),
     );
   });
 
-  test("gives up after one attempt more than its pauses, citing the last failure", async () => {
+  test("gives up after the timeout ladder, citing the last failure", async () => {
     const failures = Array.from({ length: ATTEMPTS }, lockWaitLoss);
     const run = await runScripted({ script: failures });
     expect(run.attempts).toBe(ATTEMPTS);
-    expect(run.sleeps).toEqual([...MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS]);
+    expect(run.sleeps).toEqual(JITTERED_PAUSES_MS);
     expect(MigrationLockWaitError.is(run.outcome)).toBe(true);
     expect(run.outcome).toMatchObject({
       reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
       attempts: ATTEMPTS,
+      lockTimeoutMs: DEFAULT_LOCK_RETRY_CONFIG.lockTimeoutsMs.at(-1),
       cause: failures.at(-1),
     });
   });
@@ -238,7 +247,7 @@ describe("a pending set that loses a lock wait", () => {
     const attemptMs = MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS / 2;
     const run = await runScripted({ script: failures, attemptMs });
     expect(run.attempts).toBe(2);
-    expect(run.sleeps).toEqual(MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS.slice(0, 1));
+    expect(run.sleeps).toEqual(JITTERED_PAUSES_MS.slice(0, 1));
     expect(run.outcome).toMatchObject({
       reason: MIGRATION_LOCK_WAIT_FAILURE.budgetSpent,
       attempts: 2,
@@ -276,4 +285,107 @@ describe("a pending set that loses a lock wait", () => {
       expect(run.events).toEqual([]);
     }
   });
+});
+
+test("the schema ladder restores the session lock timeout before the online phase", async () => {
+  const statements: string[] = [];
+  const connection = {
+    unsafe: async (statement: string) => {
+      statements.push(statement);
+      return [];
+    },
+  };
+
+  await applySchemaMigrationsRetryingLockWaits({
+    connection,
+    apply: async (lockTimeoutMs) => {
+      await connection.unsafe(
+        `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
+      );
+    },
+    ledgerUnchanged: async () => true,
+    retry: {
+      ...DEFAULT_LOCK_RETRY_CONFIG,
+      lockTimeoutsMs: [25],
+      random: () => 0.5,
+      now: () => 0,
+      sleep: async () => await Promise.resolve(),
+    },
+  });
+  await connection.unsafe("ONLINE PHASE FIRST STATEMENT");
+
+  expect(statements).toEqual([
+    "SET lock_timeout = '25ms'",
+    "RESET lock_timeout",
+    "ONLINE PHASE FIRST STATEMENT",
+  ]);
+});
+
+test("the schema ladder restores the session lock timeout after a failure", async () => {
+  const statements: string[] = [];
+  const connection = {
+    unsafe: async (statement: string) => {
+      statements.push(statement);
+      return [];
+    },
+  };
+  const failure = new Error("schema migration failed");
+
+  const rejection = await applySchemaMigrationsRetryingLockWaits({
+    connection,
+    apply: async (lockTimeoutMs) => {
+      await connection.unsafe(
+        `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
+      );
+      throw failure;
+    },
+    ledgerUnchanged: async () => true,
+    retry: {
+      ...DEFAULT_LOCK_RETRY_CONFIG,
+      lockTimeoutsMs: [25],
+      random: () => 0.5,
+      now: () => 0,
+      sleep: async () => await Promise.resolve(),
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBe(failure);
+  expect(statements).toEqual([
+    "SET lock_timeout = '25ms'",
+    "RESET lock_timeout",
+  ]);
+});
+
+test("a terminated schema session preserves the observation failure without resetting it", async () => {
+  const failure = new Error("observation failed");
+  const statements: string[] = [];
+  let connectionState: "open" | "terminated" = "open";
+  const rejection = await applySchemaMigrationsRetryingLockWaits({
+    connection: {
+      unsafe: async (statement) => {
+        statements.push(statement);
+        throw new Error("connection closed");
+      },
+    },
+    connectionState: () => connectionState,
+    apply: async () => {
+      connectionState = "terminated";
+      throw failure;
+    },
+    ledgerUnchanged: async () => true,
+    retry: {
+      ...DEFAULT_LOCK_RETRY_CONFIG,
+      random: () => 0.5,
+      now: () => 0,
+      sleep: async () => await Promise.resolve(),
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBe(failure);
+  expect(statements).toEqual([]);
 });

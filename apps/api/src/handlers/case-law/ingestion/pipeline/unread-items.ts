@@ -27,14 +27,14 @@ import type { IngestionScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  toPlainTextMetadataObject,
   type PlainTextMetadataValue,
+  toPlainTextMetadataObject,
 } from "@/api/lib/case-law/plain-text";
 import {
   READ_OUTCOME_METADATA_KEY,
+  type StoredReadOutcome,
   storedReadUnavailable,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
-  type StoredReadOutcome,
 } from "@/api/lib/errors/read-outcome";
 import type {
   IngestionResult,

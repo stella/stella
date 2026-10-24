@@ -150,6 +150,7 @@ const exportViewReport = createSafeHandler(
     // +1 so a view exactly one over the cap is detected, never truncated.
     const cappedRowsResult = yield* Result.await(
       queryEntities({
+        textMode: "full",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: user.id,

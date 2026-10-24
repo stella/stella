@@ -35,8 +35,8 @@ import {
   lockActiveWorkspaceForBufferIntent,
   lockObjectCleanupIntentsForWriter,
   lockOrganizationObjectIntentsForWriter,
-  objectWriterSettlementAfterCleanup,
   OBJECT_WRITE_RECOVERY_DELAY_MS,
+  objectWriterSettlementAfterCleanup,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
@@ -53,9 +53,9 @@ import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-sessi
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
+  decideFolioSnapshotRecoveryState,
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
   loadPersistedFolioSnapshot,
-  decideFolioSnapshotRecoveryState,
 } from "@/api/lib/files/folio-collab-snapshot-loader";
 import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -158,8 +158,7 @@ export type FolioCollabSnapshotTarget = Pick<
 >;
 
 type FolioCollabSnapshotStoreAuthority =
-  | { type: "collab-service" }
-  | { type: "participant"; userId: SafeId<"user"> };
+  { type: "collab-service" } | { type: "participant"; userId: SafeId<"user"> };
 
 type FolioCollabTokenIssueDb = {
   execute: (query: SQL) => Promise<unknown>;

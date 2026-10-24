@@ -22,8 +22,8 @@ import { stellaToast } from "@stll/ui/toast";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
-  FlowStepStatusBadge,
   FlowStatusBadge,
+  FlowStepStatusBadge,
 } from "@/components/flows/flow-badges";
 import {
   FLOW_STEP_KIND_ICONS,

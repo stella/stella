@@ -10,8 +10,8 @@ import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headn
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  truncateHeadlineBytes,
   nullableText,
+  truncateHeadlineBytes,
   truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
@@ -166,6 +166,7 @@ export const projectCaseLawSearchResponse = (
             .map(projectBucket),
         },
   total: response.total,
+  relaxedHitCount: response.relaxedHitCount,
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,

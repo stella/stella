@@ -86,12 +86,7 @@ type EvidenceNodeKind = "error" | "plain" | "primitive" | "tagged";
 type EvidenceTruncation = "cycle" | "depth" | "none" | "read_failed";
 
 type ProviderStatusSource =
-  | "body_code"
-  | "body_status"
-  | "code"
-  | "metadata"
-  | "status"
-  | "statusCode";
+  "body_code" | "body_status" | "code" | "metadata" | "status" | "statusCode";
 
 type ProviderStatus = {
   readonly status: number;
@@ -139,8 +134,7 @@ export type EvidenceNode = {
   readonly ownStatus: number | undefined;
   readonly providerStatus: ProviderStatus | undefined;
   readonly handler:
-    | { readonly status: number; readonly code: string | undefined }
-    | undefined;
+    { readonly status: number; readonly code: string | undefined } | undefined;
   readonly brand: FailureBrand | undefined;
   /** The prototype chain, read once; identity checks run against it. */
   readonly prototypes: readonly object[];
@@ -502,6 +496,12 @@ const extractionFields = (
     fields["signalCode"] = String(readKey(state, termination, "signalCode"));
     fields["terminationReason"] = String(readKey(state, termination, "reason"));
     return fields;
+  }
+  const workerErrorClass = nonEmptyString(
+    readKey(state, value, "workerErrorClass"),
+  );
+  if (workerErrorClass !== undefined) {
+    fields["workerErrorClass"] = workerErrorClass;
   }
   fields["exitCode"] = String(readKey(state, value, "exitCode"));
   return fields;

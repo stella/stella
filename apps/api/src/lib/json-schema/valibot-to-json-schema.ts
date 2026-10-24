@@ -1,12 +1,13 @@
 import {
   type ConversionConfig,
-  toJsonSchema as convertToJsonSchema,
   type JsonSchema,
+  toJsonSchema as convertToJsonSchema,
 } from "@valibot/to-json-schema";
 import type { GenericSchema } from "valibot";
 
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+import { ANALYSIS_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/decision-identifier";
 import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast";
 
@@ -50,6 +51,7 @@ const stripInternalMetadata: NonNullable<
  * an error.
  */
 const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
+  ...ANALYSIS_RUNTIME_ONLY_CHECKS,
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
   ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
@@ -57,6 +59,7 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
 
 const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
   [
+    ...ANALYSIS_RUNTIME_ONLY_CHECKS,
     ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
     ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
   ].map(({ requirement }) => requirement),

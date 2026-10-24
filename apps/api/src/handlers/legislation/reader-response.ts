@@ -5,8 +5,8 @@ import * as v from "valibot";
 
 import {
   LEGISLATION_EXPRESSION_KINDS,
-  LEGISLATION_WINDOW_DISPOSITIONS,
   LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES,
+  LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 
@@ -27,8 +27,8 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   boundedString,
   nullableBoundedString,
-  truncateTextBytes,
   nullableText,
+  truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 // Database varchar limits admit four UTF-8 bytes per character; text columns

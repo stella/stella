@@ -23,8 +23,7 @@ export type ClauseBodyWrite = {
 };
 
 type BodyConflict =
-  | { status: "none" }
-  | { status: "choice"; head: ClauseParagraph[] };
+  { status: "none" } | { status: "choice"; head: ClauseParagraph[] };
 type ClauseBodySaveOptions = {
   initialBody: ClauseParagraph[];
   persist: (write: ClauseBodyWrite) => Promise<unknown>;

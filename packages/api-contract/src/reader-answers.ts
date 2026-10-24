@@ -23,6 +23,9 @@ export const READER_ANSWER_MESSAGE_STATUSES = [
 export const READER_ANSWER_QUESTION_MAX_LENGTH = 10_000;
 export const READER_ANSWER_QUOTE_MAX_LENGTH = 2000;
 export const READER_ANSWER_MAX_MESSAGES = 40;
+/** A selection whose offsets or quote do not match the anchored reader text. */
+export const READER_ANSWER_ANCHOR_MISMATCH_CODE =
+  "reader_answer_anchor_mismatch";
 
 /** Streaming message updatedAt is the non-renewing server claim timestamp. */
 export const READER_ANSWER_DEADLINE_MS = 120_000;

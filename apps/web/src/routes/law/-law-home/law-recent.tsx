@@ -6,12 +6,12 @@ import { useTranslations } from "use-intl";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import {
   AlertDialog,
-  AlertDialogPopup,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogClose,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogClose,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
@@ -23,6 +23,7 @@ import {
   LandingItemText,
   LandingSection,
 } from "@stll/ui/landing";
+import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
@@ -111,7 +112,7 @@ const ScopedLawRecentList = ({
       case "error":
         return "lawHome.recentLoadFailed" as const;
       case "pending":
-        return "common.loading" as const;
+        return undefined;
       case "ready":
         return entries.length === 0 ? ("lawHome.noRecent" as const) : undefined;
       default:
@@ -180,6 +181,30 @@ const ScopedLawRecentList = ({
             >
               {t("common.retry")}
             </Button>
+          </div>
+        )}
+        {history.list.status === "pending" && (
+          // The rows' own shape, so the list fills in place rather than
+          // swapping a status line for entries.
+          <div
+            aria-busy="true"
+            aria-label={t("common.loading")}
+            className="flex flex-col"
+            role="status"
+          >
+            {Array.from({ length: 3 }, (_, index) => (
+              <div
+                aria-hidden="true"
+                className="flex items-start gap-2 px-2 py-1.5"
+                key={index}
+              >
+                <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <Skeleton className="h-4 w-3/5" />
+                  <Skeleton className="h-3 w-2/5" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {emptyLabel !== undefined ? (
