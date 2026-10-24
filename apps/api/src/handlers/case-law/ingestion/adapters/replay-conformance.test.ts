@@ -152,10 +152,10 @@ describe("every case-law adapter is replay safe", () => {
       expect(snapshotOf(interrupted)).toEqual(snapshotOf(uninterrupted));
 
       const parserSnapshot = parserFingerprints[adapter.key];
-      expect({
+      expect(parserSnapshot).toEqual({
         version: PARSER_VERSIONS[adapter.key],
         fingerprint: fingerprint(first),
-      }).toEqual(parserSnapshot);
+      });
 
       for (const [field, value] of Object.entries(first.textFields)) {
         switch (value.type) {
