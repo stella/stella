@@ -134,6 +134,8 @@ export type ProcessDecisionAttemptOptions = {
   observationOrder: bigint;
   contentionReconciliation: ContentionReconciliation;
   refresh: DecisionRefresh;
+  sourceFingerprintVersion: number;
+  sourceFingerprintFromStoredRaw: (key: string) => Promise<string>;
   corpus: CaseLawCorpusDependencies;
   /**
    * The batch this decision's payloads join. A caller processing a page
@@ -158,9 +160,15 @@ export type ProcessDecisionOptions = Omit<
   | "refresh"
   | "metadataUrlSchema"
   | "statedEcliIdentity"
+  | "sourceFingerprintVersion"
+  | "sourceFingerprintFromStoredRaw"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;
   corpus?: CaseLawCorpusDependencies;
   judges?: CaseLawJudgeDependencies;
+  /** Test seam for the external raw-object store. */
+  sourceFingerprintFromStoredRaw?:
+    | ((key: string) => Promise<string>)
+    | undefined;
 };

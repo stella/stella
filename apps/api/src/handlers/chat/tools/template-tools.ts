@@ -29,8 +29,8 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
-  requireChatToolModelAdmission,
   type ModelDispatchAdmission,
+  requireChatToolModelAdmission,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { recordTemplateExecution } from "@/api/lib/templates/record-use";
@@ -162,7 +162,7 @@ const buildTemplateAiAnalytics = ({
       workspaceId: null,
     },
     feature,
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig: orgAIConfig ?? null,
     modelTier,
     properties: { organization_id: organizationId },

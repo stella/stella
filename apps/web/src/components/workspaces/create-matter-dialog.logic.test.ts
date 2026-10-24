@@ -1,8 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
 import {
-  buildCollaboratorStats,
-  compareMembersByCollaboratorStats,
   getPossibleDuplicateMatters,
   isPossibleDuplicateMatter,
 } from "@/components/workspaces/create-matter-dialog.logic";
@@ -92,61 +90,5 @@ describe("getPossibleDuplicateMatters", () => {
       "workspace-1",
       "workspace-2",
     ]);
-  });
-});
-
-describe("compareMembersByCollaboratorStats", () => {
-  it("prioritizes members with stronger shared collaboration signals", () => {
-    const collaboratorStats = buildCollaboratorStats({
-      currentUserId: "current-user",
-      workspaces: [
-        {
-          client: { id: "client-1" },
-          members: [
-            {
-              lastActivity: "2026-04-05T10:00:00.000Z",
-              userId: "current-user",
-            },
-            { lastActivity: "2026-04-05T10:00:00.000Z", userId: "alice" },
-          ],
-          id: "workspace-1",
-          name: "Matter A",
-        },
-        {
-          client: { id: "client-1" },
-          members: [
-            {
-              lastActivity: "2026-04-06T10:00:00.000Z",
-              userId: "current-user",
-            },
-            { lastActivity: "2026-04-06T10:00:00.000Z", userId: "alice" },
-          ],
-          id: "workspace-2",
-          name: "Matter B",
-        },
-        {
-          client: { id: "client-1" },
-          members: [
-            { lastActivity: "2026-04-07T10:00:00.000Z", userId: "bob" },
-          ],
-          id: "workspace-3",
-          name: "Matter C",
-        },
-      ],
-    });
-
-    const members = [
-      { user: { name: "Bob" }, userId: "bob" },
-      { user: { name: "Alice" }, userId: "alice" },
-    ].toSorted((a, b) =>
-      compareMembersByCollaboratorStats({
-        a,
-        b,
-        collaboratorStats,
-        locale: "en",
-      }),
-    );
-
-    expect(members.map((member) => member.userId)).toEqual(["alice", "bob"]);
   });
 });

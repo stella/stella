@@ -1,4 +1,5 @@
 import { startTransition, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -48,6 +49,9 @@ import {
 } from "../telemetry/desktop-telemetry";
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { commandErrorMessage } from "./command-error";
+import { PermissionsSection } from "./PermissionsSection";
+import { ShortcutSetting } from "./ShortcutSetting";
 import stellaFavicon from "./stella-favicon.svg";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
@@ -125,7 +129,7 @@ const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
 type SettingRowProps = {
   helper?: string;
   label: string;
-  value: string;
+  value: ReactNode;
 };
 
 const SettingRow = ({ helper, label, value }: SettingRowProps) => (
@@ -205,43 +209,6 @@ const PanelGroup = ({
     </div>
   </section>
 );
-
-const AutoStartToggle = () => {
-  const t = useTranslations("settings");
-  const [enabled, setEnabled] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    invoke<boolean>("is_autostart_enabled")
-      .then(setEnabled)
-      .catch(() => setEnabled(null));
-  }, []);
-
-  if (enabled === null) {
-    return null;
-  }
-
-  return (
-    <div className="px-4 py-3">
-      <Label className="items-start gap-3" htmlFor="autostart-toggle">
-        <Checkbox
-          checked={enabled}
-          className="mt-0.5"
-          id="autostart-toggle"
-          onCheckedChange={(checked) => {
-            setEnabled(checked);
-            void invoke<boolean>("set_autostart", { enabled: checked });
-          }}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">{t("startOnLogin")}</span>
-          <span className="text-muted-foreground mt-1 block text-sm leading-relaxed">
-            {t("startOnLoginDescription")}
-          </span>
-        </span>
-      </Label>
-    </div>
-  );
-};
 
 type TelemetryPreferenceState =
   | { status: "loading" }
@@ -384,10 +351,14 @@ const GeneralPane = ({
           </div>
           <span
             className={cn(
-              "text-2xs inline-flex rounded-full border px-2 py-0.5 font-medium",
-              presentation.status === "linked"
-                ? "border-success/20 bg-success/10 text-success-foreground"
-                : "bg-muted text-muted-foreground border-border",
+              "text-2xs inline-flex shrink-0 rounded-full border px-2 py-0.5 font-medium",
+              presentation.status === "linked" &&
+                "border-success/20 bg-success/10 text-success-foreground",
+              presentation.status === "attention" &&
+                "border-warning/20 bg-warning/10 text-warning-foreground",
+              presentation.status !== "linked" &&
+                presentation.status !== "attention" &&
+                "bg-muted text-muted-foreground border-border",
             )}
           >
             {t(presentation.statusKey)}
@@ -395,12 +366,21 @@ const GeneralPane = ({
         </div>
         <p className="text-muted-foreground px-4 pb-4 text-sm leading-relaxed wrap-break-word">
           {linkedAccount?.email ??
-            t(
-              accountState.status === "expired"
-                ? "connectionExpiredDescription"
-                : "desktopBenefit",
-            )}
+            (presentation.descriptionKey
+              ? t(presentation.descriptionKey, {
+                  host: presentation.host ?? "",
+                })
+              : t("desktopBenefit"))}
         </p>
+        {presentation.host ? (
+          <>
+            <Separator />
+            <SettingRow
+              label={t("serverLabel")}
+              value={<bdi dir="ltr">{presentation.host}</bdi>}
+            />
+          </>
+        ) : null}
         {linkedAccount ? (
           <>
             <Separator />
@@ -422,26 +402,24 @@ const GeneralPane = ({
           </>
         ) : null}
         <Separator />
-        <div className="flex items-center justify-between gap-4 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{t(presentation.webTitleKey)}</p>
-            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              {t(presentation.webDescriptionKey)}
-            </p>
-          </div>
+        <div className="flex items-center justify-end gap-4 px-4 py-3">
           <Button
             disabled={presentation.status === "loading"}
             onClick={onAccountAction}
             size="sm"
-            variant="outline"
+            variant={presentation.actionVariant}
           >
-            {t(presentation.actionKey)}
+            {t(presentation.actionKey, { host: presentation.host ?? "" })}
           </Button>
         </div>
         <Separator />
-        <AutoStartToggle />
-        <Separator />
         <TelemetryToggle />
+      </PanelGroup>
+      <PanelGroup>
+        <ShortcutSetting />
+      </PanelGroup>
+      <PanelGroup title={t("permissions")}>
+        <PermissionsSection window={DESKTOP_TELEMETRY_WINDOWS.main} />
       </PanelGroup>
       <PanelGroup>
         <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -487,6 +465,52 @@ const GeneralPane = ({
           </Combobox>
         </div>
       </PanelGroup>
+      <PanelGroup>
+        <SetupGuideSetting />
+      </PanelGroup>
+    </div>
+  );
+};
+
+/** Starts the setup tour again in its own window. */
+const SetupGuideSetting = () => {
+  const t = useTranslations("settings");
+  const [failed, setFailed] = useState(false);
+  const restart = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_restart"),
+    );
+    if (Result.isError(result)) {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+        window: DESKTOP_TELEMETRY_WINDOWS.main,
+      });
+    }
+    setFailed(Result.isError(result));
+  };
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{t("setupGuide")}</p>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("setupGuideDescription")}
+        </p>
+        {failed ? (
+          <p className="text-destructive-foreground mt-1 text-sm" role="alert">
+            {t("errorSetupGuide")}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        onClick={() => {
+          void restart();
+        }}
+        size="sm"
+        variant="outline"
+      >
+        {t("setupGuideAction")}
+      </Button>
     </div>
   );
 };
@@ -678,11 +702,7 @@ const App = () => {
           return;
         }
 
-        setError(
-          fetchError instanceof Error
-            ? fetchError.message
-            : t("errorReadState"),
-        );
+        setError(commandErrorMessage(fetchError, t("errorReadState")));
       }
     };
 
@@ -792,11 +812,7 @@ const App = () => {
               }
             : currentState,
         );
-        setError(
-          updateError instanceof Error
-            ? updateError.message
-            : t("errorUpdatePreferences"),
-        );
+        setError(commandErrorMessage(updateError, t("errorUpdatePreferences")));
       });
     }
   };
@@ -806,11 +822,7 @@ const App = () => {
       await invoke<boolean>("copy_diagnostics");
       setError(null);
     } catch (copyError) {
-      setError(
-        copyError instanceof Error
-          ? copyError.message
-          : t("errorCopyDiagnostics"),
-      );
+      setError(commandErrorMessage(copyError, t("errorCopyDiagnostics")));
     }
   };
 
@@ -819,11 +831,7 @@ const App = () => {
       await invoke<boolean>("email_support");
       setError(null);
     } catch (emailError) {
-      setError(
-        emailError instanceof Error
-          ? emailError.message
-          : t("errorEmailSupport"),
-      );
+      setError(commandErrorMessage(emailError, t("errorEmailSupport")));
     }
   };
 
@@ -832,11 +840,7 @@ const App = () => {
       await invoke<boolean>("reveal_support_root");
       setError(null);
     } catch (revealError) {
-      setError(
-        revealError instanceof Error
-          ? revealError.message
-          : t("errorRevealAppData"),
-      );
+      setError(commandErrorMessage(revealError, t("errorRevealAppData")));
     }
   };
 
@@ -845,11 +849,7 @@ const App = () => {
       await setPreferredLanguage(language);
       setError(null);
     } catch (languageError) {
-      setError(
-        languageError instanceof Error
-          ? languageError.message
-          : t("errorUpdateLanguage"),
-      );
+      setError(commandErrorMessage(languageError, t("errorUpdateLanguage")));
     }
   };
 
@@ -857,16 +857,15 @@ const App = () => {
     try {
       if (accountState.status === "reconnectRequired") {
         await invoke("account_disconnect");
-        setAccountState({ status: "disconnected" });
+        setAccountState({
+          status: "disconnected",
+          server: accountState.server,
+        });
       }
       await invoke("open_stella_account");
       setError(null);
     } catch (openError) {
-      setError(
-        openError instanceof Error
-          ? openError.message
-          : t("errorOpenStellaWeb"),
-      );
+      setError(commandErrorMessage(openError, t("errorOpenStellaWeb")));
     }
   };
 
@@ -933,15 +932,19 @@ const App = () => {
                       if (accountState.status === "connected") {
                         void invoke("account_disconnect")
                           .then(() => {
-                            setAccountState({ status: "disconnected" });
+                            setAccountState({
+                              status: "disconnected",
+                              server: accountState.server,
+                            });
                             setError(null);
                             return;
                           })
                           .catch((disconnectError: unknown) => {
                             setError(
-                              disconnectError instanceof Error
-                                ? disconnectError.message
-                                : t("errorDisconnectAccount"),
+                              commandErrorMessage(
+                                disconnectError,
+                                t("errorDisconnectAccount"),
+                              ),
                             );
                           });
                         return;

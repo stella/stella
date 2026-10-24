@@ -3,15 +3,15 @@ import type * as v from "valibot";
 
 import {
   AGENT_INPUT_NORMALIZATION_KIND,
-  agentInputNormalizationMetadata,
   type AgentInputNormalizationAnnotation,
+  agentInputNormalizationMetadata,
 } from "@stll/agent-input";
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 import type {
-  McpToolDefinition,
   McpToolAnnotationReasons,
+  McpToolDefinition,
   McpToolInputSchema,
   McpToolOutputContract,
   McpToolOutputSchema,
@@ -44,6 +44,7 @@ type ToolWithoutInputSchema<TDefinition> = TDefinition extends McpToolDefinition
 
 type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
   inputSchema: NullAsAbsentInputSchema;
+  annotationReasons?: McpToolAnnotationReasons;
   /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
   inputNormalization?: Readonly<
     Record<string, AgentInputNormalizationAnnotation>
@@ -53,7 +54,10 @@ type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
 
 type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
   TDefinition,
-  "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
+  | "inputSchema"
+  | "inputNormalization"
+  | "jsonSchemaProjectionWaiver"
+  | "annotationReasons"
 > & {
   annotationReasons: McpToolAnnotationReasons;
   inputSchema: McpToolInputSchema;
@@ -471,7 +475,11 @@ const combineSchemas = (
   const unique = uniqueSchemas(schemas);
   const combined =
     compaction === "equivalent" ? mergeLiteralAlternatives(unique) : unique;
-  return combined.length === 1 ? (combined.at(0) ?? {}) : { anyOf: combined };
+  // Normalize newly combined property unions before the depth limit counts
+  // their alternatives as another level of object detail.
+  return combined.length === 1
+    ? (combined.at(0) ?? {})
+    : simplifyMcpOutputSchema({ anyOf: combined }, compaction);
 };
 
 const MERGEABLE_OBJECT_SCHEMA_KEYS = new Set([
@@ -770,6 +778,7 @@ export const defineValibotMcpTool = <
     inputNormalization,
     inputSchema,
     jsonSchemaProjectionWaiver,
+    annotationReasons,
     ...toolDefinition
   } = definition;
   const { annotations } = toolDefinition;
@@ -786,7 +795,7 @@ export const defineValibotMcpTool = <
   }
   return {
     ...toolDefinition,
-    annotationReasons: {
+    annotationReasons: annotationReasons ?? {
       readOnlyHint: annotations.readOnlyHint
         ? `${subject} only retrieves or computes data.`
         : `${subject} changes state or starts stateful work.`,

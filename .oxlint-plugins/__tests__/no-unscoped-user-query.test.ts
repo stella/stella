@@ -8,6 +8,22 @@ const SOURCE = [
   "",
 ].join("\n");
 
+test("schema metadata does not exempt database reads in the same module", async () => {
+  const source = [
+    'import { user } from "@/api/db/auth-schema";',
+    'import { getTableConfig } from "drizzle-orm/pg-core";',
+    "const name = getTableConfig(user).name;",
+    'const owner = text("user_id").references(() => user.id);',
+    "export const read = db.select().from(user);",
+  ].join("\n");
+  expect(
+    await lintSingleRule("no-unscoped-user-query", source, {
+      plugin: "security-guards",
+      sourcePath: "apps/api/src/db/schema/account-export-fixture.ts",
+    }),
+  ).toEqual([5]);
+});
+
 const lint = async (
   sourcePath: string,
   allowedFiles?: readonly { file: string; reason: string }[],
@@ -116,5 +132,57 @@ describe.serial("no-unscoped-user-query hoisted projections", () => {
         `${PROFILE_SELECTION}\nexport const unscoped = db.select(profileColumns).from(user);`,
       ),
     ).not.toEqual([]);
+  });
+});
+
+describe.serial("no-unscoped-user-query schema metadata", () => {
+  const options = {
+    plugin: "security-guards",
+    sourcePath: "apps/api/src/db/schema/receipt.ts",
+    cwd: "scratch" as const,
+  };
+  test("allows foreign-key callbacks while retaining row-query checks", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", { userId: text("user_id").references(() => user.id) });`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule(
+        "no-unscoped-user-query",
+        `${source}\nexport const rows = db.select().from(user);`,
+        options,
+      ),
+    ).toEqual([3]);
+  });
+  test("checks row reads and returned columns inside block callbacks", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", {
+  userId: text("user_id").references(() => {
+    db.select().from(user);
+    return user.id;
+  }),
+});`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([4, 5]);
+  });
+  test("checks a block callback that only returns a column", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", {
+  userId: text("user_id").references(() => {
+    return user.id;
+  }),
+});`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([4]);
+  });
+  test("checks concise callbacks outside the first references argument", async () => {
+    const source = `import { user } from "@/api/db/auth-schema";
+export const table = pgTable("receipt", { userId: text("user_id").references(options, () => user.id) });`;
+    expect(
+      await lintSingleRule("no-unscoped-user-query", source, options),
+    ).toEqual([2]);
   });
 });

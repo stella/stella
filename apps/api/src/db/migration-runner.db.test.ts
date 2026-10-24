@@ -3,10 +3,10 @@ import { describe, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -14,6 +14,8 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
+
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
@@ -31,10 +33,12 @@ import {
   runMigrations,
   runMigrationsUntilSettled,
 } from "./migration-runner";
-import {
-  ONLINE_MIGRATION_INDEXES,
-  type OnlineMigrationOutcome,
-} from "./online-migrations";
+import type {
+  MigrationTiming,
+  MigrationTimingRecord,
+} from "./migration-timing";
+import type { OnlineMigrationOutcome } from "./online-migration-connection";
+import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
 // Scratch databases are not RDS; the migrator requires an explicit choice.
@@ -52,7 +56,7 @@ const INSERT_B = "INSERT INTO migration_probe (event) VALUES ('B');";
 const INSERT_C = "INSERT INTO migration_probe (event) VALUES ('C');";
 const CREATE_PROBE_B = `CREATE TABLE migration_probe (event text NOT NULL);--> statement-breakpoint\n${INSERT_B}`;
 const CREATE_LOCK_PROBE = "CREATE TABLE lock_probe (id integer)";
-// A short wait keeps the lost attempts cheap; production migrations wait 1s.
+// An embedded timeout must yield to the attempt's configured queue bound.
 const ALTER_LOCK_PROBE =
   "SET lock_timeout = '100ms';--> statement-breakpoint\n" +
   "ALTER TABLE lock_probe ADD COLUMN reissued boolean;";
@@ -170,7 +174,7 @@ const withScratch = async <T>(
                   },
                 });
               } finally {
-                connection.release();
+                await connection.release();
               }
             },
           });
@@ -202,6 +206,22 @@ const rejectionOf = async (run: () => Promise<unknown>): Promise<unknown> =>
     () => null,
     (error: unknown) => error,
   );
+
+/** A key only these tests take; schema SQL that awaits it parks under the lane. */
+const SCHEMA_GATE_KEY = 74_221_903;
+const AWAIT_SCHEMA_GATE = `SELECT pg_advisory_xact_lock(${String(SCHEMA_GATE_KEY)});`;
+const HOLD_SCHEMA_GATE = `SELECT pg_advisory_lock(${String(SCHEMA_GATE_KEY)})`;
+const RELEASE_SCHEMA_GATE = `SELECT pg_advisory_unlock_all()`;
+
+const backendPid = async (connection: SQL) => {
+  const [row] = await connection.unsafe<{ pid: number }[]>(
+    "SELECT pg_backend_pid() AS pid",
+  );
+  if (row === undefined) {
+    throw new Error("Expected backend pid");
+  }
+  return row.pid;
+};
 
 const appliedResult = (result: Awaited<ReturnType<typeof runMigrations>>) => {
   if (result.status !== "applied") {
@@ -551,63 +571,157 @@ if (!runPostgresTests || databaseUrl === undefined) {
     });
 
     test("a second session waits on the lane and applies no duplicate SQL", async () => {
-      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
-        await withScratch(async ({ scratchUrl, observer, openClient }) => {
-          const first = await openClient().reserve();
-          const second = await openClient().reserve();
-          const [pidRow] = await second.unsafe<{ pid: number }[]>(
-            "SELECT pg_backend_pid() AS pid",
-          );
-          if (pidRow === undefined) {
-            throw new Error("Expected backend pid");
-          }
-          const entered = Promise.withResolvers<undefined>();
-          const release = Promise.withResolvers<undefined>();
-          const firstRun = runMigrations({
-            connection: first,
-            migrationsFolder: folder,
-            ebs: DISABLED_EBS,
-            databaseUrl: scratchUrl,
-            runOnline: async () => {
-              entered.resolve(undefined);
-              await release.promise;
-              return ONLINE_COMPLETE;
-            },
-          });
-          try {
-            await entered.promise;
-            const secondRun = runMigrations({
-              connection: second,
+      await withBundle(
+        [
+          {
+            name: A,
+            sql: `${CREATE_PROBE}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          },
+        ],
+        async (folder) => {
+          await withScratch(async ({ scratchUrl, observer, openClient }) => {
+            const gate = await openClient().reserve();
+            const first = await openClient().reserve();
+            const second = await openClient().reserve();
+            const firstPid = await backendPid(first);
+            const secondPid = await backendPid(second);
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const firstRun = runMigrations({
+              connection: first,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
               databaseUrl: scratchUrl,
               runOnline: async () => ONLINE_COMPLETE,
             });
-            await waitUntilBlocked(observer, pidRow.pid);
-            release.resolve(undefined);
-            expect(appliedResult(await firstRun).insertedNames).toEqual([A]);
-            expect(appliedResult(await secondRun).insertedNames).toEqual([]);
-            expect(await probeEvents(observer)).toEqual(["A"]);
+            try {
+              // The first run holds the lane while its schema SQL waits.
+              await waitUntilBlocked(observer, firstPid);
+              const secondRun = runMigrations({
+                connection: second,
+                migrationsFolder: folder,
+                ebs: DISABLED_EBS,
+                databaseUrl: scratchUrl,
+                runOnline: async () => ONLINE_COMPLETE,
+              });
+              await waitUntilBlocked(observer, secondPid);
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              expect(appliedResult(await firstRun).insertedNames).toEqual([A]);
+              expect(appliedResult(await secondRun).insertedNames).toEqual([]);
+              expect(await probeEvents(observer)).toEqual(["A"]);
+              expect(
+                (await ledgerRows(observer)).map(({ name }) => name),
+              ).toEqual([A]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: finally drains the first migration runner after its applied result has been asserted
+              await firstRun.catch(() => undefined);
+              await gate.release();
+              await first.release();
+              await second.release();
+            }
+          });
+        },
+      );
+    });
+
+    /**
+     * An index build on a corpus-sized table runs for many minutes. The
+     * schema SQL needs the lane; the online phase must not keep corpus
+     * writers out while it builds.
+     */
+    test("the online phase runs with the lane open to corpus writers", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, run }) => {
+          const result = await run(folder, async () => {
+            expect(await laneHolders(observer)).toBe(0);
             expect(
-              (await ledgerRows(observer)).map(({ name }) => name),
-            ).toEqual([A]);
+              await observer.begin(async (tx) =>
+                isCorpusSchemaLaneGranted(
+                  await tx.unsafe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL),
+                ),
+              ),
+            ).toBe(true);
+          });
+          expect(appliedResult(result).insertedNames).toEqual([A]);
+          expect(await laneHolders(observer)).toBe(0);
+        });
+      });
+    });
+
+    test("every run reports how long its schema and online phases took, a failed phase included", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ scratchUrl, openClient }) => {
+          const records: MigrationTimingRecord[] = [];
+          let now = 0;
+          const timing: MigrationTiming = {
+            // Each reading advances 10 ms, so every duration is non-zero and exact.
+            clock: () => (now += 10),
+            emit: (record) => {
+              records.push(record);
+            },
+          };
+          const connection = await openClient().reserve();
+          try {
+            await runMigrations({
+              connection,
+              migrationsFolder: folder,
+              ebs: DISABLED_EBS,
+              databaseUrl: scratchUrl,
+              timing,
+              runOnline: async () => ONLINE_COMPLETE,
+            });
+            expect(records).toEqual([
+              {
+                event: "migrate.phase_duration",
+                phase: "schema",
+                durationMs: 20,
+                retriesSpent: 0,
+                outcome: "applied",
+                laneWaitMs: 10,
+                appliedCount: 1,
+              },
+              {
+                event: "migrate.phase_duration",
+                phase: "online",
+                durationMs: 10,
+                retriesSpent: 0,
+                outcome: "complete",
+              },
+            ]);
+
+            records.length = 0;
+            const failure = new Error("online step failed");
+            expect(
+              await rejectionOf(
+                async () =>
+                  await runMigrations({
+                    connection,
+                    migrationsFolder: folder,
+                    ebs: DISABLED_EBS,
+                    databaseUrl: scratchUrl,
+                    timing,
+                    runOnline: async () => {
+                      throw failure;
+                    },
+                  }),
+              ),
+            ).toBe(failure);
+            expect(records).toMatchObject([
+              { phase: "schema", outcome: "applied", appliedCount: 0 },
+              { phase: "online", outcome: "failed" },
+            ]);
           } finally {
-            release.resolve(undefined);
-            // swallow-ok: finally drains the first migration runner after its applied result has been asserted
-            await firstRun.catch(() => undefined);
-            first.release();
-            second.release();
+            await connection.release();
           }
         });
       });
     });
 
     /**
-     * A held index build must not keep corpus writers out: they wait for the
-     * lane only within a bounded budget and then fail. The deferred run
-     * releases the lane, reports no completion, and a later run resumes.
+     * A held index build reports no completion, keeps the lane open while it
+     * waits, and a later run resumes it.
      */
-    test("a deferred online phase releases the lane while it waits and settles on a later run", async () => {
+    test("a deferred online phase leaves the lane open while it waits and settles on a later run", async () => {
       await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
         await withScratch(async ({ scratchUrl, observer, openClient }) => {
           const laneOpenToWriters = async () =>
@@ -618,24 +732,41 @@ if (!runPostgresTests || databaseUrl === undefined) {
             );
           const deferred = {
             type: "deferred",
-            index: "probe_idx",
+            step: "probe_idx",
             retryAfterMs: 7,
           } as const satisfies OnlineMigrationOutcome;
           const connection = await openClient().reserve();
+          const timings: MigrationTimingRecord[] = [];
           try {
             const single = await runMigrations({
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
               databaseUrl: scratchUrl,
+              timing: {
+                clock: () => performance.now(),
+                emit: (record) => {
+                  timings.push(record);
+                },
+              },
               runOnline: async () => {
-                expect(await laneOpenToWriters()).toBe(false);
+                expect(await laneOpenToWriters()).toBe(true);
                 return deferred;
               },
             });
+            const onlineTerminals = timings.filter(
+              (record) =>
+                record.event === "migrate.phase_duration" &&
+                record.phase === "online",
+            );
+            expect(onlineTerminals).toHaveLength(1);
+            expect(onlineTerminals.at(0)).toMatchObject({
+              outcome: "deferred",
+              retriesSpent: 0,
+            });
             expect(single).toMatchObject({
               status: "online_deferred",
-              index: deferred.index,
+              step: deferred.step,
               insertedNames: [A],
             });
             expect(await laneOpenToWriters()).toBe(true);
@@ -654,7 +785,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               databaseUrl: scratchUrl,
               runOnline: async (_pool, options) => {
                 holds.add(options.indexGate.hold);
-                expect(await laneOpenToWriters()).toBe(false);
+                expect(await laneOpenToWriters()).toBe(true);
                 const outcome = outcomes.shift();
                 if (outcome === undefined) {
                   throw new Error("Online phase ran after it completed");
@@ -676,7 +807,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               (await ledgerRows(observer)).map(({ name }) => name),
             ).toEqual([A]);
           } finally {
-            connection.release();
+            await connection.release();
           }
         });
       });
@@ -713,7 +844,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 }
                 await withTimeout(async () => await terminate(), {
                   label: "migration session termination",
-                  timeoutMs: 2000,
+                  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
                 });
                 throw onlineError;
               },
@@ -731,7 +862,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               (await ledgerRows(observer)).map(({ name }) => name),
             ).toEqual([A]);
           } finally {
-            connection.release();
+            await connection.release();
           }
         });
       });
@@ -794,7 +925,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             stderr: "pipe",
           });
           let output = "";
-          const decisions: { index: string; retryAfterMs: number }[] = [];
+          const decisions: { step: string; retryAfterMs: number }[] = [];
           const deadline = setTimeout(() => child.kill(), 30_000);
           try {
             const readOutput = async () => {
@@ -814,15 +945,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   if (
                     typeof record !== "object" ||
                     record === null ||
-                    !("index" in record) ||
-                    typeof record.index !== "string" ||
+                    !("step" in record) ||
+                    typeof record.step !== "string" ||
                     !("retryAfterMs" in record) ||
                     typeof record.retryAfterMs !== "number"
                   ) {
                     throw new TypeError("Invalid migrate deferral event");
                   }
                   decisions.push({
-                    index: record.index,
+                    step: record.step,
                     retryAfterMs: record.retryAfterMs,
                   });
                   if (decisions.length === 2) {
@@ -842,7 +973,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             ).toBeGreaterThanOrEqual(2);
             const first = decisions.at(0);
             expect(first).toMatchObject({
-              index: firstIndex.name,
+              step: firstIndex.name,
               retryAfterMs: 13,
             });
             expect(decisions.at(1)).toEqual(first);
@@ -856,7 +987,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           }
         } finally {
           await blocker.unsafe("ROLLBACK");
-          blocker.release();
+          await blocker.release();
           rmSync(environmentDirectory, { recursive: true, force: true });
         }
       });
@@ -898,8 +1029,23 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         mismatchCount: 1,
                         mismatchedNames: [A],
                       });
-                      expect(stdout.mock.calls).toHaveLength(1);
-                      const noopLine = String(stdout.mock.calls.at(0)?.at(0));
+                      // The no-op event, then the schema phase's duration.
+                      const phaseCalls = stdout.mock.calls.filter(
+                        (call) =>
+                          !String(call.at(0)).includes(
+                            '"event":"migrate.lock_attempt"',
+                          ),
+                      );
+                      expect(phaseCalls).toHaveLength(2);
+                      expect(
+                        JSON.parse(String(phaseCalls.at(1)?.at(0))),
+                      ).toMatchObject({
+                        event: "migrate.phase_duration",
+                        phase: "schema",
+                        outcome: "stale_bundle_noop",
+                        appliedCount: 0,
+                      });
+                      const noopLine = String(phaseCalls.at(0)?.at(0));
                       expect(noopLine.endsWith("\n")).toBe(true);
                       expect(JSON.parse(noopLine)).toEqual({
                         event: "migrate.stale_bundle_noop",
@@ -996,7 +1142,10 @@ if (!runPostgresTests || databaseUrl === undefined) {
       await withBundle(
         [
           { name: A, sql: CREATE_PROBE },
-          { name: B, sql: ALTER_LOCK_PROBE },
+          {
+            name: B,
+            sql: `${ALTER_LOCK_PROBE}--> statement-breakpoint\nINSERT INTO migration_probe (event) VALUES (current_setting('lock_timeout'));`,
+          },
         ],
         async (folder) => {
           await withScratch(async ({ observer, openClient, scratchUrl }) => {
@@ -1004,6 +1153,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const holder = holdLockProbe(openClient());
             const connection = await openClient().reserve();
             const sleeps: number[] = [];
+            let onlineLockTimeout: unknown;
             const stdout = spyOn(process.stdout, "write").mockImplementation(
               () => true,
             );
@@ -1014,9 +1164,18 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 databaseUrl: scratchUrl,
                 ebs: DISABLED_EBS,
                 migrationsFolder: folder,
-                runOnline: async () => ONLINE_COMPLETE,
+                runOnline: async (pool) => {
+                  const onlineConnection = await pool.reserve();
+                  onlineLockTimeout = await onlineConnection.query(
+                    "SELECT current_setting('lock_timeout') AS lock_timeout",
+                  );
+                  return ONLINE_COMPLETE;
+                },
                 lockWaitRetry: {
-                  delaysMs: [10, 10, 10],
+                  lockTimeoutsMs: [10, 20, 30, 40],
+                  pauseBaseMs: 10,
+                  pauseCapMs: 10,
+                  random: () => 1,
                   budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
                   now: () => performance.now(),
                   sleep: async (ms) => {
@@ -1029,15 +1188,16 @@ if (!runPostgresTests || databaseUrl === undefined) {
               });
               expect(sleeps).toEqual([10]);
               expect(appliedResult(result).insertedNames).toEqual([A, B]);
+              expect(onlineLockTimeout).toEqual([{ lock_timeout: "0" }]);
             } finally {
               stdout.mockRestore();
               await holder.release();
-              connection.release();
+              await connection.release();
             }
             expect(
               (await ledgerRows(observer)).map(({ name }) => name),
             ).toEqual([A, B]);
-            expect(await probeEvents(observer)).toEqual(["A"]);
+            expect(await probeEvents(observer)).toEqual(["20ms", "A"]);
             expect(await lockProbeColumns(observer)).toEqual([
               "id",
               "reissued",
@@ -1061,6 +1221,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const holder = holdLockProbe(openClient());
               const connection = await openClient().reserve();
               const sleeps: number[] = [];
+              const timings: MigrationTimingRecord[] = [];
               const stdout = spyOn(process.stdout, "write").mockImplementation(
                 () => true,
               );
@@ -1074,8 +1235,17 @@ if (!runPostgresTests || databaseUrl === undefined) {
                       ebs: DISABLED_EBS,
                       migrationsFolder: folder,
                       runOnline: async () => ONLINE_COMPLETE,
+                      timing: {
+                        clock: () => performance.now(),
+                        emit: (record) => {
+                          timings.push(record);
+                        },
+                      },
                       lockWaitRetry: {
-                        delaysMs: [10, 10],
+                        lockTimeoutsMs: [10, 20, 30],
+                        pauseBaseMs: 10,
+                        pauseCapMs: 10,
+                        random: () => 1,
                         budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
                         now: () => performance.now(),
                         sleep: async (ms) => {
@@ -1089,12 +1259,21 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 expect(rejection).toMatchObject({
                   reason: MIGRATION_LOCK_WAIT_FAILURE.exhausted,
                   attempts: 3,
+                  lockTimeoutMs: 30,
                 });
                 expect(isPgError(rejection, PG_ERROR.LOCK_NOT_AVAILABLE)).toBe(
                   true,
                 );
                 expect(sleeps).toEqual([10, 10]);
-                expect(await ledgerRows(observer)).toEqual([]);
+                expect(timings).toHaveLength(1);
+                expect(timings.at(0)).toMatchObject({
+                  event: "migrate.phase_duration",
+                  phase: "schema",
+                  outcome: "failed",
+                  retriesSpent: 2,
+                });
+                expect([...(await ledgerRows(observer))]).toEqual([]);
+
                 const [probe] = await observer.unsafe<{ exists: boolean }[]>(
                   "SELECT to_regclass('migration_probe') IS NOT NULL AS exists",
                 );
@@ -1103,7 +1282,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               } finally {
                 stdout.mockRestore();
                 await holder.release();
-                connection.release();
+                await connection.release();
               }
               // The failed run released the lane; the next one applies the set.
               expect(appliedResult(await run(folder)).insertedNames).toEqual([
@@ -1174,7 +1353,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             );
             expect(initial.insertedNames).toHaveLength(corpusMigrations.length);
           } finally {
-            initialConnection.release();
+            await initialConnection.release();
           }
 
           const baseline = await ledgerRows(observer);
@@ -1205,7 +1384,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 expect(result.predictedNames).toEqual([]);
                 expect(result.insertedNames).toEqual([]);
               } finally {
-                connection.release();
+                await connection.release();
               }
               await assertMigrationHistory({
                 context: "startup",

@@ -1,16 +1,17 @@
 // @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
-  parseOfacList,
-  readOfacListVersion,
   type ListVersion,
   type ParsedList,
+  parseOfacList,
+  readOfacListVersion,
   type SanctionsEntry,
 } from "@stll/sanctions";
+import { largeOfacSdnXml } from "@stll/sanctions/test-fixtures/large-ofac-list";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -23,10 +24,9 @@ import {
   type SanctionsActiveEdition,
 } from "@/api/lib/lists/sanctions/screening-index";
 import {
-  fetchSanctionsEdition,
   type FetchedMarker,
+  fetchSanctionsEdition,
 } from "@/api/lib/lists/sanctions/source-fetch";
-import { largeOfacSdnXml } from "@/api/lib/lists/sanctions/test-fixtures/large-ofac-list";
 import type { safeOutboundFetchStream } from "@/api/lib/safe-outbound-fetch";
 import {
   expectEventLoopResponsive,

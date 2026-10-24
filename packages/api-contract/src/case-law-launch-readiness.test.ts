@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CASE_LAW_BROWSER_COUNTRIES,
+  CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES,
+  CASE_LAW_EXPLICIT_LAUNCHES,
+  CASE_LAW_REGION_BY_COUNTRY,
   parseCaseLawLaunchReadiness,
+  PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "./case-law-launch-readiness";
 
@@ -12,7 +17,32 @@ const readyRow = {
   lastCensusGreen: true,
 } as const;
 
+describe("explicit case-law launches", () => {
+  test("the explicit launch set is exactly Poland", () => {
+    expect(CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES).toEqual(["POL"]);
+    expect(CASE_LAW_EXPLICIT_LAUNCHES.POL.decidedOn).toMatch(
+      /^\d{4}-\d{2}-\d{2}$/u,
+    );
+  });
+
+  test("an explicitly launched country is admitted to search", () => {
+    expect(PUBLIC_CASE_LAW_COUNTRIES.some((country) => country === "POL")).toBe(
+      true,
+    );
+  });
+});
+
 describe("case-law launch readiness", () => {
+  test.each(CASE_LAW_BROWSER_COUNTRIES)(
+    "%s has a region and can carry complete readiness evidence",
+    (country) => {
+      expect(CASE_LAW_REGION_BY_COUNTRY[country]).toMatch(/^[A-Z]{2}$/u);
+      const parsed = parseCaseLawLaunchReadiness([{ ...readyRow, country }]);
+      expect(parsed).toHaveLength(1);
+      expect(parsed.at(0) === country).toBe(true);
+    },
+  );
+
   test("requires complete readiness evidence", () => {
     expect(() =>
       parseCaseLawLaunchReadiness([{ ...readyRow, evalSetExists: false }]),

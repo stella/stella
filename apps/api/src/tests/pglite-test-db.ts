@@ -1,7 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { getTableName, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { getTableName, isTable, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
+import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -10,44 +12,54 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  caseLawDecisionViewGrantStatement,
+  CENSUS_COLUMN_GRANTS_BY_RELATION,
+  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
+import { readPgliteTestSnapshotPath } from "@/api/tests/env";
 import {
   createSchemaPglite,
-  installPgliteDecisionAliases,
-  installPgliteDesktopPresenceRls,
-  installPgliteFlowTransitions,
-  installPgliteChatRunLogRls,
   installPgliteAccountAuditRls,
-  installPgliteChatMessageRevisionsRls,
-  installPgliteChatSecretRls,
-  installPgliteReaderAnswerRls,
-  installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteAiMemoryActiveUserGuard,
+  installPgliteCaseLawCountryShape,
   installPgliteCaseLawObservationFence,
+  installPgliteChatMessageRevisionsRls,
+  installPgliteChatRunLogRls,
+  installPgliteChatSecretRls,
+  installPgliteChatTurnRunIdLookup,
+  installPgliteCitationDoctrineRls,
   installPgliteCorpusProjectionRevisionFence,
-  installPgliteServiceClientCredentialCascade,
+  installPgliteDecisionAliases,
+  installPgliteDecisionCitationStats,
+  installPgliteDesktopPresenceRls,
+  installPgliteEntityFeatureGateMaintenance,
+  installPgliteFlowTransitions,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
-  installPgliteProvisionExtractionState,
-  installPgliteSchedulerJobPauseLog,
-  installPgliteOrganizationMemberCapacity,
-  installPgliteWorkspaceContactCapacity,
   installPgliteListVerificationBudgets,
+  installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
-  installPgliteSchemaPrerequisites,
-  installPgliteEntityFeatureGateMaintenance,
-  readPglitePublicSanctionsGrants,
-  installPgliteStatuteCitationCounts,
-  installPgliteDecisionCitationStats,
-  installPgliteTimeEntryTimerSignals,
+  installPgliteProvisionExtractionState,
+  installPgliteReaderAnswerRls,
   installPgliteSanctionsMonitoringTriggers,
+  installPgliteSchedulerJobPauseLog,
+  installPgliteSchemaPrerequisites,
+  installPgliteServiceClientCredentialCascade,
+  installPgliteStatuteCitationCounts,
+  installPgliteSyntheticMembershipTrigger,
+  installPgliteTimeEntryTimerSignals,
   installPgliteTreeParentGuards,
+  installPgliteUserFileOrganizationKeyGuard,
   installPgliteWorkspaceAccessObjects,
+  installPgliteWorkspaceContactCapacity,
+  readPglitePublicSanctionsGrants,
 } from "@/api/tests/pglite-schema";
 import {
   deriveStellaTablePrivileges,
@@ -68,6 +80,19 @@ const allSchema = {
   ...agentAuthSchema,
   ...rlsExports,
 };
+
+const publicLawRelations = new Set(
+  Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION),
+);
+const publicLawViews = Object.values(allSchema).flatMap((entity) => {
+  if (!isPgView(entity)) {
+    return [];
+  }
+  const config = getViewConfig(entity);
+  return !config.isExisting && publicLawRelations.has(config.name)
+    ? [entity]
+    : [];
+});
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
@@ -287,7 +312,34 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set(["case_law_decisions.docket_family_key"]);
+  new Set([
+    "case_law_decisions.docket_family_key",
+    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
+  ]);
+
+const grantedPublicLawColumns = (
+  relation: string,
+  columns: Readonly<Record<string, unknown>>,
+) =>
+  Object.keys(columns).filter(
+    (column) =>
+      !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+        `${relation}.${column}`,
+      ),
+  );
+
+// Expansion releases may declare permitted grants before their relations exist.
+// The harness pushes only this checkout's schema, so it cannot grant those yet.
+export const availableSchemaRelationNames = new Set<string>(
+  Object.values(schema).flatMap((relation) => {
+    if (isTable(relation)) {
+      return [getTableName(relation)];
+    }
+    return isPgView(relation) ? [getViewConfig(relation).name] : [];
+  }),
+);
 
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from
@@ -300,6 +352,8 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
+  caseLawDecisionViewGrantStatement("stella_ingestion"),
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
       ON TABLE "user" TO stella
@@ -343,8 +397,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
       "case_law_index_jobs",
-      "case_law_citation_reviews"
+      "case_law_citation_reviews",
+      "case_law_citation_doctrine_reviews"
     TO stella_ingestion
+  `,
+  // Redaction erases the doctrine evidence quoted from the citing decision.
+  `
+    GRANT DELETE ON TABLE "case_law_citation_doctrine_reviews" TO stella_ingestion
   `,
   `
     GRANT INSERT, UPDATE, DELETE ON TABLE
@@ -476,6 +535,12 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legislation_work_identifiers" TO stella_ingestion`,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "legislation_amendment_snapshots", "legislation_amendments"
+    TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -502,6 +567,16 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
+  `,
+  // The serving pointer is written by the gated flip and deleted when a
+  // whole generation is promoted; ingestion may not rewrite its key.
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (generation, from_generation, flipped_at)
+      ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
   `,
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
@@ -543,20 +618,16 @@ export const ROLE_GRANT_STATEMENTS = [
   // Alias reader grants land only after the release declaring them optional.
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
-      ([relation]) =>
+      ([relation, columns]) =>
+        availableSchemaRelationNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
         relation !== getTableName(schema.caseLawDecisionCitationStats) &&
-        relation !== getTableName(schema.caseLawDecisionCitationStatsState),
+        relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
+        grantedPublicLawColumns(relation, columns).length > 0,
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns)
-        .filter(
-          (column) =>
-            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
-              `${relation}.${column}`,
-            ),
-        )
+      GRANT SELECT (${grantedPublicLawColumns(relation, columns)
         .map(quoteSqlIdentifier)
         .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
@@ -637,6 +708,56 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
+const installTestPublicLawViews = async (
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
+): Promise<void> => {
+  const dialect = new PgDialect();
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    const query = config.query;
+    if (query === undefined) {
+      panic(`Public-law view ${config.name} has no query`);
+    }
+    if (config.with !== undefined) {
+      panic(
+        `Public-law fixture view ${config.name} must use plain view semantics`,
+      );
+    }
+    const rendered = dialect.sqlToQuery(query);
+    if (rendered.params.length > 0) {
+      panic(`Public-law view ${config.name} query has bound parameters`);
+    }
+    await db.execute(sql`
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+      AS (${sql.raw(rendered.sql)})
+    `);
+  }
+};
+
+/** Rebuild schema-derived views and their grants after a fixture column change. */
+export const rebuildTestPublicLawViews = async (
+  client: PGlite,
+  change: () => Promise<void>,
+): Promise<void> => {
+  const db = drizzle({ client });
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    await db.execute(sql`
+      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
+        config.name,
+      )}
+    `);
+  }
+  await change();
+  await installTestPublicLawViews(db);
+  await applyStellaTablePrivileges(client);
+  for (const statement of ROLE_GRANT_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /**
  * Build a fully provisioned test PGlite from scratch: RLS roles, schema
  * prerequisites, the drizzle schema push, workspace-access objects, and
@@ -683,6 +804,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteSyntheticMembershipTrigger(db);
+  await installPgliteUserFileOrganizationKeyGuard(db);
+  await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
@@ -691,6 +815,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
+  await installPgliteCaseLawCountryShape(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
@@ -702,6 +827,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
   await installPgliteChatSecretRls(db);
+  await installPgliteCitationDoctrineRls(db);
   await installPgliteReaderAnswerRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
@@ -730,7 +856,7 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
       loadDataDir: snapshot,
     });
   }
-  const snapshotPath = process.env[PGLITE_TEST_SNAPSHOT_ENV];
+  const snapshotPath = readPgliteTestSnapshotPath(PGLITE_TEST_SNAPSHOT_ENV);
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();
   }
@@ -738,6 +864,272 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
     extensions: { pg_trgm },
     loadDataDir: Bun.file(snapshotPath),
   });
+};
+
+const RESET_SCHEMA = "pglite_test_reset";
+const RESET_TRIGGER_PREFIX = "pglite_test_track_";
+
+type PgliteStructuralObject = {
+  definition: string;
+  identity: string;
+  kind: "function" | "sequence" | "table" | "trigger" | "view";
+};
+
+export type PgliteDatabaseBaseline = {
+  objects: PgliteStructuralObject[];
+  populatedTables: Set<string>;
+};
+
+const structuralFingerprintSql = `
+  WITH namespaces AS (
+    SELECT oid, nspname
+    FROM pg_namespace
+    WHERE nspname NOT IN ('pg_catalog', 'information_schema', '${RESET_SCHEMA}')
+      AND nspname NOT LIKE 'pg_toast%'
+      AND nspname NOT LIKE 'pg_temp_%'
+  )
+  SELECT 'function' AS kind,
+         n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS identity,
+         pg_get_functiondef(p.oid) AS definition
+  FROM pg_proc p JOIN namespaces n ON n.oid = p.pronamespace
+  UNION ALL
+  SELECT CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'table'
+                        WHEN 'v' THEN 'view' WHEN 'm' THEN 'view'
+                        WHEN 'S' THEN 'sequence' END AS kind,
+         n.nspname || '.' || c.relname AS identity,
+         CASE c.relkind
+           WHEN 'v' THEN pg_get_viewdef(c.oid, true)
+           WHEN 'm' THEN pg_get_viewdef(c.oid, true)
+           WHEN 'S' THEN concat_ws('|', s.seqstart, s.seqincrement, s.seqmax, s.seqmin, s.seqcache, s.seqcycle)
+           ELSE concat_ws(
+             '|',
+             c.relpersistence,
+             c.relkind,
+             (SELECT string_agg(
+               concat_ws(':', a.attnum, a.attname, a.atttypid, a.atttypmod, a.attnotnull, pg_get_expr(d.adbin, d.adrelid)),
+               ',' ORDER BY a.attnum
+             )
+             FROM pg_attribute a
+             LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+             WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped),
+             (SELECT string_agg(pg_get_constraintdef(k.oid, true), ',' ORDER BY k.conname)
+              FROM pg_constraint k WHERE k.conrelid = c.oid)
+           )
+         END AS definition
+  FROM pg_class c
+  JOIN namespaces n ON n.oid = c.relnamespace
+  LEFT JOIN pg_sequence s ON s.seqrelid = c.oid
+  WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S')
+  UNION ALL
+  SELECT 'trigger' AS kind,
+         n.nspname || '.' || c.relname || '.' || t.tgname AS identity,
+         t.tgenabled::text || '|' || pg_get_triggerdef(t.oid, true) AS definition
+  FROM pg_trigger t
+  JOIN pg_class c ON c.oid = t.tgrelid
+  JOIN namespaces n ON n.oid = c.relnamespace
+  WHERE NOT t.tgisinternal AND t.tgname NOT LIKE '${RESET_TRIGGER_PREFIX}%'
+  ORDER BY kind, identity
+`;
+
+const readStructuralFingerprint = async (
+  client: PGlite,
+): Promise<PgliteStructuralObject[]> => {
+  const { rows } = await client.query<PgliteStructuralObject>(
+    structuralFingerprintSql,
+  );
+  return rows;
+};
+
+const quoteQualifiedName = (identity: string) =>
+  identity.split(".").map(quoteSqlIdentifier).join(".");
+
+const quoteFunctionIdentity = (identity: string) => {
+  const argumentOffset = identity.indexOf("(");
+  const qualifiedName = identity.slice(0, argumentOffset);
+  return `${quoteQualifiedName(qualifiedName)}${identity.slice(argumentOffset)}`;
+};
+
+const parseTriggerIdentity = (identity: string) => {
+  const parts = identity.split(".");
+  const schemaName = parts.at(0);
+  const tableName = parts.at(1);
+  const triggerName = parts.at(2);
+  if (
+    parts.length !== 3 ||
+    schemaName === undefined ||
+    tableName === undefined ||
+    triggerName === undefined
+  ) {
+    return panic(`Invalid PGlite trigger identity ${identity}`);
+  }
+  return { schemaName, tableName, triggerName };
+};
+
+/** Capture schema state once, before suite seed rows are installed. */
+export const capturePgliteDatabaseBaseline = async (
+  client: PGlite,
+): Promise<PgliteDatabaseBaseline> => {
+  await client.exec(`
+    CREATE SCHEMA IF NOT EXISTS ${RESET_SCHEMA};
+    CREATE TABLE ${RESET_SCHEMA}.written_tables (identity text PRIMARY KEY);
+    CREATE FUNCTION ${RESET_SCHEMA}.record_write() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      INSERT INTO ${RESET_SCHEMA}.written_tables VALUES (TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME)
+      ON CONFLICT DO NOTHING;
+      RETURN NULL;
+    END $$;
+    CREATE TEMP TABLE pglite_baseline_populated (identity text PRIMARY KEY) ON COMMIT PRESERVE ROWS;
+    DO $$
+    DECLARE relation record;
+    BEGIN
+      FOR relation IN
+        SELECT n.nspname AS schema_name, c.relname AS table_name
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind IN ('r', 'p')
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema', '${RESET_SCHEMA}')
+          AND n.nspname NOT LIKE 'pg_toast%'
+          AND n.nspname NOT LIKE 'pg_temp_%'
+      LOOP
+        EXECUTE format(
+          'INSERT INTO pglite_baseline_populated SELECT %L WHERE EXISTS (SELECT 1 FROM %I.%I LIMIT 1)',
+          relation.schema_name || '.' || relation.table_name,
+          relation.schema_name,
+          relation.table_name
+        );
+        EXECUTE format(
+          'CREATE TRIGGER ${RESET_TRIGGER_PREFIX}%s AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I.%I FOR EACH STATEMENT EXECUTE FUNCTION ${RESET_SCHEMA}.record_write()',
+          relation.table_name,
+          relation.schema_name,
+          relation.table_name
+        );
+      END LOOP;
+    END $$;
+  `);
+  const [objects, { rows }] = await Promise.all([
+    readStructuralFingerprint(client),
+    client.query<{ identity: string }>(
+      "SELECT identity FROM pglite_baseline_populated ORDER BY identity",
+    ),
+  ]);
+  return {
+    objects,
+    populatedTables: new Set(rows.map(({ identity }) => identity)),
+  };
+};
+
+const objectKey = ({ identity, kind }: PgliteStructuralObject) =>
+  `${kind}:${identity}`;
+
+/** Restore a captured schema-only baseline without scanning application rows. */
+export const resetPgliteDatabase = async (
+  client: PGlite,
+  baseline: PgliteDatabaseBaseline,
+): Promise<void> => {
+  const [{ rows: writtenRows }, currentObjects] = await Promise.all([
+    client.query<{ identity: string }>(
+      `SELECT identity FROM ${RESET_SCHEMA}.written_tables ORDER BY identity`,
+    ),
+    readStructuralFingerprint(client),
+  ]);
+  const writtenTables = writtenRows.map(({ identity }) => identity);
+  const populatedWrite = writtenTables.find((identity) =>
+    baseline.populatedTables.has(identity),
+  );
+  if (populatedWrite !== undefined) {
+    panic(
+      `PGlite reset cannot restore populated baseline table ${populatedWrite}`,
+    );
+  }
+
+  const baselineByKey = new Map(
+    baseline.objects.map((object) => [objectKey(object), object]),
+  );
+  const extras = currentObjects.filter(
+    (object) => !baselineByKey.has(objectKey(object)),
+  );
+  const changedTriggers = currentObjects.filter((object) => {
+    const baselineObject = baselineByKey.get(objectKey(object));
+    return (
+      object.kind === "trigger" &&
+      baselineObject !== undefined &&
+      baselineObject.definition !== object.definition
+    );
+  });
+  const statements: string[] = [];
+  for (const trigger of extras.filter(({ kind }) => kind === "trigger")) {
+    const { schemaName, tableName, triggerName } = parseTriggerIdentity(
+      trigger.identity,
+    );
+    statements.push(
+      `DROP TRIGGER ${quoteSqlIdentifier(triggerName)} ON ${quoteSqlIdentifier(schemaName)}.${quoteSqlIdentifier(tableName)}`,
+    );
+  }
+  const triggerActions = {
+    A: "ENABLE ALWAYS",
+    D: "DISABLE",
+    O: "ENABLE",
+    R: "ENABLE REPLICA",
+  } as const;
+  const dropOrder = {
+    view: 0,
+    table: 1,
+    sequence: 2,
+    function: 3,
+    trigger: 4,
+  } as const;
+  for (const object of extras
+    .filter(({ kind }) => kind !== "trigger")
+    .toSorted((left, right) => dropOrder[left.kind] - dropOrder[right.kind])) {
+    const keyword =
+      object.kind === "function" ? "FUNCTION" : object.kind.toUpperCase();
+    const identity =
+      object.kind === "function"
+        ? quoteFunctionIdentity(object.identity)
+        : quoteQualifiedName(object.identity);
+    statements.push(`DROP ${keyword} IF EXISTS ${identity} CASCADE`);
+  }
+  for (const trigger of changedTriggers) {
+    const baselineTrigger = baselineByKey.get(objectKey(trigger));
+    const { schemaName, tableName, triggerName } = parseTriggerIdentity(
+      trigger.identity,
+    );
+    const enabled = baselineTrigger?.definition.at(0);
+    if (
+      enabled !== "A" &&
+      enabled !== "D" &&
+      enabled !== "O" &&
+      enabled !== "R"
+    ) {
+      return panic(`Invalid PGlite trigger state for ${trigger.identity}`);
+    }
+    const action = triggerActions[enabled];
+    statements.push(
+      `ALTER TABLE ${quoteSqlIdentifier(schemaName)}.${quoteSqlIdentifier(tableName)} ${action} TRIGGER ${quoteSqlIdentifier(triggerName)}`,
+    );
+  }
+  if (writtenTables.length > 0) {
+    statements.push(
+      `TRUNCATE ${writtenTables.map(quoteQualifiedName).join(", ")} RESTART IDENTITY CASCADE`,
+    );
+  }
+  statements.push(`TRUNCATE ${RESET_SCHEMA}.written_tables`);
+  await client.exec(`${statements.join(";\n")};`);
+
+  const restored = await readStructuralFingerprint(client);
+  const restoredByKey = new Map(
+    restored.map((object) => [objectKey(object), object]),
+  );
+  const difference =
+    baseline.objects.find(
+      (object) =>
+        restoredByKey.get(objectKey(object))?.definition !== object.definition,
+    ) ?? restored.find((object) => !baselineByKey.has(objectKey(object)));
+  if (difference !== undefined || restored.length !== baseline.objects.length) {
+    panic(
+      `PGlite reset structural mismatch: ${difference?.identity ?? "object count"}`,
+    );
+  }
 };
 
 /** Simulate the later grant release only in suites exercising exact reads. */

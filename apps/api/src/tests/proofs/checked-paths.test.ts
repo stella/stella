@@ -1,10 +1,10 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
-import { MODEL_ROLES } from "@stll/ai-catalog";
+import { MODEL_TASKS } from "@stll/ai-catalog";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { USAGE_ACTION_TYPES, USAGE_SERVICE_TIERS } from "@/api/db/schema";
@@ -13,8 +13,8 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
-  authorizeHandlerUsage,
   authorizeHandlerRunSize,
+  authorizeHandlerUsage,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { UsageMeteringConfig } from "@/api/lib/api-handlers";
@@ -24,8 +24,8 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
 import type {
-  PeriodActionKind,
   ConcurrencyOnlyActionKind,
+  PeriodActionKind,
 } from "@/api/lib/rate-limit/action-kinds";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -42,7 +42,7 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 const meteringSchema = v.object({
   actionType: v.picklist(USAGE_ACTION_TYPES),
-  modelRole: v.exactOptional(v.picklist(MODEL_ROLES)),
+  modelTask: v.exactOptional(v.picklist(MODEL_TASKS)),
   serviceTier: v.exactOptional(v.picklist(USAGE_SERVICE_TIERS)),
   laneRouting: v.exactOptional(v.literal(true)),
 } satisfies Record<keyof UsageMeteringConfig, v.GenericSchema>);

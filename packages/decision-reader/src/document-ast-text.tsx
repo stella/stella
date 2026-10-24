@@ -17,6 +17,8 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import { useCopyConfirmation } from "@stll/ui/copy-button";
+import { CheckIcon } from "@stll/ui/icons";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -25,7 +27,8 @@ import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
-import { useReaderPresentation, useReaderMessages } from "./reader-adapters";
+import { useDisplayElisionPolicy } from "./display-elision-policy";
+import { useReaderMessages, useReaderPresentation } from "./reader-adapters";
 import type { ReaderMessageKey } from "./reader-adapters";
 import type { ReaderMark, ReaderMarkRange, SearchPiece } from "./reader-search";
 import { readerHref, useSourceLinkPolicy } from "./source-link-policy";
@@ -373,8 +376,11 @@ const renderTextSegment = ({
   }
 
   if (anonymized) {
+    // No inline padding: a selection paints only behind glyphs, so padding
+    // would stay tinted inside a selected passage and break it at every
+    // placeholder. The brackets give the token its room.
     return (
-      <span className="bg-muted/60 text-muted-foreground rounded-sm px-0.5">
+      <span className="bg-muted/60 text-muted-foreground rounded-sm">
         [{content}]
       </span>
     );
@@ -761,6 +767,7 @@ export const InlineContent = ({
   ranges: ReaderMarkRange[];
 }) => {
   const sourceLinks = useSourceLinkPolicy();
+  const elisionPolicy = useDisplayElisionPolicy();
   const offset: OffsetRef = { value: initialOffset };
   const text = inlinesToPlainText(inlines);
   const automaticLinks = bareUrlAnchors(
@@ -774,7 +781,8 @@ export const InlineContent = ({
     anchors: [...anchors, ...automaticLinks].toSorted(
       (left, right) => left.start - right.start,
     ),
-    elisions: shiftedElisions(text, initialOffset),
+    elisions:
+      elisionPolicy === "literal" ? [] : shiftedElisions(text, initialOffset),
     pieceId,
     ranges,
     activeMatchIndex,
@@ -904,13 +912,16 @@ const BlockPermalink = ({
   const messages = useReaderMessages();
 
   const { copyPermalink } = useReaderPresentation();
+  const { copied, copy } = useCopyConfirmation(
+    async () => copyPermalink?.(anchorId) ?? Promise.resolve(false),
+  );
   if (copyPermalink === undefined) {
     return null;
   }
 
   return (
     <a
-      aria-label={messages["common.copyLink"]}
+      aria-label={messages[copied ? "common.copied" : "common.copyLink"]}
       className={cn(
         "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
         READER_BLOCK_CHROME_REVEAL_CLASS,
@@ -923,10 +934,15 @@ const BlockPermalink = ({
           return;
         }
         event.preventDefault();
-        copyPermalink(anchorId);
+        copy().catch(reportError);
       }}
     >
-      ¶
+      {/* The mark turns into a check where the reader clicked; no toast. */}
+      {copied ? (
+        <CheckIcon aria-hidden="true" className="inline size-[0.8em]" />
+      ) : (
+        "¶"
+      )}
     </a>
   );
 };

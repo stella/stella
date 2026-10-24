@@ -1,7 +1,7 @@
 import { panic } from "better-result";
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -118,7 +118,7 @@ class ContentDeliveryInspector {
       .at(0);
   };
   private readonly importFile = (specifier: string, from: string) => {
-    if (/\.(?:json|ttf|otf|woff2?|png|svg)$/u.test(specifier)) {
+    if (/\.(?:json|ttf|otf|woff2?|png|svg|docx)$/u.test(specifier)) {
       return undefined;
     }
     const resolved = this.options.resolveImport(specifier, from);

@@ -6,6 +6,7 @@ import {
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CHAT_RICH_PART_LIMITS,
+  CLAUSE_NUMBERING_LEVEL_LIMITS,
   ENTITIES_PER_WORKSPACE_MAX,
   ENTITY_NAME_MAX_LENGTH,
   FLOW_RUN_INPUT_ENTITIES_MAX,
@@ -17,12 +18,12 @@ import {
 } from "@stll/api-contract";
 import {
   CASE_LAW_RESULT_DEPTH_MAX,
-  SEARCH_QUERY_MAX_LENGTH,
-  SEARCH_HISTORY_TITLE_MAX_LENGTH,
-  SEARCH_HISTORY_IMPORT_MAX,
   READER_PAGE_MAX_CHARS,
-  READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  SEARCH_HISTORY_IMPORT_MAX,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_QUERY_MAX_LENGTH,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -50,6 +51,13 @@ export {
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
 
 export const LIMITS = {
+  matterNumberPatternMinLength: 1,
+  matterNumberPatternMaxLength: 128,
+  matterNumberPaddingMin: 1,
+  matterNumberPaddingMax: 6,
+  timeMinimumUnitMinutesMin: 1,
+  timeMinimumUnitMinutesMax: 60,
+  timeEditWindowDaysMin: 0,
   legalListsPageSizeDefault: 50,
   legalListsPageSizeMax: 100,
   legalListsPerWorkspace: 200,
@@ -301,8 +309,15 @@ export const LIMITS = {
    *  after 60 s without a byte, so the interval leaves room for three writes
    *  inside one of their windows. */
   sseHeartbeatMs: 15_000,
+  /** How long an event stream may outlive the credential that opened it: the
+   *  interval of the sweep that ends every stream whose session or other
+   *  credential no longer holds. */
+  sseCredentialRecheckMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
+  /** OOXML numbering levels are zero-based and bounded to nine levels. */
+  clauseNumberingLevelMin: CLAUSE_NUMBERING_LEVEL_LIMITS.min,
+  clauseNumberingLevelMax: CLAUSE_NUMBERING_LEVEL_LIMITS.max,
   clauseExpectedBodyTextChars: 10 * 1024 * 1024,
   clauseExpectedBodyParagraphs: 100_000,
   templateClausesPerTemplate: 50,
@@ -406,6 +421,14 @@ export const LIMITS = {
   entityNameMaxLength: ENTITY_NAME_MAX_LENGTH,
   workspaceContributors: 5,
   searchQueryMaxLength: SEARCH_QUERY_MAX_LENGTH,
+  /** Characters of a provision citation a case-law search is narrowed by. */
+  caseLawProvisionFilterMaxLength: 256,
+  /**
+   * Decisions citing one provision the engine is handed as an id-set filter.
+   * Conservative until the engine's term-set cost is measured at scale; a
+   * provision cited more widely is checked candidate by candidate instead.
+   */
+  caseLawProvisionIdSetMax: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */
@@ -470,6 +493,33 @@ export const LIMITS = {
   imageDerivativeSourcePixelsMax: 40_000_000,
   /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
   imageDerivativeTimeoutMs: 30_000,
+  /** Largest stored source (bytes) a PDF or thumbnail derivative is built
+   *  from. Checked against the recorded size before the object is read and
+   *  again against the store's declared length, so a refused file is never
+   *  held. The worker keeps one copy of the source; the converter's own
+   *  working set grows with it, so this bounds both. Larger files keep their
+   *  original as the preview and record `failed`/`too-large`. */
+  fileDerivativeSourceMaxBytes: 25 * 1024 * 1024,
+  /** Derivative jobs one API process runs at once. Each conversion holds a
+   *  whole source plus its output and, for images, a decoded surface: the
+   *  largest single allocations the process makes. Running them one at a time
+   *  keeps that peak to one file's worth. */
+  fileDerivativeWorkerConcurrency: 1,
+  /** Fraction of the process's effective memory limit (the smallest finite
+   *  cgroup limit on its group and ancestors, read once at startup) at or
+   *  above which the derivative worker defers a job instead of starting it.
+   *  Relative, so it follows the memory actually available; the rest is
+   *  headroom for request traffic and the conversion itself. */
+  fileDerivativeDeferMemoryFraction: 0.7,
+  /** The defer threshold (process RSS) where no finite memory limit applies
+   *  or none can be read. */
+  fileDerivativeDeferRssFallbackBytes: 1280 * 1024 * 1024,
+  /** How long after the operating system's last memory-pressure signal the
+   *  derivative worker keeps deferring jobs. */
+  fileDerivativeMemoryPressureHoldMs: 60_000,
+  /** Delay before a deferred derivative job is offered again. Deferral does
+   *  not consume one of the job's attempts. */
+  fileDerivativeDeferDelayMs: 30_000,
   /** Hard timeout for adding a searchable text layer to one PDF. */
   ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
@@ -639,6 +689,8 @@ export const LIMITS = {
     documentType: 128 * 4,
     status: 32 * 4,
     effectiveDate: 32,
+    versionValidFrom: 10,
+    versionValidTo: 10,
     sourceUrl: 2048 * 4,
     headline: 4096,
   },

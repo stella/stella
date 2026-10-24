@@ -6,6 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -18,7 +19,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { CopyIcon, CopyPlusIcon, TrashIcon } from "@stll/ui/icons";
+import { CopyPlusIcon, DuplicateIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -349,6 +350,7 @@ export const MatterMetadataPanel = ({
             className="rounded-md shadow-none"
             disabled={updateWorkspace.isPending}
             onBlur={handleSaveName}
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => {
               setNameDirty(true);
               setNameValue(e.target.value);
@@ -445,7 +447,7 @@ export const MatterMetadataPanel = ({
                 variant="ghost"
               >
                 <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-                  <CopyIcon className="size-4" />
+                  <DuplicateIcon className="size-4" />
                 </span>
                 {t("common.duplicate")}
               </Button>

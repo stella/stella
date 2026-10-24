@@ -10,10 +10,10 @@ import type { Transaction } from "@/api/db/root";
 import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   decisionCitationPageQuery,
-  decisionCitationSummaryQuery,
   decisionCitationStatsStateQuery,
-  exactDecisionCitationSummaryQuery,
+  decisionCitationSummaryQuery,
   EXACT_CITATION_SUMMARY_MAX_ROWS,
+  exactDecisionCitationSummaryQuery,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import { caseLawArrivalsSnapshotQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
@@ -30,6 +30,11 @@ import {
   getShardConditions,
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import {
+  citingDecisionConditions,
+  citingDecisionsPageQuery,
+  citingJurisdictionScope,
+} from "@/api/handlers/case-law/provisions/citing-decisions";
 import { LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT } from "@/api/handlers/legislation/catalog-response";
 import {
   buildLegislationFacetsQuery,
@@ -44,6 +49,7 @@ import {
   decisionPageSql,
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import {
   SITEMAP_REFRESH_PAGE_SIZE,
   sitemapRefreshPageSql,
@@ -380,14 +386,35 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       decisionCitationPageQuery({
+        // The public reader holds no doctrine grants in this release.
+        doctrineAvailable: false,
         cursorId: undefined,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "incoming",
         limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
     contract: planContracts["case-law.citation-page-incoming"],
+  },
+  {
+    id: "case-law.citation-page-incoming-doctrine",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        doctrineAvailable: true,
+        cursorId: undefined,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        direction: "incoming",
+        doctrine: "limits",
+        limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-incoming-doctrine"],
   },
   {
     id: "case-law.citation-page-outgoing",
@@ -395,10 +422,13 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       decisionCitationPageQuery({
+        // The public reader holds no doctrine grants in this release.
+        doctrineAvailable: false,
         cursorId: undefined,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "outgoing",
         limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
@@ -412,6 +442,7 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationSummaryQuery({
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).summary,
     seed: "case-law",
@@ -439,6 +470,7 @@ export const QUERY_PLAN_REGISTRY = [
         limit: EXACT_CITATION_SUMMARY_MAX_ROWS + 1,
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
@@ -452,11 +484,38 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationSummaryQuery({
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).topCiting(CITATION_DIGEST_TOP_CITING),
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.top-citing-decisions"],
+  },
+  {
+    // A provision's cited-by page: its whole subtree of link rows, one range
+    // of the byte-ordered anchor index, never a walk of the work's links.
+    id: "case-law.provision-citing-decisions",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      citingDecisionsPageQuery({
+        tx,
+        conditions:
+          citingDecisionConditions(
+            {
+              jurisdiction: QUERY_PLAN_SAMPLE.caseLaw.country,
+              work: "/eli/cz/sb/2024/1",
+              anchor: "section-1",
+            },
+            citingJurisdictionScope(QUERY_PLAN_SAMPLE.caseLaw.country) ??
+              panic("The query-plan country must be public"),
+          ) ?? panic("The query-plan request names one work key"),
+        cursor: null,
+        sort: undefined,
+        limit: citationPageSize,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.provision-citing-decisions"],
   },
   {
     id: "legislation.list",

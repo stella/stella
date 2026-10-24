@@ -3,11 +3,15 @@ import { describe, expect, test } from "bun:test";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import tableChart from "@/api/handlers/chat/table-chart";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -33,7 +37,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -197,7 +201,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const context = resolveMeteringContext({
         metering: {
           actionType: "chat",
-          modelRole: "fast",
+          modelTask: "short-text",
           serviceTier: "flex",
         },
         organizationId: toSafeId<"organization">(
@@ -309,7 +313,7 @@ describe("createSafeRootHandler usage preflight", () => {
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat", modelRole: "fast" },
+          requiresUsage: { actionType: "chat", modelTask: "short-text" },
         },
         async function* () {
           meteredHandlerCalled = true;
@@ -394,6 +398,34 @@ describe("createSafeRootHandler member AI access", () => {
     Result.err<T, SafeDbError>(
       new DatabaseError({ message: "the ledger should not be read" }),
     );
+
+  test("applies chart member AI access before model dispatch", async () => {
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      { ...tableChart.config, contract: "patch" },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const result = await endpoint.handler(
+      createContext(endpoint, unreadableLedger, {
+        orgAIConfig: createOrgAIConfig(),
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      }),
+    );
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new HandlerError({
+        message: "Expected an AI access response",
+        status: 500,
+      });
+    }
+    expect(result.code).toBe(403);
+    expect(result.response).toMatchObject({
+      code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+    });
+  });
 
   test("refuses an AI handler for a member without a seat assignment, own key included", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
@@ -594,6 +626,37 @@ describe("request.failed severity", () => {
     );
     // An answered client outcome is logged, not reported.
     expect(exceptions).toHaveLength(0);
+  });
+
+  test("an operator feature refusal is a warning without exception capture", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.featureDisabled];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.featureDisabled,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toEqual([]);
+  });
+
+  test("an unavailable admission service remains a captured server fault", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.admissionUnavailable];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures.at(0)?.severityText).toBe("ERROR");
+    expect(exceptions).toHaveLength(1);
   });
 
   test("grades a database failure as a server fault", async () => {
@@ -874,7 +937,7 @@ describe("authorizeHandlerRunSize", () => {
   const userId = toSafeId<"user">("019e7000-0000-7000-8000-000000000001");
 
   const baseInput = {
-    metering: { actionType: "doc_review", modelRole: "pdf" },
+    metering: { actionType: "doc_review", modelTask: "pdf" },
     organizationId,
     orgAIConfig: null,
     workspaceId: null,
@@ -1048,14 +1111,15 @@ describe("provider failure HTTP response", () => {
           },
           async function* () {
             const generated = await Result.tryPromise(async () =>
-              generateTanStackTextForRole({
+              generateTanStackTextForTask({
                 tenantWorkspaceIds: [],
                 caching: { enabled: false, reason: "org-disabled" },
                 serviceTier: "standard",
                 orgAIConfig: null,
                 dataClass: "public_corpus",
-                role: "chat",
+                task: "chat",
                 organizationId: null,
+                userId: null,
                 admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",
                 finishPolicy: "require-complete",

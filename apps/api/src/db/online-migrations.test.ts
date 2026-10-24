@@ -2,21 +2,32 @@ import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
+import type { MigrationTimingRecord } from "./migration-timing";
+import { declaresOnlineBuild } from "./online-ddl";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
+import type {
+  OnlineMigrationConnection,
+  OnlineRepair,
+  OnlineRepairCompletion,
+} from "./online-migration-connection";
 import {
   assertOnlineMigrationsApplied,
+  ensureOnlineIndexValid,
+  ONLINE_CONSTRAINT_VALIDATIONS,
+  ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
-  runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
+  runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
@@ -54,30 +65,37 @@ const heldIndexGate = {
     }),
   },
 } satisfies OnlineIndexGateOptions;
+const reserveHealthyObserver =
+  async (): Promise<OnlineMigrationConnection> => ({
+    execute: async () => undefined,
+    query: async (query) => {
+      if (query.includes("pg_blocking_pids")) {
+        return [];
+      }
+      if (query.includes("pg_backend_pid() AS pid")) {
+        return [{ pid: 2, database: "test" }];
+      }
+      if (query.includes('"stateAgeMs"')) {
+        return [];
+      }
+      if (query.includes("ageMs")) {
+        return [{ ageMs: 0, observedAt: new Date(testClock()).toISOString() }];
+      }
+      return [
+        { active: false, observedAt: new Date(testClock()).toISOString() },
+      ];
+    },
+    release: () => undefined,
+  });
 const runOnlineMigrations = async (
   pool: Parameters<typeof runOnlineMigrationsWithGate>[0],
   options: Partial<OnlineRepairOptions> = {},
 ) =>
   await runOnlineMigrationsWithGate(pool, {
     indexGate: healthyIndexGate,
+    timing: { clock: () => 0, emit: () => undefined },
     ...options,
-    reserveObserver: async () => ({
-      execute: async () => undefined,
-      query: async (query) => {
-        if (query.includes("pg_backend_pid() AS pid")) {
-          return [{ pid: 2, database: "test" }];
-        }
-        if (query.includes("ageMs")) {
-          return [
-            { ageMs: 0, observedAt: new Date(testClock()).toISOString() },
-          ];
-        }
-        return [
-          { active: false, observedAt: new Date(testClock()).toISOString() },
-        ];
-      },
-      release: () => undefined,
-    }),
+    reserveObserver: reserveHealthyObserver,
   });
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
@@ -105,6 +123,9 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+/** A pooled session's own timeout, not the role default. */
+const SESSION_STATEMENT_TIMEOUT = "30s";
+const RESTORED_SESSION_TIMEOUT = `SELECT set_config('statement_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_STATEMENT_TIMEOUT])}`;
 const CLEANUP_STALL_CONSTRAINTS = [
   "corpus_index_projection_intents_status_values",
   "corpus_index_projection_intents_status_shape",
@@ -113,9 +134,9 @@ const CLEANUP_STALL_CONSTRAINTS = [
 
 describe("online migrations", () => {
   /**
-   * The online phase runs inside the migrator's exclusive corpus schema lane,
-   * so a walk or a full-table scan there pauses every corpus writer for its
-   * whole length. The provision state backfill is a scheduler job instead.
+   * The online phase runs inside the release's migrate run, so a walk or a
+   * full-table scan there holds the release for its whole length. The
+   * provision state backfill is a scheduler job instead.
    */
   test("keeps the provision state backfill out of the online phase", () => {
     const repairNames = new Set(
@@ -130,6 +151,40 @@ describe("online migrations", () => {
     expect(
       [...repairNames].filter((name) => name.includes("provision")),
     ).toEqual([]);
+  });
+
+  test("startup validation never waits on the online lock and bounds its own statements", async () => {
+    const harness = createHarness();
+    expect(await assertOnlineMigrationsApplied(harness.pool)).toEqual({
+      type: "validated",
+    });
+    expect(harness.statements.at(1)).toBe("SET statement_timeout = '5s'");
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
+    expect(
+      harness.statements.filter((statement) =>
+        statement.includes("SELECT pg_advisory_lock("),
+      ),
+    ).toEqual([]);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup leaves the online phase to a migrate run that holds the lock", async () => {
+    const harness = createHarness({
+      missingIndexes: ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+      onlineLockHeld: true,
+    });
+    expect(await assertOnlineMigrationsApplied(harness.pool)).toEqual({
+      type: "migrator_active",
+    });
+    expect(
+      harness.statements.filter(
+        (statement) =>
+          statement.includes("pg_catalog") ||
+          statement.includes("pg_advisory_unlock"),
+      ),
+    ).toEqual([]);
+    expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
+    expect(harness.released()).toBe(true);
   });
 
   test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
@@ -157,6 +212,29 @@ describe("online migrations", () => {
     },
   );
 
+  test("every validation a registered repair runs is declared, and each runs once", async () => {
+    const declared = ONLINE_CONSTRAINT_VALIDATIONS.map(
+      ({ tableName, constraintName }) =>
+        `ALTER TABLE public."${tableName}" VALIDATE CONSTRAINT "${constraintName}"`,
+    );
+    expect(new Set(declared).size).toBe(declared.length);
+    const harness = createHarness({
+      emptyRepairTables: true,
+      unvalidatedConstraints: ONLINE_CONSTRAINT_VALIDATIONS.map(
+        ({ constraintName }) => constraintName,
+      ),
+    });
+    expect(await runOnlineMigrations(harness.pool)).toEqual({
+      type: "complete",
+    });
+    await assertOnlineMigrationsApplied(harness.pool);
+    expect(
+      harness.statements
+        .filter((statement) => statement.includes("VALIDATE CONSTRAINT"))
+        .toSorted(),
+    ).toEqual(declared.toSorted());
+  });
+
   test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness();
 
@@ -169,22 +247,141 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
-  test("creates a missing index online and verifies completion", async () => {
-    const harness = createHarness({
-      missingIndexes: [REPORT_EXPORT_INDEX],
+  test("every online step reports its duration, in the order the phase runs them", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    let now = 0;
+
+    await runOnlineMigrations(harness.pool, {
+      timing: {
+        clock: () => (now += 5),
+        emit: (record) => {
+          records.push(record);
+        },
+      },
     });
 
-    await runOnlineMigrations(harness.pool);
+    const steps = records.flatMap((record) =>
+      record.event === "migrate.online_step_duration" ? [record] : [],
+    );
+    expect(steps).toHaveLength(records.length);
+    const named = (kind: string) =>
+      steps.filter((step) => step.kind === kind).map(({ name }) => name);
+    expect(named("index")).toEqual(
+      ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+    );
+    expect(named("cutover")).toEqual(
+      ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final.name),
+    );
+    expect(named("replacement_drop").length).toBeGreaterThan(0);
+    // Indexes, then cutovers, then the replaced indexes they retire.
+    expect(steps.map(({ kind }) => kind)).toEqual(
+      [...steps.map(({ kind }) => kind)].toSorted(
+        (left, right) =>
+          ["index", "cutover", "replacement_drop", "repair"].indexOf(left) -
+          ["index", "cutover", "replacement_drop", "repair"].indexOf(right),
+      ),
+    );
+    for (const step of steps) {
+      expect(step.durationMs, step.name).toBe(5);
+      expect(step.retriesSpent, step.name).toBe(0);
+      expect(step.outcome, step.name).toBe("complete");
+    }
+  });
 
-    expect(
-      indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT),
-    ).toBeGreaterThan(-1);
-    expect(harness.released()).toBe(true);
+  test("a deferred index is the last step reported, as deferred", async () => {
+    const harness = createHarness({
+      indexStates: { [REPORT_EXPORT_INDEX]: [undefined, undefined] },
+    });
+    const records: MigrationTimingRecord[] = [];
+
+    const outcome = await runOnlineMigrations(harness.pool, {
+      indexGate: {
+        ...healthyIndexGate,
+        ebs: {
+          type: "reader",
+          read: async () => ({
+            indicator: "ebs_balance",
+            kind: "unknown",
+            value: null,
+            threshold: 70,
+            observedAt: null,
+            reason: "Injected unavailable metric",
+          }),
+        },
+      },
+      timing: {
+        clock: () => 0,
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+
+    expect(outcome.type).toBe("deferred");
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "index",
+      name: REPORT_EXPORT_INDEX,
+      durationMs: 0,
+      retriesSpent: 0,
+      outcome: "deferred",
+    });
+  });
+
+  test("creates a missing index online and verifies completion", async () => {
+    for (const { name } of ONLINE_MIGRATION_INDEXES.filter(
+      declaresOnlineBuild,
+    )) {
+      const harness = createHarness({ missingIndexes: [name] });
+
+      await runOnlineMigrations(harness.pool);
+
+      expect(
+        indexOfStatement(harness.statements, `INDEX CONCURRENTLY "${name}"`),
+        name,
+      ).toBeGreaterThan(-1);
+      expect(harness.released()).toBe(true);
+    }
+  });
+
+  test("refuses an online build without a declared create statement", async () => {
+    const declared = ONLINE_MIGRATION_INDEXES.find(
+      ({ name }) => name === REPORT_EXPORT_INDEX,
+    );
+    if (!declared) {
+      throw new TypeError("Expected the report export index declaration");
+    }
+    const index = {
+      definitionBody: declared.definitionBody,
+      isUnique: declared.isUnique,
+      name: declared.name,
+      tableName: declared.tableName,
+    };
+    const harness = createHarness({
+      indexStates: { [REPORT_EXPORT_INDEX]: [false, undefined] },
+    });
+    const connection = await harness.pool.reserve();
+
+    const rejection = await rejectionOf(
+      ensureOnlineIndexValid({
+        connection,
+        gate: healthyIndexGate,
+        index,
+        reserveObserver: reserveHealthyObserver,
+      }),
+    );
+
+    expect(String(rejection)).toContain(
+      `Required migration index ${REPORT_EXPORT_INDEX} is missing`,
+    );
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
   });
 
   /**
-   * The migrator runs this phase holding the exclusive corpus schema lane, so
-   * a gate that sleeps until health returns pauses every corpus writer for
+   * A gate that sleeps until health returns would hold the migrate run for
    * that long. A held build ends the phase instead, and nothing after it runs:
    * later steps may depend on the index it would have built.
    */
@@ -223,7 +420,7 @@ describe("online migrations", () => {
 
     expect(held).toEqual({
       type: "deferred",
-      index: REPORT_EXPORT_INDEX,
+      step: REPORT_EXPORT_INDEX,
       retryAfterMs: healthyIndexGate.config.retryMs,
     });
     expect(waits).toEqual([]);
@@ -289,7 +486,7 @@ describe("online migrations", () => {
           }),
         ).toEqual({
           type: "deferred",
-          index: staged.name,
+          step: staged.name,
           retryAfterMs: heldIndexGate.config.retryMs,
         });
         expect(waits).toEqual([]);
@@ -330,7 +527,7 @@ describe("online migrations", () => {
         await runOnlineMigrations(harness.pool, { indexGate }),
       ).toMatchObject({
         type: "deferred",
-        index: REPORT_EXPORT_INDEX,
+        step: REPORT_EXPORT_INDEX,
       });
     };
     const alerts = () =>
@@ -619,6 +816,136 @@ describe("online migrations", () => {
     );
   });
 
+  test("defers at a replaced index the gate holds, keeping it and skipping later steps", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    const firstLegacy = ONLINE_INDEX_REPLACEMENTS.at(0)?.legacyName;
+    if (firstLegacy === undefined) {
+      throw new TypeError("Expected a replaced index");
+    }
+
+    const outcome = await runOnlineMigrations(harness.pool, {
+      indexGate: heldIndexGate,
+      timing: {
+        clock: () => 0,
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+
+    expect(outcome).toEqual({
+      type: "deferred",
+      step: firstLegacy,
+      retryAfterMs: heldIndexGate.config.retryMs,
+    });
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "replacement_drop",
+      name: firstLegacy,
+      durationMs: 0,
+      retriesSpent: 0,
+      outcome: "deferred",
+    });
+    expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
+    expect(indexOfStatement(harness.statements, "VALIDATE CONSTRAINT")).toBe(
+      -1,
+    );
+    expect(harness.released()).toBe(true);
+  });
+
+  test("retired indexes cost only a catalog read, so a held gate never defers over them", async () => {
+    const harness = createHarness({
+      retiredIndexes: ONLINE_INDEX_REPLACEMENTS.map(
+        ({ legacyName }) => legacyName,
+      ),
+    });
+
+    expect(
+      await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+    ).toEqual({ type: "complete" });
+    expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
+  });
+
+  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
+    "defers at validation $name while the gate holds it, then validates it on a healthy run",
+    async ({ name }) => {
+      const harness = createHarness({
+        unvalidatedConstraints: [name],
+        retiredIndexes: ONLINE_INDEX_REPLACEMENTS.map(
+          ({ legacyName }) => legacyName,
+        ),
+      });
+      const records: MigrationTimingRecord[] = [];
+
+      expect(
+        await runOnlineMigrations(harness.pool, {
+          indexGate: heldIndexGate,
+          timing: {
+            clock: () => 0,
+            emit: (record) => {
+              records.push(record);
+            },
+          },
+        }),
+      ).toEqual({
+        type: "deferred",
+        step: name,
+        retryAfterMs: heldIndexGate.config.retryMs,
+      });
+      expect(records.at(-1)).toEqual({
+        event: "migrate.online_step_duration",
+        kind: "repair",
+        name,
+        durationMs: 0,
+        retriesSpent: 0,
+        outcome: "deferred",
+      });
+      expect(
+        indexOfStatement(harness.statements, `VALIDATE CONSTRAINT "${name}"`),
+      ).toBe(-1);
+      // Deferred, not deployable: startup still refuses the NOT VALID check.
+      expect(
+        String(await rejectionOf(assertOnlineMigrationsApplied(harness.pool))),
+      ).toContain(`constraint ${name} is not validated`);
+
+      expect(await runOnlineMigrations(harness.pool)).toEqual({
+        type: "complete",
+      });
+      await assertOnlineMigrationsApplied(harness.pool);
+      const validated = harness.statements.length;
+      // A validated constraint costs one catalog read, so a held gate never
+      // defers over it again.
+      expect(
+        await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+      ).toEqual({ type: "complete" });
+      expect(
+        harness.statements
+          .slice(validated)
+          .filter((statement) => statement.includes("VALIDATE CONSTRAINT")),
+      ).toEqual([]);
+      expect(harness.released()).toBe(true);
+    },
+  );
+
+  test("a second run after every drop is a fixed point", async () => {
+    const harness = createHarness();
+
+    expect(await runOnlineMigrations(harness.pool)).toEqual({
+      type: "complete",
+    });
+    const afterFirstRun = harness.statements.length;
+    expect(
+      await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+    ).toEqual({ type: "complete" });
+    expect(
+      indexOfStatement(
+        harness.statements.slice(afterFirstRun),
+        DROP_INDEX_FRAGMENT,
+      ),
+    ).toBe(-1);
+  });
+
   test("rejects a missing index required by a rewritten migration", async () => {
     const harness = createHarness({
       indexStates: { [CREDENTIAL_INDEX]: [undefined] },
@@ -865,6 +1192,46 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  test("a repair its completion check rejects is reported as failed, never as pending", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    const completions: OnlineRepairCompletion[] = [
+      { type: "incomplete", reason: "not started" },
+      { type: "incomplete", reason: "rows left behind" },
+    ];
+    const repair = {
+      name: "probe-repair",
+      readCompletion: async () =>
+        completions.shift() ?? {
+          type: "incomplete",
+          reason: "unexpected read",
+        },
+      repair: async () => ({ type: "complete" }) as const,
+    } satisfies OnlineRepair;
+
+    const failure = await rejectionOf(
+      runOnlineMigrations(harness.pool, {
+        repairs: [repair],
+        timing: {
+          clock: () => 0,
+          emit: (record) => {
+            records.push(record);
+          },
+        },
+      }),
+    );
+
+    expect(String(failure)).toContain("probe-repair");
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "repair",
+      name: "probe-repair",
+      durationMs: 0,
+      retriesSpent: 0,
+      outcome: "failed",
+    });
+  });
+
   test("a migrate-phase batch statement timeout stays pending and deployment proceeds", async () => {
     const harness = createHarness({
       unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
@@ -1086,6 +1453,10 @@ type HarnessOptions = {
   indexStates?: IndexStates;
   /** Missing until their CREATE statement completes, independent of reads. */
   missingIndexes?: readonly string[];
+  /** Replaced indexes already gone; the rest are present until dropped. */
+  retiredIndexes?: readonly string[];
+  /** Another session (a migrate run) holds the online lock. */
+  onlineLockHeld?: boolean;
 };
 
 const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
@@ -1100,8 +1471,14 @@ const createHarness = ({
   missingIndexes = [],
   emptyRepairTables = false,
   timeoutRepairBatch = false,
+  retiredIndexes = [],
+  onlineLockHeld = false,
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
+  const legacyIndexes = new Set(
+    ONLINE_INDEX_REPLACEMENTS.map(({ legacyName }) => legacyName),
+  );
+  const droppedLegacyIndexes = new Set(retiredIndexes);
   const backfillStates = new Map<
     unknown,
     { cursor: unknown; batch: unknown }
@@ -1140,6 +1517,11 @@ const createHarness = ({
           if (!query.includes(DROP_INDEX_FRAGMENT)) {
             return;
           }
+          for (const name of legacyIndexes) {
+            if (query.includes(`"${name}"`)) {
+              droppedLegacyIndexes.add(name);
+            }
+          }
           for (const [name, values] of remainingArtifacts) {
             remainingArtifacts.set(
               name,
@@ -1158,6 +1540,12 @@ const createHarness = ({
           if (query.includes("pg_advisory_xact_lock")) {
             return [];
           }
+          if (query.includes("pg_try_advisory_lock(hashtext('stella-online")) {
+            return [{ acquired: !onlineLockHeld }];
+          }
+          if (query.includes("current_setting('statement_timeout')")) {
+            return [{ timeout: SESSION_STATEMENT_TIMEOUT }];
+          }
           if (
             query.includes(" AS acquired") ||
             query.includes("pg_try_advisory_lock") ||
@@ -1172,9 +1560,14 @@ const createHarness = ({
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
           }
+          // The chat content repair's source and leftover reads: no chat
+          // rows, so it goes straight to its validations.
+          if (/^SELECT id FROM \w+ /u.test(query)) {
+            return [];
+          }
           if (
             query.trim() ===
-            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+            "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
           }
@@ -1268,6 +1661,19 @@ const createHarness = ({
           const indexName = params.at(1);
           if (typeof indexName !== "string") {
             throw new TypeError("Expected index name query parameter");
+          }
+          if (legacyIndexes.has(indexName)) {
+            return droppedLegacyIndexes.has(indexName)
+              ? []
+              : [
+                  {
+                    definition: `CREATE INDEX ${indexName} ON public.${String(params.at(2))} USING btree (id)`,
+                    isReady: true,
+                    isUnique: false,
+                    isValid: true,
+                    name: indexName,
+                  },
+                ];
           }
           const index = managedIndexes.find(({ name }) => name === indexName);
           if (!index) {

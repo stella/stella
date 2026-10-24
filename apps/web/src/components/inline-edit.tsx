@@ -24,6 +24,8 @@ type InlineEditProps = {
    * ("Document name"). Defaults to the bare "Rename" verb.
    */
   inputAriaLabel?: string | undefined;
+  /** Longest value the field accepts; typing and pasting stop there. */
+  maxLength?: number | undefined;
   className?: string | undefined;
   inputClassName?: string | undefined;
 };
@@ -36,6 +38,7 @@ export const InlineEdit = ({
   suffix,
   action,
   inputAriaLabel,
+  maxLength,
   className,
   inputClassName,
 }: InlineEditProps) => {
@@ -61,6 +64,7 @@ export const InlineEdit = ({
       <InlineRenameInput
         aria-label={inputAriaLabel ?? t("common.rename")}
         className={inputClassName}
+        maxLength={maxLength}
         onBlur={() => {
           // The group commits when focus leaves its action buttons too.
         }}

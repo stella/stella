@@ -1,5 +1,5 @@
-import { Result, panic } from "better-result";
-import { and, eq, sql, isNull } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { CorrespondenceActorDisplay } from "@stll/api-contract/correspondence";
 
@@ -9,18 +9,18 @@ import {
   SETTING_USER_ID,
   SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_WORKSPACE_IDS,
-  stellaAuthorizedWorkspaces,
   WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
-  workspaceMembers,
-  workspaces,
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { activeAuthorizedWorkspaceQuery } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 type AccessTransaction = Pick<Transaction, "select" | "execute">;
 
@@ -64,16 +64,7 @@ export const correspondenceUserHasAccess = async ({
   await tx.execute(
     sql`select set_config(${SETTING_USER_ID}, ${userId}, true), set_config(${SETTING_ORGANIZATION_ID}, ${organizationId}, true), set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.membership}, true), set_config(${SETTING_WORKSPACE_IDS}, '{}', true)`,
   );
-  const accessible = await tx
-    .select({ id: stellaAuthorizedWorkspaces.authorizedWorkspaceId })
-    .from(stellaAuthorizedWorkspaces)
-    .where(
-      and(
-        eq(stellaAuthorizedWorkspaces.authorizedWorkspaceId, workspaceId),
-        eq(stellaAuthorizedWorkspaces.workspaceStatus, "active"),
-      ),
-    )
-    .limit(1);
+  const accessible = await activeAuthorizedWorkspaceQuery(tx, workspaceId);
   return accessible.length === 1;
 };
 

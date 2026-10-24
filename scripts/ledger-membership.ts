@@ -2,11 +2,24 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+// Every Git read targets repoRoot: hooks export repository selectors such as
+// GIT_DIR, which would otherwise redirect it to the caller's repository.
+export const ledgerGitEnv = (): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        !entry[0].startsWith("GIT_") && entry[1] !== undefined,
+    ),
+  );
+
 type ReadBaseLedgerOptions = {
   baseRef: string;
   ledgerRel: string;
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
+  normalizeBaseEntries?:
+    | ((entries: string[], baseCommit: string) => string[])
+    | undefined;
 };
 
 type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
@@ -23,6 +36,7 @@ const compareLedgerMembership = ({
   ledgerRel,
   repoRoot,
   parseLedger,
+  normalizeBaseEntries,
 }: CompareLedgerMembershipOptions): CompareLedgerMembershipResult => {
   const resolved = Bun.spawnSync(
     [
@@ -33,12 +47,26 @@ const compareLedgerMembership = ({
       "--end-of-options",
       `${baseRef}^{commit}`,
     ],
-    { cwd: repoRoot, stderr: "pipe" },
+    { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
   );
   if (resolved.exitCode !== 0) {
     return { type: "unresolved-base" };
   }
-  const commit = resolved.stdout.toString().trim();
+  // A commit the base already contains adds nothing to the base's ledger: a
+  // later shrink on the base is not growth here. Its own ledger is the base,
+  // so only edits on top of it count.
+  const contained =
+    Bun.spawnSync(
+      [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "HEAD",
+        resolved.stdout.toString().trim(),
+      ],
+      { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
+    ).exitCode === 0;
+  const commit = contained ? "HEAD" : resolved.stdout.toString().trim();
   const base = readBaseLedger({
     baseRef: commit,
     ledgerRel,
@@ -47,7 +75,10 @@ const compareLedgerMembership = ({
   });
   return {
     type: "compared",
-    added: addedEntries(current, base),
+    added: addedEntries(
+      current,
+      base === null ? null : (normalizeBaseEntries?.(base, commit) ?? base),
+    ),
   };
 };
 
@@ -59,6 +90,7 @@ const readBaseLedger = ({
 }: ReadBaseLedgerOptions): string[] | null => {
   const result = Bun.spawnSync(["git", "show", `${baseRef}:${ledgerRel}`], {
     cwd: repoRoot,
+    env: ledgerGitEnv(),
     stderr: "pipe",
   });
   if (result.exitCode !== 0) {
@@ -128,6 +160,7 @@ type RunLedgerMembershipGuardOptions = {
   ledgerRel: string;
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
+  normalizeBaseEntries?: ReadBaseLedgerOptions["normalizeBaseEntries"];
   label: string;
   remediation: string;
   args?: readonly string[];
@@ -139,6 +172,7 @@ export const runLedgerMembershipGuard = ({
   ledgerRel,
   repoRoot,
   parseLedger,
+  normalizeBaseEntries,
   label,
   remediation,
   args = process.argv.slice(2),
@@ -165,6 +199,7 @@ export const runLedgerMembershipGuard = ({
     ledgerRel,
     repoRoot,
     parseLedger,
+    normalizeBaseEntries,
   });
   if (comparison.type === "unresolved-base") {
     error(

@@ -4,9 +4,9 @@ import { randomUUID } from "node:crypto";
 import { apiDelete, apiPut, apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 // The table store keeps one entry per signed-in user, keyed
@@ -47,12 +47,14 @@ test.describe("per-view table state", () => {
     workspace = await createTestWorkspace(request, "table-view-state");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 

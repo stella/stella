@@ -7,19 +7,20 @@
 
 import {
   Client,
+  type FetchLike,
   ProtocolError,
   SdkError,
   SdkHttpError,
   StreamableHTTPClientTransport,
-  type FetchLike,
 } from "@modelcontextprotocol/client";
 import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
 import {
-  readHttpActionAdmissionRefusal,
   type CliActionAdmissionRefusal,
+  readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
-import { CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
+import { apiFetch } from "./api-fetch.js";
+import { CLI_LATEST_HEADER, CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
@@ -158,7 +159,7 @@ const runMcpOperation = async <T>({
   let admission: CliActionAdmissionRefusal | undefined;
   let evidencePromise: Promise<ResponseEvidence | undefined> | undefined;
   const observedFetch: FetchLike = async (input, init) => {
-    const response = await fetch(input, init);
+    const response = await apiFetch(input, init);
     if (!response.ok) {
       const refusal = await readHttpActionAdmissionRefusal(response);
       if (refusal !== undefined) {
@@ -277,6 +278,7 @@ export const listTools = async ({
 export type RawToolsList = {
   rawBody: string;
   cliMinimum?: string;
+  cliLatest?: string;
   /** Effective scopes echoed by the authenticated server response. */
   grantedScopes?: readonly string[];
   /** Tool names the server attests were omitted solely for missing scope. */
@@ -341,6 +343,10 @@ export const fetchToolsListRaw = async ({
   const cliMinimum = evidence.headers.get(CLI_MINIMUM_HEADER);
   if (cliMinimum !== null) {
     out.cliMinimum = cliMinimum;
+  }
+  const cliLatest = evidence.headers.get(CLI_LATEST_HEADER);
+  if (cliLatest !== null) {
+    out.cliLatest = cliLatest;
   }
   const scopesHeader = evidence.headers.get(STELLA_SCOPES_HEADER);
   if (scopesHeader !== null) {

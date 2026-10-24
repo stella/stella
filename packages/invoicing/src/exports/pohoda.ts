@@ -9,12 +9,12 @@ import {
   czechVatBandOf,
   effectiveVatRateBps,
   invoiceDescriptionOf,
+  type InvoiceExportLine,
+  type InvoiceExportRecord,
   quantityText,
   splitCzechAccountNumber,
   streetOf,
   variableSymbolOf,
-  type InvoiceExportLine,
-  type InvoiceExportRecord,
 } from "./record";
 import { el, text, XML_DECLARATION } from "./xml";
 
@@ -62,7 +62,7 @@ const classificationOf = (record: InvoiceExportRecord): string | null => {
   if (treatments.size === 1 && treatments.has("not_vat_payer")) {
     return "nonSubsume";
   }
-  // Reverse charge and exempt supplies need a company-specific VAT
+  // Reverse charge, out-of-scope and exempt supplies need a company-specific VAT
   // classification code; POHODA applies the partner's default then.
   return null;
 };

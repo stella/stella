@@ -315,6 +315,9 @@ describe("file derivative repair", () => {
     const processingFailed = await seedFileField({
       pdfDerivative: { status: "failed", reason: "processing" },
     });
+    const tooLarge = await seedFileField({
+      pdfDerivative: { status: "failed", reason: "too-large" },
+    });
     // Written before the reason existed: read as terminal, because
     // replaying a real processing failure is the costlier mistake.
     const legacyFailed = await seedFileField({
@@ -345,6 +348,10 @@ describe("file derivative repair", () => {
     expect(await readDerivativeStatus(processingFailed)).toEqual({
       status: "failed",
       reason: "processing",
+    });
+    expect(await readDerivativeStatus(tooLarge)).toEqual({
+      status: "failed",
+      reason: "too-large",
     });
     expect(await readDerivativeStatus(legacyFailed)).toEqual({
       status: "failed",

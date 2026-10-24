@@ -21,7 +21,8 @@
 // import, a star re-export, and a dynamic import, which reach every export; the
 // specifier's other exports stay open, so one package entry point can carry
 // an owned capability next to unrelated ones. A dynamic import counts as the
-// names it is destructured into (`const { a } = await import("m")`) or read
+// names it is destructured into (`const { a } = await import("m")`), including
+// corresponding slots of an awaited `Promise.all` literal without spreads, or read
 // through (`(await import("m")).a`); held in any other shape, the module
 // object reaches every export. A `global-member` row matches
 // the full member chain `<object>.<path...>` on the global, including the
@@ -45,7 +46,7 @@
 // Cross-module local re-exports, mutable aliases and custom query wrappers are
 // outside this syntax boundary.
 
-import { eslintCompatPlugin, type Context } from "@oxlint/plugins";
+import { type Context, eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   type AstNode,
@@ -60,9 +61,10 @@ import {
   isMemberAccess,
   isStringLiteral,
   memberPropertyName,
-  resolveImport,
-  resolveVariable,
   repoRelativeFilename,
+  resolveImport,
+  resolveImportedExpressionForEnforcement,
+  resolveVariable,
   type ScopeContext,
   stableInitializer,
   staticStringValue,
@@ -351,10 +353,65 @@ const bindsOwnedName = (
     return name !== null && names.includes(name);
   });
 
+type ParallelImportBindingOptions = {
+  array: AstNode;
+  imported: AstNode;
+  context: ScopeContext;
+};
+
+const parallelImportBinding = ({
+  array,
+  imported,
+  context,
+}: ParallelImportBindingOptions) => {
+  const call = array.parent;
+  if (
+    !Array.isArray(array.elements) ||
+    array.elements.some(
+      (element) => isAstNode(element) && element.type === "SpreadElement",
+    ) ||
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !isMemberAccess(call.callee, "Promise", "all") ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.length !== 1 ||
+    call.arguments.at(0) !== array
+  ) {
+    return null;
+  }
+  if (!isAstNode(call.callee) || !isIdentifierReference(call.callee.object)) {
+    return null;
+  }
+  const promise = resolveVariable(context, call.callee.object);
+  if (promise !== null && promise.defs.length > 0) {
+    return null;
+  }
+  const awaited = call.parent;
+  if (!isAstNode(awaited) || awaited.type !== "AwaitExpression") {
+    return null;
+  }
+  const declaration = awaited.parent;
+  if (
+    !isAstNode(declaration) ||
+    declaration.type !== "VariableDeclarator" ||
+    declaration.init !== awaited ||
+    !isAstNode(declaration.id) ||
+    declaration.id.type !== "ArrayPattern" ||
+    !Array.isArray(declaration.id.elements)
+  ) {
+    return null;
+  }
+  const slot = array.elements.indexOf(imported);
+  return slot === -1 ? null : declaration.id.elements.at(slot);
+};
+
 // The export names a dynamic import is destructured into or read through, or
 // null when the module object is held in a shape that reaches every export
 // (bound whole, passed on, a rest element or a computed key).
-const dynamicImportNames = (node: unknown): readonly string[] | null => {
+const dynamicImportNames = (
+  node: unknown,
+  context: ScopeContext,
+): readonly string[] | null => {
   if (!isAstNode(node)) {
     return null;
   }
@@ -374,17 +431,21 @@ const dynamicImportNames = (node: unknown): readonly string[] | null => {
     const name = memberPropertyName(parent);
     return name === null ? null : [name];
   }
+  const binding =
+    parent.type === "ArrayExpression"
+      ? parallelImportBinding({ array: parent, imported: current, context })
+      : parent.type === "VariableDeclarator" && parent.init === current
+        ? parent.id
+        : null;
   if (
-    parent.type !== "VariableDeclarator" ||
-    parent.init !== current ||
-    !isAstNode(parent.id) ||
-    parent.id.type !== "ObjectPattern" ||
-    !Array.isArray(parent.id.properties)
+    !isAstNode(binding) ||
+    binding.type !== "ObjectPattern" ||
+    !Array.isArray(binding.properties)
   ) {
     return null;
   }
   const names: string[] = [];
-  for (const property of parent.id.properties) {
+  for (const property of binding.properties) {
     if (
       !isAstNode(property) ||
       property.type !== "Property" ||
@@ -505,30 +566,67 @@ const stableValue = (
     : stableValue(context, stableInitializer(variable), seen);
 };
 
-const objectProperty = (node: unknown, name: string): AstNode | null => {
+type PropertyLookup =
+  | { kind: "absent" }
+  | { kind: "unknown" }
+  | { kind: "value"; node: AstNode };
+
+// Absent and unknown stay distinct through nested spreads: an unresolved
+// spread may override what came before it, an absent property cannot.
+const lookupObjectProperty = (
+  context: ScopeContext,
+  node: unknown,
+  name: string,
+): PropertyLookup => {
   if (
     !isAstNode(node) ||
     node.type !== "ObjectExpression" ||
     !Array.isArray(node.properties)
   ) {
-    return null;
+    return { kind: "unknown" };
   }
-  let result: AstNode | null = null;
+  let result: PropertyLookup = { kind: "absent" };
   for (const property of node.properties) {
-    if (!isAstNode(property) || property.type !== "Property") {
-      return null;
+    if (!isAstNode(property)) {
+      return { kind: "unknown" };
+    }
+    if (property.type === "SpreadElement") {
+      const spreadValue = stableValue(context, property.argument);
+      if (spreadValue === null) {
+        result = { kind: "unknown" };
+        continue;
+      }
+      const inherited = lookupObjectProperty(context, spreadValue, name);
+      if (inherited.kind !== "absent") {
+        result = inherited;
+      }
+      continue;
+    }
+    if (property.type !== "Property") {
+      return { kind: "unknown" };
     }
     const key = property.computed
       ? staticStringValue(property.key)
       : getPropertyName(property.key);
     if (key === null) {
-      return null;
+      return { kind: "unknown" };
     }
     if (key === name) {
-      result = isAstNode(property.value) ? property.value : null;
+      result = isAstNode(property.value)
+        ? { kind: "value", node: property.value }
+        : { kind: "unknown" };
     }
   }
   return result;
+};
+
+const objectProperty = (
+  context: ScopeContext,
+  node: unknown,
+  name: string,
+): AstNode | null => {
+  const found = lookupObjectProperty(context, node, name);
+  return found.kind === "value" ? found.node : null;
 };
 
 const relationSelectsOwnedColumns = ({
@@ -537,7 +635,10 @@ const relationSelectsOwnedColumns = ({
   value,
 }: TableReadOptions): boolean => {
   const options = stableValue(context, value);
-  const columns = stableValue(context, objectProperty(options, "columns"));
+  const columns = stableValue(
+    context,
+    objectProperty(context, options, "columns"),
+  );
   if (
     columns?.type !== "ObjectExpression" ||
     !Array.isArray(columns.properties)
@@ -587,6 +688,129 @@ const isOwnedRelation = ({
   return (
     query?.type === "MemberExpression" && memberPropertyName(query) === "query"
   );
+};
+
+const nestedRelationSelectsOwnedColumns = ({
+  context,
+  entry,
+  value,
+  seen = new Set<unknown>(),
+}: TableReadOptions): boolean => {
+  const options = stableValue(context, value);
+  if (options === null || seen.has(options)) {
+    return false;
+  }
+  seen.add(options);
+  const relationsSelectOwnedColumns = (withValue: unknown): boolean => {
+    if (!isAstNode(withValue)) {
+      return false;
+    }
+    const relations = stableValue(context, withValue);
+    // A relation selection the rule cannot see may name the owned relation;
+    // an imported one is left to the census, which checks it where written.
+    if (
+      relations?.type !== "ObjectExpression" ||
+      !Array.isArray(relations.properties)
+    ) {
+      return !isImportedValue(context, withValue);
+    }
+    return relations.properties.some((property) => {
+      // A spread inside `with` is followed when it resolves; an unresolved
+      // one could carry the owned relation, so it fails closed.
+      if (isAstNode(property) && property.type === "SpreadElement") {
+        const spread = stableValue(context, property.argument);
+        if (spread?.type === "ObjectExpression") {
+          return relationsSelectOwnedColumns(spread);
+        }
+        return !isImportedValue(context, property.argument);
+      }
+      if (!isAstNode(property) || property.type !== "Property") {
+        return false;
+      }
+      const key = property.computed
+        ? staticStringValue(property.key)
+        : getPropertyName(property.key);
+      const selection = stableValue(context, property.value);
+      if (selection?.type === "Literal" && selection.value === false) {
+        return false;
+      }
+      // An unresolved relation name may be the owned one, so it is checked
+      // as the owned relation.
+      return key === null || key === entry.table
+        ? relationSelectsOwnedColumns({ context, entry, value: selection })
+        : nestedRelationSelectsOwnedColumns({
+            context,
+            entry,
+            value: selection,
+            seen,
+          });
+    });
+  };
+  // Every `with` that may take effect counts: an unresolved later spread does
+  // not prove an earlier owned selection was overridden.
+  const found = withCandidates(context, options);
+  return found.unknown || found.candidates.some(relationsSelectOwnedColumns);
+};
+
+// A value imported from another module cannot be resolved here; the matter
+// access census checks every relation selection where it is written. An
+// unresolved local (a parameter, a computed value) fails closed instead.
+const isImportedValue = (context: ScopeContext, value: unknown): boolean => {
+  let base = unwrapExpression(value);
+  while (base?.type === "MemberExpression") {
+    base = unwrapExpression(base.object);
+  }
+  return resolveImportedExpressionForEnforcement(context, base) !== null;
+};
+
+// An unresolved spread or computed key may set `with` to anything, so it is
+// unknown and the read fails closed.
+const withCandidates = (
+  context: ScopeContext,
+  options: unknown,
+  seen = new Set<unknown>(),
+): { candidates: AstNode[]; unknown: boolean } => {
+  if (
+    !isAstNode(options) ||
+    options.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties) ||
+    seen.has(options)
+  ) {
+    return { candidates: [], unknown: false };
+  }
+  seen.add(options);
+  const candidates: AstNode[] = [];
+  let unknown = false;
+  for (const property of options.properties) {
+    if (!isAstNode(property)) {
+      unknown = true;
+      continue;
+    }
+    if (property.type === "SpreadElement") {
+      const spread = stableValue(context, property.argument);
+      if (spread?.type !== "ObjectExpression") {
+        unknown ||= !isImportedValue(context, property.argument);
+        continue;
+      }
+      const inherited = withCandidates(context, spread, seen);
+      candidates.push(...inherited.candidates);
+      unknown ||= inherited.unknown;
+      continue;
+    }
+    if (property.type !== "Property") {
+      unknown = true;
+      continue;
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    if (key === null) {
+      unknown = true;
+    } else if (key === "with" && isAstNode(property.value)) {
+      candidates.push(property.value);
+    }
+  }
+  return { candidates, unknown };
 };
 
 const patternReadsOwnedColumns = (
@@ -647,8 +871,13 @@ const isImplicitOwnedRead = ({
   const method = memberPropertyName(callee);
   if (method === "findFirst" || method === "findMany") {
     return (
-      isOwnedRelation({ context, entry, value: callee.object }) &&
-      relationSelectsOwnedColumns({
+      (isOwnedRelation({ context, entry, value: callee.object }) &&
+        relationSelectsOwnedColumns({
+          context,
+          entry,
+          value: call.arguments.at(0),
+        })) ||
+      nestedRelationSelectsOwnedColumns({
         context,
         entry,
         value: call.arguments.at(0),
@@ -906,7 +1135,7 @@ export default eslintCompatPlugin({
             if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
               return;
             }
-            const taken = dynamicImportNames(node);
+            const taken = dynamicImportNames(node, context);
             reportOwnedBinding(
               node,
               node.source.value,

@@ -48,6 +48,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -67,10 +68,10 @@ import type {
   TestIds,
 } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
-  TestDatabaseTransaction,
   createDryScopedQuery,
   createScopedQuery,
+  TestDatabase,
+  TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
 const testId = <T extends SafeIdType>() => toSafeId<T>(Bun.randomUUIDv7());
@@ -714,7 +715,7 @@ describe("organization INSERT — wrong scope", () => {
           organizationId: ids.orgB,
           name: "Bad",
           fileName: "bad.docx",
-          s3Key: "test/bad.docx",
+          s3Key: `${ids.orgB}/test/bad.docx`,
           sizeBytes: 1024,
           createdBy: ids.userA1,
         }),
@@ -727,7 +728,7 @@ describe("organization INSERT — wrong scope", () => {
           organizationId: ids.orgB,
           templateId: ids.templateB,
           version: 99,
-          s3Key: "test/bad-v99.docx",
+          s3Key: `${ids.orgB}/test/bad-v99.docx`,
           createdBy: ids.userA1,
         }),
     },
@@ -1673,7 +1674,7 @@ describe("chat mutations — wrong user", () => {
       (tx) =>
         tx
           .update(chatMessages)
-          .set({ content: { version: 1 as const, data: [] } })
+          .set({ content: toPersistedChatMessageContentV3({ data: [] }) })
           .where(eq(chatMessages.id, ids.chatMessageWorkspaceA1UserA2))
           .returning({ id: chatMessages.id }),
       ids.userA1,

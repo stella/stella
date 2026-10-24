@@ -130,8 +130,8 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
-  fieldConfigurationIssuePath,
   type FieldConfigurationIssue,
+  fieldConfigurationIssuePath,
 } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import {
@@ -1719,7 +1719,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const system = `${systemPrompt}\n\n${REFERENCE_RESOURCES}`;
@@ -2423,11 +2423,12 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "fast",
+        task: "short-text",
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),

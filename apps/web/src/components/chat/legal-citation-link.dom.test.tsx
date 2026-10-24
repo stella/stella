@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { AskUserInput } from "@/components/chat/chat-ui-tools";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
@@ -47,7 +48,7 @@ const { createStatutePath, createStatuteRouteParams } =
   await import("@stll/api-contract/statute-route");
 const { createCaseLawDecisionPath, createCaseLawDecisionRouteParams } =
   await import("@stll/api-contract/case-law-decision-route");
-const { SourceChips } = await import("./source-chips");
+const { SourceChips } = await import("@/features/chat/source-chips");
 const { StreamdownMentionLink } = await import("./streamdown-mention-link");
 const { LegalCitationLink } = await import("./legal-citation-link");
 const { DecisionMainViewAction } =
@@ -58,6 +59,9 @@ const { openCaseLawDecision } = await import("./case-law-open");
 const { messageComponents } =
   await import("@/components/ai-elements/message-response-components");
 const { AskUserCard } = await import("./ask-user-card");
+const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
+const { MessageResponseImpl } =
+  await import("@/components/ai-elements/message-response");
 const { useExternalSourceStore } = await import("./external-source-store");
 const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
@@ -151,6 +155,7 @@ const decisionPath = createCaseLawDecisionPath(
 );
 const absentText = { type: "absent", reason: "not_published" } as const;
 const fullDecision = {
+  citationCount: 0,
   id: toSafeId<"caseLawDecision">(documentId),
   caseNumber: "26 Cdo 4249/2016",
   caseNumberType: "case-number",
@@ -220,6 +225,7 @@ const canonicalSearchHit = {
   citationAuthority: 0,
   citationCount: 0,
   matchingPassages: 1,
+  match: "all_terms",
 } satisfies PublicLawData<
   typeof api.case.decisions.search.post
 >["hits"][number];
@@ -362,7 +368,6 @@ for (const { kind, path } of citations) {
           <>
             <section aria-label="Sources">
               <SourceChips
-                activeOrganizationId="organization"
                 messageId="message"
                 parts={[
                   {
@@ -373,7 +378,7 @@ for (const { kind, path } of citations) {
                     arguments: "{}",
                     output: {
                       title,
-                      appUrl: held ? internal : null,
+                      url: held ? internal : null,
                       sourceUrl: publisher,
                     },
                   },
@@ -395,17 +400,20 @@ for (const { kind, path } of citations) {
             expect(primary?.getAttribute("href")).toBe(
               held ? internal : publisher,
             );
-            const links = [...surface.querySelectorAll("a")];
-            expect(links).toHaveLength(held ? 2 : 1);
+            // One chip per citation: a held primary trails no publisher link
+            // and carries no glyph beside its own text.
+            expect(surface.querySelectorAll("a")).toHaveLength(1);
             if (held) {
-              const source = links.at(1);
-              expect(source?.textContent).toBe(messages.common.source);
-              expect(source?.getAttribute("href")).toBe(publisher);
-              expect(source?.getAttribute("target")).toBe("_blank");
-              expect(source?.getAttribute("rel")).toBe("noopener noreferrer");
+              expect(surface.querySelector("svg")).toBeNull();
             }
           }
         });
+        const trayPrimary = sources.querySelector("a");
+        expect(trayPrimary?.classList.contains("border")).toBe(true);
+        expect(trayPrimary?.classList.contains("bg-muted/50")).toBe(true);
+        const trayLabel = trayPrimary?.querySelector(".truncate");
+        expect(trayLabel?.classList.contains("max-w-[20ch]")).toBe(true);
+        expect(trayLabel?.classList.contains("truncate")).toBe(true);
         expect(view.container.querySelector("a a, a button")).toBeNull();
         expect(view.container.querySelector("img")).toBeNull();
         expect(requests).toEqual([]);
@@ -430,7 +438,6 @@ test("held decision tray and answer share a compact annotation without moving th
     <>
       <section aria-label="Sources">
         <SourceChips
-          activeOrganizationId="organization"
           messageId="message"
           parts={[
             {
@@ -441,7 +448,7 @@ test("held decision tray and answer share a compact annotation without moving th
               arguments: "{}",
               output: {
                 title: quotedPassage,
-                appUrl: internal,
+                url: internal,
                 sourceUrl: publisher,
                 caseLawDecision: {
                   decisionId: documentId,
@@ -463,14 +470,21 @@ test("held decision tray and answer share a compact annotation without moving th
   const sources = view.getByRole("region", { name: "Sources" });
   const answer = view.getByRole("region", { name: "Answer" });
   await waitFor(() => {
-    for (const surface of [sources, answer]) {
+    // The tray lists the source by its court; in the answer the quotation
+    // stays as text and the chip after it shows the verified number too.
+    for (const [surface, label] of [
+      [sources, "NS"],
+      [answer, `NS${fullDecision.caseNumber}`],
+    ] as const) {
       const chip = surface.querySelector("[data-decision-citation]");
-      expect(chip?.textContent).toBe("NS");
+      expect(chip?.textContent).toBe(label);
       expect(chip?.getAttribute("aria-label")).toBe(decisionReference);
       expect(chip?.textContent).not.toContain(quotedPassage);
     }
   });
-  expect(answer.textContent).toBe(`${quotedPassage}NS`);
+  expect(answer.textContent).toBe(
+    `${quotedPassage} NS${fullDecision.caseNumber}`,
+  );
   expect(sources.textContent).not.toContain(quotedPassage);
   expect(view.container.querySelector("a a, a button")).toBeNull();
 });
@@ -482,8 +496,7 @@ test("default markdown and clarification analysis share publisher aliases and in
   useExternalSourceStore.getState().registerSources([
     {
       title: "Provision",
-      url: publisher,
-      appUrl: internal,
+      url: internal,
       sourceUrl: publisher,
     },
   ]);
@@ -518,12 +531,45 @@ test("default markdown and clarification analysis share publisher aliases and in
       expect(primary.getAttribute("href")).toBe(internal);
     }
     expect(
-      view.getAllByRole("link", { name: messages.common.source }),
-    ).toHaveLength(2);
+      view.queryAllByRole("link", { name: messages.common.source }),
+    ).toHaveLength(0);
   });
 });
 
-test("an external primary still previews its publisher in the inspector on plain activation", async () => {
+test("Arabic clarification questions use automatic direction and localized numbering", async () => {
+  const input = {
+    analysis: "Review [the source](https://example.test/source).",
+    questions: [
+      {
+        question: "هل ينبغي متابعة هذا المصدر؟",
+        reason: "يحدد الجواب الخطوة التالية.",
+      },
+    ],
+  } satisfies AskUserInput;
+  const view = await renderChat(
+    <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
+      <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+        <AskUserCard
+          isAwaitingUser
+          onSubmit={() => undefined}
+          part={{
+            type: "tool-call",
+            name: "ask-user",
+            id: "arabic-ask",
+            state: "input-complete",
+            arguments: JSON.stringify(input),
+            input,
+          }}
+        />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  const question = view.container.querySelector("form p");
+  expect(question?.getAttribute("dir")).toBe("auto");
+  expect(question?.textContent).toBe("١. هل ينبغي متابعة هذا المصدر؟");
+});
+
+test("an external primary opens immediately in a new tab without inspector interception", async () => {
   const label = "Unheld citation";
   const publisher = "https://publisher.example.test/unheld";
   const view = await renderChat(
@@ -534,12 +580,16 @@ test("an external primary still previews its publisher in the inspector on plain
   const primary = view.getByRole("link", { name: label });
   const click = new MouseEvent("click", { bubbles: true, cancelable: true });
   primary.dispatchEvent(click);
-  expect(click.defaultPrevented).toBe(true);
-  expect(
-    useInspectorTabsStore
-      .getState()
-      .tabs.some((tab) => tab.type === "external" && tab.url === publisher),
-  ).toBe(true);
+  expect(click.defaultPrevented).toBe(false);
+  expect(primary.getAttribute("href")).toBe(publisher);
+  expect(primary.getAttribute("target")).toBe("_blank");
+  expect(primary.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(primary.firstElementChild?.querySelector("svg")).not.toBeNull();
+  expect(primary.querySelector("bdi")?.textContent).toBe(label);
+  primary.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  primary.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+  expect(view.container.querySelector("img")).toBeNull();
+  expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
 });
 
 for (const anchorId of [null, "p-12"]) {
@@ -571,8 +621,7 @@ for (const anchorId of [null, "p-12"]) {
     useExternalSourceStore.getState().registerSources([
       {
         title: target.caseNumber,
-        url: publisher,
-        appUrl: internal,
+        url: internal,
         sourceUrl: publisher,
         caseLawDecision: {
           decisionId: documentId,
@@ -606,8 +655,7 @@ for (const anchorId of [null, "p-12"]) {
     expect(primary.getAttribute("href")).toBe(
       `${reader.pathname}${reader.search}${reader.hash}`,
     );
-    expect(primary.textContent).toBe("NS");
-    expect(primary.textContent).not.toContain(target.caseNumber);
+    expect(primary.textContent).toBe(`NS${target.caseNumber}`);
     fireEvent.focus(primary);
     const source = await screen.findByRole("link", {
       name: messages.inspector.external.openOriginal,
@@ -655,8 +703,10 @@ for (const interactive of [false, true]) {
       return;
     }
     const primary = view.getByRole("button", { name: decisionReference });
-    expect(primary.textContent).toBe("NS");
-    expect(view.container.textContent).toBe(`${quotedPassage}NS`);
+    expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
+    expect(view.container.textContent).toBe(
+      `${quotedPassage} NS${fullDecision.caseNumber}`,
+    );
     fireEvent.focus(primary);
     const source = await screen.findByRole("link", {
       name: messages.inspector.external.openOriginal,
@@ -666,7 +716,38 @@ for (const interactive of [false, true]) {
   });
 }
 
-test("a relative held primary keeps its publisher source in the tray and passive answer", async () => {
+test("a long external source title stays inside its truncated tray chip", async () => {
+  const title = "Publisher".repeat(12);
+  const href = "https://publisher.example.test/long-title";
+  const view = await renderChat(
+    <SourceChips
+      messageId="long-external"
+      parts={[
+        {
+          type: "tool-call",
+          name: "execute_typescript",
+          id: "long-external-source",
+          state: "complete",
+          arguments: "{}",
+          output: { url: href, title },
+        },
+      ]}
+    />,
+  );
+  await waitFor(() => {
+    const chip = view.getByRole("link", { name: title });
+    expect(chip.getAttribute("href")).toBe(href);
+    expect(chip.getAttribute("target")).toBe("_blank");
+    expect(chip.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(chip.className).toContain("rounded-md");
+    expect(chip.className).toContain("border");
+    const label = chip.querySelector(".truncate");
+    expect(label?.className).toContain("max-w-[20ch]");
+    expect(label?.textContent).toBe(title);
+  });
+});
+
+test("a relative held primary is one chip in the tray and the passive answer", async () => {
   const href = `${statutePath}#par-420`;
   const publisher = "https://publisher.example.test/relative-provision";
   const primaryUrl = new URL(href, env.VITE_PUBLIC_APP_URL).href;
@@ -674,7 +755,6 @@ test("a relative held primary keeps its publisher source in the tray and passive
   const view = await renderChat(
     <>
       <SourceChips
-        activeOrganizationId="organization"
         messageId="relative"
         parts={[
           {
@@ -704,11 +784,9 @@ test("a relative held primary keeps its publisher source in the tray and passive
     for (const primary of primaryLinks) {
       expect(primary.getAttribute("href")).toBe(primaryUrl);
     }
-    const sources = view.getAllByRole("link", { name: messages.common.source });
-    expect(sources).toHaveLength(2);
-    for (const source of sources) {
-      expect(source.getAttribute("href")).toBe(publisher);
-    }
+    expect(
+      view.queryAllByRole("link", { name: messages.common.source }),
+    ).toHaveLength(0);
   });
 });
 
@@ -731,8 +809,10 @@ test("a publisher alias with a canonical decision keeps the passage before the s
     fullDecision,
   );
   const primary = view.getByRole("button", { name: decisionReference });
-  expect(primary.textContent).toBe("NS");
-  expect(view.container.textContent).toBe(`${quotedPassage}NS`);
+  expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
+  expect(view.container.textContent).toBe(
+    `${quotedPassage} NS${fullDecision.caseNumber}`,
+  );
   fireEvent.focus(primary);
   const original = await screen.findByRole("link", {
     name: messages.inspector.external.openOriginal,
@@ -748,7 +828,7 @@ test("a publisher alias with a canonical decision keeps the passage before the s
 });
 
 for (const explicitAnchorId of [undefined, "p-30"]) {
-  test(`a publisher alias opens its decision at the ${explicitAnchorId === undefined ? "anchor stored in its app URL" : "explicit anchor over the stored one"}`, async () => {
+  test(`a publisher alias opens its decision at the ${explicitAnchorId === undefined ? "anchor stored in its reader URL" : "explicit anchor over the stored one"}`, async () => {
     const publisher = "https://publisher.example.test/stored-anchor";
     const internal = new URL(`${decisionPath}#p-12`, window.location.origin)
       .href;
@@ -756,13 +836,13 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
       <LegalCitationLink
         source={{
           title: fullDecision.caseNumber,
-          url: publisher,
-          appUrl: internal,
+          url: internal,
           sourceUrl: publisher,
         }}
         anchorId={explicitAnchorId}
         interactive
         appearance="inline"
+        linkIconSource={{ kind: "tool-source" }}
       >
         {quotedPassage}
       </LegalCitationLink>,
@@ -795,6 +875,64 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
     });
   });
 }
+
+test("reply markdown and clarification analysis share bare-domain chips without remote icons", async () => {
+  const input = {
+    analysis:
+      "Read stll.app and [Repository](https://github.com/stella/stella).",
+    questions: [{ question: "Continue?", reason: "Confirm the reading." }],
+  };
+  const view = await renderChat(
+    <>
+      <MessageResponseImpl>{input.analysis}</MessageResponseImpl>
+      <AskUserCard
+        isAwaitingUser
+        onSubmit={() => undefined}
+        part={{
+          type: "tool-call",
+          name: "ask-user",
+          id: "external-links",
+          state: "input-complete",
+          arguments: JSON.stringify(input),
+          input,
+        }}
+      />
+    </>,
+  );
+  await waitFor(() => {
+    for (const name of ["stll.app", "Repository"]) {
+      const links = view.getAllByRole("link", { name });
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.getAttribute("target")).toBe("_blank");
+        expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(link.firstElementChild?.querySelector("svg")).not.toBeNull();
+        expect(link.children.item(1)?.tagName).toBe("BDI");
+        fireEvent.mouseEnter(link);
+        fireEvent.focus(link);
+      }
+    }
+  });
+  expect(view.container.querySelector("img")).toBeNull();
+});
+
+test("relative Markdown destinations retain their original href through citation classification", async () => {
+  const label = "Relative source";
+  const href = "/github.com/stella";
+  const view = await renderChat(
+    <StreamdownMentionLink href={href} interactive>
+      {label}
+    </StreamdownMentionLink>,
+  );
+  const link = view.getByRole("link", { name: label });
+  expect(link.getAttribute("href")).toBe(href);
+  expect(
+    new URL(link.getAttribute("href") ?? "", window.location.href).origin,
+  ).toBe(window.location.origin);
+  expect(link.querySelector("svg")).toBeNull();
+  expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(link.getAttribute("target")).toBe("_blank");
+});
 
 test("maximizing a different decision docks the displaced main reader before navigation", async () => {
   const side = createCaseDecisionViewTab({
@@ -853,4 +991,23 @@ test("maximizing a different decision docks the displaced main reader before nav
   expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
     payload: { decisionId: fullDecision.id },
   });
+});
+
+test("an external tray label without a safe URL retains its compact presentation", async () => {
+  const title = "Unavailable publisher title".repeat(8);
+  const view = await renderChat(
+    <LegalCitationLink
+      appearance="tray"
+      interactive={false}
+      linkIconSource={{ kind: "tool-source" }}
+      source={{ title, url: "data:text/plain,unavailable" }}
+    >
+      {title}
+    </LegalCitationLink>,
+  );
+  const label = view.getByText(title);
+  expect(label.className).toContain("max-w-[20ch]");
+  expect(label.className).toContain("truncate");
+  expect(label.parentElement?.className).toContain("border");
+  expect(view.queryByRole("link")).toBeNull();
 });

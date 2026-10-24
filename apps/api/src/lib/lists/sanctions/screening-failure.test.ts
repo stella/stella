@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import { Worker } from "node:worker_threads";
+import * as v from "valibot";
 
 import type { FailureGrade } from "@stll/errors";
 import { FAILURE_REASON_GRADE } from "@stll/errors";
 import { DEFAULT_CUTOFF } from "@stll/sanctions";
 
-import { gradeFailure, failureSink } from "@/api/lib/observability/failure";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   resetMetricLineSinkForTesting,
@@ -18,8 +19,10 @@ import {
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import {
-  SanctionsScreeningFailure,
   reportSanctionsScreeningFailure,
+  reportSanctionsScreeningWork,
+  SANCTIONS_WORK_PRESSURE,
+  SanctionsScreeningFailure,
 } from "./screening-failure";
 import type { SanctionsScreeningFailureCause } from "./screening-failure";
 
@@ -146,10 +149,8 @@ const screeningGrades = {
   "short-read": { reason: "short-read", grade: "defect" },
   "read-stalled": { reason: "read-stalled", grade: "defect" },
   "matcher-unavailable": { reason: "matcher-unavailable", grade: "defect" },
-  "truncated-empty": { reason: "truncated-empty", grade: "defect" },
   "freshness-read": { reason: "freshness-read", grade: "defect" },
   "entries-read": { reason: "entries-read", grade: "defect" },
-  "index-load": { reason: "index-load", grade: "defect" },
   operation: { reason: "operation", grade: "defect" },
 } as const satisfies {
   [Cause in SanctionsScreeningFailureCause]: {
@@ -218,5 +219,45 @@ test("a successful null lease has no diagnostic or capture", async () => {
     await pool.close();
     logs.restore();
     analytics.restore();
+  }
+});
+
+test("every completed screening reports its budget share and warns above the pressure line", () => {
+  const logs = installRecordingLogger();
+  const metrics: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    metrics.push(line);
+  });
+  try {
+    const limit = 2_000_000;
+    reportSanctionsScreeningWork({ source: "eu", spent: limit / 2, limit });
+    expect(logs.records).toHaveLength(0);
+    reportSanctionsScreeningWork({
+      source: "uk",
+      spent: Math.ceil(limit * SANCTIONS_WORK_PRESSURE) + 1,
+      limit,
+    });
+    expect(logs.at("WARN")).toHaveLength(1);
+    expect(logs.records.at(0)).toMatchObject({
+      severityText: "WARN",
+      message: "sanctions.screening_work_pressure",
+      attributes: { source: "uk", limit },
+    });
+    const workUsageLine = v.object({
+      source: v.string(),
+      SanctionsScreeningWorkUsage: v.number(),
+    });
+    const parsed = metrics.map((line) =>
+      v.parse(workUsageLine, JSON.parse(line)),
+    );
+    expect(
+      parsed.map((line) => [line.source, line.SanctionsScreeningWorkUsage]),
+    ).toEqual([
+      ["eu", 50],
+      ["uk", ((Math.ceil(limit * SANCTIONS_WORK_PRESSURE) + 1) / limit) * 100],
+    ]);
+  } finally {
+    logs.restore();
+    resetMetricLineSinkForTesting();
   }
 });

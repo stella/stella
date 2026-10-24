@@ -7,13 +7,12 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
+import Elysia from "elysia";
 import type { Context } from "elysia";
-import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
-import { desktopTimeEntryBatchResponseSchema } from "@stll/api-contract/desktop-time-entries";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
@@ -31,38 +30,41 @@ import {
   chatMessageRevisions,
   chatMessages,
   chatThreads,
+  chatToolGrants,
   chatTurns,
-  documentTranslationRuns,
   desktopPresence,
   desktopTimeEntryBatches,
+  documentTranslationRuns,
   entities,
-  entityViews,
   entityVersions,
+  entityViews,
+  featureEnrolments,
   fields,
   invoiceLines,
   invoices,
   legalLists,
   legalReaderAnnotations,
   legalReaderAnswers,
-  numberSeries,
   notifications,
-  savedTimeNarratives,
+  numberSeries,
   savedSearches,
+  savedTimeNarratives,
   searchHistoryEntries,
   sellerProfiles,
   signals,
+  templateLookupFormats,
   timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
@@ -96,12 +98,18 @@ import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
+import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
+import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
+import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
+import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
+import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
+import { createDesktopRegistryRequestEndpoint } from "@/api/handlers/desktop-registry/request";
 import {
   createDesktopTimeEntryBatchEndpoint,
   desktopBatchFingerprint,
@@ -113,7 +121,9 @@ import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entrie
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
+import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
+import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -128,8 +138,11 @@ import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list"
 import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
+import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
+import updateMemory from "@/api/handlers/memories/update";
 import listNotifications from "@/api/handlers/notifications/list";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
@@ -155,7 +168,7 @@ import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -163,6 +176,7 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import {
+  AI_MEMORY_FEATURE_ID,
   FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
@@ -171,16 +185,13 @@ import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
-import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import {
-  claimFixtureDeviceProof,
-  createDesktopDeviceSigner,
-} from "@/api/tests/helpers/desktop-device-proof";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
 import {
   createTestIds,
   setupRlsTestData,
@@ -223,6 +234,8 @@ type TestHandlerContext = {
 
 type IsolationContext = {
   ids: TestIds;
+  desktopA: (request: Request) => Promise<Response>;
+  desktopB: (request: Request) => Promise<Response>;
   sameUserWorkspaceB: TestHandlerContext;
   workspaceA: TestHandlerContext;
   workspaceB: TestHandlerContext;
@@ -263,8 +276,48 @@ const legalListAccess = ({ session, user }: TestHandlerContext) =>
     ]),
   });
 
+const memoryAccess = ({ session, user }: TestHandlerContext) =>
+  createFeatureAccessSnapshot({
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+    decisions: new Map([
+      [
+        AI_MEMORY_FEATURE_ID,
+        decideFeatureAccess({
+          registry: FEATURE_REGISTRY,
+          featureId: AI_MEMORY_FEATURE_ID,
+          grants: {
+            [AI_MEMORY_FEATURE_ID]: [
+              {
+                type: "organization",
+                organizationId: session.activeOrganizationId,
+              },
+            ],
+          },
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+        }),
+      ],
+    ]),
+  });
+
 let testDb: TestDatabase;
 let ids: TestIds;
+let desktopCredentials: Awaited<ReturnType<typeof createRlsDesktopCredentials>>;
+const desktopFormatB = createSafeId<"templateLookupFormat">();
+const DESKTOP_BATCH_KEY = "matrix-desktop-batch";
+// Its own key, so the positive call writes a batch instead of replaying the
+// seeded receipt that the status case reads, whatever the case order.
+const DESKTOP_CREATE_BATCH_KEY = "matrix-desktop-create-batch";
+const DESKTOP_ENTRY = {
+  dateWorked: "2026-10-09",
+  timezoneId: "UTC",
+  durationMinutes: 6,
+  narrative: "Reviewed agreement",
+  billable: false,
+};
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 const savedSearchA = toSafeId<"savedSearch">(
@@ -471,6 +524,17 @@ const chatRevisionAcceptMessageB = toSafeId<"chatMessage">(
 const chatRevisionRevertMessageB = toSafeId<"chatMessage">(
   "22222222-2222-4222-8222-222222222292",
 );
+// Stored tool approvals of user A1 in organization B: one for every
+// conversation, one given in thread B, and one the delete case removes.
+const chatToolGrantAlwaysB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222297",
+);
+const chatToolGrantConversationB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222298",
+);
+const chatToolGrantDeleteB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222299",
+);
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
 /** Thread B's stored model, so a foreign "auto" selection is observable. */
@@ -529,7 +593,7 @@ const chatRecapB = "Recap of thread B";
 
 // The model sees only the transcript the handler loaded. Answering with a
 // title only when thread B's answer is in it shows the read reached B's rows.
-const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
+const generateTitleFromTranscript: typeof generateTanStackTextForTask = async (
   options,
 ) =>
   "prompt" in options && options.prompt.includes("Here is the summary.")
@@ -537,7 +601,7 @@ const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
     : "";
 
 const suggestChatThreadTitle = createSuggestThreadTitle({
-  generateTextForRole: generateTitleFromTranscript,
+  generateTextForTask: generateTitleFromTranscript,
 });
 const proposeChatMessageSpanEdit = createProposeMessageSpanEdit({
   generateObject: async () => ({ replacement: "Updated" }),
@@ -589,6 +653,14 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
       .where(eq(chatThreads.id, threadId))
   ).at(0) ?? null;
 
+const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
+  (
+    await testDb
+      .select({ id: chatToolGrants.id })
+      .from(chatToolGrants)
+      .where(eq(chatToolGrants.id, grantId))
+  ).length > 0;
+
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
   (
     await testDb
@@ -621,9 +693,185 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
+// Desktop credential B is user A1 bound to organization B: a successful
+// write lands in matter B1 under organization B and that user, nowhere else.
+const expectDesktopEntryOwnedByB = async (entryId: string) => {
+  const safeEntryId = toSafeId<"timeEntry">(entryId);
+  const rows = await testDb
+    .select({
+      id: timeEntries.id,
+      workspaceId: timeEntries.workspaceId,
+      organizationId: timeEntries.organizationId,
+      userId: timeEntries.userId,
+    })
+    .from(timeEntries)
+    .where(eq(timeEntries.id, safeEntryId));
+  expect(rows).toEqual([
+    {
+      id: safeEntryId,
+      workspaceId: ids.wsB1,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+    },
+  ]);
+};
+
+const desktopCredentialIsolationCases = (): IsolationCase[] => [
+  {
+    name: "desktop registry saved format",
+    runAAgainstB: async ({ desktopA }) =>
+      await desktopA(
+        desktopRequest("/registry", {
+          type: "setDefaultFormat",
+          registry: "ares",
+          formatId: desktopFormatB,
+        }),
+      ),
+    runBPositive: async ({ desktopB }) =>
+      await desktopB(
+        desktopRequest("/registry", {
+          type: "setDefaultFormat",
+          registry: "ares",
+          formatId: desktopFormatB,
+        }),
+      ),
+    expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
+    expectPositive: (result) => expect(result).toMatchObject({ status: 200 }),
+  },
+  {
+    name: "desktop feature access",
+    runAAgainstB: async ({ desktopA }) => {
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+        "activity-timeline": [
+          { type: "organization", organizationId: ids.orgB },
+        ],
+      });
+      const response = await desktopA(desktopRequest("/features"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      const response = await desktopB(desktopRequest("/features"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) =>
+      expect(result).toMatchObject({
+        features: { "activity-timeline": { status: "hidden" } },
+      }),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        features: { "activity-timeline": { status: "enabled" } },
+      }),
+  },
+  ...["candidates", "matters"].map((path): IsolationCase => ({
+    name: `desktop ${path}`,
+    runAAgainstB: async ({ desktopA }) => {
+      const response = await desktopA(desktopRequest(`/${path}`));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      const response = await desktopB(desktopRequest(`/${path}`));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result, { ids: testIds }) => {
+      // A sees its own matter, so an empty list cannot pass as isolation.
+      const matters = recordField(result, "matters");
+      expect(matters).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: testIds.wsA1 })]),
+      );
+      expect(matters).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: testIds.wsB1 })]),
+      );
+    },
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        matters: expect.arrayContaining([
+          expect.objectContaining({ id: testIds.wsB1 }),
+        ]),
+      }),
+  })),
+  {
+    name: "desktop batch",
+    runAAgainstB: async ({ desktopA, ids: testIds }) =>
+      await desktopA(
+        desktopRequest("/batch", {
+          idempotencyKey: DESKTOP_CREATE_BATCH_KEY,
+          entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
+        }),
+      ),
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      const response = await desktopB(
+        desktopRequest("/batch", {
+          idempotencyKey: DESKTOP_CREATE_BATCH_KEY,
+          entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
+        }),
+      );
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      const entries = recordField(body, "entries");
+      expect(Array.isArray(entries) ? entries : []).toHaveLength(1);
+      for (const entry of Array.isArray(entries) ? entries : []) {
+        await expectDesktopEntryOwnedByB(String(recordField(entry, "id")));
+      }
+      return body;
+    },
+    expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(recordField(result, "entries")).toEqual([
+        expect.objectContaining({
+          id: expect.any(String),
+          matterId: testIds.wsB1,
+        }),
+      ]),
+  },
+  {
+    name: "desktop batch status",
+    runAAgainstB: async ({ desktopA }) => {
+      const response = await desktopA(
+        desktopRequest("/status", { idempotencyKey: DESKTOP_BATCH_KEY }),
+      );
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      const response = await desktopB(
+        desktopRequest("/status", { idempotencyKey: DESKTOP_BATCH_KEY }),
+      );
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) => expect(result).toEqual({ type: "cancelled" }),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toEqual({
+        type: "committed",
+        entries: [{ id: testIds.timeEntryB1, matterId: testIds.wsB1 }],
+      }),
+  },
+  {
+    name: "desktop single create",
+    runAAgainstB: async ({ desktopA, ids: testIds }) =>
+      await desktopA(desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY)),
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      const response = await desktopB(
+        desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY),
+      );
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      await expectDesktopEntryOwnedByB(String(recordField(body, "id")));
+      return body;
+    },
+    expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
+    expectPositive: (result) =>
+      expect(result).toEqual({ id: expect.any(String) }),
+  },
+];
+
 const isolationCases: IsolationCase[] = [
   ...desktopPresenceIsolationCases(),
-  ...desktopTimeEntryIsolationCases(),
+  ...desktopCredentialIsolationCases(),
   ...readerAnswerIsolationCases(),
   {
     name: "user file content",
@@ -829,6 +1077,52 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
+  },
+  {
+    // The positive run rejects B's suggestion; the revert case below returns
+    // it to pending, so the fixture leaves the matrix as it entered.
+    name: "docx suggestion resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
+    name: "docx suggestion revert",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(revertDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(revertDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
   },
   {
     name: "document review source list",
@@ -1332,16 +1626,54 @@ const isolationCases: IsolationCase[] = [
     name: "memory list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listMemories, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listMemories, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     expectDenied: (result, { ids: testIds }) =>
       expectPageExcludesId(result, testIds.aiMemoryFirmB),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.aiMemoryFirmB),
+  },
+  {
+    // `pinned: false` matches the fixture, so the positive run reaches the
+    // locked row without writing.
+    name: "memory update",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(updateMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(updateMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
+  },
+  {
+    name: "memory delete",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(deleteMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(deleteMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toEqual({ id: testIds.aiMemoryDeleteB }),
   },
   {
     name: "organization contact read by id",
@@ -1446,6 +1778,21 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesField(result, "id", notificationB),
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
+  },
+  {
+    // Same organization, other recipient: only the recipient predicate stands
+    // between user A1 and user B1's notification.
+    name: "notification mark read",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(markNotificationRead, sameUserWorkspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(markNotificationRead, workspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
     name: "chat thread list",
@@ -1762,6 +2109,87 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: expectStatus(409),
+  },
+  {
+    // The same person's approvals in another firm stay with that firm: the
+    // list in organization A neither returns them nor sees thread B's grant.
+    name: "chat tool grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatToolGrants, workspaceA, {
+        query: { threadId: chatThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatToolGrants, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(chatToolGrantIds(result)).not.toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).not.toContain(
+        chatToolGrantConversationB,
+      );
+    },
+    expectPositive: (result) => {
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantConversationB);
+    },
+  },
+  {
+    name: "chat tool grant coverage",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatToolGrantCoverage, workspaceA, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatToolGrantCoverage, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    expectDenied: (result) => expect(result).toEqual({ covered: false }),
+    expectPositive: (result) => expect(result).toEqual({ covered: true }),
+  },
+  {
+    // A grant names the conversation it was given in; organization A cannot
+    // attach one to thread B.
+    name: "chat tool grant create",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(createChatToolGrant, workspaceA, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(createChatToolGrant, sameUserWorkspaceB, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        scope: "conversation",
+        toolName: "add_comment",
+      }),
+  },
+  {
+    name: "chat tool grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteChatToolGrant, workspaceA, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+      exists: await chatToolGrantExists(chatToolGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteChatToolGrant, sameUserWorkspaceB, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
   },
   {
     name: "chat thread rename",
@@ -2258,14 +2686,22 @@ testState.beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  await testDb.insert(templateLookupFormats).values({
+    id: desktopFormatB,
+    organizationId: ids.orgB,
+    registry: "ares",
+    name: "Matrix format B",
+    format: "[company name]",
+  });
+  desktopCredentials = await createRlsDesktopCredentials(testDb, ids);
   await testDb.insert(desktopTimeEntryBatches).values({
     organizationId: ids.orgB,
-    userId: ids.userB1,
-    idempotencyKey: "desktop-review-status",
+    userId: ids.userA1,
+    idempotencyKey: DESKTOP_BATCH_KEY,
     status: "committed",
     requestFingerprint: desktopBatchFingerprint({
-      idempotencyKey: "desktop-review-status",
-      entries: [{ matterId: ids.wsB1, ...desktopTimeEntryBody }],
+      idempotencyKey: DESKTOP_BATCH_KEY,
+      entries: [{ matterId: ids.wsB1, ...DESKTOP_ENTRY }],
     }),
     result: { entries: [{ id: ids.timeEntryB1, matterId: ids.wsB1 }] },
   });
@@ -2439,7 +2875,7 @@ testState.beforeAll(async () => {
       ],
       fallback: null,
     },
-    tool: { version: 1, role: "fast" },
+    tool: { version: 1, task: "short-text" },
   });
   await testDb.insert(caseLawResearchAnswers).values({
     columnId: researchColumnB,
@@ -2630,10 +3066,10 @@ testState.beforeAll(async () => {
     chatThreadOfB(chatSendThreadB),
     { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
-  const chatText = (text: string) => ({
-    version: 1 as const,
-    data: [{ type: "text" as const, text }],
-  });
+  const chatText = (text: string) =>
+    toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: text }],
+    });
   await testDb.insert(chatThreads).values(chatThreadOfB(chatRevisionThreadB));
   await testDb.insert(chatThreads).values({
     ...chatThreadOfB(chatMatterThreadB),
@@ -2708,6 +3144,30 @@ testState.beforeAll(async () => {
     userMessageId: chatTurnUserMessageB,
     workspaceId: null,
   });
+  await testDb.insert(chatToolGrants).values([
+    {
+      id: chatToolGrantAlwaysB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "web_search",
+    },
+    {
+      id: chatToolGrantConversationB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "conversation",
+      chatThreadId: chatThreadB,
+      toolName: "remember",
+    },
+    {
+      id: chatToolGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "fetch_url",
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -2736,6 +3196,8 @@ describe("cross-tenant handler isolation", () => {
 
 const createIsolationContext = (): IsolationContext => ({
   ids,
+  desktopA: desktopCaller("a"),
+  desktopB: desktopCaller("b"),
   sameUserWorkspaceB: createWorkspaceContext({
     activeWorkspaceIds: [ids.wsB1],
     organizationId: ids.orgB,
@@ -2828,261 +3290,6 @@ const runHandler = async <TContext>(
     return error;
   }
 };
-
-const desktopTimeEntryBody = {
-  dateWorked: "2026-10-09",
-  timezoneId: "UTC",
-  durationMinutes: 6,
-  narrative: "Reviewed agreement",
-  billable: false,
-};
-
-const desktopAccountForContext = (context: TestHandlerContext) => {
-  const signer = createDesktopDeviceSigner();
-  return async (request: Request) => {
-    const device = await signer;
-    const keyId = `desktop-review-${context.session.activeOrganizationId}`;
-    const credential = "fixture-credential";
-    return Result.ok({
-      consumedProof: await claimFixtureDeviceProof({
-        request: await device.signRequest({ request, credential }),
-        deviceJkt: device.deviceJkt,
-        keyId,
-        credential,
-      }),
-      organizationId: context.session.activeOrganizationId,
-      userId: context.user.id,
-      keyId,
-      memberRole: context.memberRole,
-      scopedDb: asTestRaw<ScopedDb>(context.scopedDb),
-    });
-  };
-};
-
-const enableDesktopActivityForContext = ({ session }: TestHandlerContext) => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    ...env.API_FEATURE_ACCESS_GRANTS,
-    "activity-timeline": [
-      ...(env.API_FEATURE_ACCESS_GRANTS["activity-timeline"] ?? []),
-      {
-        type: "member",
-        organizationId: session.activeOrganizationId,
-        email: "desktop-review-a@example.test",
-      },
-    ],
-  });
-};
-
-const expectCreatedDesktopTimeEntry = async (
-  entryId: SafeId<"timeEntry">,
-  context: TestHandlerContext,
-) => {
-  const rows = await testDb
-    .select({
-      id: timeEntries.id,
-      workspaceId: timeEntries.workspaceId,
-      organizationId: timeEntries.organizationId,
-      userId: timeEntries.userId,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.id, entryId),
-        eq(timeEntries.workspaceId, context.workspaceId),
-        eq(timeEntries.organizationId, context.session.activeOrganizationId),
-        eq(timeEntries.userId, context.user.id),
-      ),
-    );
-  expect(rows).toContainEqual({
-    id: entryId,
-    workspaceId: context.workspaceId,
-    organizationId: context.session.activeOrganizationId,
-    userId: context.user.id,
-  });
-};
-
-function desktopTimeEntryIsolationCases(): IsolationCase[] {
-  return [
-    {
-      name: "desktop matter candidates",
-      runAAgainstB: async ({ workspaceA }) => {
-        enableDesktopActivityForContext(workspaceA);
-        return await runHandler(
-          createDesktopMatterCandidatesEndpoint(
-            desktopAccountForContext(workspaceA),
-          ),
-          workspaceA,
-          {},
-        );
-      },
-      runBPositive: async ({ workspaceB }) =>
-        await runHandler(
-          createDesktopMatterCandidatesEndpoint(
-            desktopAccountForContext(workspaceB),
-          ),
-          workspaceB,
-          {},
-        ),
-      expectDenied: (result, { ids: testIds }) => {
-        const matters = recordField(result, "matters");
-        expect(matters).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: testIds.wsA1 }),
-          ]),
-        );
-        expect(matters).not.toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: testIds.wsB1 }),
-          ]),
-        );
-      },
-      expectPositive: (result, { ids: testIds }) =>
-        expect(recordField(result, "matters")).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: testIds.wsB1 }),
-          ]),
-        ),
-    },
-    {
-      name: "desktop matters",
-      runAAgainstB: async ({ workspaceA }) => {
-        enableDesktopActivityForContext(workspaceA);
-        return await runHandler(
-          createDesktopMattersEndpoint(desktopAccountForContext(workspaceA)),
-          workspaceA,
-          { query: {} },
-        );
-      },
-      runBPositive: async ({ workspaceB }) =>
-        await runHandler(
-          createDesktopMattersEndpoint(desktopAccountForContext(workspaceB)),
-          workspaceB,
-          { query: {} },
-        ),
-      expectDenied: (result, { ids: testIds }) => {
-        const matters = recordField(result, "matters");
-        expect(matters).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: testIds.wsA1 }),
-          ]),
-        );
-        expect(matters).not.toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: testIds.wsB1 }),
-          ]),
-        );
-      },
-      expectPositive: (result, { ids: testIds }) =>
-        expect(recordField(result, "matters")).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: testIds.wsB1 }),
-          ]),
-        ),
-    },
-    {
-      name: "desktop time entry batch",
-      runAAgainstB: async ({ ids: testIds, workspaceA }) => {
-        enableDesktopActivityForContext(workspaceA);
-        return await runHandler(
-          createDesktopTimeEntryBatchEndpoint(
-            desktopAccountForContext(workspaceA),
-          ),
-          workspaceA,
-          {
-            body: {
-              idempotencyKey: "desktop-review-batch",
-              entries: [{ matterId: testIds.wsB1, ...desktopTimeEntryBody }],
-            },
-          },
-        );
-      },
-      runBPositive: async ({ ids: testIds, workspaceB }) => {
-        const result = await runHandler(
-          createDesktopTimeEntryBatchEndpoint(
-            desktopAccountForContext(workspaceB),
-          ),
-          workspaceB,
-          {
-            body: {
-              idempotencyKey: "desktop-review-batch",
-              entries: [{ matterId: testIds.wsB1, ...desktopTimeEntryBody }],
-            },
-          },
-        );
-        const response = v.parse(desktopTimeEntryBatchResponseSchema, result);
-        expect(response.entries).toHaveLength(1);
-        for (const entry of response.entries) {
-          await expectCreatedDesktopTimeEntry(
-            toSafeId<"timeEntry">(entry.id),
-            workspaceB,
-          );
-        }
-        return result;
-      },
-      expectDenied: expectStatus(404),
-      expectPositive: (result, { ids: testIds }) =>
-        expect(recordField(result, "entries")).toEqual([
-          expect.objectContaining({
-            id: expect.any(String),
-            matterId: testIds.wsB1,
-          }),
-        ]),
-    },
-    {
-      name: "desktop time entry batch status",
-      runAAgainstB: async ({ workspaceA }) => {
-        enableDesktopActivityForContext(workspaceA);
-        return await runHandler(
-          createDesktopTimeEntryBatchStatusEndpoint(
-            desktopAccountForContext(workspaceA),
-          ),
-          workspaceA,
-          { body: { idempotencyKey: "desktop-review-status" } },
-        );
-      },
-      runBPositive: async ({ workspaceB }) =>
-        await runHandler(
-          createDesktopTimeEntryBatchStatusEndpoint(
-            desktopAccountForContext(workspaceB),
-          ),
-          workspaceB,
-          { body: { idempotencyKey: "desktop-review-status" } },
-        ),
-      expectDenied: (result) => expect(result).toEqual({ type: "cancelled" }),
-      expectPositive: (result, { ids: testIds }) =>
-        expect(result).toEqual({
-          type: "committed",
-          entries: [{ id: testIds.timeEntryB1, matterId: testIds.wsB1 }],
-        }),
-    },
-    {
-      name: "desktop time entry create",
-      runAAgainstB: async ({ ids: testIds, workspaceA }) => {
-        enableDesktopActivityForContext(workspaceA);
-        return await runHandler(
-          createDesktopTimeEntryEndpoint(desktopAccountForContext(workspaceA)),
-          workspaceA,
-          { params: { workspaceId: testIds.wsB1 }, body: desktopTimeEntryBody },
-        );
-      },
-      runBPositive: async ({ ids: testIds, workspaceB }) => {
-        const result = await runHandler(
-          createDesktopTimeEntryEndpoint(desktopAccountForContext(workspaceB)),
-          workspaceB,
-          { params: { workspaceId: testIds.wsB1 }, body: desktopTimeEntryBody },
-        );
-        await expectCreatedDesktopTimeEntry(
-          toSafeId<"timeEntry">(v.parse(v.string(), recordField(result, "id"))),
-          workspaceB,
-        );
-        return result;
-      },
-      expectDenied: expectStatus(404),
-      expectPositive: (result) =>
-        expect(result).toEqual({ id: expect.any(String) }),
-    },
-  ];
-}
 
 function desktopPresenceIsolationCases(): IsolationCase[] {
   return [
@@ -3265,6 +3472,15 @@ function recordField(result: unknown, field: string): unknown {
   return result[field];
 }
 
+function chatToolGrantIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const grants = recordField(result, "grants");
+  if (!Array.isArray(grants)) {
+    throw new TypeError("Expected a chat tool grant list response");
+  }
+  return grants.map((grant) => recordField(grant, "id"));
+}
+
 function globalChatThreadIds(result: unknown): unknown[] {
   expect(getStatusCode(result)).toBeNull();
   const threads = recordField(result, "global");
@@ -3333,3 +3549,70 @@ const getPageItems = (result: unknown): Record<string, unknown>[] => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+testState.beforeAll(() => {
+  testState.setConfig("FEATURE_TIME_BILLING", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "activity-timeline": [ids.orgA, ids.orgB].map((organizationId) => ({
+      type: "organization" as const,
+      organizationId,
+    })),
+  });
+});
+
+const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+  const authorize = desktopCredentials.authorizeDesktopAccount;
+  const registry = createDesktopRegistryRequestEndpoint({
+    config: authorize,
+    revoke: authorize,
+    search: desktopCredentials.authorizeDesktopRegistry,
+    format: desktopCredentials.authorizeDesktopRegistry,
+    setDefaultFormat: desktopCredentials.authorizeDesktopRegistry,
+  });
+  const feature = createDesktopFeatureAccessReadEndpoint({
+    authorizeAccount: authorize,
+  });
+  const candidates = createDesktopMatterCandidatesEndpoint(authorize);
+  const matters = createDesktopMattersEndpoint(authorize);
+  const batch = createDesktopTimeEntryBatchEndpoint(authorize);
+  const status = createDesktopTimeEntryBatchStatusEndpoint(authorize);
+  const single = createDesktopTimeEntryEndpoint(authorize);
+  const app = new Elysia()
+    .put("/registry", registry.handler, { body: registry.config.body })
+    .get("/features", feature.handler, { response: feature.config.response })
+    .get("/candidates", candidates.handler, {
+      response: candidates.config.response,
+    })
+    .get("/matters", matters.handler, {
+      query: matters.config.query,
+      response: matters.config.response,
+    })
+    .put("/batch", batch.handler, {
+      body: batch.config.body,
+      response: batch.config.response,
+    })
+    .put("/status", status.handler, {
+      body: status.config.body,
+      response: status.config.response,
+    })
+    .put("/single/:workspaceId", single.handler, {
+      params: single.config.params,
+      body: single.config.body,
+      response: single.config.response,
+    });
+  const credential =
+    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
+  return await app.handle(await credential.signRequest(request));
+};
+
+const desktopRequest = (path: string, body?: unknown) =>
+  new Request(
+    `http://localhost${path}`,
+    body === undefined
+      ? {}
+      : {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+  );

@@ -145,3 +145,9 @@ type MissingInvoiceLineSource = Exclude<
 >;
 
 true satisfies MissingInvoiceLineSource extends never ? true : never;
+
+/** Payment terms the invoice composer offers as one-click choices. */
+export const INVOICE_DUE_DAY_PRESETS = [7, 14, 30] as const;
+
+/** Payment term used when neither the client nor the caller sets one. */
+export const DEFAULT_INVOICE_DUE_DAYS = 14;

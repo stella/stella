@@ -24,7 +24,6 @@ import {
   flagValueProvided,
   parseInputObject,
   parsePayload,
-  readRequestReceipt,
   requestIdLine,
   reservedFlagUsageError,
   runLeafCommand,
@@ -923,19 +922,6 @@ describe("request-id receipt helpers", () => {
     expect(tty).toContain(`request id: ${GOOD_ID}`);
     expect(tty).not.toBe(`request id: ${GOOD_ID}\n`);
   });
-
-  test("readRequestReceipt reads a well-formed meta.requestId, else undefined", () => {
-    expect(readRequestReceipt({ ok: true, meta: { requestId: GOOD_ID } })).toBe(
-      GOOD_ID,
-    );
-    expect(readRequestReceipt({ ok: true })).toBeUndefined();
-    expect(readRequestReceipt({ meta: { requestId: 1 } })).toBeUndefined();
-    expect(readRequestReceipt("nope")).toBeUndefined();
-    // A malformed/ANSI-laced receipt is dropped, never printed.
-    expect(
-      readRequestReceipt({ meta: { requestId: ANSI_ID } }),
-    ).toBeUndefined();
-  });
 });
 
 describe("scopePreflightFailure: the hint must survive a re-parse", () => {
@@ -1001,6 +987,19 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
 
 describe("toolErrorLines", () => {
   const FLAGS = new Set(["matter_id", "entity_id"]);
+
+  test("an unknown tool is an actionable outdated-CLI error", () => {
+    expect(
+      toolErrorLines({
+        code: "unknown_tool",
+        message: "Unknown tool: invoke_capability",
+        hint: undefined,
+        issues: [],
+      }),
+    ).toEqual([
+      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
+    ]);
+  });
 
   test("a lone issue repeating the summary folds into one line naming the flag", () => {
     expect(

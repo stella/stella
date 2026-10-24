@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 
-import type { AgentSkillOrigin } from "@/api/db/schema";
+import type { AgentSkillInvocation, AgentSkillOrigin } from "@/api/db/schema";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type CatalogueSkillHandleRow = {
   enabled: boolean;
   id: SafeId<"agentSkill">;
+  invocation: AgentSkillInvocation;
   origin: AgentSkillOrigin;
   scope: "private" | "team";
   slug: string;
@@ -48,6 +49,9 @@ export const resolveCatalogueSkillHandleMaps = ({
   return {
     chatSkillIdBySlug: mapSkillIdsBySlug(chatSkillRowBySlug),
     enabledBySlug: mapSkillEnabledBySlug(visibleRowBySlug),
+    invocationBySlug: new Map(
+      [...visibleRowBySlug].map(([slug, row]) => [slug, row.invocation]),
+    ),
     installedSkillIdBySlug: mapSkillIdsBySlug(installedSkillRowBySlug),
   };
 };

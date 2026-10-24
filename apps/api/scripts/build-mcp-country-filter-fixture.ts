@@ -1,15 +1,25 @@
 import { panic } from "better-result";
 import path from "node:path";
 
-import { parseCaseLawLaunchReadiness } from "@stll/api-contract/case-law-launch-readiness";
 import {
-  ADMITTED_PUBLIC_COUNTRIES,
+  CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES,
+  parseCaseLawLaunchReadiness,
+} from "@stll/api-contract/case-law-launch-readiness";
+import {
   PUBLIC_COUNTRY_CAPABILITIES,
+  publicCountriesFor,
 } from "@stll/api-contract/public-country-capability";
 
+// An explicitly launched country carries no serving receipt: the app refuses
+// a country that has both.
 const countries = [
-  ...new Set([...ADMITTED_PUBLIC_COUNTRIES, "SVK"]),
-].toSorted();
+  ...new Set([...publicCountriesFor("caseLaw", "search"), "SVK"]),
+]
+  .filter(
+    (country) =>
+      !CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.some((launch) => launch === country),
+  )
+  .toSorted();
 const readiness = countries.map((country) => ({
   country,
   evalSetExists: true,
@@ -43,12 +53,15 @@ const result = await Bun.build({
           { filter: /\/public-country-capability\.ts$/u },
           async ({ path: file }) => {
             const source = await Bun.file(file).text();
-            const declaration = `SVK: "${PUBLIC_COUNTRY_CAPABILITIES.SVK}"`;
+            const declaration = `SVK: { caseLaw: "${PUBLIC_COUNTRY_CAPABILITIES.SVK.caseLaw}"`;
             if (source.split(declaration).length !== 2) {
               panic("Country fixture requires one SVK admission declaration");
             }
             return {
-              contents: source.replace(declaration, 'SVK: "admitted"'),
+              contents: source.replace(
+                declaration,
+                'SVK: { caseLaw: "admitted"',
+              ),
               loader: "ts",
             };
           },

@@ -6,10 +6,10 @@ import {
   BILLING_STATUS,
   entities,
   expenses,
+  featureEnrolments,
   invoices,
   workspaceMembers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";

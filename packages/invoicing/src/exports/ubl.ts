@@ -7,11 +7,11 @@ import {
   countryCodeOf,
   effectiveVatRateBps,
   invoiceDescriptionOf,
+  type InvoiceExportLine,
+  type InvoiceExportRecord,
   quantityText,
   variableSymbolOf,
   vatPercentText,
-  type InvoiceExportLine,
-  type InvoiceExportRecord,
 } from "./record";
 import { el, text, XML_DECLARATION } from "./xml";
 
@@ -41,6 +41,9 @@ const vatCategoryOf = (
       return "E";
     case "reverse_charge":
       return "AE";
+    // A service whose place of supply is outside the EU.
+    case "outside_scope":
+      return "O";
     case "not_vat_payer":
       return "O";
     default: {

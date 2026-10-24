@@ -1,4 +1,4 @@
-// parser-output-unchanged: EcjDocumentBoundary is now private; parsing and document output are unchanged.
+// parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.
 /**
  * Court of Justice of the European Union (CJEU) XHTML parser.
  *
@@ -60,12 +60,12 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
   ANONYMIZED_CLASS,
-  type WalkInlinesOptions,
   appendTextInline,
   inlinesToPlainText,
   ownTableRows,
   visibleHtmlText,
   walkInlines,
+  type WalkInlinesOptions,
 } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
@@ -117,6 +117,7 @@ export const parseEcjDecisionHtml = (
   const blocks = buildBlocks($, $document);
   const keywords = extractKeywords($document);
 
+  const validationHtml = documentSource($, $document, input.html);
   const validation = validateAndLog(
     {
       parser: "eu-ecj",
@@ -124,8 +125,9 @@ export const parseEcjDecisionHtml = (
       language: input.language,
       url: input.sourceUrl,
     },
-    documentSource($, $document, input.html),
+    validationHtml,
     blocks,
+    tagNameOf($document.get(0)) === "body" ? { document: $ } : undefined,
   );
 
   return {

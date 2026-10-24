@@ -12,7 +12,7 @@ import { Result } from "better-result";
 
 import type {
   DecisionAnalysis,
-  DecisionAnalysisV3,
+  DecisionAnalysisV4,
 } from "@stll/legal-ast/analysis";
 import { isSignificanceCurrent } from "@stll/legal-ast/analysis";
 import { Temporal } from "@stll/time";
@@ -25,22 +25,26 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
+import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
 } from "@/api/lib/tanstack-ai-models";
 
 import {
   graphFingerprintOf,
   readCitationGraphFacts,
+  SIGNIFICANCE_PROMPT_VERSION,
   significanceOutputSchema,
   significanceSystemPrompt,
   significanceUserMessage,
-  SIGNIFICANCE_PROMPT_VERSION,
 } from "./significance";
+import type { CitationGraphFacts } from "./significance";
 
 /**
  * Runs in flight in this process, keyed by the decision and the graph they
@@ -50,6 +54,11 @@ import {
  */
 const inFlight = new Set<string>();
 
+const SIGNIFICANCE_NONE_SAVE_FAILED_SINK = failureSink({
+  event: "case_law.analysis.significance_none_save_failed",
+  expected: [],
+});
+
 type RefreshSignificanceOptions = {
   /** Admits the refresh only once it is known to call the model. */
   admitModelAction: ModelActionAdmitter;
@@ -58,52 +67,109 @@ type RefreshSignificanceOptions = {
   analysis: DecisionAnalysis;
   /** The row's `contentHash`; the save is fenced on it, as every save is. */
   contentHash: string | null;
+  /**
+   * Whether this deployment may ask a model for derived layers
+   * (`writesDerivedAnalyses`). Required, so no caller can start a refresh
+   * without having made that decision.
+   */
+  derivedAi: boolean;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
+  /** Reads the decision's cited-by graph; tests answer it without a database. */
+  readGraphFacts?: (
+    decisionId: SafeId<"caseLawDecision">,
+  ) => Promise<CitationGraphFacts | null>;
+  store?: AnalysisStore;
 };
 
-/** Only a version 3 analysis has a slot to write the statement into. */
-const asV3 = (analysis: DecisionAnalysis): DecisionAnalysisV3 | null =>
-  analysis.version === 3 ? analysis : null;
+const readPublicGraphFacts = async (decisionId: SafeId<"caseLawDecision">) =>
+  await caseLawPublicReadDb(
+    async (tx) => await readCitationGraphFacts({ decisionId, tx }),
+  );
+
+/** Only a version 4 analysis has a slot to write the statement into. */
+const asV4 = (analysis: DecisionAnalysis): DecisionAnalysisV4 | null =>
+  analysis.version === 4 ? analysis : null;
 
 export const refreshSignificance = async ({
   admitModelAction,
   analysis,
   contentHash,
   decisionId,
+  derivedAi,
   orgAIConfig,
   orgAIConfigStatus,
   organizationId,
   promptCachingEnabled,
+  readGraphFacts = readPublicGraphFacts,
+  store = analysisStore(),
 }: RefreshSignificanceOptions): Promise<void> => {
-  const current = asV3(analysis);
+  // First, before the graph is read: a deployment that may not ask a model
+  // pays for nothing here.
+  if (!derivedAi) {
+    return;
+  }
+  const current = asV4(analysis);
   if (current === null) {
     return;
   }
-  // Checked before the graph is read: an org with no fast model available
-  // must not pay for the query either.
+  const facts = await readGraphFacts(decisionId);
+  if (facts === null) {
+    return;
+  }
+  const graphFingerprint = graphFingerprintOf(facts);
+  // No later decision cites this one: the graph already says so, so `none` is
+  // stored without asking a model, and a statement an earlier run wrote over
+  // the empty graph is replaced by it.
+  if (facts.citedByCount === 0) {
+    if (
+      current.significance?.kind === "none" &&
+      current.significance.graphFingerprint === graphFingerprint
+    ) {
+      return;
+    }
+    const saved = await Result.tryPromise(
+      async () =>
+        await store.save({
+          analysis: {
+            ...current,
+            significance: {
+              kind: "none",
+              graphFingerprint,
+              generatedAt: Temporal.Now.instant().toString({
+                fractionalSecondDigits: 3,
+              }),
+            },
+          },
+          contentHash,
+          decisionId,
+          expected: analysis,
+        }),
+    );
+    if (Result.isError(saved)) {
+      observeFailure(saved.error, {
+        sink: SIGNIFICANCE_NONE_SAVE_FAILED_SINK,
+        ctx: { decisionId },
+      });
+    }
+    return;
+  }
+  // Only the positive-citation path needs an available classify model. The
+  // empty graph above is corpus-wide state and can be stored for every reader.
   if (
     Result.isError(
-      requireTanStackAIAvailableForRole({
+      requireTanStackAIAvailableForTask({
         dataClass: "public_corpus",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
-        role: "fast",
+        task: "classify",
       }),
     )
   ) {
     return;
   }
-
-  const facts = await caseLawPublicReadDb(
-    async (tx) => await readCitationGraphFacts({ decisionId, tx }),
-  );
-  if (facts === null) {
-    return;
-  }
-  const graphFingerprint = graphFingerprintOf(facts);
   if (
     isSignificanceCurrent({
       analysis: current,
@@ -121,7 +187,6 @@ export const refreshSignificance = async ({
   inFlight.add(key);
 
   const language = current.holding.language;
-
   // Built once admission states the tier; absent when admission refused.
   let aiAnalytics:
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
@@ -130,7 +195,7 @@ export const refreshSignificance = async ({
     aiAnalytics = createTanStackAIAnalyticsCallbacks({
       dataClass: "public_corpus",
       feature: "case-law.analysis.significance",
-      modelRole: "fast",
+      modelTask: "classify",
       organizationId,
       orgAIConfig,
       modelTier: admission.modelTier,
@@ -143,15 +208,19 @@ export const refreshSignificance = async ({
       sessionId: decisionId,
       traceId: Bun.randomUUIDv7(),
     });
-
-    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForTask(
+      "classify",
+      orgAIConfig,
+      {
+        dataClass: "public_corpus",
+        organizationId,
+        modelTier: admission.modelTier,
+      },
+    );
+    const result = await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "public_corpus",
-      organizationId,
-      modelTier: admission.modelTier,
-    });
-    const result = await generateTanStackObjectForRole({
-      dataClass: "public_corpus",
-      role: "fast",
+      task: "classify",
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
@@ -161,13 +230,13 @@ export const refreshSignificance = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "classify",
         scopeKey: decisionId,
       }),
       system: significanceSystemPrompt(language),
       prompt: significanceUserMessage(facts),
       outputSchema: significanceOutputSchema,
-      abortSignal: AbortSignal.timeout(60_000),
+      deadlineMs: 60_000,
     });
 
     // The document layers are carried over untouched: this run read the
@@ -179,7 +248,7 @@ export const refreshSignificance = async ({
     // began on an older graph and finished last would otherwise overwrite
     // the newer statement and put the decision back in the queue. Here it
     // simply loses.
-    await analysisStore().save({
+    await store.save({
       analysis: {
         ...current,
         significance: {

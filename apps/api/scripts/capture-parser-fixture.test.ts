@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
 
-import { hashAdapterFixtureBytes } from "../src/handlers/case-law/ingestion/adapters/update-fixtures";
+import { hashAdapterFixtureBytes } from "../src/tests/case-law/update-adapter-fixtures";
 import {
   CAPTURED_FIXTURE_ROOTS,
   provenancePathOf,

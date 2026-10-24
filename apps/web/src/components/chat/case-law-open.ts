@@ -12,7 +12,7 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 
 import { openPublicLawLink } from "@/components/chat/public-law-open";
-import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
@@ -146,7 +146,7 @@ const resolveByRoute = async ({
     return await readDecisionById(decisionId);
   }
 
-  const routeCountry = publicCaseLawCountryFromParam(country);
+  const routeCountry = publicCaseLawPageCountryFromParam(country);
   if (routeCountry === null) {
     return null;
   }

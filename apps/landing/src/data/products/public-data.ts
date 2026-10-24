@@ -1,13 +1,13 @@
-import { frameAccents, productCtaLabels, type Product } from "./types";
+import { frameAccents, type Product, productCtaLabels } from "./types";
 
 export const publicData = {
   slug: "public-data",
   hero: {
     type: "image",
-    src: "/media/products/public-data.png",
-    darkSrc: "/media/products/public-data-dark.png",
-    alt: "A court decision open in the stella case-law reader",
-    aspect: "16 / 10",
+    src: "/media/products/story-public-data-1.png",
+    darkSrc: "/media/products/story-public-data-1-dark.png",
+    altKey: "story.dataMainAlt",
+    aspect: "1440 / 760",
   },
   heroFrameVariant: "bloom",
   frameAccent: frameAccents.tide,

@@ -31,7 +31,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/legal-atlas-runner",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/legal-atlas-runner",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
@@ -40,7 +39,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
     "@stll/scripts": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "drizzle-orm": "catalog:"
   },

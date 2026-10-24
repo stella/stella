@@ -55,6 +55,7 @@ import { MatterMetadataPanel } from "@/components/workspaces/matter-metadata-she
 import { TaskDetailPanel } from "@/components/workspaces/tasks/task-detail-panel";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { documentOpenTiming } from "@/lib/analytics/document-open-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -338,6 +339,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         scaleOffset: 0,
         sidebar: openAnonymizeSidebar ? "anonymize" : "entity",
       });
+      documentOpenTiming.requested(activeTab.id, "full-view");
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
         params: { workspaceId: activeTab.workspaceId, viewId: "all" },
@@ -489,7 +491,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             onOpenChat={openChat}
             onSetMinimized={setMinimized}
             tabs={tabs}
-            workspaceId={workspaceId}
           />
         </div>
 

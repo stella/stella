@@ -5,7 +5,7 @@
  * expected IngestionResult shape. Catches schema drift
  * when a source API changes its response format.
  *
- * Run after `update-fixtures.ts` to verify the new
+ * Run after `update-adapter-fixtures.ts` to verify the new
  * fixtures are valid. Also runs in CI to catch stale
  * fixtures that no longer parse correctly.
  */
@@ -16,8 +16,8 @@ import { describe, expect, test } from "bun:test";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
-  toPlainTextIngestionResult,
   type RawIngestionResult,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -103,7 +103,7 @@ describe("fixture validation", () => {
 
     expect(
       fixtures.length,
-      "No page fixtures found. Run update-fixtures.ts first.",
+      "No page fixtures found. Run update-adapter-fixtures.ts first.",
     ).toBeGreaterThan(0);
 
     for (const { filename, data } of fixtures) {
@@ -142,7 +142,7 @@ describe("fixture validation", () => {
 
     expect(
       fixtures.length,
-      "No page fixtures found. Run update-fixtures.ts first.",
+      "No page fixtures found. Run update-adapter-fixtures.ts first.",
     ).toBeGreaterThan(0);
 
     const now = Date.now();

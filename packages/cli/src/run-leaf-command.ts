@@ -35,25 +35,25 @@ import {
 } from "./mcp-client.js";
 import {
   EXIT_CODES,
+  type ExitCode,
   FEATURE_DISABLED_ERROR_CODES,
+  mapHttpStatusExit,
   MAX_ALL_BYTES,
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
-  mapHttpStatusExit,
   resolveMcpErrorCodeExit,
-  type ExitCode,
 } from "./mcp-constants.js";
 import {
   buildRenderPlan,
   jsonlLine,
   MERGED_TEXT_PATH,
+  type OutputFormat,
+  type RenderPlan,
   renderPlanExitCode,
   renderResult,
   selectFormat,
   terminalWidth,
   valueAtPath,
-  type OutputFormat,
-  type RenderPlan,
   type Writers,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -491,11 +491,13 @@ export const confirmDestructive = async ({
   flags,
   writers,
   label,
+  operation = "destructive",
 }: {
   context: Context;
   flags: LeafFlags;
   writers: Writers;
   label: string;
+  operation?: "destructive" | "approval";
 }): Promise<"proceed" | "aborted"> => {
   if (flags[RESERVED_FLAG_KEYS.yes] === true) {
     return "proceed";
@@ -509,7 +511,9 @@ export const confirmDestructive = async ({
     return "aborted";
   }
   if (!context.process.stdin.isTTY) {
-    writers.stderr("refusing destructive op without --yes on non-TTY\n");
+    writers.stderr(
+      `refusing ${operation === "destructive" ? "destructive op" : "operation requiring approval"} without --yes on non-TTY\n`,
+    );
     return "aborted";
   }
   // A TTY confirmation must read a single line: `readAllStdin` waits for EOF,
@@ -519,7 +523,7 @@ export const confirmDestructive = async ({
     output: context.process.stdout,
   });
   const rawAnswer = await rl.question(
-    `Run destructive command '${label}'? [y/N] `,
+    `Run ${operation === "destructive" ? "destructive command" : "command requiring approval"} '${label}'? [y/N] `,
   );
   rl.close();
   const answer = rawAnswer.trim().toLowerCase();
@@ -685,8 +689,7 @@ const RECEIPT_RESET = "\u001B[0m";
 
 /**
  * The `request id: …` receipt line, dimmed on a TTY and plain on a pipe (so an
- * agent capturing stderr reads a clean, greppable line). Shared by the error
- * path (after the envelope) and the capability write path (after a mutation).
+ * agent capturing stderr reads a clean, greppable line) after an error envelope.
  * Callers only receive ids that passed {@link parseRequestId}, so the value is
  * terminal-safe by construction.
  */
@@ -694,21 +697,6 @@ export const requestIdLine = (requestId: string, isTTY: boolean): string =>
   isTTY
     ? `${RECEIPT_DIM}request id: ${requestId}${RECEIPT_RESET}\n`
     : `request id: ${requestId}\n`;
-
-/**
- * Read the `meta.requestId` receipt off a success payload, if present and
- * well-formed (see {@link parseRequestId}; a malformed id is dropped).
- */
-export const readRequestReceipt = (payload: unknown): string | undefined => {
-  if (!isRecord(payload)) {
-    return undefined;
-  }
-  const meta = payload["meta"];
-  if (!isRecord(meta)) {
-    return undefined;
-  }
-  return parseRequestId(meta["requestId"]);
-};
 
 /**
  * Map a tool `isError` result to an exit class (spec 051 S4). A structured
@@ -741,13 +729,9 @@ export const classifyToolError = (payload: unknown): ExitCode => {
 
 /**
  * True when the tool declares a boolean `confirm` gate in its input schema (the
- * destructive delete_* tools, and `manage_organization` which gates its
- * remove_member action). The generated per-tool flags hide `confirm` (the
- * reserved --yes flow owns it), so after a confirmed destructive op the executor
- * injects `confirm: true` to satisfy the server gate. Injection only runs on a
- * leaf marked `destructive`, so a non-destructive sibling subcommand (e.g.
- * `organization update-settings`, sharing the one schema) never has `confirm`
- * injected even though this returns true for the shared schema.
+ * destructive delete_* tools and remove_matter_member). The generated flags
+ * hide `confirm`; after human approval the reserved --yes flow injects
+ * `confirm: true` for a leaf marked destructive.
  */
 const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
   const properties = spec.inputSchema["properties"];
@@ -1140,6 +1124,11 @@ export const toolErrorLines = (
   },
   flagPaths?: ReadonlySet<string>,
 ): string[] => {
+  if (envelope.code === "unknown_tool") {
+    return [
+      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
+    ];
+  }
   const admission = readCliActionAdmissionRefusal(envelope);
   if (admission !== undefined) {
     return actionAdmissionRefusalLines(admission);
@@ -1229,7 +1218,6 @@ type RenderCommandResultOptions = {
   /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
   textPath: string | undefined;
   writers: Writers;
-  writeReceipt: boolean;
   /** Input paths the leaf exposes as flags, so an issue can name the flag. */
   flagPaths?: ReadonlySet<string> | undefined;
 };
@@ -1242,7 +1230,6 @@ export const renderCommandResult = ({
   result,
   textPath,
   writers,
-  writeReceipt,
   flagPaths,
 }: RenderCommandResultOptions): void => {
   if (result.isError) {
@@ -1280,12 +1267,6 @@ export const renderCommandResult = ({
   });
   if (hint !== null) {
     writers.stderr(`${hint}\n`);
-  }
-  if (writeReceipt) {
-    const requestId = readRequestReceipt(payload);
-    if (requestId !== undefined) {
-      writers.stderr(requestIdLine(requestId, context.process.stderr.isTTY));
-    }
   }
 };
 
@@ -1443,7 +1424,6 @@ export const runLeafCommand = async ({
       result,
       textPath: spec.textPath,
       writers,
-      writeReceipt: false,
       flagPaths: leafFlagPaths(spec),
     });
   };

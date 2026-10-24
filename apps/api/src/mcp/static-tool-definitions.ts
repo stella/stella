@@ -20,6 +20,8 @@ import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
+import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
+import type { McpToolName } from "@/api/mcp/static-tool-names";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import {
@@ -29,10 +31,17 @@ import {
 import type {
   McpToolDefinition,
   McpToolHandler,
-  RuntimeMcpToolOutputContract,
   McpToolSet,
+  RuntimeMcpToolOutputContract,
   ToolScope,
 } from "@/api/mcp/tool-types";
+import {
+  isMcpToolVisibleTo,
+  type McpToolVisibleTo,
+} from "@/api/mcp/tool-visibility";
+import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
+
+export { MCP_STATIC_TOOL_NAMES };
 
 type DefaultMcpToolSets = readonly [
   typeof COMPAT_TOOL_SET,
@@ -49,6 +58,7 @@ type DefaultMcpToolSets = readonly [
   typeof RESEARCH_ADMIN_TOOL_SET,
   typeof FEEDBACK_TOOL_SET,
   typeof CAPABILITY_TOOL_SET,
+  typeof WEB_HANDOFF_TOOL_SET,
 ];
 
 export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
@@ -66,6 +76,7 @@ export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   RESEARCH_ADMIN_TOOL_SET,
   FEEDBACK_TOOL_SET,
   CAPABILITY_TOOL_SET,
+  WEB_HANDOFF_TOOL_SET,
 ];
 
 // Keep this schema-sensitive projection as a literal tuple: flattening the
@@ -73,22 +84,39 @@ export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
 // destroys the exact tool-name union used throughout chat. The bidirectional
 // compile check below makes the explicit projection unable to drift from the
 // canonical tool-set registry.
-export const DEFAULT_MCP_TOOL_DEFINITIONS = [
-  ...COMPAT_TOOL_SET.definitions,
-  ...STELLA_TOOL_SET.definitions,
-  ...DECISION_READER_TOOL_SET.definitions,
-  ...LEGISLATION_TOOL_SET.definitions,
-  ...LEGAL_RESOLVE_TOOL_SET.definitions,
-  ...TEMPLATE_TOOL_SET.definitions,
-  ...DOCUMENT_TOOL_SET.definitions,
-  ...MATTER_TOOL_SET.definitions,
-  ...KNOWLEDGE_TOOL_SET.definitions,
-  ...READER_ANNOTATION_TOOL_SET.definitions,
-  ...BILLING_TOOL_SET.definitions,
-  ...RESEARCH_ADMIN_TOOL_SET.definitions,
-  ...FEEDBACK_TOOL_SET.definitions,
-  ...CAPABILITY_TOOL_SET.definitions,
-] as const satisfies readonly McpToolDefinition[];
+type RegisteredMcpToolDefinition =
+  (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number];
+
+export const DEFAULT_MCP_TOOL_DEFINITIONS: readonly RegisteredMcpToolDefinition[] =
+  [
+    ...COMPAT_TOOL_SET.definitions,
+    ...STELLA_TOOL_SET.definitions,
+    ...DECISION_READER_TOOL_SET.definitions,
+    ...LEGISLATION_TOOL_SET.definitions,
+    ...LEGAL_RESOLVE_TOOL_SET.definitions,
+    ...TEMPLATE_TOOL_SET.definitions,
+    ...DOCUMENT_TOOL_SET.definitions,
+    ...MATTER_TOOL_SET.definitions,
+    ...KNOWLEDGE_TOOL_SET.definitions,
+    ...READER_ANNOTATION_TOOL_SET.definitions,
+    ...BILLING_TOOL_SET.definitions,
+    ...RESEARCH_ADMIN_TOOL_SET.definitions,
+    ...FEEDBACK_TOOL_SET.definitions,
+    ...CAPABILITY_TOOL_SET.definitions,
+    ...WEB_HANDOFF_TOOL_SET.definitions,
+  ];
+
+type ModelVisibleMcpToolDefinition = McpToolVisibleTo<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  "model"
+>;
+
+/** Static definitions visible to the model; app-only tools cannot enter chat registries. */
+export const MODEL_VISIBLE_MCP_TOOL_DEFINITIONS =
+  DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool): tool is ModelVisibleMcpToolDefinition =>
+      isMcpToolVisibleTo(tool, "model"),
+  );
 
 const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
   ({ name }) =>
@@ -99,23 +127,21 @@ const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
 );
 
 export type AnonymizingMcpToolName = Extract<
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number],
   { anonymized: { exposure: "anonymize" } }
 >["name"];
 
 type RegisteredMcpToolName =
   (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number]["name"];
-type FlattenedMcpToolName =
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number]["name"];
-type MissingMcpToolName = Exclude<RegisteredMcpToolName, FlattenedMcpToolName>;
-type ExtraMcpToolName = Exclude<FlattenedMcpToolName, RegisteredMcpToolName>;
+type MissingMcpToolName = Exclude<McpToolName, RegisteredMcpToolName>;
+type ExtraMcpToolName = Exclude<RegisteredMcpToolName, McpToolName>;
 
 true satisfies [MissingMcpToolName, ExtraMcpToolName] extends [never, never]
   ? true
   : never;
 
 type ValibotInputToolName = Extract<
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number],
   { inputSchemaSource: unknown }
 >["name"];
 type LegacyManualInputToolName = Exclude<
@@ -125,19 +151,6 @@ type LegacyManualInputToolName = Exclude<
 
 // Every native tool must use defineValibotMcpTool, so no hand-written input schema mirrors a validator.
 true satisfies [LegacyManualInputToolName] extends [never] ? true : never;
-
-/**
- * The closed set of curated static MCP tool names, derived from the single
- * default registry. Source of truth for the `McpToolName` type
- * (`apps/api/src/lib/api-handlers.ts`, type-only import to avoid a runtime
- * cycle) and for the runtime coverage guard
- * (`apps/api/scripts/mcp-coverage-guard.ts`). Because the registry is
- * declared `as const`, `.map` preserves the literal name union, so
- * `(typeof MCP_STATIC_TOOL_NAMES)[number]` is the exact tool-name union.
- */
-export const MCP_STATIC_TOOL_NAMES = DEFAULT_MCP_TOOL_DEFINITIONS.map(
-  (tool) => tool.name,
-);
 
 /**
  * Every advertised tool name, the law audience's own `search`/`fetch`

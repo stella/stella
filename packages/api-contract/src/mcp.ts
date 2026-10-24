@@ -5,6 +5,8 @@ export const MCP_DOCUMENTS_HTTP_PATH = "/mcp-documents" as const;
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized" as const;
 export const MCP_LAW_HTTP_PATH = "/mcp-law" as const;
 
+// Browser-safe literal; registry.test.ts compares both directions against
+// every scope required by the tools served on /mcp.
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:search",
   "stella:read",
@@ -13,7 +15,24 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:documents_write",
   "stella:matters_write",
   "stella:contacts_write",
+  "stella:knowledge_write",
+  "stella:billing_write",
+  "stella:admin_read",
+  "stella:admin_write",
+  "stella:onboarding",
+  "stella:feedback",
+] as const;
+
+export const MCP_ADVANCED_RESOURCE_SCOPES = [
+  "stella:search",
+  "stella:read",
+  "stella:law_read",
+  "stella:templates",
+  "stella:documents_write",
+  "stella:matters_write",
+  "stella:contacts_write",
   "stella:chat",
+  "stella:memory_write",
   "stella:knowledge_write",
   "stella:billing_write",
   "stella:admin_read",
@@ -21,10 +40,6 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
-] as const;
-
-export const MCP_ADVANCED_RESOURCE_SCOPES = [
-  ...MCP_DEFAULT_RESOURCE_SCOPES,
   "stella:external_mcps",
 ] as const;
 
@@ -40,6 +55,7 @@ export const MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE = {
   "stella:matters_write": null,
   "stella:contacts_write": null,
   "stella:chat": null,
+  "stella:memory_write": null,
   "stella:knowledge_write": null,
   "stella:billing_write": null,
   "stella:admin_read": null,
@@ -79,6 +95,7 @@ const MCP_RESOURCE_SCOPE_ACCESS = {
   "stella:matters_write": "write-only",
   "stella:contacts_write": "write-only",
   "stella:chat": "read-capable",
+  "stella:memory_write": "write-only",
   "stella:knowledge_write": "write-only",
   "stella:billing_write": "write-only",
   "stella:admin_read": "read-capable",
@@ -106,7 +123,7 @@ const isMcpWriteOnlyResourceScope = (
   MCP_RESOURCE_SCOPE_ACCESS[scope] === "write-only";
 
 export const MCP_WRITE_ONLY_RESOURCE_SCOPES =
-  MCP_DEFAULT_RESOURCE_SCOPES.filter(isMcpWriteOnlyResourceScope);
+  MCP_ADVANCED_RESOURCE_SCOPES.filter(isMcpWriteOnlyResourceScope);
 
 export const MCP_OAUTH_PROTOCOL_SCOPES = [
   "openid",

@@ -9,6 +9,7 @@ import {
   referencesOutsideVersion,
   versionCoversDate,
 } from "@stll/api-contract/statute-version";
+import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
 import {
   Accordion,
   AccordionItem,
@@ -26,8 +27,9 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
 import {
   groupProvisionsByWork,
-  summarizeProvisionVersions,
   type ProvisionGroup,
+  provisionStatusMessage,
+  summarizeProvisionVersions,
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
@@ -104,7 +106,11 @@ export const ProvisionsCited = ({
       group.provisions
         .map((provision) => provisionVersionAsOf(provision, decisionAsOf))
         .find((date) => date !== null) ?? null;
-    if (group.workEli !== null && asOf !== null) {
+    if (
+      group.jurisdiction !== "EU" &&
+      group.workEli !== null &&
+      asOf !== null
+    ) {
       citedWorkByGroup.set(group.key, {
         asOf,
         country: group.jurisdiction,
@@ -123,14 +129,18 @@ export const ProvisionsCited = ({
   const statuteByWork = statuteByCitedWork(resolved);
   const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
-  // Absent is the answer for a decision that applies no provisions. A failed
-  // read is not that answer, so it keeps the panel and says so instead of
-  // disappearing as though the decision cited nothing. Until hydrated the
-  // panel is absent either way: the non-blocking prefetch may be known on
-  // one side of hydration and not the other.
+  const firstPage = data?.pages.at(0);
+  const statusMessage =
+    firstPage === undefined
+      ? null
+      : provisionStatusMessage(
+          firstPage.status,
+          groups.length,
+          firstPage.capability,
+        );
   const environmentHydrated = useHydrated();
   const hydrated = isHydrated ?? environmentHydrated;
-  if (!hydrated || (groups.length === 0 && !isError)) {
+  if (!hydrated || (data === undefined && !isError)) {
     return null;
   }
 
@@ -141,6 +151,11 @@ export const ProvisionsCited = ({
         expanded === undefined && "px-3 pb-3",
       )}
     >
+      {!isError && statusMessage !== null && (
+        <p className="text-muted-foreground text-xs" role="status">
+          {t(statusMessage)}
+        </p>
+      )}
       {isError && (
         <div className="flex items-center gap-2">
           <p className="text-muted-foreground text-xs">
@@ -347,17 +362,33 @@ const WorkReferences = ({
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
-          {group.provisions.map((provision) => (
-            <ProvisionReferenceChip
-              document={documentFor(provision)}
-              key={provision.key}
-              label={formatProvisionReference(provision, renderPart)}
-              provision={provision}
-              versionMarker={
-                exceptions.has(provision.key) ? "exception" : "group"
-              }
-            />
-          ))}
+          {group.provisions.map((provision) => {
+            const href =
+              group.jurisdiction === "EU"
+                ? euProvisionSourceUrl(group.workIdentifier, provision)
+                : null;
+            return (
+              <ProvisionReferenceChip
+                target={
+                  href !== null
+                    ? { type: "external", href }
+                    : {
+                        type: "hosted",
+                        document:
+                          group.jurisdiction === "EU"
+                            ? null
+                            : documentFor(provision),
+                      }
+                }
+                key={provision.key}
+                label={formatProvisionReference(provision, renderPart)}
+                provision={provision}
+                versionMarker={
+                  exceptions.has(provision.key) ? "exception" : "group"
+                }
+              />
+            );
+          })}
         </div>
       </AccordionPanel>
     </AccordionItem>

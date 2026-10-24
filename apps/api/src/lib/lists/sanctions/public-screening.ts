@@ -7,9 +7,9 @@ import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 import { logger } from "@/api/lib/observability/logger";
 
 import {
+  isSanctionsMatcherCancelled,
   SANCTIONS_MATCHER_CONFIG,
   sharedSanctionsMatcherPool,
-  isSanctionsMatcherCancelled,
 } from "./matcher-pool";
 import type { MatcherWorkOutcome } from "./matcher-pool";
 import type { SanctionsReadDb } from "./read-db";
@@ -442,7 +442,7 @@ export const createPublicSanctionsScreening = ({
               reportFailure(failure);
             }
           },
-          matcher: async ({ db, source, edition, query, limit }) => {
+          matcher: async ({ db, source, edition, query, limit, onWork }) => {
             if (isSanctionsMatcherCancelled(session.signal)) {
               return Result.err({
                 code: "load-failed",
@@ -463,13 +463,10 @@ export const createPublicSanctionsScreening = ({
             });
             switch (reply.status) {
               case "screened":
+                onWork(reply.work);
                 return Result.ok(reply.result);
               case "work-limit":
-                return Result.err({
-                  code: "load-failed",
-                  stage: "public-matcher",
-                  reason: "work-limit",
-                } as const);
+                return Result.err({ code: "work-limit" } as const);
               case "unavailable":
               case "entries-loaded":
               case "indexed":

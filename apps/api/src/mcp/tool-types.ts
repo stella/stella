@@ -73,6 +73,8 @@ export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
  * `static-tool-definitions.ts` can only reason about known reasons.
  */
 const MCP_ANONYMIZED_EXCLUSION_REASONS = [
+  /** An OAuth grant may create browser session authority only on the ordinary surface. */
+  "credential_authority",
   /** Mutating tool. The anonymized surface is egress-only, so writes never appear. */
   "write",
   /**
@@ -297,6 +299,7 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:contacts_write": "contacts_write",
   "stella:matters_write": "matters_write",
   "stella:chat": "chat",
+  "stella:memory_write": "memory_write",
   "stella:documents_write": "documents_write",
   "stella:knowledge_write": "knowledge_write",
   "stella:search": "search",

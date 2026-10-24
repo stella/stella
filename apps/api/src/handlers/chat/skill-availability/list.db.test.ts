@@ -24,8 +24,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -380,8 +380,9 @@ describe("built-in skills are decided beside installed ones", () => {
   // on them is visible; their names stay the shipped ones.
   const listUnmetBuiltIns = createListUnavailableChatSkills({
     listBuiltInSkills: () =>
-      listSkillMetadata().map(({ description, name, version }) => ({
+      listSkillMetadata().map(({ description, invocation, name, version }) => ({
         description,
+        invocation,
         metadata: { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: SKILL.nowhere.tools },
         name,
         version,

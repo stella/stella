@@ -1,16 +1,16 @@
 import {
-  SANCTIONS_SCREENING_STATUSES,
-  SANCTIONS_REVIEW_DISPOSITIONS,
   SANCTIONS_MATCH_STATES,
   SANCTIONS_MONITORING_EVENT_TYPES,
+  SANCTIONS_REVIEW_DISPOSITIONS,
+  SANCTIONS_SCREENING_STATUSES,
 } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
 
 import { reviewResetOwnerCheck } from "../review-reset-policies";
 import {
-  orgPolicies,
   globalCaseLawPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -242,6 +242,10 @@ export const sanctionsContactScreenings = p.pgTable(
     p.check(
       "sanctions_contact_screenings_clear_edition_check",
       sql`${table.status} <> 'clear' OR ${table.editionId} IS NOT NULL`,
+    ),
+    p.check(
+      "sanctions_contact_screenings_incomplete_edition_check",
+      sql`${table.status} <> 'incomplete' OR ${table.editionId} IS NOT NULL`,
     ),
     ...monitoringPolicies("sanctions_contact_screenings"),
   ],

@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -12,8 +13,8 @@ import {
 } from "@/api/handlers/chat/message-page";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -84,10 +85,9 @@ const seedThread = async (
     userId: ids.userA1,
     workspaceId: ids.wsA1,
     role: "user" as const,
-    content: {
-      version: 1 as const,
-      data: [{ type: "text" as const, text: `message ${index}` }],
-    },
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: `message ${index}` }],
+    }),
     createdAt,
   }));
   if (rows.length > 0) {
@@ -253,7 +253,11 @@ describe("loadClientMessages", () => {
       id: fileId,
       mimeType: "image/png",
       placeholder: "data:image/png;base64,AAAA",
-      s3Key: testFileKey(`chat/${ids.userA1}/${fileId}`),
+      s3Key: createUserFileKey({
+        fileId,
+        mimeType: "image/png",
+        organizationId: ids.orgA,
+      }),
       sha256Hex: "b".repeat(64),
       sizeBytes: 4,
       threadId,
@@ -262,7 +266,7 @@ describe("loadClientMessages", () => {
     seededFileIds.push(fileId);
     const withAttachment = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     await testDb.insert(chatMessages).values({
-      content: {
+      content: toPersistedChatMessageContentV3({
         data: [
           {
             source: {
@@ -273,8 +277,7 @@ describe("loadClientMessages", () => {
             type: "image",
           },
         ],
-        version: 1,
-      },
+      }),
       createdAt: new Date(base + 2),
       id: withAttachment,
       role: "user",

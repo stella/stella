@@ -21,6 +21,7 @@ import type {
   VisitorWithHooks,
 } from "@oxlint/plugins";
 
+import { type IconEntry, readIconEntries } from "./icon-ownership.ts";
 import {
   type AstNode,
   canonicalModuleId,
@@ -94,6 +95,11 @@ const packageWithSubpaths =
 const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
   new Set(glyphs.flatMap((glyph) => [glyph, `${glyph}Icon`, `Lucide${glyph}`]));
 
+// Test support (`asTestRaw` and the other unchecked casts) must not be
+// reachable from production modules.
+const isTestSupportModule = (moduleId: string): boolean =>
+  moduleId.startsWith("apps/api/src/tests/");
+
 const LUCIDE = packageWithSubpaths("lucide-react");
 // Every icon reaches the app through one module, so a glyph restricted to an
 // owner component is restricted there too.
@@ -127,6 +133,46 @@ const staticDevtoolsPackage = (
   owners,
 });
 
+// One row per icon-module entry that declares `ownedBy:`: the entry is
+// importable only in its owner component (and the icon module). The message
+// names the component, and the other entries drawing the same glyph for
+// call sites that mean something else.
+const ownedIconRestrictions = (
+  entries: readonly IconEntry[],
+): RestrictedImportEntry[] =>
+  entries.flatMap((entry) => {
+    if (entry.owner === null) {
+      return [];
+    }
+    const alternatives = entries
+      .filter((other) => other.owner === null && other.glyph === entry.glyph)
+      .map((other) => other.name);
+    const { component, path } = entry.owner;
+    const otherMeaning =
+      alternatives.length > 0
+        ? `import ${alternatives.join(" or ")}, or add`
+        : "add";
+    return [
+      {
+        messageId: `unownedIcon${entry.name}`,
+        message: [
+          `Do not import '{{name}}' here: only <${component}> (${path})`,
+          "draws it, because the component carries its behaviour.",
+          `Render <${component}> instead. For another meaning ${otherMeaning}`,
+          `a semantic entry in ${ICON_MODULE}.`,
+        ].join(" "),
+        modules: ICON_SOURCES,
+        restriction: {
+          type: "exports",
+          names: new Set([entry.name]),
+          hit: EXPORT_HIT.binding,
+        },
+        // The owner, the module that declares the entry, and its test.
+        owners: [path, ICON_MODULE, "packages/ui/src/icons.test.ts"],
+      },
+    ];
+  });
+
 const RESTRICTED_IMPORT_RULES = {
   // One icon module decides what each glyph means (a skill, an AI action),
   // so a call site cannot pick a lucide glyph that means something else
@@ -145,6 +191,25 @@ const RESTRICTED_IMPORT_RULES = {
       },
       // The module, and its drift test, which compares entries against lucide.
       owners: [ICON_MODULE, "packages/ui/src/icons.test.ts"],
+    },
+  ],
+  // Production API modules import nothing under apps/api/src/tests/; the
+  // scope (production versus test files) is set by the rule's override in
+  // oxlint.config.ts.
+  "no-test-support-import": [
+    {
+      messageId: "noTestSupportImport",
+      message:
+        "Production modules must not import from apps/api/src/tests/. " +
+        "Move test-only code under that directory and import it only from " +
+        "tests.",
+      modules: [isTestSupportModule],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
     },
   ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and
@@ -230,6 +295,10 @@ const RESTRICTED_IMPORT_RULES = {
       ],
     },
   ],
+  // A glyph whose semantic entry declares `ownedBy:` in the icon module is
+  // drawn only by that component (CopyButton confirms a copy in place), so a
+  // call site cannot draw it with different behaviour. Read from icons.ts.
+  "no-unowned-icon": ownedIconRestrictions(readIconEntries()),
   // Devtools packages can schedule browser work while routes are still
   // mounting, so they load only inside lazy islands, and the islands
   // themselves are reached only through `import()`.
@@ -281,6 +350,25 @@ const RESTRICTED_IMPORT_RULES = {
         hit: EXPORT_HIT.call,
       },
       owners: ["apps/web/src/hooks/use-effect.ts"],
+    },
+  ],
+  "tooltip-provider-owner": [
+    {
+      messageId: "tooltipProviderOwner",
+      message:
+        "Do not mount a nested TooltipProvider. Use the provider owned by the app shell instead.",
+      modules: ["@stll/ui/tooltip", "packages/ui/src/components/tooltip"],
+      restriction: {
+        type: "exports",
+        names: new Set(["TooltipProvider"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/app-providers.tsx",
+        "apps/desktop/src/mainview/main.tsx",
+        "packages/mcp-apps/src/case-law-results/app.tsx",
+        "packages/mcp-apps/src/decision-reader/app.tsx",
+      ],
     },
   ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;

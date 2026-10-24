@@ -33,11 +33,14 @@ export default defineConfig({
   // measured boxes, which a screenshot cannot assert on and a unit test cannot
   // reach. Both run against the same playground routes, in the same projects.
   testMatch: "**/*.@(visual|geometry).spec.ts",
-  fullyParallel: false,
-  workers: 1,
+  // Every test loads its own page and shares nothing with the others, so they
+  // spread across workers. One page load on the dev server costs about 6 s,
+  // which made the single-worker run about 10 min long.
+  fullyParallel: true,
+  workers: 4,
   retries: 0,
   // A clean Linux checkout compiles the shared app shell and focused route on
-  // the first visit; later theme projects reuse that graph and finish quickly.
+  // the first visit; the parallel first visits wait on that one compile.
   timeout: 180_000,
   expect: { timeout: 120_000 },
   snapshotPathTemplate: path.join(

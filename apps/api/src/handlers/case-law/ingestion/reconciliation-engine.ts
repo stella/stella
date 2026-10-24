@@ -11,9 +11,10 @@ import { panic, Result } from "better-result";
  *
  * The hunt has to end. An item the publisher lists but never serves would
  * otherwise keep its slice short forever and be re-fetched on every visit, so
- * a repeatedly failing item is parked on a widening schedule and finally
- * retired; a retired item counts as accounted for, which is what lets a slice
- * settle and stay settled.
+ * an unavailable item is parked on a widening schedule with capped backoff.
+ * Only an explicit unkeyable outcome retires an item; repeated failure never
+ * proves a listed document permanently absent. A retired item counts as
+ * accounted for, which is what lets a slice settle and stay settled.
  *
  * Everything here runs under the source's ingestion lease, because it writes
  * through the same `processDecision` a crawl feeds and must not interleave
@@ -26,8 +27,8 @@ import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
+  asc,
   eq,
-  or,
   gte,
   inArray,
   isNotNull,
@@ -35,8 +36,8 @@ import {
   lt,
   min,
   notInArray,
+  or,
   sql,
-  asc,
 } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -47,11 +48,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import {
   recordSliceCoverage,
   recordSliceWalkFailure,
@@ -73,11 +75,11 @@ import type {
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  floorSliceWalk,
+  partitionShortSliceCandidates,
   RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
-  floorSliceWalk,
-  partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
@@ -87,7 +89,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
-import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -116,12 +118,12 @@ import {
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
-  pruneUnlistedTerminalItems,
+  pruneUnlistedReconciliationItems,
+  refreshTrackedReconciliationItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
-  refreshTrackedReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -167,7 +169,7 @@ const LIST_DELAY_MS = 200;
  * avoid.
  */
 const LIST_TIMEOUT_MS = 5 * 60_000;
-/** Terminal rows examined when pruning a walked slice. */
+/** Tracked rows removed when pruning a completed listing walk. */
 const PRUNE_ROW_LIMIT = 1000;
 /**
  * One item's build; nothing in it should take longer. Sized like
@@ -272,6 +274,7 @@ export type ReconciliationUnitOutcome =
   | { type: "worked"; summary: ReconciliationUnitSummary }
   | { type: "idle" }
   | { type: "leased" }
+  | { type: "aborted" }
   /**
    * The source states something no unit can act on — today, a sweep floor
    * that is no slice of this source. Nothing was walked, and nothing will be
@@ -338,7 +341,11 @@ export type ReconciliationWorkUnitOptions = {
   sliceRetries: SliceRetrySchedule;
   /** Stored-raw reader; injectable for bounded repair work. */
   readStoredRaw?: StoredRawResultReader | undefined;
+  signal?: AbortSignal | undefined;
 };
+
+const isSignalAborted = (signal: AbortSignal | undefined): boolean =>
+  signal?.aborted === true;
 
 type KeyedListingItem = ReconciliationListingItem & {
   identityKey: string;
@@ -621,7 +628,7 @@ const selectHeldDocumentIds = async (
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
         hasDetail:
           detail === undefined ? sql<boolean>`true` : sql<boolean>`${detail}`,
-        hasStoredDocument: rowHoldsDocument,
+        hasStoredDocument: rowHoldsDocumentFor(caseLawDecisions),
         hasStoredDetail: sql<boolean>`${storedObservationHasDetail(caseLawDecisions.metadata)}`,
         // Taken out of the corpus by absorption or by a takedown: either
         // way settled, and nothing a listing walk could place again.
@@ -1216,6 +1223,7 @@ type IngestItemOptions = {
   sourceId: SafeId<"caseLawSource">;
   summary: ReconciliationUnitSummary;
   failureDisposition?: "park" | "hold";
+  signal?: AbortSignal | undefined;
 };
 
 /**
@@ -1240,6 +1248,7 @@ const ingestListedItem = async ({
   sourceId,
   summary,
   failureDisposition = "park",
+  signal,
 }: IngestItemOptions): Promise<void> => {
   const park = async (tag: string): Promise<void> => {
     if (failureDisposition === "hold") {
@@ -1269,9 +1278,12 @@ const ingestListedItem = async ({
   };
 
   try {
+    const timeoutSignal = AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS);
     const built = await buildDecision(
       item.payload,
-      AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS),
+      signal === undefined
+        ? timeoutSignal
+        : AbortSignal.any([signal, timeoutSignal]),
     );
     switch (built.type) {
       case "unkeyable": {
@@ -1290,7 +1302,7 @@ const ingestListedItem = async ({
           slice,
           identityKey: item.identityKey,
           payload: item.payload,
-          errorTag: "unkeyable",
+          errorTag: built.type,
           now,
         });
         if (retired.outcome === "recorded") {
@@ -1413,6 +1425,9 @@ const ingestListedItem = async ({
       }
     }
   } catch (error) {
+    if (signal?.aborted === true) {
+      throw error;
+    }
     summary.failed += 1;
     logger.warn("case_law.reconciliation.item_failed", {
       adapterKey,
@@ -1458,6 +1473,7 @@ type WalkSliceOptions = {
   slice: string;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
+  signal?: AbortSignal | undefined;
 };
 
 /**
@@ -1482,6 +1498,7 @@ const walkSlice = async ({
   slice,
   sleep,
   sourceId,
+  signal,
 }: WalkSliceOptions): Promise<ReconciliationUnitSummary> => {
   const summary = emptySummary("slice");
   summary.reason = reason;
@@ -1496,6 +1513,7 @@ const walkSlice = async ({
     pageTimeoutMs: LIST_TIMEOUT_MS,
     slice,
     sleep,
+    signal,
   });
   if (Result.isError(listing)) {
     // A walk fails by throwing: the unit's caller records it on the ledger as
@@ -1554,8 +1572,9 @@ const walkSlice = async ({
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
+    signal?.throwIfAborted();
     if (index > 0) {
-      await sleep(fetchDelayMs);
+      await abortableSleep(sleep, fetchDelayMs, signal);
     }
     // After the pause, not before it: the pause can itself carry the unit past
     // the budget, and what has to stay inside it is the request, not the
@@ -1580,27 +1599,37 @@ const walkSlice = async ({
       slice,
       sourceId,
       summary,
+      signal,
     });
   }
 
-  // This walk saw every page, so it is authoritative about what the slice
-  // lists. Retired rows naming anything else no longer describe this slice and
-  // must stop vouching for its shortfall: settledness weighs the terminal count
-  // against `reported`/`collected`, and those two describe the listing as it is
-  // now. Only reachable on a complete walk — a listing that failed part way
-  // through throws above and never gets here.
-  await lease.beforeDatabaseMark();
-  const prune = await pruneUnlistedTerminalItems(scopedDb, {
-    sourceId,
-    leaseToken: lease.leaseToken,
-    slice,
-    listedIdentityKeys: items.map(({ identityKey }) => identityKey),
-    limit: PRUNE_ROW_LIMIT,
-  });
-  if (prune.outcome === "superseded") {
-    return summary;
+  // Only a completed listing is authoritative about withdrawals. Remove
+  // unlisted parked rows before they can retry a withdrawn payload, and
+  // unlisted terminal rows before they can vouch for this slice's shortfall.
+  // A partial or failed listing never reaches this boundary. Each prune is a
+  // bounded batch; keep pruning until a batch comes back short, so no
+  // withdrawn row survives to a later retry and coverage is recorded only
+  // once the slice holds no unlisted row.
+  const listedIdentityKeys = items.map(({ identityKey }) => identityKey);
+  let pruned = 0;
+  let batchRemoved = PRUNE_ROW_LIMIT;
+  while (batchRemoved === PRUNE_ROW_LIMIT) {
+    await lease.beforeDatabaseMark();
+    // db-await-in-loop: bounded delete batches under the lease, until the slice holds no unlisted row
+    const prune = await pruneUnlistedReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: lease.leaseToken,
+      slice,
+      listedIdentityKeys,
+      limit: PRUNE_ROW_LIMIT,
+    });
+    if (prune.outcome === "superseded") {
+      return summary;
+    }
+    batchRemoved = prune.removed;
+    pruned += batchRemoved;
   }
-  summary.pruned = prune.removed;
+  summary.pruned = pruned;
 
   await recordSliceCoverage(scopedDb, {
     sourceId,
@@ -1630,6 +1659,7 @@ type RecheckTextlessHeldOptions = {
   resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
+  signal?: AbortSignal | undefined;
 };
 
 const recheckTextlessHeldRows = async ({
@@ -1644,6 +1674,7 @@ const recheckTextlessHeldRows = async ({
   resolveSourceContract,
   sleep,
   sourceId,
+  signal,
 }: RecheckTextlessHeldOptions): Promise<ReconciliationUnitSummary> => {
   const summary = emptySummary("textless-detail-rechecks");
   const recheck = reconciliation.textlessHeldRecheck;
@@ -1672,8 +1703,9 @@ const recheckTextlessHeldRows = async ({
   const rows = candidates.filter(({ id }) => claimed.has(id));
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   for (const [index, row] of rows.entries()) {
+    signal?.throwIfAborted();
     if (index > 0) {
-      await sleep(fetchDelayMs);
+      await abortableSleep(sleep, fetchDelayMs, signal);
     }
     const attemptedAt = now();
     if (attemptedAt.getTime() >= ingestEndsAtMs) {
@@ -1758,9 +1790,10 @@ const recheckTextlessHeldRows = async ({
       slice: item.slice,
       sourceId,
       summary,
-      buildDecision: async (_payload, signal) =>
-        await recheck.buildDecisionFromStored(stored, signal),
+      buildDecision: async (_payload, buildSignal) =>
+        await recheck.buildDecisionFromStored(stored, buildSignal),
       failureDisposition: "hold",
+      signal,
     });
   }
   return summary;
@@ -1777,6 +1810,7 @@ type RetryParkedOptions = {
   resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
+  signal?: AbortSignal | undefined;
 };
 
 /**
@@ -1796,6 +1830,7 @@ const retryParkedItems = async ({
   resolveSourceContract,
   sleep,
   sourceId,
+  signal,
 }: RetryParkedOptions): Promise<ReconciliationUnitSummary> => {
   const summary = emptySummary("parked-retries");
   const due = await selectDueReconciliationItems(scopedDb, {
@@ -1850,8 +1885,9 @@ const retryParkedItems = async ({
   >();
   let fetched = 0;
   for (const [index, item] of outstanding.entries()) {
+    signal?.throwIfAborted();
     if (fetched > 0) {
-      await sleep(fetchDelayMs);
+      await abortableSleep(sleep, fetchDelayMs, signal);
     }
     // After the pause, for the reason given in `walkSlice`. Their backoff
     // already decides when each is asked again, so the ones this unit did not
@@ -1882,6 +1918,7 @@ const retryParkedItems = async ({
       slice: item.slice,
       sourceId,
       summary,
+      signal,
     });
   }
   return summary;
@@ -1896,6 +1933,7 @@ type ExecuteReconciliationUnitOptions = Pick<
   | "scopedDb"
   | "sleep"
   | "sourceId"
+  | "signal"
 > & {
   readStoredRaw: StoredRawResultReader;
   reconciliation: SourceReconciliation;
@@ -1917,6 +1955,7 @@ const executeReconciliationUnit = async ({
   sleep,
   sourceId,
   unit,
+  signal,
 }: ExecuteReconciliationUnitOptions): Promise<ReconciliationUnitOutcome> => {
   if (unit.type === "idle") {
     return { type: "idle" };
@@ -1946,6 +1985,7 @@ const executeReconciliationUnit = async ({
             resolveSourceContract,
             sleep,
             sourceId,
+            signal,
           }),
         };
       case "textless-detail-rechecks":
@@ -1963,6 +2003,7 @@ const executeReconciliationUnit = async ({
             resolveSourceContract,
             sleep,
             sourceId,
+            signal,
           }),
         };
       case "slice":
@@ -1982,7 +2023,11 @@ const executeReconciliationUnit = async ({
             slice: unit.slice,
             sleep,
             sourceId,
+            signal,
           }).catch(async (error: unknown) => {
+            if (signal?.aborted === true) {
+              throw error;
+            }
             // The walk is all-or-nothing by design: a listing that failed part
             // way through writes no counts, so the slice is owed exactly as
             // much as before. Recorded as failed, so the sweep's frontier and
@@ -2051,7 +2096,11 @@ export const runReconciliationWorkUnit = async ({
   sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
   sliceRetries,
   sourceId,
+  signal,
 }: ReconciliationWorkUnitOptions): Promise<ReconciliationUnitOutcome> => {
+  if (isSignalAborted(signal)) {
+    return { type: "aborted" };
+  }
   if (
     !Number.isInteger(sliceIngestBudget) ||
     sliceIngestBudget < 1 ||
@@ -2149,6 +2198,9 @@ export const runReconciliationWorkUnit = async ({
           recheck: reconciliation.textlessHeldRecheck,
         }),
   ]);
+  if (isSignalAborted(signal)) {
+    return { type: "aborted" };
+  }
 
   const terminalBySlice = await countTerminalReconciliationItemsBySlice(
     scopedDb,
@@ -2212,18 +2264,31 @@ export const runReconciliationWorkUnit = async ({
     return { type: "idle" };
   }
 
-  return await executeReconciliationUnit({
-    adapterKey,
-    fetchDelayMs,
-    now,
-    reparseStoredRaw,
-    readStoredRaw,
-    reconciliation,
-    scopedDb,
-    sliceIngestBudget,
-    sliceRetries,
-    sleep,
-    sourceId,
-    unit,
+  const executed = await Result.tryPromise({
+    try: async () =>
+      await executeReconciliationUnit({
+        adapterKey,
+        fetchDelayMs,
+        now,
+        reparseStoredRaw,
+        readStoredRaw,
+        reconciliation,
+        scopedDb,
+        signal,
+        sliceIngestBudget,
+        sliceRetries,
+        sleep,
+        sourceId,
+        unit,
+      }),
+    catch: (error) => error,
   });
+  if (Result.isError(executed)) {
+    if (isSignalAborted(signal)) {
+      return { type: "aborted" };
+    }
+    await Promise.reject.bind(Promise, executed.error)();
+    return panic("Promise rejection unexpectedly resolved");
+  }
+  return executed.value;
 };

@@ -33,6 +33,7 @@ const VALUE_FLAGS = new Set([
   "--cwd",
   "--env-file",
   "--max-concurrency",
+  "--path-ignore-patterns",
   "--preload",
   "-r",
   "--reporter",
@@ -50,6 +51,16 @@ const VALUE_FLAGS = new Set([
  * bare integer is taken as the value, so `--bail some-pattern` still selects.
  */
 const OPTIONAL_NUMERIC_FLAGS = new Set(["--bail"]);
+
+export const testRunnerFlagArity = (flag: string) => {
+  if (VALUE_FLAGS.has(flag)) {
+    return "value";
+  }
+  if (OPTIONAL_NUMERIC_FLAGS.has(flag)) {
+    return "optional-number";
+  }
+  return undefined;
+};
 
 const INTEGER_PATTERN = /^\d+$/u;
 const FLAGS_TERMINATOR = "--";

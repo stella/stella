@@ -7,8 +7,8 @@ import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import {
-  mcpMemberAuthority,
   type McpEffectiveAuthority,
+  mcpMemberAuthority,
 } from "@/api/mcp/effective-authority";
 
 /** One operation a write tool's input can select, with the grant it needs. */
@@ -69,19 +69,6 @@ export type McpWriteToolPermissions =
       reason: string;
     }
   | { type: "delegated"; reason: string };
-
-/**
- * A `value` selector whose keys are checked against the enum the input
- * schema is built from, so adding an enum value without a grant does not
- * compile.
- */
-export const selectOperationByValue = <const TValue extends string>(
-  property: string,
-  values: Readonly<Record<TValue, McpWriteToolOperation>>,
-): McpWriteToolPermissions => ({
-  type: "input",
-  select: { by: "value", property, values },
-});
 
 /** A `presence` selector: `property` set selects `present`, else `absent`. */
 export const selectOperationByPresence = (

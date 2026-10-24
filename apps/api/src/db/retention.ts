@@ -58,6 +58,10 @@ export const TABLE_RETENTION = {
   oauth_client_resource: {
     boundedBy: "Cascade-deleted with its client or resource.",
   },
+  mcp_web_handoff: {
+    ttlColumn: "expires_at",
+    sweeper: "auth.sweepRegistrations",
+  },
   oauth_client_assertion: {
     ttlColumn: "expires_at",
     sweeper: "auth.sweepRegistrations",
@@ -166,6 +170,20 @@ export const TABLE_RETENTION = {
   search_documents: {
     boundedBy:
       "Derived document projection replaced or deleted with its source.",
+  },
+  contact_search_document_preview_passages: {
+    boundedBy:
+      "Derived contact projection replaced or deleted with its source.",
+  },
+  contact_search_documents: {
+    boundedBy:
+      "Derived contact projection replaced or deleted with its source.",
+  },
+  workspace_search_document_preview_passages: {
+    boundedBy: "Derived matter projection replaced or deleted with its source.",
+  },
+  workspace_search_documents: {
+    boundedBy: "Derived matter projection replaced or deleted with its source.",
   },
   // A public decision read may fetch a deferred document itself, once per
   // decision, and store it through the ingestion path.

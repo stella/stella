@@ -4,10 +4,9 @@ defaults:
   run:
     shell: bash
 
+# Optional proofs run on demand only: pull requests, pushes and the merge queue
+# run the correctness gates in ci.yml.
 on:
-  schedule:
-    # 03:17 UTC daily (off-minute to avoid :00 stampede)
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       fresh-web:
@@ -20,7 +19,7 @@ permissions: {}
 jobs:
   full-typecheck:
     if: ${{ !inputs.fresh-web }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
       contents: read
@@ -32,13 +31,14 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -55,7 +55,7 @@ jobs:
   # full typecheck's timeout.
   cumulative-type-cost:
     if: ${{ !inputs.fresh-web }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -68,13 +68,14 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -90,8 +91,8 @@ jobs:
         run: bun scripts/typecheck-baseline.ts --check
 
   fresh-web-sources:
-    if: ${{ github.event_name == 'schedule' || inputs.fresh-web }}
-    runs-on: ubuntu-latest
+    if: ${{ inputs.fresh-web }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -101,11 +102,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
       - name: Prove fresh web consumers and generator guards
+        timeout-minutes: 40
         run: bash scripts/check-fresh-web-sources.sh
         env:
           NPM_TOKEN: ""

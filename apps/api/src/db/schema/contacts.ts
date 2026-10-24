@@ -17,9 +17,9 @@ import {
   centsColumn,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
   organizationCheck,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -27,11 +27,11 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  timestamptz,
   user,
   workspaceIdCheck,
   wsOrganizationPolicies,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   BankAccount,
@@ -327,8 +327,8 @@ export const workspaces = p.pgTable(
     reference: p.varchar({ length: 64 }).notNull(),
     // Nullable: a null client_id encodes a personal matter (visible
     // only to the creator via workspace_members). A non-null client_id
-    // is a normal client matter. Personal -> client is a one-way
-    // promotion handled by the update endpoint.
+    // is a normal client matter. Setting clientId on update turns a
+    // personal matter into a client matter; members are added apart.
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
@@ -773,6 +773,7 @@ export const schedulerJobs = p.pgTable(
     payload: jsonb().$type<SchedulerPayload | null>(),
     enabled: p.boolean().notNull().default(true),
     pausedBy: p.text("paused_by"),
+    pausedSince: timestamptz("paused_since"),
     pausedUntil: timestamptz("paused_until"),
     pauseReason: p.text("pause_reason"),
     nextRunAt: timestamptz("next_run_at").notNull(),
@@ -795,9 +796,22 @@ export const schedulerJobs = p.pgTable(
       .on(table.enabled, table.nextRunAt),
     p.index("scheduler_jobs_task_idx").on(table.task),
     p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    p
+      .index("scheduler_jobs_paused_until_idx")
+      .on(table.pausedUntil)
+      .where(sql`${table.pausedUntil} IS NOT NULL`),
     p.check(
       "scheduler_jobs_pause_attribution_check",
       sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
+    ),
+    p.check(
+      "scheduler_jobs_pause_finite_check",
+      sql`${table.pausedUntil} IS NULL OR isfinite(${table.pausedUntil})`,
+    ),
+    // The pause audit watches every pause, so it can never be paused itself.
+    p.check(
+      "scheduler_jobs_pause_audit_unpausable_check",
+      sql`${table.id} <> 'scheduler.pauseAudit.hourly' OR ${table.pausedUntil} IS NULL`,
     ),
     p.pgPolicy("scheduler_jobs_no_stella_access", {
       for: "all",

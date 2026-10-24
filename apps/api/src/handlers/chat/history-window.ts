@@ -6,17 +6,12 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages } from "@/api/db/schema";
-import {
-  chatMessageFromPersisted,
-  toChatMessageContent,
-} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThreadCompactionCheckpoint } from "@/api/handlers/chat/persistent-compaction";
 import {
   decodeChatCompactionDeltaCursor,
   readLatestChatCompactionOnTx,
 } from "@/api/handlers/chat/persistent-compaction";
 import type {
-  ChatMessageContent,
   ChatMessageRole,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
@@ -28,28 +23,7 @@ import { LIMITS } from "@/api/lib/limits";
 export type WindowedThreadMessage = {
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
-  content: ChatMessageContent;
-};
-
-/**
- * Normalize a stored row's content (which may be a legacy v1 payload) into the
- * canonical version-2 `ChatMessageContent` the rest of the chat pipeline reads.
- */
-const toWindowedMessage = (row: {
-  id: SafeId<"chatMessage">;
-  role: ChatMessageRole;
   content: PersistedChatMessageContent;
-}): WindowedThreadMessage => {
-  const message = chatMessageFromPersisted(row);
-  return {
-    id: row.id,
-    role: row.role,
-    content: toChatMessageContent({
-      data: message.parts,
-      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-      version: 2,
-    }),
-  };
 };
 
 /**
@@ -160,7 +134,7 @@ const loadWindowedThreadHistoryOnTx = async ({
 
   const ascending = rows.toReversed();
   return {
-    messages: ascending.map(toWindowedMessage),
+    messages: ascending,
     snapshot: {
       rows: ascending.map(({ id, version }) => ({ id, version })),
       scope: windowScope({ ascending, cursor, limit }),
@@ -445,7 +419,7 @@ export const resolveTruncationTarget = async ({
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
 
     return {
-      messagesForPersistence: retainedPrefix.map(toWindowedMessage),
+      messagesForPersistence: retainedPrefix,
       deleteMessageIdsBeforeLatest: idsAfterTarget.map((row) => row.id),
       hasLaterUserMessage: idsAfterTarget.some((row) => row.role === "user"),
       // Exactly the rows every decision above came from, so whenever the

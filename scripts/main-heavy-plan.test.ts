@@ -7,6 +7,8 @@ import * as v from "valibot";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
+import { renderResultInputs } from "./ci-result-inputs";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -118,46 +120,39 @@ const context = (
   event: string,
   heavyOnly: boolean,
   plan: Record<string, string>,
-) => ({
-  github: {
-    event_name: event,
-    event: { pull_request: { draft: false, labels: [] } },
-  },
-  inputs: {
-    heavy_only: heavyOnly,
-    pr_depth_only: false,
-    query_perf_mode: "compare",
-  },
-  steps: {
+) => {
+  const value = ciExpressionContext({
+    event: modelledEvent(event),
+    heavyOnly,
+    plan,
+    needsResults: Object.fromEntries(
+      ciNeeds.map((job) => [
+        job,
+        heavyOnly && THIN_JOBS.some((thin) => thin === job)
+          ? "skipped"
+          : "success",
+      ]),
+    ),
+    stepOutputs: {
+      "marketing-release": {
+        required: plan["marketing_screenshots_required"] ?? "false",
+      },
+    },
+  });
+  value.steps = {
     "changed-files": { outputs: plan },
     "marketing-release": {
-      outputs: { required: plan["marketing_screenshots_required"] },
+      outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
     },
-  },
-  needs: Object.fromEntries(
-    ciNeeds.map((job) => [
-      job,
-      {
-        result:
-          heavyOnly && THIN_JOBS.some((thin) => thin === job)
-            ? "skipped"
-            : "success",
-        outputs:
-          job === "ci-plan"
-            ? {
-                run_required: "true",
-                coverage_profile: "normal-v1",
-                queue_required_jobs: "[]",
-                pr_depth_reused: "false",
-                ...plan,
-              }
-            : {},
+    "completed-depth": {
+      outputs: {
+        run_required: plan["run_required"] ?? "true",
+        pr_heavy_suites: "run",
       },
-    ]),
-  ),
-  always: () => true,
-  cancelled: () => false,
-});
+    },
+  };
+  return value;
+};
 
 const planned = (plan: Record<string, string>, job: string) => {
   const scope = scopes[job];
@@ -204,6 +199,10 @@ const heavyPlan = {
 };
 
 const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
+
+test("main heavy suites include the Windows desktop dry run", () => {
+  expect(heavy).toContain("desktop-windows-dry-run");
+});
 
 test("dedicated query recording dispatch schedules one measurement job", () => {
   const parsed = v.parse(
@@ -434,6 +433,26 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
   expect(planner?.run).toContain(
     'git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts"',
   );
+  // The copied planner runs from packages/scripts, so every script it reaches
+  // through a relative import must be copied beside it.
+  const pending = ["main-heavy-plan"];
+  for (const seen = new Set<string>(); pending.length > 0;) {
+    const name = pending.pop() ?? "";
+    if (seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    const script = readFileSync(
+      path.resolve(import.meta.dirname, `${name}.ts`),
+      "utf-8",
+    );
+    for (const [, imported = ""] of script.matchAll(/from "\.\/([\w.-]+)"/gu)) {
+      expect(planner?.run).toContain(
+        `git show "$WORKFLOW_SHA:scripts/${imported}.ts" > packages/scripts/${imported}.ts`,
+      );
+      pending.push(imported);
+    }
+  }
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
 });
 
@@ -576,7 +595,7 @@ test("completed-depth reuse skips every nonstructural main heavy job", () => {
       if (
         job === "ci-plan" ||
         job === "ci-result" ||
-        job === "dated-waiver-expiry"
+        job === "ci-quick-checks"
       ) {
         continue;
       }
@@ -736,7 +755,11 @@ const evaluate = ({
     panic(`Missing scoped job: ${jobName}`);
   }
   job.result = result;
-  const run = Bun.spawnSync(["bash", "-e", "-c", outcome.run ?? "exit 2"], {
+  const script = renderResultInputs(outcome.run ?? "exit 2", {
+    needs: JSON.stringify(needs),
+    plan: JSON.stringify({ ...heavyPlan, [scope]: String(isPlanned) }),
+  });
+  const run = Bun.spawnSync(["bash", "-e", "-c", script], {
     cwd: root,
     env: {
       ...process.env,
@@ -746,11 +769,6 @@ const evaluate = ({
       HEAVY_JOBS: JSON.stringify(heavy),
       QUEUE_DEPTH: "full",
       THIN_JOBS: JSON.stringify(THIN_JOBS),
-      NEEDS: JSON.stringify(needs),
-      PLAN: JSON.stringify({
-        ...heavyPlan,
-        [scope]: String(isPlanned),
-      }),
       PLAN_RESULT: planResult,
       TRUSTED: "true",
       SUITE_DEPTH: "full",

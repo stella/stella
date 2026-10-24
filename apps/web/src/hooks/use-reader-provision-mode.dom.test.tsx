@@ -13,6 +13,7 @@ const sessionArea = () =>
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
+const { useRef } = await import("react");
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
 const { renderToString } = await import("react-dom/server");
@@ -38,7 +39,8 @@ afterAll(async () => {
 });
 
 const Reader = ({ label }: { label: string }) => {
-  const mode = useReaderProvisionMode();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const mode = useReaderProvisionMode(scrollRef);
   return (
     <button
       aria-label={label}

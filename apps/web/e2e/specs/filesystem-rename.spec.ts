@@ -4,9 +4,9 @@ import path from "node:path";
 import { apiStatus, apiUploadDocx } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =
@@ -22,12 +22,14 @@ test.describe("filesystem rename", () => {
     workspace = await createTestWorkspace(request, "filesystem-rename");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 

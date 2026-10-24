@@ -34,22 +34,27 @@ export const apiKeysRoute = new Elysia({ prefix: "/api-keys" })
   .get("/personal", listPersonalKeys.handler, {
     query: listPersonalKeys.config.query,
     permissions: listPersonalKeys.config.permissions,
+    accountAccess: listPersonalKeys.config.accountAccess,
   })
   .post("/personal", createPersonalKey.handler, {
     body: createPersonalKey.config.body,
     permissions: createPersonalKey.config.permissions,
+    accountAccess: createPersonalKey.config.accountAccess,
   })
   .post("/personal/rotate", rotatePersonalKey.handler, {
     body: rotatePersonalKey.config.body,
     permissions: rotatePersonalKey.config.permissions,
+    accountAccess: rotatePersonalKey.config.accountAccess,
   })
   .post("/personal/revoke", revokePersonalKey.handler, {
     body: revokePersonalKey.config.body,
     permissions: revokePersonalKey.config.permissions,
+    accountAccess: revokePersonalKey.config.accountAccess,
   })
   .get("/personal/organization", listOrganizationPersonalKeys.handler, {
     query: listOrganizationPersonalKeys.config.query,
     permissions: listOrganizationPersonalKeys.config.permissions,
+    accountAccess: listOrganizationPersonalKeys.config.accountAccess,
   })
   .post(
     "/personal/organization/revoke",
@@ -57,25 +62,31 @@ export const apiKeysRoute = new Elysia({ prefix: "/api-keys" })
     {
       body: revokeOrganizationPersonalKey.config.body,
       permissions: revokeOrganizationPersonalKey.config.permissions,
+      accountAccess: revokeOrganizationPersonalKey.config.accountAccess,
     },
   )
   .post("/personal/policy", updatePersonalKeyPolicy.handler, {
     body: updatePersonalKeyPolicy.config.body,
     permissions: updatePersonalKeyPolicy.config.permissions,
+    accountAccess: updatePersonalKeyPolicy.config.accountAccess,
   })
   .get("/", listMachineApiKeys.handler, {
     query: listMachineApiKeys.config.query,
     permissions: listMachineApiKeys.config.permissions,
+    accountAccess: listMachineApiKeys.config.accountAccess,
   })
   .post("/", createMachineApiKey.handler, {
     body: createMachineApiKey.config.body,
     permissions: createMachineApiKey.config.permissions,
+    accountAccess: createMachineApiKey.config.accountAccess,
   })
   .post("/rotate", rotateMachineApiKey.handler, {
     body: rotateMachineApiKey.config.body,
     permissions: rotateMachineApiKey.config.permissions,
+    accountAccess: rotateMachineApiKey.config.accountAccess,
   })
   .post("/revoke", revokeMachineApiKey.handler, {
     body: revokeMachineApiKey.config.body,
     permissions: revokeMachineApiKey.config.permissions,
+    accountAccess: revokeMachineApiKey.config.accountAccess,
   });

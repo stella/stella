@@ -11,18 +11,18 @@ import {
   type ActionServiceCredentials,
 } from "@/api/lib/rate-limit/action-kinds";
 import {
-  PER_KIND_PERIOD_SCOPE,
   type ActionPeriodPolicy,
   type ActionPeriodScope,
+  PER_KIND_PERIOD_SCOPE,
 } from "@/api/lib/rate-limit/action-period-budget";
 import {
-  readFreeTier,
   type FreeTier,
   type OrganizationAccess,
+  readFreeTier,
 } from "@/api/lib/usage/organization-access";
 import {
-  readOrganizationAccessSnapshot,
   type OrganizationAccessSnapshot,
+  readOrganizationAccessSnapshot,
 } from "@/api/lib/usage/organization-access-snapshot";
 
 /** Whose model key serves the organization's model dispatch. */
@@ -94,6 +94,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   // The automatic title of a counted chat send rides on that send.
   "chat.generate-thread-title": "counts",
   "chat.improve-prompt": "counts",
+  "chat.table-chart": "counts",
   "chat.suggest-thread-title": "off",
   "chat.suggested-prompts": "off",
   "chat.thread-recap": "off",

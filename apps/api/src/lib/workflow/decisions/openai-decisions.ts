@@ -9,10 +9,10 @@ import {
   bindAnswer,
   createDecisionFetch,
   hasEveryAnswer,
-  SystemOneError,
   SYSTEM_ONE_MAX_CHOICE_OPTIONS,
   SYSTEM_ONE_MAX_QUESTIONS,
   SYSTEM_ONE_MAX_REQUEST_BYTES,
+  SystemOneError,
 } from "@/api/lib/workflow/decisions/system-one";
 import type {
   DecisionFetcher,
@@ -20,9 +20,9 @@ import type {
   SystemOneAnswer,
   SystemOneClient,
   SystemOneEntry,
+  SystemOneErrorKind,
   SystemOneQuestions,
   SystemOneState,
-  SystemOneErrorKind,
 } from "@/api/lib/workflow/decisions/system-one";
 
 const REQUEST_TIMEOUT_MS = 30_000;

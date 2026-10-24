@@ -22,6 +22,7 @@ import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   finalizeAssistantTurn,
@@ -54,6 +55,7 @@ import {
   findOfferedInteractions,
   findTurnOutcomeMismatches,
 } from "@/api/tests/helpers/chat-thread-invariants";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -131,7 +133,9 @@ const seedAcceptedTurn = async () => {
   unwrap(
     await safeDb(async (tx) => {
       await tx.insert(chatMessages).values({
-        content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
+        content: toPersistedChatMessageContentV3({
+          data: [{ content: "Draft it", type: "text" }],
+        }),
         id: userMessageId,
         role: "user",
         threadId,
@@ -372,6 +376,7 @@ const produceUntilCut = ({
   const response = run.produce(
     output(),
     memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
   );
   return { response, run };
 };
@@ -796,7 +801,9 @@ describe("the thread a stopped turn belongs to", () => {
     unwrap(
       await safeDb(async (tx) => {
         await tx.insert(chatMessages).values({
-          content: { data: [{ text: "Next", type: "text" }], version: 1 },
+          content: toPersistedChatMessageContentV3({
+            data: [{ content: "Next", type: "text" }],
+          }),
           id: next.userMessageId,
           role: "user",
           threadId,

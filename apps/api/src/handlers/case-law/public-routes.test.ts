@@ -16,7 +16,7 @@ import { LIMITS } from "@/api/lib/limits";
 describe("public case-law routes", () => {
   test.each(
     PUBLIC_COUNTRIES.filter(
-      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+      (country) => PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw !== "admitted",
     ),
   )(
     "advertised %s reports its capability before reading data",
@@ -28,7 +28,7 @@ describe("public case-law routes", () => {
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country,
-        reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+        reason: PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw,
       });
     },
   );
@@ -130,16 +130,17 @@ describe("public case-law routes", () => {
     });
   });
 
-  test("pending public countries return typed unavailable on every country-addressed route", async () => {
+  // A pages-public country serves its decision pages and sitemap (the page
+  // routes read the database, covered by the page db tests); every search
+  // route still answers typed unavailable.
+  test("a pages-public country returns typed unavailable on every search route", async () => {
     const urls = [
       "/case/decisions?country=SVK",
       "/case/decisions/facets?country=SVK",
       "/case/decisions/status?country=SVK",
       "/case/decisions/latest?country=SVK",
-      "/case/decisions/by-slug/a-case?country=SVK",
       "/case/provisions/citing-decisions?jurisdiction=SVK&work=synthetic",
       "/case/provisions/citation-counts?jurisdiction=SVK&eli=SK/2012/89",
-      "/case/sitemap/decisions/shard?country=svk&year=2026&month=01",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
     requests.push(
@@ -157,8 +158,9 @@ describe("public case-law routes", () => {
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
         code: "public_country_unavailable",
+        domain: "caseLaw",
       });
     }
   });

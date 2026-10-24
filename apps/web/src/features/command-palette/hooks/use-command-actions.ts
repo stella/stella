@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 import { ENTITIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -26,7 +27,6 @@ import type { CommandAction, CommandActionContext } from "../lib/types";
 
 export type ResolvedCommandAction = CommandAction & {
   title: string;
-  keywordLabels: readonly string[];
   hotkey?: Hotkey;
 };
 
@@ -112,11 +112,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
         openCreateMatterDialog();
       },
       openNewChat: () => {
-        openChat(
-          workspaceId === undefined
-            ? {}
-            : { workspaceId, contextMatterIds: [workspaceId] },
-        );
+        openChat(newChatMatterScope(workspaceId));
       },
     }),
     [
@@ -164,13 +160,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
           isAvailable: action.isAvailable,
           run: action.run,
           title: t(action.titleKey),
-          keywordLabels: action.keywords
-            ? action.keywords.map((keyword) => t(keyword))
-            : [],
         };
-        if (action.keywords) {
-          resolved.keywords = action.keywords;
-        }
         if (action.shortcutId === undefined) {
           return resolved;
         }

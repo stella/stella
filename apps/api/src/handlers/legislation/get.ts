@@ -1,8 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { todayFor } from "@stll/time";
 
 import {
   caseLawStatuteCitationCountState,
@@ -13,15 +15,23 @@ import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
 } from "@/api/handlers/legislation/citation-count";
-import { projectStatuteReader } from "@/api/handlers/legislation/reader-response";
+import {
+  projectStatuteAmendments,
+  projectStatuteReader,
+} from "@/api/handlers/legislation/reader-response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  LEGISLATION_AMENDMENT_PAGE_MAX,
+  readLegislationAmendments,
+  readLegislationAmendmentSnapshot,
+} from "@/api/lib/legal-search/legislation-amendments";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionAst,
@@ -33,6 +43,17 @@ import {
   legislationPublicReadDb,
   type LegislationReadDb,
 } from "@/api/lib/legislation-public-read-db";
+
+const amendmentLegalDayTimeZone = (country: string): string => {
+  switch (country) {
+    case "CZE":
+      return "Europe/Prague";
+    case "SVK":
+      return "Europe/Bratislava";
+    default:
+      return panic("Amendment source has no legal-day time zone");
+  }
+};
 
 /**
  * Read one legislation document for display. Prefers canonical text/AST
@@ -46,6 +67,7 @@ import {
 export const readPublicLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
   legislationDb: LegislationReadDb,
+  surface: PublicCountrySurface,
 ) => {
   const [document] = await legislationDb(
     async (tx) =>
@@ -57,6 +79,7 @@ export const readPublicLegislationHandler = async (
           // megabytes the reader would discard.
           ...versionAstColumns,
           ...versionTextColumns,
+          sourceId: legislationDocuments.sourceId,
           eli: legislationDocuments.eli,
           slug: legislationDocuments.slug,
           title: legislationDocuments.title,
@@ -93,7 +116,7 @@ export const readPublicLegislationHandler = async (
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            publishedLegislationDocument,
+            publishedLegislationDocumentFor(surface),
           ),
         )
         .limit(1),
@@ -103,7 +126,28 @@ export const readPublicLegislationHandler = async (
     return status(404, { message: "Legislation document not found" });
   }
 
+  const pendingChanges = await legislationDb(async (tx) => {
+    const work = {
+      sourceId: document.sourceId,
+      eli: document.eli,
+      language: document.language,
+    };
+    const snapshot = await readLegislationAmendmentSnapshot(tx, work);
+    if (snapshot === null) {
+      return null;
+    }
+    const timeZone = amendmentLegalDayTimeZone(document.country);
+    const page = await readLegislationAmendments(tx, {
+      work,
+      direction: "incoming",
+      limit: LEGISLATION_AMENDMENT_PAGE_MAX,
+      effectiveAfter: todayFor(timeZone).toString(),
+    });
+    return projectStatuteAmendments({ page, snapshot });
+  });
+
   const {
+    sourceId: _sourceId,
     astS3Key,
     textS3Key,
     documentAst: pgAst,
@@ -112,6 +156,7 @@ export const readPublicLegislationHandler = async (
   } = document;
 
   const documentAst = await readVersionAst({
+    surface,
     row: { id: documentId, astS3Key, documentAst: pgAst },
     legislationDb,
     step: "readLegislation.corpusAst",
@@ -120,12 +165,18 @@ export const readPublicLegislationHandler = async (
   const fulltext = hasUsableAst(documentAst)
     ? null
     : await readVersionText({
+        surface,
         row: { id: documentId, textS3Key, fulltext: pgText },
         legislationDb,
         step: "readLegislation.corpusText",
       });
 
-  return projectStatuteReader({ ...rest, documentAst, fulltext });
+  return projectStatuteReader({
+    ...rest,
+    pendingChanges,
+    documentAst,
+    fulltext,
+  });
 };
 
 const config = {
@@ -153,6 +204,7 @@ const readLegislation = createSafeRootHandler(
           await readPublicLegislationHandler(
             documentId,
             legislationPublicReadDb,
+            "pages",
           ),
       ),
     );

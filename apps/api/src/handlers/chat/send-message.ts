@@ -9,8 +9,8 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
@@ -23,16 +23,17 @@ import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
-  getActiveFileModelBinding,
   type ActiveFileModelBinding,
   type ActiveFileSourceForModel,
+  getActiveFileModelBinding,
 } from "@/api/handlers/chat/active-file-model-source";
 import {
-  resolveActiveChatSkillContext,
   type ActiveChatSkillContext,
+  resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
 import {
   chatMessageFromPersisted,
+  getAwaitedApprovalToolNames,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
@@ -77,22 +78,22 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  agUiSendMessageBodySchema,
   CHAT_EDIT_APPLY_MODE,
   CHAT_RUN_MODE,
-  agUiSendMessageBodySchema,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
   resolveBrowserClientCapability,
-  validateToolCallParts,
   validateMessage,
+  validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   bindChatTurnRunId,
+  CHAT_METERED_PROVIDER_TIMEOUT_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
-  CHAT_METERED_PROVIDER_TIMEOUT_MS,
   isChatTurnNotOwned,
   isChatTurnRunIdTaken,
   startChatTurnRun,
@@ -128,11 +129,15 @@ import {
   chatMessageExistsForThread,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
+import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
-import { loadRequestedSkillsPrompt } from "@/api/handlers/chat/requested-skills-prompt";
+import {
+  loadRequestedSkillsPrompt,
+  requestedSkillNames,
+} from "@/api/handlers/chat/requested-skills-prompt";
 import {
   compactMessagesForContext,
   markChatCompactionDue,
@@ -165,6 +170,11 @@ import {
 import { hasSuggestChangesApprovalResponse } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { resolveChatDocumentClients } from "@/api/handlers/chat/tools/chat-document-clients";
 import {
+  applyChatToolGrants,
+  loadChatToolGrants,
+  type StoredChatToolGrant,
+} from "@/api/handlers/chat/tools/chat-tool-grants";
+import {
   areSubagentToolsRegistered,
   areTemplateAuthoringToolsRegistered,
   areWebResearchToolsRegistered,
@@ -179,6 +189,7 @@ import {
 } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
   LazyExternalMcpToolsLoader,
+  LoadedExternalMcpConnector,
   LoadedExternalMcpTools,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
 import {
@@ -194,9 +205,10 @@ import {
   resolveRegistryToolOutputRefs,
 } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import {
-  chatToolNamesForSkills,
   type ChatSkillToolContext,
+  chatToolNamesForSkills,
 } from "@/api/handlers/chat/tools/skill-tool-availability";
+import { scopedExternalConnectors } from "@/api/handlers/chat/tools/source-scope";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -215,6 +227,7 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -245,13 +258,13 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
   CHAT_REF_INPUT_STATE,
-  isChatRefContext,
-  resolveChatRefInputState,
   type ChatEntityRefContext,
   type ChatRefBinding,
   type ChatRefContext,
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
+  isChatRefContext,
+  resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
 import {
   type ChatThreadNamesRead,
@@ -285,7 +298,7 @@ import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import {
-  requireTanStackAIAvailableForRole,
+  requireTanStackAIAvailableForTask,
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
@@ -518,6 +531,65 @@ type CompletedTurnFollowUps = {
     typeof applyAssistantPersistencePlan
   >;
   resolvedResponseMessage: ChatMessage;
+};
+
+/**
+ * What a streamed turn's persistence left: nothing when another execution or
+ * the reaper settled the turn first, the failure to report when storing
+ * failed, else the stored outcome and, for a completed turn, what its
+ * follow-ups read.
+ */
+const persistedTurnSettlement = ({
+  messages,
+  persistResult,
+  resolvedResponseMessage,
+  threadId,
+}: {
+  messages: ApplyAssistantPersistencePlanProps["messages"];
+  persistResult: Awaited<ReturnType<typeof finalizeAssistantTurn>>;
+  resolvedResponseMessage: ChatMessage;
+  threadId: SafeId<"chatThread">;
+}): Result<
+  {
+    followUps: CompletedTurnFollowUps | null;
+    settlement: ChatTurnStoredSettlement;
+  },
+  AssistantTurnFailure
+> => {
+  if (
+    Result.isError(persistResult) &&
+    isChatTurnNotOwned(persistResult.error)
+  ) {
+    // Another execution or the reaper settled the turn first: its outcome
+    // stands, and this run has nothing left to store or count.
+    return Result.ok({ followUps: null, settlement: { type: "not-owned" } });
+  }
+  if (Result.isError(persistResult)) {
+    captureError(persistResult.error, { threadId });
+    return Result.err({
+      code: "persistence",
+      error: new HandlerError({
+        status: 500,
+        message: "Failed to persist assistant turn",
+        cause: persistResult.error,
+      }),
+    });
+  }
+  const { outcome: storedOutcome, persistencePlan } = persistResult.value;
+  return Result.ok({
+    // A stop that won the race stored `cancelled`, whatever the run proposed.
+    followUps:
+      storedOutcome.type === "completed"
+        ? {
+            messagesAfterAssistantPersist: applyAssistantPersistencePlan({
+              messages,
+              persistencePlan,
+            }),
+            resolvedResponseMessage,
+          }
+        : null,
+    settlement: { type: "stored", outcome: storedOutcome },
+  });
 };
 
 /**
@@ -1140,6 +1212,29 @@ const prepareDispatch = async ({
 type ThreadValidationState = InferOk<
   Awaited<ReturnType<typeof readThreadValidationState>>
 >;
+
+/**
+ * The tools whose awaited approvals the incoming message answers: a replay of
+ * the stored assistant message that awaits them. An answer resumes on the
+ * tool's gate, so a grant stored while its card waited applies to the next
+ * request.
+ */
+const answeredApprovalToolNamesOf = ({
+  incomingMessage,
+  persistedMessage,
+}: {
+  incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
+  persistedMessage: ThreadValidationState["persistedMessage"];
+}): ReadonlySet<string> =>
+  getAwaitedApprovalToolNames(
+    incomingMessage.role === "assistant" && persistedMessage !== null
+      ? chatMessageFromPersisted({
+          content: persistedMessage.content,
+          id: incomingMessage.id,
+          role: persistedMessage.role,
+        })
+      : null,
+  );
 
 type CreateTurnVisualOriginOptions = {
   incomingMessage: Pick<PersistableChatMessage, "id" | "role">;
@@ -1990,6 +2085,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const uploadResult = await uploadMessageFiles({
       message: stampedValidatedMessage.message,
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId: thread.data.id,
@@ -2022,7 +2118,8 @@ type AssembleTurnSystemPromptOptions = {
     systemSafe: ChatSafePromptLayers;
     systemUntrusted: ChatUntrustedPromptSuffix;
   };
-  externalMcpTools: LoadedExternalMcpTools | undefined;
+  /** The connectors the turn may call, after its source chips. */
+  externalMcpConnectors: readonly LoadedExternalMcpConnector[];
   requestedSkillsPrompt: string;
   sendMode: ChatSendMode;
 };
@@ -2035,7 +2132,7 @@ type AssembleTurnSystemPromptOptions = {
 // in anonymized mode.
 const assembleTurnSystemPrompt = ({
   chatContext,
-  externalMcpTools,
+  externalMcpConnectors,
   requestedSkillsPrompt,
   sendMode,
 }: AssembleTurnSystemPromptOptions) => ({
@@ -2046,9 +2143,7 @@ const assembleTurnSystemPrompt = ({
   systemUntrusted: extendChatUntrustedPromptSuffix(
     chatContext.systemUntrusted,
     [
-      buildExternalMcpSystemHint(
-        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
-      ),
+      buildExternalMcpSystemHint(externalMcpConnectors),
       requestedSkillsPrompt,
     ].map(chatVolatilePromptSection),
   ),
@@ -2156,11 +2251,11 @@ export const createSendMessage = (
         );
       }
 
-      yield* requireTanStackAIAvailableForRole({
+      yield* requireTanStackAIAvailableForTask({
         dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
-        role: "chat",
+        task: "chat",
       });
 
       const hasEnvelopeCorrelationMismatch = (): boolean =>
@@ -2400,6 +2495,11 @@ export const createSendMessage = (
       const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
         async () =>
           await dependencies.loadExternalMcpTools({
+            executionAudit: {
+              recordAuditEvent,
+              safeDb,
+              threadId: body.threadId,
+            },
             nullUnionStrategy: externalMcpNullUnionStrategy,
             organizationId: session.activeOrganizationId,
             permit: grantThirdPartyOutboundPermit(),
@@ -2659,7 +2759,6 @@ export const createSendMessage = (
             organizationId: session.activeOrganizationId,
             orgAIConfig,
             managedAIResidency,
-            reasoningEffort: chatReasoningEffort,
             safeDb,
             tenantWorkspaceIds: accessibleWorkspaceIds,
             threadId: body.threadId,
@@ -2726,6 +2825,7 @@ export const createSendMessage = (
               functionArn: env.VISUAL_PREVIEW_FUNCTION_NAME,
             }),
           store: createVisualStore({
+            organizationId: session.activeOrganizationId,
             recordAuditEvent,
             safeDb,
             threadId: body.threadId,
@@ -2828,7 +2928,7 @@ export const createSendMessage = (
           hasReachableMatter: toolWorkspaceIds.length > 0,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
-          messageWindow: messagesForContextResult.value,
+          messageWindow: messagesForContextResult.value.messages,
           organizationId: session.activeOrganizationId,
           offeredToolNamesForSkills,
           safeDb,
@@ -2876,25 +2976,26 @@ export const createSendMessage = (
         // Normal streaming needs external MCP tools. Agent runs reach tools only
         // through their workspace-scoped Stella MCP binding, so loading per-user
         // external connectors here would create unused clients.
-        const externalMcpToolsResult = shouldLoadExternalMcpToolsForStreaming(
+        // Stored approval grants load with them: the API, not the browser,
+        // decides which approval-gated calls run without a prompt, and agent
+        // runs keep every approval gate.
+        const toolSourcesResult = shouldLoadExternalMcpToolsForStreaming(
           body.runMode,
         )
-          ? await Result.tryPromise({
-              try: async () =>
-                await externalMcpToolsLoader.getExternalMcpTools(),
-              catch: (cause) =>
-                new HandlerError({
-                  status: 500,
-                  message: "Failed to discover chat connectors",
-                  cause,
-                }),
+          ? await loadStreamingToolSources({
+              chatThreadId: body.threadId,
+              externalMcpToolsLoader,
+              organizationId: session.activeOrganizationId,
+              safeDb,
+              userId: user.id,
             })
-          : Result.ok(undefined);
-        if (Result.isError(externalMcpToolsResult)) {
+          : Result.ok(NO_STREAMING_TOOL_SOURCES);
+        if (Result.isError(toolSourcesResult)) {
           await lifecycle.failCurrentTurn("connector-discovery", true);
-          return Result.err(externalMcpToolsResult.error);
+          return Result.err(toolSourcesResult.error);
         }
-        const externalMcpTools = externalMcpToolsResult.value;
+        const { chatToolGrants, externalConnectors, externalMcpTools } =
+          toolSourcesResult.value;
 
         // Streaming tools mirror the surface the user is on: only the
         // DOCX file-overlay client knows how to satisfy
@@ -2906,12 +3007,29 @@ export const createSendMessage = (
         // folio-agents `read_document`/`find_text` tools are narrower
         // still — `hasActiveDocxFileClient` only, since Template Studio
         // mounts no watcher to resolve them.
-        const chatTools = getChatTools({
-          ...chatToolContext,
-          modelAdmission,
-          externalTools: externalMcpTools?.tools ?? {},
-          skillMetadata: chatContext.skillMetadata,
-          activeSkillContext: chatContext.activeSkillContext,
+        // Source chips on the latest user message (corpora, registries,
+        // connectors) limit this turn to the sources they name. Read from
+        // history (which holds the incoming message once accepted) so an
+        // approval continuation stays scoped.
+        const sourceScopes = sourceScopesOfLatestUserMessage(
+          latestMessagePlan.messages,
+        );
+        const chatTools = applyChatToolGrants({
+          answeredApprovalToolNames: answeredApprovalToolNamesOf({
+            incomingMessage: body.message,
+            persistedMessage: validationThreadState.persistedMessage,
+          }),
+          externalConnectors,
+          grants: chatToolGrants,
+          tools: getChatTools({
+            ...chatToolContext,
+            sourceScopes,
+            externalConnectors,
+            modelAdmission,
+            externalTools: externalMcpTools?.tools ?? {},
+            skillMetadata: chatContext.skillMetadata,
+            activeSkillContext: chatContext.activeSkillContext,
+          }),
         });
         // A named scope narrows the streaming turn to its server-defined
         // allowlist (validation above stays broad so persisted tool parts
@@ -2967,7 +3085,10 @@ export const createSendMessage = (
         }
         const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
           chatContext,
-          externalMcpTools,
+          externalMcpConnectors: scopedExternalConnectors(
+            sourceScopes,
+            externalConnectors,
+          ),
           requestedSkillsPrompt: requestedSkillsPrompt.value,
           sendMode: body.sendMode,
         });
@@ -3007,7 +3128,6 @@ export const createSendMessage = (
               modelTier: modelAdmission.modelTier,
               organizationId: session.activeOrganizationId,
               orgAIConfig,
-              reasoningEffort: chatReasoningEffort,
               safeDb,
               threadId: body.threadId,
             });
@@ -3148,50 +3268,11 @@ export const createSendMessage = (
                     workspaceId,
                     indexThread: dependencies.indexThread,
                   });
-                  if (
-                    Result.isError(persistResult) &&
-                    isChatTurnNotOwned(persistResult.error)
-                  ) {
-                    // Another execution or the reaper settled the turn
-                    // first: its outcome stands, and this run has nothing
-                    // left to store or count.
-                    return Result.ok({
-                      followUps: null,
-                      settlement: { type: "not-owned" },
-                    });
-                  }
-                  if (Result.isError(persistResult)) {
-                    captureError(persistResult.error, {
-                      threadId: body.threadId,
-                    });
-                    return Result.err({
-                      code: "persistence",
-                      error: new HandlerError({
-                        status: 500,
-                        message: "Failed to persist assistant turn",
-                        cause: persistResult.error,
-                      }),
-                    });
-                  }
-
-                  const { outcome: storedOutcome, persistencePlan } =
-                    persistResult.value;
-                  const messagesAfterAssistantPersist =
-                    applyAssistantPersistencePlan({
-                      messages: latestMessagePlan.messages,
-                      persistencePlan,
-                    });
-                  return Result.ok({
-                    // A stop that won the race stored `cancelled`, whatever
-                    // the run proposed.
-                    followUps:
-                      storedOutcome.type === "completed"
-                        ? {
-                            messagesAfterAssistantPersist,
-                            resolvedResponseMessage,
-                          }
-                        : null,
-                    settlement: { type: "stored", outcome: storedOutcome },
+                  return persistedTurnSettlement({
+                    messages: latestMessagePlan.messages,
+                    persistResult,
+                    resolvedResponseMessage,
+                    threadId: body.threadId,
                   });
                 };
 
@@ -3202,6 +3283,7 @@ export const createSendMessage = (
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
                   messages: chatContext.hydratedMessages,
+                  contextNotice: messagesForContextResult.value.notice,
                   latestMessageId: parsedMessage.message.id,
                   storedHistory: storedHistory.value,
                   threadToolCallIds: threadNames.toolCallIds,
@@ -3257,6 +3339,11 @@ export const createSendMessage = (
                   systemSafe,
                   systemUntrusted,
                   userId: user.id,
+                  viewer: {
+                    kind: "session",
+                    sessionId: session.id,
+                    userId: user.id,
+                  },
                   workspaceId,
                 });
 
@@ -3370,6 +3457,61 @@ const resolveExternalToolsForValidation = async (
   return loaded.tools;
 };
 
+type StreamingToolSources = {
+  chatToolGrants: readonly StoredChatToolGrant[];
+  externalConnectors: readonly LoadedExternalMcpConnector[];
+  externalMcpTools: LoadedExternalMcpTools | undefined;
+};
+
+const NO_STREAMING_TOOL_SOURCES: StreamingToolSources = {
+  chatToolGrants: [],
+  externalConnectors: [],
+  externalMcpTools: undefined,
+};
+
+/** The user's connector tools and the stored grants that apply to them. */
+const loadStreamingToolSources = async ({
+  chatThreadId,
+  externalMcpToolsLoader,
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  chatThreadId: SafeId<"chatThread">;
+  externalMcpToolsLoader: LazyExternalMcpToolsLoader;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<Result<StreamingToolSources, HandlerError | SafeDbError>> => {
+  const externalMcpTools = await Result.tryPromise({
+    try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
+    catch: (cause) =>
+      new HandlerError({
+        status: 500,
+        message: "Failed to discover chat connectors",
+        cause,
+      }),
+  });
+  if (Result.isError(externalMcpTools)) {
+    return Result.err(externalMcpTools.error);
+  }
+  const chatToolGrants = await loadChatToolGrants({
+    chatThreadId,
+    organizationId,
+    safeDb,
+    userId,
+  });
+  if (Result.isError(chatToolGrants)) {
+    // The database error carries its own failure grade.
+    return Result.err(chatToolGrants.error);
+  }
+  return Result.ok({
+    chatToolGrants: chatToolGrants.value,
+    externalConnectors: externalMcpTools.value.connectors,
+    externalMcpTools: externalMcpTools.value,
+  });
+};
+
 export const shouldLoadExternalMcpToolsForStreaming = (
   runMode: ChatSendRequest["runMode"],
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
@@ -3417,7 +3559,7 @@ type PrepareChatContextResult = Result<
      * `systemSafe`.
      */
     systemUntrusted: ChatUntrustedPromptSuffix;
-    skillMetadata: readonly SkillMetadata[];
+    skillMetadata: ModelOfferedSkills<SkillMetadata>;
     activeSkillContext: ActiveChatSkillContext | null;
     /** Court numbers the turn stamps onto the answer's passage citations. */
     decisionPassageNumbers: DecisionPassageNumbers;
@@ -3483,6 +3625,7 @@ const prepareChatContext = async ({
         refRegistry,
         safeDb,
         messages: messageWindow,
+        requestedSkillNames: requestedSkillNames(messageWindow),
         threadId,
         toolAvailability,
         userContext,

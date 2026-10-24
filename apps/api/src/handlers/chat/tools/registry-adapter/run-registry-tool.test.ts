@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
-import { containsRawUuid } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -15,6 +16,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { buildMcpContextFromChat } from "./mcp-chat-context";
+import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
 import { runRegistryReadTool } from "./run-registry-tool";
 
@@ -242,13 +244,13 @@ describe("runRegistryReadTool", () => {
     }
   });
 
-  test("drops a raw uuid that survives ref hydration at an undeclared path", async () => {
+  test("masks a raw uuid that survives ref hydration at an undeclared path", async () => {
     const registry = createChatRefRegistry();
     // Doctored: `reference` is an ordinary free-text field the ref map never
     // mediates (it is not one of `list_matters`'s `outputRefs` or
     // `passthroughIdPaths`), but nothing stops it from holding a raw uuid.
     // The path-aware backstop must catch this survivor at its exact path even
-    // though no per-field ref rule exists for it, and drop that leaf.
+    // though no per-field ref rule exists for it, and mask the id in place.
     const rows = [
       {
         id: WS_UUID,
@@ -269,9 +271,15 @@ describe("runRegistryReadTool", () => {
 
     const payload = result.unwrap();
     expect(payload).toMatchObject({
-      matters: [{ id: "mat_1", name: "Acme", status: "active" }],
+      matters: [
+        {
+          id: "mat_1",
+          name: "Acme",
+          reference: MASKED_CONTENT_ID,
+          status: "active",
+        },
+      ],
     });
-    expect(payload).not.toHaveProperty("matters.0.reference");
     expect(containsRawUuid(payload)).toBe(false);
     // Telemetry carries the offending path so the survivor is traceable, but
     // never the leaked value itself.
@@ -311,7 +319,10 @@ describe("runRegistryReadTool", () => {
             versions: [{ id: "version-1" }],
           }),
         },
-        documentProcessingRuns: { findMany: async () => [] },
+        documentProcessingRuns: {
+          findFirst: async () => undefined,
+          findMany: async () => [],
+        },
         entityVersions: { findFirst: async () => ({ id: "version-1" }) },
         extractedContent: { findFirst: async () => null },
         organizationSettings: {
@@ -445,20 +456,29 @@ describe("runRegistryReadTool", () => {
     });
   });
 
-  test("refuses a read tool the ref map keeps off the chat surface", async () => {
-    const result = await runRegistryReadTool({
-      args: {},
-      context: buildContext(),
-      refRegistry: createChatRefRegistry(),
-      toolName: "list_audit_log",
-    });
-
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.message).toContain("not available in chat");
-      expect(result.error.kind).toBe("unavailable");
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (definition.access !== "read") {
+      continue;
     }
-  });
+    if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
+      continue;
+    }
+    const toolName = definition.name;
+    test(`refuses ${toolName} kept off the chat surface`, async () => {
+      const result = await runRegistryReadTool({
+        args: {},
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName,
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("not available in chat");
+        expect(result.error.kind).toBe("unavailable");
+      }
+    });
+  }
 
   test("classifies a structured registry error envelope by its code", async () => {
     const registry = createChatRefRegistry();

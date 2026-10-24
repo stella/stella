@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { deferred } from "@stll/test-kit";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -12,13 +13,13 @@ import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   bindChatTurnRunId,
+  CHAT_TURN_RUN_LEASE_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
   isChatTurnRunIdTaken,
   OWNER_LOST_OUTCOME,
   reapOwnerlessChatTurnOnTx,
-  CHAT_TURN_RUN_LEASE_MS,
   settleChatTurnOnTx,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -34,6 +35,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -120,7 +122,9 @@ const seedRunningTurn = async (member?: Member) => {
   unwrap(
     await as.safeDb(async (tx) => {
       await tx.insert(chatMessages).values({
-        content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
+        content: toPersistedChatMessageContentV3({
+          data: [{ content: "Draft it", type: "text" }],
+        }),
         id: userMessageId,
         role: "user",
         threadId,
@@ -170,6 +174,7 @@ const produceUntilCut = ({
   ownerDb = safeDb,
   ownership = new ChatTurnOwnership(),
   persist,
+  onDeliveryStalled,
   threadId,
 }: {
   chunks?: AsyncIterable<StreamChunk>;
@@ -181,6 +186,7 @@ const produceUntilCut = ({
   ownership?: ChatTurnOwnership;
   /** Stores the cut; the turn's own settlement by default. */
   persist?: () => Promise<ChatTurnStoredSettlement>;
+  onDeliveryStalled?: () => void;
   threadId: SafeId<"chatThread">;
 }) => {
   const run = new ChatTurnRun({
@@ -189,6 +195,7 @@ const produceUntilCut = ({
     mode: "raw",
     heartbeat,
     ownership,
+    onDeliveryStalled,
     owner: {
       indexThread: async () => await Promise.resolve(),
       execution,
@@ -263,6 +270,7 @@ const produceUntilCut = ({
   const response = run.produce(
     output(),
     memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
   );
   return { response, run, stored };
 };
@@ -311,6 +319,7 @@ describe("a producing run", () => {
     const response = run.produce(
       output(),
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     try {
       await stalled.promise;
@@ -396,6 +405,7 @@ describe("a producing run", () => {
   test("fails a stalled HTTP reader while preserving the completed turn", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const clientConnected = Promise.withResolvers<undefined>();
+    const deliveryStalled = deferred();
     const snapshot = buildWireSnapshot([
       {
         id: "stalled-http-history",
@@ -418,6 +428,7 @@ describe("a producing run", () => {
       execution,
       threadId,
       heartbeat: { intervalMs: 5000, renewEvery: 4 },
+      onDeliveryStalled: deliveryStalled.resolve,
     });
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -454,9 +465,7 @@ describe("a producing run", () => {
     try {
       await firstBytes.promise;
       clientConnected.resolve(undefined);
-      // Settlement can precede delivery; keep the socket paused beyond the
-      // delivery stall deadline before allowing network reads to resume.
-      await Bun.sleep(6000);
+      await deliveryStalled.promise;
       expect(await run.settled).toBe("stored");
       socket.resume();
       // Bun can leave a failed chunked socket open until client cancellation.
@@ -677,6 +686,7 @@ describe("a producing run", () => {
     const response = run.produce(
       output(),
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     await response.text();
 
@@ -837,7 +847,11 @@ describe("a producing run", () => {
       yield* [];
     };
     await run
-      .produce(output(), memoryStream({ runId: Bun.randomUUIDv7() }))
+      .produce(
+        output(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
+      )
       .text();
     expect(ownership.run(execution.executionId)).toBeUndefined();
 

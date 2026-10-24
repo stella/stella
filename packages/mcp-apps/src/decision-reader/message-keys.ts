@@ -4,6 +4,7 @@ export const READER_MESSAGE_KEYS = {
   "statutes.diffRemoved": "statutes.diffRemoved",
   "statutes.diffInserted": "statutes.diffInserted",
   "common.copyLink": "common.copyLink",
+  "common.copied": "common.copied",
   "common.back": "common.back",
   "caseLaw.viewer.legalSentence": "caseLaw.viewer.legalSentence",
   "caseLaw.viewer.abstract": "caseLaw.viewer.abstract",
@@ -12,9 +13,12 @@ export const READER_MESSAGE_KEYS = {
   "caseLaw.reader.headMatter": "caseLaw.reader.headMatter",
   "caseLaw.notesFilter.ai": "caseLaw.notesFilter.ai",
   "common.court": "common.court",
-  "statutes.currentWording": "statutes.currentWording",
   "statutes.wordingVersionUnknown": "statutes.wordingVersionUnknown",
   "statutes.openProvision": "statutes.openProvision",
+  "statutes.provisionTextUnavailable": "statutes.provisionTextUnavailable",
+  "statutes.showCitedPartOnly": "statutes.showCitedPartOnly",
+  "statutes.showFullProvision": "statutes.showFullProvision",
+  "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",
 } as const satisfies Record<ReaderMessageKey, ReaderMessageKey>;
 
 export const READER_TEMPLATE_KEYS = [
@@ -22,5 +26,6 @@ export const READER_TEMPLATE_KEYS = [
   "caseLaw.reader.documentUpdated",
   "caseLaw.reader.sourceAttribution",
   "caseLaw.viewer.dissentByline",
-  "statutes.wordingValidFrom",
+  "statutes.provisionEffectiveFrom",
+  "statutes.provisionPartTextUnavailable",
 ] as const;

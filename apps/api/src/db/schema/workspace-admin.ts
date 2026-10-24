@@ -17,17 +17,17 @@ import {
 import {
   bytea,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
@@ -212,6 +212,15 @@ export const organizationSettings = p.pgTable(
       .integer("matter_number_padding")
       .notNull()
       .default(3),
+    /**
+     * When true, matter titles show the allocated reference beside the
+     * name. Off, the title is exactly the name entered at creation. The
+     * reference is still allocated either way so document numbers stay unique.
+     */
+    matterNumberingEnabled: p
+      .boolean("matter_numbering_enabled")
+      .notNull()
+      .default(false),
     timeMinimumUnitMinutes: p
       .integer("time_minimum_unit_minutes")
       .notNull()

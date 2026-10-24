@@ -1,13 +1,15 @@
 import { Result } from "better-result";
-import Elysia, { t } from "elysia";
+import Elysia, { status, t } from "elysia";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
+import { decodeCitationCursor } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
 import {
+  decodeDecisionCitationCursor,
   readDecisionHandler,
   readDecisionQuerySchema,
 } from "@/api/handlers/case-law/decisions/get";
@@ -43,16 +45,19 @@ import {
   readCaseLawCorpusStatusQuerySchema,
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
+import readDecisionSummaryRoute from "@/api/handlers/case-law/decisions/summary/get";
 import readJudgePortrait from "@/api/handlers/case-law/judges/read-portrait";
 import {
   readStatuteCitationCountsHandler,
   statuteCitationCountsQuerySchema,
 } from "@/api/handlers/case-law/provisions/citation-counts";
 import {
+  decodeCitingDecisionsCursor,
   listCitingDecisionsHandler,
   listCitingDecisionsQuerySchema,
 } from "@/api/handlers/case-law/provisions/citing-decisions";
 import {
+  decodeProvisionCursor,
   listDecisionProvisionsHandler,
   listDecisionProvisionsQuerySchema,
 } from "@/api/handlers/case-law/provisions/list-for-decision";
@@ -279,7 +284,9 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { slug }, query: { country, language } }) => {
     const countryRead = readPublicLawCountry(country, {
-      admitted: PUBLIC_CASE_LAW_COUNTRIES,
+      domain: "caseLaw",
+      admitted: PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+      surface: "pages",
     });
     return countryRead.kind !== "read"
       ? countryRead
@@ -309,6 +316,7 @@ const projectDecisionProvisionPage = async (
     page,
     decisionDate,
     legislationDb: legislationPublicReadDb,
+    surface: "pages",
   });
   return projectResponseText(
     {
@@ -319,6 +327,14 @@ const projectDecisionProvisionPage = async (
     decisionProvisionsSuccessResponseSchema,
   );
 };
+
+const rejectInvalidCursor = (
+  cursor: string | undefined,
+  decode: (value: string) => unknown,
+) =>
+  cursor !== undefined && decode(cursor) === null
+    ? status(400, { message: "Invalid cursor" })
+    : undefined;
 
 /**
  * Provision references of a decision, each with the wording it points at.
@@ -477,7 +493,7 @@ const listSitemapShards = createSafeBoundedPublicHandler(
  * Public-read routes: no auth, no session, no organization context.
  * Decisions are public records; protected workspace features live elsewhere.
  */
-export const publicCaseLawRoute = new Elysia({
+const publicCaseLawContentRoute = new Elysia({
   prefix: "/case",
 })
   .use(
@@ -508,16 +524,24 @@ export const publicCaseLawRoute = new Elysia({
     params: readDecisionBySlug.config.params,
     query: readDecisionBySlug.config.query,
     response: readDecisionBySlug.config.response,
+    beforeHandle: ({ query }) =>
+      rejectInvalidCursor(query.citationsCursor, decodeDecisionCitationCursor),
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,
     query: readDecision.config.query,
     response: readDecision.config.response,
+    beforeHandle: ({ query }) =>
+      rejectInvalidCursor(query.citationsCursor, decodeDecisionCitationCursor),
   })
   .get("/decisions/:decisionId/citations", listDecisionCitations.handler, {
     params: listDecisionCitations.config.params,
     query: listDecisionCitations.config.query,
     response: listDecisionCitations.config.response,
+    beforeHandle: ({ query }) =>
+      rejectInvalidCursor(query.cursor, (cursor) =>
+        decodeCitationCursor(cursor, query),
+      ),
   })
   .get(
     "/decisions/:decisionId/citations/summary",
@@ -540,6 +564,8 @@ export const publicCaseLawRoute = new Elysia({
     params: listDecisionProvisions.config.params,
     query: listDecisionProvisions.config.query,
     response: listDecisionProvisions.config.response,
+    beforeHandle: ({ query }) =>
+      rejectInvalidCursor(query.cursor, decodeProvisionCursor),
   })
   .get("/judges/:judgeId/portrait", readJudgePortrait.handler, {
     params: readJudgePortrait.config.params,
@@ -547,6 +573,8 @@ export const publicCaseLawRoute = new Elysia({
   .get("/provisions/citing-decisions", listCitingDecisions.handler, {
     query: listCitingDecisions.config.query,
     response: listCitingDecisions.config.response,
+    beforeHandle: ({ query }) =>
+      rejectInvalidCursor(query.cursor, decodeCitingDecisionsCursor),
   })
   .get("/provisions/citation-counts", readStatuteCitationCounts.handler, {
     query: readStatuteCitationCounts.config.query,
@@ -563,3 +591,20 @@ export const publicCaseLawRoute = new Elysia({
     query: listSitemapShardDecisions.config.query,
     response: listSitemapShardDecisions.config.response,
   });
+
+// The summary has no cursor hook. Keep its chain separate so the capability
+// compiler can prove its only route gate is the shared deployment flag.
+const publicDecisionSummaryRoute = new Elysia({ prefix: "/case" })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+    ),
+  )
+  .get("/decisions/:decisionId/summary", readDecisionSummaryRoute.handler, {
+    params: readDecisionSummaryRoute.config.params,
+    response: readDecisionSummaryRoute.config.response,
+  });
+
+export const publicCaseLawRoute = new Elysia()
+  .use(publicCaseLawContentRoute)
+  .use(publicDecisionSummaryRoute);

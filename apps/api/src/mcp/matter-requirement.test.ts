@@ -10,7 +10,6 @@ import {
   writeCallNeedsMatter,
 } from "@/api/mcp/matter-requirement";
 import type { McpWriteToolName } from "@/api/mcp/matter-requirement";
-import { MANAGE_ORG_ACTIONS } from "@/api/mcp/research-admin-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -52,19 +51,12 @@ describe("write tool scope classification", () => {
     }
   });
 
-  test("decides every manage_organization action", () => {
-    const { byValue } = WRITE_TOOL_SCOPES.manage_organization;
-    expect(Object.keys(byValue).toSorted()).toEqual(
-      [...MANAGE_ORG_ACTIONS].toSorted(),
+  test("membership operations need a matter and organization settings do not", () => {
+    expect(writeCallNeedsMatter("add_matter_member", {})).toBe(true);
+    expect(writeCallNeedsMatter("remove_matter_member", {})).toBe(true);
+    expect(writeCallNeedsMatter("update_organization_settings", {})).toBe(
+      false,
     );
-    expect(
-      writeCallNeedsMatter("manage_organization", { action: "add_member" }),
-    ).toBe(true);
-    expect(
-      writeCallNeedsMatter("manage_organization", {
-        action: "update_org_settings",
-      }),
-    ).toBe(false);
   });
 
   test("compares staged uploads without a matter, stored versions in one", () => {
@@ -81,7 +73,7 @@ describe("write tool scope classification", () => {
     }
   });
 
-  test("keeps creating a matter and the organization library matter-free", () => {
+  test("keeps organization-scoped writes matter-free", () => {
     for (const name of [
       "save_matter",
       "save_playbook",
@@ -91,6 +83,7 @@ describe("write tool scope classification", () => {
       "configure_template_fields",
       "save_contact",
       "set_practice_jurisdictions",
+      "mint_web_handoff",
     ] as const) {
       expect(writeCallNeedsMatter(name, {}), name).toBe(false);
     }

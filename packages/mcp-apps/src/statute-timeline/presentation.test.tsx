@@ -6,11 +6,10 @@ import { IntlProvider } from "use-intl";
 import { LEGISLATION_WINDOW_DISPOSITIONS } from "@stll/api-contract/legislation-expression";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 
-import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
+import type { ProvisionVersion, StatuteTimelineHistory } from "./parse";
 import { TimelineChart, VersionLabel } from "./presentation";
 
 const historical = {
-  appUrl: null,
   url: null,
   documentId: "historical-version",
   resourceName: "historical-resource",

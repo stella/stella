@@ -4,8 +4,8 @@ import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  dynamicToolNamespaceOf,
   type DynamicToolNamespace,
+  dynamicToolNamespaceOf,
 } from "@/api/lib/mcp-upstream/namespace";
 import type {
   McpToolAnnotations,
@@ -141,28 +141,14 @@ type DynamicToolFamilyPolicy =
  */
 export const DYNAMIC_TOOL_FAMILY_POLICIES = {
   external_mcp: { owner: "upstream" },
+  // MCP/CLI parity exception: the CLI keeps skills on /mcp/advanced.
+  // The default MCP surface carries only reviewed, purpose-built tools.
   skill: {
     owner: "stella",
     annotations: SKILL_TOOL_ANNOTATIONS,
     output: SKILL_TOOL_OUTPUT,
   },
 } as const satisfies Record<DynamicToolNamespace, DynamicToolFamilyPolicy>;
-
-/** Families whose tools serve a Stella contract; derived, never listed twice. */
-export type StellaOwnedDynamicToolNamespace = {
-  [
-    TNamespace in DynamicToolNamespace
-  ]: (typeof DYNAMIC_TOOL_FAMILY_POLICIES)[TNamespace] extends {
-    owner: "stella";
-  }
-    ? TNamespace
-    : never;
-}[DynamicToolNamespace];
-
-export const isStellaOwnedDynamicToolNamespace = (
-  namespace: DynamicToolNamespace,
-): namespace is StellaOwnedDynamicToolNamespace =>
-  DYNAMIC_TOOL_FAMILY_POLICIES[namespace].owner === "stella";
 
 export const getDynamicMcpToolOutputContract = (
   toolName: string,

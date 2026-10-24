@@ -5,6 +5,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { compareByLocale } from "@stll/collation";
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -27,9 +28,9 @@ import {
 } from "@stll/ui/combobox";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -79,8 +80,8 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   clauseDetailOptions,
-  knowledgeKeys,
   invalidateTemplateClauseSources,
+  knowledgeKeys,
 } from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -738,6 +739,7 @@ const ClauseHeader = ({
       {editingTitle && canEdit ? (
         <InlineEdit
           className="min-w-0 flex-1 text-lg font-semibold"
+          maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
           onCancel={() => {
             setTitleDraft(detail.title);
             setEditingTitle(false);
@@ -1558,6 +1560,7 @@ const VariantFormDialogBody = ({
           </label>
           <Input
             id="variant-label"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => setLabel(e.target.value)}
             placeholder={t("clauses.variantLabelPlaceholder")}
             value={label}

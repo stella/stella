@@ -11,9 +11,9 @@ import type { searchLegislationSuccessResponseSchema } from "@/api/handlers/legi
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  truncateTextBytes,
-  truncateHeadlineBytes,
   nullableText,
+  truncateHeadlineBytes,
+  truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 // The response projection owns display truncation; corpus storage retains the
@@ -47,6 +47,11 @@ export const projectLegislationSearchHit = (
   documentType: nullableText(hit.documentType, textBytes.documentType),
   status: truncateTextBytes(hit.status, textBytes.status),
   effectiveDate: nullableText(hit.effectiveDate, textBytes.effectiveDate),
+  versionValidFrom: nullableText(
+    hit.versionValidFrom,
+    textBytes.versionValidFrom,
+  ),
+  versionValidTo: nullableText(hit.versionValidTo, textBytes.versionValidTo),
   sourceUrl: nullableText(hit.sourceUrl, textBytes.sourceUrl),
   headline:
     hit.headline === null
@@ -71,6 +76,8 @@ const emptyHit = {
   documentType: "",
   status: "",
   effectiveDate: "",
+  versionValidFrom: "",
+  versionValidTo: "",
   sourceUrl: "",
   headline: "",
   // A finite JSON number occupies at most 25 ASCII bytes, including sign,

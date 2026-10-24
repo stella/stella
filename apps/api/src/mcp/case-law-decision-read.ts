@@ -255,7 +255,7 @@ export const citationSummaryOutput = (
 ) => {
   const citedByCount = totalOf(digest.summary.incoming);
   const top = rankCitingDecisions(digest.topCiting.items).map((decision) => {
-    const appUrl = appUrlOf(decision);
+    const url = appUrlOf(decision);
     return {
       caseNumber: decision.caseNumber,
       court: decision.court,
@@ -263,7 +263,7 @@ export const citationSummaryOutput = (
       ...(decision.decisionDate === null
         ? {}
         : { date: decision.decisionDate }),
-      ...(appUrl === null ? {} : { url: appUrl }),
+      ...(url === null ? {} : { url }),
     };
   });
 
@@ -320,17 +320,26 @@ export const citationSummaryOutput = (
     }
     const key = `decision:${String(row.decision.id)}`;
     if (!cited.has(key)) {
-      const appUrl = appUrlOf(row.decision);
+      const url = appUrlOf(row.decision);
       cited.set(key, {
         caseNumber: row.decision.caseNumber,
         decisionId: String(row.decision.id),
-        ...(appUrl === null ? {} : { url: appUrl }),
+        ...(url === null ? {} : { url }),
       });
     }
   }
 
   return {
     citedBy: {
+      doctrineCounts:
+        digest.doctrineSummary.status === "unavailable"
+          ? { status: "unavailable" as const }
+          : {
+              status: "available" as const,
+              counts: digest.doctrineSummary.counts.incoming,
+              capped: digest.doctrineSummary.capped.incoming,
+              candidateWindow: digest.doctrineSummary.candidateWindow,
+            },
       count: citedByCount,
       ...(digest.summary.precision.status === "bounded" &&
       digest.summary.precision.capped.incoming
@@ -342,6 +351,15 @@ export const citationSummaryOutput = (
       top: topResult,
     },
     cites: {
+      doctrineCounts:
+        digest.doctrineSummary.status === "unavailable"
+          ? { status: "unavailable" as const }
+          : {
+              status: "available" as const,
+              counts: digest.doctrineSummary.counts.outgoing,
+              capped: digest.doctrineSummary.capped.outgoing,
+              candidateWindow: digest.doctrineSummary.candidateWindow,
+            },
       count: totalOf(digest.summary.outgoing),
       ...(digest.summary.precision.status === "bounded" &&
       digest.summary.precision.capped.outgoing

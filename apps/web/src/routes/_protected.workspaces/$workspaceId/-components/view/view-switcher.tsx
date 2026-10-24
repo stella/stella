@@ -9,6 +9,7 @@ import {
   isSingleViewLayout,
   type RequiredViewLayoutType,
 } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -23,7 +24,7 @@ import {
   BookmarkIcon,
   BookmarkPlusIcon,
   CalendarIcon,
-  CopyIcon,
+  DuplicateIcon,
   FileCheckIcon,
   FolderTreeIcon,
   GanttChartIcon,
@@ -480,6 +481,7 @@ const ViewRenameEditor = ({
 
   return (
     <InlineEdit
+      maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
       onCancel={() => {
         onStop();
         setRenameValue(name);
@@ -573,7 +575,7 @@ const useViewActionsMenu = ({
         )}
         {canCreateView && !isSingleViewLayout(layout.type) && (
           <MenuItem onClick={() => handleDuplicate(view)}>
-            <CopyIcon />
+            <DuplicateIcon />
             {t("common.duplicate")}
           </MenuItem>
         )}

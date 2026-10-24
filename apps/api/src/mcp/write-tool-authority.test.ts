@@ -59,7 +59,6 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
     userId: toSafeId<"user">("user_1"),
     userEmail: "member@example.test",
     accessibleWorkspaceIds: [],
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: role,
   });
@@ -90,6 +89,7 @@ const mcpOffered = (role: MemberRole): ReadonlySet<string> =>
       listOfferedStaticMcpToolDefinitions({
         context: mcpContextFor(role),
         mode,
+        enabledRegistrySlugs: undefined,
       }).map((definition) => definition.name),
     ),
   );
@@ -216,11 +216,11 @@ describe("write tool permissions", () => {
     }
   });
 
-  test("MCP discovery offers no role a write tool its permissions do not grant", () => {
+  test("MCP discovery offers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), mcpOffered)).toEqual([]);
   });
 
-  test("chat registers no role a write tool its permissions do not grant", () => {
+  test("chat registers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), chatOffered)).toEqual([]);
   });
 
@@ -484,7 +484,7 @@ const payloadOf = (result: Awaited<ReturnType<typeof handleMcpToolCall>>) => {
 const OPERATION_DENIED = (tool: string) => ({
   error: {
     code: "permission_denied",
-    message: `Your member role does not permit this ${tool} operation`,
+    message: `Your member role does not permit ${tool}`,
     hint: "Call tools/list for the tools your role offers, or ask an organization administrator for a role that includes this tool.",
   },
 });
@@ -546,28 +546,27 @@ describe("write tools whose input selects the operation", () => {
     expect(problems).toEqual([]);
   });
 
-  test("dispatch checks the grant of the selected operation before the handler runs", async () => {
+  test("membership and settings tools enforce their separate grants", async () => {
     // A member may change matter membership but not organization settings.
     const settings = await handleMcpToolCall({
-      args: { action: "update_org_settings", prompt_caching_enabled: true },
+      args: { prompt_caching_enabled: true },
       context: mcpContextFor("member"),
-      toolName: "manage_organization",
+      toolName: "update_organization_settings",
     });
     expect(payloadOf(settings)).toEqual(
-      OPERATION_DENIED("manage_organization"),
+      OPERATION_DENIED("update_organization_settings"),
     );
 
     const membership = await handleMcpToolCall({
       args: {
-        action: "add_member",
         matter_id: "00000000-0000-4000-8000-000000000001",
         user_id: "user_2",
       },
       context: mcpContextFor("member"),
-      toolName: "manage_organization",
+      toolName: "add_matter_member",
     });
     expect(payloadOf(membership)).not.toEqual(
-      OPERATION_DENIED("manage_organization"),
+      OPERATION_DENIED("add_matter_member"),
     );
   });
 
@@ -575,7 +574,6 @@ describe("write tools whose input selects the operation", () => {
     const updateOnly = asTestRaw<McpRequestContext>({
       accessibleWorkspaceIds: [],
       credentialPermissions: { entity: ["update"] },
-      enabledRegistrySlugs: undefined,
       grantedScopes: [],
       memberRole: "owner",
     });
@@ -605,18 +603,17 @@ describe("write tools whose input selects the operation", () => {
     );
   });
 
-  test("chat execution checks the grant of the selected operation", async () => {
+  test("chat settings tool checks the current grant", async () => {
     const failure = await chatExecutionFailure({
-      args: { action: "update_org_settings", prompt_caching_enabled: true },
+      args: { prompt_caching_enabled: true },
       currentRole: "member",
-      registeredRole: "member",
-      tool: "manage_organization",
+      registeredRole: "owner",
+      tool: "update_organization_settings",
     });
     expect(failure).toBeInstanceOf(ChatToolError);
     expect(failure).toMatchObject({
       kind: "unavailable",
-      message:
-        "Your member role does not permit this manage_organization operation.",
+      message: "Your member role does not permit update_organization_settings.",
     });
   });
 });
@@ -644,11 +641,14 @@ describe("write tool account access", () => {
         )
         .toSorted(),
     ).toEqual([
+      "add_matter_member:standard",
       "fill_template:standard",
-      "manage_organization:account-control",
+      "mint_web_handoff:standard",
+      "remove_matter_member:standard",
       "save_filled_template:standard",
       "set_practice_jurisdictions:standard",
       "submit_feedback:standard",
+      "update_organization_settings:account-control",
     ]);
     for (const definition of definitions) {
       expect({
@@ -676,24 +676,25 @@ describe("write tool account access", () => {
     env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
     try {
       const context = asTestRaw<McpRequestContext>({
-        enabledRegistrySlugs: undefined,
         grantedScopes: [],
         memberRole: "owner",
         userEmail: "limited@example.test",
       });
       const offered = new Set(
-        listOfferedStaticMcpToolDefinitions({ context, mode: "default" }).map(
-          (definition) => definition.name,
-        ),
+        listOfferedStaticMcpToolDefinitions({
+          context,
+          mode: "default",
+          enabledRegistrySlugs: undefined,
+        }).map((definition) => definition.name),
       );
-      expect(offered.has("manage_organization")).toBe(false);
+      expect(offered.has("update_organization_settings")).toBe(false);
       expect(offered.has("set_practice_jurisdictions")).toBe(false);
       expect(offered.has("save_matter")).toBe(true);
 
       const result = await handleMcpToolCall({
-        args: { action: "update_org_settings", prompt_caching_enabled: true },
+        args: { prompt_caching_enabled: true },
         context,
-        toolName: "manage_organization",
+        toolName: "update_organization_settings",
       });
       expect(payloadOf(result)).toEqual({
         error: {

@@ -1,11 +1,12 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 // Prints the API types apps/web consumes (`WebApiContract` in
 // src/eden-contract.ts) into apps/web/src/generated/api-routes.gen.ts. apps/web
 // type-checks against that snapshot instead of re-inferring the whole API
 // graph. The API implementation stays the source of truth: --check asserts,
 // through the compiler's identity relation, that each printed type is
-// identical to the inferred one. `--check` generates twice and fails if the
-// bytes differ; the output is local build input rather than committed state.
+// identical to the inferred one. `--check` compares two independently
+// generated printouts and fails if the bytes differ; the output is local build
+// input rather than committed state.
 // Without --check, a run whose compiler inputs are unchanged since the last
 // printout restores that printout from .cache/web-api-types instead of
 // building the API program (see lib/compiler-input-stamp.ts).
@@ -41,14 +42,18 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
+import { printError } from "@stll/errors";
 import { repoRelativePath } from "@stll/portable-path";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { withGenerationLock } from "../../../packages/scripts/src/generation-lock";
-import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
+import {
+  hasPreparedGeneratedSources,
+  preparedGeneratedFile,
+} from "../../../packages/scripts/src/prepared-generated-sources";
 import { withoutTsgoOnlyOptionDiagnostics } from "../../../packages/scripts/src/tsgo-compiler-options";
 import {
   type CompilerInputRecorder,
@@ -57,6 +62,11 @@ import {
   isCompilerInputStampCurrent,
   scriptSourceHash,
 } from "./lib/compiler-input-stamp";
+import {
+  generatedStoreDir,
+  publishGeneratedOutput,
+  restoreGeneratedOutput,
+} from "./lib/generated-output-store";
 import {
   hasFlag,
   isReadonlyProperty,
@@ -67,6 +77,11 @@ import {
   type AliasGraphEdge,
   nameAliases,
 } from "./lib/web-api-alias-names";
+import {
+  uncoveredCompilerInputs,
+  webApiDependencyOutputs,
+  webApiTurboInputs,
+} from "./lib/web-api-turbo-inputs";
 import { orderUnionMembers } from "./lib/web-api-union-order";
 
 const API_DIR = path.resolve(import.meta.dir, "..");
@@ -98,14 +113,12 @@ const HEADER = [
 
 type ApiProgramOptions = {
   virtualFiles: ReadonlyMap<string, string>;
-  oldProgram?: ts.Program;
   // Records the file-system answers the program depends on.
   recorder?: CompilerInputRecorder;
 };
 
 const createApiProgram = ({
   virtualFiles,
-  oldProgram,
   recorder,
 }: ApiProgramOptions): ts.Program => {
   const configHost: ts.ParseConfigFileHost = {
@@ -167,7 +180,6 @@ const createApiProgram = ({
     rootNames: [CONTRACT_PATH, ...virtualFiles.keys(), ...ambient],
     options,
     host,
-    ...(oldProgram === undefined ? {} : { oldProgram }),
   });
 };
 
@@ -1225,57 +1237,64 @@ const renderIdentityCheck = (names: readonly string[]): string => {
   ].join("\n");
 };
 
-type VerifyIdentityOptions = {
-  names: readonly string[];
-  // The printout with response dates as declared, served in place of the
-  // output file so the check compares it against the contract.
-  declaredOutput: string;
-  output: string;
-  oldProgram: ts.Program;
-};
-
-const verifyIdentity = ({
-  names,
-  declaredOutput,
-  output,
-  oldProgram,
-}: VerifyIdentityOptions): readonly ts.Diagnostic[] => {
-  const program = createApiProgram({
-    virtualFiles: new Map([
-      [CHECK_PATH, renderIdentityCheck(names)],
-      [OUTPUT_PATH, declaredOutput],
-      [WIRE_CHECK_PATH, output],
-    ]),
-    oldProgram,
-  });
-  const check = program.getSourceFile(CHECK_PATH);
-  const generated = program.getSourceFile(OUTPUT_PATH);
-  const wire = program.getSourceFile(WIRE_CHECK_PATH);
-  if (check === undefined || generated === undefined || wire === undefined) {
-    return panic("generate-web-api-types: identity check files not loaded");
-  }
-  return [
-    ...program.getSyntacticDiagnostics(generated),
-    ...program.getSemanticDiagnostics(generated),
-    ...program.getSyntacticDiagnostics(wire),
-    ...program.getSemanticDiagnostics(wire),
-    ...program.getSemanticDiagnostics(check),
-  ];
-};
-
 // --- CLI --------------------------------------------------------------------------
 
 type GenerateOptions = {
-  validation: "identity" | "print";
+  validation:
+    | { type: "identity"; declared: string; wire: string | Uint8Array }
+    | { type: "print"; includeDeclared?: boolean };
   recorder?: CompilerInputRecorder;
 };
 
-const generate = ({ validation, recorder }: GenerateOptions) => {
-  const started = performance.now();
+type Printed = {
+  output: string;
+  declared?: string;
+  diagnostics?: readonly ts.Diagnostic[];
+};
+
+const exportedTypeNames = (output: string): string[] => {
+  const source = ts.createSourceFile(
+    OUTPUT_PATH,
+    output,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  return source.statements.flatMap((statement) =>
+    ts.isTypeAliasDeclaration(statement) &&
+    statement.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    ) === true
+      ? [statement.name.text]
+      : [],
+  );
+};
+
+// Builds the API program and returns strings only, so the program and its
+// checker are unreachable once this returns.
+const printWithProgram = ({
+  validation,
+  recorder,
+}: GenerateOptions): Printed => {
+  const declared =
+    validation.type === "identity" ? validation.declared : undefined;
+  const wire =
+    validation.type === "identity"
+      ? Buffer.from(validation.wire).toString("utf-8")
+      : undefined;
+  const names = declared === undefined ? [] : exportedTypeNames(declared);
+  const programStarted = performance.now();
   const program = createApiProgram({
-    virtualFiles: new Map(),
+    virtualFiles:
+      declared === undefined || wire === undefined
+        ? new Map()
+        : new Map([
+            [CHECK_PATH, renderIdentityCheck(names)],
+            [OUTPUT_PATH, declared],
+            [WIRE_CHECK_PATH, wire],
+          ]),
     ...(recorder === undefined ? {} : { recorder }),
   });
+  const programCreated = performance.now();
   const contractSource =
     program.getSourceFile(CONTRACT_PATH) ??
     panic("generate-web-api-types: eden-contract.ts not in program");
@@ -1289,6 +1308,15 @@ const generate = ({ validation, recorder }: GenerateOptions) => {
     responseDates: RESPONSE_DATES.wire,
   });
   const output = renderOutput(result);
+  const printed = performance.now();
+  const stage =
+    validation.type === "identity" ? "generation 2" : "generation 1";
+  console.log(
+    `generate-web-api-types: ${stage}: program ${Math.round(programCreated - programStarted)} ms, ` +
+      `check/print ${Math.round(printed - programCreated)} ms, types ${program.getTypeCount()}, ` +
+      `instantiations ${program.getInstantiationCount()}, identifiers ${program.getIdentifierCount()}, ` +
+      `RSS ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MiB`,
+  );
 
   for (const [reason, occurrences] of result.fallbacks) {
     console.error(
@@ -1302,32 +1330,63 @@ const generate = ({ validation, recorder }: GenerateOptions) => {
       .join(", ")}`,
   );
 
-  const printed = performance.now();
-
   // Consumer tasks only need the printout. The dedicated CI --check owns
   // identity validation and determinism, without charging each compiler job.
-  if (validation === "print") {
+  if (declared === undefined) {
+    return validation.type === "print" && validation.includeDeclared === true
+      ? {
+          output,
+          declared: renderOutput(
+            printContract({
+              program,
+              contractSource,
+              webDependencies,
+              responseDates: RESPONSE_DATES.declared,
+            }),
+          ),
+        }
+      : { output };
+  }
+  const check = program.getSourceFile(CHECK_PATH);
+  const generated = program.getSourceFile(OUTPUT_PATH);
+  const wireSource = program.getSourceFile(WIRE_CHECK_PATH);
+  if (
+    check === undefined ||
+    generated === undefined ||
+    wireSource === undefined
+  ) {
+    return panic("generate-web-api-types: identity check files not loaded");
+  }
+  const identityStarted = performance.now();
+  const diagnostics = [
+    ...program.getSyntacticDiagnostics(generated),
+    ...program.getSemanticDiagnostics(generated),
+    ...program.getSyntacticDiagnostics(wireSource),
+    ...program.getSemanticDiagnostics(wireSource),
+    ...program.getSemanticDiagnostics(check),
+  ];
+  console.log(
+    `generate-web-api-types: identity: check ${Math.round(performance.now() - identityStarted)} ms, ` +
+      `types ${program.getTypeCount()}, instantiations ${program.getInstantiationCount()}, ` +
+      `identifiers ${program.getIdentifierCount()}, RSS ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MiB`,
+  );
+  return { output, diagnostics };
+};
+
+const generate = ({ validation, recorder }: GenerateOptions) => {
+  const started = performance.now();
+  const { output, declared, diagnostics } = printWithProgram({
+    validation,
+    ...(recorder === undefined ? {} : { recorder }),
+  });
+  const printed = performance.now();
+  if (diagnostics === undefined) {
     console.log(
       `generate-web-api-types: printed in ${Math.round(printed - started)} ms`,
     );
-    return output;
+    return { output, declared };
   }
 
-  const declaredOutput = renderOutput(
-    printContract({
-      program,
-      contractSource,
-      webDependencies,
-      responseDates: RESPONSE_DATES.declared,
-    }),
-  );
-
-  const diagnostics = verifyIdentity({
-    names: result.declarations.map(({ name }) => name),
-    declaredOutput,
-    output,
-    oldProgram: program,
-  });
   if (diagnostics.length > 0) {
     console.error(formatDiagnostics(diagnostics));
     console.error(
@@ -1337,10 +1396,9 @@ const generate = ({ validation, recorder }: GenerateOptions) => {
   }
 
   console.log(
-    `generate-web-api-types: printed in ${Math.round(printed - started)} ms, ` +
-      `identity verified in ${Math.round(performance.now() - printed)} ms`,
+    `generate-web-api-types: printed and identity verified in ${Math.round(performance.now() - started)} ms`,
   );
-  return output;
+  return { output };
 };
 
 const writeAtomically = (file: string, bytes: string | Uint8Array) => {
@@ -1359,21 +1417,51 @@ const readOptional = (file: string): Buffer | undefined => {
   return read.isOk() ? read.value : undefined;
 };
 
+type VerifyDeterminismOptions = {
+  output: string | Uint8Array;
+  prepared: Uint8Array | undefined;
+  regenerate: () => string | Uint8Array;
+};
+
+export const verifyDeterminism = ({
+  output,
+  prepared,
+  regenerate,
+}: VerifyDeterminismOptions): "prepared printout" | "two generations" => {
+  if (prepared !== undefined) {
+    if (!Buffer.from(output).equals(prepared)) {
+      panic("generate-web-api-types: prepared printout differs from this run");
+    }
+    return "prepared printout";
+  }
+  if (!Buffer.from(output).equals(Buffer.from(regenerate()))) {
+    panic(
+      "generate-web-api-types: output is not deterministic across two generations",
+    );
+  }
+  return "two generations";
+};
+
 const cacheStampSchema = v.strictObject({
   outputHash: v.string(),
   inputs: compilerInputStampSchema,
 });
 
-// Everything besides the program's own inputs that decides the printout.
+// Everything besides the program's own inputs that decides the printout. No
+// absolute path: the host-wide store shares entries between checkouts, and
+// the stamp itself pins every path the program read.
 const cacheContext = () =>
   sha256Hex(
     JSON.stringify({
-      format: 1,
-      root: REPO_ROOT,
-      output: OUTPUT_PATH,
+      format: 2,
+      output: repoRelativePath(REPO_ROOT, OUTPUT_PATH),
       bun: Bun.version,
       typescript: ts.version,
       generator: scriptSourceHash(import.meta.path),
+      // The Turbo coverage check reads these declarations, so a restored
+      // printout must not outlive a change to them.
+      turboInputs: webApiTurboInputs(REPO_ROOT),
+      dependencyOutputs: webApiDependencyOutputs(REPO_ROOT),
     }),
   );
 
@@ -1404,6 +1492,30 @@ const reuseCachedOutput = async (context: string): Promise<boolean> => {
   return true;
 };
 
+const STORE_DIR = generatedStoreDir("web-api-types");
+
+/**
+ * Restores a printout another checkout on this host (or a CI cache) made from
+ * inputs this checkout still has, and makes it this checkout's own cache.
+ */
+const reuseStoredOutput = async (context: string): Promise<boolean> => {
+  const stored = await restoreGeneratedOutput({
+    storeDir: STORE_DIR,
+    root: REPO_ROOT,
+    context,
+  });
+  if (stored === undefined) {
+    return false;
+  }
+  writeAtomically(OUTPUT_PATH, stored.output);
+  writeAtomically(CACHED_OUTPUT_PATH, stored.output);
+  writeAtomically(
+    STAMP_PATH,
+    JSON.stringify({ outputHash: stored.outputHash, inputs: stored.stamp }),
+  );
+  return true;
+};
+
 const main = async () => {
   const args = process.argv.slice(2);
   const check = args.includes("--check");
@@ -1423,15 +1535,56 @@ const main = async () => {
     );
     return;
   }
+  if (!check && (await reuseStoredOutput(context))) {
+    console.log(
+      `generate-web-api-types: compiler inputs match a stored printout; restored ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
+        `from ${STORE_DIR} in ${Math.round(performance.now() - started)} ms`,
+    );
+    return;
+  }
   const recorder = createCompilerInputRecorder();
-  const output = generate({
-    validation: check ? "identity" : "print",
+  const first = generate({
+    validation: { type: "print", ...(check ? { includeDeclared: true } : {}) },
     recorder,
   });
-  if (check && generate({ validation: "print" }) !== output) {
+  const stamp = recorder.stamp(context);
+  const uncovered = uncoveredCompilerInputs(
+    stamp,
+    REPO_ROOT,
+    webApiTurboInputs(REPO_ROOT),
+    webApiDependencyOutputs(REPO_ROOT),
+  );
+  if (uncovered.length > 0) {
     panic(
-      "generate-web-api-types: output is not deterministic across two generations",
+      `generate-web-api-types: compiler inputs are missing from the Turbo task:\n${uncovered.join("\n")}`,
     );
+  }
+  let output = first.output;
+  let outcome = "wrote";
+  if (check) {
+    if (first.declared === undefined) {
+      panic("generate-web-api-types: declared printout was not produced");
+    }
+    Bun.gc(true);
+    const prepared = preparedGeneratedFile(
+      REPO_ROOT,
+      repoRelativePath(REPO_ROOT, OUTPUT_PATH),
+    );
+    const reference = prepared ?? output;
+    const second = generate({
+      validation: {
+        type: "identity",
+        declared: first.declared,
+        wire: reference,
+      },
+    });
+    const proof = verifyDeterminism({
+      output: second.output,
+      prepared,
+      regenerate: () => output,
+    });
+    output = second.output;
+    outcome = `verified deterministic against ${proof}`;
   }
   writeAtomically(OUTPUT_PATH, output);
   // The copy first: a stamp never names a printout that is not on disk.
@@ -1440,12 +1593,28 @@ const main = async () => {
     STAMP_PATH,
     JSON.stringify({
       outputHash: sha256Hex(output),
-      inputs: recorder.stamp(context),
+      inputs: stamp,
     }),
   );
+  // A store failure costs only a later rebuild elsewhere, never this run.
+  const published = Result.try(() =>
+    publishGeneratedOutput({
+      storeDir: STORE_DIR,
+      stamp: recorder.portableStamp(context, REPO_ROOT),
+      output,
+    }),
+  );
+  if (published.isErr()) {
+    printError(
+      `generate-web-api-types: could not publish to ${STORE_DIR}:`,
+      published.error,
+    );
+  }
   console.log(
-    `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
-      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
+    `generate-web-api-types: ${outcome} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
+      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms, ` +
+      // maxRSS is in kilobytes on every platform Node and Bun report it for.
+      `peak RSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`,
   );
 };
 

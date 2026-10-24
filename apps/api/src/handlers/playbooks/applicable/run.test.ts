@@ -7,8 +7,8 @@ import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playb
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -152,7 +152,6 @@ describe("auto-run playbooks handler", () => {
       mapHandlerResult({
         id: "playbooks.applicable.run",
         result,
-        access: "write",
       }),
     ).toMatchObject({
       egress: "structured",
@@ -254,7 +253,6 @@ describe("auto-run playbooks handler", () => {
       mapHandlerResult({
         id: "playbooks.applicable.run",
         result,
-        access: "write",
       }),
     ).toMatchObject({ egress: "structured", payload: expected });
     expect(startWorkflowMock).toHaveBeenCalledTimes(1);

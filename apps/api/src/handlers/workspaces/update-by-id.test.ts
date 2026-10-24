@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { aggregateRecorder } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { aggregateRecorder } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -85,64 +85,27 @@ describe("updateWorkspace", () => {
     expect(getCallCount()).toBe(1);
   });
 
-  test("rejects promote on an already-client workspace", async () => {
-    const workspaceSelect = {
-      from: () => ({
-        where: async () => [
-          {
-            id: "ws_test123",
-            name: "Workspace",
-            clientId: "contact_existing",
-            reference: null,
-            billingReference: null,
-            color: null,
-          },
-        ],
-      }),
+  test("looks up the contact when attaching a client to a personal matter", async () => {
+    const workspaceRow = {
+      id: "ws_test123",
+      name: "Workspace",
+      clientId: null,
+      reference: null,
+      billingReference: null,
+      color: null,
+      leadUserId: null,
     };
-
     const { safeDb, scopedDb } = createScopedDbMock({
       execute: aggregateRecorder().tx.execute,
-      select: () => workspaceSelect,
-    });
-
-    const result = await updateWorkspace.handler(
-      createContext({
-        body: {
-          promote: {
-            clientId: toSafeId<"contact">(Bun.randomUUIDv7()),
-          },
-        },
-        safeDb,
-        scopedDb,
+      select: () => ({
+        from: () => ({
+          // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the locking chain the contact lookup uses
+          where: () =>
+            Object.assign(Promise.resolve([workspaceRow]), {
+              for: () => ({ limit: async () => [] }),
+            }),
+        }),
       }),
-    );
-
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Workspace is already a client matter" },
-    });
-  });
-
-  test("rejects clientId update on a personal workspace", async () => {
-    const workspaceSelect = {
-      from: () => ({
-        where: async () => [
-          {
-            id: "ws_test123",
-            name: "Workspace",
-            clientId: null,
-            reference: null,
-            billingReference: null,
-            color: null,
-          },
-        ],
-      }),
-    };
-
-    const { safeDb, scopedDb } = createScopedDbMock({
-      execute: aggregateRecorder().tx.execute,
-      select: () => workspaceSelect,
     });
 
     const result = await updateWorkspace.handler(
@@ -156,10 +119,8 @@ describe("updateWorkspace", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: {
-        message: "Use promote to attach a client to a personal matter",
-      },
+      code: 404,
+      response: { message: "Client not found" },
     });
   });
 });

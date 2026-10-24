@@ -211,7 +211,12 @@ if (!databaseUrl || !runPostgresTests) {
           decisionId,
           fingerprint: FINGERPRINT,
           observed: sentinel,
-          unlessFailed: failureClaimGuard({ decisionId, now, reader }),
+          unlessFailed: failureClaimGuard({
+            decisionId,
+            now,
+            reader,
+            request: "poll",
+          }),
         });
 
         const claimWaits = async (): Promise<boolean> => {

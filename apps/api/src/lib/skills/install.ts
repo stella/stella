@@ -344,6 +344,7 @@ export const installSkill = async (props: InstallSkillProps) => {
             contentHash,
             body: parsed.body,
             enabled,
+            invocation: parsed.invocation,
           });
           const rows = urlReplayIdentity
             ? await insert

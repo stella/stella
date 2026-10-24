@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+await_holding_lock = "deny"
 cast_lossless = "warn"
 dbg_macro = "deny"
 disallowed_methods = "deny"
@@ -26,6 +27,7 @@ implicit_clone = "warn"
 inefficient_to_string = "warn"
 manual_is_variant_and = "warn"
 manual_let_else = "warn"
+map_err_ignore = "deny"
 match_wildcard_for_single_variants = "warn"
 needless_continue = "warn"
 needless_pass_by_ref_mut = "warn"
@@ -33,9 +35,12 @@ needless_raw_string_hashes = "deny"
 ptr_as_ptr = "warn"
 print_stdout = "warn"
 print_stderr = "warn"
+significant_drop_in_scrutinee = "deny"
+significant_drop_tightening = "warn"
 uninlined_format_args = "warn"
 unnecessary_wraps = "warn"
 unused_async = "warn"
+unused_result_ok = "deny"
 unused_self = "warn"
 used_underscore_binding = "warn"
 
@@ -124,7 +129,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
-zip = { version = "8.6.0", default-features = false }
+zip = { version = "9.0.0", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1", features = [
@@ -150,6 +155,7 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
   "std",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSArray",
   "NSData",
   "NSGeometry",
   "NSString",
@@ -165,8 +171,26 @@ stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-windows-signing = { path = "crates/windows-signing", version = "0.0.1" }
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
+windows-registry = "0.6"
 winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
+[features]
+allocation-tests = []
+
 [dev-dependencies]
+dhat = "=0.3.3"
+tokio = { version = "1", features = ["test-util"] }
 tower = { version = "0.5", features = ["util"] }
 ts-rs = "12.0.1"
+
+[[test]]
+name = "allocation_clipboard"
+required-features = ["allocation-tests"]
+
+[[test]]
+name = "allocation_session_gate"
+required-features = ["allocation-tests"]
+
+[[test]]
+name = "allocation_session_upload"
+required-features = ["allocation-tests"]

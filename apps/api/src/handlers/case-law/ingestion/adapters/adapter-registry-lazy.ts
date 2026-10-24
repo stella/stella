@@ -1,7 +1,7 @@
 /**
  * Lazy adapter module registry.
  *
- * Shared between health-check.ts and update-fixtures.ts to
+ * Shared between health-check.ts and update-adapter-fixtures.ts to
  * avoid duplicating the adapter import map. Uses dynamic
  * imports to avoid pulling in the full app dependency graph.
  */
@@ -27,6 +27,7 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.CZ_US]: async () => (await import("./cz-us")).czUsAdapter,
   [ADAPTER_KEYS.CZ_REGIONAL]: async () =>
     (await import("./cz-regional")).czRegionalAdapter,
+  [ADAPTER_KEYS.CZ_UOHS]: async () => (await import("./cz-uohs")).czUohsAdapter,
   [ADAPTER_KEYS.SK_COURTS]: async () =>
     (await import("./sk-courts")).skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: async () => (await import("./sk-us")).skUsAdapter,

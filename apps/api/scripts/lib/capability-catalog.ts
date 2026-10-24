@@ -184,6 +184,7 @@ export const DOMAIN_ACTION_VERBS = [
   "restore",
   "resume",
   "retry",
+  "revert",
   "review",
   "rewrite",
   "run",
@@ -666,9 +667,9 @@ const sanitizeExportName = ({
  * `sanitizeDispatchId` / `sanitizeImportSpecifier` / `sanitizeExportName`) and
  * emitted through `JSON.stringify`, so the generated code's structure cannot be
  * influenced by a crafted handler path or export name. The output is raw (single-
- * line entries); the exporter formats it with oxfmt before writing/comparing,
+ * line entries); the exporter formats it with bun fmt before writing/comparing,
  * mirroring how the CLI codegen formats its generated modules, so the committed
- * artifact passes `oxfmt --check`.
+ * artifact passes `bun fmt --check`.
  */
 export const serializeDispatchModule = (
   records: readonly CapabilityDispatchRecord[],

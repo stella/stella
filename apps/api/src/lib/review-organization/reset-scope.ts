@@ -50,6 +50,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Storage tombstones: they must outlive the rows they erase.",
   template_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
+  mcp_web_handoff: "Short-lived OAuth state; never reviewer content.",
   mcp_oauth_clients: "OAuth data: never touched by the reset.",
   mcp_oauth_state: "OAuth data: never touched by the reset.",
   mcp_user_connections: "OAuth data: never touched by the reset.",
@@ -62,6 +63,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  chat_content_v3_backfill_receipts:
+    "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:
     "Scheduler-maintained screening state; holds no reviewer content.",
   sanctions_monitoring_backfills:
@@ -93,6 +96,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "chat_run_logs",
   "chat_secrets",
   "chat_threads",
+  "chat_tool_grants",
   "chat_turns",
   "clause_categories",
   "clause_variants",

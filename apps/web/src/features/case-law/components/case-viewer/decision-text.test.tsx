@@ -409,10 +409,9 @@ const renderTopMatter = ({
   documentAst = ast,
   fields = {},
   notesByAnchorId,
-}: Partial<
-  Pick<TextDecision, "courtAbbreviation" | "courtTier" | "documentAst">
-> & {
+}: Partial<Pick<TextDecision, "courtAbbreviation" | "courtTier">> & {
   analysis?: DecisionAnalysis;
+  documentAst?: DocumentAst | null;
   fields?: TextFieldOverrides;
   notesByAnchorId?: ReadonlyMap<string, ReactNode>;
 } = {}): string =>
@@ -426,6 +425,7 @@ const renderTopMatter = ({
               analysis === undefined ? null : (
                 <AiHeadnotes
                   analysis={analysis}
+                  blocks={documentAst?.blocks ?? []}
                   onAnchorClick={() => undefined}
                 />
               )
@@ -606,18 +606,38 @@ const sectionSummary = (markup: string, text: string): string => {
   return section.slice(0, section.indexOf("</summary>"));
 };
 
+/** The origin mark on the row of the section whose body contains `text`. */
+const sectionMark = (markup: string, text: string): string => {
+  // The mark precedes the `<details>` inside the section's block.
+  const block =
+    markup
+      .split('data-slot="headnote-block"')
+      .slice(1)
+      .find((candidate) => candidate.includes(text)) ?? "";
+  const start = block.indexOf('data-slot="headnote-origin"');
+  return start === -1
+    ? ""
+    : block.slice(start, block.indexOf("</span><details", start));
+};
+
 // Two authors write the same two sections, and a reader must be able to tell
 // whose sentence they are reading — by the mark on it, never by a shape that
 // would also rank one author above the other.
 describe("a headnote the court wrote and one a model wrote", () => {
   const analysis = {
-    version: 3,
+    version: 4,
     generatedAt: "2026-02-01T00:00:00.000Z",
     model: "test-model",
     inputFingerprint: "fingerprint-1",
     tree: [],
-    holding: { anchors: [], language: "cs", text: "Model holding sentence." },
-    abstract: { language: "cs", text: "Model abstract sentence." },
+    holding: {
+      spans: [{ text: "Model holding sentence.", anchors: [] }],
+      language: "cs",
+    },
+    abstract: {
+      spans: [{ text: "Model abstract sentence.", anchors: [] }],
+      language: "cs",
+    },
     topics: [],
   } satisfies DecisionAnalysis;
   const courtHeadnote = "Publisher headnote sentence.";
@@ -647,14 +667,35 @@ describe("a headnote the court wrote and one a model wrote", () => {
   });
 
   test("marks each section with who wrote it", () => {
-    const court = sectionSummary(markup, courtHeadnote);
-    const model = sectionSummary(markup, "Model holding sentence.");
+    const court = sectionMark(markup, courtHeadnote);
+    const model = sectionMark(markup, "Model holding sentence.");
 
     expect(court).toContain('data-slot="court-badge"');
     expect(court).toContain("NS");
     expect(court).not.toContain(messages.caseLaw.notesFilter.ai);
     expect(model).toContain(messages.caseLaw.notesFilter.ai);
     expect(model).not.toContain('data-slot="court-badge"');
+    // The model's mark is the shared AI label, a button that opens the
+    // disclosure; the court's section has none.
+    expect(model).toContain('data-slot="ai-label"');
+    expect(model).toContain("<button");
+    expect(court).not.toContain('data-slot="ai-label"');
+  });
+
+  // A `<summary>` is the section's toggle; a control inside it would be
+  // nested interactive content. The mark shares its row from outside.
+  test("keeps every section's summary free of other controls", () => {
+    for (const text of [
+      courtHeadnote,
+      courtAbstract,
+      "Model holding sentence.",
+      "Model abstract sentence.",
+    ]) {
+      const summary = sectionSummary(markup, text);
+      expect(summary).not.toContain("<button");
+      expect(summary).not.toContain("<a ");
+      expect(summary).not.toContain('data-slot="headnote-origin"');
+    }
   });
 
   test("opens with the court's own, then what the model made of it", () => {

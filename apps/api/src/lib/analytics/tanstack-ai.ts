@@ -1,12 +1,12 @@
 import {
-  EventType,
   type ChatMiddleware,
   type ChatMiddlewareContext,
+  EventType,
   type TokenUsage,
 } from "@tanstack/ai";
 import { Result } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
@@ -29,10 +29,13 @@ import {
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
+import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";
 import {
   finishReasonOf,
   type TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { sanitizeHandoffDiagnosticText } from "@/api/lib/errors/handoff-diagnostics";
+import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -40,9 +43,9 @@ import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import {
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForRole,
-  resolveEffectiveServiceTierForProvider,
+  getTanStackTextModelInfoForTask,
   type ResolvedTanStackTextModelInfo,
+  resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
@@ -55,12 +58,12 @@ import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getServerAnalytics } from "./client";
 import {
-  SERVER_ANALYTICS_EVENTS,
-  type ServerAnalytics,
   type AnalyticsPrimitive,
   type CountBucket,
   type LatencyBucket,
   type SafeAIAnalyticsMetadata,
+  SERVER_ANALYTICS_EVENTS,
+  type ServerAnalytics,
   type TokenBucket,
 } from "./server-analytics";
 
@@ -71,6 +74,8 @@ type RunAnalyticsState = {
   /** Start of the current agent-loop iteration (one model call). */
   iterationStartedAt: number;
   finishReason: TanStackTextFinishReason;
+  /** The provider's own stop reason, where its table lists it. */
+  providerStopReason: string | undefined;
   outputTokens: number | undefined;
   toolCount: number;
   /** Sum of every iteration's reported usage. */
@@ -116,7 +121,7 @@ type TanStackAIAnalyticsProps = {
   distinctId?: string;
   properties?: AnalyticsMetadata;
   analytics?: ServerAnalytics;
-  modelRole?: ModelRole;
+  modelTask?: ModelTask;
   /**
    * Explicit per-turn model selection (dev override or validated
    * thread model). When set, metering rates this model instead of the
@@ -147,6 +152,10 @@ type TanStackAIAnalyticsProps = {
 export type TanStackAIAnalyticsCallbacks = {
   /** Shared attribution for nested non-generative model calls. */
   readonly usageMetering?: AIUsageMetering | undefined;
+  /** Bind one request without changing callbacks shared by concurrent runs. */
+  forModel: (
+    model: Omit<ResolvedTanStackTextModelInfo, "availability">,
+  ) => TanStackAIAnalyticsCallbacks;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
 };
@@ -348,7 +357,7 @@ const recordTanStackConsumption = async ({
       unitsConsumed: lane === "pool" ? unitsConsumed : 0,
       isByok: modelInfo.keySource === "byok",
       lane,
-      modelRole: config.modelRole ?? "chat",
+      modelTask: config.modelTask ?? "chat",
       organizationId: metering.organizationId,
       rawUsageMicroUnits,
       serviceTier: effectiveServiceTier,
@@ -382,12 +391,12 @@ const recordTanStackConsumption = async ({
   }
 };
 
-export const createTanStackAIAnalyticsCallbacks = ({
-  analytics = getServerAnalytics(),
-  ...config
-}: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
+export const createTanStackAIAnalyticsCallbacks = (
+  { analytics = getServerAnalytics(), ...config }: TanStackAIAnalyticsProps,
+  resolvedModel?: Omit<ResolvedTanStackTextModelInfo, "availability">,
+): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
-  const modelRole = config.modelRole ?? "chat";
+  const modelTask = config.modelTask ?? "chat";
   // Group attachment is derived centrally so call sites cannot forget it:
   // from the metering context when present, else from the analytics-only
   // organization identity. Events with neither stay ungrouped.
@@ -398,7 +407,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
       ? {}
       : { groups: { organization: analyticsOrganizationId } };
   const selectedModelId = config.selectedModelId;
-  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
+  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined =
+    resolvedModel === undefined
+      ? undefined
+      : { ...resolvedModel, availability: "available" };
   const startedAt = performance.now();
   // Per-run state, keyed by `ctx.runId`: one callbacks instance may serve
   // several `chat()` requests (template filling shares one across up to
@@ -415,6 +427,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
     const created: RunAnalyticsState = {
       iterationStartedAt: now,
       finishReason: null,
+      providerStopReason: undefined,
       outputTokens: undefined,
       toolCount: 0,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
@@ -441,10 +454,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
             ? getTanStackTextModelInfoById(
                 selectedModelId,
                 config.orgAIConfig,
-                modelRole,
+                modelTask,
                 { dataClass: config.dataClass, modelTier: config.modelTier },
               )
-            : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
+            : getTanStackTextModelInfoForTask(modelTask, config.orgAIConfig, {
                 dataClass: config.dataClass,
                 organizationId: analyticsOrganizationId,
                 modelTier: config.modelTier,
@@ -455,7 +468,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
         modelInfo = null;
         logger.warn("tanstack_ai.analytics.model_info_unavailable", {
           "ai.feature": config.feature,
-          "ai.role": modelRole,
+          "ai.task": modelTask,
           "error.type": errorTag(resolved.error),
         });
       } else {
@@ -497,14 +510,26 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // The AI boundary: naming the failure also classifies it for the shadow
     // grade the record carries.
     const kind = classifyAIBoundaryFailure(error);
-    const finishReason = context?.run?.finishReason;
+    const providerStatus = providerStatusFields(error)["error.provider.status"];
+    // A failure caught outside the run (a caller's own catch) has no run
+    // state; a refused finish carries the finish on the error instead.
+    const refusedFinish =
+      error instanceof ModelRunError ? error.finish : undefined;
+    const finishReason = context?.run?.finishReason ?? refusedFinish?.finish;
+    const providerStopReason =
+      context?.run?.providerStopReason ?? refusedFinish?.providerStopReason;
     const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
-      "ai.error_kind": sanitizeQueryErrorText(kind),
+      "ai.error_kind": sanitizeHandoffDiagnosticText(
+        sanitizeQueryErrorText(kind),
+      ),
       "ai.feature": config.feature,
       ...(typeof finishReason === "string"
         ? { "ai.finish_reason": finishReason }
         : {}),
+      ...(providerStopReason === undefined
+        ? {}
+        : { "ai.provider_stop_reason": providerStopReason }),
       ...(context?.run?.outputTokens !== undefined
         ? { "ai.output_tokens": context.run.outputTokens }
         : {}),
@@ -572,6 +597,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
         error_message_kind: "non_standard",
         error_type: errorTag(error),
         failure_reason: "provider",
+        failure_kind: kind,
+        ...(providerStatus === undefined
+          ? {}
+          : { provider_status: providerStatus }),
         feature: config.feature,
         latency_bucket: bucketLatency(
           (performance.now() - startedAt) / ONE_SECOND_MS,
@@ -770,6 +799,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
   return {
     captureError: captureGenerationError,
+    forModel: (model) =>
+      createTanStackAIAnalyticsCallbacks({ ...config, analytics }, model),
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",
@@ -780,16 +811,20 @@ export const createTanStackAIAnalyticsCallbacks = ({
         const run = runState(ctx);
         run.iterationStartedAt = performance.now();
         run.finishReason = null;
+        run.providerStopReason = undefined;
         run.outputTokens = undefined;
       },
       onStructuredOutputConfig: (ctx) => {
         const run = runState(ctx);
         run.finishReason = null;
+        run.providerStopReason = undefined;
         run.outputTokens = undefined;
       },
       onChunk: (ctx, chunk) => {
         if (chunk.type === EventType.RUN_FINISHED) {
-          runState(ctx).finishReason = finishReasonOf(chunk);
+          const run = runState(ctx);
+          run.finishReason = finishReasonOf(chunk);
+          run.providerStopReason = recordedStopReasonOf(chunk);
         }
         // TanStack reports usage for a finished model call only. A call that
         // failed after the provider reported usage was billed as well, so its

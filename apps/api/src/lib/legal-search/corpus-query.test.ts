@@ -8,12 +8,12 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
-  CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
-  type CorpusStemming,
-  type CorpusFreeTextOptions,
+  CORPUS_QUERY_LEAF_BUDGET,
   corpusDecisionTypeClause,
   corpusFreeTextClause,
+  type CorpusFreeTextOptions,
+  type CorpusStemming,
   type CorpusTermExpander,
   partitionCorpusQueryTokens,
   quoteCorpusValue,
@@ -245,6 +245,70 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
       ' AND court:"Nejvyšší soud"' +
       " AND decision_date:[2020-01-01 TO 2024-12-31]",
   );
+});
+
+test("the assembler ORs the words under match any and leaves the filters ANDed", () => {
+  const filters = { jurisdiction: "CZE", language: "cs" };
+  const strict = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+  });
+  const relaxed = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+    match: "any",
+  });
+  expect(relaxed).toBe(
+    '("promlčení" OR "náhrada" OR "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
+  );
+  // Asking for "all" explicitly is the default, byte for byte.
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "promlčení náhrada škody",
+      filters,
+      match: "all",
+    }),
+  ).toBe(strict);
+  expect(strict).toBe(
+    '("promlčení" AND "náhrada" AND "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
+  );
+});
+
+test("a decision id set is a quoted term-set filter on the decision id", () => {
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "kamera",
+      filters: {
+        jurisdiction: "CZE",
+        decisionIds: [
+          "019dd643-82d9-7000-abc3-fe06dac868ee",
+          "e979ebe3-2f3c-471c-89f7-e769457e3a09",
+        ],
+      },
+    }),
+  ).toBe(
+    '("kamera")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND document_id: IN ["019dd643-82d9-7000-abc3-fe06dac868ee" "e979ebe3-2f3c-471c-89f7-e769457e3a09"]',
+  );
+});
+
+test("an empty decision id set admits nothing, so no query is sent", () => {
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "kamera",
+      filters: { decisionIds: [] },
+    }),
+  ).toBeNull();
 });
 
 test("a type filter names every stored spelling of its kind, so an abbreviation is not missed", () => {

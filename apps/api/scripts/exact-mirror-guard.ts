@@ -8,7 +8,7 @@ const child = Bun.spawnSync(
   [
     process.execPath,
     fileURLToPath(
-      new URL("../src/scripts/exact-mirror-guard.ts", import.meta.url),
+      new URL("../src/tests/exact-mirror-guard.ts", import.meta.url),
     ),
     ...process.argv.slice(2),
   ],

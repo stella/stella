@@ -23,8 +23,13 @@ export type ReaderMessages = Record<ReaderMessageKey, string> & {
     link: (children: ReactNode) => ReactNode,
   ) => ReactNode;
   dissentByline: (names: readonly string[]) => ReactNode;
-  wordingValidFrom: (date: string) => string;
+  provisionPartTextUnavailable: (provisionLabel: string) => string;
+  provisionEffectiveFrom: (date: string) => string;
   formatValidityDate: (date: string | null) => string | null;
+  /** The cited act by number and title, e.g. `89/2012 Sb., Občanský zákoník`. */
+  provisionActText: (provision: ProvisionViewPayload) => string;
+  /** Labels joined the way the reader's language lists them, abbreviated. */
+  formatLabelList: (labels: readonly string[]) => string;
 };
 
 export type ReaderDecisionLinkProps = {
@@ -40,14 +45,9 @@ export type ReaderStatuteLinkProps =
   | { type: "provision"; children: ReactNode; provision: CitedProvisionTarget }
   | {
       type: "provision-expansion";
-      label: string;
-      provision: CitedProvisionTarget;
-      version: ProvisionWordingVersion;
+      /** The citations of one provision in one paragraph, sharing a card. */
+      citations: readonly CitedProvisionTarget[];
     };
-
-export type ProvisionWordingVersion =
-  | { type: "current" }
-  | { type: "consolidation"; validFrom: string | null };
 
 export type ProvisionPreviewRef = {
   anchor: string;
@@ -57,8 +57,12 @@ export type ProvisionPreviewRef = {
 
 export type ReaderPresentationAdapters = {
   messages: ReaderMessages;
-  /** Omit when the host cannot copy a permalink; copy controls are hidden. */
-  copyPermalink?: ((anchorId: string) => void) | undefined;
+  /**
+   * Copies the block's permalink and reports whether it worked; the mark
+   * confirms a success in place, so the host raises no success toast.
+   * Omit when the host cannot copy a permalink; copy controls are hidden.
+   */
+  copyPermalink?: ((anchorId: string) => Promise<boolean>) | undefined;
 };
 
 export type DecisionReaderAdapters = ReaderPresentationAdapters & {
@@ -71,7 +75,7 @@ export type DecisionReaderAdapters = ReaderPresentationAdapters & {
   openProvision: (provision: ProvisionViewPayload) => void;
   loadProvisionPreview: (
     ref: ProvisionPreviewRef,
-  ) => Promise<ProvisionPreviewData>;
+  ) => Promise<ProvisionPreviewData | null>;
 };
 
 const ReaderPresentationContext =

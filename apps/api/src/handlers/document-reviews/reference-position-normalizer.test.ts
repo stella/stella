@@ -37,9 +37,9 @@ import {
 import type { ProposedReferencePosition } from "@/api/lib/document-review/reference-passages";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import {
+  type Position,
   POSITION_PURPOSE_MAX_LENGTH,
   POSITION_TERM_KINDS,
-  type Position,
 } from "@/api/lib/workflow/playbook-positions";
 
 const SOURCE_KEY = "F1";
@@ -59,11 +59,36 @@ const source: ReferenceSource = {
     fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
     fileId: "file-1",
     blocks: [
-      { kind: "paragraph", id: "r-1", text: CLAIMS_BLOCK },
-      { kind: "paragraph", id: "r-2", text: "   " },
-      { kind: "paragraph", id: "r-3", text: DATE_BLOCK },
-      { kind: "paragraph", id: "r-4", text: PLACEHOLDER_BLOCK },
-      { kind: "paragraph", id: "r-5", text: WORDED_BLOCK },
+      {
+        kind: "paragraph",
+        statedNumbering: { kind: "inherit" },
+        id: "r-1",
+        text: CLAIMS_BLOCK,
+      },
+      {
+        kind: "paragraph",
+        statedNumbering: { kind: "inherit" },
+        id: "r-2",
+        text: "   ",
+      },
+      {
+        kind: "paragraph",
+        statedNumbering: { kind: "inherit" },
+        id: "r-3",
+        text: DATE_BLOCK,
+      },
+      {
+        kind: "paragraph",
+        statedNumbering: { kind: "inherit" },
+        id: "r-4",
+        text: PLACEHOLDER_BLOCK,
+      },
+      {
+        kind: "paragraph",
+        statedNumbering: { kind: "inherit" },
+        id: "r-5",
+        text: WORDED_BLOCK,
+      },
     ],
     simplifiedName: SOURCE_KEY,
   },

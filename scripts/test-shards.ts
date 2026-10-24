@@ -34,6 +34,8 @@ export const TEST_SHARD_IDS = [
   "api-2",
   "api-3",
   "api-4",
+  "api-5",
+  "api-6",
   "rest",
   "web",
 ] as const;
@@ -45,6 +47,8 @@ export const TEST_JOB_SHARDS = {
   "api-2": ["api-2"],
   "api-3": ["api-3"],
   "api-4": ["api-4"],
+  "api-5": ["api-5"],
+  "api-6": ["api-6"],
   "rest-web": ["rest", "web"],
 } as const satisfies Record<string, readonly TestShardId[]>;
 
@@ -59,6 +63,8 @@ export const TEST_SHARD_PACKAGES = {
   "api-2": ["@stll/api"],
   "api-3": ["@stll/api"],
   "api-4": ["@stll/api"],
+  "api-5": ["@stll/api"],
+  "api-6": ["@stll/api"],
   rest: null,
   web: ["@stll/web"],
 } as const satisfies Record<TestShardId, readonly string[] | null>;
@@ -127,7 +133,10 @@ export const shardFilters = ({
     .map((name) => `--filter=!${name}`);
 };
 
-export const apiShardValue = (shard: TestShardId, count = 4): string => {
+export const apiShardValue = (
+  shard: TestShardId,
+  count: number = API_TEST_SHARD_IDS.length,
+): string => {
   const apiShards = API_TEST_SHARD_IDS;
   if (!isApiTestShardId(shard)) {
     return "";
@@ -175,7 +184,7 @@ export const assertApiShardExecuted = ({
   shard,
   taskIds,
   output,
-  count = 4,
+  count = API_TEST_SHARD_IDS.length,
 }: AssertApiShardExecutedOptions): void => {
   const value = apiShardValue(shard, count);
   if (value === "" || !taskIds.includes("@stll/api#test")) {
@@ -192,7 +201,9 @@ export const assertApiShardExecuted = ({
 
 if (import.meta.main) {
   const shard = parseShard(process.argv.slice(2));
-  const count = Number(process.env["API_TEST_SHARD_COUNT"] || 4);
+  const count = Number(
+    process.env["API_TEST_SHARD_COUNT"] || API_TEST_SHARD_IDS.length,
+  );
   if (process.argv[2] === "--verify-output") {
     const plan: { tasks: { taskId: string }[] } = JSON.parse(
       readFileSync(process.argv[4] ?? panic("Missing Turbo plan"), "utf-8"),

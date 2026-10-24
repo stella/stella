@@ -5,18 +5,18 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
 import {
-  SEARCH_TOTAL_NOT_COUNTED,
-  FACET_COUNT_TYPE,
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
+  FACET_COUNT_TYPE,
+  SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   caseLawDecisions,
-  caseLawSources,
   caseLawSearchDocuments,
+  caseLawSources,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { caseLawSearchPlan } from "@/api/handlers/case-law/decisions/search";
@@ -160,7 +160,7 @@ beforeAll(
       await withPublicLawReaderRole(db, async (tx) => {
         const result = await tx.execute(sql`
       SELECT d.source_id::text AS value, count(distinct coalesce(d.language_group_key, d.id::text))::int AS count
-      FROM case_law_decisions d
+      FROM case_law_published_decisions d
       JOIN case_law_search_documents sd ON sd.decision_id = d.id
       WHERE sd.tsv @@ plainto_tsquery('simple', 'facetword')
         ${language === undefined ? sql`` : sql`AND d.language = ${language}`}

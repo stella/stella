@@ -25,17 +25,17 @@ import { assertProperty } from "@stll/property-testing";
 import {
   chatMessageFromPersisted,
   isChatPart,
-  toChatMessageContent,
-  toPersistedChatMessageContentV3,
   normalizePersistedChatMessageContent,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
+import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,
-  STRIPPED_CHUNK_KEYS,
   streamChatChunks,
+  STRIPPED_CHUNK_KEYS,
   toolCallEndInputOf,
   toolCallEndOutputOf,
   toolCallNameOf,
@@ -405,7 +405,9 @@ test("a continuation snapshot preserves normalized legacy server ownership", asy
   const historical = chatMessageFromPersisted({
     id: toSafeId<"chatMessage">("msg_legacy_server_snapshot"),
     role: "assistant",
-    content: toChatMessageContent({ version: 2, data: [call] }),
+    content: toPersistedChatMessageContentV3({
+      data: [normalizeStoredChatToolExecutor(call)],
+    }),
   });
   const beforeRefs = chatRefsWrittenIn({
     parts: historical.parts,

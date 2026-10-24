@@ -1,12 +1,13 @@
 import Elysia from "elysia";
 
 import readAIAvailability from "@/api/handlers/organization-settings/ai-availability/get";
+import previewAIConfigDefaults from "@/api/handlers/organization-settings/ai-config/defaults/preview";
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/get";
 import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/anonymization-blacklist/update";
 import {
+  deleteBusinessRegistryCredential,
   readBusinessRegistryCredentials,
   saveBusinessRegistryCredential,
-  deleteBusinessRegistryCredential,
 } from "@/api/handlers/organization-settings/business-registry-credentials";
 import createCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
 import deleteCorrespondenceAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/delete";
@@ -36,10 +37,10 @@ import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 import {
-  readBillingDraftConfiguration,
-  updateBillingDraftConfiguration,
   listBillingKnowledgeFiles,
+  readBillingDraftConfiguration,
   readBillingKnowledgeFile,
+  updateBillingDraftConfiguration,
 } from "./billing-drafts";
 
 export const organizationSettingsRoute = new Elysia({
@@ -64,6 +65,7 @@ export const organizationSettingsRoute = new Elysia({
     listCorrespondenceAllowedSenders.handler,
     {
       permissions: listCorrespondenceAllowedSenders.config.permissions,
+      accountAccess: listCorrespondenceAllowedSenders.config.accountAccess,
       query: listCorrespondenceAllowedSenders.config.query,
     },
   )
@@ -72,6 +74,7 @@ export const organizationSettingsRoute = new Elysia({
     createCorrespondenceAllowedSender.handler,
     {
       permissions: createCorrespondenceAllowedSender.config.permissions,
+      accountAccess: createCorrespondenceAllowedSender.config.accountAccess,
       body: createCorrespondenceAllowedSender.config.body,
     },
   )
@@ -80,6 +83,7 @@ export const organizationSettingsRoute = new Elysia({
     deleteCorrespondenceAllowedSender.handler,
     {
       permissions: deleteCorrespondenceAllowedSender.config.permissions,
+      accountAccess: deleteCorrespondenceAllowedSender.config.accountAccess,
       params: deleteCorrespondenceAllowedSender.config.params,
     },
   )
@@ -88,6 +92,7 @@ export const organizationSettingsRoute = new Elysia({
     addCorrespondenceAllowedSenderScope.handler,
     {
       permissions: addCorrespondenceAllowedSenderScope.config.permissions,
+      accountAccess: addCorrespondenceAllowedSenderScope.config.accountAccess,
       params: addCorrespondenceAllowedSenderScope.config.params,
       body: addCorrespondenceAllowedSenderScope.config.body,
     },
@@ -97,17 +102,23 @@ export const organizationSettingsRoute = new Elysia({
     removeCorrespondenceAllowedSenderScope.handler,
     {
       permissions: removeCorrespondenceAllowedSenderScope.config.permissions,
+      accountAccess:
+        removeCorrespondenceAllowedSenderScope.config.accountAccess,
       params: removeCorrespondenceAllowedSenderScope.config.params,
       body: removeCorrespondenceAllowedSenderScope.config.body,
     },
   )
   .get("/", readOrganizationSettings.handler, {
     permissions: readOrganizationSettings.config.permissions,
+    accountAccess: readOrganizationSettings.config.accountAccess,
   })
   .get(
     "/business-registry-credentials",
     readBusinessRegistryCredentials.handler,
-    { permissions: readBusinessRegistryCredentials.config.permissions },
+    {
+      permissions: readBusinessRegistryCredentials.config.permissions,
+      accountAccess: readBusinessRegistryCredentials.config.accountAccess,
+    },
   )
   .post(
     "/business-registry-credentials",
@@ -115,6 +126,7 @@ export const organizationSettingsRoute = new Elysia({
     {
       body: saveBusinessRegistryCredential.config.body,
       permissions: saveBusinessRegistryCredential.config.permissions,
+      accountAccess: saveBusinessRegistryCredential.config.accountAccess,
     },
   )
   .delete(
@@ -123,102 +135,134 @@ export const organizationSettingsRoute = new Elysia({
     {
       query: deleteBusinessRegistryCredential.config.query,
       permissions: deleteBusinessRegistryCredential.config.permissions,
+      accountAccess: deleteBusinessRegistryCredential.config.accountAccess,
     },
   )
   .post("/", updateOrganizationSettings.handler, {
     body: updateOrganizationSettings.config.body,
     permissions: updateOrganizationSettings.config.permissions,
+    accountAccess: updateOrganizationSettings.config.accountAccess,
   })
   .post("/sanctions-monitoring", updateSanctionsMonitoring.handler, {
     permissions: updateSanctionsMonitoring.config.permissions,
+    accountAccess: updateSanctionsMonitoring.config.accountAccess,
     body: updateSanctionsMonitoring.config.body,
   })
   .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
     body: updatePracticeJurisdictions.config.body,
     permissions: updatePracticeJurisdictions.config.permissions,
+    accountAccess: updatePracticeJurisdictions.config.accountAccess,
   })
   .post("/preview", previewOrganizationSettings.handler, {
     body: previewOrganizationSettings.config.body,
     permissions: previewOrganizationSettings.config.permissions,
+    accountAccess: previewOrganizationSettings.config.accountAccess,
   })
   .get(
     "/billing-drafts/knowledge-files/:resourceId",
     readBillingKnowledgeFile.handler,
     {
       permissions: readBillingKnowledgeFile.config.permissions,
+      accountAccess: readBillingKnowledgeFile.config.accountAccess,
       params: readBillingKnowledgeFile.config.params,
     },
   )
   .get("/billing-drafts/knowledge-files", listBillingKnowledgeFiles.handler, {
     permissions: listBillingKnowledgeFiles.config.permissions,
+    accountAccess: listBillingKnowledgeFiles.config.accountAccess,
     query: listBillingKnowledgeFiles.config.query,
   })
   .get("/billing-drafts", readBillingDraftConfiguration.handler, {
     permissions: readBillingDraftConfiguration.config.permissions,
+    accountAccess: readBillingDraftConfiguration.config.accountAccess,
     query: readBillingDraftConfiguration.config.query,
   })
   .post("/billing-drafts", updateBillingDraftConfiguration.handler, {
     permissions: updateBillingDraftConfiguration.config.permissions,
+    accountAccess: updateBillingDraftConfiguration.config.accountAccess,
     body: updateBillingDraftConfiguration.config.body,
   })
   .get("/ai-availability", readAIAvailability.handler, {
     permissions: readAIAvailability.config.permissions,
+    accountAccess: readAIAvailability.config.accountAccess,
   })
   .get("/feature-enrolments", getFeatureEnrolments.handler, {
     permissions: getFeatureEnrolments.config.permissions,
+    accountAccess: getFeatureEnrolments.config.accountAccess,
   })
   .put("/feature-enrolments/:featureId", enrolFeature.handler, {
     permissions: enrolFeature.config.permissions,
+    accountAccess: enrolFeature.config.accountAccess,
     params: enrolFeature.config.params,
   })
   .delete("/feature-enrolments/:featureId", unenrolFeature.handler, {
     permissions: unenrolFeature.config.permissions,
+    accountAccess: unenrolFeature.config.accountAccess,
     params: unenrolFeature.config.params,
   })
   .get("/feature-access", getFeatureAccess.handler, {
     permissions: getFeatureAccess.config.permissions,
+    accountAccess: getFeatureAccess.config.accountAccess,
   })
   .get("/document-ocr-availability", getDocumentOcrAvailability.handler, {
     permissions: getDocumentOcrAvailability.config.permissions,
+    accountAccess: getDocumentOcrAvailability.config.accountAccess,
+  })
+  .post("/ai-config/defaults-preview", previewAIConfigDefaults.handler, {
+    body: previewAIConfigDefaults.config.body,
+    permissions: previewAIConfigDefaults.config.permissions,
+    accountAccess: previewAIConfigDefaults.config.accountAccess,
   })
   .get("/ai-config", readAIConfig.handler, {
     permissions: readAIConfig.config.permissions,
+    accountAccess: readAIConfig.config.accountAccess,
   })
   .post("/ai-config", updateAIConfig.handler, {
     body: updateAIConfig.config.body,
     permissions: updateAIConfig.config.permissions,
+    accountAccess: updateAIConfig.config.accountAccess,
   })
   .delete("/ai-config", deleteAIConfig.handler, {
     permissions: deleteAIConfig.config.permissions,
+    accountAccess: deleteAIConfig.config.accountAccess,
   })
   .get("/deepl", readDeepLAvailability.handler, {
     permissions: readDeepLAvailability.config.permissions,
+    accountAccess: readDeepLAvailability.config.accountAccess,
   })
   .get("/deepl-config", readDeepLConfig.handler, {
     permissions: readDeepLConfig.config.permissions,
+    accountAccess: readDeepLConfig.config.accountAccess,
   })
   .post("/deepl", updateDeepLKey.handler, {
     body: updateDeepLKey.config.body,
     permissions: updateDeepLKey.config.permissions,
+    accountAccess: updateDeepLKey.config.accountAccess,
   })
   .delete("/deepl", deleteDeepLKey.handler, {
     permissions: deleteDeepLKey.config.permissions,
+    accountAccess: deleteDeepLKey.config.accountAccess,
   })
   .get("/web-search-config", readWebSearchConfig.handler, {
     permissions: readWebSearchConfig.config.permissions,
+    accountAccess: readWebSearchConfig.config.accountAccess,
   })
   .post("/web-search-key", updateWebSearchKey.handler, {
     body: updateWebSearchKey.config.body,
     permissions: updateWebSearchKey.config.permissions,
+    accountAccess: updateWebSearchKey.config.accountAccess,
   })
   .delete("/web-search-key", deleteWebSearchKey.handler, {
     body: deleteWebSearchKey.config.body,
     permissions: deleteWebSearchKey.config.permissions,
+    accountAccess: deleteWebSearchKey.config.accountAccess,
   })
   .get("/anonymization-blacklist", readAnonymizationBlacklist.handler, {
     permissions: readAnonymizationBlacklist.config.permissions,
+    accountAccess: readAnonymizationBlacklist.config.accountAccess,
   })
   .put("/anonymization-blacklist", updateAnonymizationBlacklist.handler, {
     body: updateAnonymizationBlacklist.config.body,
     permissions: updateAnonymizationBlacklist.config.permissions,
+    accountAccess: updateAnonymizationBlacklist.config.accountAccess,
   });

@@ -3,6 +3,7 @@ import {
   useDeferredValue,
   useEffect,
   useEffectEvent,
+  useReducer,
   useRef,
   useState,
 } from "react";
@@ -38,10 +39,10 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -52,10 +53,10 @@ import {
   ArrowRightIcon,
   Building2Icon,
   ChevronsUpDownIcon,
-  ClipboardIcon,
   CircleHelpIcon,
-  CopyPlusIcon,
+  ClipboardIcon,
   ClockIcon,
+  CopyPlusIcon,
   EllipsisVerticalIcon,
   FileTextIcon,
   FolderInputIcon,
@@ -79,9 +80,9 @@ import type { LucideIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
+  type InlineDropPosition,
   reorderInlineIds,
   toInlineDropPosition,
-  type InlineDropPosition,
 } from "@stll/ui/inline-reorder";
 import {
   InputGroup,
@@ -109,17 +110,26 @@ import { cn } from "@stll/ui/utils";
 import { RegistrySearch } from "../registry/RegistrySearch";
 import type { DesktopConnectionStatus } from "../registry/RegistrySearch";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { formatShortcut } from "../shared/shortcut-keys";
 import {
+  DESKTOP_PLATFORM,
+  useClipboardShortcut,
+  useKeyboardLayout,
+} from "../shared/use-clipboard-shortcut";
+import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
+  adjacentClipboardScope,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  CLIPBOARD_SEARCH_SCOPES,
+  clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
@@ -127,20 +137,19 @@ import {
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
+  clipboardScopeKeyAction,
   clipboardSourceIdentity,
   clipboardSourceLabel,
   clipboardSourceTintIndex,
   clipboardSourceTitle,
-  CLIPBOARD_SEARCH_SCOPES,
-  adjacentClipboardScope,
-  clipboardControlsKeyAction,
-  clipboardScopeKeyAction,
   clipboardTimelineKeyAction,
+  clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
@@ -150,6 +159,7 @@ import type {
   ClipboardPointerPosition,
   ClipboardSearchScope,
 } from "./clipboard-logic";
+import { clipboardHistory } from "./clipboard-selection";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -157,18 +167,22 @@ import {
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
 import {
+  CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
+  isClipboardCaptureRevision,
+  isClipboardCaptureUpdate,
   isClipboardCopyError,
   isClipboardSnapshot,
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
-  ClipboardCopyFormat,
+  ClipboardCaptureUpdate,
   ClipboardCopyErrorKind,
-  ClipboardRetention,
+  ClipboardCopyFormat,
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
+  ClipboardRetention,
   ClipboardSnapshot,
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
@@ -183,7 +197,6 @@ import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
-const MAX_ITEM_NAME_CHARACTERS = 80;
 const RETENTION_LABEL_KEYS = {
   week: "retentionWeek",
   month: "retentionMonth",
@@ -233,9 +246,6 @@ const CLIPBOARD_SCOPE_PRESENTATION = {
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
-const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
-  ? "⌘⇧V"
-  : "Ctrl+Shift+V";
 // Only macOS gives the window a native material; elsewhere the page paints the
 // surface its rounded corners clip.
 const CLIPBOARD_WINDOW_CLASS = navigator.userAgent.includes("Mac")
@@ -245,6 +255,7 @@ const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
   !navigator.userAgent.includes("Linux");
 
 const EMPTY_SNAPSHOT = {
+  revision: 0,
   captureStatus: "active",
   // Native owns the limit; fail closed until the first runtime snapshot.
   groupLimit: 0,
@@ -343,6 +354,8 @@ type ClipboardOpenMenuOptions = {
 
 type ClipboardCardProps = {
   active: boolean;
+  selected: boolean;
+  onToggleSelection: (id: string) => void;
   ageReferenceTime: number;
   dragging: boolean;
   groupColor: ClipboardGroupColor | null;
@@ -445,6 +458,8 @@ const ClipboardCardFooterMetadata = ({
 
 const ClipboardCard = ({
   active,
+  selected,
+  onToggleSelection,
   ageReferenceTime,
   dragging,
   groupColor,
@@ -498,11 +513,10 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const link = clipboardItemLink(item);
-  const fallbackName =
-    item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
-  // An unnamed browser copy is named after the page it came from.
-  const untitledName =
-    item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
+  const untitledName = clipboardUntitledName(item, {
+    image: t("image"),
+    text: t("unnamedClip"),
+  });
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
@@ -568,6 +582,7 @@ const ClipboardCard = ({
         "motion-safe:transition-opacity motion-safe:duration-150",
         active ? "opacity-100" : "opacity-86 hover:opacity-100",
       )}
+      data-selected={selected ? "" : undefined}
       data-clipboard-id={item.id}
       data-clipboard-index={index}
       data-dragging={dragging ? "" : undefined}
@@ -581,7 +596,31 @@ const ClipboardCard = ({
         })}
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
-        onClick={() => onCopy(item, "original")}
+        aria-pressed={selected}
+        onClick={(event) => {
+          if (
+            hasClipboardPrimaryModifier({
+              altKey: event.altKey,
+              altGraphKey: event.getModifierState("AltGraph"),
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+            })
+          ) {
+            onToggleSelection(item.id);
+            return;
+          }
+          onCopy(item, "original");
+        }}
+        aria-keyshortcuts="Space"
+        onKeyDown={(event) => {
+          if (event.key !== " " || event.nativeEvent.isComposing) {
+            return;
+          }
+          event.preventDefault();
+          if (!event.repeat) {
+            onToggleSelection(item.id);
+          }
+        }}
         onContextMenu={(event) =>
           onOpenMenu({ anchor: "pointer", event, item, index })
         }
@@ -595,26 +634,33 @@ const ClipboardCard = ({
             onImagePreviewStatusChange={setImagePreviewStatus}
             query={query}
           />
-          {/* Renaming takes both keys for itself: Enter commits the name and
-              Shift+Enter is swallowed with it, so the hints would lie. */}
-          {active && !editingName && item.type === "formattedText" ? (
-            <span
-              className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
-              data-clipboard-format-shortcuts=""
-            >
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <kbd className="font-mono">↵</kbd>
-                {t("originalFormatting")}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <kbd className="font-mono">⇧↵</kbd>
-                {t("plainText")}
-              </span>
-            </span>
-          ) : null}
         </div>
       </button>
+
+      {active && !editingName && item.type === "formattedText" ? (
+        <div
+          className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
+          data-clipboard-format-shortcuts=""
+        >
+          <button
+            type="button"
+            onClick={() => onCopy(item, "original")}
+            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+          >
+            <kbd className="font-mono">↵</kbd>
+            {t("originalFormatting")}
+          </button>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            onClick={() => onCopy(item, "plainText")}
+            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+          >
+            <kbd className="font-mono">⇧↵</kbd>
+            {t("plainText")}
+          </button>
+        </div>
+      ) : null}
 
       <Button
         aria-expanded={menuOpen}
@@ -652,7 +698,7 @@ const ClipboardCard = ({
             className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
             fill
-            maxLength={MAX_ITEM_NAME_CHARACTERS}
+            maxLength={MAX_CLIPBOARD_ITEM_NAME_CHARACTERS}
             onCancel={() => {
               setEditingName(false);
               setNameDraft(item.name ?? "");
@@ -1202,6 +1248,14 @@ const ClipboardContextMenu = ({
   );
 };
 
+function reportShortcutReadFailure() {
+  reportDesktopError({
+    code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+    operation: DESKTOP_TELEMETRY_OPERATIONS.shortcutUpdate,
+    window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+  });
+}
+
 type ClipboardWelcomeDialogProps = {
   onClose: () => void;
   connectionStatus: DesktopConnectionStatus;
@@ -1243,6 +1297,25 @@ const ClipboardWelcomeDialog = ({
   const [autostartChoice, setAutostartChoice] = useState<AutostartChoiceState>({
     status: "loading",
   });
+  const [shortcut] = useClipboardShortcut(reportShortcutReadFailure);
+  const locale = useLocale();
+  const layout = useKeyboardLayout();
+  const shortcutFeatures = shortcut
+    ? [
+        {
+          description: t("welcomeShortcutDescription", {
+            shortcut: formatShortcut({
+              keys: shortcut.keys,
+              layout,
+              locale,
+              platform: DESKTOP_PLATFORM,
+            }),
+          }),
+          icon: KeyboardIcon,
+          title: t("welcomeShortcutTitle"),
+        },
+      ]
+    : [];
   const features = [
     {
       description: t(
@@ -1253,13 +1326,7 @@ const ClipboardWelcomeDialog = ({
       icon: ClipboardIcon,
       title: t("welcomeCaptureTitle"),
     },
-    {
-      description: t("welcomeShortcutDescription", {
-        shortcut: CLIPBOARD_SHORTCUT_LABEL,
-      }),
-      icon: KeyboardIcon,
-      title: t("welcomeShortcutTitle"),
-    },
+    ...shortcutFeatures,
     {
       description: t("welcomeLocalDescription"),
       icon: LockKeyholeIcon,
@@ -1540,7 +1607,9 @@ const ClipboardApp = () => {
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
-  const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
+  const captureUpdatesRef = useRef<ClipboardCaptureUpdate[]>([]);
+  const snapshotPendingRef = useRef(false);
+  const appliedRevisionRef = useRef(0);
   const [ageReferenceTime, setAgeReferenceTime] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
@@ -1549,6 +1618,13 @@ const ClipboardApp = () => {
     useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [{ snapshot, selection }, dispatchClipboard] = useReducer(
+    clipboardHistory,
+    {
+      snapshot: EMPTY_SNAPSHOT,
+      selection: { ids: [], session: 0 },
+    },
+  );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
@@ -1578,7 +1654,10 @@ const ClipboardApp = () => {
     markClipboardShellCommit();
     const stopObservingReopens = observeClipboardReopens();
     let disposed = false;
+    let notifiedRevision = 0;
     const readSnapshot = () => {
+      captureUpdatesRef.current = [];
+      snapshotPendingRef.current = true;
       const requestId = snapshotRequestIdRef.current + 1;
       snapshotRequestIdRef.current = requestId;
       void measureClipboardSnapshotRequest(
@@ -1588,7 +1667,9 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return undefined;
           }
+          snapshotPendingRef.current = false;
           if (!isClipboardSnapshot(value)) {
+            captureUpdatesRef.current = [];
             reportDesktopError({
               code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
@@ -1597,7 +1678,33 @@ const ClipboardApp = () => {
             setError({ message: errorReadHistory, source: "read" });
             return undefined;
           }
-          setSnapshot(value);
+          dispatchClipboard({ type: "snapshotReceived", snapshot: value });
+          appliedRevisionRef.current = Math.max(
+            appliedRevisionRef.current,
+            value.revision,
+          );
+          let refreshRequired = false;
+          const pendingUpdates = [...captureUpdatesRef.current].sort(
+            (left, right) => left.revision - right.revision,
+          );
+          for (const update of pendingUpdates) {
+            if (update.revision <= appliedRevisionRef.current) {
+              continue;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              refreshRequired = true;
+              continue;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+          }
+          captureUpdatesRef.current = [];
+          if (
+            refreshRequired ||
+            notifiedRevision > appliedRevisionRef.current
+          ) {
+            readSnapshot();
+          }
           setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
@@ -1605,6 +1712,8 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return;
           }
+          snapshotPendingRef.current = false;
+          captureUpdatesRef.current = [];
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             detail: describeError(error),
@@ -1615,9 +1724,88 @@ const ClipboardApp = () => {
         });
     };
     readSnapshot();
-    const stopListening = subscribeDesktopEvent({
-      event: "clipboard-history-changed",
-      handler: readSnapshot,
+    const stopListening = subscribeDesktopEvent<unknown>({
+      event: CLIPBOARD_HISTORY_CHANGED_EVENT,
+      handler: ({ payload }) => {
+        if (payload === null) {
+          readSnapshot();
+          return;
+        }
+        if (!isClipboardCaptureRevision(payload)) {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({ message: errorReadHistory, source: "read" });
+          return;
+        }
+        notifiedRevision = Math.max(notifiedRevision, payload.revision);
+        if (
+          payload.revision <= appliedRevisionRef.current ||
+          snapshotPendingRef.current
+        ) {
+          return;
+        }
+        void invoke<unknown>("clipboard_get_capture_update", {
+          revision: payload.revision,
+        })
+          .then((update) => {
+            if (disposed) {
+              return undefined;
+            }
+            // Only the most recent capture is retained natively. A gap or a
+            // mutation invalidating it recovers through the authorized snapshot.
+            if (update === null) {
+              if (
+                !snapshotPendingRef.current &&
+                notifiedRevision > appliedRevisionRef.current
+              ) {
+                readSnapshot();
+              }
+              return undefined;
+            }
+            if (
+              !isClipboardCaptureUpdate(update) ||
+              update.revision !== payload.revision
+            ) {
+              reportDesktopError({
+                code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+                operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+                window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+              });
+              setError({ message: errorReadHistory, source: "read" });
+              return undefined;
+            }
+            if (update.revision <= appliedRevisionRef.current) {
+              return undefined;
+            }
+            if (snapshotPendingRef.current) {
+              captureUpdatesRef.current.push(update);
+              return undefined;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              readSnapshot();
+              captureUpdatesRef.current.push(update);
+              return undefined;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            if (disposed) {
+              return;
+            }
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+              detail: describeError(error),
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+            });
+            setError({ message: errorReadHistory, source: "read" });
+          });
+      },
       onError: () => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
@@ -1761,6 +1949,7 @@ const ClipboardApp = () => {
       timelineRef.current?.focus();
     };
     const handleWindowFocus = () => {
+      dispatchClipboard({ type: "sessionStarted" });
       setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
       // The pointer may have moved while the window was hidden; the next
       // pointer move only seeds the position.
@@ -1831,7 +2020,11 @@ const ClipboardApp = () => {
       void invoke<unknown>(command, args)
         .then((value) => {
           if (isClipboardSnapshot(value)) {
-            setSnapshot(value);
+            appliedRevisionRef.current = Math.max(
+              appliedRevisionRef.current,
+              value.revision,
+            );
+            dispatchClipboard({ type: "snapshotReceived", snapshot: value });
             onSuccess?.();
             return undefined;
           }
@@ -1875,8 +2068,14 @@ const ClipboardApp = () => {
     format: ClipboardCopyFormat = "original",
   ) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    void invoke("clipboard_copy_item", { format, id: item.id }).catch(
-      (error: unknown) => {
+    const { ids, session } = selection;
+    const copying =
+      ids.length > 0
+        ? invoke("clipboard_copy_items", { format, ids })
+        : invoke("clipboard_copy_item", { format, id: item.id });
+    void copying
+      .then(() => dispatchClipboard({ type: "copySucceeded", session }))
+      .catch((error: unknown) => {
         // An unrecognised rejection means the clip never left the window.
         const kind = isClipboardCopyError(error) ? error.kind : "copy";
         const feedback = COPY_FAILURE_FEEDBACK[kind];
@@ -1886,8 +2085,7 @@ const ClipboardApp = () => {
           window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
         });
         setError({ message: t(feedback.messageKey), source: "operation" });
-      },
-    );
+      });
   };
 
   const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
@@ -2453,6 +2651,10 @@ const ClipboardApp = () => {
       setDialog({ type: "closed" });
       return;
     }
+    if (selection.ids.length > 0) {
+      dispatchClipboard({ type: "clear" });
+      return;
+    }
     requestHide();
   });
 
@@ -2656,7 +2858,7 @@ const ClipboardApp = () => {
                 ) : (
                   <div
                     aria-label={t("timeline")}
-                    className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+                    className="clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
                     onPointerMove={handleRailPointerMove}
                     onWheel={handleRailWheel}
                     ref={attachTimelineRail}
@@ -2690,6 +2892,10 @@ const ClipboardApp = () => {
                         return (
                           <ClipboardCard
                             active={index === activeIndex}
+                            selected={selection.ids.includes(item.id)}
+                            onToggleSelection={(id) =>
+                              dispatchClipboard({ type: "toggle", id })
+                            }
                             ageReferenceTime={ageReferenceTime}
                             dragging={
                               dragState.type === "dragging" &&
@@ -2864,10 +3070,18 @@ const ClipboardApp = () => {
                   inert={searchSource === "registry"}
                   aria-label={t("groups")}
                   className={cn(
-                    "clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2",
+                    "clipboard-groups-rail border-border flex min-w-0 items-center gap-1 border-s ps-2",
                     searchSource === "registry" && "hidden",
                   )}
-                  onWheel={handleRailWheel}
+                  onFocusCapture={({ target }) => {
+                    if (target instanceof HTMLElement) {
+                      target.scrollIntoView({
+                        block: "nearest",
+                        inline: "nearest",
+                        behavior: "instant",
+                      });
+                    }
+                  }}
                 >
                   <Button
                     aria-pressed={activeGroupId === null}
@@ -2884,7 +3098,7 @@ const ClipboardApp = () => {
                   </Button>
                   <Button
                     aria-label={t("createGroup")}
-                    className="bg-background/80 sticky start-0 z-10 size-11 shrink-0 rounded-full backdrop-blur-sm"
+                    className="size-11 shrink-0 rounded-full"
                     disabled={snapshot.groups.length >= snapshot.groupLimit}
                     onClick={() =>
                       setDialog({
@@ -2900,96 +3114,105 @@ const ClipboardApp = () => {
                   >
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
-                  {snapshot.groups.map((group, groupIndex) => {
-                    const groupStyle: ClipboardGroupStyle = {
-                      "--clipboard-group-accent": group.color,
-                    };
-                    return (
-                      <ContextMenu
-                        actions={[
-                          {
-                            icon: <PencilIcon aria-hidden="true" />,
-                            label: t("editGroup"),
-                            onClick: () =>
-                              setDialog({
-                                color: group.color,
-                                groupId: group.id,
-                                name: group.name,
-                                type: "editGroup",
-                              }),
-                          },
-                          {
-                            disabled: groupIndex === 0,
-                            icon: (
-                              <ArrowLeftIcon
-                                aria-hidden="true"
-                                className="rtl:rotate-180"
-                              />
-                            ),
-                            label: t("moveGroupEarlier"),
-                            onClick: () => moveGroup(group.id, groupIndex - 1),
-                            separatorBefore: true,
-                          },
-                          {
-                            disabled: groupIndex === snapshot.groups.length - 1,
-                            icon: (
-                              <ArrowRightIcon
-                                aria-hidden="true"
-                                className="rtl:rotate-180"
-                              />
-                            ),
-                            label: t("moveGroupLater"),
-                            onClick: () => moveGroup(group.id, groupIndex + 1),
-                          },
-                          {
-                            icon: <Trash2Icon aria-hidden="true" />,
-                            label: t("deleteGroup"),
-                            onClick: () =>
-                              setDialog({
-                                groupId: group.id,
-                                groupName: group.name,
-                                mode: "keepClips",
-                                type: "deleteGroup",
-                              }),
-                            separatorBefore: true,
-                            variant: "destructive",
-                          },
-                        ]}
-                        key={group.id}
-                      >
-                        <Button
-                          aria-pressed={activeGroupId === group.id}
-                          className="clipboard-group-chip relative h-11 shrink-0 rounded-full px-3 text-xs"
-                          data-clipboard-group-id={group.id}
-                          data-dragging={
-                            dragState.type === "reordering" &&
-                            dragState.groupId === group.id
-                              ? ""
-                              : undefined
-                          }
-                          data-drop-target={
-                            isDropTarget(group.id) ? "" : undefined
-                          }
-                          data-group-chip=""
-                          onClick={() => {
-                            setSelectedGroupId(group.id);
-                            setSelectedIndex(0);
-                          }}
-                          style={groupStyle}
-                          variant="ghost"
+                  <div
+                    className="flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+                    data-clipboard-groups-scroller=""
+                    onWheel={handleRailWheel}
+                  >
+                    {snapshot.groups.map((group, groupIndex) => {
+                      const groupStyle: ClipboardGroupStyle = {
+                        "--clipboard-group-accent": group.color,
+                      };
+                      return (
+                        <ContextMenu
+                          actions={[
+                            {
+                              icon: <PencilIcon aria-hidden="true" />,
+                              label: t("editGroup"),
+                              onClick: () =>
+                                setDialog({
+                                  color: group.color,
+                                  groupId: group.id,
+                                  name: group.name,
+                                  type: "editGroup",
+                                }),
+                            },
+                            {
+                              disabled: groupIndex === 0,
+                              icon: (
+                                <ArrowLeftIcon
+                                  aria-hidden="true"
+                                  className="rtl:rotate-180"
+                                />
+                              ),
+                              label: t("moveGroupEarlier"),
+                              onClick: () =>
+                                moveGroup(group.id, groupIndex - 1),
+                              separatorBefore: true,
+                            },
+                            {
+                              disabled:
+                                groupIndex === snapshot.groups.length - 1,
+                              icon: (
+                                <ArrowRightIcon
+                                  aria-hidden="true"
+                                  className="rtl:rotate-180"
+                                />
+                              ),
+                              label: t("moveGroupLater"),
+                              onClick: () =>
+                                moveGroup(group.id, groupIndex + 1),
+                            },
+                            {
+                              icon: <Trash2Icon aria-hidden="true" />,
+                              label: t("deleteGroup"),
+                              onClick: () =>
+                                setDialog({
+                                  groupId: group.id,
+                                  groupName: group.name,
+                                  mode: "keepClips",
+                                  type: "deleteGroup",
+                                }),
+                              separatorBefore: true,
+                              variant: "destructive",
+                            },
+                          ]}
+                          key={group.id}
                         >
-                          <span
-                            aria-hidden="true"
-                            className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                          />
-                          {group.name}
-                          <InlineDropIndicator
-                            position={reorderPosition(group.id)}
-                          />
-                        </Button>
-                      </ContextMenu>
-                    );
-                  })}
+                          <Button
+                            aria-pressed={activeGroupId === group.id}
+                            className="clipboard-group-chip relative h-11 shrink-0 rounded-full px-3 text-xs"
+                            data-clipboard-group-id={group.id}
+                            data-dragging={
+                              dragState.type === "reordering" &&
+                              dragState.groupId === group.id
+                                ? ""
+                                : undefined
+                            }
+                            data-drop-target={
+                              isDropTarget(group.id) ? "" : undefined
+                            }
+                            data-group-chip=""
+                            onClick={() => {
+                              setSelectedGroupId(group.id);
+                              setSelectedIndex(0);
+                            }}
+                            style={groupStyle}
+                            variant="ghost"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                            />
+                            {group.name}
+                            <InlineDropIndicator
+                              position={reorderPosition(group.id)}
+                            />
+                          </Button>
+                        </ContextMenu>
+                      );
+                    })}
+                  </div>
                 </nav>
               </div>
               <div className="flex shrink-0 items-center gap-0.5 justify-self-end">

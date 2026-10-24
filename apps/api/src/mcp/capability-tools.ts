@@ -1,3 +1,4 @@
+import "@/api/register-schema-formats";
 import { KindGuard, type TSchema } from "@sinclair/typebox";
 import { ValueErrorType } from "@sinclair/typebox/errors";
 import { Value, type ValueError } from "@sinclair/typebox/value";
@@ -30,16 +31,15 @@ import {
 } from "@/api/lib/capability-transport";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
-import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
-  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
-  isServiceClassification,
   type CatalogServiceClassification,
+  isServiceClassification,
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "@/api/lib/rate-limit/service-classification";
 import {
   HANDLER_KINDS,
@@ -82,12 +82,12 @@ import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
+  withPublicFieldNames,
 } from "@/api/mcp/public-field-names";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
-  McpEgressPlan,
   McpReadClass,
   McpToolDefinition,
   McpToolHandler,
@@ -104,14 +104,15 @@ import {
   getWorkspaceStatus,
   invalidCursorResult,
   MAX_LIST_LIMIT,
+  MAX_TOOL_NAME_CHARS,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
   nullAsAbsent,
   oauthScopeRecoveryHint,
   quoteToolName,
   searchIndexUnavailableResult,
-  structuredErrorResult,
   structuredEgressPlan,
+  structuredErrorResult,
   untypedStructuredEgressPlan,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -144,6 +145,7 @@ type CatalogEntry = {
   access: "read" | "write";
   readClass?: McpReadClass;
   destructive: boolean;
+  confirmation?: "required";
   scope: string;
   additionalScopes?: readonly string[];
   /**
@@ -176,6 +178,10 @@ type CatalogEntry = {
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
   mcp: CapabilityMcpDisposition;
 };
+
+const requiresCapabilityConfirmation = (
+  entry: Pick<CatalogEntry, "destructive" | "confirmation">,
+) => entry.destructive || entry.confirmation === "required";
 
 const HANDLER_KIND_SET = new Set<string>(HANDLER_KINDS);
 
@@ -276,6 +282,8 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
         value["readClass"] === "public" ||
         value["readClass"] === "both"))) &&
   typeof value["destructive"] === "boolean" &&
+  (value["confirmation"] === undefined ||
+    value["confirmation"] === "required") &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
     (Array.isArray(value["additionalScopes"]) &&
@@ -770,43 +778,6 @@ const mapStatusResponse = (
   );
 };
 
-/**
- * Attach the request receipt to a successful WRITE capability payload. The id
- * lands in a top-level `meta.requestId` sibling of the handler's own fields,
- * never mixed into the handler's data: it cannot collide with a domain field,
- * and the pagination fields (`items`/`nextCursor`) the CLI and `--all` read
- * stay at the top level. Reads deliberately carry NO receipt: a per-request
- * random id would make otherwise deterministic read payloads change on every
- * call, defeating agent-side caching/diffing (the `x-request-id` response
- * header still carries the id for every request; the error envelope carries it
- * unconditionally because errors are not cacheable results). A non-object
- * payload (or no active request) carries no receipt either.
- */
-const withRequestReceipt = (
-  payload: unknown,
-  access: "read" | "write",
-): unknown => {
-  if (access !== "write") {
-    return payload;
-  }
-  const requestId = getCurrentRequestId();
-  if (requestId === undefined || !isRecord(payload)) {
-    return payload;
-  }
-  const existingMeta = isRecord(payload["meta"]) ? payload["meta"] : {};
-  return { ...payload, meta: { ...existingMeta, requestId } };
-};
-
-/** Serialize a successful capability payload through the standard egress path. */
-const successEgress = (
-  payload: unknown,
-  access: "read" | "write",
-): McpEgressPlan =>
-  untypedStructuredEgressPlan({
-    payload: withRequestReceipt(payload, access),
-    textFields: [],
-  });
-
 const CAPABILITY_TRANSPORT_OUTPUT_SCHEMA = v.strictObject({
   type: v.picklist(["json", "file-input", "file-response", "file-both"]),
   invocable: v.boolean(),
@@ -831,6 +802,7 @@ const LIST_CAPABILITIES_OUTPUT_SCHEMA = v.strictObject({
       description: v.nullable(v.string()),
       access: v.picklist(["read", "write"]),
       destructive: v.boolean(),
+      confirmation: v.picklist(["required", "not-required"]),
       handlerKind: v.picklist(HANDLER_KINDS),
       transport: CAPABILITY_TRANSPORT_OUTPUT_SCHEMA,
       scope: v.string(),
@@ -847,6 +819,7 @@ const DESCRIBE_CAPABILITY_OUTPUT_SCHEMA = v.strictObject({
   domain: v.string(),
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
+  confirmation: v.picklist(["required", "not-required"]),
   handlerKind: v.picklist(HANDLER_KINDS),
   scope: v.string(),
   additionalScopes: v.array(v.string()),
@@ -1002,7 +975,7 @@ const listCapabilitiesHandler: McpToolHandler<
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       capabilityFeatureEnabled(entry, context) &&
-      (confirmable || !entry.destructive) &&
+      (confirmable || !requiresCapabilityConfirmation(entry)) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
@@ -1031,6 +1004,9 @@ const listCapabilitiesHandler: McpToolHandler<
             : scopeMcpDescriptorProse(entry.description, hiddenIds),
         access: entry.access,
         destructive: entry.destructive,
+        confirmation: requiresCapabilityConfirmation(entry)
+          ? "required"
+          : "not-required",
         handlerKind: entry.handlerKind,
         transport: renderTransport(entry.transport),
         scope: entry.scope,
@@ -1106,6 +1082,7 @@ const describeCapabilityArgsSchema = nullAsAbsent(
     capability: v.pipe(
       v.string(),
       v.minLength(1),
+      v.maxLength(MAX_TOOL_NAME_CHARS),
       v.description(
         'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
       ),
@@ -1198,7 +1175,7 @@ const describeCapabilityHandler: McpToolHandler<
   );
   const schema = advertisedSchemas(endpoint.config);
   const requirement = endpoint.config.featureAccess;
-  const inputSchema =
+  const callerSchema =
     requirement?.type === "conditional" &&
     !isMcpDescriptorFeatureEnabled({
       context,
@@ -1208,6 +1185,13 @@ const describeCapabilityHandler: McpToolHandler<
     })
       ? requirement.projectInputSchema(schema)
       : schema;
+  // The executors read `matterId` and refuse the internal spelling, so the
+  // description names the field the same way the catalog does.
+  const inputSchema = {
+    body: withPublicFieldNames(callerSchema.body),
+    params: withPublicFieldNames(callerSchema.params),
+    query: withPublicFieldNames(callerSchema.query),
+  };
 
   return structuredEgressPlan({
     payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
@@ -1219,6 +1203,9 @@ const describeCapabilityHandler: McpToolHandler<
       domain: capabilityDomain(entry.id),
       access: entry.access,
       destructive: entry.destructive,
+      confirmation: requiresCapabilityConfirmation(entry)
+        ? "required"
+        : "not-required",
       handlerKind: entry.handlerKind,
       scope: entry.scope,
       additionalScopes: additionalScopesOf(entry),
@@ -1345,6 +1332,7 @@ const CAPABILITY_ARGUMENTS = {
   capability: v.pipe(
     v.string(),
     v.nonEmpty(),
+    v.maxLength(MAX_TOOL_NAME_CHARS),
     v.description(
       "Capability id to invoke. Use an id list_capabilities returned.",
     ),
@@ -1374,7 +1362,7 @@ const writeCapabilityArgsSchema = nullAsAbsent(
   v.strictObject({
     ...CAPABILITY_ARGUMENTS,
     confirm: invokeFlagSchema(
-      "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
+      "Must be true to run a capability that requires confirmation. Set it only after a human user approved this operation.",
     ),
   }),
 );
@@ -1747,7 +1735,7 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  const unconfirmable = entry.destructive
+  const unconfirmable = requiresCapabilityConfirmation(entry)
     ? confirmationUnavailableResult({
         toolConfirmation: context.toolConfirmation,
         subject: `Capability "${id}"`,
@@ -1774,7 +1762,7 @@ const invokeCapabilityHandler = async ({
 
   try {
     return await executeInvoke({
-      context: entry.destructive
+      context: requiresCapabilityConfirmation(entry)
         ? bindApprovedMcpAuditContext(context)
         : context,
       entry,
@@ -1981,7 +1969,7 @@ const capabilityReferenceRefusal = async ({
   body: unknown;
   params: unknown;
   query: unknown;
-  entry: Pick<CatalogEntry, "id" | "destructive">;
+  entry: Pick<CatalogEntry, "id" | "destructive" | "confirmation">;
   confirm: boolean | undefined;
 }) => {
   if (
@@ -1997,12 +1985,12 @@ const capabilityReferenceRefusal = async ({
     return notFoundResult("Not found");
   }
 
-  // 5. Destructive confirm gate.
-  if (entry.destructive && confirm !== true) {
+  // 5. Per-capability confirmation gate.
+  if (requiresCapabilityConfirmation(entry) && confirm !== true) {
     return structuredErrorResult({
       code: "confirmation_required",
-      message: `Capability "${entry.id}" is an irreversible operation and was called without confirmation`,
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+      message: `Capability "${entry.id}" requires confirmation and was called without it`,
+      hint: "Confirm this operation with the human user, then retry with confirm: true.",
     });
   }
 
@@ -2228,7 +2216,7 @@ const executeInvoke = async ({
   });
 
   const result = await endpoint.handler(ctx);
-  return mapHandlerResult({ id, result, access: entry.access });
+  return mapHandlerResult({ id, result });
 };
 
 /**
@@ -2251,19 +2239,14 @@ const isBinaryPayload = (value: unknown): boolean =>
  *  - a `Response`/binary payload (see `isBinaryPayload`) -> `feature_disabled`
  *    (runtime backstop for fix-6: the catalog flag refuses file capabilities
  *    pre-execution, and this catches any that slip past);
- *  - anything else -> the structured success payload, with the request receipt
- *    attached under `meta.requestId` for a WRITE capability only (see
- *    `withRequestReceipt`).
+ *  - anything else -> the structured success payload.
  */
 export const mapHandlerResult = ({
   id,
   result,
-  access,
 }: {
   id: string;
   result: unknown;
-  /** The invoked capability's catalog access; receipts attach to writes only. */
-  access: "read" | "write";
 }): McpToolResponse => {
   if (result instanceof ElysiaCustomStatusResponse) {
     const statusCode = typeof result.code === "number" ? result.code : 500;
@@ -2276,7 +2259,7 @@ export const mapHandlerResult = ({
       hint: "Fetch the file through its REST route or the stella app; capability executors only return structured JSON.",
     });
   }
-  return successEgress(result, access);
+  return untypedStructuredEgressPlan({ payload: result, textFields: [] });
 };
 
 export const resolveCapabilityReadClass = async (args: unknown) => {
@@ -2390,7 +2373,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "matter-scoped capabilities take input.params.matterId. " +
       "Required scopes and member permissions are checked per capability. " +
       "Set validate_only: true to check input without running it; " +
-      "destructive capabilities require confirm: true after human approval. " +
+      "Capabilities declaring confirmation require confirm: true after human approval. " +
       "Read capabilities must use read_capability.",
     inputSchema: writeCapabilityArgsSchema,
   }),

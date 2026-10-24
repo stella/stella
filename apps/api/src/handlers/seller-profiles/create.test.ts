@@ -65,6 +65,32 @@ describe("seller profile creation", () => {
     expect(transactionCount).toBe(0);
   });
 
+  test("refuses a VAT payer without a VAT ID before opening a transaction", async () => {
+    let transactionCount = 0;
+    const safeDb = asTestRaw<SafeDb>(async () => {
+      transactionCount += 1;
+      return Result.ok(undefined);
+    });
+
+    const result = await createSellerProfile.handler(
+      createContext({
+        body: {
+          legalName: "Example Legal s.r.o.",
+          defaultCurrency: "CZK",
+          vatPayer: true,
+          vatId: "  ",
+        },
+        safeDb,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: { code: "vat_payer_requires_vat_id" },
+    });
+    expect(transactionCount).toBe(0);
+  });
+
   test("makes the first profile default and audits in the same transaction without bank details", async () => {
     const profileId = toSafeId<"sellerProfile">("seller_profile_test");
     const tx = asTestRaw<Transaction>({

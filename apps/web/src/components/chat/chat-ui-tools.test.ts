@@ -10,11 +10,11 @@ import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import {
   consumeDocumentDeletionToolCalls,
   consumePlaybookSaveToolCalls,
+  getApprovalToolName,
+  getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getChatToolTitleKey,
-  getAwaitedAssistantMessageId,
   getCurrentApprovalPendingMessageId,
-  getApprovalToolName,
   getToolApprovalGrant,
   getUserMessageHtmlHistory,
   hasApprovalResponseAwaitingModelStep,
@@ -572,7 +572,12 @@ describe("isApprovalPart", () => {
 describe("tool approval grants", () => {
   test("keeps sensitive and update-capable write approvals per call", () => {
     expect(isApprovalOnceChatToolName("suggest_changes")).toBe(true);
-    expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
+    expect(isApprovalOnceChatToolName("update_organization_settings")).toBe(
+      true,
+    );
+    expect(
+      isNonPersistentGrantChatToolName("update_organization_settings"),
+    ).toBe(true);
     expect(isApprovalOnceChatToolName("save_clause")).toBe(true);
   });
 

@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -17,9 +18,9 @@ import { ContextMenu } from "@stll/ui/context-menu";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -738,6 +739,7 @@ const CategoryFormDialogBody = ({
           </label>
           <Input
             id="category-name"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => setName(e.target.value)}
             placeholder={labels.namePlaceholder}
             value={name}

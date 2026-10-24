@@ -12,9 +12,9 @@ import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_VIEW_NAME,
   stella,
   stellaIngestion,
+  WORKSPACE_ACCESS_VIEW_NAME,
 } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import {
@@ -32,9 +32,9 @@ import {
   fetchStellaIngestionColumnPrivileges,
   fetchStellaIngestionPolicies,
   fetchStellaIngestionTablePrivileges,
-  fetchStellaUserSelectColumnPrivileges,
-  fetchStellaTablePrivileges,
   fetchStellaPolicies,
+  fetchStellaTablePrivileges,
+  fetchStellaUserSelectColumnPrivileges,
   fetchWorkspaceTenantPairForeignKeys,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -388,12 +388,19 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    // Root-owned OAuth state denies all app-role access.
+    "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
     // every privilege is revoked from stella (asserted in
     // rls-table-grants.test.ts), so there is no org policy to require.
     "feedback_reports",
+    // Chat content repair receipts: organization_id lets the receipts cascade
+    // with their organization and is never a tenant scope. RLS is forced with
+    // one owner-only policy and every privilege is revoked from stella; the
+    // dedicated assertion below covers that instead of tenant CRUD.
+    "chat_content_v3_backfill_receipts",
     // Professional-use acceptances are written once at organization creation
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
@@ -415,7 +422,7 @@ describe("policy coverage", () => {
     // Owner/admin targets have a dedicated policy assertion and no DELETE grant.
     "time_daily_targets",
     // AI memory is multi-scope (org OR user OR workspace in one table)
-    // and archive-only (no permissive DELETE). The generic workspace /
+    // with scoped permanent deletion. The generic workspace /
     // org loops can't express either shape; the dedicated test below
     // asserts its real policy boundaries.
     "ai_memories",
@@ -772,6 +779,41 @@ describe("policy coverage", () => {
     }
   });
 
+  test("chat content repair receipts admit only the owning role", async () => {
+    const table = "chat_content_v3_backfill_receipts";
+    const result = await testDb.execute<{
+      command: string;
+      permissive: boolean;
+      roles: string;
+      using_expr: string | null;
+      check_expr: string | null;
+    }>(sql`
+      SELECT p.polcmd AS command,
+             p.polpermissive AS permissive,
+             p.polroles::text AS roles,
+             pg_get_expr(p.polqual, p.polrelid) AS using_expr,
+             pg_get_expr(p.polwithcheck, p.polrelid) AS check_expr
+      FROM pg_policy p
+      WHERE p.polrelid = ${table}::regclass
+    `);
+    expect(result.rows).toHaveLength(1);
+    const policy = result.rows.at(0);
+    expect(policy).toMatchObject({
+      command: "*",
+      permissive: true,
+      roles: "{0}",
+    });
+    // Both sides compare the session role with the table's owner, nothing else.
+    const ownerOnly = `(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid
+   FROM pg_class
+  WHERE (pg_class.oid = ('${table}'::regclass)::oid)))`;
+    expect(policy?.using_expr).toBe(ownerOnly);
+    expect(policy?.check_expr).toBe(ownerOnly);
+    expect(
+      privilegesForTable(await fetchStellaTablePrivileges(testDb), table),
+    ).toEqual([]);
+  });
+
   test("every table with organization_id (org-only) has org policies", async () => {
     const scoped = await fetchScopedTables(testDb);
     const policies = await fetchStellaPolicies(testDb);
@@ -966,7 +1008,7 @@ describe("policy coverage", () => {
     }
   });
 
-  test("ai_memories is multi-scope and archive-only (no permissive delete)", async () => {
+  test("ai_memories applies the same scope to reads and permanent deletion", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const tablePolicies = policies.filter(
       (p) => p.table_name === "ai_memories",
@@ -980,7 +1022,7 @@ describe("policy coverage", () => {
     expect(cmds).toContain("r");
     expect(cmds).toContain("a");
     expect(cmds).toContain("w");
-    for (const command of ["r", "a", "w"] as const) {
+    for (const command of ["r", "a", "w", "d"] as const) {
       const policy = tablePolicies.find((p) => p.command === command);
       expect(policy?.permissive).toBe(true);
       const expr = command === "a" ? policy?.check_expr : policy?.using_expr;
@@ -993,14 +1035,10 @@ describe("policy coverage", () => {
       expect(expr).toContain("source_data_workspace_ids");
     }
 
-    // Archive-only: DELETE is locked by a single RESTRICTIVE `false`
-    // policy so a later permissive DELETE cannot silently unlock hard
-    // deletes (same durability guarantee as audit_logs).
+    const selectPolicy = tablePolicies.find((p) => p.command === "r");
     const deletePolicies = tablePolicies.filter((p) => p.command === "d");
     expect(deletePolicies).toHaveLength(1);
-    const deletePolicy = deletePolicies.at(0);
-    expect(deletePolicy?.permissive).toBe(false);
-    expect(deletePolicy?.using_expr).toBe("false");
+    expect(deletePolicies.at(0)?.using_expr).toBe(selectPolicy?.using_expr);
   });
 
   test("docx_suggestions carries the contributing-matter subset check", async () => {
@@ -1326,6 +1364,7 @@ describe("policy coverage", () => {
       "oauth_access_token",
       "oauth_client",
       "service_oauth_clients",
+      "mcp_web_handoff",
       "oauth_consent",
       "oauth_refresh_token",
       "session",
@@ -1386,6 +1425,67 @@ describe("policy coverage", () => {
     expect(policy?.owner_check).toBe(policy?.owner_using);
     const privileges = await fetchStellaTablePrivileges(testDb);
     expect(privilegesForTable(privileges, "service_oauth_clients")).toEqual([]);
+  });
+
+  test("doctrine reviews retain owner writes and ingestion reads and erasure", async () => {
+    const policies = await fetchStellaIngestionPolicies(testDb);
+    const ingestionPolicy = policies.find(
+      (policy) =>
+        policy.table_name === "case_law_citation_doctrine_reviews" &&
+        policy.policy_name === "case_law_ingestion_access",
+    );
+    expect(ingestionPolicy?.command).toBe("*");
+    expect(ingestionPolicy?.using_expr).toBe("true");
+    expect(ingestionPolicy?.check_expr).toBe("true");
+    const ingestionGrants = await fetchStellaIngestionTablePrivileges(testDb);
+    expect(
+      privilegesForTable(ingestionGrants, "case_law_citation_doctrine_reviews"),
+    ).toEqual(["DELETE", "SELECT"]);
+    const requestGrants = await fetchStellaTablePrivileges(testDb);
+    expect(
+      privilegesForTable(requestGrants, "case_law_citation_doctrine_reviews"),
+    ).toEqual([]);
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      rls_forced: boolean;
+      owner_using: string;
+      owner_check: string;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled, rel.relforcerowsecurity AS rls_forced,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.case_law_citation_doctrine_reviews'::regclass
+        AND policy.polname = 'citation_doctrine_reviews_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
+    expect(policy?.rls_forced).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
+  });
+
+  test("web handoffs retain an owner-only RLS policy", async () => {
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      owner_using: string | null;
+      owner_check: string | null;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.mcp_web_handoff'::regclass
+        AND policy.polname = 'mcp_web_handoff_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
   });
 
   test("case-law ingestion role has explicit narrow write boundaries", async () => {

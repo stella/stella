@@ -6,9 +6,9 @@ import { apiPut, apiStatus, apiUploadDocx } from "../helpers/api";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =
@@ -22,12 +22,14 @@ test.describe("find in table", () => {
     workspace = await createTestWorkspace(request, "table-search");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 

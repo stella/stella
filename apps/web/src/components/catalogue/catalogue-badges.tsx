@@ -65,6 +65,24 @@ export const LicenseBadge = ({ license }: { license: string }) => (
 );
 
 /**
+ * Neutral chip on a skill the assistant only uses when the user invokes it
+ * (slash command, skill chip, or the thread's active skill).
+ */
+export const ManualInvocationBadge = () => {
+  const t = useTranslations();
+  return (
+    <Tooltip
+      content={t("knowledge.agentSkills.invocationManualHelp")}
+      render={
+        <span className="border-border text-muted-foreground inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium">
+          {t("flows.trigger.manual")}
+        </span>
+      }
+    />
+  );
+};
+
+/**
  * First-party mark — the Stella brand glyph next to the title.
  * Used on the settings catalogue browser; onboarding still uses the
  * pill-shaped FirstPartyBadge below so its row can mirror the third-

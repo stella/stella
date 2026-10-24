@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
 
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
@@ -21,14 +22,21 @@ const STORAGE_KEY = "stella:preload-reload-at";
 // Keep this aligned with TanStack Router's cross-browser dynamic-import
 // classifier. A rejected lazy import is cached inside lazyRouteComponent, so
 // resetting the route boundary can only throw the same error again; recovery
-// requires a new page module graph. PDF.js reports a worker script it cannot
-// load as a failed fake-worker setup.
+// requires a new page module graph. Vite's preload helper rejects with its
+// own message when a chunk's stylesheet is gone. PDF.js reports a worker
+// script it cannot load as a failed fake-worker setup.
 const STALE_DEPLOYMENT_ERROR_PREFIXES = Object.freeze([
   "Failed to fetch dynamically imported module",
   "error loading dynamically imported module",
   "Importing a module script failed",
+  "Unable to preload CSS for",
   "Setting up fake worker failed",
 ]);
+
+const isHtmlModuleResponseError = (message: string): boolean =>
+  containsSearchMatchKey(message, "module script") &&
+  containsSearchMatchKey(message, "MIME type") &&
+  containsSearchMatchKey(message, "text/html");
 
 const getErrorMessage = (error: unknown): string | undefined => {
   if (typeof error !== "object" || error === null || !("message" in error)) {
@@ -42,7 +50,10 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
   const message = getErrorMessage(error);
   return (
     message !== undefined &&
-    STALE_DEPLOYMENT_ERROR_PREFIXES.some((prefix) => message.startsWith(prefix))
+    (STALE_DEPLOYMENT_ERROR_PREFIXES.some((prefix) =>
+      containsSearchMatchKey(message.slice(0, prefix.length), prefix),
+    ) ||
+      isHtmlModuleResponseError(message))
   );
 };
 
@@ -91,11 +102,16 @@ export const reloadForStaleDeployment = (): boolean => {
   return true;
 };
 
+/** Route lazy imports and Vite preload failures share this recovery owner. */
+export const recoverFromStaleDeploymentLoad = (error: unknown): boolean =>
+  isStaleDeploymentLoadError(error) && reloadForStaleDeployment();
+
 // Typed as Event: the WindowEventMap augmentation for "vite:preloadError" is
 // not guaranteed in scope, and we only need preventDefault() + the reload.
 export const installPreloadErrorRecovery = (): void => {
   window.addEventListener("vite:preloadError", (event: Event) => {
-    if (reloadForStaleDeployment()) {
+    const error = "payload" in event ? event.payload : undefined;
+    if (recoverFromStaleDeploymentLoad(error)) {
       // Cancel Vite's default rethrow; the reload fetches the fresh chunk.
       event.preventDefault();
     }

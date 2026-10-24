@@ -5,9 +5,9 @@ import { createUploadedDocumentRoute } from "../helpers/document";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const ROUTE_READY_TIMEOUT_MS = 60_000;
@@ -28,12 +28,14 @@ test.describe("Vite dependency optimizer canary", () => {
     workspace = await createTestWorkspace(request, "vite-canary");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 

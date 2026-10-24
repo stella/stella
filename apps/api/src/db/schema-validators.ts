@@ -251,17 +251,41 @@ export type PropertyTool = Static<typeof propertyToolSchema>;
  * Why a derivative reached `failed`. `enqueue` means the job never entered the
  * queue, so nothing will ever pick the derivative up again and a reconciler
  * must retry it; `processing` means the worker ran and exhausted its attempts,
- * which is terminal. Absent on rows written before the distinction existed:
+ * which is terminal; `too-large` means admission refused the source (bytes or
+ * declared pixels over the derivative budget) before any conversion, which is
+ * also terminal: the stored file is unchanged, so a retry would refuse again. Absent on rows written before the distinction existed:
  * those are read as terminal, because resurrecting a genuine processing
  * failure is the more expensive mistake.
  */
 export const DERIVATIVE_FAILURE_REASON = {
   ENQUEUE: "enqueue",
   PROCESSING: "processing",
+  TOO_LARGE: "too-large",
 } as const;
 
 export type DerivativeFailureReason =
   (typeof DERIVATIVE_FAILURE_REASON)[keyof typeof DERIVATIVE_FAILURE_REASON];
+
+const conversionRefusalSchema = t.Union([
+  t.Object({
+    kind: t.Literal("unsupported_encoding"),
+    encoding: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+  t.Object({
+    kind: t.Literal("unsupported_reference"),
+    format: t.String({ minLength: 1, maxLength: 256 }),
+    element: t.String({ minLength: 1, maxLength: 512 }),
+    attribute: t.String({ minLength: 1, maxLength: 512 }),
+  }),
+  t.Object({
+    kind: t.Literal("unsupported_field"),
+    fieldType: t.String({ minLength: 1, maxLength: 256 }),
+  }),
+  t.Object({
+    kind: t.Literal("legacy_format"),
+    replacementExtension: t.UnionEnum([".xlsx", ".pptx"]),
+  }),
+]);
 
 /** Shared by both derivatives so their state machines cannot drift apart. */
 const derivativeStateSchema = t.Union([
@@ -276,10 +300,12 @@ const derivativeStateSchema = t.Union([
   }),
   t.Object({
     status: t.Literal("failed"),
+    conversionRefusal: t.Optional(conversionRefusalSchema),
     reason: t.Optional(
       t.Union([
         t.Literal(DERIVATIVE_FAILURE_REASON.ENQUEUE),
         t.Literal(DERIVATIVE_FAILURE_REASON.PROCESSING),
+        t.Literal(DERIVATIVE_FAILURE_REASON.TOO_LARGE),
       ]),
     ),
   }),

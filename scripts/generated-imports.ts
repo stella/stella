@@ -1,10 +1,10 @@
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import {
+  type Generator,
   GENERATORS,
   matchesGeneratedGlob,
-  type Generator,
 } from "./generated-files";
 
 /**
@@ -182,7 +182,9 @@ export const findUnbuildableGeneratedImports = ({
   };
   const derivedByPack = (file: string, directory: string) =>
     generators.some((generator) => {
-      const command = generatorPackageScript(generator.write);
+      const command = generatorPackageScript(
+        generator.prepare ?? generator.write,
+      );
       return (
         generator.outputKind === "derived" &&
         generator.outputs.some((output) =>

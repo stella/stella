@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { abortTransaction, abortableTx } from "@/api/db/safe-db";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   correspondence,
@@ -45,7 +45,7 @@ const config = {
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   realtime: workspaceRealtimeUpdates,
-  mcp: { type: "covered", by: "manage_organization" },
+  mcp: { type: "tool", name: "remove_matter_member" },
   params: workspaceParams({ userId: tUserId }),
   body: t.Optional(t.Object({ reassign_to: t.Optional(tUserId) })),
 } satisfies WorkspaceHandlerConfig;
@@ -214,7 +214,7 @@ const removedMemberWorkEvents = ({
   );
 
 // Shared remove-member logic reused by the HTTP handler and the
-// `manage_organization` MCP tool. Keeps the tx (last-member guard, lead
+// `remove_matter_member` MCP tool. Keeps the tx (last-member guard, lead
 // clear, desktop-edit session cancel, audit events) and the in-process SSE
 // dispatch together so member removal has identical side effects on both
 // transports.

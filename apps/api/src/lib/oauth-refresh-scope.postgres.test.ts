@@ -317,7 +317,12 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           "auth.path": "/oauth2/token",
           "http.status_code": 400,
           "auth.error_code": "invalid_grant",
+          "auth.refusal_delivery": "response",
           "oauth.grant_type": "refresh_token",
+          "oauth.refusal_reason": "unclassified",
+          "oauth.refusal_unclassified": true,
+          "oauth.client_id": "none",
+          "oauth.grant_family": "none",
         },
       });
     });

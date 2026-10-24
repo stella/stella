@@ -10,20 +10,45 @@ import { cn } from "../lib/utils";
  * empty (no children) while nothing is highlighted.
  */
 
+type MenuPreviewLayoutProps = React.PropsWithChildren<{
+  preview: React.ReactNode;
+  className?: string;
+  /**
+   * `fixed` sizes the menu around a fixed-width pane. `remaining` is for a
+   * menu whose width is set from outside: the pane takes the width the
+   * options leave and is dropped below 10rem, so it never paints past the
+   * menu. Pair it with a `PreviewPane` of `w-full`.
+   */
+  previewWidth?: "fixed" | "remaining";
+}>;
+
 const MenuPreviewLayout = ({
   children,
   preview,
   className,
-}: React.PropsWithChildren<{
-  preview: React.ReactNode;
-  className?: string;
-}>) => (
+  previewWidth = "fixed",
+}: MenuPreviewLayoutProps) => (
   <div
     className={cn("flex items-stretch", className)}
     data-slot="menu-preview-layout"
   >
-    <div className="flex min-w-32 flex-1 flex-col">{children}</div>
-    <div className="ms-1 hidden border-s ps-1 sm:block">{preview}</div>
+    <div
+      className={cn(
+        "flex min-w-32 flex-col",
+        previewWidth === "fixed" ? "flex-1" : "shrink-0",
+      )}
+    >
+      {children}
+    </div>
+    {previewWidth === "fixed" ? (
+      <div className="ms-1 hidden border-s ps-1 sm:block">{preview}</div>
+    ) : (
+      <div className="@container min-w-0 flex-1">
+        <div className="ms-1 hidden border-s ps-1 @min-[10rem]:block">
+          {preview}
+        </div>
+      </div>
+    )}
   </div>
 );
 

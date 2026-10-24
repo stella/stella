@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
-import { SQL } from "bun";
+
+import { createSqlClient } from "@/api/db/sql-client";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { terminateReserved } from "./sql-close";
 
 type BoundedDatabaseObserverOptions = {
   url: string;
@@ -23,7 +25,7 @@ export const openBoundedDatabaseObserver = async ({
       panic("Database observer timeouts must be positive integer milliseconds");
     }
   }
-  const client = new SQL({
+  const client = createSqlClient({
     url,
     max: 1,
     idleTimeout: 0,
@@ -51,7 +53,7 @@ export const openBoundedDatabaseObserver = async ({
     query: async (query, params = []) =>
       await reserved.unsafe(query, [...params]),
     release: async () => {
-      reserved.release();
+      await reserved.release();
       await client.close();
     },
   };
@@ -71,4 +73,44 @@ export const openOnlineIndexObserver = async (
     statementTimeoutMs: config.health.readTimeoutMs,
     lockTimeoutMs: config.health.readTimeoutMs,
   });
+};
+
+/**
+ * One dedicated session for an operator-run online repair, outside the
+ * migrator. It carries no session budgets: each repair batch installs its own
+ * LOCAL budgets, and the online-migration lock must wait for a deploy's repair
+ * rather than time out.
+ */
+export const openOnlineRepairConnection = async (
+  url: string,
+): Promise<OnlineMigrationConnection> => {
+  const client = createSqlClient({ url, max: 1 });
+  const reservation = await Result.tryPromise(
+    async () => await client.reserve(),
+  );
+  if (reservation.isErr()) {
+    await client.close();
+    throw reservation.error;
+  }
+  const reserved = reservation.value;
+  let session: "open" | "terminated" = "open";
+  return {
+    execute: async (query, params = []) => {
+      await reserved.unsafe(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      await reserved.unsafe<unknown[]>(query, [...params]),
+    release: async () => {
+      if (session === "open") {
+        await reserved.release();
+      }
+      await client.close();
+    },
+    // The table gate closes a session whose stalled statement it could not
+    // cancel; the repair then fails rather than hold the table.
+    terminate: async () => {
+      session = "terminated";
+      await terminateReserved(reserved);
+    },
+  };
 };

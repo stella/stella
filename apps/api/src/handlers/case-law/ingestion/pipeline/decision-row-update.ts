@@ -39,7 +39,9 @@ import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pip
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
-import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -69,7 +71,7 @@ const replacedDecisionState = async (
       country: caseLawDecisions.country,
       language: caseLawDecisions.language,
       decisionDate: caseLawDecisions.decisionDate,
-      holdsDocument: sql<boolean>`${rowHoldsDocument}`,
+      holdsDocument: sql<boolean>`${rowHoldsDocumentFor(caseLawDecisions)}`,
       metadata: caseLawDecisions.metadata,
     })
     .from(caseLawDecisions)
@@ -349,7 +351,7 @@ export const describeRowUpdateTx = async (
   // statement below.
   const markedMetadata: SQL | undefined =
     storesUnpublishedWithoutDocument && pendingMirrorPayload === null
-      ? sql`CASE WHEN ${rowHoldsDocument} THEN ${describedMetadataSql} ELSE ${metadataMarkedListingOnly(describedMetadataSql)} END`
+      ? sql`CASE WHEN ${rowHoldsDocumentFor(caseLawDecisions)} THEN ${describedMetadataSql} ELSE ${metadataMarkedListingOnly(describedMetadataSql)} END`
       : undefined;
   const metadataWrite = markedMetadata ?? describedMetadata;
   const writtenPayload = payloadNeedsGuard ? {} : payloadColumns;
@@ -382,6 +384,10 @@ export const describeRowUpdateTx = async (
       preservesExistingDetail || s3UploadFailed
         ? existing.sourceHash
         : result.rawHash,
+    sourceHashVersion:
+      preservesExistingDetail || s3UploadFailed
+        ? existing.sourceHashVersion
+        : write.sourceFingerprintVersion,
     sourceObservedAt: observedAt,
     sourceObservationOrder: observationOrder,
     sourceObservationHash: result.rawHash,
@@ -442,7 +448,7 @@ export const readDocumentlessPayloadStateTx = async (
   (
     await tx
       .select({
-        holdsDocument: rowHoldsDocument,
+        holdsDocument: rowHoldsDocumentFor(caseLawDecisions),
         differs: sql<boolean>`${storedRowDiffers(payloadColumns)}`,
       })
       .from(caseLawDecisions)
@@ -535,6 +541,9 @@ export const finishRefreshedRowTx = async (
   // Citations are read out of the document, so a refresh that
   // carries no document has nothing to say about them either.
   if (!incomingCarriesDocument) {
+    await runDecisionWriteExtension(tx, existing.id, {
+      ...(write.signal === undefined ? {} : { signal: write.signal }),
+    });
     await reconcileStableProjection(tx, write, existing.id, projectionLock);
     return DECISION_ROW_WRITE_STATUS.APPLIED;
   }
@@ -556,6 +565,13 @@ export const finishRefreshedRowTx = async (
       panic("Unhandled citation disposition");
   }
 
+  await runDecisionWriteExtension(tx, existing.id, {
+    payload: {
+      ...write.plan.corpusPayload,
+      contentHash: corpusContentHash(write.plan.corpusPayload),
+    },
+    ...(write.signal === undefined ? {} : { signal: write.signal }),
+  });
   await reconcileStableProjection(tx, write, existing.id, projectionLock);
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };

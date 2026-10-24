@@ -56,6 +56,7 @@ details unless they are already public in the repository.
 
 ## Meta Preferences
 
+- Use Computer Use or desktop/browser UI control only when the user explicitly asks for it. General fix, build, and test requests do not authorize operating user applications; isolated automated tests and code-level checks remain allowed.
 - Never manually reformat code you did not semantically change (auto-formatter output
   from `bun run format` is fine to include)
 - In prose, vary punctuation: prefer colons, semicolons, commas, and parentheses
@@ -107,8 +108,9 @@ details unless they are already public in the repository.
 - Keep feature branches rebased onto main so review sees a clean diff. How a
   branch lands (merge queue, squash) follows the repository's merge policy; main
   stays linear either way.
-- Enable `git rerere` (`git config --global rerere.enabled true`, plus
-  `rerere.autoupdate true` to auto-stage what it resolves) so conflict
+- Enable `git rerere` in the clone, never globally (`git config rerere.enabled
+  true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
+  `git -c rerere.enabled=true -c rerere.autoupdate=true merge ...`) so conflict
   resolutions are recorded and auto-replayed across repeated or long rebases
 - Fail fast: validate at boundaries, return/throw early
 - Minimize brace nesting: invert conditions, early returns
@@ -166,7 +168,7 @@ details unless they are already public in the repository.
   widening it or paying the annotation's instantiation cost.
 - Companion maps over a union (policy, consent, projection, or rendering
   dispositions per tool/route/kind) must be total: `as const satisfies
-Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
+  Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
   member land without a decision. Derive the union from the source of truth
   (`keyof typeof SOURCE_MAP`, or a mapped filter over it) instead of
   hand-listing names.
@@ -300,7 +302,7 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
-`bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
+`bun run typecheck` uses Bun’s native checker through the workspace
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. Manual checks dispatch offers
@@ -325,6 +327,10 @@ There, local formatting and generator runs are optional, except that workflow
 files must be formatted locally. Fork pull requests get no autofix: run
 `bun run autofix` (the same generators, lint fixes and formatting, against the
 canonical repository's main) before pushing.
+
+Network fetches in CI go through `scripts/retry.sh` (`scripts/gh-retry.sh` for
+the GitHub API) or a cache-first action, in a step with its own
+`timeout-minutes`; `scripts/check-ci-network-steps.ts` enforces both.
 
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
@@ -359,7 +365,7 @@ then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select
 narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
 index or page.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, oxfmt. For these, use `WebFetch` or
+**Not covered (no `llms.txt`):** Tailwind CSS. For it, use `WebFetch` or
 `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.

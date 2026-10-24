@@ -3,6 +3,7 @@ import Elysia, { t } from "elysia";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -58,11 +59,14 @@ export const readFileEndpoint = createSafeHandler(
         async () =>
           await readFileHandler({
             fieldId,
+            userId: user.id,
+            source: { kind: "request", sessionId: session.id },
             organizationId: session.activeOrganizationId,
             workspaceId,
             purpose,
             scopedDb,
             recordAuditEvent,
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           }),
       ),
     );
@@ -347,6 +351,7 @@ export const ocrExportEndpoint = createSafeHandler(
     query: { format },
     scopedDb,
     session,
+    user,
     workspaceId,
     recordAuditEvent,
   }) {
@@ -354,8 +359,11 @@ export const ocrExportEndpoint = createSafeHandler(
       Result.tryPromise(
         async () =>
           await readOcrExport({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
             fieldId,
             format,
+            userId: user.id,
+            source: { kind: "request", sessionId: session.id },
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
             scopedDb,
@@ -378,11 +386,13 @@ export const filesRoute = new Elysia({
   .get("/url/:fieldId", readFileEndpoint.handler, {
     params: readFileEndpoint.config.params,
     permissions: readFileEndpoint.config.permissions,
+    accountAccess: readFileEndpoint.config.accountAccess,
     query: readFileEndpoint.config.query,
   })
   .get("/email-html/:fieldId", readEmailHtmlPreviewEndpoint.handler, {
     params: readEmailHtmlPreviewEndpoint.config.params,
     permissions: readEmailHtmlPreviewEndpoint.config.permissions,
+    accountAccess: readEmailHtmlPreviewEndpoint.config.accountAccess,
   })
   .get(
     "/office-citation/:entityId/:fieldId/:blockId",
@@ -390,20 +400,24 @@ export const filesRoute = new Elysia({
     {
       params: officeCitationEndpoint.config.params,
       permissions: officeCitationEndpoint.config.permissions,
+      accountAccess: officeCitationEndpoint.config.accountAccess,
     },
   )
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
     params: printPdfEndpoint.config.params,
     permissions: printPdfEndpoint.config.permissions,
+    accountAccess: printPdfEndpoint.config.accountAccess,
   })
   .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
     params: stampedDownloadEndpoint.config.params,
     permissions: stampedDownloadEndpoint.config.permissions,
+    accountAccess: stampedDownloadEndpoint.config.accountAccess,
     query: stampedDownloadEndpoint.config.query,
   })
   .get("/ocr-export/:fieldId", ocrExportEndpoint.handler, {
     params: ocrExportEndpoint.config.params,
     permissions: ocrExportEndpoint.config.permissions,
+    accountAccess: ocrExportEndpoint.config.accountAccess,
     query: ocrExportEndpoint.config.query,
     response: ocrExportEndpoint.config.response,
   });
@@ -416,6 +430,7 @@ filesRoute.get(
   {
     params: readDocumentPropertiesEndpoint.config.params,
     permissions: readDocumentPropertiesEndpoint.config.permissions,
+    accountAccess: readDocumentPropertiesEndpoint.config.accountAccess,
   },
 );
 
@@ -426,17 +441,20 @@ filesRoute.patch(
     body: updateDocumentPropertiesEndpoint.config.body,
     params: updateDocumentPropertiesEndpoint.config.params,
     permissions: updateDocumentPropertiesEndpoint.config.permissions,
+    accountAccess: updateDocumentPropertiesEndpoint.config.accountAccess,
   },
 );
 
 filesRoute.get("/scrubbed/:fieldId", scrubbedDownloadEndpoint.handler, {
   params: scrubbedDownloadEndpoint.config.params,
   permissions: scrubbedDownloadEndpoint.config.permissions,
+  accountAccess: scrubbedDownloadEndpoint.config.accountAccess,
 });
 
 filesRoute.get("/thumbnail/:fieldId", readFileThumbnailEndpoint.handler, {
   params: readFileThumbnailEndpoint.config.params,
   permissions: readFileThumbnailEndpoint.config.permissions,
+  accountAccess: readFileThumbnailEndpoint.config.accountAccess,
 });
 
 filesRoute.get(
@@ -445,6 +463,7 @@ filesRoute.get(
   {
     params: emailAttachmentEndpoint.config.params,
     permissions: emailAttachmentEndpoint.config.permissions,
+    accountAccess: emailAttachmentEndpoint.config.accountAccess,
     query: emailAttachmentEndpoint.config.query,
   },
 );
@@ -456,5 +475,6 @@ filesRoute.post(
     body: saveEmailAttachmentEndpoint.config.body,
     params: saveEmailAttachmentEndpoint.config.params,
     permissions: saveEmailAttachmentEndpoint.config.permissions,
+    accountAccess: saveEmailAttachmentEndpoint.config.accountAccess,
   },
 );

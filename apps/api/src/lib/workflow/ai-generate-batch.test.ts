@@ -8,8 +8,8 @@ import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
   buildWorkflowAIAnalyticsProps,
-  generateWorkflowData,
   EXTRACTED_TEXT_PROMPT_LIMITS,
+  generateWorkflowData,
   limitExtractedTextPromptContent,
 } from "@/api/lib/workflow/ai-generate-batch";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -45,7 +45,7 @@ describe("buildWorkflowAIAnalyticsProps", () => {
 
     expect(props).toMatchObject({
       feature: "workflow.generate-batch",
-      modelRole: "pdf",
+      modelTask: "pdf",
       properties: {
         entity_version_id: "entity-version-1",
         organization_id: organizationId,

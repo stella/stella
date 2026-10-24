@@ -1,9 +1,10 @@
 import { classifyAIError, providerStatusCode } from "@/api/lib/ai-error";
 import {
-  ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
+  ProviderCallError,
   providerCallErrorCode,
 } from "@/api/lib/errors/provider-call-error";
+import { providerRetryDelayMs } from "@/api/lib/errors/provider-retry-delay";
 import { createProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
@@ -90,5 +91,6 @@ export const createProviderCallError = ({
     kind: classifyAIError(input),
     facts: providerFactsFrom(input),
     requestId: providerRequestIdFrom(evidence),
+    retryAfterMs: providerRetryDelayMs(evidence),
   });
 };

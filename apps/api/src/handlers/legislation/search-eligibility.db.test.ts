@@ -233,7 +233,7 @@ test("a withdrawn version stays openable by its id, labelled withdrawn", async (
 
   expect(await search(term, 10)).toEqual({ ids: [], nextCursor: null });
   expect(
-    await readPublicLegislationHandler(withdrawn, legislationDb),
+    await readPublicLegislationHandler(withdrawn, legislationDb, "pages"),
   ).toMatchObject({
     id: withdrawn,
     windowDisposition: "withdrawn",

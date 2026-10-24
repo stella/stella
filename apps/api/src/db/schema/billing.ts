@@ -2,11 +2,11 @@ import {
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
+  type InvoiceStatus,
   NUMBER_SERIES_DOCUMENT_TYPES,
-  TIME_ENTRY_SUGGESTION_STATUSES,
   TIME_ENTRY_ACTIVITY_GROUP,
   TIME_ENTRY_ACTIVITY_GROUPS,
-  type InvoiceStatus,
+  TIME_ENTRY_SUGGESTION_STATUSES,
 } from "@stll/api-contract";
 import {
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
@@ -25,10 +25,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
-  EXPENSE_CATEGORIES,
-  TIME_ENTRY_SOURCES,
-  TIME_ENTRY_STATUSES,
   centsColumn,
+  EXPENSE_CATEGORIES,
   member,
   organization,
   orgPolicies,
@@ -39,13 +37,15 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  TIME_ENTRY_SOURCES,
+  TIME_ENTRY_STATUSES,
+  timestamptz,
   unsafeCents,
   user,
   userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
@@ -631,6 +631,9 @@ export const sellerProfiles = p.pgTable(
     legalName: p.varchar("legal_name", { length: 512 }).notNull(),
     registrationId: p.varchar("registration_id", { length: 64 }),
     vatId: p.varchar("vat_id", { length: 64 }),
+    // Whether the issuer charges VAT. A VAT ID alone does not decide it: a
+    // registered person who is not a payer has one and must not charge VAT.
+    vatPayer: p.boolean("vat_payer").notNull().default(false),
     addressLine1: p.varchar("address_line_1", { length: 512 }),
     addressLine2: p.varchar("address_line_2", { length: 512 }),
     city: p.varchar({ length: 256 }),
@@ -662,6 +665,10 @@ export const sellerProfiles = p.pgTable(
     p.check(
       "seller_profiles_archived_default_check",
       sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
+    ),
+    p.check(
+      "seller_profiles_vat_payer_check",
+      sql`NOT ${table.vatPayer} OR btrim(coalesce(${table.vatId}, '')) <> ''`,
     ),
     ...orgPolicies(),
   ],

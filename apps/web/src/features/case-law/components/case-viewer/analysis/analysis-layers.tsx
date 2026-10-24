@@ -2,13 +2,22 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
-import { analysisLayersOf } from "@stll/legal-ast/analysis";
+import {
+  analysisLayersOf,
+  significanceStatementOf,
+} from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
-import { SparklesIcon } from "@stll/ui/icons";
 
 type AnalysisLayersProps = {
   analysis: DecisionAnalysis;
+  /**
+   * The decision's citation summary shows a later citing decision. Until it
+   * does, no later-treatment note is drawn, whatever the stored analysis
+   * says: a note written before `none` existed may describe an empty graph.
+   */
+  citedLater: boolean;
 };
 
 /**
@@ -28,9 +37,11 @@ const Layer = ({
   const t = useTranslations();
   return (
     <section className="px-2 pt-4">
-      <h3 className="text-foreground-disabled text-3xs flex items-center gap-1 pb-1 font-medium tracking-wider uppercase">
-        <SparklesIcon aria-hidden className="size-3" />
-        {t("caseLaw.analysis.aiLayer", { layer: label })}
+      <h3 className="text-foreground-disabled text-3xs pb-1 font-medium tracking-wider uppercase">
+        <ReaderAiLabel
+          context="caseLaw"
+          label={t("caseLaw.analysis.aiLayer", { layer: label })}
+        />
       </h3>
       {children}
     </section>
@@ -46,9 +57,17 @@ const Layer = ({
  * A stored analysis from before these layers existed carries none of them,
  * and then nothing renders: an absent layer is absent, never an empty box.
  */
-export const AnalysisLayers = ({ analysis }: AnalysisLayersProps) => {
+export const AnalysisLayers = ({
+  analysis,
+  citedLater,
+}: AnalysisLayersProps) => {
   const t = useTranslations();
-  const { significance, topics } = analysisLayersOf(analysis);
+  const layers = analysisLayersOf(analysis);
+  const { topics } = layers;
+  // `none`: no later decision cites this one, so the section is not drawn.
+  const significance = citedLater
+    ? significanceStatementOf(layers.significance)
+    : null;
 
   if (significance === null && topics.length === 0) {
     return null;

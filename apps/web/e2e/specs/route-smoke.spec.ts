@@ -14,7 +14,7 @@ import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
 } from "../execution-profile";
-import { apiDelete, E2E_API_ORIGIN, apiGet, apiPut } from "../helpers/api";
+import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import {
@@ -27,14 +27,11 @@ import {
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import {
-  type RouteNetworkMetrics,
-  WATERFALL_DEPTH_RESAMPLES,
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
-  baselineWaterfallDepth,
   createNetworkCollector,
   mergeNetworkBaseline,
-  mergeResampledMetrics,
+  type RouteNetworkMetrics,
   summarizeCapture,
 } from "../helpers/network";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
@@ -44,18 +41,18 @@ import {
   networkBaselineKey,
 } from "../helpers/smoke-route-coverage";
 import {
+  type RouteExpectation,
   SMOKE_ROUTE_DEFS,
   type SmokeRouteDef,
   type SmokeWorld,
-  type RouteExpectation,
 } from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 // Every route retains the former one-second observation floor so delayed
@@ -134,8 +131,8 @@ const timeBillingRedirectDestination = ({
   if (template.startsWith("/workspaces/")) {
     return `/workspaces/${workspace.id}/${workspace.viewId}`;
   }
-  if (template.startsWith("/settings/organization/")) {
-    return "/settings/organization/members";
+  if (template.startsWith("/admin/")) {
+    return "/admin/members";
   }
   if (template === "/time") {
     return "/workspaces";
@@ -495,29 +492,7 @@ const smokeRouteTarget = async ({
   results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
 }) => {
-  // A deeper reading than the budget is either a regression or a fast sample
-  // over-reading by one; only more samples tell them apart. A regression
-  // survives every re-measurement, jitter does not. Samples run one at a time
-  // on purpose: a second page in flight would distort the timing being read.
-  const budget = baselineWaterfallDepth(route.template);
-  const resampleDeeperReading = async (
-    metrics: RouteNetworkMetrics,
-    remaining: number,
-  ): Promise<RouteNetworkMetrics> => {
-    if (budget === null || metrics.depth <= budget || remaining === 0) {
-      return metrics;
-    }
-    const again = await measureRouteTarget({ browser, route });
-    return resampleDeeperReading(
-      mergeResampledMetrics(metrics, again),
-      remaining - 1,
-    );
-  };
-
-  const metrics = await resampleDeeperReading(
-    await measureRouteTarget({ browser, route }),
-    WATERFALL_DEPTH_RESAMPLES,
-  );
+  const metrics = await measureRouteTarget({ browser, route });
   // Stored under the template it received; redirect targets arrive as
   // "<template> target".
   results.set(route.template, metrics);
@@ -539,12 +514,15 @@ const measureRouteTarget = async ({
   const detachNetwork = network.trackPage(page);
 
   try {
+    await network.measureRounds(page);
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
       idleMs: NETWORK_QUIET_MS,
       minimumObservationMs: DEFAULT_SETTLE_MS,
-      timeoutMs: route.settleMs ?? DEFAULT_SETTLE_MS,
+      // Allow injected request waves to finish; quiet activity still exits early.
+      timeoutMs: Math.max(route.settleMs ?? DEFAULT_SETTLE_MS, 10_000),
     });
+    network.finishRounds();
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);

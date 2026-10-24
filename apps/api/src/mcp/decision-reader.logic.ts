@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import type { DecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
 import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
-import type { DocumentAst, Block } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
 
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
@@ -418,6 +418,7 @@ export const packReaderSourcePage = ({
     blockFragments: packed.blockFragments,
     citationAnchors: packed.citationAnchors,
     provisionAnchors: packed.provisionAnchors,
+    provisionStatus: source.provisionStatus,
     nextCursor: next === null ? null : encodeReaderCursor(next),
   };
 };

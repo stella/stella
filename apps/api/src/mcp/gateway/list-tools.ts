@@ -1,6 +1,10 @@
 import type { Tool as McpTool } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 
+import { BoundedLruCache } from "@stll/collation";
+
+import { modelMayStartUninvoked } from "@/api/lib/agent-skills/invocation";
+import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -30,10 +34,7 @@ import type {
   ExternalGatewayDependencies,
   ResolvedExternalMcpTool,
 } from "@/api/mcp/gateway/external-tools";
-import {
-  GATEWAY_TOOL_KIND,
-  modeAllowsGatewayTools,
-} from "@/api/mcp/gateway/mode-policy";
+import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
   loadVisibleSkillTools,
   resolveSkillTool,
@@ -42,7 +43,7 @@ import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import {
   hasGrantedScope,
   isStaticToolShownToMemberRole,
-  listOfferedStaticMcpToolDefinitions,
+  loadOfferedStaticMcpToolDefinitions,
 } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -52,9 +53,9 @@ import {
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpAnonymizedPolicy,
+  McpToolAnnotations,
   McpToolDefinition,
   McpToolInputSchema,
-  McpToolAnnotations,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
 import {
@@ -166,21 +167,23 @@ export const listGatewayMcpToolDefinitions = async ({
   scopes?: readonly string[];
   externalGatewayDependencies?: ExternalGatewayDependencies;
 }): Promise<McpToolDefinition[]> => {
-  const definitions = listOfferedStaticMcpToolDefinitions({
-    context,
-    mode,
-    scopes,
-  }).map((definition) => projectFeatureToolDefinition(definition, context));
+  const definitions = (
+    await loadOfferedStaticMcpToolDefinitions({
+      context,
+      mode,
+      scopes,
+    })
+  ).map((definition) => projectFeatureToolDefinition(definition, context));
   // Restricted surfaces are pure static projections. Dynamic
   // connector discovery runs only on the advanced surface, so a
   // restricted client never discovers a tool its dispatcher rejects and never
   // receives tenant-specific connector metadata.
-  if (!modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill)) {
+  if (!modeAllowsGatewayTools(mode)) {
     return definitions;
   }
 
   if (
-    modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp) &&
+    modeAllowsGatewayTools(mode) &&
     hasGrantedScope(scopes, "stella:external_mcps")
   ) {
     for (const tool of await listGatewayExternalMcpTools({
@@ -251,7 +254,7 @@ export const getGatewayMcpToolDefinition = async ({
       : undefined;
   }
   if (
-    !modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill) ||
+    !modeAllowsGatewayTools(mode) ||
     !isMcpDescriptorFeatureEnabled({ context, kind: "tools", id: toolName })
   ) {
     return undefined;
@@ -259,7 +262,7 @@ export const getGatewayMcpToolDefinition = async ({
 
   if (isExternalMcpToolName(toolName)) {
     if (
-      !modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp) ||
+      !modeAllowsGatewayTools(mode) ||
       !hasGrantedScope(context.grantedScopes, "stella:external_mcps")
     ) {
       return undefined;
@@ -281,7 +284,10 @@ export const getGatewayMcpToolDefinition = async ({
   }
 
   const skill = await resolveSkillTool({ context, mode, toolName });
-  return skill === null ? undefined : skillToolDefinition(skill);
+  // A `manual` skill is served as a prompt, never as a tool.
+  return skill === null || !modelMayStartUninvoked(skill)
+    ? undefined
+    : skillToolDefinition(skill);
 };
 
 /**
@@ -422,7 +428,9 @@ const convertInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
  * Tool definitions are static values, so the rebuilt schema is memoized on the
  * definition's own schema object: `tools/list` pays the walk once per tool
  * rather than once per request. Dynamic gateway tools build a fresh schema each
- * time and simply miss, which costs no more than converting inline.
+ * time and simply miss, which costs no more than converting inline. A memoized
+ * schema is handed to every later caller, so it is frozen: a consumer that
+ * mutates it throws instead of changing what the next session is served.
  */
 const wireInputSchemas = new WeakMap<McpToolInputSchema, WireInputSchema>();
 
@@ -432,9 +440,91 @@ const toWireInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
     return cached;
   }
 
-  const converted = convertInputSchema(schema);
+  const converted = deepFreeze(convertInputSchema(schema));
   wireInputSchemas.set(schema, converted);
   return converted;
+};
+
+/**
+ * A schema with the feature-hidden descriptors scoped out is rebuilt from the
+ * whole tree, and most sessions hide the same set (invitation-only features
+ * are off for most organizations), so every `tools/list` would rebuild every
+ * schema. The scoped form is a pure function of the source schema object and
+ * the hidden set, so it is memoized on exactly those two: no other part of
+ * the session enters the key or the value, and a hit is the value a recompute
+ * would produce. Source schemas are static definitions, so the cache lives as
+ * long as the deploy; a dynamic tool's fresh schema is released with it. Each
+ * value is frozen, like the unscoped memo above.
+ */
+const SCOPED_SCHEMA_VARIANTS_PER_SCHEMA = 16;
+
+type HiddenDescriptors = {
+  ids: ReadonlySet<string>;
+  /** Canonical spelling of `ids`: sorted, one id per line. */
+  key: string;
+};
+
+const scopedWireSchemas = new WeakMap<
+  Record<string, unknown>,
+  BoundedLruCache<string, WireInputSchema>
+>();
+
+const toScopedWireSchema = (
+  schema: Record<string, unknown>,
+  hidden: HiddenDescriptors,
+): WireInputSchema => {
+  let variants = scopedWireSchemas.get(schema);
+  if (variants === undefined) {
+    variants = new BoundedLruCache(SCOPED_SCHEMA_VARIANTS_PER_SCHEMA);
+    scopedWireSchemas.set(schema, variants);
+  }
+  const cached = variants.get(hidden.key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const scoped = deepFreeze(
+    convertInputSchema({
+      ...scopeSchemaAnnotations(schema, hidden.ids),
+      type: "object",
+    }),
+  );
+  variants.set(hidden.key, scoped);
+  return scoped;
+};
+
+/**
+ * Static descriptions get the same treatment, keyed by hidden set and then by
+ * the text. Only registry descriptions are cached, so the inner map is bounded
+ * by the registry and a dynamic tool's tenant-authored description is never
+ * retained.
+ */
+const scopedStaticDescriptions = new BoundedLruCache<
+  string,
+  Map<string, string>
+>(SCOPED_SCHEMA_VARIANTS_PER_SCHEMA);
+
+const staticDescriptionsFor = (hidden: HiddenDescriptors) => {
+  const cached = scopedStaticDescriptions.get(hidden.key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const descriptions = new Map<string, string>();
+  scopedStaticDescriptions.set(hidden.key, descriptions);
+  return descriptions;
+};
+
+const toScopedStaticDescription = (
+  description: string,
+  hidden: HiddenDescriptors,
+  descriptions: Map<string, string>,
+): string => {
+  const cached = descriptions.get(description);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const scoped = scopeMcpDescriptorProse(description, hidden.ids);
+  descriptions.set(description, scoped);
+  return scoped;
 };
 
 export const toMcpTools = (
@@ -448,20 +538,32 @@ export const toMcpTools = (
     context,
     DEFAULT_MCP_TOOL_DEFINITIONS,
   );
+  const hidden: HiddenDescriptors = {
+    ids: hiddenIds,
+    key: [...hiddenIds].toSorted().join("\n"),
+  };
+  const staticDescriptions =
+    hiddenIds.size === 0 ? undefined : staticDescriptionsFor(hidden);
+  const scopeDescription = (name: string, description: string) => {
+    if (staticDescriptions === undefined) {
+      return description;
+    }
+    if (getStaticMcpToolDefinition(name, mode) === undefined) {
+      return scopeMcpDescriptorProse(description, hiddenIds);
+    }
+    return toScopedStaticDescription(description, hidden, staticDescriptions);
+  };
   return definitions.map(
     ({ _meta, annotations, description, inputSchema, name }) => {
       const outputContract = resolveMcpToolOutputContract(name, mode);
       return {
         ...(_meta === undefined ? {} : { _meta }),
         annotations,
-        description: scopeMcpDescriptorProse(description, hiddenIds),
+        description: scopeDescription(name, description),
         inputSchema:
           hiddenIds.size === 0
             ? toWireInputSchema(inputSchema)
-            : toWireInputSchema({
-                ...scopeSchemaAnnotations(inputSchema, hiddenIds),
-                type: "object",
-              }),
+            : toScopedWireSchema(inputSchema, hidden),
         name,
         ...(outputContract === undefined
           ? {}
@@ -469,13 +571,7 @@ export const toMcpTools = (
               outputSchema:
                 hiddenIds.size === 0
                   ? outputContract.outputSchema
-                  : toWireInputSchema({
-                      ...scopeSchemaAnnotations(
-                        outputContract.outputSchema,
-                        hiddenIds,
-                      ),
-                      type: "object",
-                    }),
+                  : toScopedWireSchema(outputContract.outputSchema, hidden),
             }),
         title: annotations.title,
       };
@@ -508,7 +604,8 @@ const clampTitle = (raw: string, maxUnits: number): string => {
   return clamped.trimEnd();
 };
 
-const toDynamicToolTitle = (raw: string): string =>
+/** A gateway-served name's display title (tools and skill prompts). */
+export const toDynamicToolTitle = (raw: string): string =>
   clampTitle(raw, DYNAMIC_TOOL_TITLE_MAX_CHARS);
 
 // `<connector display name>: <upstream tool name>`, preferring the tool name:

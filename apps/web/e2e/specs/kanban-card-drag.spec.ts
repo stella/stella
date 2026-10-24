@@ -4,9 +4,9 @@ import { randomUUID } from "node:crypto";
 import { apiGet, apiPut, apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 // Every workspace seeds a "Todos"/"Lists" kanban view alongside its
@@ -41,11 +41,13 @@ const findKanbanViewId = async (
 test.describe("kanban card drag", () => {
   let workspace: TestWorkspace | null = null;
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 

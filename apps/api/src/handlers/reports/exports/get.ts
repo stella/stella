@@ -13,6 +13,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { reportExports } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -133,7 +134,10 @@ const readReportExport = createSafeHandler(
           Result.tryPromise({
             try: async () =>
               await presignDownloadUrl(resultS3Key, {
+                userId: user.id,
                 expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
+                source: { kind: "request", sessionId: session.id },
+                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
                 fileName: downloadFileName(resultS3Key),
                 scope: {
                   keyspace: "exports",

@@ -4,6 +4,7 @@ import type {
   SanctionsSource,
   ScreeningQuery,
   ScreeningResult,
+  ScreeningWorkUsage,
 } from "@stll/sanctions";
 
 export type SanctionsMatcherRequest = {
@@ -13,6 +14,7 @@ export type SanctionsMatcherRequest = {
   query: ScreeningQuery;
   cutoff: number;
   limit: number;
+  maxWork?: number;
 };
 
 /** One edition to index ahead of screening: its entries, then its version. */
@@ -44,11 +46,12 @@ export type SanctionsMatcherMessage =
       query: ScreeningQuery;
       cutoff: number;
       limit: number;
+      maxWork?: number;
     };
 
 // Plain data only: Result and tagged-error prototypes do not cross threads.
 export type SanctionsMatcherReply =
-  | { status: "screened"; result: ScreeningResult }
+  | { status: "screened"; result: ScreeningResult; work: ScreeningWorkUsage }
   | { status: "work-limit" }
   | { status: "unavailable" }
   | { status: "entries-loaded" }

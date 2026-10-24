@@ -27,8 +27,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
-
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -39,7 +37,7 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -52,11 +50,11 @@ import {
 } from "@/api/lib/chat/compaction-summary";
 import type { IncrementalSummaryPrompt } from "@/api/lib/chat/compaction-summary";
 import {
-  COMPACTION_GENERATION_POLICY,
+  compactionGenerationRequest,
+  estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_TEXT_PART_CHARS,
   MESSAGE_OVERHEAD_TOKENS,
-  estimateTextTokens,
   renderTaggedValue,
   safeStringify,
   truncateForCompaction,
@@ -69,9 +67,9 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 /**
  * Rows one run may pull past the checkpoint cursor. The bound is what makes a
@@ -156,7 +154,7 @@ type RunChatThreadCompactionOptions = {
    * Whether this deployment may derive AI memory from chat. Passed in rather
    * than read from `env` here so the value that lands on the checkpoint is the
    * one the caller observed, and so the re-enable path is exercisable.
-   * Defaults to the deployment flag.
+   * Defaults to current thread-owner feature admission.
    */
   extractionFeatureEnabled?: boolean | undefined;
   modelId?: string | undefined;
@@ -164,7 +162,6 @@ type RunChatThreadCompactionOptions = {
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   preserveTokens: number;
-  reasoningEffort?: ReasoningEffort | undefined;
   safeDb: SafeDb;
   /** Test seam. Defaults to the real structured-summary model call. */
   summarize?: ChatCompactionSummarize | undefined;
@@ -179,7 +176,7 @@ export type ChatCompactionSummarize = (
 
 type ChatCompactionAnalytics = Pick<
   TanStackAIAnalyticsCallbacks,
-  "captureError" | "middleware"
+  "captureError" | "forModel" | "middleware"
 >;
 
 /**
@@ -684,24 +681,23 @@ const summarizeDelta = async ({
 const createModelSummarizer =
   (options: RunChatThreadCompactionOptions): ChatCompactionSummarize =>
   async (prompt) =>
-    await generateTanStackTextForRole({
+    await generateTanStackTextForTask({
+      userId: options.admission.userId,
       dataClass: "customer",
       abortSignal: options.abortSignal,
       analytics: options.analytics,
       caching: resolveCaching({
         promptCachingEnabled: false,
-        role: "chat",
+        task: "chat",
         scopeKey: null,
       }),
-      ...COMPACTION_GENERATION_POLICY,
+      ...compactionGenerationRequest(renderIncrementalCompactionPrompt(prompt)),
       modelId: options.modelId,
       organizationId: options.organizationId,
       admission: options.admission,
       orgAIConfig: options.orgAIConfig,
       managedAIResidency: options.managedAIResidency,
-      reasoningEffort: options.reasoningEffort,
-      prompt: renderIncrementalCompactionPrompt(prompt),
-      role: "chat",
+      task: "chat",
       serviceTier: "batch",
       system: CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,
       systemPromptOrigin: "server-built",
@@ -781,7 +777,7 @@ const advanceCheckpointOnTx = async ({
   const memoryEligibility = resolveCheckpointMemoryEligibility({
     extractionFeatureEnabled:
       options.extractionFeatureEnabled ??
-      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+      (await isThreadMemoryEnabled({ tx, threadId })),
     previous: observed.checkpoint?.memoryEligibility ?? null,
     segmentMessages: plan.messagesToSummarize,
   });
@@ -901,8 +897,12 @@ const estimateDeltaPartTokens = (part: unknown): number => {
   return estimateTextTokens(safeStringify(part));
 };
 
-const deltaMessageParts = (message: DeltaMessage): unknown[] =>
-  Array.isArray(message.content.data) ? message.content.data : [];
+const deltaMessageParts = (message: DeltaMessage): unknown[] => {
+  if (!Array.isArray(message.content.data)) {
+    panic("Stored v3 chat content has invalid data");
+  }
+  return message.content.data;
+};
 
 /**
  * Render the summarized slice for the model. Deliberately the same envelope
@@ -961,8 +961,7 @@ const partTypeTag = (part: unknown): string => {
 };
 
 /**
- * Text of a persisted part, across both persisted content versions (`content`
- * in v2, `text` in the legacy v1 payload). Returns null for non-text parts.
+ * Text of a persisted v3 part. Returns null for non-text parts.
  */
 const persistedTextPartContent = (part: unknown): string | null => {
   if (typeof part !== "object" || part === null || !("type" in part)) {
@@ -974,9 +973,6 @@ const persistedTextPartContent = (part: unknown): string | null => {
   if ("content" in part && typeof part.content === "string") {
     return part.content;
   }
-  if ("text" in part && typeof part.text === "string") {
-    return part.text;
-  }
   return null;
 };
 
@@ -984,7 +980,7 @@ const isPersistedAttachmentPart = (part: unknown): boolean => {
   if (typeof part !== "object" || part === null || !("type" in part)) {
     return false;
   }
-  return part.type === "file" || part.type === "image";
+  return part.type === "document" || part.type === "image";
 };
 
 /**

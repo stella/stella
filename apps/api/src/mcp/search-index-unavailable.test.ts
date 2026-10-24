@@ -12,13 +12,16 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CorpusServingGenerationAbsentError } from "@/api/lib/legal-search/corpus-index-generation-store";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  NATIVE_SCAN_TRANSPORT,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
+  isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_HINT,
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
-  isSearchIndexUnavailable,
   searchIndexUnavailableError,
 } from "@/api/lib/legal-search/search-index-unavailable";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -84,6 +87,7 @@ afterEach(() => {
 /** A scan against the unreachable index, as both search handlers run one. */
 const scanUnreachableIndex = async (): Promise<never> => {
   await readCorpusIndexSearchPage({
+    scanTransport: NATIVE_SCAN_TRANSPORT,
     observer: "unobserved",
     cluster: "q09",
     indexId: "legal_corpus_v1_cze",
@@ -379,7 +383,6 @@ describe("search_index_unavailable", () => {
     const refusal = searchIndexUnavailableError(new Error("refused"));
     const response = mapHandlerResult({
       id: "legislation.search",
-      access: "read",
       result: new ElysiaCustomStatusResponse(503, {
         code: refusal.code,
         message: refusal.message,

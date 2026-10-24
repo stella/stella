@@ -1,4 +1,4 @@
-import { and, desc, eq, notExists, sql } from "drizzle-orm";
+import { and, desc, eq, not, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import { isUuid } from "@stll/uuid-codec";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -31,10 +31,6 @@ import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import {
-  publishedCaseLawDecision,
-  publishedCaseLawDecisionFor,
-} from "@/api/lib/case-law/published-decisions";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceFor,
@@ -90,12 +86,12 @@ type DecisionDateCursor = {
   id: SafeId<"caseLawDecision">;
 };
 
-const encodeDecisionDateCursor = ({
+export const encodeDecisionDateCursor = ({
   decisionDate,
   id,
 }: DecisionDateCursor): string => encodePaginationCursor([decisionDate, id]);
 
-const decodeDecisionDateCursor = (
+export const decodeDecisionDateCursor = (
   cursor: string,
 ): DecisionDateCursor | null => {
   const parts = decodePaginationCursor(cursor);
@@ -121,11 +117,11 @@ const decisionDateKeysetAfter = ({
   decisionDate,
   id,
 }: DecisionDateCursor): SQL =>
-  sql`(${decisionDateSortKeySql(caseLawDecisions.decisionDate)}, ${caseLawDecisions.id})
+  sql`(${decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)}, ${publishedCaseLawDecisions.id})
     < (coalesce(${decisionDate}::date, '-infinity'::date), ${id}::uuid)`;
 
 /** The language versions of a decision, so the sibling rule can be applied to them. */
-const sibling = alias(caseLawDecisions, "sibling");
+const sibling = alias(publishedCaseLawDecisions, "sibling");
 const siblingSource = alias(caseLawSources, "sibling_source");
 
 /** The table or its alias: the alias carries its own table name in the types. */
@@ -153,11 +149,19 @@ const decisionFilterConditions = (
     conditions.push(eq(decision.court, query.court));
   }
   conditions.push(eq(decision.country, query.country));
+  // Date bounds compare the walk's own sort key, so both browse indexes take
+  // them as a range of the walk; on the bare column they filter a walk that
+  // starts at the newest decision. The key gives undated rows `-infinity`: a
+  // lower bound excludes them, an upper bound alone must exclude them itself.
+  const sortKey = decisionDateSortKeySql(decision.decisionDate);
   if (query.dateFrom) {
-    conditions.push(sql`${decision.decisionDate} >= ${query.dateFrom}`);
+    conditions.push(sql`${sortKey} >= ${query.dateFrom}::date`);
   }
   if (query.dateTo) {
-    conditions.push(sql`${decision.decisionDate} <= ${query.dateTo}`);
+    conditions.push(sql`${sortKey} <= ${query.dateTo}::date`);
+    if (!query.dateFrom) {
+      conditions.push(sql`${sortKey} > '-infinity'::date`);
+    }
   }
   if (query.decisionType) {
     conditions.push(
@@ -195,49 +199,58 @@ export const listDecisionsPageQuery = ({
 }: ListDecisionsPageQueryOptions) => {
   const conditions: SQL[] = [
     redistributableCaseLawSource,
-    publishedCaseLawDecision,
-    ...decisionFilterConditions(query, caseLawDecisions),
+    ...decisionFilterConditions(query, publishedCaseLawDecisions),
   ];
   if (cursor !== undefined) {
     conditions.push(decisionDateKeysetAfter(cursor));
   }
 
+  // The representative check stays a correlated, per-row test on the index
+  // walk. Flattened into an anti-join, or kept as a lateral join filtered on
+  // null, the planner estimates that almost no row survives it, expects to
+  // read the whole country to fill a page, and sorts the corpus instead of
+  // walking the date index. As a subplan it is estimated as half the rows,
+  // which is the walk's real shape: most decisions have no earlier version.
+  // `OFFSET 0` is a deliberate optimization fence, not a no-op to clean up:
+  // PostgreSQL never pulls an EXISTS with an offset up into a join, so it is
+  // what keeps the check a subplan. `list-plan.db.test.ts` fails without it.
+  const earlierSibling = tx
+    .select({ id: sibling.id })
+    .from(sibling)
+    .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
+    .where(
+      and(
+        eq(
+          sibling.languageGroupKey,
+          publishedCaseLawDecisions.languageGroupKey,
+        ),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
+        sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
+        redistributableCaseLawSourceFor(siblingSource.descriptor),
+        ...decisionFilterConditions(query, sibling),
+      ),
+    )
+    .limit(1);
+  const hasEarlierSibling = sql`exists (${earlierSibling} offset 0)`;
+
   return tx
     .select(publicDecisionRowColumns())
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
         ...conditions,
-        // A multilingual decision is listed once, by its oldest listable
-        // version. Rows only ever arrive with newer timestamps, so no later
-        // ingested translation can displace the representative between two
-        // pages of one walk, and the keyset cursor stays valid. Siblings are
-        // held to the same filters and the same redistribution gate as the
-        // row itself.
-        // Equality against a null group key matches no sibling, so the
-        // anti-join also keeps ungrouped decisions without a separate OR arm.
-        notExists(
-          tx
-            .select({ one: sql`1` })
-            .from(sibling)
-            .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
-            .where(
-              and(
-                eq(sibling.languageGroupKey, caseLawDecisions.languageGroupKey),
-                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
-                sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
-                redistributableCaseLawSourceFor(siblingSource.descriptor),
-                publishedCaseLawDecisionFor(sibling.metadata),
-                ...decisionFilterConditions(query, sibling),
-              ),
-            ),
-        ),
+        // Only an older version eligible for this request hides a row.
+        // A null group key matches no sibling, so ungrouped rows remain.
+        not(hasEarlierSibling),
       ),
     )
     .orderBy(
-      desc(decisionDateSortKeySql(caseLawDecisions.decisionDate)),
-      desc(caseLawDecisions.id),
+      desc(decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)),
+      desc(publishedCaseLawDecisions.id),
     )
     .limit(limit + 1)
     .offset(offset);
@@ -254,7 +267,9 @@ export const listDecisionsHandler = async (
   readCourtWeights: () => Promise<CourtWeightMap> = loadPublicCourtWeights,
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;

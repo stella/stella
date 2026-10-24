@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -131,6 +131,10 @@ test("the migration adds the expression the schema declares, NOT VALID", () => {
 const preMigrationDb = async () => {
   const preClient = await createTestPglite();
   const preDb = drizzle({ client: preClient });
+  // Drizzle creates the published views during the PGlite schema push; this
+  // fixture rewinds the base table to a pre-court-id shape.
+  await preDb.execute(sql.raw('DROP VIEW "case_law_unredacted_decisions"'));
+  await preDb.execute(sql.raw('DROP VIEW "case_law_published_decisions"'));
   await preDb.execute(
     sql.raw(
       `ALTER TABLE "case_law_decisions" DROP CONSTRAINT "${CASE_LAW_DECISION_COURT_ID_CONSTRAINT}"`,

@@ -4,14 +4,14 @@ import {
   asc,
   desc,
   eq,
+  gt,
   isNotNull,
   isNull,
-  gt,
-  lte,
   lt,
+  lte,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
@@ -21,8 +21,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawReplayBlocked,
   caseLawReplayBatches,
+  caseLawReplayBlocked,
 } from "@/api/db/schema";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -58,18 +58,25 @@ import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  PARSER_REPARSE_FEATURES,
+  PARSER_VERSION_SCOPES,
+  storedFeaturesForParserReparseScope,
+} from "@/api/lib/legal-search/parser-reparse-scopes";
+import type { ParserReparseScope } from "@/api/lib/legal-search/parser-reparse-scopes";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 import {
-  REPLAY_PREVIEW_FAILURE,
   classifyReplayFailure,
+  REPLAY_PREVIEW_FAILURE,
+  type ReplayFailure,
   replayFailure,
   ReplayStageError,
-  type ReplayFailure,
 } from "./replay-failure";
 
 /**
@@ -242,6 +249,7 @@ type ReplaySelection =
   | { type: "operator" }
   | {
       type: "background";
+      adapterKey?: AdapterKey;
       currentParserVersion: number;
       mode: "enrolled" | "dry-run";
     };
@@ -290,6 +298,7 @@ const replaySelectionPredicate = (
       return undefined;
     case "background":
       return and(
+        parserScopePredicate(selection.adapterKey),
         or(
           isNull(caseLawDecisions.parserVersion),
           lt(caseLawDecisions.parserVersion, selection.currentParserVersion),
@@ -341,6 +350,35 @@ const replaySelectionPredicate = (
       selection satisfies never;
       return panic(`Unhandled replay selection: ${String(selection)}`);
   }
+};
+
+const parserReparseScopeForAdapter = (
+  adapterKey: AdapterKey,
+): ParserReparseScope => PARSER_VERSION_SCOPES[adapterKey].scope;
+
+const parserScopePredicate = (
+  adapterKey: AdapterKey | undefined,
+): SQL | undefined => {
+  if (adapterKey === undefined) {
+    return undefined;
+  }
+  const scope = parserReparseScopeForAdapter(adapterKey);
+  if (scope.type === "all") {
+    return undefined;
+  }
+  const selectors = storedFeaturesForParserReparseScope(
+    scope,
+    PARSER_REPARSE_FEATURES,
+  );
+  return or(
+    ...selectors.map((feature) => {
+      const column = sql.identifier(feature.column);
+      if (feature.jsonbPath === undefined) {
+        return isNotNull(column);
+      }
+      return sql`${column} #> ${feature.jsonbPath} IS NOT NULL`;
+    }),
+  );
 };
 
 type SelectScopeEndOptions = {
@@ -483,10 +521,12 @@ export const buildBackgroundReplayProbe = (
   tx: Transaction,
   {
     sourceId,
+    adapterKey,
     currentParserVersion,
     mode,
   }: {
     sourceId: SafeId<"caseLawSource">;
+    adapterKey?: AdapterKey;
     currentParserVersion: number;
     mode: "enrolled" | "dry-run";
   },
@@ -498,7 +538,12 @@ export const buildBackgroundReplayProbe = (
       and(
         replayableRows(sourceId, CASE_LAW_REPLAY_SCOPE.SOURCE),
         replaySelectionPredicate(
-          { type: "background", currentParserVersion, mode },
+          {
+            type: "background",
+            ...(adapterKey === undefined ? {} : { adapterKey }),
+            currentParserVersion,
+            mode,
+          },
           tx,
         ),
       ),
@@ -532,8 +577,8 @@ export const countReplayability = async ({
       // sql-perf-allow: bounded by one explicit operator replay preflight
       await tx
         .select({
-          storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
-          needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
+          storedLocally: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)::int`,
+          needsRefetch: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)::int`,
         })
         .from(caseLawDecisions)
         .where(
@@ -546,8 +591,8 @@ export const countReplayability = async ({
   );
 
   return {
-    storedLocally: Number(counts?.storedLocally ?? 0),
-    needsRefetch: Number(counts?.needsRefetch ?? 0),
+    storedLocally: counts?.storedLocally ?? 0,
+    needsRefetch: counts?.needsRefetch ?? 0,
   };
 };
 
@@ -627,6 +672,7 @@ export const replayRowResult = (
 
 export type ReplayRunReport = {
   visited: number;
+  writeOutcomes: ReplayWriteOutcomeCounts;
   outcomes: Record<ReplayRowOutcome, number>;
   rejections: Record<StoredRawReparseRejection, number>;
   /**
@@ -648,6 +694,40 @@ export type ReplayRunReport = {
   haltReason: string | null;
   failure?: ReplayFailure;
 };
+
+export type ReplayWriteOutcomeCounts = {
+  unchanged: number;
+  rewritten: number;
+  failed: number;
+};
+
+const writeOutcomeOf = (
+  outcome: ReplayRowOutcome,
+): keyof ReplayWriteOutcomeCounts => {
+  switch (outcome) {
+    case REPLAY_ROW_OUTCOME.APPLIED:
+    case REPLAY_ROW_OUTCOME.WITHDRAWN:
+      return "rewritten";
+    case REPLAY_ROW_OUTCOME.UNCHANGED:
+      return "unchanged";
+    case REPLAY_ROW_OUTCOME.WOULD_APPLY:
+    case REPLAY_ROW_OUTCOME.WOULD_WITHDRAW:
+    case REPLAY_ROW_OUTCOME.REJECTED:
+    case REPLAY_ROW_OUTCOME.MISSING_PAYLOAD:
+    case REPLAY_ROW_OUTCOME.RETRYABLE:
+    case REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE:
+      return "failed";
+    default:
+      outcome satisfies never;
+      return panic("Unhandled replay write outcome");
+  }
+};
+
+const emptyWriteOutcomeCounts = (): ReplayWriteOutcomeCounts => ({
+  unchanged: 0,
+  rewritten: 0,
+  failed: 0,
+});
 
 // Both counters are annotated with a total `Record` over their union, so a
 // new outcome or rejection reason fails to compile until it is counted here.
@@ -677,6 +757,10 @@ export const replaySingleRowReport = (
   row: ReplayRowReport,
 ): ReplayRunReport => ({
   visited: 1,
+  writeOutcomes: {
+    ...emptyWriteOutcomeCounts(),
+    [writeOutcomeOf(row.outcome)]: 1,
+  },
   outcomes: { ...emptyOutcomeCounts(), [row.outcome]: 1 },
   rejections: emptyRejectionCounts(),
   problems: [],
@@ -916,6 +1000,12 @@ const storedPayloadMatches = async ({
   );
 };
 
+/** The content hash is the canonical decision-output identity used by writes. */
+export const parsedOutputRequiresWrite = (
+  storedHash: string,
+  parsedHash: string,
+): boolean => storedHash !== parsedHash;
+
 /**
  * Whether the write would change a described column the row holds.
  *
@@ -973,6 +1063,7 @@ const replayWouldChangeRow = async ({
   scopedDb: ScopedDb;
 }): Promise<boolean> => {
   const result = sanitizeResult(input, metadataUrlSchema);
+  const payload = caseLawCanonicalPayload(result);
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return true;
   }
@@ -997,8 +1088,15 @@ const replayWouldChangeRow = async ({
   if (sourceChanged) {
     return true;
   }
+  // The stored hash answers what reading the stored payload back would.
+  if (row.contentHash !== null) {
+    return parsedOutputRequiresWrite(
+      row.contentHash,
+      corpusContentHash(payload),
+    );
+  }
   return !(await storedPayloadMatches({
-    payload: caseLawCanonicalPayload(result),
+    payload,
     row,
     scopedDb,
   }));
@@ -1095,8 +1193,6 @@ const replayRow = async ({
     scopedDb,
   });
 
-  // Parser provenance for an identical re-parse belongs in the replay receipt.
-  // Even an older parser version must leave the decision row untouched.
   if (!changed) {
     return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
   }
@@ -1527,6 +1623,7 @@ export const replayCaseLawSource = async ({
 
   const resolveSourceContract = createSourceContractResolver(scopedDb);
   const outcomes = emptyOutcomeCounts();
+  const writeOutcomes = emptyWriteOutcomeCounts();
   const rejections = emptyRejectionCounts();
   const problems: ReplayRowReport[] = [];
   const listedProblems = emptyOutcomeCounts();
@@ -1541,6 +1638,7 @@ export const replayCaseLawSource = async ({
     type: "ran",
     report: {
       visited,
+      writeOutcomes,
       outcomes,
       rejections,
       problems,
@@ -1554,10 +1652,10 @@ export const replayCaseLawSource = async ({
   const replayPage = async (
     page: readonly ReplayDecisionRow[],
     index = 0,
-  ): Promise<boolean> => {
+  ): Promise<{ type: "complete" } | { type: "halted" }> => {
     const row = page.at(index);
     if (row === undefined) {
-      return true;
+      return { type: "complete" };
     }
 
     const attempted = await Result.tryPromise({
@@ -1588,13 +1686,14 @@ export const replayCaseLawSource = async ({
     if (Result.isError(attempt)) {
       failure = classifyReplayFailure(attempt.error);
       haltReason = `${row.caseNumber} (${row.language}) could not be replayed: ${failureDetail(attempt.error)}`;
-      return false;
+      return { type: "halted" };
     }
     const rowReport = attempt.value;
     await onRow?.({ row, report: rowReport });
 
     visited += 1;
     outcomes[rowReport.outcome] += 1;
+    writeOutcomes[writeOutcomeOf(rowReport.outcome)] += 1;
     if (rowReport.rejection !== undefined) {
       rejections[rowReport.rejection] += 1;
     }
@@ -1623,13 +1722,13 @@ export const replayCaseLawSource = async ({
     if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
       failure = replayFailure("writer-retryable");
       haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
-      return false;
+      return { type: "halted" };
     }
     resumeAfter = row.id;
     if (Result.isError(recorded)) {
       failure = replayFailure("receipt-write");
       haltReason = `result of ${row.caseNumber} (${row.language}) could not be recorded (${failureDetail(recorded.error)}): ${JSON.stringify(rowReport)}`;
-      return false;
+      return { type: "halted" };
     }
     return await replayPage(page, index + 1);
   };
@@ -1661,7 +1760,7 @@ export const replayCaseLawSource = async ({
     if (page.length === 0) {
       return;
     }
-    if (await replayPage(page)) {
+    if ((await replayPage(page)).type === "complete") {
       await walk();
     }
   };

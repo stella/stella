@@ -24,14 +24,18 @@ const readHandlerSource = async (file: string) =>
 describe("public statute routes", () => {
   test.each(
     PUBLIC_COUNTRIES.filter(
-      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+      (country) =>
+        PUBLIC_COUNTRY_CAPABILITIES[country].legislation !== "admitted",
     ),
   )(
     "advertised %s reports its capability before reading data",
     async (country) => {
       const urls = [
         `/law/statutes?country=${country}`,
-        `/law/sitemap/statutes/shard?country=${country.toLowerCase()}`,
+        // A pages-public country's sitemap is a page route, and it is served.
+        ...(PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "pages_public"
+          ? []
+          : [`/law/sitemap/statutes/shard?country=${country.toLowerCase()}`]),
       ];
       for (const url of urls) {
         const response = await publicLegislationRoute.handle(
@@ -41,18 +45,18 @@ describe("public statute routes", () => {
         expect(await response.json()).toMatchObject({
           status: "unavailable",
           country,
-          reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+          reason: PUBLIC_COUNTRY_CAPABILITIES[country].legislation,
         });
       }
     },
   );
 
-  test("pending public countries return typed unavailable for statute search and lookup", async () => {
+  // Its statute pages and sitemap are page routes, served from the database
+  // and covered by the page db tests; search and listing stay unavailable.
+  test("a pages-public country returns typed unavailable for statute search and listing", async () => {
     const urls = [
       "/law/statutes?country=SVK",
       "/law/statutes/facets?country=SVK",
-      "/law/statutes/by-slug/2012-89?country=SVK",
-      "/law/sitemap/statutes/shard?country=svk",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
     const search = await searchLegislationHandler(
@@ -65,7 +69,7 @@ describe("public statute routes", () => {
       response: {
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       },
     });
     for (const request of requests) {
@@ -76,7 +80,7 @@ describe("public statute routes", () => {
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       });
     }
   });

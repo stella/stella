@@ -7,10 +7,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
@@ -27,9 +27,9 @@ import type {
 } from "@/features/style-sets/style-set-editor-types";
 import { StyleSetPreview } from "@/features/style-sets/style-set-preview";
 import {
+  stellaStyleEditorOptions,
   styleSetEditorOptions,
   styleSetsKeys,
-  stellaStyleEditorOptions,
 } from "@/features/style-sets/style-set-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -173,9 +173,10 @@ const LoadedStyleSetEditor = ({
       // An API error response reaches the user through the same toast as a
       // rejected request, so it has to reach analytics the same way too; the
       // catch in `handleSubmit` only ever sees the rejection.
-      getAnalytics().captureError(error);
+      const apiError = toAPIError(error);
+      getAnalytics().captureError(apiError);
       setSaving(false);
-      notifyUserError(toAPIError(error), t("styleSets.editor.saveFailed"));
+      notifyUserError(apiError, t("styleSets.editor.saveFailed"));
       return;
     }
 

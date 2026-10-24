@@ -3,13 +3,14 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -113,6 +114,7 @@ const StyleSetPickerDialogBody = ({
           <span className="text-sm font-medium">{t("common.name")}</span>
           <Input
             autoFocus
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(event) => setName(event.target.value)}
             value={name}
           />

@@ -25,8 +25,8 @@ import type {
 import {
   internalFailureResult,
   nullAsAbsent,
-  structuredErrorResult,
   structuredEgressPlan,
+  structuredErrorResult,
   uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 
@@ -89,12 +89,6 @@ export const UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA = v.strictObject({
     fileId: v.string(),
     fileName: v.string(),
   }),
-});
-
-const uploadDocumentVersionCapabilityOutputSchema = v.strictObject({
-  finalizedResult:
-    UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA.entries.finalizedResult,
-  meta: v.optional(v.strictObject({ requestId: v.string() })),
 });
 
 export type UploadDocumentVersionInput = v.InferOutput<
@@ -395,7 +389,7 @@ export const uploadRemoteDocumentVersion = async ({
     return finalized.result;
   }
   const parsedFinalized = v.safeParse(
-    uploadDocumentVersionCapabilityOutputSchema,
+    UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
     finalized.payload,
   );
   if (!parsedFinalized.success) {

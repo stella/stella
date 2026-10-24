@@ -10,9 +10,9 @@ import { publicLawLoadMode } from "@/components/public-law-table/public-law-resu
 import { createStatuteFilters } from "@/features/statutes/open-statute-match";
 import {
   statuteFacetsOptions,
-  statutesInfiniteOptions,
   type StatuteListFilters,
   type StatuteListItem,
+  statutesInfiniteOptions,
 } from "@/features/statutes/queries/statutes";
 import {
   readStatuteIntent,
@@ -33,6 +33,7 @@ export const createStatuteListFilters = (
   ...createStatuteFilters(country, readStatuteIntent(country, search.q)),
   ...(search.type === undefined ? {} : { documentType: search.type }),
   ...(search.validity === undefined ? {} : { validity: search.validity }),
+  ...(search.year === undefined ? {} : { year: search.year }),
 });
 
 /**

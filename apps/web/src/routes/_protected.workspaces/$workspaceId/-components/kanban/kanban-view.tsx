@@ -6,8 +6,8 @@ import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import {
-  useMutation,
   useInfiniteQuery,
+  useMutation,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -87,8 +87,8 @@ import {
   isPlaybookVerdictProperty,
 } from "@/lib/workspaces/playbook-verdicts";
 import {
-  entitiesWindowOptions,
   entitiesKeys,
+  entitiesWindowOptions,
   useKanbanGroupOptions,
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
@@ -176,11 +176,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       const entityId = taskData?.entityId;
       if (taskError || !entityId) {
         analytics.captureError(
-          taskError ??
-            new ClientOperationError({
-              action: "create-task",
-              message: "Task creation returned no entity ID",
-            }),
+          taskError
+            ? toAPIError(taskError)
+            : new ClientOperationError({
+                action: "create-task",
+                message: "Task creation returned no entity ID",
+              }),
         );
         inspector.closeTab(pendingTaskId);
         notifyUserError(

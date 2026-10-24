@@ -12,6 +12,7 @@ import {
   normalizeApiError,
 } from "@stll/api-contract";
 import type { ApiErrorInput } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -45,10 +46,10 @@ import type { PlaybookSnapshot } from "@/features/knowledge/playbook-editor/play
 import {
   canAutosave,
   draftToAdopt,
-  resolvePaneSaveStatus,
-  resolveServerFollow,
-  resolveSavedPlaybookState,
   resolveLocalPlaybookIntent,
+  resolvePaneSaveStatus,
+  resolveSavedPlaybookState,
+  resolveServerFollow,
 } from "@/features/knowledge/playbook-editor/playbook-editor-sync.logic";
 import { PlaybookEditorToolbar } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
 import type { TourAttributes } from "@/features/knowledge/playbook-editor/playbook-editor-toolbar";
@@ -60,9 +61,9 @@ import type {
 import {
   buildPlaybookSavePayload,
   createPlaybookBaseline,
+  detailSeedGate,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
-  detailSeedGate,
   invalidPositionIds,
   latchedSeedGate,
   refetchSupersededDetail,
@@ -72,16 +73,16 @@ import {
   toPositionSourceLookup,
 } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
+  clearPlaybookPaneDraft,
   readParkedPlaybookPane,
   useParkedPlaybookPaneSavePending,
-  clearPlaybookPaneDraft,
 } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import { PlaybookVersionHistorySheet } from "@/features/knowledge/playbook-editor/playbook-version-history-sheet";
 import { PositionEditor } from "@/features/knowledge/playbook-editor/position-editor";
 import {
-  usePlaybookSaveQueue,
   usePlaybookDetailSaveSubscription,
+  usePlaybookSaveQueue,
 } from "@/features/knowledge/playbook-editor/use-playbook-save-queue";
 import type {
   SaveOutcome,
@@ -93,7 +94,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -105,8 +106,8 @@ import {
   newGradedPosition,
   type Position,
   type PositionErrors,
-  type PositionSeverity,
   positionReferencePassages,
+  type PositionSeverity,
   positionTiers,
   validatePosition,
 } from "@/lib/knowledge/playbook-types";
@@ -1595,6 +1596,7 @@ const PlaybookEditorForm = ({
               <Input
                 aria-invalid={attemptedSave && name.trim() === ""}
                 id={nameId}
+                maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
                 onChange={(e) => {
                   setName(e.target.value);
                   scheduleAutosaveFromEdit();
@@ -1651,7 +1653,7 @@ const PlaybookEditorForm = ({
                 </Select>
                 <Link
                   className="text-muted-foreground hover:text-foreground text-xs"
-                  to="/settings/organization/document-types"
+                  to="/admin/document-types"
                 >
                   {t("knowledge.playbooks.manageTypes")}
                 </Link>

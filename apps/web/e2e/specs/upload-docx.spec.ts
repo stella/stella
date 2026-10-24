@@ -11,9 +11,9 @@ import {
 } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =
@@ -64,12 +64,14 @@ test.describe("DOCX upload + inspector", () => {
     workspace = await createTestWorkspace(request, "upload-docx");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 

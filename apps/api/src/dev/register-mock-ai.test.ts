@@ -27,11 +27,12 @@ import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
 // Runs a Valibot schema through the exact pipeline
-// `generateTanStackObjectForRole` / `streamTanStackObjectForRole`
+// `generateTanStackObjectForTask` / `streamTanStackObjectForTask`
 // (apps/api/src/lib/tanstack-ai-generate.ts) apply before any adapter's
 // `structuredOutput` sees `outputSchema`: Valibot -> TanStack's Standard JSON
 // Schema wrapper -> provider-safe projection -> TanStack's own
@@ -326,7 +327,10 @@ for (const marker of [MOCK_AI_CANCELLATION_MARKER, MOCK_AI_CONTINUOUS_MARKER]) {
           }
           return text;
         },
-        { label: "registered live answer batch delivery", timeoutMs: 1000 },
+        {
+          label: "registered live answer batch delivery",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        },
       );
     try {
       const received = await readBatch();
@@ -386,7 +390,10 @@ for (const marker of [MOCK_AI_CANCELLATION_MARKER, MOCK_AI_CONTINUOUS_MARKER]) {
             // The replay viewer drains the producer's cancellation terminal.
           }
         },
-        { label: "registered live stream cancellation", timeoutMs: 1000 },
+        {
+          label: "registered live stream cancellation",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        },
       );
       expect(
         (await durability.snapshot()).filter(

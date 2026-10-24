@@ -16,7 +16,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 
@@ -25,6 +25,28 @@ import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 // hole. Every consumer below caps its own commands anyway; a bounded failure
 // is exactly what is under test.
 const UNREACHABLE_REDIS_URL = "redis://127.0.0.1:1";
+
+describe("link icons during a Valkey outage", () => {
+  test("an unavailable cache yields no origin fetch lease", async () => {
+    const { createLinkIconCache } =
+      await import("@/api/handlers/chat/link-icons/cache");
+    const cache = createLinkIconCache({ onRedisError: () => undefined });
+    let outboundRequests = 0;
+    const result = await settle(
+      cache.readOrLease({
+        hostname: toRegistrableIconSite("example.com").unwrap(),
+        userId: toSafeId<"user">("outage-user"),
+        ip: "192.0.2.1",
+      }),
+    );
+    if (result.status === "ok" && result.value.type === "lease") {
+      outboundRequests++;
+    }
+    expect(result).toEqual({ status: "ok", value: { type: "temporary" } });
+    expect(outboundRequests).toBe(0);
+    cache.close();
+  });
+});
 
 process.env["REDIS_URL"] = UNREACHABLE_REDIS_URL;
 
@@ -36,6 +58,8 @@ const { createRedisClient } = await import("@/api/lib/redis-client");
 const { chargeMcpReadBytes, closeMcpReadFenceRedis } =
   await import("@/api/lib/rate-limit/mcp-read-fence");
 const { toSafeId } = await import("@/api/lib/branded-types");
+const { toRegistrableIconSite } =
+  await import("@/api/handlers/chat/link-icons/origin");
 const { Result } = await import("better-result");
 const { RedisRateLimitContext } =
   await import("@/api/lib/rate-limit/redis-context");

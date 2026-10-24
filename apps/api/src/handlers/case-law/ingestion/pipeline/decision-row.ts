@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
@@ -35,6 +35,8 @@ import {
   selectComposableSupplements,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { markListingOnly } from "@/api/lib/legal-search/ingestion-normalization";
@@ -51,6 +53,7 @@ const insertedRowValues = (
     persistedDecisionDate,
     observedAt,
     observationOrder,
+    sourceFingerprintVersion,
     shape: { storesUnpublishedWithoutDocument },
     plan: { docketColumns, languageGroupKey, payloadColumns, preparedMetadata },
     rawArtifact: { sourceRawS3Key, sourceRawContentType },
@@ -82,6 +85,7 @@ const insertedRowValues = (
   sourceRawS3Key,
   sourceRawContentType,
   sourceHash: result.rawHash,
+  sourceHashVersion: sourceFingerprintVersion,
   sourceObservedAt: observedAt,
   sourceObservationOrder: observationOrder,
   sourceObservationHash: result.rawHash,
@@ -183,6 +187,13 @@ const finishInsertedRowTx = async (
       citations satisfies never;
       panic("Unhandled citation disposition");
   }
+  await runDecisionWriteExtension(tx, insertedId, {
+    payload: {
+      ...write.plan.corpusPayload,
+      contentHash: corpusContentHash(write.plan.corpusPayload),
+    },
+    ...(write.signal === undefined ? {} : { signal: write.signal }),
+  });
   await reconcileStableProjection(tx, write, insertedId, projectionLock);
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };

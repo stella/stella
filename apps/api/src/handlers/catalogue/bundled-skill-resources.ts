@@ -3,8 +3,8 @@ import { panic, Result } from "better-result";
 import type { LoadedCatalogueResource } from "@stll/catalogue/install-payloads";
 import {
   hashSkillPackage,
-  validateSkillPackage,
   type SkillPackageDiagnostic,
+  validateSkillPackage,
 } from "@stll/skills";
 
 import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
@@ -51,6 +51,7 @@ export const toParsedBundledSkillPackage = ({
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
     entrypointHash: hashSkillPackage({ resources, source }),
+    invocation: metadata.invocation,
     license: metadata.license ?? null,
     metadata: metadata.metadata ?? {},
     name: metadata.name,
