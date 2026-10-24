@@ -3091,6 +3091,7 @@ const config = defineConfig({
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "apps/*/scripts/**/*.{ts,tsx}",
+        "apps/*/evals/**/*.{ts,tsx}",
         "packages/*/src/**/*.{ts,tsx}",
         "packages/*/scripts/**/*.{ts,tsx}",
         "scripts/**/*.ts",
