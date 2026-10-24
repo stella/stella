@@ -74,7 +74,7 @@ const waitUntilHolding = async (db: GatedTestDb, holderPid: number) => {
         ) AS blocking,
         cardinality(pg_blocking_pids(${holderPid})) > 0 AS waiting`,
       );
-      if (row?.waiting === true && row.blocking !== true) {
+      if (row?.waiting === true && !row.blocking) {
         throw new Error(
           "The holder is itself waiting on a lock: signal it only after it holds",
         );
