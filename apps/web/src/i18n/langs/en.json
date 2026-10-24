@@ -388,6 +388,7 @@
         "reading": "Reading view"
       },
       "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
+      "pdfTextFailed": "The PDF's text could not be read, so the claims are not marked on its pages.",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 import sheet (XLSX)",
         "exporting": "Preparing export…",
         "isdoc": "ISDOC e-invoice (ABRA Gen and others)",
+        "ksefFa3": "KSeF e-invoice FA(3) (XML)",
         "spreadsheets": "Spreadsheets",
         "xlsx": "Invoices (XLSX)",
         "xlsxLines": "Invoice lines (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Page {page} of {pageCount}",
       "pageOfEstimatedCount": "Page {page} of ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page {page} · about {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}",
+      "pageWithMatchCounts": "Page {page} · {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithPartialMatchCount": "Page {page} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}",
       "perPage": "Per page",
       "refineForMore": "Refine your search to see more results"

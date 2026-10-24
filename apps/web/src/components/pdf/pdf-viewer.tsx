@@ -111,6 +111,7 @@ const FullscreenPdfViewer = () => {
     >
       <CreatingBBoxes />
       <PDFViewport
+        pageSource="portfolio"
         buffer={file.buffer}
         className="document-preview-surface h-full"
         contentClassName="relative mt-2 space-y-2 px-2"

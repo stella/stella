@@ -388,6 +388,7 @@
         "reading": "عرض القراءة"
       },
       "notLocated": "{count, plural, zero {لم يُعثر على # ادعاء في الأصل} one {لم يُعثر على ادعاء واحد في الأصل} two {لم يُعثر على ادعاءين في الأصل} few {لم يُعثر على # ادعاءات في الأصل} many {لم يُعثر على # ادعاءً في الأصل} other {لم يُعثر على # ادعاء في الأصل}}",
+      "pdfTextFailed": "تعذّرت قراءة نص ملف PDF، لذلك لم تُعلَّم الادعاءات على صفحاته.",
       "selectClaim": "اختر ادعاءً لفحص السجل الذي يستند إليه.",
       "showQueue": "عرض قائمة الانتظار",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "جدول استيراد ESO9 (XLSX)",
         "exporting": "جارٍ تجهيز التصدير…",
         "isdoc": "فاتورة ISDOC الإلكترونية (ABRA Gen وغيره)",
+        "ksefFa3": "فاتورة KSeF الإلكترونية FA(3) (XML)",
         "spreadsheets": "جداول البيانات",
         "xlsx": "الفواتير (XLSX)",
         "xlsxLines": "بنود الفواتير (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "الصفحة {page} من {pageCount}",
       "pageOfEstimatedCount": "الصفحة {page} من ~{pageCount}",
       "pageOfEstimatedCountLabel": "الصفحة {page} من نحو {pageCount}",
+      "pageWithEstimatedMatchCounts": "الصفحة {page} · نحو {exactCount, plural, zero {صفر تطابق تام} one {تطابق تام واحد} two {تطابقين تامين} few {# تطابقات تامة} many {# تطابقًا تامًا} other {# تطابق تام}} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
+      "pageWithMatchCounts": "الصفحة {page} · {exactCount, plural, zero {لا تطابقات تامة} one {تطابق تام واحد} two {تطابقان تامان} few {# تطابقات تامة} many {# تطابقًا تامًا} other {# تطابق تام}} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
+      "pageWithPartialMatchCount": "الصفحة {page} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة",
       "refineForMore": "ضيّق نطاق البحث لعرض مزيد من النتائج"
