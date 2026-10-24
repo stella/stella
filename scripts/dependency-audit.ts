@@ -1,7 +1,9 @@
 // Dependency vulnerability guard.
 //
-// `bun audit` checks the lockfile against the npm advisory database, but it
-// exits 0 even when advisories exist, so on its own it cannot gate CI. This
+// `bun audit` checks the lockfile against the npm advisory database and exits
+// nonzero when it reports advisories, but an exit code cannot record why a
+// known advisory is accepted or when that acceptance lapses, and it cannot
+// limit a pull request to the dependency resolutions that it changed. This
 // wraps it into a ratchet, mirroring scripts/bundle-baseline.ts: every current
 // high/critical advisory is recorded in scripts/dependency-audit-baseline.json
 // with a reason, and the --check mode fails only when a NEW high/critical
