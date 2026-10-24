@@ -6,6 +6,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/env";
@@ -116,6 +117,8 @@ const {
 const { redactTelemetryStack } = await import("./stack-redaction");
 const { sanitizeRouteErrorLifecycleEvent } =
   await import("./posthog-route-error");
+
+const BROWSER_RUNTIME = { type: "browser" } as const;
 
 describe("PostHog browser analytics adapter", () => {
   beforeEach(() => {
@@ -609,6 +612,7 @@ describe("PostHog browser analytics adapter", () => {
 
   test.each([
     "ai_config_provider_validation_failed",
+    ...Object.values(PROVIDER_SETUP_ERROR_CODE),
     CHAT_CONTINUATION_REJECTED_ERROR_CODE,
     API_FILE_SECURITY_REJECTED_ERROR_CODE,
   ])("drops the expected API outcome %s", (code) => {
@@ -1041,6 +1045,53 @@ describe("PostHog browser analytics adapter", () => {
     expect(captured.stack).toContain("    at renderMatter");
   });
 
+  // During SSR the adapter runs on Bun: the real throw site, not the
+  // reporting path the SDK would synthesize, has to reach error tracking.
+  test("captureError on the server keeps app-relative frames", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const error = new TypeError("Privileged document name");
+    error.stack = [
+      `TypeError: ${error.message}`,
+      `    at renderMatter (${process.cwd()}/dist/server/assets/provider-B5cnvp1A.js:728:4)`,
+    ].join("\n");
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(
+      [
+        "TypeError:",
+        "    at renderMatter (dist/server/assets/provider-B5cnvp1A.js:728:4)",
+      ].join("\n"),
+    );
+  });
+
+  test("captureError on the server strips directories from dot-segment frames", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const error = new TypeError("Privileged document name");
+    error.stack = [
+      `TypeError: ${error.message}`,
+      `    at renderMatter (${process.cwd()}/../private-client/render.tsx?token=private#client:10:15)`,
+    ].join("\n");
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(
+      ["TypeError:", "    at renderMatter (render.tsx:10:15)"].join("\n"),
+    );
+  });
+
   // Frame syntax is engine-specific, so the redaction has to hold for each
   // one: every frame survives, and the header carrying the message does not.
   const ENGINE_FRAMES = {
@@ -1069,6 +1120,7 @@ describe("PostHog browser analytics adapter", () => {
       expect(
         redactTelemetryStack({
           errorType: "RangeError",
+          runtime: BROWSER_RUNTIME,
           stack,
           syntax: _syntax === "callsite" ? "callsite" : "v8",
         }),
@@ -1080,6 +1132,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(
       redactTelemetryStack({
         errorType: "Error",
+        runtime: BROWSER_RUNTIME,
         stack: [
           "Privileged document name",
           "clientName@https://stella.test/assets/private.js:20:5",
@@ -1097,6 +1150,7 @@ describe("PostHog browser analytics adapter", () => {
       expect(
         redactTelemetryStack({
           errorType: "TypeError",
+          runtime: BROWSER_RUNTIME,
           stack:
             "TypeError: notify jane@https://my.stll.app/matters/Client-Smith:1:2",
           syntax,
@@ -1110,6 +1164,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(
       redactTelemetryStack({
         errorType: "SyntaxError",
+        runtime: BROWSER_RUNTIME,
         stack: ["parse@[native code]", frame].join("\n"),
         syntax: "callsite",
       }),
@@ -1153,6 +1208,7 @@ describe("PostHog browser analytics adapter", () => {
       expect(
         redactTelemetryStack({
           errorType: "Error",
+          runtime: BROWSER_RUNTIME,
           stack: frame,
           syntax: frame.startsWith("    at ") ? "v8" : "callsite",
         }),
@@ -1176,12 +1232,156 @@ describe("PostHog browser analytics adapter", () => {
       expect(
         redactTelemetryStack({
           errorType: "Error",
+          runtime: BROWSER_RUNTIME,
           stack: frame,
           syntax: frame.startsWith("    at ") ? "v8" : "callsite",
         }),
       ).toBeUndefined();
     },
   );
+
+  // Bun reports SSR frames as file paths, which a browser never does.
+  const SERVER_RUNTIME = { type: "server", root: "/app/apps/web" } as const;
+  const SERVER_FRAMES = {
+    serverChunk: {
+      frame:
+        "    at renderMatter (/app/apps/web/dist/server/assets/provider-B5cnvp1A.js:728:4)",
+      safeFrame:
+        "    at renderMatter (dist/server/assets/provider-B5cnvp1A.js:728:4)",
+    },
+    anonymousServerEntry: {
+      frame: "    at /app/apps/web/dist/server/server.js:21:27",
+      safeFrame: "    at dist/server/server.js:21:27",
+    },
+    dependency: {
+      frame:
+        "    at renderElement (/app/node_modules/.bun/react-dom@19.3.0/node_modules/react-dom/cjs/react-dom-server.bun.production.js:6523:46)",
+      safeFrame:
+        "    at renderElement (react-dom-server.bun.production.js:6523:46)",
+    },
+    outsideAppRoot: {
+      frame:
+        "    at renderMatter (/srv/checkout-client-smith/stella/apps/web/src/routes/matter.tsx:10:15)",
+      safeFrame: "    at renderMatter (matter.tsx:10:15)",
+    },
+    aboveAppRoot: {
+      frame:
+        "    at renderMatter (/app/apps/web/../private-client/render.tsx:10:15)",
+      safeFrame: "    at renderMatter (render.tsx:10:15)",
+    },
+    insideDotSegment: {
+      frame:
+        "    at renderMatter (/app/apps/web/src/./private-client/render.tsx:10:15)",
+      safeFrame: "    at renderMatter (render.tsx:10:15)",
+    },
+    query: {
+      frame:
+        "    at renderMatter (/app/apps/web/src/routes/matter.tsx?matter=private#client:10:15)",
+      safeFrame: "    at renderMatter (src/routes/matter.tsx:10:15)",
+    },
+  } as const;
+
+  test.each(Object.entries(SERVER_FRAMES))(
+    "server stack redaction keeps %s frames without the path above the app root",
+    (_kind, { frame, safeFrame }) => {
+      const stack = ["Panic: Privileged document name", frame].join("\n");
+      expect(
+        redactTelemetryStack({
+          errorType: "Panic",
+          runtime: SERVER_RUNTIME,
+          stack,
+          syntax: "v8",
+        }),
+      ).toBe(["Panic:", safeFrame].join("\n"));
+      expect(
+        redactTelemetryStack({
+          errorType: "Panic",
+          runtime: BROWSER_RUNTIME,
+          stack,
+          syntax: "v8",
+        }),
+      ).toBeUndefined();
+    },
+  );
+
+  test("server dot-segment frames retain only the basename", () => {
+    assertProperty(
+      "server dot-segment frames retain only the basename",
+      fc.property(
+        fc.array(fc.constantFrom("src", "routes", "dist", "server")),
+        fc.constantFrom(".", ".."),
+        fc.array(fc.constantFrom("private-client", "private-matter")),
+        fc.constantFrom("render.tsx", "provider-B5cnvp1A.js"),
+        fc.constantFrom(
+          "",
+          "?token=private",
+          "#client",
+          "?token=private#client",
+        ),
+        fc.constantFrom("v8", "callsite"),
+        (
+          directories,
+          dotSegment,
+          privateDirectories,
+          basename,
+          metadata,
+          syntax,
+        ) => {
+          const file = [
+            SERVER_RUNTIME.root,
+            ...directories,
+            dotSegment,
+            "private-client",
+            ...privateDirectories,
+            basename,
+          ].join("/");
+          const frame =
+            syntax === "v8"
+              ? `    at renderMatter (${file}${metadata}:10:15)`
+              : `renderMatter@${file}${metadata}:10:15`;
+          const stack =
+            syntax === "v8"
+              ? ["TypeError: Privileged document name", frame].join("\n")
+              : frame;
+          const safeFrame =
+            syntax === "v8"
+              ? `    at renderMatter (${basename}:10:15)`
+              : `renderMatter@${basename}:10:15`;
+          expect(
+            redactTelemetryStack({
+              errorType: "TypeError",
+              runtime: SERVER_RUNTIME,
+              stack,
+              syntax,
+            }),
+          ).toBe(["TypeError:", safeFrame].join("\n"));
+          expect(
+            redactTelemetryStack({
+              errorType: "TypeError",
+              runtime: BROWSER_RUNTIME,
+              stack,
+              syntax,
+            }),
+          ).toBeUndefined();
+        },
+      ),
+    );
+  });
+
+  test("server stack redaction still drops locations that are not files or web URLs", () => {
+    expect(
+      redactTelemetryStack({
+        errorType: "Error",
+        runtime: SERVER_RUNTIME,
+        stack: [
+          "Error: Privileged document name",
+          "    at processTicksAndRejections (native:7:39)",
+          "    at renderMatter (data:text/javascript,throw%20new%20Error(%22PrivilegedMatterName%22):1:1)",
+        ].join("\n"),
+        syntax: "v8",
+      }),
+    ).toBeUndefined();
+  });
 
   test("captureError cannot treat a multiline message as a stack frame", () => {
     const { analytics } = createPostHogAnalytics({
