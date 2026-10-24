@@ -374,7 +374,7 @@ jobs:
       # still runs to refuse with the staging/verified error.
       - name: Mint staging power token
         id: power-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
@@ -595,10 +595,17 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  # The builds run after a skipped wake when staging was already up. A job's
+  # default condition skips it when any job it depends on through `needs` was
+  # skipped, which promoted nothing yet ended the run green, so promotion
+  # names the build results it depends on instead.
   promote-staging:
     name: Promote staging images
     needs: [resolve, build-api, build-web]
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.resolve.result == 'success' &&
+      needs.build-api.result == 'success' && needs.build-web.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     # Deployment and its smoke verification are one serialized side-effecting
@@ -910,7 +917,7 @@ jobs:
 
       - name: Upload Playwright report
         if: ${{ always() && steps.web-smoke.outcome != '' && steps.web-smoke.outcome != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staging-smoke-report
           path: apps/web/playwright-report/
@@ -918,7 +925,7 @@ jobs:
 
       - name: Upload failed journey reports
         if: ${{ failure() && (steps.deployed-journeys.outcome == 'failure' || steps.mock-journeys.outcome == 'failure') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staging-user-journeys-report
           path: |
