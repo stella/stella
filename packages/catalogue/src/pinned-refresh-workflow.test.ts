@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,6 +6,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 const stepSchema = v.looseObject({
+  name: v.string(),
   id: v.optional(v.string()),
   if: v.optional(v.string()),
   run: v.optional(v.string()),
@@ -13,10 +15,18 @@ const stepSchema = v.looseObject({
   env: v.optional(v.record(v.string(), v.string())),
 });
 
+const workflowSchema = v.looseObject({
+  permissions: v.record(v.string(), v.string()),
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      permissions: v.record(v.string(), v.string()),
+      steps: v.array(stepSchema),
+    }),
+  ),
+});
 const workflow = v.parse(
-  v.looseObject({
-    jobs: v.record(v.string(), v.looseObject({ steps: v.array(stepSchema) })),
-  }),
+  workflowSchema,
   Bun.YAML.parse(
     await Bun.file(
       new URL(
@@ -25,6 +35,30 @@ const workflow = v.parse(
       ),
     ).text(),
   ),
+);
+const precedent = v.parse(
+  workflowSchema,
+  Bun.YAML.parse(
+    await Bun.file(
+      new URL(
+        "../../../.github/workflows/model-catalog-check.yml",
+        import.meta.url,
+      ),
+    ).text(),
+  ),
+);
+const precedentSteps = Object.values(precedent.jobs).flatMap(
+  ({ steps: jobSteps }) => jobSteps,
+);
+const precedentApp = v.parse(
+  stepSchema,
+  precedentSteps.find(({ uses }) =>
+    uses?.startsWith("actions/create-github-app-token@"),
+  ),
+);
+const precedentProposal = v.parse(
+  stepSchema,
+  precedentSteps.find(({ with: inputs }) => inputs?.["mode"] === "refresh-pr"),
 );
 const steps = Object.values(workflow.jobs).flatMap(
   ({ steps: jobSteps }) => jobSteps,
@@ -41,7 +75,34 @@ afterEach(async () => {
   );
 });
 
-type FixtureMode = "advanced" | "failed" | "out-of-allowlist" | "unchanged";
+type FixtureMode =
+  | "advanced"
+  | "failed"
+  | "out-of-allowlist"
+  | "unchanged"
+  | "refresh-failed"
+  | "validation-failed";
+type JobStatus = "success" | "failure";
+
+test("retains least-privilege grants and the reviewed publication identity", () => {
+  expect(workflow.permissions).toEqual({});
+  for (const job of Object.values(workflow.jobs)) {
+    expect(job.permissions).toEqual({ contents: "read" });
+  }
+  expect(steps.slice(0, 3).map(({ name }) => name)).toEqual([
+    "Checkout",
+    "Setup Bun",
+    "Install dependencies",
+  ]);
+  expect(
+    steps.filter(({ uses }) =>
+      uses?.startsWith("actions/create-github-app-token@"),
+    ),
+  ).toHaveLength(1);
+  expect(
+    steps.filter(({ uses }) => uses?.includes("/signed-commit@")),
+  ).toHaveLength(1);
+});
 
 const outputValue = (
   outputs: ReadonlyMap<string, ReadonlyMap<string, string>>,
@@ -51,7 +112,7 @@ const outputValue = (
     reference,
   );
   if (!match?.groups) {
-    throw new Error(`Unsupported workflow output reference: ${reference}`);
+    panic(`Unsupported workflow output reference: ${reference}`);
   }
   return (
     outputs
@@ -60,41 +121,65 @@ const outputValue = (
   );
 };
 
-const shouldRun = (
-  condition: string | undefined,
-  outputs: ReadonlyMap<string, ReadonlyMap<string, string>>,
-  outcomes: ReadonlyMap<string, string>,
-): boolean => {
-  if (condition === undefined) {
-    return true;
+type ShouldRunOptions = {
+  condition: string | undefined;
+  outputs: ReadonlyMap<string, ReadonlyMap<string, string>>;
+  outcomes: ReadonlyMap<string, string>;
+  jobStatus: JobStatus;
+};
+
+const shouldRun = ({
+  condition,
+  outputs,
+  outcomes,
+  jobStatus,
+}: ShouldRunOptions): boolean => {
+  const expression = condition?.replace(/^\$\{\{\s*|\s*\}\}$/gu, "");
+  const clauses =
+    expression?.split(/\s*&&\s*/u).map((clause) => clause.trim()) ?? [];
+  // GitHub implicitly requires success unless a status function is explicit.
+  if (
+    jobStatus === "failure" &&
+    !clauses.some((clause) =>
+      /^(?:!?cancelled|always|success|failure)\(\)$/u.test(clause),
+    )
+  ) {
+    return false;
   }
-  const expression = condition.replace(/^\$\{\{\s*|\s*\}\}$/gu, "");
-  return expression
-    .replace(/!?cancelled\(\)\s*&&\s*/gu, "")
-    .split(/\s*&&\s*/u)
-    .every((clause) => {
-      const comparison =
-        /^(?<left>\S+)\s*(?<operator>==|!=)\s*'(?<right>[^']*)'$/u.exec(
-          clause.trim(),
-        );
-      if (!comparison?.groups) {
-        throw new Error(`Unsupported workflow condition: ${clause}`);
-      }
-      const left = comparison.groups["left"] ?? "";
-      let actual = "";
-      if (left.startsWith("steps.") && left.endsWith(".outcome")) {
-        actual = outcomes.get(left.split(".")[1] ?? "") ?? "";
-      } else if (left.startsWith("steps.")) {
-        actual = outputValue(outputs, left);
-      } else if (left === "github.repository") {
-        actual = "stella/stella";
-      } else if (left === "github.ref") {
-        actual = "refs/heads/main";
-      }
-      return comparison.groups["operator"] === "=="
-        ? actual === comparison.groups["right"]
-        : actual !== comparison.groups["right"];
-    });
+  return clauses.every((clause) => {
+    switch (clause) {
+      case "!cancelled()":
+      case "always()":
+        return true;
+      case "cancelled()":
+        return false;
+      case "success()":
+        return jobStatus === "success";
+      case "failure()":
+        return jobStatus === "failure";
+    }
+    const comparison =
+      /^(?<left>\S+)\s*(?<operator>==|!=)\s*'(?<right>[^']*)'$/u.exec(clause);
+    if (!comparison?.groups) {
+      panic(`Unsupported workflow condition: ${clause}`);
+    }
+    const left = comparison.groups["left"] ?? "";
+    let actual: string;
+    if (left.startsWith("steps.") && left.endsWith(".outcome")) {
+      actual = outcomes.get(left.split(".")[1] ?? "") ?? "";
+    } else if (left.startsWith("steps.")) {
+      actual = outputValue(outputs, left);
+    } else if (left === "github.repository") {
+      actual = "stella/stella";
+    } else if (left === "github.ref") {
+      actual = "refs/heads/main";
+    } else {
+      return panic(`Unsupported workflow condition input: ${left}`);
+    }
+    return comparison.groups["operator"] === "=="
+      ? actual === comparison.groups["right"]
+      : actual !== comparison.groups["right"];
+  });
 };
 
 const parseOutputFile = async (file: string): Promise<Map<string, string>> => {
@@ -113,7 +198,7 @@ const parseOutputFile = async (file: string): Promise<Map<string, string>> => {
   );
 };
 
-const runWorkflow = async (mode: FixtureMode) => {
+const runWorkflow = async (mode: FixtureMode, fixtureSteps = steps) => {
   const root = await mkdtemp(path.join(tmpdir(), "pinned-refresh-"));
   const tools = await mkdtemp(path.join(tmpdir(), "pinned-refresh-tools-"));
   directories.push(root, tools);
@@ -189,7 +274,7 @@ const runWorkflow = async (mode: FixtureMode) => {
         },
       ],
     };
-  } else if (mode === "failed") {
+  } else if (["failed", "refresh-failed", "validation-failed"].includes(mode)) {
     report = {
       failures: [
         {
@@ -208,18 +293,24 @@ const runWorkflow = async (mode: FixtureMode) => {
 set -euo pipefail
 printf '%s\\n' "$*" >> "$CALLS_FILE"
 case "$*" in
-  *check-upstream.ts*) printf '%s\\n' "$UPSTREAM_FIXTURE" ;;
-  *"catalogue generate"*)
+  "packages/catalogue/scripts/check-upstream.ts --json") printf '%s\\n' "$UPSTREAM_FIXTURE" ;;
+  "run --filter @stll/catalogue validate") ;;
+  "run --filter @stll/catalogue generate")
     printf '%s\\n' '// regenerated catalogue' > packages/catalogue/src/catalogue.gen.ts
     printf '%s\\n' '// regenerated payloads' > packages/catalogue/src/catalogue-install-payloads.gen.ts
     ;;
-  *"catalogue refresh-pinned"*)
+  "--filter @stll/catalogue refresh-pinned")
+    if [[ "$FIXTURE_MODE" == refresh-failed ]]; then exit 23; fi
     if [[ "$FIXTURE_MODE" == advanced ]]; then
       printf '%s\\n' '{"refreshed":true}' > packages/catalogue/upstream/pinned-content.gen.json
     elif [[ "$FIXTURE_MODE" == out-of-allowlist ]]; then
       printf '%s\\n' 'unreviewed' > packages/catalogue/src/unreviewed.ts
     fi
     ;;
+  "--filter @stll/catalogue check-pinned")
+    if [[ "$FIXTURE_MODE" == validation-failed ]]; then exit 24; fi
+    ;;
+  *) printf 'Unsupported Bun command: %s\\n' "$*" >&2; exit 64 ;;
 esac
 `,
   );
@@ -230,19 +321,34 @@ esac
   const outcomes = new Map<string, string>();
   const published: string[][] = [];
   let exitCode = 0;
+  let jobStatus: JobStatus = "success";
   let log = "";
 
-  for (const [index, step] of steps.entries()) {
-    if (index < 3 || !shouldRun(step.if, outputs, outcomes)) {
+  for (const [index, step] of fixtureSteps.entries()) {
+    if (
+      index < 3 ||
+      !shouldRun({ condition: step.if, outputs, outcomes, jobStatus })
+    ) {
       continue;
     }
     if (step.uses?.startsWith("actions/create-github-app-token@")) {
+      expect(step.uses).toBe(precedentApp.uses);
+      expect(step.with).toEqual(precedentApp.with);
+      expect(step.id).toBe("app-token");
+      expect(step.if).toContain("github.repository == 'stella/stella'");
+      expect(step.if).toContain("github.ref == 'refs/heads/main'");
       if (step.id) {
         outcomes.set(step.id, "success");
       }
       continue;
     }
     if (step.uses?.includes("/signed-commit@")) {
+      expect(step.uses).toBe(precedentProposal.uses);
+      expect(step.with?.["token"]).toBe(precedentProposal.with?.["token"]);
+      expect(step.with?.["mode"]).toBe("refresh-pr");
+      expect(step.with?.["branch"]).toBe("catalogue/upstream-revs");
+      expect(step.with?.["base"]).toBe("main");
+      expect(step.with?.["pr-body"]).toBe("${{ steps.body.outputs.pr-body }}");
       const configuredPaths = v
         .parse(v.string(), step.with?.["paths"])
         .trim()
@@ -268,7 +374,7 @@ esac
       continue;
     }
     if (!step.run) {
-      continue;
+      panic(`Unsupported workflow step: ${step.name}`);
     }
 
     const outputFile = path.join(tools, `output-${index}`);
@@ -301,8 +407,10 @@ esac
       outputs.set(step.id, await parseOutputFile(outputFile));
     }
     if (code !== 0) {
-      exitCode = code;
-      break;
+      jobStatus = "failure";
+      if (exitCode === 0) {
+        exitCode = code;
+      }
     }
   }
   return {
@@ -329,6 +437,8 @@ test.each([
   },
   { mode: "failed", exitCode: 1, published: [[]] },
   { mode: "out-of-allowlist", exitCode: 1, published: [] },
+  { mode: "refresh-failed", exitCode: 23, published: [] },
+  { mode: "validation-failed", exitCode: 24, published: [] },
 ] satisfies { mode: FixtureMode; exitCode: number; published: string[][] }[])(
   "runs the pinned refresh for $mode inputs without publishing unreviewed paths",
   async ({ mode, exitCode, published }) => {
@@ -336,7 +446,14 @@ test.each([
     expect(result.exitCode, result.log).toBe(exitCode);
     expect(result.published).toEqual(published);
     expect(result.calls).toContain("catalogue refresh-pinned");
-    if (mode === "failed") {
+    if (mode !== "refresh-failed") {
+      expect(
+        result.calls
+          .split("\n")
+          .filter((call) => call === "--filter @stll/catalogue check-pinned"),
+      ).toHaveLength(1);
+    }
+    if (["failed", "refresh-failed", "validation-failed"].includes(mode)) {
       expect(result.log).toContain("upstream unavailable");
     }
     if (mode === "out-of-allowlist") {
@@ -346,3 +463,16 @@ test.each([
     }
   },
 );
+
+test("unknown Bun invocations fail before publication", async () => {
+  const fixtureSteps = steps.map((step) =>
+    step.run === "bun --filter @stll/catalogue check-pinned"
+      ? { ...step, run: "bun --filter @stll/catalogue unknown-pinned-command" }
+      : step,
+  );
+  expect(fixtureSteps).not.toEqual(steps);
+  const result = await runWorkflow("unchanged", fixtureSteps);
+  expect(result.exitCode).toBe(64);
+  expect(result.published).toEqual([]);
+  expect(result.log).toContain("Unsupported Bun command");
+});
