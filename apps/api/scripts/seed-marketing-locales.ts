@@ -58,6 +58,7 @@ for (const locale of MARKETING_LOCALES) {
     cmd: [process.execPath, `${import.meta.dir}/seed-dev.ts`],
     env: {
       ...process.env,
+      STELLA_SEED_LOCALE: locale,
       STELLA_SEED_ID_NAMESPACE: marketingSeedNamespace(locale),
       STELLA_SEED_ORG_ID: account.organizationId,
       STELLA_SEED_USER_ID: userId,
