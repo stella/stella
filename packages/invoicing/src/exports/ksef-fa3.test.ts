@@ -281,31 +281,32 @@ describe("KSeF FA(3) VAT treatments", () => {
     vatTreatment,
   });
 
-  test("a seller exempt by turnover cites art. 113 for every line", async () => {
-    const xml = fa3(
-      polish({
-        number: "1/2026",
-        lines: [line("not_vat_payer"), line("not_vat_payer")],
-      }),
-    );
-    expect(between(xml, "P_13_7")).toEqual(["2000.00"]);
-    expect(xml).not.toContain("<P_14_");
-    expect(between(xml, "P_19")).toEqual(["1"]);
-    expect(between(xml, "P_19A")).toEqual(["art. 113 ust. 1 ustawy o VAT"]);
-    expect(between(xml, "P_12")).toEqual(["zw", "zw"]);
-    expect(xml).not.toContain("<P_11Vat>");
-    expect(await schemaErrors(xml)).toBe("");
-  });
-
-  test("an exempt seller cannot also charge VAT", async () => {
-    const record = polish({
-      number: "2/2026",
-      lines: [
-        line("not_vat_payer"),
-        { description: "Porada", netAmountMinor: cents(100), vatRateBps: 2300 },
-      ],
-    });
-    expect(refusal(record)).toContain("exempt from VAT");
+  test("refuses a seller outside VAT: the exemption's legal basis is not stored", async () => {
+    // Being outside VAT names no legal basis; art. 113 ust. 1 cannot be assumed
+    // (ust. 13 pkt 2 lit. a excludes legal services from it).
+    expect(
+      refusal(
+        polish({
+          number: "1/2026",
+          lines: [line("not_vat_payer"), line("not_vat_payer")],
+        }),
+      ),
+    ).toContain("legal basis of the exemption");
+    expect(
+      refusal(
+        polish({
+          number: "2/2026",
+          lines: [
+            line("not_vat_payer"),
+            {
+              description: "Porada",
+              netAmountMinor: cents(100),
+              vatRateBps: 2300,
+            },
+          ],
+        }),
+      ),
+    ).toContain("legal basis of the exemption");
   });
 
   test("refuses an exempt line: the legal basis is not stored", async () => {
@@ -474,6 +475,28 @@ describe("KSeF FA(3) VAT treatments", () => {
       lines: [line("reverse_charge")],
     });
     expect(refusal(record)).toContain("is not valid");
+  });
+
+  test("a service to a Northern Ireland registration is supplied outside the EU", async () => {
+    const xml = fa3(
+      polish({
+        number: "5x/2026",
+        buyer: {
+          name: "Belfast Legal Ltd",
+          vatId: "XI123456789",
+          addressLine1: "1 Donegall Square",
+          city: "Belfast",
+          postalCode: "BT1 5GS",
+          country: "GB",
+        },
+        lines: [line("reverse_charge")],
+      }),
+    );
+    expect(between(xml, "KodUE")).toEqual(["XI"]);
+    expect(between(xml, "P_13_8")).toEqual(["1000.00"]);
+    expect(xml).not.toContain("<P_13_9>");
+    expect(between(xml, "P_12")).toEqual(["np I"]);
+    expect(await schemaErrors(xml)).toBe("");
   });
 
   test("a reverse charge to an EU buyer needs its VAT number", async () => {

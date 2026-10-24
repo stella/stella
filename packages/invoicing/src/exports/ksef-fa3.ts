@@ -157,13 +157,18 @@ const isEuCountry = (country: string): country is EuCountry =>
 const vatPrefixOf = (country: string): string =>
   country === "GR" ? "EL" : country;
 
+/** Northern Ireland's VAT prefix: it is in the EU VAT area for goods only
+ * (Windsor Framework), so a service to an XI registration is supplied outside
+ * the EU, like one to Great Britain. */
+const NORTHERN_IRELAND_PREFIX = "XI";
+
 /** Each EU VAT prefix (TKodyKrajowUE) with its number shape: the member states
  * with EL for Greece, and XI for Northern Ireland. */
 const VAT_NUMBER_PATTERN_BY_PREFIX: ReadonlyMap<string, RegExp> = new Map([
   ...Object.entries(EU_VAT_NUMBER_PATTERNS).map(
     ([country, pattern]) => [vatPrefixOf(country), pattern] as const,
   ),
-  ["XI", /^(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$/u],
+  [NORTHERN_IRELAND_PREFIX, /^(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$/u],
 ]);
 
 const EU_VAT_PREFIXES: ReadonlySet<string> = new Set(
@@ -179,7 +184,6 @@ const BUCKETS = {
   firstReduced: { net: "P_13_2", vat: "P_14_2" },
   secondReduced: { net: "P_13_3", vat: "P_14_3" },
   zeroDomestic: { net: "P_13_6_1", vat: null },
-  exempt: { net: "P_13_7", vat: null },
   outsideCountry: { net: "P_13_8", vat: null },
   euServices: { net: "P_13_9", vat: null },
   domesticReverseCharge: { net: "P_13_10", vat: null },
@@ -200,12 +204,6 @@ const DOMESTIC_RATES = new Map<number, LineTax>([
   [0, { bucket: "zeroDomestic", rate: "0 KR" }],
 ]);
 
-/**
- * The legal basis a seller exempt by turnover cites (art. 113 ust. 1 of the
- * VAT Act); FA(3) requires one whenever P_19 flags exempt sales.
- */
-const SMALL_BUSINESS_EXEMPTION = "art. 113 ust. 1 ustawy o VAT";
-
 type BuyerTaxIdentity =
   | { zone: "domestic"; nip: string | null }
   | { zone: "eu"; prefix: string; number: string }
@@ -215,12 +213,12 @@ type BuyerTaxIdentity =
  * The tax of a line as FA(3) states it. A reverse charge reads by where the
  * buyer is: domestic reverse charge ("oo"), an EU business customer's
  * services under art. 100 ust. 1 pkt 4 ("np II"), or a supply outside Poland
- * ("np I"). Exempt sales need the exemption's legal basis, which stella does
- * not store, so they are refused.
+ * ("np I"). Exempt sales, a seller outside VAT included, need the exemption's
+ * legal basis, which stella does not store, so they are refused.
  */
 const lineTaxOf = (
   line: InvoiceExportLine,
-  zone: BuyerTaxIdentity["zone"],
+  identity: BuyerTaxIdentity,
 ): LineTax | string => {
   switch (line.vatTreatment) {
     case "domestic_vat":
@@ -228,20 +226,29 @@ const lineTaxOf = (
         DOMESTIC_RATES.get(line.vatRateBps) ??
         `${line.vatRateBps / 100} % is not a Polish VAT rate`
       );
+    // FA(3) states the legal basis of every exemption (P_19A). Being outside
+    // VAT does not establish one: art. 113 ust. 13 pkt 2 lit. a excludes legal
+    // services from the small-business exemption.
     case "not_vat_payer":
-      return { bucket: "exempt", rate: "zw" };
     case "exempt":
       return "an exempt line needs the legal basis of the exemption (P_19A), which stella does not store";
     case "outside_scope":
       return { bucket: "outsideCountry", rate: "np I" };
-    case "reverse_charge": {
-      if (zone === "domestic") {
-        return { bucket: "domesticReverseCharge", rate: "oo" };
+    case "reverse_charge":
+      switch (identity.zone) {
+        case "domestic":
+          return { bucket: "domesticReverseCharge", rate: "oo" };
+        case "eu":
+          return identity.prefix === NORTHERN_IRELAND_PREFIX
+            ? { bucket: "outsideCountry", rate: "np I" }
+            : { bucket: "euServices", rate: "np II" };
+        case "foreign":
+          return { bucket: "outsideCountry", rate: "np I" };
+        default: {
+          identity satisfies never;
+          return panic("Unknown buyer tax identity");
+        }
       }
-      return zone === "eu"
-        ? { bucket: "euServices", rate: "np II" }
-        : { bucket: "outsideCountry", rate: "np I" };
-    }
     default: {
       line.vatTreatment satisfies never;
       return panic("Unknown VAT treatment");
@@ -440,7 +447,6 @@ const document = (
       fields.vat === null ? "" : text(fields.vat, amount(sum.vat)),
     ];
   });
-  const exempt = sums.has("exempt");
   const reverseCharge = lines.some(
     ({ line }) => line.vatTreatment === "reverse_charge",
   );
@@ -523,12 +529,7 @@ const document = (
         text("P_17", "2"),
         text("P_18", reverseCharge ? "1" : "2"),
         text("P_18A", "2"),
-        el(
-          "Zwolnienie",
-          exempt
-            ? [text("P_19", "1"), text("P_19A", SMALL_BUSINESS_EXEMPTION)]
-            : text("P_19N", "1"),
-        ),
+        el("Zwolnienie", text("P_19N", "1")),
         el("NoweSrodkiTransportu", text("P_22N", "1")),
         text("P_23", "2"),
         el("PMarzy", text("P_PMarzyN", "1")),
@@ -589,14 +590,6 @@ const prepare = (
   if (!hasAddress(record.buyer)) {
     return refuse("FA(3) requires the buyer's address");
   }
-  const notVatPayer = record.lines.filter(
-    (line) => line.vatTreatment === "not_vat_payer",
-  ).length;
-  if (notVatPayer > 0 && notVatPayer < record.lines.length) {
-    return refuse(
-      "a seller exempt from VAT cannot also charge or reverse-charge VAT on the same invoice",
-    );
-  }
   const buyerCountry = buyerAddressCountryOf(record.buyer);
   const identity = buyerTaxIdentity(
     record.buyer,
@@ -608,7 +601,7 @@ const prepare = (
   }
   const lines: Classified[] = [];
   for (const line of record.lines) {
-    const tax = lineTaxOf(line, identity.zone);
+    const tax = lineTaxOf(line, identity);
     if (typeof tax === "string") {
       return refuse(`line ${line.position}: ${tax}`);
     }
