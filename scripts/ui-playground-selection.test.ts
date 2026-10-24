@@ -510,7 +510,7 @@ test("render inputs outside source select every geometry spec", () => {
   }
 });
 
-test("an app shell change selects every spec, the route tree does not", () => {
+test("app shell and route-tree changes select every spec without following unrelated routes", () => {
   const fixture = createSelectionFixture();
   try {
     fixture.write("apps/web/src/routes/dev/fixture.tsx", "export {};\n");
@@ -535,6 +535,7 @@ test("an app shell change selects every spec, the route tree does not", () => {
       "apps/web/src/styles/tokens.css",
       "apps/web/src/providers.tsx",
       "apps/web/src/routes/__root.tsx",
+      "apps/web/src/routeTree.gen.ts",
     ]) {
       expect(selectGeometrySpecs([file], fixture.root), file).toEqual([
         fixture.spec,
@@ -561,6 +562,9 @@ test("an absent generated route tree remains an app shell boundary", () => {
         ["apps/web/src/routes/dev/fixture.tsx"],
         fixture.root,
       ),
+    ).toEqual([fixture.spec]);
+    expect(
+      selectGeometrySpecs(["apps/web/src/routeTree.gen.ts"], fixture.root),
     ).toEqual([fixture.spec]);
   } finally {
     rmSync(fixture.root, { force: true, recursive: true });

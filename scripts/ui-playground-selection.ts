@@ -17,8 +17,8 @@ const APP_SHELL_ENTRIES = [
   `${WEB_SOURCE}/routes/__root.tsx`,
   `${WEB_SOURCE}/routes/dev.tsx`,
 ];
-// The generated route tree reaches every route of the app, and the visual
-// registry every playground page; each page is covered by its own loader.
+// Boundary files affect the shell, but following their imports would reach
+// every app route or playground loader instead of their owning selection.
 const APP_SHELL_BOUNDARY: ReadonlySet<string> = new Set([
   `${WEB_SOURCE}/routeTree.gen.ts`,
   REGISTRY,
@@ -392,10 +392,13 @@ export const staticImportClosure = (
   const pending = [sourceCandidate(root, entry) ?? normalize(entry)];
   let complete = true;
   for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
-    if (files.has(file) || boundary.has(file)) {
+    if (files.has(file)) {
       continue;
     }
     files.add(file);
+    if (boundary.has(file)) {
+      continue;
+    }
     const absolute = path.join(root, file);
     if (!existsSync(absolute)) {
       complete = false;
