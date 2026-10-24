@@ -1001,3 +1001,5 @@ export type {
   RulingIdentityDefect,
 } from "./decision-ruling-identity";
 export * from "./vat-rate-presets";
+export { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
+export { SELLER_PROFILE_TEXT_FIELDS } from "./seller-profile-fields";

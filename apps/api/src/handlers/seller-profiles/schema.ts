@@ -1,11 +1,13 @@
 import { t } from "elysia";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+
 import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 
 const name = t.String({ minLength: 1, maxLength: 512 });
-const registrationId = t.String({ maxLength: 64 });
-const taxId = t.String({ maxLength: 64 });
-const vatId = t.String({ maxLength: 64 });
+const registrationId = t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH });
+const taxId = t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH });
+const vatId = t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH });
 const vatPayer = t.Boolean({
   description:
     "Whether the issuer charges VAT. Requires a VAT ID; a registered person who is not a VAT payer has a VAT ID but sets this to false.",

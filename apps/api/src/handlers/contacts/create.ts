@@ -3,6 +3,8 @@ import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
@@ -61,9 +63,11 @@ export const createContactBodySchema = t.Object({
   metadata: t.Optional(contactMetadataSchema),
   tags: t.Optional(t.Array(t.String(), { maxItems: 50 })),
   color: t.Optional(t.String({ maxLength: 32 })),
-  registrationNumber: t.Optional(t.String({ maxLength: 64 })),
-  taxId: t.Optional(t.String({ maxLength: 64 })),
-  vatId: t.Optional(t.String({ maxLength: 64 })),
+  registrationNumber: t.Optional(
+    t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH }),
+  ),
+  taxId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  vatId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
   vatPayer: t.Optional(t.Nullable(t.Boolean())),
   bankAccounts: t.Optional(t.Array(bankAccountSchema, { maxItems: 10 })),
   billingAddress: t.Optional(billingAddressSchema),

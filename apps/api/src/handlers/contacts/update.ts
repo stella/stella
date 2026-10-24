@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
@@ -64,9 +65,15 @@ const updateContactBodySchema = t.Object({
   metadata: t.Optional(t.Nullable(contactMetadataSchema)),
   tags: t.Optional(t.Nullable(t.Array(t.String(), { maxItems: 50 }))),
   color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  registrationNumber: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  taxId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  vatId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  registrationNumber: t.Optional(
+    t.Nullable(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  ),
+  taxId: t.Optional(
+    t.Nullable(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  ),
+  vatId: t.Optional(
+    t.Nullable(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  ),
   vatPayer: t.Optional(t.Nullable(t.Boolean())),
   bankAccounts: t.Optional(
     t.Nullable(t.Array(bankAccountSchema, { maxItems: 10 })),

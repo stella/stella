@@ -3,6 +3,7 @@ import { useId } from "react";
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 
+import { SELLER_PROFILE_TEXT_FIELDS } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DialogFooter, DialogPanel } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -21,7 +22,6 @@ import type {
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import {
-  SELLER_PROFILE_FIELDS,
   SELLER_PROFILE_LIMITS,
   sellerProfileFormSchema,
 } from "./seller-profile-form.logic";
@@ -110,7 +110,7 @@ export const SellerProfileForm = ({
           className="grid min-w-0 gap-4 sm:grid-cols-2"
           disabled={disabled}
         >
-          {SELLER_PROFILE_FIELDS.map((name) => (
+          {SELLER_PROFILE_TEXT_FIELDS.map((name) => (
             <form.Field key={name} name={name}>
               {(field) => (
                 <Field
