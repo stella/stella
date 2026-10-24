@@ -153,6 +153,27 @@ describe("the PDF text builder", () => {
     },
   );
 
+  test.each(["first", "last"] as const)(
+    "preserves distinct numeric facts at the %s edge of three pages",
+    (edge) => {
+      const facts = [12, 24, 36].map(
+        (months) => `Retention period: ${months} months.`,
+      );
+      const text = facts
+        .map((fact) => {
+          const body = "The general requirements apply.";
+          return (edge === "first" ? [fact, body] : [body, fact]).join("\n");
+        })
+        .join(PDF_PAGE_SEPARATOR);
+      const preserved = build(text)
+        .blocks.map(({ plainText }) => plainText)
+        .join(" ");
+      for (const fact of facts) {
+        expect(preserved).toContain(fact);
+      }
+    },
+  );
+
   test("reads sections, numbered paragraphs, footnotes and their marks", () => {
     const page = (lines: string[]) => lines.join("\n");
     const ast = build(

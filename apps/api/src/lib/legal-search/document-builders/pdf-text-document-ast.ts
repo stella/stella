@@ -102,8 +102,10 @@ const SHORT_LINE_SHARE = 0.75;
 type Mark = { offset: number; label: string };
 type Line = { text: string; marks: Mark[] };
 
+// Only isolated page numbers (optionally before a running-label separator)
+// vary within furniture. Numbers in substantive sentences remain part of the key.
 const furnitureKey = (line: string): string =>
-  line.trim().replace(/\d+/gu, "#");
+  line.trim().replace(/^\d{1,4}(?=\s*(?:$|\|\s*[\p{L}\s]+$))/u, "#");
 
 const edgeLines = (lines: readonly string[]): string[] => {
   const content = lines.filter((line) => line.trim() !== "");
