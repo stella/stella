@@ -1,5 +1,5 @@
 // Independent equivalence oracle captured from f3efe8009a.
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
@@ -11,9 +11,9 @@ import type {
   SanctionsEntry,
 } from "../entry";
 import {
-  nameReading,
   hasExcessQueryTokens,
   MAX_QUERY_TOKENS,
+  nameReading,
 } from "../normalise";
 import type { NameReading } from "../normalise";
 import { isCalendarDate } from "../values";
@@ -107,10 +107,7 @@ type QueryBirthDate = {
 type FieldComparison = "match" | "mismatch" | "not-compared";
 
 type BirthDateComparison =
-  | "exact"
-  | "approximate"
-  | "mismatch"
-  | "not-compared";
+  "exact" | "approximate" | "mismatch" | "not-compared";
 
 const birthDateMatch = (
   query: QueryBirthDate,

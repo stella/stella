@@ -399,14 +399,11 @@ for (const { kind, path } of citations) {
             expect(primary?.getAttribute("href")).toBe(
               held ? internal : publisher,
             );
-            const links = [...surface.querySelectorAll("a")];
-            expect(links).toHaveLength(held ? 2 : 1);
+            // One chip per citation: a held primary trails no publisher link
+            // and carries no glyph beside its own text.
+            expect(surface.querySelectorAll("a")).toHaveLength(1);
             if (held) {
-              const source = links.at(1);
-              expect(source?.textContent).toBe(messages.common.source);
-              expect(source?.getAttribute("href")).toBe(publisher);
-              expect(source?.getAttribute("target")).toBe("_blank");
-              expect(source?.getAttribute("rel")).toBe("noopener noreferrer");
+              expect(surface.querySelector("svg")).toBeNull();
             }
           }
         });
@@ -533,8 +530,8 @@ test("default markdown and clarification analysis share publisher aliases and in
       expect(primary.getAttribute("href")).toBe(internal);
     }
     expect(
-      view.getAllByRole("link", { name: messages.common.source }),
-    ).toHaveLength(2);
+      view.queryAllByRole("link", { name: messages.common.source }),
+    ).toHaveLength(0);
   });
 });
 
@@ -749,7 +746,7 @@ test("a long external source title stays inside its truncated tray chip", async 
   });
 });
 
-test("a relative held primary keeps its publisher source in the tray and passive answer", async () => {
+test("a relative held primary is one chip in the tray and the passive answer", async () => {
   const href = `${statutePath}#par-420`;
   const publisher = "https://publisher.example.test/relative-provision";
   const primaryUrl = new URL(href, env.VITE_PUBLIC_APP_URL).href;
@@ -786,11 +783,9 @@ test("a relative held primary keeps its publisher source in the tray and passive
     for (const primary of primaryLinks) {
       expect(primary.getAttribute("href")).toBe(primaryUrl);
     }
-    const sources = view.getAllByRole("link", { name: messages.common.source });
-    expect(sources).toHaveLength(2);
-    for (const source of sources) {
-      expect(source.getAttribute("href")).toBe(publisher);
-    }
+    expect(
+      view.queryAllByRole("link", { name: messages.common.source }),
+    ).toHaveLength(0);
   });
 });
 
@@ -846,6 +841,7 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
         anchorId={explicitAnchorId}
         interactive
         appearance="inline"
+        linkIconSource={{ kind: "tool-source" }}
       >
         {quotedPassage}
       </LegalCitationLink>,
@@ -1002,6 +998,7 @@ test("an external tray label without a safe URL retains its compact presentation
     <LegalCitationLink
       appearance="tray"
       interactive={false}
+      linkIconSource={{ kind: "tool-source" }}
       source={{ title, url: "data:text/plain,unavailable" }}
     >
       {title}

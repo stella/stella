@@ -15,8 +15,8 @@ import {
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
 import {
-  resolveInboundMailReceiving,
   type InboundMailReceivingInput,
+  resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {

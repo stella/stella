@@ -14,8 +14,8 @@ import {
 import { MONITORING_SESSION_INDEXES } from "@/api/lib/synthetic-principal/indexes";
 
 import {
-  REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
+  REWRITTEN_MIGRATION_INDEXES,
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
@@ -229,6 +229,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_citations_doctrine_cited_idx",
     tableName: "case_law_citations",
+  },
+  // A provision's subtree of citing rows as one byte-ordered anchor range.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C")`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C")',
+    isUnique: false,
+    name: "case_law_provision_citations_work_subtree_idx",
+    tableName: "case_law_provision_citations",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C") WHERE "work_eli" IS NOT NULL`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C") WHERE (work_eli IS NOT NULL)',
+    isUnique: false,
+    name: "case_law_provision_citations_eli_subtree_idx",
+    tableName: "case_law_provision_citations",
   },
   // Bounded cross-publisher ruling lookup before a decision insert.
   {
@@ -709,6 +726,16 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
       "case_law_decisions_source_case_lang_null_idx",
     ],
   },
+  // A provision's citing rows are its whole subtree, which the exact-anchor
+  // walks cannot seek under the database collation.
+  {
+    legacyName: "case_law_provision_citations_work_anchor_idx",
+    replacementNames: ["case_law_provision_citations_work_subtree_idx"],
+  },
+  {
+    legacyName: "case_law_provision_citations_eli_anchor_idx",
+    replacementNames: ["case_law_provision_citations_eli_subtree_idx"],
+  },
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The
   // replacement is proven ready before this retires the legacy index, so no
@@ -831,8 +858,7 @@ export const runOnlineMigrations = async (
   );
 
 type OnlineValidationOutcome =
-  | { type: "validated" }
-  | { type: "migrator_active" };
+  { type: "validated" } | { type: "migrator_active" };
 
 const VALIDATED = {
   type: "validated",

@@ -32,8 +32,8 @@ import {
 } from "@/features/case-law/case-law-jurisdiction";
 import {
   caseLawLandingPage,
-  caseLawPageNumber,
   caseLawPageEvidence,
+  caseLawPageNumber,
 } from "@/features/case-law/case-law-route-pages.logic";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { prefetchDecisionFacetsAfterSearch } from "@/features/case-law/decision-filter-facets";

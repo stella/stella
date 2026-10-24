@@ -245,6 +245,7 @@
     "strikethrough": "Läbikriipsutus",
     "underline": "Allakriipsutus",
     "unnamedClip": "Tekst",
+    "clipName": "Nimi",
     "allClips": "Kõik lõiked",
     "clips": "Lõiked",
     "externalRegistry": "Väline register",

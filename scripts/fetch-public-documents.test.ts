@@ -1,22 +1,22 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { sha256Hex } from "../packages/sha256/src/node.ts";
 import {
   classifyFailure,
+  fetchBudgetMinutes,
   fetchDocument,
   fetchDocuments,
-  fetchBudgetMinutes,
   jobBudgetMinutes,
-  retryDelayMs,
-  MAX_URLS,
-  TIMEOUT_MS,
-  MAX_RETRIES,
   MAX_INPUT_BYTES,
   MAX_RESPONSE_BYTES,
+  MAX_RETRIES,
+  MAX_URLS,
   parseUrls,
+  retryDelayMs,
+  TIMEOUT_MS,
 } from "./fetch-public-documents";
 
 const roots: string[] = [];

@@ -58,8 +58,14 @@ body:has(.clipboard-editor-window),
 body:has(.clipboard-window) .font-sans,
 body:has(.clipboard-editor-window) .font-sans {
   font-family:
-    system-ui, -apple-system, "Segoe UI", sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji";
 }
 
 .clipboard-window {

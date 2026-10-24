@@ -5,16 +5,16 @@ import { propertyConfig } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
 import {
+  type BatchState,
   combine,
   decideStart,
   decideWhileRunning,
   defaultConfig,
+  type HealthSignalKind,
   initialBatchState,
   isHeldTooLong,
   nextBatch,
-  type BatchState,
   type Signal,
-  type HealthSignalKind,
   validateConfig,
 } from "./health";
 

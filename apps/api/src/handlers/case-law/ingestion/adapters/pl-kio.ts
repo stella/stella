@@ -1,5 +1,5 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
@@ -28,9 +28,9 @@ import {
   isPersistableSourceDocumentId,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
-  SOURCE_TOTAL_PROBE_FAILURE,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -61,9 +61,9 @@ import {
   visibleHtmlText,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -878,10 +878,7 @@ const plKioCourtStorage = ({
   const court = courtTooLong ? "" : (statedCourt ?? "");
   const unavailableCourt = statedCourt === undefined || courtTooLong;
   let quarantineReason:
-    | "no-record-id"
-    | "court-not-stated"
-    | "court-too-long"
-    | undefined;
+    "no-record-id" | "court-not-stated" | "court-too-long" | undefined;
   if (!hasRecordId) {
     quarantineReason = "no-record-id";
   } else if (statedCourt === undefined) {

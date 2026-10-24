@@ -245,6 +245,7 @@
     "strikethrough": "Strikethrough",
     "underline": "Underline",
     "unnamedClip": "Text",
+    "clipName": "Name",
     "allClips": "All clips",
     "clips": "Clips",
     "externalRegistry": "External registry",

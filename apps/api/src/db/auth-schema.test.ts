@@ -18,9 +18,9 @@ import type {
 } from "@stll/auth-model";
 
 import {
+  account,
   AUTH_USER_STELLA_SELECT_COLUMN_NAMES,
   AUTH_USER_STELLA_SELECT_COLUMNS,
-  account,
   authSchema,
   invitation,
   jwks,
@@ -57,7 +57,7 @@ const OAUTH_PROVIDER_MODEL_TABLES = [
   [
     "oauthClient",
     authSchema.oauthClient,
-    ["public", "type", "registrationOrigin"],
+    ["public", "type", "registrationOrigin", "metadataValidatedAt"],
   ],
   ["oauthResource", authSchema.oauthResource, []],
   ["oauthClientResource", authSchema.oauthClientResource, []],

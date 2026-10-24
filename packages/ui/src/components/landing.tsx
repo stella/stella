@@ -172,7 +172,7 @@ export const LandingRowIcon = ({
 }: LandingRowIconProps) => (
   <span
     className={cn(
-      "mt-0.5 flex size-4 shrink-0 items-center justify-center",
+      "mt-0.5 flex min-h-4 min-w-4 shrink-0 items-center justify-center",
       tone === "muted" &&
         "text-foreground-muted group-hover:text-muted-foreground",
     )}

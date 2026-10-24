@@ -1,5 +1,5 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim)
-FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS base
+# Pin to digest for supply-chain integrity (oven/bun:1.4.4-slim)
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS base
 WORKDIR /app
 # BEGIN GENERATED INSTALL TOOLING
 COPY packages/scripts/src/child-exit-status.ts packages/scripts/src/child-exit-status.ts
@@ -54,7 +54,6 @@ COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.c
 COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
 COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
-COPY --from=install-inputs /app/.oxfmtrc.json /app/.oxfmtrc.json
 RUN bun apps/api/scripts/generate-capability-runtime.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
@@ -182,6 +181,13 @@ RUN bun build \
     --outdir /app/bundles \
     --entry-naming replay-tick.js \
     apps/api/src/scripts/replay-tick.ts
+# Weekly Czech Constitutional Court roster import and load-aware relink.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outdir /app/bundles \
+    --entry-naming import-cz-us-roster.js \
+    apps/api/src/scripts/import-cz-us-roster.ts
 # Bounded EU completion ticks and operator controls.
 RUN bun build \
     --define __STELLA_RELEASE__=true \

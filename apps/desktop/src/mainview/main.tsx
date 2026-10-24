@@ -24,9 +24,9 @@ import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
-  describeError,
   desktopTelemetryWindowFromLabel,
   installDesktopErrorTelemetry,
   reportDesktopError,

@@ -35,8 +35,8 @@ import {
   getFolioDocumentOperationReceipts,
 } from "@stll/folio-core";
 import type {
-  FolioAIEditSkipReason,
   FolioAIEditSkippedOperation,
+  FolioAIEditSkipReason,
   FolioDocumentOperationBatch,
   FolioDocumentOperationResult,
 } from "@stll/folio-core";

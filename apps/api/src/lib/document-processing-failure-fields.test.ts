@@ -3,10 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";
 import {
   EXTRACTION_WORKER_ERROR_CODE,
-  type ExtractionWorkerErrorCode,
-  type ExtractionWorkerTermination,
   ExtractionWorkerError,
+  type ExtractionWorkerErrorCode,
   extractionWorkerErrorCode,
+  type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
   type SubprocessTerminationReason,
 } from "@/api/lib/errors/tagged-errors";
@@ -32,6 +32,7 @@ const errorFor = (termination: ExtractionWorkerTermination | null) =>
     mimeType: "application/pdf",
     sizeBytes: 12_345,
     termination,
+    workerErrorClass: termination === null ? "PdfParseError" : null,
   });
 
 /**

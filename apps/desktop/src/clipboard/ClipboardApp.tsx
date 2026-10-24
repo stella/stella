@@ -3,8 +3,8 @@ import {
   useDeferredValue,
   useEffect,
   useEffectEvent,
-  useRef,
   useReducer,
+  useRef,
   useState,
 } from "react";
 import type {
@@ -39,10 +39,10 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -53,10 +53,10 @@ import {
   ArrowRightIcon,
   Building2Icon,
   ChevronsUpDownIcon,
-  ClipboardIcon,
   CircleHelpIcon,
-  CopyPlusIcon,
+  ClipboardIcon,
   ClockIcon,
+  CopyPlusIcon,
   EllipsisVerticalIcon,
   FileTextIcon,
   FolderInputIcon,
@@ -80,9 +80,9 @@ import type { LucideIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
+  type InlineDropPosition,
   reorderInlineIds,
   toInlineDropPosition,
-  type InlineDropPosition,
 } from "@stll/ui/inline-reorder";
 import {
   InputGroup,
@@ -117,16 +117,19 @@ import {
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
+  adjacentClipboardScope,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  CLIPBOARD_SEARCH_SCOPES,
+  clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
@@ -134,20 +137,19 @@ import {
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
+  clipboardScopeKeyAction,
   clipboardSourceIdentity,
   clipboardSourceLabel,
   clipboardSourceTintIndex,
   clipboardSourceTitle,
-  CLIPBOARD_SEARCH_SCOPES,
-  adjacentClipboardScope,
-  clipboardControlsKeyAction,
-  clipboardScopeKeyAction,
   clipboardTimelineKeyAction,
+  clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
@@ -172,12 +174,12 @@ import {
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
-  ClipboardCopyFormat,
   ClipboardCopyErrorKind,
-  ClipboardRetention,
+  ClipboardCopyFormat,
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
+  ClipboardRetention,
   ClipboardSnapshot,
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
@@ -192,7 +194,6 @@ import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
-const MAX_ITEM_NAME_CHARACTERS = 80;
 const RETENTION_LABEL_KEYS = {
   week: "retentionWeek",
   month: "retentionMonth",
@@ -508,11 +509,10 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const link = clipboardItemLink(item);
-  const fallbackName =
-    item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
-  // An unnamed browser copy is named after the page it came from.
-  const untitledName =
-    item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
+  const untitledName = clipboardUntitledName(item, {
+    image: t("image"),
+    text: t("unnamedClip"),
+  });
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
@@ -694,7 +694,7 @@ const ClipboardCard = ({
             className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
             fill
-            maxLength={MAX_ITEM_NAME_CHARACTERS}
+            maxLength={MAX_CLIPBOARD_ITEM_NAME_CHARACTERS}
             onCancel={() => {
               setEditingName(false);
               setNameDraft(item.name ?? "");

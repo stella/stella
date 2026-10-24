@@ -245,6 +245,7 @@
     "strikethrough": "Barré",
     "underline": "Souligné",
     "unnamedClip": "Texte",
+    "clipName": "Nom",
     "allClips": "Tous les extraits",
     "clips": "Extraits",
     "externalRegistry": "Registre externe",

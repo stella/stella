@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
