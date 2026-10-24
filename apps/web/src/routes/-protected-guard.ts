@@ -64,10 +64,8 @@ export const loadProtectedContext = async ({
   const activeOrganizationId = authContext.session.activeOrganizationId;
   const userId = authContext.session.userId;
 
-  // An account created where the professional-use statement was not shown
-  // (agent provisioning, the operator command) accepts it here, on its first
-  // interactive sign-in, before anything signed-in loads; the API refuses
-  // its signed-in requests until then.
+  // Confirm professional use before anything signed-in loads; the API refuses
+  // signed-in requests until the statement is accepted.
   const professionalUse = await ensureRouteQueryData(
     context.queryClient,
     professionalUseOptions(userId),
