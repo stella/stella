@@ -22,6 +22,7 @@ import {
   DECISION_PRIMARY_REFERENCE_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
 
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
@@ -109,18 +110,18 @@ import {
   jsonb,
   orgPolicies,
   p,
-  pUuid,
   publicCaseLawReaderPolicies,
   publicLawReaderPolicies,
+  pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
   stellaPublicLawReader,
+  timestamptz,
   tsvector,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -311,6 +312,10 @@ export const STATUTE_CITATION_COUNT_STATUS = {
 } as const;
 
 export const STATUTE_CITATION_COUNT_STATE_KEY = "global";
+
+const EU_PRIMARY_WORK_CELEX_SQL_VALUES = Object.values(EU_PRIMARY_WORKS).map(
+  ({ celex }) => sql.raw(`'${celex}'`),
+);
 
 const PROVISION_UNIT_SQL_VALUES = PROVISION_UNITS.map((unit) =>
   sql.raw(`'${unit}'`),
@@ -782,6 +787,12 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_docket_family_key_idx")
       .on(t.docketFamilyKey)
+      .where(isNotNull(t.docketFamilyKey)),
+    // Bounded cross-publisher ruling lookup: jurisdiction and court first,
+    // then the normalized docket family shared by equivalent publications.
+    p
+      .index("case_law_decisions_republished_ruling_idx")
+      .on(t.country, t.court, t.docketFamilyKey, t.id)
       .where(isNotNull(t.docketFamilyKey)),
     p
       .index("case_law_decisions_lang_group_idx")
@@ -1309,6 +1320,15 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
       .varchar("source_document_id", { length: 256 })
       .notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** Raw payload for this publisher observation, including republished copies. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    sourceObservedAt: timestamptz("source_observed_at"),
+    /** The source's observation order of the provenance above; only a later order replaces it. */
+    sourceObservationOrder: p.bigint("source_observation_order", {
+      mode: "bigint",
+    }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1350,6 +1370,34 @@ export const caseLawDecisionAliases = p.pgTable(
       "case_law_decision_aliases_not_self",
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Exact source identities moved by a reversible decision-alias repair. */
+export const caseLawDecisionAliasMovedIdentities = p.pgTable(
+  "case_law_decision_alias_moved_identities",
+  {
+    retiredDecisionId: safeUuid<"caseLawDecision">(
+      "retired_decision_id",
+    ).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    sourceDocumentId: p
+      .varchar("source_document_id", { length: 1024 })
+      .notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.retiredDecisionId, t.sourceId, t.sourceDocumentId],
+      name: "case_law_decision_alias_moved_identities_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_decision_alias_moved_identities_alias_fk",
+        columns: [t.retiredDecisionId],
+        foreignColumns: [caseLawDecisionAliases.retiredDecisionId],
+      })
+      .onDelete("cascade"),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
@@ -1690,6 +1738,7 @@ export const caseLawCoverageSlices = p.pgTable(
       sql`${t.reported} IS NOT NULL OR ${t.walkError} IS NOT NULL`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -2024,8 +2073,13 @@ export const caseLawProvisionCitations = p.pgTable(
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     jurisdiction: p.varchar("jurisdiction", { length: 3 }).notNull(),
     workIdentifier: p.text("work_identifier").notNull(),
-    workNumber: p.integer("work_number").notNull(),
-    workYear: p.smallint("work_year").notNull(),
+    /** Legacy rollout slots stay non-null until all deployed readers use EU identity columns. */
+    workNumber: p.integer("work_number").default(0).notNull(),
+    workYear: p.smallint("work_year").default(0).notNull(),
+    /** EU act number; null for treaty and Charter work identities. */
+    euWorkNumber: p.integer("eu_work_number"),
+    /** EU act year; null for treaty and Charter work identities. */
+    euWorkYear: p.smallint("eu_work_year"),
     workCollection: p.text("work_collection").notNull(),
     workEli: p.text("work_eli"),
     unit: p.text("unit", { enum: PROVISION_UNITS }).notNull(),
@@ -2152,6 +2206,20 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart.desc(),
       )
       .where(isNotNull(t.workEli)),
+    p.check(
+      "provision_citations_work_number_shape",
+      sql`CASE WHEN ${t.jurisdiction} = 'EU' AND ${t.workIdentifier} IN (${sql.join(EU_PRIMARY_WORK_CELEX_SQL_VALUES, sql.raw(","))})
+        THEN ${t.euWorkNumber} IS NULL AND ${t.euWorkYear} IS NULL
+        WHEN ${t.jurisdiction} = 'EU' THEN ${t.euWorkNumber} IS NOT NULL AND ${t.euWorkYear} IS NOT NULL
+        ELSE ${t.euWorkNumber} IS NULL AND ${t.euWorkYear} IS NULL AND ${t.workNumber} > 0 AND ${t.workYear} > 0 END`,
+    ),
+    p.check(
+      "provision_citations_eu_work_identity",
+      sql`${t.jurisdiction} <> 'EU' OR (
+        ${t.workCollection} = 'EUR-Lex' AND ${t.workEli} IS NOT NULL
+        AND (${t.workIdentifier} IN (${sql.join(EU_PRIMARY_WORK_CELEX_SQL_VALUES, sql.raw(","))})
+          OR ${t.workIdentifier} ~ '^3[0-9]{4}[LR][0-9]{4}$'))`,
+    ),
     p.check(
       "provision_citations_unit_values",
       sql`${t.unit} IN (${sql.join(PROVISION_UNIT_SQL_VALUES, sql.raw(","))})`,
@@ -2406,6 +2474,32 @@ export const caseLawSitemapShards = p.pgTable(
       withCheck: sql`true`,
     }),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * One country's month counts, staged by the sitemap refresh until every
+ * public country is counted and `case_law_sitemap_shards` is replaced whole.
+ */
+export const caseLawSitemapShardCounts = p.pgTable(
+  "case_law_sitemap_shard_counts",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    months: p.jsonb().notNull(),
+    pages: p.integer().notNull(),
+    countedAt: timestamptz("counted_at").notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_sitemap_shard_counts_pages_positive",
+      sql`${t.pages} > 0`,
+    ),
+    p.pgPolicy("case_law_sitemap_shard_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
   ],
 );
 

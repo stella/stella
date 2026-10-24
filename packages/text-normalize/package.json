@@ -1,6 +1,6 @@
 {
   "name": "@stll/text-normalize",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Search match-key text normalization — Arabic orthographic variant folding (alef/hamza/teh-marbuta/yeh, tashkeel, tatweel, digits) with per-language fold tables",
   "keywords": [
     "arabic",
@@ -45,7 +45,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/text-normalize",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/text-normalize",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"
   },
   "devDependencies": {

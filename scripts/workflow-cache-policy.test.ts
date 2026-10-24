@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
@@ -9,8 +9,8 @@ import { CACHE_SAVE_REVISION } from "./ci-store-save";
 import { storeSaverCensus } from "./ci-store-save-policy";
 import { mainHeavyJobs } from "./main-heavy-plan";
 import {
-  MAIN_ONLY_BUN_CACHE_SAVE,
   jobCachePolicy,
+  MAIN_ONLY_BUN_CACHE_SAVE,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
 

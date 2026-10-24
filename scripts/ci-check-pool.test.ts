@@ -8,25 +8,31 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   blockingFailures,
+  checkLogText,
+  type CheckResult,
+  conditionHolds,
   continueOnErrorHolds,
+  failedCheckAnnotation,
+  type Launched,
+  partitionChecks,
   planChecks,
+  type PlannedCheck,
   POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
   resolveEnv,
   runChecks,
+  selectChecks,
   summaryTable,
-  type CheckResult,
-  type Launched,
-  type PlannedCheck,
 } from "./ci-check-pool";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolJob,
+  checkPoolStepRun,
   parseCheckPool,
-  readCheckPool,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { evaluate, type Value } from "./github-expression";
@@ -49,6 +55,129 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   ...extra,
 });
 
+test("an exact named subset retains manifest order", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  expect(selectChecks(checks, "Third,First").map(({ name }) => name)).toEqual([
+    "First",
+    "Third",
+  ]);
+  expect(selectChecks(checks, undefined)).toEqual(checks);
+  expect(() => selectChecks(checks, "First,Missing")).toThrow(
+    "Unknown check name(s): Missing",
+  );
+});
+
+test("matrix partitions cover every pooled check exactly once", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  const selected = ["1/2", "2/2"].flatMap((partition) =>
+    partitionChecks(checks, partition),
+  );
+  expect(selected.map(({ name }) => name).toSorted()).toEqual(
+    checks.map(({ name }) => name).toSorted(),
+  );
+  expect(new Set(selected).size).toBe(checks.length);
+  expect(() => partitionChecks(checks, "3/2")).toThrow(
+    "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
+  );
+});
+
+test("failed checks emit one annotation with their first actionable cause", () => {
+  const result = { name: "Unit tests", detail: "exit code 1" };
+  // Bun prints a test's error before its (fail) line; a later test's error is
+  // not the first failure's cause.
+  expect(
+    failedCheckAnnotation(
+      result,
+      "(pass) earlier\nerror: expected A\n(fail) test A\nerror: expected B\n(fail) test B",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Unit tests::(fail) test A -- error: expected A",
+  );
+  // Output after the marker belongs to the next test, so a failed test
+  // without its own diagnostic is named alone.
+  expect(
+    failedCheckAnnotation(
+      result,
+      "(pass) earlier\n(fail) parser > rejects invalid input\ntrace\nerror: expected a value\n(fail) later",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Unit tests::(fail) parser > rejects invalid input",
+  );
+  expect(
+    failedCheckAnnotation(result, "loading\nERROR: compiler stopped"),
+  ).toBe("::error title=FAILED check%3A Unit tests::ERROR: compiler stopped");
+  expect(failedCheckAnnotation(result, "loading\nno diagnostic")).toBe(
+    "::error title=FAILED check%3A Unit tests::exit code 1",
+  );
+});
+
+test("a check that passes its own tests reports its first finding, never a passing test", () => {
+  const result = { name: "CI network step retries and timeouts", detail: "x" };
+  expect(
+    failedCheckAnnotation(
+      result,
+      [
+        "bun test v1.4.3 (c6da4a4d3)",
+        "",
+        "::group::scripts/check-ci-network-steps.test.ts:",
+        "(pass) shell detection > curl with its own retry-all-errors budget counts as retried [0.09ms]",
+        "(pass) allowlist > every entry needs a reason [1.10ms]",
+        "::endgroup::",
+        "",
+        " 43 pass",
+        " 0 fail",
+        " 46 expect() calls",
+        "Ran 43 tests across 1 file. [119.00ms]",
+        ".github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+        ".github/workflows/release.yml: prepare-web-image: docker pull needs a step timeout-minutes",
+      ].join("\n"),
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A CI network step retries and timeouts::.github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+  );
+  // A finding is named by its path, even one with a line and no extension.
+  expect(
+    failedCheckAnnotation(
+      { name: "Ratchet guard", detail: "x" },
+      "bun test v1.4.3 (c6da4a4d3)\n(pass) ratchet > counts [1ms]\napps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE\nerror: script exited with code 1",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Ratchet guard::apps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE",
+  );
+  // A word that merely contains "error" is not an error line.
+  expect(
+    failedCheckAnnotation(
+      { name: "Policy", detail: "exit code 1" },
+      "(pass) retry-all-errors budget [1ms]\nchecking mirrors\nnothing matched",
+    ),
+  ).toBe("::error title=FAILED check%3A Policy::exit code 1");
+});
+
+test("failed check annotations escape and truncate their messages", () => {
+  const cause = `error: 100%\rnext${"x".repeat(600)}`;
+  const annotation = failedCheckAnnotation(
+    { name: "Policy, checks", detail: "exit code 2" },
+    cause,
+  );
+  expect(annotation).toStartWith(
+    "::error title=FAILED check%3A Policy%2C checks::error: 100%25",
+  );
+  expect(annotation).toContain("%0Dnext");
+  const message = annotation.slice(annotation.indexOf("::", 2) + 2);
+  expect(
+    message
+      .replaceAll("%0A", "\n")
+      .replaceAll("%0D", "\r")
+      .replaceAll("%25", "%"),
+  ).toHaveLength(500);
+  expect(
+    failedCheckAnnotation(
+      { name: "Fallback", detail: "exit%\r\ncode 2" },
+      "no diagnostic",
+    ),
+  ).toEndWith("::exit%25%0D%0Acode 2");
+});
+
 test("each pooled job runs its registry from exactly one pool step", () => {
   for (const job of CHECK_POOL_JOBS) {
     const steps = workflowJobSteps(workflow, job);
@@ -56,6 +185,8 @@ test("each pooled job runs its registry from exactly one pool step", () => {
     expect(pools.map((step) => [step["name"], checkPoolJob(step)])).toEqual([
       [CHECK_POOL_STEP_NAMES[job], job],
     ]);
+    expect(pools.at(0)?.["run"]).toBe(checkPoolStepRun(job));
+    expect(checkPoolJob({ run: checkPoolStepRun(job) })).toBe(job);
     // Guards see every pooled check as a step of the job, right after the pool.
     const index = steps.indexOf(pools[0] ?? {});
     const pooled = readCheckPool(job).map(({ name }) => name);
@@ -173,6 +304,45 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
   );
   expect(reused).not.toContain("Test unsignalled skip detection");
   expect(reused).toContain("Ratchet scanner invariants");
+});
+
+test("an unset root check selection keeps every pooled check, as GitHub reads it", () => {
+  // A main PR-depth run whose planner was unavailable writes no root_checks
+  // output, so toJSON(needs) omits the key. GitHub evaluates the selection
+  // gate `root_checks == ''` as true for the unset output; the pool must
+  // agree, or main skips the checks every pull request then inherits as red.
+  for (const job of CHECK_POOL_JOBS) {
+    const checks = readCheckPool(job);
+    const names = (rootChecks: Value | undefined) =>
+      planChecks(
+        checks,
+        poolContext({
+          github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
+          needs: {
+            "ci-plan": {
+              outputs: {
+                package_checks_required: "true",
+                ...(rootChecks === undefined
+                  ? {}
+                  : { root_checks: rootChecks }),
+              },
+            },
+          },
+          steps: {
+            checkout: { outcome: "success", outputs: {} },
+            install: { outcome: "success", outputs: {} },
+          },
+          inputs: { depth: "fast", heavy_only: false, pr_depth_only: true },
+        }),
+      ).flatMap((entry) =>
+        entry.status === "selected" ? [entry.check.name] : [],
+      );
+    const all = JSON.stringify(
+      Object.keys(ROOT_CHECK_INPUTS[job]).map((name) => `${job}/${name}`),
+    );
+    expect(names(undefined), job).toEqual(names(""));
+    expect(names(undefined), job).toEqual(names(all));
+  }
 });
 
 const EXPRESSION = (body: string) => `\${{ ${body} }}`;
@@ -421,6 +591,21 @@ test("every real pooled continue-on-error is decidable in both events", () => {
   }
 });
 
+test("every real pooled condition is decidable in both events", () => {
+  // The pool decides `cancelled()` but no other status function, so a
+  // condition such as `success()` would fail the pool step at run time.
+  for (const job of CHECK_POOL_JOBS) {
+    for (const pooled of readCheckPool(job)) {
+      for (const event of ["pull_request", "merge_group"]) {
+        expect(
+          () => conditionHolds(pooled.condition, context(event, "")),
+          `${job}: ${pooled.name}`,
+        ).not.toThrow();
+      }
+    }
+  }
+});
+
 test("every pooled expression reads only contexts the pool provides", () => {
   const roots = new Set<string>();
   const recording = {
@@ -454,7 +639,7 @@ test("every pooled expression reads only contexts the pool provides", () => {
   }
 });
 
-test("the generated manifest guard defers the scan engine only outside PR depth runs", () => {
+test("the generated manifest guard defers the scan engine outside PR depth runs and typecheck coverage to its job", () => {
   const guard = readCheckPool("ci-checks-rest").find(
     ({ name }) => name === "Generated files manifest guard",
   );
@@ -462,7 +647,7 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
   if (guard === undefined) {
     return;
   }
-  const deferred = (inputs: Value) => {
+  const deferred = (inputs: Value, outputs: Record<string, string> = {}) => {
     const [planned] = planChecks(
       [guard],
       context(
@@ -471,7 +656,7 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
         {},
         {
           inputs,
-          outputs: { scan_engine_wasm_required: "true" },
+          outputs: { scan_engine_wasm_required: "true", ...outputs },
         },
       ),
     );
@@ -480,8 +665,37 @@ test("the generated manifest guard defers the scan engine only outside PR depth 
       ? planned.env["GENERATED_CHECKS_IN_OTHER_JOBS"]
       : undefined;
   };
-  expect(deferred({ pr_depth_only: true })).toBe("[]");
-  expect(deferred({ pr_depth_only: false })).toBe('["scan-engine-wasm"]');
+  expect(deferred({ pr_depth_only: true })).toBe('["",""]');
+  expect(deferred({ pr_depth_only: false })).toBe('["scan-engine-wasm",""]');
   // Push and merge-group runs have no inputs: GitHub renders them as null.
-  expect(deferred(null)).toBe('["scan-engine-wasm"]');
+  expect(deferred(null)).toBe('["scan-engine-wasm",""]');
+  // code-quality-web-rest runs the full typecheck coverage in this run.
+  expect(
+    deferred(null, { package_checks_required: "true", trusted: "true" }),
+  ).toBe('["scan-engine-wasm","api-typecheck-projects"]');
+});
+
+test("only a failed check's own error commands reach the job log", () => {
+  const output = [
+    "::error::Release history includes a fixture pull request",
+    "::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    "::group::nested",
+    "ok",
+  ].join("\n");
+  const neutralized = [
+    " ::error::Release history includes a fixture pull request",
+    " ::error file=a.ts,line=1::Expected refusal",
+    "  ::error::already indented",
+    "::warning::advisory note",
+    " ::group::nested",
+    "ok",
+  ].join("\n");
+  for (const outcome of ["success", "skipped"] as const) {
+    expect(checkLogText(output, outcome)).toBe(neutralized);
+  }
+  expect(checkLogText(output, "failure")).toBe(
+    output.replace("::group::nested", " ::group::nested"),
+  );
 });

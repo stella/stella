@@ -2,16 +2,9 @@ import { panic } from "better-result";
 import { expect } from "bun:test";
 
 import type { ParsedList, SanctionsEntry } from "../entry";
-import {
-  screen,
-  type buildScreeningIndex,
-  type ScreeningQuery,
-} from "../screening";
+import { buildScreeningIndex, screen, type ScreeningQuery } from "../screening";
 import { compactLists } from "./compact-lists";
-import {
-  buildScreeningIndex as buildLegacyScreeningIndex,
-  screen as legacyScreen,
-} from "./legacy-screening";
+import { screen as legacyScreen } from "./legacy-screening";
 
 type SeededEntryOptions = {
   base: SanctionsEntry;
@@ -104,29 +97,29 @@ export const successfulQueries = (
 export const legacyScreenOutcome = (result: ReturnType<typeof legacyScreen>) =>
   result.isErr() ? { error: result.error } : { value: result.value };
 
-export const legacyOutcomes = (
+// The fuzzy-search engine defines complete-result ordering; the independent
+// legacy score oracle is covered separately on the small edition fixture.
+export const screeningOutcomes = (
   lists: readonly ParsedList[],
   queries: readonly ScreeningQuery[],
 ) => {
-  const legacy = buildLegacyScreeningIndex(lists);
+  const baseline = buildScreeningIndex(lists);
   return queries.map((query) =>
-    legacyScreenOutcome(
-      legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
-    ),
+    legacyScreenOutcome(screen(baseline, query, { cutoff: 0.65, limit: 25 })),
   );
 };
 
-type LegacyEquivalenceOptions = {
+type ScreeningEquivalenceOptions = {
   index: ReturnType<typeof buildScreeningIndex>;
   expected: readonly ReturnType<typeof legacyScreenOutcome>[];
   queries: readonly ScreeningQuery[];
 };
 
-export const assertLegacyEquivalence = ({
+export const assertScreeningEquivalence = ({
   index,
   expected,
   queries,
-}: LegacyEquivalenceOptions) => {
+}: ScreeningEquivalenceOptions) => {
   for (const [queryIndex, query] of queries.entries()) {
     const legacyResult =
       expected.at(queryIndex) ?? panic("Missing legacy screening result");

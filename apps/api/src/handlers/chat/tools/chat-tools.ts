@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 
 import {
-  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BrowserClientCapability,
-  type ChatCorpusScope,
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  type ChatSourceScope,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
@@ -14,9 +14,9 @@ import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
+  type ChatEditApplyMode,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
-  type ChatEditApplyMode,
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -26,11 +26,7 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
-import {
-  corpusScopeDroppedTools,
-  corpusScopeUnavailableReason,
-  restrictChatToolsToCorpusScope,
-} from "@/api/handlers/chat/tools/corpus-scope";
+import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
@@ -70,6 +66,14 @@ import {
 } from "@/api/handlers/chat/tools/remember-tool";
 import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
+import {
+  businessRegistryCallScope,
+  restrictChatToolsToSourceScope,
+  scopedRegistries,
+  sourceScopeDroppedTools,
+  sourceScopeUnavailableReason,
+} from "@/api/handlers/chat/tools/source-scope";
+import type { ScopedExternalConnector } from "@/api/handlers/chat/tools/source-scope";
 import {
   createSpawnSubagentsTool,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -111,7 +115,6 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { authorizeDocumentWriteAccess } from "@/api/lib/entities/authorize-document-write";
 import type {
   DocumentWriteAccess,
@@ -119,6 +122,7 @@ import type {
 } from "@/api/lib/entities/authorize-document-write";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
+  AI_MEMORY_FEATURE_ID,
   CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
   FEATURE_REGISTRY,
   type FeatureRegistry,
@@ -224,8 +228,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
   workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -408,8 +411,7 @@ export type ChatBuiltinApprovalToolName = Exclude<
 >;
 
 type BuiltInChatToolPolicyName =
-  | keyof BuiltInChatTools
-  | CurrentSkillEditToolName;
+  keyof BuiltInChatTools | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
   /** Only the owning chat turn can issue and store displayed visual resources. */
@@ -555,12 +557,20 @@ export type GetChatToolsProps = {
    */
   disabledNativeToolSlugs?: readonly string[] | undefined;
   /**
-   * The corpus chips on the turn's latest user message. Script reads are held
-   * to them and direct tools over other public corpora are dropped; subagents
-   * inherit them through the props re-spread. Only the run set passes them:
-   * the validation set must keep every tool an earlier turn could have used.
+   * The source chips (public corpora, business registries, MCP connectors)
+   * on the turn's latest user message. A turn with any chip reads only the
+   * sources they name: script reads are held to them, registry lookups are
+   * held to the named registries, and direct tools over other sources are
+   * dropped (`source-scope.ts`); subagents inherit them through the props
+   * re-spread. Only the run set passes them: the validation set must keep
+   * every tool an earlier turn could have used.
    */
-  corpusScopes?: readonly ChatCorpusScope[] | undefined;
+  sourceScopes?: readonly ChatSourceScope[] | undefined;
+  /**
+   * The loaded external connectors behind `externalTools`, so a scoped turn
+   * keeps a named connector's tools by that connector's own tool list.
+   */
+  externalConnectors?: readonly ScopedExternalConnector[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
@@ -573,8 +583,7 @@ export type GetChatToolsProps = {
    * registered by tools or subagents before the memory write.
    */
   resolveMemorySourceWorkspaceIds?:
-    | (() => readonly SafeId<"workspace">[])
-    | undefined;
+    (() => readonly SafeId<"workspace">[]) | undefined;
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Threaded
    * into the projected write tools' MCP context so their `ensureActiveWorkspace`
@@ -584,8 +593,7 @@ export type GetChatToolsProps = {
    * from `accessibleWorkspaces`.
    */
   workspaceStatusById?:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see
@@ -828,11 +836,20 @@ const createSecretToolsForTurn = ({
   return createSecretTools({ safeDb, organizationId, userId, threadId });
 };
 
-export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
     testDependencies,
-    memoryEnabled = isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
+    memoryEnabled = isMcpDescriptorFeatureEnabled({
+      context: {
+        featureAccessSnapshot: props.featureAccessSnapshot,
+        organizationId: props.organizationId,
+        userId: props.userId,
+      },
+      kind: "tools",
+      id: REMEMBER_TOOL_NAME,
+      featureId: AI_MEMORY_FEATURE_ID,
+    }),
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,
@@ -862,7 +879,8 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     webSearchProviders,
     externalTools = {},
     disabledNativeToolSlugs,
-    corpusScopes = [],
+    sourceScopes = [],
+    externalConnectors = [],
     registryDispatch,
     skillMetadata,
     activeSkillContext,
@@ -936,7 +954,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     unavailableReasons: new Map(),
   };
   const executionTools = buildChatCodeModeTools({
-    corpusScopes,
+    sourceScopes,
     featureAccessSnapshot,
     testDependencies,
     documentedReads: skillDeclarations.documentedChatReads,
@@ -971,9 +989,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     disabledNativeToolSlugs,
     dispatch: registryDispatch,
   });
+  // Registry chips hold every lookup to the registries they name.
+  const registryScope = scopedRegistries({
+    scopes: sourceScopes,
+    enabled: businessRegistryHandlers,
+  });
   const businessRegistryTools = createBusinessRegistryTools({
     organizationId,
     enabledHandlers: businessRegistryHandlers,
+    scopeCall: businessRegistryCallScope(registryScope),
   });
   // Findings name natural persons with birth dates and identifiers, which the
   // anonymization boundary cannot redact, so anonymized chat never sees them.
@@ -1325,9 +1349,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     CHAT_ONLY_FEATURE_TOOL_DEFINITIONS.find(
       (definition) => definition.name === name,
     )?.featureId ?? getStaticMcpToolDefinition(name)?.featureId;
+  const sourceScope = {
+    scopes: sourceScopes,
+    externalToolNames: Object.keys(externalTools),
+    connectors: externalConnectors,
+    registries: registryScope,
+  };
   const tools = Object.fromEntries(
     Object.entries(
-      restrictChatToolsToCorpusScope(projected, corpusScopes),
+      restrictChatToolsToSourceScope(projected, sourceScope),
     ).filter(([name]) =>
       isMcpDescriptorFeatureEnabled({
         context: {
@@ -1374,12 +1404,32 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...Object.keys(registered)
         .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),
-      ...corpusScopeDroppedTools(corpusScopes).map(
-        (name) => [name, corpusScopeUnavailableReason(corpusScopes)] as const,
+      ...sourceScopeDroppedTools(sourceScope).map(
+        (name) => [name, sourceScopeUnavailableReason(sourceScopes)] as const,
       ),
     ]),
   };
   return tools;
+};
+
+export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+  const tools = buildChatTools(props);
+  // A run's approval-gated tools record each execution; validation sets never
+  // execute.
+  if (
+    props.purpose === CHAT_TOOL_SET_PURPOSE.validation ||
+    props.recordAuditEvent === undefined
+  ) {
+    return tools;
+  }
+  return auditChatToolExecutions({
+    audit: {
+      recordAuditEvent: props.recordAuditEvent,
+      safeDb: props.safeDb,
+      threadId: props.threadId,
+    },
+    tools,
+  });
 };
 
 type GetChatValidationToolsProps = Omit<

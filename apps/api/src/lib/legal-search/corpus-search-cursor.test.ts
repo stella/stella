@@ -10,10 +10,10 @@ import {
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  type CorpusSearchPhase,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
-  type CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import {
@@ -357,10 +357,8 @@ test("encode → decode round-trips every window, identity and order", () => {
         NO_EXPANSION_DICTIONARY_IDENTITY,
       ),
       // The corpus addresses documents by uuid, which is what makes the id one
-      // segment; the property holds over any id spelled without a separator.
-      fc
-        .string({ maxLength: 64, minLength: 1 })
-        .filter((id) => !id.includes(":")),
+      // segment.
+      fc.uuid(),
       fc.constantFrom(...SEARCH_SORTS),
       fc.constantFrom(null, TARGET_A, TARGET_B),
       (score, windowStart, dictionary, id, sort, target) => {

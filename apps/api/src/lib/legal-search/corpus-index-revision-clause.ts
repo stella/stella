@@ -3,10 +3,28 @@ import { panic } from "better-result";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type CorpusIndexManifest,
+  corpusIndexRevisionRetrieval,
+  type CorpusRevisionRetrieval,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 
 /** The projection intent that wrote a document's copy into the index. */
 export type CorpusProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
+
+/** SQL's applied copy and the retrieval contract of the generation serving it. */
+export type CorpusAppliedProjection = {
+  revision: CorpusProjectionRevision;
+  retrieval: CorpusRevisionRetrieval;
+};
+
+export const corpusAppliedProjection = (
+  manifest: CorpusIndexManifest,
+  revision: CorpusProjectionRevision,
+): CorpusAppliedProjection => ({
+  revision,
+  retrieval: corpusIndexRevisionRetrieval(manifest),
+});
 
 export type CorpusProjectionRevisionField =
   CorpusIndexManifest["projection"]["projectionRevisionField"];

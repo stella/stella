@@ -13,11 +13,7 @@ type WorkspaceNavigationStatusScope =
 export type MemoryScope = "organization" | "user" | "workspace";
 export type MemoryStatus = "suggested" | "active" | "stale" | "archived";
 type MemoryKind =
-  | "preference"
-  | "instruction"
-  | "fact"
-  | "decision"
-  | "relationship";
+  "preference" | "instruction" | "fact" | "decision" | "relationship";
 
 type FetchMemoriesPageOptions = {
   cursor: string | null;
@@ -107,6 +103,13 @@ export const updateMemory = async ({ body, memoryId }: UpdateMemoryOptions) => {
     ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
     ...(body.status !== undefined ? { status: body.status } : {}),
   });
+  return unwrapEden(response);
+};
+
+export const deleteMemory = async (memoryId: string) => {
+  const response = await memoriesApi({
+    memoryId: toSafeId<"aiMemory">(memoryId),
+  }).delete();
   return unwrapEden(response);
 };
 

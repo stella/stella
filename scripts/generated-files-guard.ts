@@ -2,11 +2,11 @@ import { panic, Result } from "better-result";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
+  type Generator,
   GENERATORS,
   GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
-  type Generator,
 } from "./generated-files";
 
 const ROOT = new URL("..", import.meta.url);
@@ -339,7 +339,8 @@ export const DELEGATED_CHECKS_ENV = "GENERATED_CHECKS_IN_OTHER_JOBS";
 
 // CI names families whose `checkedBy` step runs the same check on the same
 // commit in another job of this run, so Guard B does not repeat that work.
-// Unset means none; anything that cannot be proven delegated panics.
+// Unset means none; an empty entry (a condition that did not hold) names none;
+// anything that cannot be proven delegated panics.
 export const delegatedGeneratorIds = (value: string | undefined) => {
   if (value === undefined) {
     return new Set<string>();
@@ -352,13 +353,14 @@ export const delegatedGeneratorIds = (value: string | undefined) => {
   ) {
     panic(`${DELEGATED_CHECKS_ENV} must be a JSON array of generator ids`);
   }
-  for (const id of parsed.value) {
+  const ids = parsed.value.filter((id) => id !== "");
+  for (const id of ids) {
     const generator = GENERATORS.find((candidate) => candidate.id === id);
     if (generator?.checkedBy === undefined || generator.check === null) {
       panic(`Generator ${id} has no check delegated to another CI step`);
     }
   }
-  return new Set(parsed.value);
+  return new Set(ids);
 };
 
 const guardB = async () => {

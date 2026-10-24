@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
@@ -9,8 +9,8 @@ import {
   fields,
   legalListColumns,
   legalListFactDetails,
-  legalListItemSources,
   legalListItems,
+  legalListItemSources,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";

@@ -22,8 +22,8 @@ import * as v from "valibot";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
-  createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
+  createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -173,8 +173,7 @@ export type ReferenceGrading = {
   consensus: ReferenceConsensus;
   impact: ReferenceImpact;
   explanation:
-    | { type: "comparison"; text: string }
-    | { type: "insufficient-evidence" };
+    { type: "comparison"; text: string } | { type: "insufficient-evidence" };
   recommendation: string | null;
   citations: DocxFolioCitation[];
   referenceCitations: {
@@ -781,6 +780,7 @@ export const gradeReferencePositions = async ({
   };
   const generate = async (messages: ModelMessage[]) =>
     await generateObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
       task: REFERENCE_GRADE_TASK,
       orgAIConfig,
@@ -793,10 +793,8 @@ export const gradeReferencePositions = async ({
       tenantWorkspaceIds: [workspaceId],
       system: SYSTEM_PROMPT,
       messages,
-      abortSignal: AbortSignal.any([
-        abortSignal,
-        AbortSignal.timeout(REFERENCE_GRADE_TIMEOUT_MS),
-      ]),
+      abortSignal,
+      deadlineMs: REFERENCE_GRADE_TIMEOUT_MS,
       outputSchema: referenceGradeSchema,
     });
 

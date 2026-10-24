@@ -11,7 +11,7 @@
       "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
-        "@typescript/native",
+        "typescript",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
         "eslint",
@@ -238,10 +238,7 @@
         "src/dev-postgres.ts",
         // Test fixture processes are spawned by path from the tests.
         "src/test-fixtures/*.ts"
-      ],
-      // generated-artifact-format.ts runs the oxfmt binary as a process, which
-      // knip cannot see; filtered installs need it declared here.
-      "ignoreDependencies": ["oxfmt"]
+      ]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries
@@ -255,14 +252,6 @@
     },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
-    },
-    "packages/test-kit": {
-      "entry": [
-        "src/index.ts",
-        "src/db-clock.ts",
-        "src/forbid-network.ts",
-        "src/**/*.test.ts"
-      ]
     },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]
@@ -299,7 +288,7 @@
     "packages/infosoud/src/constants.ts": ["duplicates"]
   },
   "exclude": ["exports", "types"],
-  "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
+  "ignoreBinaries": ["docker", "tsc", "bun", "tail", "fmt"],
   "ignoreDependencies": [
     "@stll/typescript-config",
     // Declared ahead of the text-search engine migration so its PRs share one

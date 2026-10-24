@@ -32,8 +32,8 @@ import {
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { settled } from "@/api/tests/helpers/settled";
@@ -129,7 +129,7 @@ const seedPreparedSession = async () => {
     .delete(pdfSigningSessions)
     .where(eq(pdfSigningSessions.workspaceId, ids.wsA1));
   const sessionId = createSafeId<"pdfSigningSession">();
-  const handoffToken = createPdfSigningToken();
+  const handoffToken = createPdfSigningToken({ userId: null });
   const expiresAt = new Date(Date.now() + 120_000);
   await testDb.insert(pdfSigningSessions).values({
     baseVersionId: ids.entityVersionA1,

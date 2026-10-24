@@ -1,18 +1,32 @@
+import { Fragment } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { HeadnoteBlock } from "@stll/decision-reader/headnote-block";
 import type { HeadnoteOrigin } from "@stll/decision-reader/headnote-block";
-import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import type {
+  AnalysisCitedSpan,
+  DecisionAnalysis,
+} from "@stll/legal-ast/analysis";
 import { analysisLayersOf } from "@stll/legal-ast/analysis";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
+
+import { useFormatter } from "@/i18n/formatting-context";
+
+import {
+  ParagraphReference,
+  resolveParagraphReference,
+} from "../paragraph-reference";
 
 /** Every block here was written by a model, and says so on each block. */
 const AI_ORIGIN = { type: "ai" } as const satisfies HeadnoteOrigin;
 
 type AiHeadnotesProps = {
   analysis: DecisionAnalysis;
-  /** Scrolls the text to a paragraph the holding rests on. */
-  onAnchorClick: (anchorId: string) => void;
+  blocks: Block[];
+  /** Scrolls the text to a paragraph a claim rests on. */
+  onAnchorClick: (startAnchorId: string, endAnchorId: string) => void;
 };
 
 /**
@@ -31,7 +45,11 @@ export const hasAiHeadnotes = (analysis: DecisionAnalysis): boolean => {
  * tells the two apart by the mark, which is the point — not by a shape that
  * would also rank one above the other.
  */
-export const AiHeadnotes = ({ analysis, onAnchorClick }: AiHeadnotesProps) => {
+export const AiHeadnotes = ({
+  analysis,
+  blocks,
+  onAnchorClick,
+}: AiHeadnotesProps) => {
   const t = useTranslations();
   const { abstract, holding } = analysisLayersOf(analysis);
 
@@ -43,25 +61,15 @@ export const AiHeadnotes = ({ analysis, onAnchorClick }: AiHeadnotesProps) => {
           label={t("caseLaw.viewer.legalSentence")}
           origin={AI_ORIGIN}
         >
-          <BidiText as="p" className="reader-justify" lang={holding.language}>
-            {holding.text}
-          </BidiText>
-          {holding.anchors.length > 0 && (
-            <div className="reader-chrome flex flex-wrap gap-1 pt-2">
-              {holding.anchors.map((anchor) => (
-                <button
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted text-3xs rounded px-1.5 py-1"
-                  key={`${anchor.startAnchorId}-${anchor.endAnchorId}`}
-                  onClick={() => {
-                    onAnchorClick(anchor.startAnchorId);
-                  }}
-                  type="button"
-                >
-                  {t("caseLaw.analysis.holdingAnchor")}
-                </button>
-              ))}
-            </div>
-          )}
+          <p className="reader-justify">
+            <BidiText as="span" lang={holding.language}>
+              <CitedSpans
+                blocks={blocks}
+                onAnchorClick={onAnchorClick}
+                spans={holding.spans}
+              />
+            </BidiText>
+          </p>
         </HeadnoteBlock>
       )}
 
@@ -78,10 +86,83 @@ export const AiHeadnotes = ({ analysis, onAnchorClick }: AiHeadnotesProps) => {
             className="reader-justify text-foreground-strong-muted"
             lang={abstract.language}
           >
-            {abstract.text}
+            <CitedSpans
+              blocks={blocks}
+              onAnchorClick={onAnchorClick}
+              spans={abstract.spans}
+            />
           </BidiText>
         </HeadnoteBlock>
       )}
     </>
   );
 };
+
+type CitedSpansProps = {
+  blocks: Block[];
+  onAnchorClick: (startAnchorId: string, endAnchorId: string) => void;
+  spans: readonly AnalysisCitedSpan[];
+};
+
+/**
+ * A passage with each claim's citations drawn where the claim ends: after
+ * the span's last word, before the space that follows it, so a citation
+ * never lands at the start of the next claim.
+ */
+function CitedSpans({ blocks, onAnchorClick, spans }: CitedSpansProps) {
+  const format = useFormatter();
+  return spanOffsets(spans).map(({ span, start }) => {
+    const claim = span.text.trimEnd();
+    return (
+      <Fragment key={start}>
+        {claim}
+        {span.anchors
+          .map((range) =>
+            resolveParagraphReference({
+              blocks,
+              formatNumber: format.number,
+              range,
+            }),
+          )
+          .filter((anchor) => anchor !== null)
+          // Both endpoints, so equal ranges sit side by side for the
+          // dedupe below however the span listed them.
+          .toSorted(
+            (left, right) =>
+              left.startIndex - right.startIndex ||
+              left.endIndex - right.endIndex,
+          )
+          .filter(
+            (anchor, index, anchors) =>
+              index === 0 ||
+              anchor.startAnchorId !== anchors[index - 1]?.startAnchorId ||
+              anchor.endAnchorId !== anchors[index - 1]?.endAnchorId,
+          )
+          .map((anchor) => (
+            <Fragment key={`${anchor.startAnchorId}-${anchor.endAnchorId}`}>
+              {" "}
+              <ParagraphReference
+                blocks={blocks}
+                endAnchorId={anchor.endAnchorId}
+                onAnchorClick={onAnchorClick}
+                startAnchorId={anchor.startAnchorId}
+              />
+            </Fragment>
+          ))}
+        {span.text.slice(claim.length)}
+      </Fragment>
+    );
+  });
+}
+
+/** Each span with its offset in the passage: a stable key for a fixed text. */
+function spanOffsets(
+  spans: readonly AnalysisCitedSpan[],
+): { span: AnalysisCitedSpan; start: number }[] {
+  let start = 0;
+  return spans.map((span) => {
+    const entry = { span, start };
+    start += span.text.length;
+    return entry;
+  });
+}

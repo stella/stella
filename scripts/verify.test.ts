@@ -314,17 +314,20 @@ test("fix mode executes exact autofix workflow blocks", () => {
   ]) {
     expect(lint.run).toContain(command);
   }
+  // The fixer runs on the prepared type graph; its rewrites are type-checked
+  // afterwards and restored when their project does not type-check.
   expect(lint.run.indexOf("ci-generated-sources.ts prepare")).toBeLessThan(
-    lint.run.indexOf("typecheck-coverage.ts --autofix"),
-  );
-  expect(lint.run.indexOf("typecheck-coverage.ts --autofix")).toBeLessThan(
     lint.run.indexOf("--type-aware --fix"),
   );
+  expect(lint.run.indexOf("--type-aware --fix")).toBeLessThan(
+    lint.run.indexOf("typecheck-coverage.ts --autofix"),
+  );
+  expect(lint.run).toContain("restore_lint_paths");
   // API test weights are measured on main and cached, never fixed locally.
   expect(steps.some(({ run }) => run.includes("refresh-test-durations"))).toBe(
     false,
   );
-  expect(steps.some(({ run }) => run.includes("oxfmt"))).toBe(true);
+  expect(steps.some(({ run }) => run.includes("bun fmt"))).toBe(true);
   expect(
     steps.some(({ run }) => run.includes("fix-tauri-package-alignment.ts")),
   ).toBe(true);
@@ -730,7 +733,7 @@ case "$1" in
   */verify.ts|*fixture-typegen.ts|*autofix-protected-paths.ts) exec '${process.execPath}' "$@" ;;
   run) if [[ "$2" == typegen ]]; then exec '${process.execPath}' "$@"; fi ;;
   *check-tauri-package-alignment.ts) printf false ;;
-  scripts/*|apps/*|packages/*|test|--bun|--no-install) ;;
+  scripts/*|apps/*|packages/*|test|fmt|--bun|--no-install) ;;
   *) echo "Unexpected fixture Bun command: $1" >&2; exit 127 ;;
 esac
 printf '%s executed' "$TEST_ENTRY" > "$TEST_ENTRY_RECEIPT"

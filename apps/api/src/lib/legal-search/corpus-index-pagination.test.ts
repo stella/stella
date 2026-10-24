@@ -1,4 +1,4 @@
-import { panic, Panic } from "better-result";
+import { Panic, panic } from "better-result";
 import {
   afterEach,
   beforeEach,
@@ -22,10 +22,12 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
-  corpusIndexLexicalScore,
   CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
+  corpusIndexLexicalScore,
+  emptyCorpusIndexScan,
   NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
+  sumCorpusIndexScans,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
@@ -41,6 +43,7 @@ import {
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  testAppliedProjectionsFor,
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
@@ -63,8 +66,7 @@ let responseBody: unknown;
  * single-window cases.
  */
 let engineHits:
-  | { document_id: string; anchor_id?: string; chunk_id?: string }[]
-  | null;
+  { document_id: string; anchor_id?: string; chunk_id?: string }[] | null;
 let requestBodies: Record<string, unknown>[];
 /**
  * Wall time the fake engine spends on every request. Zero by default, so only
@@ -125,7 +127,27 @@ beforeEach(() => {
       return new Response(JSON.stringify(snippetResponseBody), { status: 200 });
     }
     if (engineHits === null) {
-      return new Response(JSON.stringify(responseBody), { status: 200 });
+      const bodyWithRevisions =
+        typeof responseBody === "object" &&
+        responseBody !== null &&
+        "hits" in responseBody &&
+        Array.isArray(responseBody.hits)
+          ? {
+              ...responseBody,
+              hits: responseBody.hits.map((hit: unknown) =>
+                typeof hit === "object" &&
+                hit !== null &&
+                "document_id" in hit &&
+                typeof hit.document_id === "string"
+                  ? {
+                      ...hit,
+                      projection_revision: testRevisionOf(hit.document_id),
+                    }
+                  : hit,
+              ),
+            }
+          : responseBody;
+      return new Response(JSON.stringify(bodyWithRevisions), { status: 200 });
     }
     const offset = Number(body["start_offset"] ?? 0);
     const matching =
@@ -143,7 +165,10 @@ beforeEach(() => {
     return new Response(
       JSON.stringify({
         num_hits: engineHits.length,
-        hits: window,
+        hits: window.map((hit) => ({
+          ...hit,
+          projection_revision: testRevisionOf(hit.document_id),
+        })),
         snippets: window.map((hit) => ({ text: [`snip ${hit.document_id}`] })),
       }),
       { status: 200 },
@@ -212,24 +237,29 @@ const readPage = async (
       return Array.isArray(text) ? String(text.at(0)) : null;
     },
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) => ({
-      context: null,
-      revisionById: testRevisionsFor(candidates),
-      groups: recurringDocumentTokens(candidates),
-      ranked: candidates
-        .filter(
-          (candidate) =>
-            !parsedCursor?.excludedGroups?.includes(
-              corpusSearchGroupToken(candidate.id),
-            ),
-        )
-        .map((candidate) => ({
-          id: candidate.id,
-          score: candidate.score,
-          lexicalScore: candidate.score,
-          citationAuthority: 0,
-        })),
-    }),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
+      return {
+        context: null,
+        revisionById: testRevisionsFor(candidates),
+        groups: recurringDocumentTokens(candidates),
+        ranked: candidates
+          .filter(
+            (candidate) =>
+              !parsedCursor?.excludedGroups?.includes(
+                corpusSearchGroupToken(candidate.id),
+              ),
+          )
+          .map((candidate) => ({
+            id: candidate.id,
+            score: candidate.score,
+            lexicalScore: candidate.score,
+            citationAuthority: 0,
+          })),
+      };
+    },
   });
 
 describe("passage hits group into document hits", () => {
@@ -389,21 +419,26 @@ describe("a page settles within one scan round", () => {
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => stableBlendUpperBound(score, weight),
-      rankCandidates: async (candidates) => ({
-        context: null,
-        revisionById: testRevisionsFor(candidates),
-        groups: recurringDocumentTokens(candidates),
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter(
-            (candidate) =>
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          ),
-          authorityById: new Map(),
-          weight,
-        }),
-      }),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(candidates),
+          ranked: blendStableCitationAuthority({
+            candidates: candidates.filter(
+              (candidate) =>
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            ),
+            authorityById: new Map(),
+            weight,
+          }),
+        };
+      },
     });
 
   const documentId = (index: number) => `doc-${String(index).padStart(5, "0")}`;
@@ -519,24 +554,29 @@ describe("the scan is bounded by engine round trips", () => {
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score + 1,
-      rankCandidates: async (candidates) => ({
-        context: null,
-        revisionById: testRevisionsFor(candidates),
-        groups: recurringDocumentTokens(candidates),
-        ranked: candidates
-          .filter(
-            (candidate) =>
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          )
-          .map((candidate) => ({
-            id: candidate.id,
-            score: candidate.score,
-            lexicalScore: candidate.score,
-            citationAuthority: 0,
-          })),
-      }),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(candidates),
+          ranked: candidates
+            .filter(
+              (candidate) =>
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            )
+            .map((candidate) => ({
+              id: candidate.id,
+              score: candidate.score,
+              lexicalScore: candidate.score,
+              citationAuthority: 0,
+            })),
+        };
+      },
     });
 
   beforeEach(() => {
@@ -686,21 +726,26 @@ describe("a passage flood does not strand the reader", () => {
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) =>
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
-      rankCandidates: async (candidates) => ({
-        context: null,
-        revisionById: testRevisionsFor(candidates),
-        groups: recurringDocumentTokens(candidates),
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter(
-            (candidate) =>
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          ),
-          authorityById: new Map(),
-          weight: DEFAULT_AUTHORITY_WEIGHT,
-        }),
-      }),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(candidates),
+          ranked: blendStableCitationAuthority({
+            candidates: candidates.filter(
+              (candidate) =>
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            ),
+            authorityById: new Map(),
+            weight: DEFAULT_AUTHORITY_WEIGHT,
+          }),
+        };
+      },
     });
 
   beforeEach(() => {
@@ -790,29 +835,34 @@ describe("residual filters preserve progress past empty scan windows", () => {
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
-      rankCandidates: async (candidates) => ({
-        context: null,
-        revisionById: testRevisionsFor(candidates),
-        groups: recurringDocumentTokens(
-          candidates.filter((candidate) =>
-            candidate.id.startsWith("zz-match-"),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(
+            candidates.filter((candidate) =>
+              candidate.id.startsWith("zz-match-"),
+            ),
           ),
-        ),
-        ranked: candidates
-          .filter(
-            (candidate) =>
-              candidate.id.startsWith("zz-match-") &&
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          )
-          .map((candidate) => ({
-            id: candidate.id,
-            score: candidate.score,
-            lexicalScore: candidate.score,
-            citationAuthority: 0,
-          })),
-      }),
+          ranked: candidates
+            .filter(
+              (candidate) =>
+                candidate.id.startsWith("zz-match-") &&
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            )
+            .map((candidate) => ({
+              id: candidate.id,
+              score: candidate.score,
+              lexicalScore: candidate.score,
+              citationAuthority: 0,
+            })),
+        };
+      },
     });
 
   test.each([
@@ -923,24 +973,29 @@ describe("split legislation stays one hit across cursor pages", () => {
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,
         unseenScoreUpperBound: () => 0,
-        rankCandidates: async (candidates) => ({
-          context: null,
-          revisionById: testRevisionsFor(candidates),
-          groups: recurringDocumentTokens(candidates),
-          ranked: candidates
-            .filter(
-              (candidate) =>
-                !parsedCursor?.excludedGroups?.includes(
-                  corpusSearchGroupToken(candidate.id),
-                ),
-            )
-            .map((candidate) => ({
-              id: candidate.id,
-              score: candidate.score,
-              lexicalScore: candidate.score,
-              citationAuthority: 0,
-            })),
-        }),
+        rankCandidates: async (probes, { selectAppliedCandidates }) => {
+          const candidates = selectAppliedCandidates(
+            testAppliedProjectionsFor(probes),
+          );
+          return {
+            context: null,
+            revisionById: testRevisionsFor(candidates),
+            groups: recurringDocumentTokens(candidates),
+            ranked: candidates
+              .filter(
+                (candidate) =>
+                  !parsedCursor?.excludedGroups?.includes(
+                    corpusSearchGroupToken(candidate.id),
+                  ),
+              )
+              .map((candidate) => ({
+                id: candidate.id,
+                score: candidate.score,
+                lexicalScore: candidate.score,
+                citationAuthority: 0,
+              })),
+          };
+        },
       });
 
     const seen: string[] = [];
@@ -989,7 +1044,11 @@ describe("ranker-folded candidates stay folded across pages", () => {
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+
         const { representatives, groupTokenById } = collapseByLanguageGroup(
           candidates.map((candidate) => ({
             id: candidate.id,
@@ -1280,7 +1339,10 @@ describe("only the passages a page emits are highlighted", () => {
       return new Response(
         JSON.stringify({
           num_hits: matching.length,
-          hits: selected,
+          hits: selected.map((hit) => ({
+            ...hit,
+            projection_revision: testRevisionOf(hit.document_id),
+          })),
           snippets: selected.map((hit) => ({
             text: [`passage ${hit.chunk_id}`],
           })),
@@ -1386,7 +1448,10 @@ describe("only the passages a page emits are highlighted", () => {
         return new Response(
           JSON.stringify({
             num_hits: matching.length,
-            hits: selected,
+            hits: selected.map((hit) => ({
+              ...hit,
+              projection_revision: testRevisionOf(hit.document_id),
+            })),
             snippets: selected.map((hit) => ({
               text: [`current ${hit.document_id}`],
             })),
@@ -1774,7 +1839,11 @@ describe("folded acts stay folded across capped windows", () => {
       extractSnippet: () => null,
       // No bound ever proves the page: only the round cap ends a scan.
       unseenScoreUpperBound: (score) => score + 1,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+
         const collapsed = collapseLegislationHitsByWork({
           ranked: candidates
             .filter(
@@ -1984,7 +2053,14 @@ describe("a page addressed by offset", () => {
       unseenScoreUpperBound: (score) =>
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
       // The production contract: leave out the groups the scope names.
-      rankCandidates: async (candidates, { excludedGroups }) => {
+      rankCandidates: async (
+        probes,
+        { excludedGroups, selectAppliedCandidates },
+      ) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+
         const shown = candidates.filter(
           ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
         );
@@ -2370,4 +2446,32 @@ describe("a page addressed by offset", () => {
     expect(failure).toBeInstanceOf(Panic);
     expect(String(failure)).toContain("placed by its cursor or by its offset");
   });
+});
+
+test("two sequential scans report as one, with every count added", () => {
+  const strict = {
+    rounds: 2,
+    passagesScanned: 40,
+    indexMs: 12,
+    earlyStopped: true,
+    roundCapHit: false,
+    highlightRounds: 1,
+  };
+  const relaxed = {
+    rounds: 1,
+    passagesScanned: 15,
+    indexMs: 5,
+    earlyStopped: false,
+    roundCapHit: true,
+    highlightRounds: 2,
+  };
+  expect(sumCorpusIndexScans(strict, relaxed)).toEqual({
+    rounds: 3,
+    passagesScanned: 55,
+    indexMs: 17,
+    earlyStopped: true,
+    roundCapHit: true,
+    highlightRounds: 3,
+  });
+  expect(sumCorpusIndexScans(strict, emptyCorpusIndexScan())).toEqual(strict);
 });

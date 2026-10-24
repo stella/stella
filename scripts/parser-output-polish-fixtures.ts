@@ -3,8 +3,8 @@ import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
 import type {
-  IngestionResult,
   DecisionSupplement,
+  IngestionResult,
 } from "../apps/api/src/handlers/case-law/ingestion/adapter";
 import {
   buildPlDecision,
@@ -37,8 +37,8 @@ import {
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-tk";
 import {
   assemblePlUodoDecision,
-  normalizePlUodoRow,
   classifyPlUodoRow,
+  normalizePlUodoRow,
   plUodoBodyFrom,
   plUodoRawPartsOf,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo";
@@ -46,11 +46,12 @@ import {
   assemblePlUokikDecision,
   assemblePlUokikRuling,
   parsePlUokikDetail,
-  plUokikRawPartsOf,
   PL_UOKIK_FILE_STATUS,
   PL_UOKIK_LABEL,
+  plUokikRawPartsOf,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
+  parsePlTkPage,
   readPlTkCasePage,
   readPlTkRuling,
 } from "../apps/api/src/handlers/case-law/ingestion/parsers/pl-tk";
@@ -345,10 +346,11 @@ const collectTk = async ({
     /^pl-tk-case-.*\.html\.gz$/u.test(candidateName),
   )) {
     const casePage = await text({ dir: parserDir, name });
-    const page = readPlTkCasePage(casePage) ?? panic(`Invalid case ${name}`);
+    const parsedPage = parsePlTkPage(casePage);
+    const page = readPlTkCasePage(parsedPage) ?? panic(`Invalid case ${name}`);
     for (const documentId of page.rulingIds) {
       const ruling =
-        readPlTkRuling(casePage, documentId) ??
+        readPlTkRuling(parsedPage, documentId) ??
         panic(`Missing ruling ${name}:${documentId}`);
       const row = {
         stage: name.includes("ts-")

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -514,8 +514,7 @@ export const validateSchemaIntrospection = ({
         return;
       }
       let knownNonDatabaseReceiver:
-        | ReturnType<typeof nonDatabaseMethodReceiver>
-        | undefined;
+        ReturnType<typeof nonDatabaseMethodReceiver> | undefined;
       const dependency = (specifier: string, full: boolean): void => {
         const module = canonicalModuleId(specifier, file);
         if (

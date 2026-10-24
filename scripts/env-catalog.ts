@@ -82,6 +82,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "MCP_READ_PUBLIC_ORG_BYTES",
   "MCP_READ_PUBLIC_USER_BYTES",
   "MCP_CASE_LAW_SEARCH_GUIDANCE",
+  "DATA_INVARIANT_CASE_LAW_CANARIES",
+  "DATA_INVARIANT_CASE_LAW_DAILY_BANDS",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
@@ -202,6 +204,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "SELFHOST_LOCAL_PASSWORD_AUTH",
   "SESSION_TOKEN_ROTATION_ENABLED",
   "SESSION_LIFETIME_CAP_ENABLED",
+  "MCP_WEB_HANDOFF_MINT_ENABLED",
+  "MCP_WEB_HANDOFF_TEXT_ENABLED",
+  "MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
   "STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV",
@@ -399,6 +404,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   CORPUS_INDEX_Q09_ENDPOINT: "Corpus index mutation endpoint.",
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
     "Corpus index read endpoint, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
+  DATA_INVARIANT_CASE_LAW_CANARIES:
+    'Case-law queries the corpus must answer, as a JSON array of {"country","query"} (at most 32). The hourly data-invariant run searches each and reports any that returns nothing. Unset or "[]" skips the check.',
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS:
+    'Expected published decisions per day for each ingestion adapter, as a JSON array of {"adapterKey","min","max"}. The hourly data-invariant run reports an enabled source outside its band. Unset or "[]" skips the check.',
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
@@ -427,6 +436,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Delay before the migrator retries a deferred online index build.",
   ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS:
     "Maximum time an online index build may stay in one waiting phase, such as waiting for older transactions, before it is cancelled and retried.",
+  ONLINE_INDEX_IDLE_HOLDER_MS:
+    "How long another session may sit idle in a transaction on a table before online index work on that table defers instead of starting.",
+  ONLINE_INDEX_LONG_HOLDER_MS:
+    "How old another session's transaction on a table may be before online index work on that table defers instead of starting.",
   ONLINE_INDEX_PARALLEL_WORKERS:
     "max_parallel_maintenance_workers for online index builds (0 or 1).",
   ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB:
@@ -568,6 +581,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
   SESSION_TOKEN_ROTATION_ENABLED:
     "Rotate browser session credentials on refresh. Defaults off; enable after every API instance supports prior credentials.",
+  MCP_WEB_HANDOFF_MINT_ENABLED:
+    "Enable sign-in handoffs on connected-app links. Defaults off.",
+  MCP_WEB_HANDOFF_TEXT_ENABLED:
+    "Include sign-in handoff codes in MCP text links. Defaults off; opt in separately from link minting.",
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS:
+    "Absolute lifetime in seconds for sessions created from MCP text links; defaults to twelve hours and cannot exceed it.",
   SESSION_LIFETIME_CAP_ENABLED:
     "Apply the ninety-day session cap at startup after one idle hour. Defaults off; enable after activity tracking is established.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
@@ -631,7 +650,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
-  VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
   VITE_FEATURE_GOVERNED_WORKFLOW:
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
@@ -772,6 +790,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DATABASE_RLS_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   DATABASE_ROOT_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   DATABASE_STATEMENT_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DATA_INVARIANT_CASE_LAW_CANARIES: ENV_CREDENTIAL_KIND.notCredential,
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS: ENV_CREDENTIAL_KIND.notCredential,
   DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   DB_HOST: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_BUSY_WINDOWS: ENV_CREDENTIAL_KIND.notCredential,
@@ -874,6 +894,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
   ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_IDLE_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_LONG_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_PARALLEL_WORKERS: ENV_CREDENTIAL_KIND.notCredential,
@@ -932,6 +954,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   SESSION_LIFETIME_CAP_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_MINT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_TEXT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
   SESSION_TOKEN_ROTATION_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   SES_ACCESS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
   SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,
@@ -941,6 +966,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
     ENV_CREDENTIAL_KIND.notCredential,
   SKIP_MIGRATION_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   SMOKE_SESSION_SECRET: ENV_CREDENTIAL_KIND.credential,
+  SYNTHETIC_SESSION_KEYS: ENV_CREDENTIAL_KIND.credential,
   SMTP_HOST: ENV_CREDENTIAL_KIND.notCredential,
   SMTP_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   SMTP_PORT: ENV_CREDENTIAL_KIND.notCredential,
@@ -982,7 +1008,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
-  VITE_FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
@@ -1399,6 +1424,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
+  // The merge group's base revision.
+  "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
@@ -1476,8 +1503,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHANNEL",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
-  // JSON paths handed from ci-plan to the changed-test repeat in ci-tests.
-  "CHANGED_FILES_JSON",
+  // File holding ci-plan's changed paths for the changed-test repeat in ci-tests.
+  "CHANGED_FILES_PATH",
   // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
   "CLEAN_DATABASE_URL",
   "CODEX_API_KEY",
@@ -1503,8 +1530,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKE_CHILD_RECORD",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
+  // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
+  "FLAKY_TEST_QUARANTINE_REGISTRY",
+  "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
   "HEAD_SHA",
+  "HEAVY_ONLY",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
   "JOURNEY_CLI_URL",
   "JOURNEY_MAIN_REF",
@@ -1548,6 +1579,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
+  "PR_TITLE",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
@@ -1584,6 +1616,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
+  "RELEASE_GATE_DIR",
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",
@@ -1642,17 +1675,22 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "STORED_AGENT_TEST_CREDENTIAL",
   "STORED_AGENT_TEST_VALUE",
+  "SUITE_DEPTH",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
   // Check pool: the job context its step hands over and an optional
   // concurrency override; the pool strips the context before running checks.
-  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_NEEDS_FILE",
   "CI_CHECK_POOL_STEPS",
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
   "CI_CHECK_POOL_CONCURRENCY",
+  // <index>/<count>: the share of the check registry one ci-checks-rest leg runs.
+  "CI_CHECK_POOL_PARTITION",
+  // Test-only: the commit ci-checks-partition.test.ts compares the head with.
+  "CI_CHECKS_PARTITION_BASE",
   // Generator families another job of the same CI run checks on this commit.
   "GENERATED_CHECKS_IN_OTHER_JOBS",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
@@ -1663,6 +1701,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODE_QUALITY_PROCESS_GROUP",
   // Lowers the code-check Turbo task count; the pre-push check sets it to 1.
   "CODE_CHECK_CONCURRENCY",
+  // Replaces the detected code-check memory size (tests pin the plan with it).
+  "CODE_CHECK_MEMORY_BYTES",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
@@ -1687,10 +1727,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_FIX_AVAILABLE",
   "TEST_OPEN_PRS",
   "TEST_ADVISORIES_REMAIN",
+  "TEST_STALE",
+  "TEST_PIN_REWRITE",
   "WXT_STELLA_ORIGINS",
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([
+  // Network clients conventionally inherit these proxy settings from the host.
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
   "AWS_ACCESS_KEY_ID",
   "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
   "AWS_EXECUTION_ENV",

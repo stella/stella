@@ -10,8 +10,8 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
-  DECISION_TEXT_WITHHELD_REASON,
   DECISION_TEXT_SOURCE,
+  DECISION_TEXT_WITHHELD_REASON,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -52,6 +52,7 @@ import {
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
+import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
 import {
   SANCTIONS_CLASSIFICATIONS,
   SANCTIONS_ENTITY_TYPES,
@@ -1437,20 +1438,46 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
             knownGaps: v.variant("type", [
-              projectionBranch(v.strictObject({ type: v.literal("unknown") })),
               projectionBranch(
-                v.strictObject({ type: v.literal("none-recorded") }),
+                v.strictObject({
+                  type: v.literal("not_reconciled"),
+                  reason: v.string(),
+                }),
               ),
               projectionBranch(
                 v.strictObject({
-                  type: v.literal("known"),
-                  gaps: v.array(
-                    v.strictObject({
-                      from: v.string(),
-                      to: v.string(),
-                      reason: v.string(),
-                      evidenceRef: v.string(),
-                    }),
+                  type: v.literal("reconciled"),
+                  summary: v.strictObject({
+                    missing: v.number(),
+                    shortSlices: v.number(),
+                    unlistedSlices: v.number(),
+                  }),
+                  years: v.array(
+                    v.variant("type", [
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("complete"),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("gaps"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("unlisted"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                          unlistedSlices: v.number(),
+                        }),
+                      ),
+                    ]),
                   ),
                 }),
               ),
@@ -1607,7 +1634,18 @@ const caseLawDecisionProjection = v.strictObject({
   source_url: v.optional(publicUrl()),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  citations: v.optional(caseLawCitationSummaryProjection),
+  citations: v.optional(
+    v.union([
+      projectionBranch(caseLawCitationSummaryProjection),
+      projectionBranch(
+        v.strictObject({
+          status: v.literal("unavailable"),
+          reason: v.literal("country_not_search_admitted"),
+          country: v.string(),
+        }),
+      ),
+    ]),
+  ),
   country: v.optional(v.string()),
   court: v.optional(v.string()),
   // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
@@ -1754,7 +1792,42 @@ export { READ_CASE_LAW_CITATIONS_PROJECTION } from "./case-law-citation-projecti
  * Newest validity window first, bounded by the versions page size: enough to
  * see which consolidations exist, not the whole amendment history.
  */
+const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
+  v.strictObject({
+    items: v.array(
+      v.strictObject({
+        publisherId: v.string(),
+        amendingEli: v.string(),
+        amendingTitle: v.nullable(v.string()),
+        affectedAnchor: v.string(),
+        changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+        effectiveDate: v.nullable(v.string()),
+        effectiveText: v.nullable(v.string()),
+      }),
+    ),
+    observedAt: v.string(),
+    coverage: v.variant("type", [
+      projectionBranch(v.strictObject({ type: v.literal("complete") })),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("partial"),
+          unlocatedRelations: v.number(),
+          reason: v.string(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          type: v.literal("not-stated"),
+          reason: v.string(),
+        }),
+      ),
+    ]),
+    truncated: v.boolean(),
+  }),
+);
+
 const STATUTE_VERSION_PROJECTION = v.strictObject({
+  amendedBy: STATUTE_AMENDMENT_PAGE_PROJECTION,
   documentId: passthroughId(),
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
@@ -1783,6 +1856,8 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
           effectiveDate: v.nullable(v.string()),
+          versionValidFrom: v.nullable(v.string()),
+          versionValidTo: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
           match: v.strictObject({
@@ -1852,6 +1927,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
     ...statuteExpressionLabel,
+    pendingChanges: STATUTE_AMENDMENT_PAGE_PROJECTION,
     versions: v.optional(v.array(STATUTE_VERSION_PROJECTION)),
   }),
 });

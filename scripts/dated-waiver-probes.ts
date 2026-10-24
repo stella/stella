@@ -1,14 +1,20 @@
 import { panic, Result } from "better-result";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import {
-  DOC_SOURCE_FILE,
-  ZERO_AGE_OVERRIDE,
   type DatedWaiver,
+  DOC_SOURCE_FILE,
+  type ProbeKind,
+  ZERO_AGE_OVERRIDE,
 } from "./dated-waivers";
+import {
+  parseRegistry,
+  serializeRegistry,
+  splitTestId,
+} from "./flaky-test-quarantine";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -17,6 +23,17 @@ import {
 import { parseLedger } from "./suppression-waivers";
 
 export type RemovalChange = { source: string; before: string; after: string };
+
+export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "no-llms-txt": true,
+  "release-age-exclusion": true,
+  "release-age-exception": true,
+  "dependency-audit": true,
+  "quarantined-test": true,
+  "flaky-test-quarantine": true,
+  "suppression-waiver": true,
+  "pending-contract-migration": false,
+} as const satisfies Record<ProbeKind, boolean>;
 
 // Offsets must come from a parseable owner, never from regex over source text.
 const parseOwner = (source: string, file: string): ts.SourceFile => {
@@ -182,6 +199,9 @@ export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
 ): RemovalChange[] => {
+  if (!AUTOMATIC_REMOVAL_ALLOWED[entry.kind]) {
+    return panic(`Automatic removal is disabled for ${entry.kind}`);
+  }
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
@@ -347,6 +367,26 @@ export const removeWaiver = (
         { source: waiver.file, before: content, after: updated },
       ];
     }
+    case "flaky-test-quarantine": {
+      const parsed = parseRegistry(JSON.parse(before));
+      if (parsed.status === "invalid") {
+        return panic(parsed.errors.join("\n"));
+      }
+      const { entries } = parsed.registry;
+      if (
+        entries.filter(
+          ({ id, expires }) => id === entry.id && expires === entry.expiresAt,
+        ).length !== 1
+      ) {
+        panic(`Flaky-test quarantine anchor missing: ${entry.id}`);
+      }
+      after = serializeRegistry({
+        entries: entries.filter(({ id }) => id !== entry.id),
+      });
+      break;
+    }
+    case "pending-contract-migration":
+      return panic(`Automatic removal is disabled for ${entry.kind}`);
     default:
       entry.kind satisfies never;
       return panic("Unhandled dated waiver kind");
@@ -404,6 +444,33 @@ export const createProbeBudget = ({
   };
 };
 
+// Which printed Bun result names the probed test, for kinds whose probe runs
+// a single test.
+const receiptSelector = (
+  entry: DatedWaiver,
+): ((name: string) => boolean) | undefined => {
+  switch (entry.kind) {
+    case "quarantined-test":
+      return (name) => name === entry.id || name.endsWith(` > ${entry.id}`);
+    case "flaky-test-quarantine": {
+      const expected =
+        splitTestId(entry.id)?.name ??
+        panic(`Invalid flaky-test quarantine id: ${entry.id}`);
+      return (name) => name === expected;
+    }
+    case "no-llms-txt":
+    case "release-age-exclusion":
+    case "release-age-exception":
+    case "dependency-audit":
+    case "suppression-waiver":
+    case "pending-contract-migration":
+      return undefined;
+    default:
+      entry.kind satisfies never;
+      return panic("Unhandled dated waiver kind");
+  }
+};
+
 type RunProbeOptions = {
   run: (command: readonly string[]) => Promise<ProbeResult>;
 };
@@ -425,7 +492,8 @@ export const runWaiverProbe = async (
     }
     const receipt = result.value;
     let executedTest = true;
-    if (entry.kind === "quarantined-test") {
+    const selects = receiptSelector(entry);
+    if (selects !== undefined) {
       // Filtered Bun runs may include skipped declarations other than the
       // selected test. Only its named receipt establishes recovery.
       const output = stripVTControlCharacters(receipt.output);
@@ -433,11 +501,7 @@ export const runWaiverProbe = async (
         const match = /^\((pass|fail|skip|todo)\) (.+)$/u.exec(line);
         const status = match?.at(1);
         const name = match?.at(2)?.replace(/ \[\d+(?:\.\d+)?(?:ms|s)\]$/u, "");
-        if (
-          !status ||
-          !name ||
-          (name !== entry.id && !name.endsWith(` > ${entry.id}`))
-        ) {
+        if (!status || !name || !selects(name)) {
           return [];
         }
         return [status];

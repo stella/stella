@@ -79,6 +79,18 @@ describe("placing notes in the gutter", () => {
     ]);
   });
 
+  test("a provision sharing an anchor follows the AI outline section", () => {
+    const placed = placeGutterNotes({
+      notes: [note("outline", 100, 64), note("provision", 100, 80)],
+      region: gutter,
+    });
+
+    expect(topsOf(placed)).toEqual([
+      ["outline", 100],
+      ["provision", 172],
+    ]);
+  });
+
   test("notes are laid out in document order, not in the order handed in", () => {
     const placed = placeGutterNotes({
       notes: [note("composer", 90), note("earlier", 40)],

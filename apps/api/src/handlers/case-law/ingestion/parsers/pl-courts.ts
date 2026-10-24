@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
+// parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -15,6 +15,7 @@ import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
   Block,
   DocumentAst,
@@ -23,7 +24,7 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 
-import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -32,10 +33,10 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import {
-  isExcludedHtmlTag,
-  ownTableRows,
   appendTextInline,
   inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -518,6 +519,7 @@ export const parsePlDecisionContent = (
       { parser: "pl-courts", caseNumber: input.caseNumber },
       input.content,
       state.blocks,
+      { document: $ },
     );
   } else {
     const normalizedContent = normalizeLegacyPlainText(

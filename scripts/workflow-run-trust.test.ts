@@ -24,9 +24,8 @@ const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 // Pin the current scan so missing or newly added entry points need review.
 const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
+  "ci-runner-loss-retry.yml",
   "cla.yml",
-  "generated-conflicts-publish.yml",
-  "marketing-screenshots-publish.yml",
   "publish-npm.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",
@@ -208,12 +207,10 @@ const UNATTENDED_EVENTS = new Set([
 const UNALERTED_UNATTENDED_WORKFLOWS: Record<string, string> = {
   "bot-refresh-auto-merge.yml":
     "Runs after each pull request's checks; a failure affects one bot pull request and shows on it.",
+  "ci-runner-loss-retry.yml":
+    "Runs after a failed pull request run; if the retry fails, that pull request's own red CI still shows on it.",
   "cla.yml":
     "Its workflow_run leg posts the signature status on the contributor's pull request, where a failure shows.",
-  "generated-conflicts-publish.yml":
-    "Follows a manually dispatched resolution run whose dispatcher watches the outcome.",
-  "marketing-screenshots-publish.yml":
-    "Follows a manually dispatched capture run whose dispatcher watches the outcome.",
   "scheduled-run-alerts.yml":
     "The alerting workflow itself cannot report its own failed delivery.",
 };
@@ -637,6 +634,215 @@ describe("workflow_run trust", () => {
 
   test("ignores workflows without a workflow_run trigger", () => {
     expect(trustProblems({ on: ["push"], jobs: { a: {} } })).toEqual([]);
+  });
+});
+
+// GitHub creates no workflow_run event for a run that GITHUB_TOKEN started,
+// so a workflow_run trigger never fires for a workflow this repository
+// dispatches with GITHUB_TOKEN, and nothing reports it. The dispatching run
+// starts the next step itself and follows it instead. Over-approximated: any
+// step that calls a dispatch endpoint and names a followed workflow's file
+// (or builds the file name at run time) counts, unless its token is a
+// GitHub App token minted in the job.
+const DISPATCH_CALL =
+  /createWorkflowDispatch|\/dispatches\b|\bgh workflow run\b/u;
+const COMPUTED_WORKFLOW_FILE = /\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\.ya?ml\b/u;
+const APP_TOKEN = /^\$\{\{\s*steps\.[\w-]+\.outputs\.token\s*\}\}$/u;
+// Dispatches whose targets only the failed-run alerting workflow follows,
+// keyed by `<workflow file>#<step name>`, with the workflows each starts.
+const ALERTING_WORKFLOW = "scheduled-run-alerts.yml";
+const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
+  "main-heavy.yml#Dispatch release PR-depth checks": ["main-pr-depth.yml"],
+  "network-baseline-request.yml#Request main recording": [
+    "network-baseline-record.yml",
+  ],
+  "release-pr.yml#Dispatch the version commit": ["release-tag.yml"],
+  "release-proof.yml#Dispatch pinned release proofs once": [
+    "deploy-staging.yml",
+    "main-heavy.yml",
+  ],
+  "release.yml#Dispatch release-health.yml": ["release-health.yml"],
+};
+
+// Built, not written literally: a `${...}` in a plain string reads as a
+// broken template literal to the linter.
+const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
+
+type DispatchSite = { site: string; targets: string[]; computed: boolean };
+
+/** Followed workflow file -> the workflow_run workflows that follow it. */
+const followersOf = (
+  workflows: { file: string; workflow: unknown }[],
+): Map<string, string[]> => {
+  const fileByName = new Map<string, string>();
+  for (const { file, workflow } of workflows) {
+    if (isRecord(workflow) && typeof workflow["name"] === "string") {
+      fileByName.set(workflow["name"], file);
+    }
+  }
+  const followers = new Map<string, string[]>();
+  for (const { file: follower, workflow } of workflows) {
+    const on = isRecord(workflow) ? workflow["on"] : undefined;
+    const trigger = isRecord(on) ? on["workflow_run"] : undefined;
+    const names = isRecord(trigger) ? trigger["workflows"] : undefined;
+    for (const name of Array.isArray(names) ? names : []) {
+      const file = fileByName.get(String(name));
+      if (file !== undefined) {
+        followers.set(file, [...(followers.get(file) ?? []), follower]);
+      }
+    }
+  }
+  return followers;
+};
+
+const tokenDispatchesOfFollowed = (
+  workflows: { file: string; workflow: unknown }[],
+): DispatchSite[] => {
+  const followed = [...followersOf(workflows).keys()];
+  const sites: DispatchSite[] = [];
+  for (const { file, workflow } of workflows) {
+    const jobs =
+      isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+    for (const job of Object.values(jobs)) {
+      const steps =
+        isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : [];
+      for (const step of steps) {
+        if (!isRecord(step)) {
+          continue;
+        }
+        const text = JSON.stringify(step);
+        if (!DISPATCH_CALL.test(text)) {
+          continue;
+        }
+        const tokens = [
+          isRecord(step["with"]) ? step["with"]["github-token"] : undefined,
+          isRecord(step["env"]) ? step["env"]["GH_TOKEN"] : undefined,
+          isRecord(step["env"]) ? step["env"]["GITHUB_TOKEN"] : undefined,
+        ].filter((token) => token !== undefined);
+        if (
+          tokens.length > 0 &&
+          tokens.every(
+            (token) => typeof token === "string" && APP_TOKEN.test(token),
+          )
+        ) {
+          continue;
+        }
+        const computed = COMPUTED_WORKFLOW_FILE.test(text);
+        const targets = computed
+          ? followed
+          : followed.filter((target) => text.includes(target));
+        if (targets.length > 0) {
+          sites.push({
+            site: `${file}#${String(step["name"])}`,
+            targets: targets.toSorted(),
+            computed,
+          });
+        }
+      }
+    }
+  }
+  return sites;
+};
+
+describe("a followed run is never started with GITHUB_TOKEN", () => {
+  test("no workflow_run trigger follows a workflow dispatched with GITHUB_TOKEN", () => {
+    const workflows = allWorkflows();
+    const sites = tokenDispatchesOfFollowed(workflows);
+    expect(
+      sites
+        .filter(({ site }) => !Object.hasOwn(ALERT_ONLY_TOKEN_DISPATCHES, site))
+        .map(({ site, targets }) => `${site} -> ${targets.join(", ")}`),
+    ).toEqual([]);
+    // An exemption names a dispatch that still exists, so a stale entry
+    // fails here instead of lingering.
+    expect(Object.keys(ALERT_ONLY_TOKEN_DISPATCHES).toSorted()).toEqual(
+      sites.map(({ site }) => site).toSorted(),
+    );
+    const followers = followersOf(workflows);
+    for (const { site, targets, computed } of sites) {
+      const declared = ALERT_ONLY_TOKEN_DISPATCHES[site] ?? [];
+      // A file name built at run time cannot be read here; the entry
+      // declares it, and every declared target is checked below.
+      if (!computed) {
+        expect(declared, site).toEqual(targets);
+      }
+      for (const target of declared) {
+        expect(followers.get(target), `${site} -> ${target}`).toEqual([
+          ALERTING_WORKFLOW,
+        ]);
+      }
+    }
+  });
+
+  const fixture = (step: Record<string, unknown>) => [
+    {
+      file: "publish.yml",
+      workflow: {
+        name: "Publish",
+        on: { workflow_run: { workflows: ["Build"] } },
+        jobs: {},
+      },
+    },
+    { file: "build.yml", workflow: { name: "Build", on: "workflow_dispatch" } },
+    {
+      file: "start.yml",
+      workflow: { jobs: { start: { steps: [{ name: "Start", ...step }] } } },
+    },
+  ];
+
+  test("reports every token shape that starts the followed workflow", () => {
+    for (const step of [
+      {
+        uses: "actions/github-script@fixture",
+        with: {
+          script:
+            "github.rest.actions.createWorkflowDispatch({ workflow_id: 'build.yml' })",
+        },
+      },
+      {
+        run: "gh api --method POST repos/o/r/actions/workflows/build.yml/dispatches",
+        env: { GH_TOKEN: githubExpression("github.token") },
+      },
+      {
+        run: "gh workflow run build.yml",
+        env: { GH_TOKEN: githubExpression("secrets.GITHUB_TOKEN") },
+      },
+      {
+        run: 'for workflow in build; do gh workflow run "$workflow.yml"; done',
+        env: { GH_TOKEN: githubExpression("github.token") },
+      },
+      {
+        run: "gh workflow run build.yml",
+        env: {
+          GH_TOKEN: githubExpression("steps.app.outputs.token"),
+          GITHUB_TOKEN: githubExpression("github.token"),
+        },
+      },
+    ]) {
+      expect(
+        tokenDispatchesOfFollowed(fixture(step)).map(({ site, targets }) => ({
+          site,
+          targets,
+        })),
+        JSON.stringify(step),
+      ).toEqual([{ site: "start.yml#Start", targets: ["build.yml"] }]);
+    }
+  });
+
+  test("accepts an App token and dispatches of workflows nothing follows", () => {
+    expect(
+      tokenDispatchesOfFollowed(
+        fixture({
+          run: "gh workflow run build.yml",
+          env: { GH_TOKEN: githubExpression("steps.app.outputs.token") },
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      tokenDispatchesOfFollowed(
+        fixture({ run: "gh workflow run publish.yml" }),
+      ),
+    ).toEqual([]);
   });
 });
 

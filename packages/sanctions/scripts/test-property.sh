@@ -9,8 +9,14 @@ property_suites=(
 
 runner_args=("$1" "$2")
 shift 2
-mapfile -t selected_suites < <(printf '%s\n' "$@" | sort)
-mapfile -t expected_suites < <(printf '%s\n' "${property_suites[@]}" | sort)
+selected_suites=()
+while IFS= read -r suite; do
+  selected_suites+=("$suite")
+done < <(printf '%s\n' "$@" | sort)
+expected_suites=()
+while IFS= read -r suite; do
+  expected_suites+=("$suite")
+done < <(printf '%s\n' "${property_suites[@]}" | sort)
 if [[ "${selected_suites[*]}" != "${expected_suites[*]}" ]]; then
   echo "Property selector does not match the explicit suite list" >&2
   exit 1

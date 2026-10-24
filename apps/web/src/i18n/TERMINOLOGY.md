@@ -152,7 +152,7 @@ Arabic:
 | **Remove**   | إزالة        |
 | **Add**      | إضافة        |
 | **Edit**     | تحرير        |
-| **Close**    | إغلاق         |
+| **Close**    | إغلاق        |
 | **Send**     | إرسال        |
 | **Download** | تنزيل        |
 | **Export**   | تصدير        |
@@ -267,7 +267,7 @@ Typegen does **not** run as part of `bun run typecheck`. Run it
 manually after editing `en.json`, or rely on the validation gate:
 
 ```bash
-bun run i18n:check   # typegen --check (drift) + locale structure check
+bun run i18n:check   # locale structure, glossary, and terminology checks
 bun run i18n:sync    # fill missing keys from en + sort + regenerate types
 ```
 
@@ -381,25 +381,25 @@ Arabic:
 
 <!-- glossary-gen:legal-arabic start -->
 
-| Concept           | Arabic          |
-| ----------------- | --------------- |
-| **Matter**        | ملف قانوني      |
-| **Team**          | فريق            |
+| Concept           | Arabic           |
+| ----------------- | ---------------- |
+| **Matter**        | ملف قانوني       |
+| **Team**          | فريق             |
 | **Case law**      | الاجتهاد القضائي |
-| **Court**         | محكمة           |
-| **Party**         | طرف             |
-| **Clause**        | بند             |
-| **Template**      | قالب            |
-| **View**          | عرض             |
-| **Preset**        | إعداد مسبق      |
-| **Folder**        | مجلد            |
-| **Tag**           | وسم             |
-| **Draft**         | مسودة           |
-| **Contact**       | جهة اتصال       |
-| **Playbook**      | دليل مراجعة     |
-| **Due diligence** | العناية الواجبة |
-| **Escalation**    | التصعيد         |
-| **Rationale**     | المبررات        |
+| **Court**         | محكمة            |
+| **Party**         | طرف              |
+| **Clause**        | بند              |
+| **Template**      | قالب             |
+| **View**          | عرض              |
+| **Preset**        | إعداد مسبق       |
+| **Folder**        | مجلد             |
+| **Tag**           | وسم              |
+| **Draft**         | مسودة            |
+| **Contact**       | جهة اتصال        |
+| **Playbook**      | دليل مراجعة      |
+| **Due diligence** | العناية الواجبة  |
+| **Escalation**    | التصعيد          |
+| **Rationale**     | المبررات         |
 
 <!-- glossary-gen:legal-arabic end -->
 

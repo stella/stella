@@ -9,10 +9,10 @@ import {
 } from "./screening";
 import type { ScreeningQuery } from "./screening";
 import {
-  assertLegacyEquivalence,
+  assertScreeningEquivalence,
   equivalenceLists,
   expectAliasHit,
-  legacyOutcomes,
+  screeningOutcomes,
   successfulQueries,
 } from "./test-fixtures/legacy-equivalence";
 
@@ -20,10 +20,10 @@ const yieldImmediately = async () => {
   await Promise.resolve();
 };
 
-test("full-scale compact and cooperative screening preserve legacy equivalence", async () => {
+test("full-scale compact and cooperative screening preserve complete screening results", async () => {
   const lists = equivalenceLists();
   const queries = successfulQueries(lists);
-  const expected = legacyOutcomes(lists, queries);
+  const expected = screeningOutcomes(lists, queries);
   const compact = buildScreeningIndex(lists);
   let entryIndex = 0;
   for (const list of lists) {
@@ -33,7 +33,7 @@ test("full-scale compact and cooperative screening preserve legacy equivalence",
     }
   }
   expect(compact.entries.length).toBe(entryIndex);
-  assertLegacyEquivalence({ index: compact, expected, queries });
+  assertScreeningEquivalence({ index: compact, expected, queries });
   expectAliasHit({
     index: compact,
     name: "Zerovan Velnakov",
@@ -62,12 +62,12 @@ test("full-scale compact and cooperative screening preserve legacy equivalence",
     lists,
     yieldImmediately,
   );
-  assertLegacyEquivalence({ index: cooperative, expected, queries });
+  assertScreeningEquivalence({ index: cooperative, expected, queries });
 }, 120_000);
 
-test("small random lists and queries preserve legacy equivalence", async () => {
+test("small random lists and queries preserve complete screening results", async () => {
   await assertProperty(
-    "small random lists and queries preserve legacy equivalence",
+    "small random lists and queries preserve complete screening results",
     fc.asyncProperty(
       fc.tuple(
         fc.array(fc.integer({ min: 1, max: 12 }), {
@@ -84,8 +84,8 @@ test("small random lists and queries preserve legacy equivalence", async () => {
           ...successfulQueries(lists),
           ...randomNames.map((name) => ({ name })),
         ];
-        const expected = legacyOutcomes(lists, queries);
-        assertLegacyEquivalence({
+        const expected = screeningOutcomes(lists, queries);
+        assertScreeningEquivalence({
           index: buildScreeningIndex(lists),
           expected,
           queries,
@@ -94,7 +94,7 @@ test("small random lists and queries preserve legacy equivalence", async () => {
           lists,
           yieldImmediately,
         );
-        assertLegacyEquivalence({ index: cooperative, expected, queries });
+        assertScreeningEquivalence({ index: cooperative, expected, queries });
       },
     ),
     { numRuns: 20 },

@@ -5,6 +5,7 @@ import {
   beforeAll,
   beforeEach,
   expect,
+  spyOn,
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -19,13 +20,14 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawReconciliationItems,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
@@ -48,9 +50,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { metadataWithDecisionAbsorption } from "@/api/lib/case-law/decision-absorption";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -383,6 +385,7 @@ type RunUnitOptions = {
   now?: () => Date;
   /** Instant unless a test needs the politeness pause to consume the budget. */
   sleep?: (ms: number) => Promise<void>;
+  signal?: AbortSignal | undefined;
 };
 
 const runUnitWith = async ({
@@ -394,6 +397,7 @@ const runUnitWith = async ({
   sliceIngestBudget,
   sliceRetries = new Map(),
   sourceId,
+  signal,
 }: RunUnitOptions) =>
   await runReconciliationWorkUnit({
     adapterKey: "engine-fixture",
@@ -406,7 +410,93 @@ const runUnitWith = async ({
     sleep,
     sliceIngestBudget,
     sliceRetries,
+    signal,
   });
+
+test("an aborted unit stops a pending publisher fetch without another request", async () => {
+  const sourceId = await seedSource();
+  const controller = new AbortController();
+  let fetches = 0;
+  const listingStarted = Promise.withResolvers<boolean>();
+  const reconciliation: SourceReconciliation = {
+    ...stubReconciliation,
+    listSlicePage: async ({ signal }) => {
+      fetches += 1;
+      if (signal === undefined) {
+        return panic("reconciliation listing signal was not provided");
+      }
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => reject(new Error("Listing aborted")),
+          { once: true },
+        );
+        listingStarted.resolve(true);
+      });
+      return panic("aborted listing fetch resolved");
+    },
+  };
+
+  const pending = runUnitWith({
+    sourceId,
+    reconciliation,
+    signal: controller.signal,
+  });
+  await listingStarted.promise;
+  controller.abort();
+
+  expect(await pending).toEqual({ type: "aborted" });
+  expect(fetches).toBe(1);
+});
+
+test("an aborted reconciliation backoff sleep returns immediately", async () => {
+  const sourceId = await seedSource();
+  const controller = new AbortController();
+  let fetches = 0;
+  const sleepStarted = Promise.withResolvers<boolean>();
+  const reconciliation: SourceReconciliation = {
+    ...stubReconciliation,
+    listSlicePage: async () => {
+      fetches += 1;
+      return { items: [], totalPages: 2 };
+    },
+  };
+  const pending = runUnitWith({
+    sourceId,
+    reconciliation,
+    signal: controller.signal,
+    sleep: async () => {
+      sleepStarted.resolve(true);
+      await new Promise<void>(() => {
+        // Intentionally pending: the abort signal must end the raced wait.
+      });
+    },
+  });
+  await sleepStarted.promise;
+  controller.abort();
+
+  expect(await pending).toEqual({ type: "aborted" });
+  expect(fetches).toBe(1);
+});
+
+test("completed reconciliation sleeps remove their aborted-signal listeners", async () => {
+  const controller = new AbortController();
+  const addListener = spyOn(controller.signal, "addEventListener");
+  const removeListener = spyOn(controller.signal, "removeEventListener");
+
+  for (let completed = 0; completed < 5; completed += 1) {
+    await abortableSleep(
+      async () => {
+        await Promise.resolve();
+      },
+      0,
+      controller.signal,
+    );
+  }
+
+  expect(addListener).toHaveBeenCalledTimes(5);
+  expect(removeListener).toHaveBeenCalledTimes(5);
+});
 
 const runUnit = async (
   sourceId: SafeId<"caseLawSource">,

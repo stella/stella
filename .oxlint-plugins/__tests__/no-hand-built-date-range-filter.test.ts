@@ -36,16 +36,29 @@ test("accepts the shared range and unrelated single date pickers", async () => {
 });
 
 test("exempts record-validity forms rather than query filters", async () => {
-  for (const form of [
-    "routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx",
-    "routes/_protected.settings/-components/organization/vat-rate-form.tsx",
-  ]) {
-    expect(
-      await lintSingleRule("no-hand-built-date-range-filter", pickerPair, {
-        sourcePath: `apps/web/src/${form}`,
-      }),
-    ).toEqual([]);
-  }
+  const results = await Promise.all(
+    [
+      "routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx",
+      "routes/_protected.settings/-components/organization/vat-rate-form.tsx",
+    ].map(async (lintCase, index) => {
+      const form = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "no-hand-built-date-range-filter",
+          pickerPair,
+          {
+            sourcePath: `apps/web/src/${form}`,
+          },
+        ),
+        expected: [],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("rejects paired decision date pickers in MCP result apps", async () => {

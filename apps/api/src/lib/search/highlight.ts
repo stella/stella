@@ -3,8 +3,8 @@ import { panic } from "better-result";
 import {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
-  foldToAscii,
   arabicNormalize,
+  foldToAscii,
 } from "@stll/text-normalize";
 
 // Non-HTML delimiters injected by ts_headline / pdb.snippet(). Keep these
@@ -249,35 +249,37 @@ const getSearchLexemes = (text: string): SearchLexeme[] =>
     value: match[0],
   }));
 
+// Each candidate lexeme prefixes the source lexeme at the same position. The
+// earliest-starting candidate wins, and an earlier candidate wins a tie.
 const findCandidatePrefix = (
   sourceLexemes: readonly SearchLexeme[],
-  candidate: string,
+  candidates: readonly string[],
 ): CandidatePrefixMatch | null => {
-  const candidateLexemes = Array.from(
-    candidate.matchAll(SEARCH_LEXEME),
-    (match) => match[0],
-  );
-  if (candidateLexemes.length === 0) {
-    return null;
-  }
-  const lastStartIndex = sourceLexemes.length - candidateLexemes.length;
-  for (let startIndex = 0; startIndex <= lastStartIndex; startIndex += 1) {
-    const matches = candidateLexemes.every((lexeme, offset) =>
-      sourceLexemes.at(startIndex + offset)?.value.startsWith(lexeme),
-    );
-    if (!matches) {
-      continue;
+  const candidateLexemes = candidates
+    .map((candidate) =>
+      Array.from(candidate.matchAll(SEARCH_LEXEME), (match) => match[0]),
+    )
+    .filter((lexemes) => lexemes.length > 0);
+  for (const [startIndex, first] of sourceLexemes.entries()) {
+    for (const lexemes of candidateLexemes) {
+      const matches = lexemes.every(
+        (lexeme, offset) =>
+          sourceLexemes.at(startIndex + offset)?.value.startsWith(lexeme) ===
+          true,
+      );
+      if (!matches) {
+        continue;
+      }
+      const last =
+        sourceLexemes.at(startIndex + lexemes.length - 1) ??
+        panic("A lexical prefix has no last lexeme");
+      const lastPrefix =
+        lexemes.at(-1) ?? panic("A lexical prefix has no last candidate");
+      return {
+        length: last.start + lastPrefix.length - first.start,
+        start: first.start,
+      };
     }
-    const first = sourceLexemes.at(startIndex);
-    const last = sourceLexemes.at(startIndex + candidateLexemes.length - 1);
-    const lastCandidate = candidateLexemes.at(-1);
-    if (!first || !last || !lastCandidate) {
-      return null;
-    }
-    return {
-      length: last.start + lastCandidate.length - first.start,
-      start: first.start,
-    };
   }
   return null;
 };
@@ -285,8 +287,9 @@ const findCandidatePrefix = (
 export const truncateSearchPreviewAroundCandidates = ({
   candidates,
   maxLength,
-  source,
+  source: rawSource,
 }: TruncateSearchPreviewAroundCandidatesOptions): string => {
+  const source = rawSource.toWellFormed();
   const boundedLength = Math.max(0, Math.floor(maxLength));
   if (boundedLength === 0) {
     return "";
@@ -298,21 +301,14 @@ export const truncateSearchPreviewAroundCandidates = ({
   const normalizedSource = normalizeSourceWithMappings(source, true);
   const foldedSource = applyArabicFoldsWithOffsets(normalizedSource.text);
   const sourceLexemes = getSearchLexemes(foldedSource.text);
-  let foldedMatchStart = Number.POSITIVE_INFINITY;
-  let foldedMatchLength = 0;
-  for (const candidate of candidates) {
-    const normalizedCandidate = applyArabicFolds(
-      normalizePreviewUnit(candidate.trim(), true),
-    );
-    if (!normalizedCandidate) {
-      continue;
-    }
-    const match = findCandidatePrefix(sourceLexemes, normalizedCandidate);
-    if (match && match.start < foldedMatchStart) {
-      foldedMatchStart = match.start;
-      foldedMatchLength = match.length;
-    }
-  }
+  const normalizedCandidates = candidates.map((candidate) =>
+    applyArabicFolds(
+      normalizePreviewUnit(candidate.toWellFormed().trim(), true),
+    ),
+  );
+  const match = findCandidatePrefix(sourceLexemes, normalizedCandidates);
+  const foldedMatchStart = match?.start ?? Number.POSITIVE_INFINITY;
+  const foldedMatchLength = match?.length ?? 0;
 
   if (!Number.isFinite(foldedMatchStart)) {
     return sliceWithoutSplitSurrogate(source, 0, boundedLength);
@@ -659,24 +655,14 @@ const parseHeadlineFragment = (fragment: string): ParsedHeadlineFragment => {
 const restoreFragment = ({
   fragment,
   normalizedSource,
-  searchFrom,
+  normalizedStart,
   source,
 }: {
   fragment: ParsedHeadlineFragment;
   normalizedSource: NormalizedSource;
-  searchFrom: number;
+  normalizedStart: number;
   source: string;
 }): { nextSearchFrom: number; text: string } | null => {
-  if (!fragment.text) {
-    return null;
-  }
-  const normalizedStart = normalizedSource.text.indexOf(
-    fragment.text,
-    searchFrom,
-  );
-  if (normalizedStart === -1) {
-    return null;
-  }
   const normalizedEnd = normalizedStart + fragment.text.length;
   const firstSpan = sourceSpanAt(normalizedSource, normalizedStart);
   const lastSpan = sourceSpanAt(normalizedSource, normalizedEnd - 1);
@@ -773,10 +759,10 @@ const truncateHighlightAware = (text: string, maxLength: number): string => {
 };
 
 export const restoreOriginalSearchPreview = ({
-  headline,
+  headline: rawHeadline,
   maxLength,
-  normalizedSource,
-  source,
+  normalizedSource: rawNormalizedSource,
+  source: rawSource,
   useUnaccent,
 }: {
   headline: string;
@@ -785,22 +771,34 @@ export const restoreOriginalSearchPreview = ({
   source: string;
   useUnaccent: boolean;
 }): string => {
+  const headline = rawHeadline.toWellFormed();
+  const source = rawSource.toWellFormed();
+  const normalizedSource = rawNormalizedSource.toWellFormed();
   const alignedSource = alignDatabaseNormalizedSource({
     normalized: normalizedSource,
     source,
     useUnaccent,
   });
+  const fragments = headline
+    .split(SEARCH_PREVIEW_FRAGMENT_DELIMITER)
+    .map(parseHeadlineFragment)
+    .filter(({ text }) => text.length > 0);
   const restored: string[] = [];
   let searchFrom = 0;
-  for (const rawFragment of headline.split(SEARCH_PREVIEW_FRAGMENT_DELIMITER)) {
-    const parsedFragment = parseHeadlineFragment(rawFragment);
-    if (!parsedFragment.text) {
-      continue;
+  for (const parsedFragment of fragments) {
+    // Each fragment needs only its first occurrence after the previous one;
+    // collecting all overlapping matches makes repetitive sources unbounded.
+    const normalizedStart = alignedSource.text.indexOf(
+      parsedFragment.text,
+      searchFrom,
+    );
+    if (normalizedStart === -1) {
+      break;
     }
     const fragment = restoreFragment({
       fragment: parsedFragment,
       normalizedSource: alignedSource,
-      searchFrom,
+      normalizedStart,
       source,
     });
     if (!fragment) {

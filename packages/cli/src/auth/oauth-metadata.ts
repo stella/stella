@@ -3,6 +3,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { apiFetch } from "../api-fetch.js";
 import {
   AUTH_FETCH_TIMEOUT_MS,
   AUTHORIZATION_SERVER_METADATA_PATHS,
@@ -20,8 +21,7 @@ export type AuthorizationServerMetadata = {
   readonly code_challenge_methods_supported?: readonly string[] | undefined;
   readonly scopes_supported?: readonly string[] | undefined;
   readonly token_endpoint_auth_methods_supported?:
-    | readonly string[]
-    | undefined;
+    readonly string[] | undefined;
 };
 
 const authorizationServerMetadataSchema = v.object({
@@ -39,7 +39,7 @@ const fetchCandidate = async (
   url: string,
 ): Promise<AuthorizationServerMetadata | undefined> => {
   const attempt = await Result.tryPromise(async () => {
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
     });

@@ -47,15 +47,15 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
-  legalReaderAnnotations,
   caseLawSources,
-  publishedCaseLawDecisions,
   entities,
   entityVersions,
   fields,
+  legalReaderAnnotations,
   legislationDocuments,
   legislationSources,
   properties,
+  publishedCaseLawDecisions,
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
@@ -124,7 +124,6 @@ import type {
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   CorpusPayloadUnavailableError,
@@ -1051,11 +1050,11 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") &&
-      organizationId &&
-      userId
+      organizationId && userId
         ? yield* Result.await(
             buildMemoryPromptParts({
+              featureAccessSnapshot:
+                featureAccessContext?.featureAccessSnapshot,
               contextMatterIds,
               hydrateRefs: refRegistry.hydrateAssistantTextRefs,
               organizationId,
@@ -3159,8 +3158,7 @@ const buildPromptParts = ({
   // anonymizer in anonymized mode. The tail carries no cache marker, so its
   // user and volatile sections keep the order they have always had.
   const untrustedSections: (
-    | ChatUserPromptSection
-    | ChatVolatilePromptSection
+    ChatUserPromptSection | ChatVolatilePromptSection
   )[] = [
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
     chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),

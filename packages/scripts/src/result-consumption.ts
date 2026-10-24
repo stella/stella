@@ -1,14 +1,14 @@
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import {
   CODE_CHECK_LEGS,
-  ownsCodeCheckPath,
   type CodeCheckLeg,
+  ownsCodeCheckPath,
 } from "./code-quality-partition";
 import { createProgram } from "./typescript-program";
 
@@ -901,8 +901,7 @@ const createDiagnostic = ({
 };
 
 type CliOptions = (
-  | { readonly mode: "all" }
-  | { readonly base: string; readonly mode: "changed" }
+  { readonly mode: "all" } | { readonly base: string; readonly mode: "changed" }
 ) & { readonly leg?: CodeCheckLeg };
 
 export const parseResultConsumptionArgs = (

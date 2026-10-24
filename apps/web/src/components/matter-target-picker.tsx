@@ -32,12 +32,13 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
+import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 import {
   canMoveMatterFolder,
   discardPendingMatterFolder,
-  MAX_FOLDER_NAME_LENGTH,
-  matterFolderPath,
   matterFolderMoveDestinations,
+  matterFolderPath,
+  MAX_FOLDER_NAME_LENGTH,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,
@@ -449,28 +450,16 @@ export const MatterTargetPicker = ({
     ? data.workspaces.filter((w) => w.id !== excludeWorkspaceId)
     : [];
 
-  const query = search.trim().toLowerCase();
-  const visibleMatters =
-    query === ""
-      ? matters
-      : matters.filter(
-          (w) =>
-            w.name.toLowerCase().includes(query) ||
-            (w.client?.displayName ?? "").toLowerCase().includes(query),
-        );
   const selectedMatter =
     value === null
       ? undefined
       : matters.find((workspace) => workspace.id === value.workspaceId);
-  const orderedVisibleMatters =
-    query === "" && selectedMatter !== undefined
-      ? [
-          selectedMatter,
-          ...visibleMatters.filter(
-            (workspace) => workspace.id !== selectedMatter.id,
-          ),
-        ]
-      : visibleMatters;
+  const visibleMatters = filterMatterPickerItems({
+    getClientLabel: (workspace) => workspace.client?.displayName ?? "",
+    items: matters,
+    query: search,
+    selectedId: selectedMatter?.id,
+  });
 
   return (
     <div className="space-y-4">
@@ -508,7 +497,7 @@ export const MatterTargetPicker = ({
                   </p>
                 );
               }
-              return orderedVisibleMatters.map((workspace) => {
+              return visibleMatters.map((workspace) => {
                 const isSelected = value?.workspaceId === workspace.id;
                 return (
                   <button
@@ -575,8 +564,7 @@ type FolderPickerProps = {
 };
 
 type FolderDraft =
-  | { type: "create"; name: string }
-  | { type: "edit"; name: string };
+  { type: "create"; name: string } | { type: "edit"; name: string };
 
 const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();
