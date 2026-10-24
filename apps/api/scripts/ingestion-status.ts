@@ -58,8 +58,8 @@ await runScriptWithErrorOutput(async () => {
           await tx
             .select({
               sourceId: caseLawIngestionEvents.sourceId,
-              lastHour: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}) FILTER (WHERE ${caseLawIngestionEvents.finishedAt} >= ${ONE_HOUR_AGO}), 0)`,
-              lastDay: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
+              lastHour: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}) FILTER (WHERE ${caseLawIngestionEvents.finishedAt} >= ${ONE_HOUR_AGO}), 0)::int`,
+              lastDay: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)::int`,
             })
             .from(caseLawIngestionEvents)
             .where(gte(caseLawIngestionEvents.finishedAt, ONE_DAY_AGO))

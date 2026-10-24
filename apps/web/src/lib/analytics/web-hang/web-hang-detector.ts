@@ -7,8 +7,8 @@ import { Temporal } from "@stll/time";
 import { browserStorage } from "@/lib/account/browser-storage";
 import type { Analytics } from "@/lib/analytics/types";
 import {
-  PERSISTED_UI_STATE_NAMES,
   isPersistedUiStateFingerprintKey,
+  PERSISTED_UI_STATE_NAMES,
   persistedUiStateFingerprint,
   resetPersistedUiState,
 } from "@/lib/analytics/web-hang/persisted-ui-state";
@@ -271,7 +271,8 @@ export const createWebHangDetector = ({
   let reported = false;
   let notified = false;
   const frameRelay = createFrameRelay();
-  let idlePending = false;
+  let readiness: "routing" | "idle_pending" | "paused" | "interactive" =
+    "routing";
   let retirementTimer: ReturnType<typeof browser.setTimeout> | undefined;
   const persist = () => {
     if (!storageReady || stopped) {
@@ -299,10 +300,60 @@ export const createWebHangDetector = ({
     Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
     liveness.release();
   };
+  const scheduleInteractive = () => {
+    if (readiness === "idle_pending" || readiness === "interactive") {
+      return;
+    }
+    readiness = "idle_pending";
+    const interactive = () => {
+      if (stopped) {
+        readiness = "paused";
+        return;
+      }
+      if (readiness === "interactive") {
+        return;
+      }
+      readiness = "interactive";
+      marker = { ...marker, phase: "session", heartbeat: now() };
+      // Remove the failed-boot record after recovery; subsequent heartbeats
+      // describe the healthy session rather than triggering recovery again.
+      if (safeMode) {
+        Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
+      } else {
+        persist();
+      }
+      const retireBootCandidates = async () =>
+        retireAbandonedBootCandidates({
+          storage: local,
+          locks,
+          candidates: bootCandidates,
+          started: marker.started,
+          stopped: () => stopped,
+        });
+      const retirementDelay = Math.max(
+        0,
+        started + 2 * HANG_HEARTBEAT_MS - now(),
+      );
+      retirementTimer = browser.setTimeout(
+        retireBootCandidates,
+        retirementDelay,
+      );
+    };
+    if (typeof browser.requestIdleCallback === "function") {
+      browser.requestIdleCallback(interactive);
+    } else {
+      browser.requestAnimationFrame(() => {
+        browser.setTimeout(interactive, 0);
+      });
+    }
+  };
   const onShow = () => {
     stopped = false;
     liveness.acquire();
     onVisibility();
+    if (readiness === "paused") {
+      scheduleInteractive();
+    }
   };
   let timer: ReturnType<typeof browser.setInterval> | undefined;
   let observer: ReturnType<typeof observeLongAnimationFrames> = undefined;
@@ -367,46 +418,7 @@ export const createWebHangDetector = ({
     routeReady: (routeTemplate: string) => {
       marker = { ...marker, routeTemplate };
       persist();
-      if (idlePending || marker.phase === "session") {
-        return;
-      }
-      idlePending = true;
-      const interactive = () => {
-        if (stopped) {
-          return;
-        }
-        marker = { ...marker, phase: "session", heartbeat: now() };
-        // Remove the failed-boot record after recovery; subsequent heartbeats
-        // describe the healthy session rather than triggering recovery again.
-        if (safeMode) {
-          Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
-        } else {
-          persist();
-        }
-        const retireBootCandidates = async () =>
-          retireAbandonedBootCandidates({
-            storage: local,
-            locks,
-            candidates: bootCandidates,
-            started: marker.started,
-            stopped: () => stopped,
-          });
-        const retirementDelay = Math.max(
-          0,
-          started + 2 * HANG_HEARTBEAT_MS - now(),
-        );
-        retirementTimer = browser.setTimeout(
-          retireBootCandidates,
-          retirementDelay,
-        );
-      };
-      if (typeof browser.requestIdleCallback === "function") {
-        browser.requestIdleCallback(interactive);
-      } else {
-        browser.requestAnimationFrame(() => {
-          browser.setTimeout(interactive, 0);
-        });
-      }
+      scheduleInteractive();
     },
     notifyRecovery: (notify: () => void) => {
       if (!safeMode || notified) {

@@ -18,21 +18,21 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import {
-  DocumentWriteRefusedError,
   documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
-  createModelActionAdmitter,
   type AdmittedModelAction,
+  createModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import {
   DOCX_EXT_RE,
-  sanitizeFilename,
   type SanitizedFileName,
+  sanitizeFilename,
 } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { recordTemplateFill } from "@/api/lib/templates/record-use";
@@ -42,9 +42,9 @@ import {
   templateFillStatus,
 } from "@/api/lib/templates/template-fill-completion";
 import {
+  type AiFillAdmission,
   fillTemplateDocx,
   loadStoredTemplateSource,
-  type AiFillAdmission,
 } from "@/api/lib/templates/template-fill-service";
 import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";

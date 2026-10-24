@@ -7,9 +7,9 @@ import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 import { logger } from "@/api/lib/observability/logger";
 
 import {
+  isSanctionsMatcherCancelled,
   SANCTIONS_MATCHER_CONFIG,
   sharedSanctionsMatcherPool,
-  isSanctionsMatcherCancelled,
 } from "./matcher-pool";
 import type { MatcherWorkOutcome } from "./matcher-pool";
 import type { SanctionsReadDb } from "./read-db";

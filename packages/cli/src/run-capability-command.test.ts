@@ -511,6 +511,38 @@ describe("runCapabilityCommand: compound scope preflight", () => {
 });
 
 describe("runCapabilityCommand: confirm gates", () => {
+  test("reversible confirmation-required capabilities need fresh approval", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({
+      capabilityId: "memories.create",
+      access: "write",
+      destructive: false,
+      confirmation: "required",
+    });
+    const denied = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: denied.context, flags: {}, spec });
+    expect(denied.exitCode()).toBe(EXIT_CODES.aborted);
+    expect(server.calls).toHaveLength(0);
+    expect(denied.stderrText()).toContain("requiring approval");
+    const allowed = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: allowed.context,
+      flags: { yes: true },
+      spec,
+    });
+    expect(allowed.exitCode()).toBeUndefined();
+    expect(lastInvoke(server.calls)["confirm"]).toBe(true);
+    server.stop();
+  });
+
   test("a read with --yes never sends confirmation arguments", async () => {
     const server = startServer({ kind: "echo" });
     const tty = makeTtyContext({

@@ -250,6 +250,9 @@ test("a new tab consumes a stale terminated-tab boot while live tabs remain isol
 test("duplicated session ids cannot share document markers or erase a neighbor's hang evidence", () => {
   const firstFrame = document.createElement("iframe");
   const secondFrame = document.createElement("iframe");
+  // Isolated document windows need no iframe navigation or network access.
+  firstFrame.srcdoc = "<html><body></body></html>";
+  secondFrame.srcdoc = "<html><body></body></html>";
   document.body.append(firstFrame, secondFrame);
   const firstBrowser = firstFrame.contentWindow;
   const secondBrowser = secondFrame.contentWindow;
@@ -527,6 +530,76 @@ test("pagehide releases the liveness lock with the marker and pageshow takes bot
   expect(fake.held.has(markerKey ?? "")).toBe(true);
   expect(local.getItem(markerKey ?? "")).not.toBeNull();
 });
+test.each([
+  { boot: "normal", idleDelivery: "hidden" },
+  { boot: "normal", idleDelivery: "restored" },
+  { boot: "recovery", idleDelivery: "hidden" },
+  { boot: "recovery", idleDelivery: "restored" },
+] as const)(
+  "a restored document completes its ready boot (%o)",
+  async ({ boot, idleDelivery }) => {
+    if (boot === "recovery") {
+      seed("boot");
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      window,
+      "requestIdleCallback",
+    );
+    const tasks: (() => void)[] = [];
+    Object.defineProperty(window, "requestIdleCallback", {
+      configurable: true,
+      value: (task: () => void) => {
+        tasks.push(task);
+        return tasks.length;
+      },
+    });
+    const runIdle = () => {
+      const task = tasks.shift();
+      if (task === undefined) {
+        throw new DOMException("A scheduled idle callback is required");
+      }
+      task();
+    };
+    try {
+      const fake = createFakeLocks();
+      const { detector, markerKey } = setup({ locks: fake.locks });
+      if (markerKey === undefined) {
+        throw new DOMException("New document marker required");
+      }
+      detector.routeReady("/chat/$threadId");
+      expect(tasks).toHaveLength(1);
+      expect(local.getItem(markerKey)).toContain('"phase":"boot"');
+      window.dispatchEvent(new Event("pagehide"));
+      await sleep(0);
+      expect(fake.held.has(markerKey)).toBe(false);
+      if (idleDelivery === "hidden") {
+        runIdle();
+        expect(tasks).toHaveLength(0);
+      }
+      expect(local.getItem(markerKey)).toBeNull();
+      window.dispatchEvent(new Event("pageshow"));
+      await sleep(0);
+      expect(fake.held.has(markerKey)).toBe(true);
+      expect(tasks).toHaveLength(1);
+      expect(local.getItem(markerKey)).toContain('"phase":"boot"');
+      runIdle();
+      if (boot === "recovery") {
+        expect(local.getItem(markerKey)).toBeNull();
+      }
+      window.document.dispatchEvent(new Event("visibilitychange"));
+      expect(local.getItem(markerKey)).toContain('"phase":"session"');
+      detector.routeReady("/chat/$threadId");
+      expect(tasks).toHaveLength(0);
+      expect(local.getItem(markerKey)).toContain('"phase":"session"');
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(window, "requestIdleCallback", descriptor);
+      } else {
+        Reflect.deleteProperty(window, "requestIdleCallback");
+      }
+    }
+  },
+);
 test("a document holds its liveness lock until it is disposed", async () => {
   const fake = createFakeLocks();
   const { detector, markerKey } = setup({ locks: fake.locks });
