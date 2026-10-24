@@ -12,6 +12,7 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import {
   readInvoicePrefillContext,
@@ -23,6 +24,7 @@ import {
   timekeeperIdsOf,
 } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBoundedByGroup } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
@@ -95,9 +97,7 @@ const readInvoicePrefillSources = async (
         ne(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
       ),
     )
-    .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
-    .limit(PREFILL_ENTRY_LIMIT + 1)
-    .as("prefill_entries");
+    .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id));
   const eligibleExpenses = tx
     .select({
       id: expenses.id,
@@ -120,61 +120,77 @@ const readInvoicePrefillSources = async (
         isNull(expenses.invoiceId),
       ),
     )
-    .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
-    .limit(PREFILL_ENTRY_LIMIT + 1)
-    .as("prefill_expenses");
+    .orderBy(asc(expenses.dateIncurred), asc(expenses.id));
   const selectedMatters = and(
     eq(workspaces.organizationId, organizationId),
     inArray(workspaces.id, workspaceIds),
   );
   const [entries, expenseRows, arrangements, timeZone, context] =
     await Promise.all([
-      tx
-        .select({
-          workspaceId: workspaces.id,
-          entry: {
-            id: eligibleEntries.id,
-            userId: eligibleEntries.userId,
-            dateWorked: eligibleEntries.dateWorked,
-            durationMinutes: eligibleEntries.durationMinutes,
-            billedMinutes: eligibleEntries.billedMinutes,
-            rateAtEntry: eligibleEntries.rateAtEntry,
-            currency: eligibleEntries.currency,
-            narrative: eligibleEntries.narrative,
-            invoiceNarrative: eligibleEntries.invoiceNarrative,
-            noCharge: eligibleEntries.noCharge,
-            taskCode: eligibleEntries.taskCode,
-            activityCode: eligibleEntries.activityCode,
-          },
-        })
-        .from(workspaces)
-        .innerJoinLateral(eligibleEntries, sql`true`)
-        .where(selectedMatters)
-        .orderBy(workspaces.id, eligibleEntries.dateWorked, eligibleEntries.id)
-        .limit(workspaceIds.length * (PREFILL_ENTRY_LIMIT + 1)),
-      tx
-        .select({
-          workspaceId: workspaces.id,
-          expense: {
-            id: eligibleExpenses.id,
-            dateIncurred: eligibleExpenses.dateIncurred,
-            amount: eligibleExpenses.amount,
-            markup: eligibleExpenses.markup,
-            currency: eligibleExpenses.currency,
-            category: eligibleExpenses.category,
-            description: eligibleExpenses.description,
-            invoiceDescription: eligibleExpenses.invoiceDescription,
-          },
-        })
-        .from(workspaces)
-        .innerJoinLateral(eligibleExpenses, sql`true`)
-        .where(selectedMatters)
-        .orderBy(
-          workspaces.id,
-          eligibleExpenses.dateIncurred,
-          eligibleExpenses.id,
-        )
-        .limit(workspaceIds.length * (PREFILL_ENTRY_LIMIT + 1)),
+      readBoundedByGroup(eligibleEntries, {
+        cap: PREFILL_ENTRY_LIMIT,
+        readRows: (limited) => {
+          const limitedEntries = limited.as("prefill_entries");
+          return tx
+            .select({
+              workspaceId: workspaces.id,
+              entry: {
+                id: limitedEntries.id,
+                userId: limitedEntries.userId,
+                dateWorked: limitedEntries.dateWorked,
+                durationMinutes: limitedEntries.durationMinutes,
+                billedMinutes: limitedEntries.billedMinutes,
+                rateAtEntry: limitedEntries.rateAtEntry,
+                currency: limitedEntries.currency,
+                narrative: limitedEntries.narrative,
+                invoiceNarrative: limitedEntries.invoiceNarrative,
+                noCharge: limitedEntries.noCharge,
+                taskCode: limitedEntries.taskCode,
+                activityCode: limitedEntries.activityCode,
+              },
+            })
+            .from(workspaces)
+            .innerJoinLateral(limitedEntries, sql`true`)
+            .where(selectedMatters)
+            .orderBy(
+              workspaces.id,
+              limitedEntries.dateWorked,
+              limitedEntries.id,
+            )
+            .limit(workspaceIds.length * (PREFILL_ENTRY_LIMIT + 1));
+        },
+        groupKeyOf: (row) => row.workspaceId,
+      }),
+      readBoundedByGroup(eligibleExpenses, {
+        cap: PREFILL_ENTRY_LIMIT,
+        readRows: (limited) => {
+          const limitedExpenses = limited.as("prefill_expenses");
+          return tx
+            .select({
+              workspaceId: workspaces.id,
+              expense: {
+                id: limitedExpenses.id,
+                dateIncurred: limitedExpenses.dateIncurred,
+                amount: limitedExpenses.amount,
+                markup: limitedExpenses.markup,
+                currency: limitedExpenses.currency,
+                category: limitedExpenses.category,
+                description: limitedExpenses.description,
+                invoiceDescription: limitedExpenses.invoiceDescription,
+              },
+            })
+            .from(workspaces)
+            .innerJoinLateral(limitedExpenses, sql`true`)
+            .where(selectedMatters)
+            .orderBy(
+              workspaces.id,
+              limitedExpenses.dateIncurred,
+              limitedExpenses.id,
+            )
+            .limit(workspaceIds.length * (PREFILL_ENTRY_LIMIT + 1));
+        },
+        groupKeyOf: (row) => row.workspaceId,
+      }),
       tx
         .select({
           workspaceId: billingArrangements.workspaceId,
@@ -200,21 +216,18 @@ export const readMatterInvoicePrefills = async (
   tx: Transaction,
   options: MatterPrefillsOptions,
 ) => {
-  const { workspaceIds } = options;
+  const { organizationId, workspaceIds } = options;
   if (workspaceIds.length > LIMITS.clientInvoiceMatters) {
     panic("Invoice prefill matter selection exceeds its bound");
   }
-  const { entries, expenseRows, arrangements, timeZone, context } =
-    await readInvoicePrefillSources(tx, options);
-  const entriesByMatter = Map.groupBy(entries, (row) => row.workspaceId);
-  const expensesByMatter = Map.groupBy(expenseRows, (row) => row.workspaceId);
-  if (
-    workspaceIds.some(
-      (workspaceId: SafeId<"workspace">) =>
-        (entriesByMatter.get(workspaceId)?.length ?? 0) > PREFILL_ENTRY_LIMIT ||
-        (expensesByMatter.get(workspaceId)?.length ?? 0) > PREFILL_ENTRY_LIMIT,
-    )
-  ) {
+  const {
+    entries: entryRead,
+    expenseRows: expenseRead,
+    arrangements,
+    timeZone,
+    context,
+  } = await readInvoicePrefillSources(tx, options);
+  if (entryRead.type === "overflow" || expenseRead.type === "overflow") {
     return Result.err(
       new HandlerError({
         status: 409,
@@ -224,6 +237,10 @@ export const readMatterInvoicePrefills = async (
       }),
     );
   }
+  const entries = entryRead.rows;
+  const expenseRows = expenseRead.rows;
+  const entriesByMatter = Map.groupBy(entries, (row) => row.workspaceId);
+  const expensesByMatter = Map.groupBy(expenseRows, (row) => row.workspaceId);
   const userIds = timekeeperIdsOf(entries.map(({ entry }) => entry));
   const names =
     userIds.size === 0
@@ -235,10 +252,10 @@ export const readMatterInvoicePrefills = async (
   );
   const invoiceDate = todayFor(timeZone).toString();
   const prefills = workspaceIds.map((workspaceId: SafeId<"workspace">) => {
-    const shownEntries = (entriesByMatter.get(workspaceId) ?? []).map(
+    const shownEntries = arrayOrEmpty(entriesByMatter.get(workspaceId)).map(
       ({ entry }) => entry,
     );
-    const shownExpenses = (expensesByMatter.get(workspaceId) ?? []).map(
+    const shownExpenses = arrayOrEmpty(expensesByMatter.get(workspaceId)).map(
       ({ expense }) => expense,
     );
     const supplyDate = latestDate(

@@ -383,10 +383,15 @@ if (!databaseUrl || !runPostgres) {
       // The fixture already has one other-client matter: these populations
       // contain exactly 10 and 200, while the requested client keeps two.
       await db.insert(workspaces).values(unrelatedMatters.slice(0, 9));
-      const context = prefillContext(scenario);
-      const at10 = await clientInvoicePrefillScalingScenario.measure(context);
+      // Admission stores its feature snapshot on the request context. Each
+      // measured request starts cold instead of inheriting an earlier read.
+      const at10 = await clientInvoicePrefillScalingScenario.measure(
+        prefillContext(scenario),
+      );
       await db.insert(workspaces).values(unrelatedMatters.slice(9));
-      const at200 = await clientInvoicePrefillScalingScenario.measure(context);
+      const at200 = await clientInvoicePrefillScalingScenario.measure(
+        prefillContext(scenario),
+      );
       const expectedMatters = [scenario.firstMatterId, scenario.secondMatterId];
       for (const measurement of [at10, at200]) {
         expect(measurement.rows).toBe(2);
@@ -423,12 +428,16 @@ if (!databaseUrl || !runPostgres) {
         .update(workspaces)
         .set({ status: "archived" })
         .where(eq(workspaces.id, scenario.secondMatterId));
-      const atOne = await clientInvoicePrefillScalingScenario.measure(context);
+      const atOne = await clientInvoicePrefillScalingScenario.measure(
+        prefillContext(scenario),
+      );
       await db
         .update(workspaces)
         .set({ status: "active" })
         .where(eq(workspaces.id, scenario.secondMatterId));
-      const atTwo = await clientInvoicePrefillScalingScenario.measure(context);
+      const atTwo = await clientInvoicePrefillScalingScenario.measure(
+        prefillContext(scenario),
+      );
       const additional = Array.from(
         { length: LIMITS.clientInvoiceMatters - 2 },
         () => {
@@ -443,8 +452,9 @@ if (!databaseUrl || !runPostgres) {
         },
       );
       await db.insert(workspaces).values(additional);
-      const atLimit =
-        await clientInvoicePrefillScalingScenario.measure(context);
+      const atLimit = await clientInvoicePrefillScalingScenario.measure(
+        prefillContext(scenario),
+      );
       expect([atOne.rows, atTwo.rows, atLimit.rows]).toEqual([
         1,
         2,

@@ -98,6 +98,7 @@ type ToolCallOp = { args: string[] };
 type AnswerOp =
   | { kind: "reasoning"; delta: string }
   | { kind: "status" }
+  | { kind: "snapshot" }
   | { kind: "text"; delta: string }
   | { calls: ToolCallOp[]; kind: "tools" };
 
@@ -132,6 +133,10 @@ const answerBody = (
           messageId: `${answerId}-reasoning-${String(steps)}`,
           delta: op.delta,
         });
+        break;
+      case "snapshot":
+        // Materialized from the current messages when the stream yields it.
+        chunks.push({ type: EventType.MESSAGES_SNAPSHOT, messages: [] });
         break;
       case "status":
         steps += 1;
@@ -226,6 +231,7 @@ const answerOpArb: fc.Arbitrary<AnswerOp> = fc.oneof(
   textArb.map((delta) => ({ kind: "text" as const, delta })),
   textArb.map((delta) => ({ kind: "reasoning" as const, delta })),
   fc.constant({ kind: "status" as const }),
+  fc.constant({ kind: "snapshot" as const }),
   fc
     .array(fc.record({ args: argsArb }), {
       minLength: MIN_ONE,
@@ -348,6 +354,8 @@ type Cause = StreamChunk | "approval" | "regenerate" | "send" | "stop";
 
 type Emit = {
   cause: Cause;
+  /** STEP_STARTED changes SDK state without emitting messages. */
+  stepName: string | undefined;
   /** The cached projections equal fresh ones over the same messages. */
   fresh: boolean;
   shown: ChatUIMessage[];
@@ -372,6 +380,7 @@ const streamSession = async ({
   let stopped = false;
   const watch = createChangeWatch();
   let cause: Cause = "send";
+  let stepName: string | undefined;
   let latest: UIMessage<ChatClientTools>[] = [];
   let approvalId: string | undefined;
   let stop: () => void = () => undefined;
@@ -414,7 +423,11 @@ const streamSession = async ({
       messageId: answerId,
       role: "assistant",
     };
-    yield* chunks;
+    for (const chunk of chunks) {
+      yield chunk.type === EventType.MESSAGES_SNAPSHOT
+        ? buildWireSnapshot(latest)
+        : chunk;
+    }
     if (spec.end === "stop") {
       cause = "stop";
       stopped = true;
@@ -460,13 +473,27 @@ const streamSession = async ({
     },
     onChunk: (chunk) => {
       cause = chunk;
+      if (
+        chunk.type === EventType.RUN_STARTED ||
+        chunk.type === EventType.MESSAGES_SNAPSHOT
+      ) {
+        stepName = undefined;
+      } else if (chunk.type === EventType.STEP_STARTED) {
+        stepName = chunk.stepName;
+      }
+      // STEP_FINISHED retains the SDK's current thinking step.
     },
     onMessagesChange: (messages) => {
       latest = messages;
       const shown = onMessages(messages);
       watch.observe(messages);
       watch.observe(shown);
-      emits.push({ cause, fresh: matchesFreshProjection(messages), shown });
+      emits.push({
+        cause,
+        stepName,
+        fresh: matchesFreshProjection(messages),
+        shown,
+      });
     },
   });
   stop = () => {
@@ -703,20 +730,12 @@ const expectStableStreamIdentity = ({
 }: StreamIdentityObservation) => {
   expect(changed).toEqual([]);
   const historyIds = new Set(history.map(({ id }) => id));
-  let stepName: string | undefined;
   for (const [index, next] of emits.entries()) {
     expect({ cause: next.cause, fresh: next.fresh }).toMatchObject({
       fresh: true,
     });
     const previous = emits.at(index - 1);
-    const { cause } = next;
-    if (typeof cause === "object") {
-      if (cause.type === EventType.RUN_STARTED) {
-        stepName = undefined;
-      } else if (cause.type === EventType.STEP_STARTED) {
-        stepName = cause.stepName;
-      }
-    }
+    const { cause, stepName } = next;
     // A page action (approval, stop, regenerate) may rebuild messages.
     if (index === 0 || previous === undefined || typeof cause !== "object") {
       continue;
@@ -811,7 +830,12 @@ describe("streamed chunks keep what they do not change", () => {
       messageId: "step",
       delta: " reasoning",
     } as const;
-    const before = { cause, fresh: true, shown: [earlier, active] };
+    const before = {
+      cause,
+      stepName: "step",
+      fresh: true,
+      shown: [earlier, active],
+    };
     const continued = {
       ...active,
       parts: [
@@ -825,7 +849,10 @@ describe("streamed chunks keep what they do not change", () => {
     expectStableStreamIdentity({
       changed: [],
       history: [],
-      emits: [before, { cause, fresh: true, shown: [earlier, continued] }],
+      emits: [
+        before,
+        { cause, stepName: "step", fresh: true, shown: [earlier, continued] },
+      ],
     });
     expect(() =>
       expectStableStreamIdentity({
@@ -833,7 +860,12 @@ describe("streamed chunks keep what they do not change", () => {
         history: [],
         emits: [
           before,
-          { cause, fresh: true, shown: [{ ...earlier }, continued] },
+          {
+            cause,
+            stepName: "step",
+            fresh: true,
+            shown: [{ ...earlier }, continued],
+          },
         ],
       }),
     ).toThrow("expect(received).toBe(expected)");
@@ -863,7 +895,10 @@ describe("streamed chunks keep what they do not change", () => {
             ],
           },
           { kind: "text", delta: "\n\n" },
+          { kind: "snapshot" },
+          { kind: "status" },
           { kind: "reasoning", delta: "Reasoning after tool results" },
+          { kind: "reasoning", delta: " and more reasoning" },
           { kind: "status" },
           { kind: "status" },
         ],
@@ -885,30 +920,26 @@ describe("streamed chunks keep what they do not change", () => {
     const observed = await streamSession({ session });
     expectStableStreamIdentity({ ...observed, history });
     const historyIds = new Set(history.map(({ id }) => id));
-    let stepName: string | undefined;
-    const reachedFallbackReasoning = observed.emits.some(({ cause, shown }) => {
-      if (typeof cause !== "object") {
-        return false;
-      }
-      if (cause.type === EventType.RUN_STARTED) {
-        stepName = undefined;
-      } else if (cause.type === EventType.STEP_STARTED) {
-        stepName = cause.stepName;
-      }
-      return shown.some(
-        (message) =>
-          !STREAMED_IDS.has(message.id) &&
-          reasoningTargetsMessage({
-            cause,
-            message,
-            historyIds,
-            activeAssistantId: shown.findLast(
-              ({ id, role }) => role === "assistant" && !historyIds.has(id),
-            )?.id,
-            stepName,
-          }),
-      );
-    });
+    const reachedFallbackReasoning = observed.emits.some(
+      ({ cause, shown, stepName }) => {
+        if (typeof cause !== "object") {
+          return false;
+        }
+        return shown.some(
+          (message) =>
+            !STREAMED_IDS.has(message.id) &&
+            reasoningTargetsMessage({
+              cause,
+              message,
+              historyIds,
+              activeAssistantId: shown.findLast(
+                ({ id, role }) => role === "assistant" && !historyIds.has(id),
+              )?.id,
+              stepName,
+            }),
+        );
+      },
+    );
     expect(reachedFallbackReasoning).toBe(true);
   });
 
