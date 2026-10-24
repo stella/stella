@@ -1,5 +1,4 @@
 ---
-"@stll/api-contract": patch
 "@stll/cli": minor
 ---
 
