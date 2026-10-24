@@ -777,6 +777,38 @@ const cleanupExpressionPaths = (
   return new Set(["continues"]);
 };
 
+const cleanupCompletionPaths = (
+  proof: CleanupProof,
+  node: AstNode,
+): Set<UncancelledPath> => {
+  if (proof.cancels.some((cancel) => cancel.node === node)) {
+    return new Set();
+  }
+  if (
+    proof.setup !== undefined &&
+    enclosingFunctions(node).at(0) === proof.setup.effect
+  ) {
+    if (
+      node.range[0] < proof.setup.start.range[0] &&
+      !isWithin(proof.setup.start, node)
+    ) {
+      return new Set();
+    }
+    if (node.type === "ReturnStatement") {
+      proof.setup.returns.add(node);
+    }
+  }
+  return new Set(
+    [...cleanupExpressionPaths(proof, node.argument)].map((path) =>
+      path === "continues"
+        ? node.type === "ReturnStatement"
+          ? "returns"
+          : "throws"
+        : path,
+    ),
+  );
+};
+
 // Only uncancelled paths remain. Safe branches disappear; returns, throws,
 // loops and suspension cannot be repaired by a later unreachable cancel.
 const cleanupPaths = (
@@ -839,33 +871,9 @@ const cleanupPaths = (
     return paths;
   }
   if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
-    if (proof.cancels.some((cancel) => cancel.node === node)) {
-      return new Set();
-    }
-    if (
-      proof.setup !== undefined &&
-      enclosingFunctions(node).at(0) === proof.setup.effect
-    ) {
-      if (
-        node.range[0] < proof.setup.start.range[0] &&
-        !isWithin(proof.setup.start, node)
-      ) {
-        return new Set();
-      }
-      if (node.type === "ReturnStatement") {
-        proof.setup.returns.add(node);
-      }
-    }
-    return new Set(
-      [...cleanupExpressionPaths(proof, node.argument)].map((path) =>
-        path === "continues"
-          ? node.type === "ReturnStatement"
-            ? "returns"
-            : "throws"
-          : path,
-      ),
-    );
+    return cleanupCompletionPaths(proof, node);
   }
+
   if (proof.setup !== undefined && finiteForLoop(proof.context, node)) {
     return continueCleanupPaths(
       cleanupExpressionPaths(proof, node.test),
@@ -1041,7 +1049,7 @@ const mutuallyExclusiveBranches = (left: AstNode, right: AstNode): boolean => {
     if (parent.type === "TryStatement") {
       crossesTry = true;
     }
-    if (parent.type === "IfStatement" && right.range[0] > parent.range[1]) {
+    if (parent.type === "IfStatement" && right.range[0] >= parent.range[1]) {
       const branch =
         isAstNode(parent.consequent) && isWithin(left, parent.consequent)
           ? parent.consequent
@@ -1451,40 +1459,43 @@ const returnsCreatedHandle = ({
   const valuePath = invocationPath.filter(
     (call) => !context.effectRegistrations.has(call),
   );
-  return valuePath.every((call, index) => {
-    const factory = namedCallTarget(context, call);
-    const expected = valuePath.at(index + 1) ?? start;
-    if (
-      factory === null ||
-      factory.async === true ||
-      factory.generator === true ||
-      !isAstNode(factory.body)
-    ) {
-      return false;
-    }
-    const returnsValue = (expression: unknown) =>
-      returnsHandleValue({ context, expression, expected, budget });
-    if (factory.body.type !== "BlockStatement") {
-      return returnsValue(factory.body);
-    }
-    const returns = new Set<AstNode>();
-    const exits = cleanupPaths(
-      {
-        context,
-        handle: { kind: "transferred", transfer: "returned" },
-        cancels: [],
-        visiting: new Set(),
-        completed: new Map(),
-        setup: { effect: factory, start: expected, returns },
-      },
-      factory.body,
-    );
-    return (
-      [...exits].every((exit) => exit === "returns") &&
-      returns.size > 0 &&
-      [...returns].every((node) => returnsValue(node.argument))
-    );
-  });
+  return (
+    valuePath.length > 0 &&
+    valuePath.every((call, index) => {
+      const factory = namedCallTarget(context, call);
+      const expected = valuePath.at(index + 1) ?? start;
+      if (
+        factory === null ||
+        factory.async === true ||
+        factory.generator === true ||
+        !isAstNode(factory.body)
+      ) {
+        return false;
+      }
+      const returnsValue = (expression: unknown) =>
+        returnsHandleValue({ context, expression, expected, budget });
+      if (factory.body.type !== "BlockStatement") {
+        return returnsValue(factory.body);
+      }
+      const returns = new Set<AstNode>();
+      const exits = cleanupPaths(
+        {
+          context,
+          handle: { kind: "transferred", transfer: "returned" },
+          cancels: [],
+          visiting: new Set(),
+          completed: new Map(),
+          setup: { effect: factory, start: expected, returns },
+        },
+        factory.body,
+      );
+      return (
+        [...exits].every((exit) => exit === "returns") &&
+        returns.size > 0 &&
+        [...returns].every((node) => returnsValue(node.argument))
+      );
+    })
+  );
 };
 
 type ReturnedCleanupOptions = {
@@ -1700,11 +1711,10 @@ const ownsOwnerCleanup = ({
   );
 };
 
-const isOwned = (
+const resolveLoopHandle = (
   context: LoopContext,
-  cancels: Cancel[],
-  { owner: origin, loopBody, start }: OwnedLoop,
-): boolean => {
+  { owner: origin, start }: Pick<OwnedLoop, "owner" | "start">,
+) => {
   const effectAnchor =
     origin.type === "factory-contract" ? start : origin.effectAnchor;
   const invocationPath =
@@ -1717,23 +1727,33 @@ const isOwned = (
   let handle = handleOf(context, start);
   if (effect !== null) {
     const returnedHandle =
+      origin.type === "effect-startup" &&
       effectAnchor !== start &&
       invocationPath !== undefined &&
       returnsCreatedHandle({ context, invocationPath, start });
     if (returnedHandle) {
       handle = handleOf(context, effectAnchor);
       ownershipStart = effectAnchor;
-    } else if (
-      handle?.kind === "transferred" &&
-      handle.transfer === "returned"
-    ) {
-      return false;
     }
     // React's returned value must be a cleanup, rather than the timer handle.
     if (handle?.kind === "transferred" && handle.transfer === "returned") {
-      return false;
+      return null;
     }
   }
+  return { effectAnchor, invocationPath, effect, ownershipStart, handle };
+};
+
+const isOwned = (
+  context: LoopContext,
+  cancels: Cancel[],
+  { owner: origin, loopBody, start }: OwnedLoop,
+): boolean => {
+  const resolved = resolveLoopHandle(context, { owner: origin, start });
+  if (resolved === null) {
+    return false;
+  }
+  const { effectAnchor, invocationPath, effect, ownershipStart, handle } =
+    resolved;
   if (
     handle === null ||
     hasAmbiguousHandleWrites({
@@ -2129,6 +2149,9 @@ type AsyncFrameOwnerOptions = Pick<
   unowned: Set<AstNode>;
 };
 
+type AsyncFrameOwnership =
+  LoopOwner | { type: "unowned-startup"; node: AstNode };
+
 // An asynchronous frame callback inherits effect ownership only from a
 // retained kickoff on a proven startup path, not lexical nesting alone.
 const asyncFrameOwner = ({
@@ -2139,7 +2162,8 @@ const asyncFrameOwner = ({
   loopBody,
   budget,
   unowned,
-}: AsyncFrameOwnerOptions): LoopOwner => {
+}: AsyncFrameOwnerOptions): AsyncFrameOwnership => {
+  let unownedStartup: AstNode | undefined;
   for (const kickoff of starts) {
     if (kickoff.loopBody !== loopBody || isWithin(kickoff.node, loopBody)) {
       continue;
@@ -2177,9 +2201,14 @@ const asyncFrameOwner = ({
           invocationPath: path,
         };
       }
+      if (paths.length > 0) {
+        unownedStartup ??= kickoff.node;
+      }
     }
   }
-  return { type: "factory-contract" };
+  return unownedStartup === undefined
+    ? { type: "factory-contract" }
+    : { type: "unowned-startup", node: unownedStartup };
 };
 
 const loopOwnershipReports = ({
@@ -2252,7 +2281,9 @@ const loopOwnershipReports = ({
             unowned,
           })
         : ({ type: "factory-contract" } as const);
-    if (
+    if (fallbackOwner.type === "unowned-startup") {
+      unowned.add(fallbackOwner.node);
+    } else if (
       !reached &&
       !isOwned(context, cancels, { owner: fallbackOwner, loopBody, start })
     ) {

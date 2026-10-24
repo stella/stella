@@ -243,6 +243,30 @@ test("only mutually exclusive writes can share one cleanup handle", async () => 
   expect(results).toEqual(cases.map(([, owned]) => owned));
 });
 
+test("returning guards preserve ownership across source separators", async () => {
+  const results = await Promise.all(
+    ["", " ", "\n", "/* next branch */"].flatMap((separator) =>
+      ["interval", "frame"].flatMap((kind) =>
+        ["id", "ref.current"].map(async (target) => {
+          const declaration =
+            target === "id" ? "let id;" : "const ref={current:0};";
+          const allocate =
+            kind === "interval"
+              ? "setInterval(tick,10)"
+              : "requestAnimationFrame(tick)";
+          const cancel =
+            kind === "interval" ? "clearInterval" : "cancelAnimationFrame";
+          return lintSingleRule(
+            RULE,
+            `useMountEffect(()=>{${declaration}if(enabled){${target}=${allocate};return()=>${cancel}(${target});}${separator}${target}=${allocate};return()=>${cancel}(${target});});`,
+          );
+        }),
+      ),
+    ),
+  );
+  expect(results).toEqual(results.map(() => []));
+});
+
 test("named effect callbacks use the same cleanup ownership proof", async () => {
   const cases = [
     [
@@ -309,9 +333,7 @@ test("named effect callbacks use the same cleanup ownership proof", async () => 
       }),
     ),
   );
-  expect(results).toEqual(
-    hooks.flatMap(() => cases.map(([, , owned]) => owned)),
-  );
+  expect(results).toEqual(hooks.flatMap(() => cases.map((entry) => entry[2])));
 });
 
 test("effect registrations distinguish shared handles from fresh allocations", async () => {
@@ -738,6 +760,35 @@ for (const callback of [
     });
   }
 }
+
+test("an owned kickoff cannot hide another discarded kickoff of the same loop", async () => {
+  for (const ownedFirst of [false, true]) {
+    const setup = [
+      "useMountEffect(() => {",
+      "  let frame = 0;",
+      "  const tick = () => {",
+      "    if (visible()) frame = requestAnimationFrame(tick);",
+      "  };",
+    ];
+    const owned = [
+      "  frame = requestAnimationFrame(tick);",
+      "  cancelAnimationFrame(frame);",
+    ];
+    const discarded = "  requestAnimationFrame(tick);";
+    const starts = ownedFirst ? [...owned, discarded] : [discarded, ...owned];
+    expect(
+      await lintSingleRule(
+        RULE,
+        [
+          ...setup,
+          ...starts,
+          "  return () => cancelAnimationFrame(frame);",
+          "});",
+        ].join("\n"),
+      ),
+    ).toEqual([ownedFirst ? 8 : 6]);
+  }
+});
 
 for (const [progress, comparison, bounded] of [
   ["n++", "n < 10", true],
@@ -1221,7 +1272,7 @@ test("setup loops require proven termination and cleanup on every exit", async (
         const declaration = member
           ? "const ref={current:0};ref.current=setInterval(tick,10);"
           : "let id=setInterval(tick,10);";
-        const source = `useEffect(()=>{${declaration}${body.replaceAll("id", target)}return()=>clearInterval(${target});},[]);`;
+        const source = `useEffect(()=>{${declaration}${body.replaceAll("id", () => target)}return()=>clearInterval(${target});},[]);`;
         return [(await lintSingleRule(RULE, source)).length === 0, owned];
       }),
     ),
