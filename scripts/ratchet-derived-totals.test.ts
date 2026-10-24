@@ -186,6 +186,7 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
       temporary,
       "clone",
       "--quiet",
+      // Keep each fixture's object database independent of its disposable seed.
       "--no-local",
       ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
       seed,
