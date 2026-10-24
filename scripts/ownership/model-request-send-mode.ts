@@ -74,6 +74,11 @@ export default {
     names: MODEL_REQUEST_NAMES,
     allowed: [
       {
+        path: "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
+        reason:
+          "Sends selected activity evidence, own bounded time history and authorized guideline files; carries no chat transcript. Both consent gates are checked live.",
+      },
+      {
         path: "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
         reason:
           "Proposes an answer rewrite from stored content; reads the thread send mode after loading the answer and refuses anonymized threads.",

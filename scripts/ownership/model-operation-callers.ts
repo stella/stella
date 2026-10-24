@@ -4,6 +4,7 @@ export default {
   id: "model-operation-callers",
   capability: "Registering model operation entry points",
   owner: [
+    "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
     "apps/api/src/handlers/ai-autocomplete/stream.ts",
     "apps/api/src/handlers/case-law/analysis/generate.ts",
     "apps/api/src/handlers/case-law/analysis/significance-run.ts",

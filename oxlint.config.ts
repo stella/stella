@@ -2831,6 +2831,18 @@ const config = defineConfig({
           {
             approvedAdapters: [
               {
+                path: "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
+                binding: "billingDraftReviewSchema",
+                reason:
+                  "Runtime response schema and static type derive from the same strict shared Valibot contract.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/billing-draft-settings.ts",
+                binding: "billingDraftSettingsResponseSchema",
+                reason:
+                  "Runtime response schema and static type derive from the same strict shared Valibot contract.",
+              },
+              {
                 path: "apps/api/src/handlers/desktop-time-entries/batch.ts",
                 binding: "responseSchema",
                 reason:
