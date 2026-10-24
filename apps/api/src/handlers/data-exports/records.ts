@@ -265,6 +265,7 @@ export const INVOICE_LINE_COLUMNS = {
   unitPrice: "export",
   vatRateBps: "export",
   vatTreatment: "export",
+  exemptionReason: "export",
   netAmount: "export",
   vatAmount: "export",
   grossAmount: "export",
