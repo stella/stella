@@ -302,6 +302,8 @@ runtime validation, or integration tests.
 
 ## Native and shared rules
 
+- [`require-stable-geometry`](./require-stable-geometry.ts) (`require-stable-geometry`): geometry specs use the shared stable-geometry helper; direct Playwright sleeps, viewport changes, and `boundingBox()` reads are rejected.
+
 Do not recreate a project plugin when an enabled native rule expresses the same
 invariant more accurately:
 
