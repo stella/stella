@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 
-import type { MarginItem } from "./analysis/margin-notes";
-import { MARGIN_NOTE_KIND_ATTRIBUTE } from "./analysis/margin-notes.logic";
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
+import { MARGIN_NOTE_KIND_ATTRIBUTE } from "@/components/legal-reader/margin-notes.logic";
+
 import type { AnalysisState } from "./analysis/use-decision-analysis";
 
 /** The notes margin's mutually exclusive source filter. */

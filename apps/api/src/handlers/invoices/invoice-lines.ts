@@ -76,6 +76,14 @@ export const tVatTreatment = t.Union([
   t.Literal("exempt"),
 ]);
 
+/**
+ * The statutory exemption basis a line prints; it must carry text, so a
+ * whitespace-only value cannot stand in for the basis finalize requires.
+ */
+export const tExemptionReason = t.Nullable(
+  t.String({ minLength: 1, maxLength: 500, pattern: "\\S" }),
+);
+
 true satisfies [VatTreatment] extends [Static<typeof tVatTreatment>]
   ? [Static<typeof tVatTreatment>] extends [VatTreatment]
     ? true
@@ -92,6 +100,7 @@ export const tLineUnit = t.String({ minLength: 1, maxLength: 32 });
 export type LineVat = {
   vatRateBps: number;
   vatTreatment: VatTreatment;
+  exemptionReason: string | null;
 };
 
 /**
@@ -102,6 +111,7 @@ export type LineVat = {
 export const ATTACHED_ENTRY_LINE_VAT = {
   vatRateBps: 0,
   vatTreatment: "domestic_vat",
+  exemptionReason: null,
 } as const satisfies LineVat;
 
 export type InvoiceLineDraft = LineVat & {
@@ -276,7 +286,7 @@ export const manualLineDraft = (
   });
 };
 
-type LineAmountInput = LineVat & {
+type LineAmountInput = Pick<LineVat, "vatRateBps" | "vatTreatment"> & {
   description: string;
   netAmount: CentsAmount;
 };
@@ -387,6 +397,7 @@ export const insertInvoiceLines = async (
         unitPrice: line.unitPrice,
         vatRateBps: line.vatRateBps,
         vatTreatment: line.vatTreatment,
+        exemptionReason: line.exemptionReason,
         netAmount: line.netAmount,
         vatAmount: line.vatAmount,
         grossAmount: line.grossAmount,
@@ -644,11 +655,12 @@ type InvoiceForReadTotals = {
   /** NULL marks totals written before invoice lines existed. */
   netAmount: CentsAmount | null;
   totalAmount: CentsAmount;
-  lines: readonly (LineAmountInput & {
-    timeEntryId: SafeId<"timeEntry"> | null;
-    expenseId: SafeId<"expense"> | null;
-    releasedAt: Date | null;
-  })[];
+  lines: readonly (LineAmountInput &
+    Partial<Pick<LineVat, "exemptionReason">> & {
+      timeEntryId: SafeId<"timeEntry"> | null;
+      expenseId: SafeId<"expense"> | null;
+      releasedAt: Date | null;
+    })[];
   timeEntries: readonly (TimeEntryForLine &
     Pick<typeof timeEntries.$inferSelect, "invoiceAttachment">)[];
   expenses: readonly ExpenseForLine[];
@@ -666,7 +678,10 @@ type LineOrigin = {
   expenseId?: SafeId<"expense"> | null;
 };
 
-type InvoiceSourceLine = LineAmountInput & Partial<LineQuantity> & LineOrigin;
+type InvoiceSourceLine = LineAmountInput &
+  Partial<Pick<LineVat, "exemptionReason">> &
+  Partial<LineQuantity> &
+  LineOrigin;
 
 /**
  * The lines an invoice read counts. An invoice with stored totals (`netAmount`
@@ -754,6 +769,7 @@ export const readInvoiceDocumentLines = (invoice: InvoiceForDocumentLines) => {
               : cents(sign * Math.abs(billed.unitPrice) || 0),
           timeEntryId: billed.timeEntryId ?? null,
           expenseId: billed.expenseId ?? null,
+          exemptionReason: billed.exemptionReason ?? null,
         };
       }),
       totals,
@@ -870,6 +886,7 @@ export const INVOICE_LINE_COLUMNS = {
   unitPrice: true,
   vatRateBps: true,
   vatTreatment: true,
+  exemptionReason: true,
   netAmount: true,
   vatAmount: true,
   grossAmount: true,

@@ -15,7 +15,7 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
   MCP_APP_EXTENSION_ID,
@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/analytics/client";
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
@@ -55,6 +56,7 @@ import {
 } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import {
+  type McpAccessRefusalError,
   McpAuthenticationError,
   McpGatewayLoadError,
   McpOrganizationAccessError,
@@ -140,7 +142,7 @@ const createModernMcpRequest = ({
   params = {},
   token = "token",
 }: {
-  id: number;
+  id: number | string;
   method: string;
   params?: Record<string, unknown>;
   token?: string;
@@ -210,6 +212,13 @@ type McpJsonResponse<TResult> = {
 type McpJsonRpcError = {
   error: { code: number; message: string };
   id: null;
+  jsonrpc: "2.0";
+};
+
+/** An error that answers a request whose id was read. */
+type McpJsonRpcFailure = {
+  error: { code: number; message: string };
+  id: number | string | null;
   jsonrpc: "2.0";
 };
 
@@ -647,12 +656,19 @@ describe("handleMcpHttpRequest", () => {
       async (session, options) =>
         await resolveMcpSessionContext(session, {
           ...options,
-          resolveAuthorization: async () => ({
-            memberId: "member_one",
-            email: "limited@example.test",
-            role: "owner",
-            workspace: null,
-          }),
+          resolveAuthorization: async () =>
+            ({
+              memberId: "member_one",
+              email: "limited@example.test",
+              role: "owner",
+              workspace: null,
+              emailVerified: true,
+              userDeleted: false,
+              enrolledFeatureIds: [],
+              professionalUse: { status: "required" },
+            }) satisfies NonNullable<
+              Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
+            >,
           checkAccountOperation: (email) =>
             checkDemoAccountAccess({
               email,
@@ -694,12 +710,19 @@ describe("handleMcpHttpRequest", () => {
       async (session, options) =>
         await resolveMcpSessionContext(session, {
           ...options,
-          resolveAuthorization: async () => ({
-            memberId: "member_one",
-            email: "limited@example.test",
-            role: "owner",
-            workspace: null,
-          }),
+          resolveAuthorization: async () =>
+            ({
+              memberId: "member_one",
+              email: "limited@example.test",
+              role: "owner",
+              workspace: null,
+              emailVerified: true,
+              userDeleted: false,
+              enrolledFeatureIds: [],
+              professionalUse: { status: "required" },
+            }) satisfies NonNullable<
+              Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
+            >,
           checkAccountOperation: (email) =>
             checkDemoAccountAccess({
               email,
@@ -733,15 +756,168 @@ describe("handleMcpHttpRequest", () => {
         method: body.method,
         status: 403,
       });
-      expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+      expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
         error: { code: -32_001, message: "Forbidden" },
-        id: null,
+        id: body.id,
         jsonrpc: "2.0",
       });
     }
     expect(listMcpToolsMock).not.toHaveBeenCalled();
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();
     expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("answers every organization access refusal with the same 403 on both transports", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        userId: "user_one",
+        organizationId: "org_one",
+        scopes: ["stella:read"],
+      }),
+    );
+    const refusals = {
+      membership: async () => {
+        throw new McpOrganizationAccessError({
+          message: "User is not a member of this organization",
+        });
+      },
+      demo_account: async (
+        session: Parameters<typeof resolveMcpSessionContext>[0],
+        options: Parameters<typeof resolveMcpSessionContext>[1],
+      ) =>
+        await resolveMcpSessionContext(session, {
+          ...options,
+          resolveAuthorization: async () =>
+            ({
+              memberId: "member_one",
+              email: "limited@example.test",
+              role: "owner",
+              workspace: null,
+              emailVerified: true,
+              userDeleted: false,
+              enrolledFeatureIds: [],
+              professionalUse: { status: "required" },
+            }) satisfies NonNullable<
+              Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
+            >,
+          checkAccountOperation: (email) =>
+            checkDemoAccountAccess({
+              email,
+              config: {
+                email: "limited@example.test",
+                organizationId: "org_one",
+              },
+              operation: "growth",
+            }),
+        }),
+    };
+
+    for (const [refusal, resolveContext] of Object.entries(refusals)) {
+      for (const protocol of ["legacy", "modern"] as const) {
+        captureErrorMock.mockClear();
+        resolveMcpSessionContextMock.mockImplementation(resolveContext);
+        const response = await handleMcpHttpRequest(
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 7, method: "tools/list" })
+            : createMcpRequest({
+                id: 7,
+                jsonrpc: "2.0",
+                method: "tools/list",
+                params: {},
+              }),
+        );
+
+        expect({
+          refusal,
+          protocol,
+          status: response.status,
+          retryAfter: response.headers.get("Retry-After"),
+          captured: captureErrorMock.mock.calls.length,
+        }).toEqual({
+          refusal,
+          protocol,
+          status: 403,
+          retryAfter: null,
+          captured: 0,
+        });
+        expect(response.headers.get("WWW-Authenticate")).not.toContain(
+          "error=",
+        );
+        expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
+          error: { code: -32_001, message: "Forbidden" },
+          id: 7,
+          jsonrpc: "2.0",
+        });
+      }
+    }
+    expect(listMcpToolsMock).not.toHaveBeenCalled();
+  });
+
+  test("answers every refusal kind raised while resolving the session with its denial on both transports", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    // Total over the refusal union: a new refusal kind fails to compile here
+    // until its expected answer is stated.
+    const refusals = {
+      McpAuthenticationError: {
+        error: () => new McpAuthenticationError({ message: "Token revoked" }),
+        status: 401,
+        message: "Invalid or expired token",
+      },
+      McpOrganizationAccessError: {
+        error: () =>
+          new McpOrganizationAccessError({ message: "Membership removed" }),
+        status: 403,
+        message: "Forbidden",
+      },
+    } satisfies Record<
+      McpAccessRefusalError["_tag"],
+      {
+        error: () => McpAccessRefusalError;
+        status: 401 | 403;
+        message: string;
+      }
+    >;
+
+    for (const [tag, refusal] of Object.entries(refusals)) {
+      for (const protocol of ["legacy", "modern"] as const) {
+        captureErrorMock.mockClear();
+        resolveMcpSessionContextMock.mockRejectedValue(refusal.error());
+        const response = await handleMcpHttpRequest(
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 3, method: "tools/list" })
+            : createMcpRequest({
+                id: 3,
+                jsonrpc: "2.0",
+                method: "tools/list",
+                params: {},
+              }),
+        );
+
+        expect({
+          tag,
+          protocol,
+          status: response.status,
+          captured: captureErrorMock.mock.calls.length,
+          body: await readTestJson<McpJsonRpcFailure>(response),
+        }).toEqual({
+          tag,
+          protocol,
+          status: refusal.status,
+          captured: 0,
+          body: {
+            error: { code: -32_001, message: refusal.message },
+            id: 3,
+            jsonrpc: "2.0",
+          },
+        });
+      }
+    }
   });
 
   test("captures unexpected transport errors as a retryable 5xx, not a 401", async () => {
@@ -794,11 +970,53 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("2");
     expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
+      error: { code: -32_000, message: "Service temporarily unavailable" },
+      id: 1,
+      jsonrpc: "2.0",
+    });
     expect(captureErrorMock).toHaveBeenCalledWith(error, {
       mode: "default",
       phase: "transport",
       source: "mcp",
     });
+  });
+
+  test("a server fault answers with the request's JSON-RPC id on both transports", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockRejectedValue(
+      new Error("database connection refused"),
+    );
+
+    for (const [protocol, id] of [
+      ["legacy", 7],
+      ["legacy", "request-7"],
+      ["modern", 7],
+      ["modern", "request-7"],
+    ] as const) {
+      const body = { id, jsonrpc: "2.0", method: "tools/list", params: {} };
+      const response = await handleMcpHttpRequest(
+        protocol === "modern"
+          ? createModernMcpRequest({ id, method: body.method })
+          : createMcpRequest(body),
+      );
+
+      expect({ protocol, status: response.status }).toEqual({
+        protocol,
+        status: 503,
+      });
+      expect(await readTestJson<McpJsonRpcFailure>(response)).toEqual({
+        error: { code: -32_000, message: "Service temporarily unavailable" },
+        id,
+        jsonrpc: "2.0",
+      });
+    }
   });
 
   test("builds a fresh modern server for each authenticated session", async () => {
@@ -2060,6 +2278,41 @@ describe("MCP transport conformance", () => {
     ]);
   });
 
+  test("parses a JSON-RPC body once on either transport", async () => {
+    authenticateSession();
+    const parse = spyOn(JSON, "parse");
+    try {
+      for (const protocol of ["legacy", "modern"] as const) {
+        const request =
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 1, method: "tools/list" })
+            : createMcpRequest({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "tools/list",
+                params: {},
+              });
+        const body = await request.clone().text();
+        parse.mockClear();
+
+        const response = await handleMcpHttpRequest(request);
+        const parses = parse.mock.calls.filter(([text]) => text === body);
+
+        expect({
+          protocol,
+          status: response.status,
+          parses: parses.length,
+        }).toEqual({
+          protocol,
+          status: 200,
+          parses: 1,
+        });
+      }
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
   test("reads no body before the token is accepted", async () => {
     authenticateMcpRequestMock.mockResolvedValue(
       Result.err(new McpAuthenticationError({ message: "Token expired" })),
@@ -2115,6 +2368,117 @@ describe("MCP transport conformance", () => {
     expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
   });
 
+  /**
+   * Request headers a browser sends without a preflight naming them (Fetch
+   * standard): the CORS-safelisted names, and the forbidden names the user
+   * agent alone sets. Every other header the transport reads must be allowed.
+   */
+  const BROWSER_SENDS_WITHOUT_PREFLIGHT = new Set([
+    "accept",
+    "accept-language",
+    "content-language",
+    "range",
+    "accept-charset",
+    "accept-encoding",
+    "access-control-request-headers",
+    "access-control-request-method",
+    "connection",
+    "content-length",
+    "cookie",
+    "date",
+    "dnt",
+    "expect",
+    "host",
+    "keep-alive",
+    "origin",
+    "referer",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "via",
+  ]);
+
+  test("allows on preflight every request header the transport reads", async () => {
+    authenticateSession();
+    listMcpToolsMock.mockImplementation(async () => []);
+    getMcpToolDefinitionMock.mockResolvedValue(undefined);
+    const read = new Set<string>();
+    const { get, has } = Headers.prototype;
+    // Response headers never carry credentials, so a read on a header set
+    // holding `Authorization` is a read of the caller's request.
+    const isRequestHeaders = (headers: Headers) =>
+      has.call(headers, "authorization");
+    const getSpy = spyOn(Headers.prototype, "get").mockImplementation(function (
+      this: Headers,
+      name: string,
+    ) {
+      if (isRequestHeaders(this)) {
+        read.add(name.toLowerCase());
+      }
+      return get.call(this, name);
+    });
+    const hasSpy = spyOn(Headers.prototype, "has").mockImplementation(function (
+      this: Headers,
+      name: string,
+    ) {
+      if (name.toLowerCase() !== "authorization" && isRequestHeaders(this)) {
+        read.add(name.toLowerCase());
+      }
+      return has.call(this, name);
+    });
+    try {
+      const toolCall = {
+        name: "list_matters",
+        arguments: {},
+      };
+      for (const request of [
+        createMcpRequest({ id: 1, jsonrpc: "2.0", method: "tools/list" }),
+        createMcpRequest({
+          id: 2,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: toolCall,
+        }),
+        createModernMcpRequest({ id: 3, method: "tools/list" }),
+        createModernMcpRequest({
+          id: 4,
+          method: "tools/call",
+          params: toolCall,
+        }),
+      ]) {
+        const response = await handleMcpHttpRequest(request);
+        await response.text();
+      }
+    } finally {
+      getSpy.mockRestore();
+      hasSpy.mockRestore();
+    }
+    const preflight = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", { method: "OPTIONS" }),
+    );
+    const allowed = new Set(
+      (preflight.headers.get("Access-Control-Allow-Headers") ?? "")
+        .split(",")
+        .map((name) => name.trim().toLowerCase()),
+    );
+
+    // The census reaches the headers the modern leg requires.
+    expect([...read]).toEqual(
+      expect.arrayContaining([
+        "mcp-protocol-version",
+        "mcp-method",
+        "mcp-name",
+      ]),
+    );
+    expect(
+      [...read].filter(
+        (name) =>
+          !allowed.has(name) && !BROWSER_SENDS_WITHOUT_PREFLIGHT.has(name),
+      ),
+    ).toEqual([]);
+  });
+
   test("refuses actual oversized frames before authentication even with a smaller declared length", async () => {
     actionSizePolicyMock.mockReturnValue(
       Result.ok({
@@ -2143,6 +2507,92 @@ describe("MCP transport conformance", () => {
       expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
       expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
     }
+  });
+
+  test("meters UTF-8 frame bytes with a smaller declared length on both transports and size-policy branches", async () => {
+    authenticateSession();
+    const body = JSON.stringify({
+      id: 1,
+      jsonrpc: "2.0",
+      method: "tools/list",
+      params: { padding: "é".repeat(MCP_MAX_REQUEST_BODY_BYTES / 2) },
+    });
+    expect(body.length).toBeLessThan(MCP_MAX_REQUEST_BODY_BYTES);
+    expect(Buffer.byteLength(body, "utf-8")).toBeGreaterThan(
+      MCP_MAX_REQUEST_BODY_BYTES,
+    );
+    for (const policy of [
+      undefined,
+      {
+        pageSize: 10,
+        requestBytes: MCP_MAX_REQUEST_BODY_BYTES * 2,
+        responseBytes: 512,
+      },
+    ]) {
+      actionSizePolicyMock.mockReturnValue(Result.ok(policy));
+      for (const protocol of ["legacy", "modern"] as const) {
+        authenticateMcpRequestMock.mockClear();
+        const original =
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 1, method: "tools/list" })
+            : toolsListRequest();
+        const headers = new Headers(original.headers);
+        headers.set("content-length", "1");
+        const response = await handleMcpHttpRequest(
+          new Request(original, { body, headers, method: "POST" }),
+        );
+        expect({ protocol, status: response.status }).toEqual({
+          protocol,
+          status: 413,
+        });
+        expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+          error: {
+            code: -32_000,
+            message: `Payload Too Large: a request body may not exceed ${MCP_MAX_REQUEST_BODY_BYTES} bytes.`,
+          },
+          id: null,
+          jsonrpc: "2.0",
+        });
+        expect(response.headers.get("access-control-allow-origin")).toBe("*");
+        expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
+        expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
+        expect(listMcpToolsMock).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  test("cancels an oversized declared-small stream without reading its remaining bytes", async () => {
+    authenticateSession();
+    let pulls = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull: (controller) => {
+          pulls += 1;
+          controller.enqueue(new Uint8Array(MCP_MAX_REQUEST_BODY_BYTES + 1));
+        },
+        cancel: () => {
+          cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        body,
+        duplex: "half",
+        headers: {
+          authorization: "Bearer token",
+          "content-length": "1",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    expect(response.status).toBe(413);
+    expect(pulls).toBe(1);
+    expect(cancelled).toBe(true);
+    expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
   });
 
   test("bounds serialized UTF-8 JSON-RPC envelopes on modern and legacy transports", async () => {

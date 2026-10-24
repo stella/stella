@@ -486,23 +486,17 @@ test.each(
     (["pages", "search"] as const).map((surface) => ({ version, surface })),
   ),
 )(
-  "stored EU $version.language stays closed on the $surface surface",
+  "stored EU $version.language opens on the $surface surface",
   async ({ surface, version }) => {
-    expect(
-      await withRedistributableSubject(
-        caseLawDb,
-        "identity",
-        { kind: "id", id: version.id },
-        async ({ id }) => id,
-      ),
-    ).toBe(version.id);
-    expect(
-      await withRedistributableSubject(
-        caseLawDb,
-        surface,
-        { kind: "id", id: version.id },
-        async ({ id }) => id,
-      ),
-    ).toBeNull();
+    for (const reading of ["identity", surface] as const) {
+      expect(
+        await withRedistributableSubject(
+          caseLawDb,
+          reading,
+          { kind: "id", id: version.id },
+          async ({ id }) => id,
+        ),
+      ).toBe(version.id);
+    }
   },
 );

@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -9,7 +9,7 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 export type ReaderAnnotationsKey = {
   activeOrganizationId: string;
   targetId: string;
-  targetType: ReaderAnnotationTargetType;
+  targetType: ReaderDocumentTargetType;
   userId: string;
 };
 
