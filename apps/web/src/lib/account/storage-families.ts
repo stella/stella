@@ -3,7 +3,9 @@ import { Result } from "better-result";
 import { mergeLegacyLawHistory } from "@/lib/account/law-history-legacy-merge";
 import {
   DOCX_OUTLINE_DEPTH_STORAGE_KEY,
+  GUEST_ANNOTATIONS_STORAGE_KEY,
   LAW_HISTORY_STORAGE_KEY,
+  LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
   READER_PROVISION_MODE_STORAGE_KEY,
 } from "@/lib/account/storage-keys";
 
@@ -274,6 +276,22 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.provision-question:",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // A visitor's private legal-reader marks migrate into the first account in
+  // this tab, then must disappear when that account leaves.
+  {
+    area: "session",
+    prefix: GUEST_ANNOTATIONS_STORAGE_KEY,
+    owner: "carried",
+    retention: "cleared",
+  },
+  // The previous guest-store shape follows the same ownership boundary until
+  // the reader migrates it to the current shape.
+  {
+    area: "session",
+    prefix: LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
     owner: "carried",
     retention: "cleared",
   },

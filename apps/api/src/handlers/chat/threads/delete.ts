@@ -10,6 +10,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
@@ -184,6 +185,7 @@ const deleteThread = createSafeRootHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockThreadStoredContentTransitionOnTx(tx, params.threadId);
         const result = await tx
           .delete(chatThreads)
           .where(

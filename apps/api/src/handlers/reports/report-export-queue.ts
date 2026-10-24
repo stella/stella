@@ -15,6 +15,7 @@ import { panic, Result } from "better-result";
  */
 import { and, eq, inArray } from "drizzle-orm";
 
+import { member } from "@/api/db/auth-schema";
 import { reportExports } from "@/api/db/schema";
 import type { ReportExportFormat, ReportTemplateRef } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -28,6 +29,7 @@ import {
   hasNarrativeSection,
   renderReportSpec,
 } from "@/api/handlers/reports/spec/render-report-spec";
+import { REPORT_EXPORT_PERMISSIONS } from "@/api/handlers/reports/views/export-input";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -36,9 +38,17 @@ import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  BUFFER_INTENT_DELETE_TIMEOUT_MS,
+  cleanupObjectAfterWriter,
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { requireCurrentActiveWorkspaceMemberPermission } from "@/api/lib/db/member-authority";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -50,8 +60,12 @@ import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
+import { isMemberRole } from "@/api/lib/member-roles";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
@@ -61,7 +75,12 @@ import type { ReportExportJobData } from "@/api/lib/report-export-enqueue";
 import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
-import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  S3_OBJECT_WRITE_CERTAINTY,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
@@ -89,6 +108,32 @@ const ERROR_MESSAGE_MAX_CHARS = 1000;
 const DOCX_TO_PDF_ERROR = "Failed to convert the report to PDF.";
 const NOTIFICATION_RECONCILE_INTERVAL_MS = 60_000;
 const REPORT_SOURCE_UNAVAILABLE = "The report source is no longer available.";
+const REPORT_EXPORT_CLEANUP_FAILED = failureSink({
+  event: "report_export.cleanup_failed",
+  expected: [],
+});
+const requesterMayExportReport = async (actor: ExportActor) => {
+  const current = (
+    await actor.writeDb(
+      async (tx) =>
+        await tx
+          .select({ role: member.role })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, actor.organizationId),
+              eq(member.userId, actor.userId),
+            ),
+          )
+          .limit(1),
+    )
+  ).at(0);
+  return (
+    current !== undefined &&
+    isMemberRole(current.role) &&
+    hasCurrentMemberPermission(current.role, REPORT_EXPORT_PERMISSIONS)
+  );
+};
 
 /** Human-readable failure string persisted on the export row. */
 export const toExportErrorMessage = (cause: unknown): string => {
@@ -393,6 +438,10 @@ const runExport = async ({
     await markExportFailedRow(actor, REPORT_SOURCE_UNAVAILABLE);
     return;
   }
+  if (!(await requesterMayExportReport(actor))) {
+    await markExportFailedRow(actor, REPORT_SOURCE_UNAVAILABLE);
+    return;
+  }
   const workspaceName = workspace.value.name;
 
   const dataResult = await buildReportData({
@@ -481,6 +530,10 @@ const runExport = async ({
   );
 
   if (row.mode === "workspace") {
+    if (!(await requesterMayExportReport(actor))) {
+      await markExportFailedRow(actor, REPORT_SOURCE_UNAVAILABLE);
+      return;
+    }
     const created = await createEntityFromBuffer({
       scopedDb: actor.writeDb,
       organizationId: actor.organizationId,
@@ -507,6 +560,15 @@ const runExport = async ({
       fileName,
       mimeType: delivery.mimeType,
       encryption: serverBuiltFileEncryption(),
+      authorizeInTransaction: async (tx) => {
+        await requireCurrentActiveWorkspaceMemberPermission({
+          db: tx,
+          organizationId: actor.organizationId,
+          workspaceId: actor.workspaceId,
+          userId: actor.userId,
+          permissions: REPORT_EXPORT_PERMISSIONS,
+        });
+      },
     });
     if (Result.isError(created)) {
       await markExportFailedRow(actor, created.error.message);
@@ -524,24 +586,60 @@ const runExport = async ({
     return;
   }
 
-  // Download mode: write under the root exports/ prefix (S3 lifecycle prefix
-  // filters anchor at the key start, so the scratch prefix must lead the key;
-  // org/workspace segments keep the key tenant-scoped); the status endpoint
-  // presigns it and names the download from the stored key's extension.
+  // Download mode reserves exact-key recovery ownership before PUT. Workspace
+  // deletion can therefore preempt an in-flight writer, while a completed row
+  // gives teardown the durable key it must erase before the row cascades.
   const key = `exports/${actor.organizationId}/${actor.workspaceId}/${actor.exportId}.${delivery.ext}`;
-  await writeS3ObjectWithRetry(
-    {
-      contentType: delivery.mimeType,
-      data: delivery.buffer,
-      key,
-    },
-    { type: "lifecycle-prefix", prefix: "exports/" },
-  );
-  await completeExport(
-    actor,
-    { type: "download", s3Key: key },
-    filled.usedTemplateId,
-  );
+  const reserved = await reserveObjectCleanupIntent({
+    objectKey: key,
+    organizationId: actor.organizationId,
+    safeDb: actor.writeSafeDb,
+    workspaceId: actor.workspaceId,
+  });
+  if (Result.isError(reserved)) {
+    await markExportFailedRow(actor, reserved.error.message);
+    return;
+  }
+  let writeState: S3ObjectWriteCertainty | "never-written" = "never-written";
+  try {
+    writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+    writeState = await writeS3ObjectWithRetry(
+      {
+        contentType: delivery.mimeType,
+        data: delivery.buffer,
+        key,
+      },
+      { type: "cleanup-intent", intent: reserved.value },
+    );
+    await completeExport(
+      actor,
+      { type: "download", s3Key: key },
+      filled.usedTemplateId,
+      reserved.value,
+    );
+  } finally {
+    const cleaned = await cleanupObjectAfterWriter({
+      safeDb: actor.writeSafeDb,
+      intentId: reserved.value,
+      writeState,
+      deleteObject: async () => {
+        await deleteS3ObjectWithSignal(
+          key,
+          AbortSignal.timeout(BUFFER_INTENT_DELETE_TIMEOUT_MS),
+        );
+        return true;
+      },
+    });
+    if (Result.isError(cleaned)) {
+      observeFailure(cleaned.error, {
+        sink: REPORT_EXPORT_CLEANUP_FAILED,
+        ctx: {
+          organizationId: actor.organizationId,
+          workspaceId: actor.workspaceId,
+        },
+      });
+    }
+  }
 };
 
 type FillReportResult =
@@ -897,16 +995,15 @@ const completeExport = async (
   actor: ExportActor,
   result: CompletedExportResult,
   usedTemplateId: SafeId<"template"> | undefined,
-): Promise<void> => {
+  cleanupIntentId?: SafeId<"pendingUpload">,
+): Promise<boolean> =>
   await actor.writeDb(async (tx) => {
-    // A stored template is used by the export that completes, in the same
-    // transaction, so a failed or rejected export never counts as a use.
-    if (usedTemplateId !== undefined) {
-      await recordTemplateUse({ tx, templateId: usedTemplateId });
+    if (cleanupIntentId !== undefined) {
+      await lockObjectCleanupIntentsForWriter(tx, [cleanupIntentId]);
     }
     // audit: skip — terminal bookkeeping on the already-audited export row (the
     // created document, in workspace mode, is audited by createEntityFromBuffer).
-    await tx
+    const completed = await tx
       .update(reportExports)
       .set({
         status: "completed",
@@ -918,9 +1015,24 @@ const completeExport = async (
           eq(reportExports.id, actor.exportId),
           eq(reportExports.workspaceId, actor.workspaceId),
         ),
-      );
+      )
+      .returning({ id: reportExports.id });
+    if (completed.length !== 1) {
+      return false;
+    }
+    // A stored template is used by the export that completes, in the same
+    // transaction, so a failed or rejected export never counts as a use.
+    if (usedTemplateId !== undefined) {
+      await recordTemplateUse({ tx, templateId: usedTemplateId });
+    }
+    if (cleanupIntentId !== undefined) {
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        tx,
+        intentIds: [cleanupIntentId],
+      });
+    }
+    return true;
   });
-};
 
 const markExportFailedRow = async (
   actor: ExportActor,

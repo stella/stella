@@ -2,8 +2,15 @@ import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { t } from "elysia";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import type { ValidatedServiceInput } from "@/api/lib/rate-limit/service-classification";
+
+export const REPORT_EXPORT_PERMISSIONS = {
+  workspace: ["read"],
+  entity: ["create"],
+} as const satisfies PermissionInput;
 
 const templateRefSchema = t.Union([
   t.Object({

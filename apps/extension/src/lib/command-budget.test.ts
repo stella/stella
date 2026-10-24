@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BROWSER_CONTROL_LIMITS,
+  BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
@@ -14,7 +15,13 @@ import {
 const click = {
   action: "click",
   page: { revision: "revision-1", url: "https://example.com/" },
-  target: { name: "Next", ref: "e:0:1", role: "button" },
+  target: {
+    context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    name: "Next",
+    ref: "e:0:1",
+    role: "button",
+  },
 } satisfies BrowserControlCommand;
 const open = {
   action: "open",

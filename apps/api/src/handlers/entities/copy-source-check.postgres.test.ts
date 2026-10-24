@@ -200,6 +200,7 @@ if (!databaseUrl || !runPostgresTests) {
             [targetSnapshot],
             [
               {
+                cleanupIntentIds: [],
                 sourceEntityId: documentId,
                 sourceFileId: sourceFile.id,
                 newFileId: allocateFileObject(),

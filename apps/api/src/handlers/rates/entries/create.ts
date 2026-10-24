@@ -14,6 +14,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  tCurrencyCode,
   tMinorUnitAmount,
   tSafeId,
   tUserId,
@@ -24,6 +25,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
+
+import { lockRateTableWorkspace } from "../rate-table-lock";
 
 type LiteralSchemas<Values extends readonly string[]> = {
   [Index in keyof Values]: ReturnType<typeof t.Literal<Values[Index]>>;
@@ -42,6 +45,7 @@ const roleSchemas = [
 const createRateEntryBodySchema = t.Object({
   userId: t.Optional(t.Nullable(tUserId)),
   role: t.Optional(t.Nullable(t.Union(roleSchemas))),
+  currency: tCurrencyCode,
   hourlyRate: tMinorUnitAmount(0),
   effectiveFrom: t.String({ format: "date" }),
   effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
@@ -103,24 +107,6 @@ export const createRateEntryHandler = async function* ({
     }
   }
 
-  const table = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.rateTables.findFirst({
-        where: {
-          id: { eq: params.rateTableId },
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { id: true },
-      }),
-    ),
-  );
-
-  if (!table) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Rate table not found" }),
-    );
-  }
-
   if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
     return Result.err(
       new HandlerError({
@@ -157,6 +143,28 @@ export const createRateEntryHandler = async function* ({
 
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      await lockRateTableWorkspace(tx, workspaceId);
+      const table = await tx.query.rateTables.findFirst({
+        where: {
+          id: { eq: params.rateTableId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { currency: true },
+      });
+      if (!table) {
+        throw new HandlerError({
+          status: 404,
+          message: "Rate table not found",
+        });
+      }
+      if (table.currency !== body.currency) {
+        throw new HandlerError({
+          status: 409,
+          code: "rate_table_currency_changed",
+          hint: "Call rates.list, then retry rates.entries.create with the table's current currency.",
+          message: "Rate table currency changed; reload and try again",
+        });
+      }
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
       );
@@ -239,11 +247,11 @@ const createRateEntry = createSafeHandler(
     contract: "patch",
     description:
       "Add one rate line to a rate table: an hourly rate in integer minor " +
-      "currency units, effective from a date and optionally until another. " +
+      "currency units, naming the table currency those units use, effective from a date and optionally until another. " +
       "Pass userId for a person-specific rate, role for an organization-role rate, " +
       "or omit both for the table fallback. Set at most one selector. " +
       "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
-      "or when the table is at its line limit.",
+      "or when the table is at its line limit. A stale currency is refused; call rates.list and retry with the table's current currency.",
     permissions: { rate: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },

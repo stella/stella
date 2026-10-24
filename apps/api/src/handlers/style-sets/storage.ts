@@ -267,20 +267,10 @@ export const replaceStoredStyleSet = async ({
             }),
         }),
       );
-      yield* Result.await(
-        safeDb(async (tx) => {
-          // audit: skip — cleanup metadata for the audited replacement below
-          await tx
-            .update(styleSets)
-            .set({ cleanupS3Key: null })
-            .where(
-              and(
-                eq(styleSets.id, styleSetId),
-                eq(styleSets.organizationId, organizationId),
-                eq(styleSets.cleanupS3Key, cleanupS3Key),
-                isNull(styleSets.deletedAt),
-              ),
-            );
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Previous style set cleanup is still pending",
         }),
       );
     }
@@ -425,24 +415,6 @@ export const replaceStoredStyleSet = async ({
       });
       if (Result.isError(cleanupResult)) {
         captureError(cleanupResult.error);
-      } else {
-        const cleared = await safeDb(async (tx) => {
-          // audit: skip — cleanup metadata for the already-audited replacement
-          await tx
-            .update(styleSets)
-            .set({ cleanupS3Key: null })
-            .where(
-              and(
-                eq(styleSets.id, styleSetId),
-                eq(styleSets.organizationId, organizationId),
-                eq(styleSets.cleanupS3Key, replaced.oldS3Key),
-                isNull(styleSets.deletedAt),
-              ),
-            );
-        });
-        if (Result.isError(cleared)) {
-          captureError(cleared.error);
-        }
       }
       return Result.ok(replaced.row);
     } finally {

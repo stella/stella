@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 
 import {
   chatThreads,
   desktopEditSessions,
   documentProcessingRuns,
   fields,
+  FILE_USAGE_RECONCILIATION_STATE,
   folioCollabRooms,
   organizationFileObjects,
-  organizationFileUsage,
   reportExports,
   styleSets,
   templates,
@@ -17,6 +17,10 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateParentBatch,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   commitOrganizationFilesBytes,
@@ -26,6 +30,7 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { organizationFileReservationCandidatesQuery } from "@/api/lib/files/organization-file-usage-queries";
 import type { HeadObjectResult } from "@/api/lib/s3-presign";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT = 50;
@@ -33,6 +38,7 @@ const RETRY_DELAY_MS = 5 * 60_000;
 const HASH_READ_TIMEOUT_MS = 5 * 60_000;
 const UUID_KEY_PART = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 const S3_LAST_MODIFIED_PRECISION_MS = 1000;
+export const ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS = 5;
 const unsettledObject = or(
   eq(organizationFileObjects.status, "reserved"),
   and(
@@ -201,14 +207,14 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
     const staleBefore = new Date(
       now.getTime() - FILE_RESERVATION_ABANDON_DELAY_MS,
     );
-    const retryBefore = new Date(now.getTime() - RETRY_DELAY_MS);
-    const candidates = await db.transaction(
+    const candidates = await withAggregateTransaction(
+      db,
       async (tx) =>
         await organizationFileReservationCandidatesQuery({
           db: tx,
           organizationId,
+          reconcileBefore: now,
           staleBefore,
-          retryBefore,
           limit,
         }),
     );
@@ -219,20 +225,24 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
     const claims =
       candidates.length === 0
         ? []
-        : await db.transaction(async (tx) => {
-            await tx
-              .select({ organizationId: organizationFileUsage.organizationId })
-              .from(organizationFileUsage)
-              .where(
-                inArray(organizationFileUsage.organizationId, [
-                  ...new Set(
-                    candidates.map((candidate) => candidate.organizationId),
-                  ),
-                ]),
-              )
-              .orderBy(asc(organizationFileUsage.organizationId))
-              .limit(candidates.length)
-              .for("update");
+        : await withAggregateTransaction(db, async (tx) => {
+            const organizationIds = [
+              ...new Set(
+                candidates.map((candidate) =>
+                  brandPersistedOrganizationId(candidate.organizationId),
+                ),
+              ),
+            ];
+            const locked = await withAggregateParentBatch({
+              mode: "update",
+              organizationIds,
+              tx,
+            });
+            if (locked.organizationIds.size !== organizationIds.length) {
+              return panic(
+                "Organization disappeared during reservation reconciliation",
+              );
+            }
             const current = await tx
               .select({
                 objectKey: organizationFileObjects.objectKey,
@@ -243,6 +253,8 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
                 expectedSha256Hex: organizationFileObjects.expectedSha256Hex,
                 reservationStartedAt:
                   organizationFileObjects.reservationStartedAt,
+                reconciliationAttemptCount:
+                  organizationFileObjects.reconciliationAttemptCount,
                 referenced: sql<boolean>`${sqlCaseFragment({
                   branches: candidates.map(
                     (candidate) =>
@@ -273,16 +285,30 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
                     organizationFileObjects.reservationStartedAt,
                     sql`${staleBefore}::timestamptz`,
                   ),
+                  eq(
+                    organizationFileObjects.reconciliationState,
+                    FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+                  ),
                   lte(
-                    organizationFileObjects.updatedAt,
-                    sql`${retryBefore}::timestamptz`,
+                    organizationFileObjects.reconcileAfter,
+                    sql`${now}::timestamptz`,
                   ),
                 ),
               );
             if (current.length !== 0) {
               await tx
                 .update(organizationFileObjects)
-                .set({ writeId: recoveryWriteId, updatedAt: now })
+                .set({
+                  reconcileAfter: sql`NOW() + LEAST(
+                    POWER(2, LEAST(
+                      ${organizationFileObjects.reconciliationAttemptCount},
+                      8
+                    )) * ${RETRY_DELAY_MS} * interval '1 millisecond',
+                    interval '24 hours'
+                  )`,
+                  writeId: recoveryWriteId,
+                  updatedAt: now,
+                })
                 .where(
                   inArray(
                     organizationFileObjects.objectKey,
@@ -294,6 +320,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           });
     const toCommit = [];
     const toRelease = [];
+    const mismatchedObjectKeys: string[] = [];
     let committed = 0;
     let deleted = 0;
     let released = 0;
@@ -331,6 +358,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         });
         if (!(yield* matches)) {
           mismatched += 1;
+          mismatchedObjectKeys.push(candidate.objectKey);
           continue;
         }
         toCommit.push(reservation);
@@ -343,6 +371,49 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
       );
       toRelease.push(reservation);
       deleted += 1;
+    }
+    if (mismatchedObjectKeys.length > 0) {
+      yield* await Result.tryPromise({
+        try: async () =>
+          await withAggregateTransaction(db, async (tx) => {
+            // audit: skip; bounded recovery bookkeeping that deliberately
+            // keeps the unresolved key and byte reservation intact.
+            await tx
+              .update(organizationFileObjects)
+              .set({
+                reconciliationAttemptCount: sql`${organizationFileObjects.reconciliationAttemptCount} + 1`,
+                reconciliationState: sql`CASE
+                  WHEN ${organizationFileObjects.reconciliationAttemptCount} + 1 >= ${ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS}
+                    THEN ${FILE_USAGE_RECONCILIATION_STATE.QUARANTINED}
+                  ELSE ${FILE_USAGE_RECONCILIATION_STATE.ACTIVE}
+                END`,
+                reconcileAfter: sql`CASE
+                  WHEN ${organizationFileObjects.reconciliationAttemptCount} + 1 >= ${ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS}
+                    THEN NULL
+                  ELSE ${organizationFileObjects.reconcileAfter}
+                END`,
+              })
+              .where(
+                and(
+                  inArray(
+                    organizationFileObjects.objectKey,
+                    mismatchedObjectKeys,
+                  ),
+                  eq(organizationFileObjects.writeId, recoveryWriteId),
+                  eq(
+                    organizationFileObjects.reconciliationState,
+                    FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+                  ),
+                ),
+              );
+          }),
+        catch: (cause) =>
+          new OrganizationFileUsageError({
+            message: "Mismatched file reservation could not be quarantined",
+            reason: "storage_unavailable",
+            cause,
+          }),
+      });
     }
     const settled = yield* await commitOrganizationFilesBytes(toCommit, db);
     committed -= settled.busyObjectKeys.length;

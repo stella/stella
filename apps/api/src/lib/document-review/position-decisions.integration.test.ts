@@ -92,7 +92,7 @@ const seedRun = async (
     id: runId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: workspaceId === ids.wsA1 ? ids.entityA1 : ids.entityB1,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: CONTENT_SHA256,

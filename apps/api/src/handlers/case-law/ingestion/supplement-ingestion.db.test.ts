@@ -93,8 +93,7 @@ const connect = (pglite: Awaited<ReturnType<typeof createTestPglite>>) =>
 
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the pipeline expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
-  await callback(db as unknown as Transaction);
+  await callback(asTestRaw<Transaction>(db));
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -1080,6 +1079,12 @@ describe("the reasons' stored payload", () => {
       readStoredRaw,
       reparseStoredRaw,
       leaseWaitMs: 0,
+      redactDecision: async (options) => {
+        expect(
+          (await decisionBy(fixture.sourceId, "339002")).fulltext,
+        ).toBeNull();
+        return await redactCaseLawDecision(options);
+      },
     });
 
     expect(Result.isOk(erased) && erased.value.holders).toEqual([
@@ -1117,6 +1122,45 @@ describe("the reasons' stored payload", () => {
     expect(again.fulltext).not.toContain(REASONS_TEXT);
     expect(JSON.stringify(again.documentAst)).not.toContain(REASONS_TEXT);
     expect(await citationsOf(ruling.id)).toEqual([]);
+  });
+
+  test("do not record the primary erasure while a holder remains public", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(RULING));
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    let redactionStarted = false;
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: absorbed.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+      withdrawDocument: async () =>
+        await Promise.resolve(
+          Result.ok({
+            type: "corpus-objects-remain" as const,
+            error: new Error("sentinel delete failure"),
+          }),
+        ),
+      redactDecision: async (options) => {
+        redactionStarted = true;
+        return await redactCaseLawDecision(options);
+      },
+    });
+
+    expect(Result.isError(erased)).toBe(true);
+    expect(redactionStarted).toBe(false);
+    expect(
+      (
+        await db
+          .select({ redactedAt: caseLawDecisions.redactedAt })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, absorbed.id))
+          .limit(1)
+      ).at(0)?.redactedAt,
+    ).toBeNull();
   });
 
   test("supplement erasure persists the registered judgment URL spelling through the pipeline entry", async () => {

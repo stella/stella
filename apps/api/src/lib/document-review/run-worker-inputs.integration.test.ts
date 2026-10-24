@@ -189,6 +189,10 @@ afterEach(async () => {
     .values(originalOrganizationMember)
     .onConflictDoNothing();
   await testDb
+    .update(member)
+    .set({ role: originalOrganizationMember.role })
+    .where(eq(member.id, ids.memberA1org));
+  await testDb
     .insert(workspaceMembers)
     .values(originalMemberships)
     .onConflictDoNothing();
@@ -223,7 +227,7 @@ const expectStoppedBeforeReading = async () => {
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
-    errorCode: "pin_unresolved",
+    errorCode: "internal",
   });
   expect(run?.finishedAt).not.toBeNull();
   expect(
@@ -271,6 +275,14 @@ describe("document review run revocation", () => {
 
   test("a run stops when its requester has left the organization", async () => {
     await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
+
+  test("a run stops before model work after a permission-losing role downgrade", async () => {
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
     await expectStoppedBeforeReading();
   });
 });

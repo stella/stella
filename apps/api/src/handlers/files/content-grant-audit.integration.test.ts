@@ -35,7 +35,14 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
-import { readFileHandler } from "@/api/lib/files/read-file";
+import {
+  checkFileContentGrant,
+  FILE_CONTENT_GRANT_TTL_MS,
+} from "@/api/lib/files/file-content-grant";
+import {
+  readFileContentHandler,
+  readFileHandler,
+} from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -65,6 +72,9 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // the handlers wrote to.
 
 const DOC_MIME_TYPE = "application/msword";
+
+const contentGrantFromUrl = (url: string): string =>
+  decodeURIComponent(new URL(url).pathname.split("/").at(-1) ?? "");
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -255,9 +265,9 @@ const readUrl = async (
     source: { kind: "request", sessionId: "fixture-session" },
     scopedDb: scopedDbA(),
     fieldId,
-    userId: ids.userA1,
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
+    userId: ids.userA1,
     purpose,
     recordAuditEvent,
   });
@@ -447,14 +457,21 @@ describe("file URL grants", () => {
     const { download } = await setupDedicatedDownload();
 
     const response = await download();
+    const checkedAt = Date.now();
 
     expect(response).toHaveProperty("presignedUrl");
     if (!("presignedUrl" in response)) {
       return;
     }
-    expect(
-      Number(new URL(response.presignedUrl).searchParams.get("X-Amz-Expires")),
-    ).toBeLessThanOrEqual(60);
+    const checked = checkFileContentGrant({
+      grant: contentGrantFromUrl(response.presignedUrl),
+      now: checkedAt,
+      secret: env.BETTER_AUTH_SECRET,
+    });
+    expect(checked).toMatchObject({ status: "valid" });
+    if (checked.status === "valid") {
+      expect(checked.grant.expiresAt - checkedAt).toBeLessThanOrEqual(60_000);
+    }
   });
 
   test("a revoked dedicated session is refused a signed URL", async () => {
@@ -476,19 +493,33 @@ describe("file URL grants", () => {
         deliveredMimeType,
       );
 
+      const requestedAt = Date.now();
       const response = await readUrl(seeded.fieldId, purpose);
 
-      const requestedLifetime =
-        "presignedUrl" in response
-          ? Number(
-              new URL(response.presignedUrl).searchParams.get("X-Amz-Expires"),
-            )
-          : null;
       expect(response).toMatchObject({
         mimeType: deliveredMimeType,
-        presignedUrl: expect.stringContaining(deliveredKey),
       });
-      expect(requestedLifetime).toBe(15 * 60);
+      expect(JSON.stringify(response)).not.toContain(deliveredKey);
+      if (!("presignedUrl" in response)) {
+        return;
+      }
+      const { presignedUrl } = response;
+      expect(presignedUrl).toContain("/v1/file-content/fc1.");
+      const checkedAt = Date.now();
+      const checked = checkFileContentGrant({
+        grant: contentGrantFromUrl(presignedUrl),
+        now: checkedAt,
+        secret: env.BETTER_AUTH_SECRET,
+      });
+      expect(checked).toMatchObject({ status: "valid" });
+      if (checked.status === "valid") {
+        expect(checked.grant.expiresAt).toBeGreaterThanOrEqual(
+          requestedAt + FILE_CONTENT_GRANT_TTL_MS,
+        );
+        expect(checked.grant.expiresAt - checkedAt).toBeLessThanOrEqual(
+          FILE_CONTENT_GRANT_TTL_MS,
+        );
+      }
       await expectOneContentRow(seeded.entityId, {
         action,
         metadata: {
@@ -515,6 +546,77 @@ describe("file URL grants", () => {
       expect(await auditRowsFor(seeded.entityId)).toEqual([]);
     },
   );
+
+  test("an issued grant cannot read retained bytes after its version is tombstoned", async () => {
+    const seeded = await seedFile({
+      fileName: "withdrawn.pdf",
+      mimeType: PDF_MIME_TYPE,
+      pdfFileId: null,
+    });
+    const key = fileKeyFor(seeded.fileId, PDF_MIME_TYPE);
+    fake.put(
+      envBase.S3_BUCKET,
+      key,
+      "retained legal-hold bytes",
+      PDF_MIME_TYPE,
+    );
+
+    const issued = await readUrl(seeded.fieldId, "download");
+    expect(issued).toMatchObject({
+      presignedUrl: expect.stringContaining("/v1/file-content/fc1."),
+    });
+    await testDb
+      .update(entityVersions)
+      .set({ deletedAt: new Date() })
+      .where(eq(entityVersions.id, seeded.entityVersionId));
+
+    const redeemed = await readFileContentHandler({
+      abortSignal: new AbortController().signal,
+      fieldId: seeded.fieldId,
+      organizationId: ids.orgA,
+      purpose: "download",
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+    });
+
+    expectStatus(redeemed, 404);
+    expect(fake.requests.filter((request) => request.method === "GET")).toEqual(
+      [],
+    );
+  });
+
+  test("redeems a live grant through stella without exposing the storage URL", async () => {
+    const seeded = await seedFile({
+      fileName: "live.pdf",
+      mimeType: PDF_MIME_TYPE,
+      pdfFileId: null,
+    });
+    const key = fileKeyFor(seeded.fileId, PDF_MIME_TYPE);
+    fake.put(envBase.S3_BUCKET, key, "authorized bytes", PDF_MIME_TYPE);
+
+    const issued = await readUrl(seeded.fieldId, "download");
+    expect(JSON.stringify(issued)).not.toContain(key);
+    const redeemed = await readFileContentHandler({
+      abortSignal: new AbortController().signal,
+      fieldId: seeded.fieldId,
+      organizationId: ids.orgA,
+      purpose: "download",
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+    });
+
+    expect(redeemed).toBeInstanceOf(Response);
+    if (!(redeemed instanceof Response)) {
+      return;
+    }
+    expect(await redeemed.text()).toBe("authorized bytes");
+    expect(redeemed.headers.get("Content-Disposition")).toContain(
+      'attachment; filename="live.pdf"',
+    );
+    expect(
+      fake.requests.filter((request) => request.method === "GET"),
+    ).toHaveLength(1);
+  });
 
   test.each(["download", "display", "native-display"] as const)(
     "a %s request for another matter's field is not found and records nothing",

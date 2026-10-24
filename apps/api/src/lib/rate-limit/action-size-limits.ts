@@ -73,12 +73,22 @@ const requestTooLarge = () =>
     reason: "request_too_large",
   });
 
+const measuredRequestBytes = new WeakMap<Request, number>();
+
 // Meter actual bytes even when Content-Length is present. Retain at most the
 // allowed body and stop reading immediately when a chunk crosses the bound.
 export const boundActionRequest = async (
   request: Request,
   maximum: number,
 ): Promise<Result<Request, ActionSizeError>> => {
+  const measuredBytes = measuredRequestBytes.get(request);
+  if (measuredBytes !== undefined) {
+    if (measuredBytes <= maximum) {
+      return Result.ok(request);
+    }
+    await request.body?.cancel();
+    return Result.err(requestTooLarge());
+  }
   const length = request.headers.get("content-length");
   if (length !== null && (!/^\d+$/u.test(length) || Number(length) > maximum)) {
     return Result.err(requestTooLarge());
@@ -99,6 +109,7 @@ export const boundActionRequest = async (
       const chunk = await reader.read();
       if (chunk.done) {
         request.headers.set("content-length", String(size));
+        measuredRequestBytes.set(request, size);
         return Result.ok(request);
       }
       size += chunk.value.byteLength;

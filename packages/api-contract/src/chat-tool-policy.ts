@@ -17,7 +17,7 @@ export const CHAT_TOOL_POLICY_REQUIRES_APPROVAL = {
   external: true,
   internal: false,
   mutation: true,
-  public_official: false,
+  public_official: true,
   public_unofficial: true,
   scope_expansion: true,
 } as const satisfies Record<ChatToolPolicyKind, boolean>;

@@ -7,6 +7,7 @@ import type { FeedbackSubmitResponse } from "@stll/api-contract/feedback";
 
 import {
   MAX_RAW_FEEDBACK_BODY_CHARS,
+  PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR,
   receivePublicFeedback,
 } from "@/api/handlers/feedback/intake";
 import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
@@ -153,6 +154,34 @@ describe("public feedback intake", () => {
     });
     expect(otherNetwork.status).toBe(200);
     expect(submitMock).toHaveBeenCalledTimes(6);
+  });
+
+  test("caps delivery across rotating client addresses", async () => {
+    const deps = { guards: memoryGuards() };
+    for (
+      let index = 0;
+      index < PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR;
+      index += 1
+    ) {
+      const response = await receiveForTest({
+        rawBody: raw({ title: `distributed report ${index}` }),
+        clientIp: `198.51.100.${index}`,
+        deps,
+      });
+      expect(response.status).toBe(200);
+    }
+
+    const blocked = await receiveForTest({
+      rawBody: raw({ title: "distributed report over budget" }),
+      clientIp: "203.0.113.250",
+      deps,
+    });
+
+    expect(blocked.status).toBe(429);
+    expect(await readErrorCode(blocked)).toBe("rate_limited");
+    expect(submitMock).toHaveBeenCalledTimes(
+      PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR,
+    );
   });
 
   test("answers 503 when the report could not be stored", async () => {

@@ -298,17 +298,6 @@ export const deleteEntityVersionHandler = async function* ({
               updatedAt: new Date(),
             })
             .where(eq(entities.id, params.entityId));
-          // The existing projection belongs to the withdrawn current version.
-          // Remove it atomically with promotion; post-commit processing below
-          // rebuilds the promoted version's projection.
-          await tx
-            .delete(searchDocuments)
-            .where(
-              and(
-                eq(searchDocuments.entityId, params.entityId),
-                eq(searchDocuments.workspaceId, workspaceId),
-              ),
-            );
           promotedVersionId = next.id;
         }
       }
@@ -325,6 +314,20 @@ export const deleteEntityVersionHandler = async function* ({
                 ? isNull(extractedContent.sourceEntityVersionId)
                 : undefined,
             ),
+          ),
+        );
+
+      // The projection includes reference stamps from every live version.
+      // Withdraw it atomically for current and historical tombstones alike;
+      // the durable repair queued below rebuilds only from versions that remain
+      // live. Missing search results are safer than serving withdrawn metadata
+      // while asynchronous repair is pending.
+      await tx
+        .delete(searchDocuments)
+        .where(
+          and(
+            eq(searchDocuments.entityId, params.entityId),
+            eq(searchDocuments.workspaceId, workspaceId),
           ),
         );
 

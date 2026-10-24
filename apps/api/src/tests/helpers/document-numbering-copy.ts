@@ -11,6 +11,12 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const copy = createCopyToWorkspace({
+  copyFileObjects: async ({ sources }) => {
+    if (sources.length > 0) {
+      panic("Document numbering fixture does not create file fields");
+    }
+    return await Promise.resolve(Result.ok([]));
+  },
   enqueueDocumentProcessingRun: async () => await Promise.resolve(),
   enqueueEntitySearchRepairs: async () => await Promise.resolve(),
   enqueueImageThumbnailOrMarkFailed: async () => await Promise.resolve(),

@@ -5,7 +5,7 @@ import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import { documentProcessingRuns, workspaces } from "@/api/db/schema";
+import { documentProcessingRuns, flowRuns, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -227,6 +227,20 @@ export const executeAuthorizedWorkspaceDeletion = async (
           )
           .limit(1);
         if (runningOcrRuns.length > 0) {
+          return { status: "document-processing-running" } as const;
+        }
+
+        const runningFlowRuns = await tx
+          .select({ id: flowRuns.id })
+          .from(flowRuns)
+          .where(
+            and(
+              eq(flowRuns.workspaceId, workspaceId),
+              eq(flowRuns.status, "running"),
+            ),
+          )
+          .limit(1);
+        if (runningFlowRuns.length > 0) {
           return { status: "document-processing-running" } as const;
         }
 

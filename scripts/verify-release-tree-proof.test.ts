@@ -193,11 +193,13 @@ const createRepository = (directory: string) => {
     return result.stdout.toString().trim();
   };
   git("init", "--quiet", "--initial-branch=main", "--template=");
+  mkdirSync(path.join(directory, "docs/changelog"), { recursive: true });
   writeFileSync(path.join(directory, "VERSION"), "1.2.2\n");
-  git("add", "VERSION");
+  writeFileSync(path.join(directory, "bun.lock"), "{}\n");
+  git("add", "VERSION", "bun.lock");
   const commit = (contents: string, message: string) => {
-    writeFileSync(path.join(directory, "release.txt"), contents);
-    git("add", "release.txt", "VERSION");
+    writeFileSync(path.join(directory, "docs/changelog/v1.2.3.md"), contents);
+    git("add", "docs/changelog/v1.2.3.md", "VERSION");
     git("commit", "--quiet", "--message", message);
     return git("rev-parse", "HEAD");
   };

@@ -92,7 +92,7 @@
   "candidate:.github/workflows/build-api-image.yml/resolve": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "c027d33c49694409c6cf4c0273b05cbe755423ee586403de830dbefdc8b62060"
+    "reviewedDigest": "b38147d5def110a103352469884059444102bd7ce2beb2bad2fbdf25f1e28354"
   },
   "candidate:.github/workflows/build-api-image.yml/build": {
     "kind": "priority",
@@ -107,7 +107,7 @@
   "candidate:.github/workflows/cancel-stale-merge-groups.yml/cancel": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "c141e178af7edbc194c3e02014bfff6f0b41d3efe79b6a9db18cc0e6e2703fbc"
+    "reviewedDigest": "6049d77f803d853dd6371de56a4ecee7166468129941a94ba8b0220f19688002"
   },
   "candidate:.github/workflows/catalogue-upstream.yml/catalogue-upstream": {
     "kind": "ordinary",
@@ -512,7 +512,7 @@
   "candidate:.github/workflows/marketing-screenshots-capture.yml/capture": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "bee803ef89db01ab98d677ed16a58916dd0987121848029dc743ccb70a97ecc8"
+    "reviewedDigest": "7261315b7413c255fb7d97ca57a32334c73ae64492e7b3936f733063220ea860"
   },
   "candidate:.github/workflows/marketing-screenshots-publish.yml/publish": {
     "kind": "ordinary",
@@ -542,7 +542,7 @@
   "candidate:.github/workflows/mirror-ci-service-images.yml/mirror": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "69a039223b5d8043007ae7822c231e2a27d73b313ba5a264880534b7706950dd"
+    "reviewedDigest": "9cbe3d7c5e905f034c470cfecb4d487d484f434a0a7d66f21791a026a8d38479"
   },
   "candidate:.github/workflows/model-catalog-check.yml/model-catalog-check": {
     "kind": "ordinary",
@@ -732,7 +732,7 @@
   "candidate:.github/workflows/release-desktop.yml/resolve": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "be20fb57ff87b47ade002ca776eb16cb7102ee4e65929c53bef02bd95d9cda3b"
+    "reviewedDigest": "5a7b0f87f8cb12e177070ffa66f214a3e8d916cc4f3508d5c8002f6177d8325e"
   },
   "candidate:.github/workflows/release-desktop.yml/build": {
     "kind": "priority",
@@ -792,7 +792,7 @@
   "candidate:.github/workflows/release.yml/resolve": {
     "kind": "support",
     "qualifier": "Resolves and verifies the requested release source and emits a trusted receipt for release jobs.",
-    "reviewedDigest": "5d1041a72ac610642c6c895aee5f1b5a4a96539446c6a6d8a0a3ff9a1bd407a8"
+    "reviewedDigest": "20971b26fc46bdff34a8f3f090761f1f14b5327af7a5dc3a8941a5ea4eee7b8e"
   },
   "candidate:.github/workflows/release.yml/smoke": {
     "kind": "support",
@@ -852,7 +852,7 @@
   "candidate:.github/workflows/sync-branch-protection.yml/sync": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "817301614e81960eb70dbeff8c497a170a4dd776c8beebf0d509819bfa81314c"
+    "reviewedDigest": "0d6e1288896a0fa50239e468c795c8566406b44db58f7b1bfae66651084343a1"
   },
   "candidate:.github/workflows/type-cost-measurement.yml/prepare": {
     "kind": "ordinary",
@@ -922,7 +922,7 @@
   "candidate:.github/workflows/flaky-test-quarantine.yml/propose": {
     "kind": "ordinary",
     "qualifier": "Scans flake history and opens or refreshes a review-required quarantine proposal; no release publication or deployment.",
-    "reviewedDigest": "538b9da9de8e865ff800d669235e6ad56ebc2f912e92836cc6729c6bf852e45c"
+    "reviewedDigest": "07689e44ba6ca7c97b301cbf5387d0268eb5f6e03612cb6d941d1ebb45b527b5"
   },
   "candidate:.github/workflows/release-health.yml/window": {
     "kind": "support",

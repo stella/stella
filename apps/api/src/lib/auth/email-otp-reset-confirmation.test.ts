@@ -20,6 +20,7 @@ type FixtureOptions = {
   value?: string;
   expiresAt?: Date;
   olderValue?: string;
+  onConfirmedReset?: (userId: string) => void;
 };
 
 const createFixture = async ({
@@ -28,6 +29,7 @@ const createFixture = async ({
   value = `${otp}:0`,
   expiresAt = new Date(Date.now() + 60_000),
   olderValue,
+  onConfirmedReset = () => {},
 }: FixtureOptions = {}) => {
   const auth = betterAuth({
     baseURL: "http://localhost:3001",
@@ -55,6 +57,9 @@ const createFixture = async ({
         });
         if (Result.isError(result)) {
           throw result.error;
+        }
+        if (result.value.type === "confirmed") {
+          onConfirmedReset(result.value.userId);
         }
       }),
     },
@@ -148,7 +153,12 @@ describe("email code access reset confirmation", () => {
   );
 
   test("confirmation consumes proof, disconnects providers and signs out old sessions", async () => {
-    const fixture = await createFixture();
+    const confirmedUserIds: string[] = [];
+    const fixture = await createFixture({
+      onConfirmedReset: (userId) => {
+        confirmedUserIds.push(userId);
+      },
+    });
     expect((await fixture.signIn({ email, otp })).status).toBe(409);
     const response = await fixture.signIn({ email, otp, confirmReset: true });
     expect(response.status).toBe(200);
@@ -158,6 +168,10 @@ describe("email code access reset confirmation", () => {
     expect(state.account?.accounts).toEqual([]);
     expect(state.account?.user.emailVerified).toBe(true);
     expect(state.session).toBeNull();
+    if (!state.account) {
+      throw new TypeError("Expected the account fixture to remain readable");
+    }
+    expect(confirmedUserIds).toEqual([state.account.user.id]);
     const replay = await fixture.signIn({ email, otp, confirmReset: true });
     expect(replay.status).toBe(400);
     expect(await replay.json()).toMatchObject({ code: "INVALID_OTP" });

@@ -11,7 +11,10 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
-import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import {
+  requiresPerCallChatApproval,
+  USE_CONNECTOR_SECRET_TOOL_NAME,
+} from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
@@ -48,6 +51,7 @@ import {
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
   formatReadableInputValue,
+  getCompleteConnectorInputRows,
   getReadableInputRows,
   getReaderAnnotationEditTargetId,
   humanizeIdentifier,
@@ -840,6 +844,7 @@ const ToolApprovalSummary = ({
           input={externalInput}
           isAwaitingDecision={isAwaitingDecision}
           providerName={providerName}
+          toolName={name}
         />
       )}
       {isRegistryWriteSummaryToolName(name) && input !== undefined && (
@@ -1118,17 +1123,23 @@ const ExternalMcpInputSummary = ({
   input,
   isAwaitingDecision,
   providerName,
+  toolName,
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
   providerName: string;
+  toolName: ApprovalToolName;
 }) => {
   const t = useTranslations();
-  const rows = getReadableInputRows({
+  const rowOptions = {
     emptyLabel: t("common.empty"),
     input,
     requestLabel: t("chat.toolCall.input"),
-  });
+  };
+  const rows =
+    toolName === USE_CONNECTOR_SECRET_TOOL_NAME
+      ? getCompleteConnectorInputRows(rowOptions)
+      : getReadableInputRows(rowOptions);
 
   return (
     <div className="border-border/50 space-y-2 border-t px-3 py-2">

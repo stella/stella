@@ -57,7 +57,9 @@ jobs:
 
   propose:
     name: Propose quarantine entries
-    if: github.repository == 'stella/stella'
+    if: >-
+      github.repository == 'stella/stella' &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:

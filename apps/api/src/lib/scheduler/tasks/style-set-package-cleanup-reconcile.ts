@@ -4,7 +4,10 @@ import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
-import { reconcilePendingStyleSetPackageCleanups } from "@/api/lib/style-set-package-cleanup-queue";
+import {
+  reconcileDeletedStyleSetPackages,
+  reconcilePendingStyleSetPackageCleanups,
+} from "@/api/lib/style-set-package-cleanup-queue";
 
 export const RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK =
   "styleSets.reconcilePackageCleanups" as const;
@@ -15,7 +18,7 @@ type StyleSetPackageCleanupReconcileDependencies = {
   >[0]["cleanupQueue"];
 };
 
-/** Re-drive package deletions a style set row still records as owed. */
+/** Re-drive replacement cleanup and consume committed deletion tombstones. */
 export const createReconcileStyleSetPackageCleanupsTask =
   ({
     cleanupQueue,
@@ -28,22 +31,35 @@ export const createReconcileStyleSetPackageCleanupsTask =
       ...(cleanupQueue === undefined ? {} : { cleanupQueue }),
       db,
     });
+    const deletionOutcome = await reconcileDeletedStyleSetPackages({ db });
     const summary = Result.isError(outcome)
       ? outcome.error.summary
       : outcome.value;
+    const deletionSummary = Result.isError(deletionOutcome)
+      ? deletionOutcome.error.summary
+      : deletionOutcome.value;
     logger.info(
       "scheduler.style_set_package_cleanups_reconciled",
       sanitizeErrorAttributesForOutput({
+        "styleSetDeletionCleanups.cleaned": deletionSummary.cleaned,
+        "styleSetDeletionCleanups.failed": deletionSummary.failed,
+        "styleSetDeletionCleanups.scanned": deletionSummary.scanned,
         "styleSetPackageCleanups.enqueued": summary.handedOff,
         "styleSetPackageCleanups.failed": summary.failed,
         "styleSetPackageCleanups.scanned": summary.scanned,
       }),
     );
+    let error = null;
     if (Result.isError(outcome)) {
+      error = outcome.error;
+    } else if (Result.isError(deletionOutcome)) {
+      error = deletionOutcome.error;
+    }
+    if (error !== null) {
       return Result.err(
         new SchedulerTaskFailure({
-          cause: outcome.error,
-          message: outcome.error.message,
+          cause: error,
+          message: error.message,
         }),
       );
     }

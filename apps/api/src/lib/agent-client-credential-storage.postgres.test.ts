@@ -166,7 +166,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("records completion across restarts and accepts an explicit reset", async () => {
+    test("records completion and self-heals later legacy writes", async () => {
       await withStoredValues(databaseUrl, async (db) => {
         await db.transaction(async (tx) => await seed(tx, 2));
         const job = await db.transaction(async (tx) =>
@@ -211,42 +211,14 @@ if (!databaseUrl || !enabled) {
           throw new Error("scheduler fixture missing");
         }
         expect(completed.payload?.["completed"]).toBe(true);
-        expect(completed.enabled).toBe(false);
+        expect(completed.enabled).toBe(true);
         await db.transaction(async (tx) => {
           await seed(tx, 1);
-          await tx
-            .update(schedulerJobs)
-            .set({ enabled: true })
-            .where(eq(schedulerJobs.id, job.id));
-        });
-        const unusedDatabase = new Proxy(db, {
-          get() {
-            throw new Error("completed task must not access storage");
-          },
         });
         await backfillAgentClientStorage({
           ...context,
-          db: unusedDatabase,
-          job: { ...completed, enabled: true },
+          job: completed,
           payload: completed.payload,
-        });
-        expect(await countPreviousAgentClientValues(db)).toBe(1);
-        const reset = await db.transaction(async (tx) =>
-          (
-            await tx
-              .update(schedulerJobs)
-              .set({ payload: {}, enabled: true })
-              .where(eq(schedulerJobs.id, job.id))
-              .returning()
-          ).at(0),
-        );
-        if (!reset) {
-          throw new Error("scheduler fixture missing");
-        }
-        await backfillAgentClientStorage({
-          ...context,
-          job: reset,
-          payload: reset.payload,
         });
         expect(await countPreviousAgentClientValues(db)).toBe(0);
       });

@@ -16,17 +16,19 @@ import type {
   UpdateAnnotationInput,
 } from "@/components/legal-reader/annotations/annotation-types";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import {
+  GUEST_ANNOTATIONS_STORAGE_KEY,
+  LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
+} from "@/lib/account/storage-keys";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson } from "@/lib/stored-json";
 
-const GUEST_ANNOTATIONS_STORAGE_KEY = "legal-reader-guest-annotations:v2";
 /**
  * Where a tab that was reading a decision when this shipped still holds its
  * marks. Session storage, so the window is one open tab wide, but the marks
  * are the reader's own words and are not worth dropping.
  */
-const LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY = "case-law-guest-annotations:v1";
 /**
  * v1 held decision notes under `decisionId`, before statutes could be marked.
  * v2 names the document the way the reader and the API now do.

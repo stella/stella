@@ -92,14 +92,16 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-// An insert whose values can be awaited directly or chained into an upsert,
-// as the refresh path does for identifier rows.
-// oxlint-disable-next-line typescript/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
-const insertedValues = () =>
-  Object.assign(Promise.resolve(undefined), {
-    onConflictDoUpdate: async () => await Promise.resolve(undefined),
-  });
+const insertFixture = (table: unknown) => ({
+  values:
+    table === caseLawDecisionIdentifiers
+      ? () => ({
+          onConflictDoUpdate: async () => await Promise.resolve(undefined),
+        })
+      : async () => await Promise.resolve(undefined),
+});
 
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
@@ -142,7 +144,7 @@ const cursorOnlyDb =
   (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
   async (callback) => {
     const tx = {
-      insert: () => ({ values: insertedValues }),
+      insert: insertFixture,
       query: {
         caseLawDecisions: { findFirst: async () => undefined },
       },
@@ -179,8 +181,7 @@ const cursorOnlyDb =
 
     // SAFETY: these cases exercise only the case_law_sources cursor update;
     // the fake implements that chain.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return await callback(tx as unknown as Transaction);
+    return await callback(asTestRaw<Transaction>(tx));
   };
 
 afterEach(() => {
@@ -888,8 +889,7 @@ describe("runIngestionPipeline — database timeouts", () => {
 
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update after the synthetic timeout; the fake implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const result = await runIngestionPipeline({
@@ -940,21 +940,28 @@ describe("runIngestionPipeline — failure records", () => {
             findMany: async () => [],
           },
         },
-        select: () => ({
+        select: (selection: unknown) => ({
           from: (table: unknown) => ({
-            // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with for/limit chains; async would discard those methods
-            where: () =>
-              Object.assign(Promise.resolve([]), {
-                for: () => ({ limit: async () => [] }),
-                limit: async () =>
-                  table === caseLawSources
-                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                    : [],
-              }),
+            where:
+              table === caseLawDecisionIdentifiers ||
+              (typeof selection === "object" &&
+                selection !== null &&
+                "polarity" in selection)
+                ? async () => await Promise.resolve([])
+                : () => ({
+                    for: () => ({ limit: async () => [] }),
+                    limit: async () =>
+                      table === caseLawSources &&
+                      typeof selection === "object" &&
+                      selection !== null &&
+                      "adapterKey" in selection
+                        ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                        : [],
+                  }),
           }),
         }),
         insert: (table: unknown) => ({
-          values: async (rows: FailureRow[]) => {
+          values: (rows: FailureRow[]) => {
             if (table === caseLawDecisions) {
               state.decisionWrites++;
               throw new Error("unexpected decision write");
@@ -963,7 +970,9 @@ describe("runIngestionPipeline — failure records", () => {
               throw insertError;
             }
             state.insertedRows.push(...rows);
-            return await Promise.resolve([]);
+            return {
+              onConflictDoNothing: async () => await Promise.resolve([]),
+            };
           },
         }),
         execute: async () => await Promise.resolve([]),
@@ -989,8 +998,7 @@ describe("runIngestionPipeline — failure records", () => {
 
       // SAFETY: this fake implements identity and polarity reads, failure-record
       // inserts and cursor updates; a decision insert fails explicitly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
     return { scopedDb, state };
   };
@@ -1033,6 +1041,7 @@ describe("runIngestionPipeline — failure records", () => {
       });
       expect(state.insertedRows).toHaveLength(1);
       const [row] = state.insertedRows;
+      expect(row?.recordIdentity).toMatch(/^decision:[0-9a-f]{64}$/u);
       expect(row?.caseNumber).toBe(
         input.caseNumber.slice(0, CITATION_STORAGE_WIDTHS.caseNumber),
       );
@@ -1301,8 +1310,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update (the empty page performs no decision writes); the fake
       // implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const result = await runIngestionPipeline({
@@ -1781,13 +1789,12 @@ describe("processDecision — corpus storage off", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const outcome = await processDecision({
@@ -1879,15 +1886,14 @@ describe("processDecision — the decision's judges", () => {
           }),
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       inTransaction = true;
       try {
         // SAFETY: the refresh path walks only these chains; anything else
         // would throw and fail the test loudly.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        return await callback(tx as unknown as Transaction);
+        return await callback(asTestRaw<Transaction>(tx));
       } finally {
         inTransaction = false;
       }
@@ -2032,13 +2038,12 @@ describe("processDecision — fields on an existing row", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     await processDecision({
@@ -2178,8 +2183,7 @@ describe("processDecision — source raw upload failure", () => {
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const outcome = await processDecision({
@@ -2264,8 +2268,7 @@ describe("processDecision — source raw upload failure", () => {
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     await processDecision({

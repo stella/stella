@@ -6,7 +6,7 @@
 
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import {
   caseLawDecisions,
@@ -91,6 +91,7 @@ if (!databaseUrl || !runPostgresTests) {
           court: "Test court",
           fulltext: "text that must no longer be searchable",
           language: "cs",
+          sourceRaw: "publisher payload that must be erased",
           sourceId,
         })
         .returning({ id: caseLawDecisions.id });
@@ -109,10 +110,66 @@ if (!databaseUrl || !runPostgresTests) {
         operation: "redact",
         status: "succeeded",
       });
-      await db
-        .update(caseLawDecisions)
-        .set({ fulltext: null })
-        .where(eq(caseLawDecisions.id, decision.id));
+      // Model a row written before the stronger inline-raw CHECK shipped.
+      // Reinstall the NOT VALID constraint immediately: it fences every new
+      // write while allowing this one historical violation to exercise v3.
+      await db.execute(sql`
+        ALTER TABLE "case_law_decisions"
+        DROP CONSTRAINT "case_law_decisions_redacted_payload_erased"
+      `);
+      const alreadyRedacted = await (async () => {
+        try {
+          const [row] = await db
+            .insert(caseLawDecisions)
+            .values({
+              caseNumber: `redaction-inline-raw-${suffix}`,
+              country: "CZE",
+              court: "Test court",
+              language: "cs",
+              redactedAt: new Date("2026-07-31T00:00:00.000Z"),
+              sourceId,
+              sourceRaw: "legacy inline raw payload",
+            })
+            .returning({ id: caseLawDecisions.id });
+          return row;
+        } finally {
+          await db.execute(sql`
+            ALTER TABLE "case_law_decisions"
+            ADD CONSTRAINT "case_law_decisions_redacted_payload_erased"
+            CHECK (
+              "redacted_at" IS NULL
+              OR (
+                "fulltext" IS NULL
+                AND "sections" IS NULL
+                AND "document_ast" IS NULL
+                AND "content_hash" IS NULL
+                AND "source_raw" IS NULL
+              )
+            ) NOT VALID
+          `);
+        }
+      })();
+      if (!alreadyRedacted) {
+        panic("expected already-redacted decision row");
+      }
+      // The audit row predates its compatibility trigger in production.
+      await db.execute(sql`
+        ALTER TABLE "case_law_index_jobs"
+        DISABLE TRIGGER "case_law_index_jobs_legacy_redaction_tombstone"
+      `);
+      try {
+        await db.insert(caseLawIndexJobs).values({
+          decisionId: alreadyRedacted.id,
+          generation: "case_law_v1",
+          operation: "redact",
+          status: "succeeded",
+        });
+      } finally {
+        await db.execute(sql`
+          ALTER TABLE "case_law_index_jobs"
+          ENABLE TRIGGER "case_law_index_jobs_legacy_redaction_tombstone"
+        `);
+      }
       await db.insert(schedulerJobs).values({
         description: "redaction repair test",
         id: schedulerJobId,
@@ -124,12 +181,30 @@ if (!databaseUrl || !runPostgresTests) {
 
       await runTask();
 
+      await db.execute(sql`
+        ALTER TABLE "case_law_decisions"
+        VALIDATE CONSTRAINT "case_law_decisions_redacted_payload_erased"
+      `);
+
       expect(
         await db.query.caseLawDecisions.findFirst({
           where: { id: { eq: decision.id } },
-          columns: { fulltext: true, redactedAt: true },
+          columns: { fulltext: true, redactedAt: true, sourceRaw: true },
         }),
-      ).toMatchObject({ fulltext: null, redactedAt: expect.any(Date) });
+      ).toMatchObject({
+        fulltext: null,
+        redactedAt: expect.any(Date),
+        sourceRaw: null,
+      });
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: alreadyRedacted.id } },
+          columns: { redactedAt: true, sourceRaw: true },
+        }),
+      ).toMatchObject({
+        redactedAt: new Date("2026-07-31T00:00:00.000Z"),
+        sourceRaw: null,
+      });
       expect(
         await db
           .select({ id: caseLawSearchDocuments.decisionId })

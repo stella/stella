@@ -55,10 +55,16 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 import {
+  PUBLISHER_BODY_MAX_BYTES,
+  PublisherResponseTooLargeError,
+} from "./publisher-response-limit";
+import {
   fetchPublisher,
   type PublisherFetchInit,
   rethrowCycleStop,
 } from "./retry";
+
+export { PUBLISHER_BODY_MAX_BYTES } from "./publisher-response-limit";
 
 /**
  * Run one step of a read: its value, or the failure as `unavailable`. Errors
@@ -155,8 +161,6 @@ const readGatedResponse = async ({
  * payload verification ceiling, so anything larger could not be stored and
  * verified as a raw source payload anyway.
  */
-export const PUBLISHER_BODY_MAX_BYTES = 64 * 1024 * 1024;
-
 /**
  * The body of a present read, whole, up to {@link PUBLISHER_BODY_MAX_BYTES}.
  * A body over the ceiling stops the read at the ceiling and is `too-large`; a
@@ -180,6 +184,16 @@ const readBodyBytes = async (
     signal,
   );
   if (Result.isError(bytes)) {
+    if (
+      bytes.error.type === "unavailable" &&
+      bytes.error.cause.kind === "thrown" &&
+      bytes.error.cause.error instanceof PublisherResponseTooLargeError
+    ) {
+      return readUnavailable({
+        kind: "too-large",
+        maxBytes: bytes.error.cause.error.maxBytes,
+      });
+    }
     return bytes.error;
   }
   if (bytes.value === null) {

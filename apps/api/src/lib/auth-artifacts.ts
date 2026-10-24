@@ -496,9 +496,27 @@ export const revokeAllUserSessions = async (
 };
 
 /**
+ * Disables every API key a user holds across organizations and key
+ * configurations. Access reset keeps the user row, so its cascade cannot end
+ * credentials that may have been issued by the account controller being
+ * displaced.
+ */
+export const revokeAllUserApiKeys = async (
+  tx: AuthArtifactTransaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  // audit: skip - the enclosing account recovery or deletion records revocation
+  await tx
+    .update(apikey)
+    .set({ enabled: false, updatedAt: new Date() })
+    .where(and(eq(apikey.referenceId, userId), eq(apikey.enabled, true)));
+};
+
+/**
  * Revokes every OAuth access and refresh token a user holds, across all
- * clients and organizations. Account deletion only; per-grant and
- * per-membership revocation stay on the scoped helpers above.
+ * clients and organizations. Account deletion and confirmed access recovery
+ * use this account-wide boundary; per-grant and per-membership revocation stay
+ * on the scoped helpers above.
  */
 export const revokeAllUserOAuthTokens = async (
   tx: AuthArtifactTransaction,
@@ -547,4 +565,13 @@ export const revokeMonitoringSessions = async ({
   };
   await recordAuditEvent(counts);
   return counts;
+};
+
+/** Ends every durable credential controlled by an account before recovery. */
+export const revokeAllUserDurableCredentials = async (
+  tx: AuthArtifactTransaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  await revokeAllUserApiKeys(tx, userId);
+  await revokeAllUserOAuthTokens(tx, userId);
 };

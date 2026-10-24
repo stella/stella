@@ -90,6 +90,7 @@ type CreateCollabServerBaseOptions = {
   maxDebounceMs?: number;
   port: number;
   roomHeartbeatIntervalMs?: number;
+  roomActivityHeartbeatIntervalMs?: number;
   shutdownDrainTimeoutMs?: number;
   snapshotStoreRetryBaseDelayMs?: number;
   snapshotStoreRetryMaxDelayMs?: number;
@@ -146,6 +147,7 @@ const storeSnapshotResponseSchema = v.strictObject({
 
 const heartbeatResponseSchema = v.strictObject({
   activeAt: v.string(),
+  canEdit: v.boolean(),
 });
 
 const flushRequestSchema = v.pipe(
@@ -210,6 +212,12 @@ class CollabSnapshotRoomRetiredError extends TaggedError(
 
 class CollabSnapshotPendingError extends TaggedError(
   "CollabSnapshotPendingError",
+)<{
+  message: string;
+}> {}
+
+class CollabPermissionChangedError extends TaggedError(
+  "CollabPermissionChangedError",
 )<{
   message: string;
 }> {}
@@ -368,7 +376,9 @@ export const createCollabServer = async (
     hostname = "0.0.0.0",
     maxDebounceMs = 10_000,
     port,
-    roomHeartbeatIntervalMs = ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
+    roomActivityHeartbeatIntervalMs,
+    roomHeartbeatIntervalMs = roomActivityHeartbeatIntervalMs ??
+      ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
     serviceToken,
     shutdownDrainTimeoutMs = SHUTDOWN_DRAIN_TIMEOUT_MS,
     snapshotStoreRetryBaseDelayMs = SNAPSHOT_STORE_RETRY_BASE_DELAY_MS,
@@ -805,12 +815,18 @@ export const createCollabServer = async (
 
   const heartbeatRoom = async (state: CollabRoomTokenState) => {
     const token = await getFreshRoomToken(state);
-    await postJson({
+    const heartbeat = await postJson({
       apiUrl,
       body: { roomId: state.roomId, token },
       path: "/folio-collab-rooms/heartbeat",
       schema: heartbeatResponseSchema,
     });
+    if (state.canEdit !== heartbeat.canEdit) {
+      state.canEdit = heartbeat.canEdit;
+      throw new CollabPermissionChangedError({
+        message: "Collaboration permission changed.",
+      });
+    }
   };
 
   const scheduleRoomHeartbeat = (tokenState: CollabRoomTokenState) => {

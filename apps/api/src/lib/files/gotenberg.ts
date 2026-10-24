@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { readCappedBytes } from "@stll/skills/streaming";
 
 import { env } from "@/api/env";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
@@ -52,6 +53,7 @@ type ConvertToPdfResult = {
 
 class GotenbergError extends TaggedError("GotenbergError")<{
   message: string;
+  kind: "http" | "transport" | "response-too-large";
   statusCode?: number;
   cause?: unknown;
 }> {}
@@ -182,8 +184,15 @@ const GOTENBERG_RETRY = {
   delayMs: 2000,
   backoff: "exponential",
   shouldRetry: (error: GotenbergError) =>
-    error.statusCode === undefined || error.statusCode >= 500,
+    error.kind === "transport" ||
+    (error.kind === "http" && (error.statusCode ?? 0) >= 500),
 } as const;
+
+const tooLargeConverterResponse = () =>
+  new GotenbergError({
+    message: `Gotenberg PDF exceeds the ${LIMITS.fileDerivativePdfMaxBytes}-byte limit`,
+    kind: "response-too-large",
+  });
 
 type ConvertToPdfOptions = {
   /**
@@ -381,11 +390,31 @@ export const convertToPdf = async (
         if (!response.ok) {
           throw new GotenbergError({
             message: `Gotenberg returned ${response.status}`,
+            kind: "http",
             statusCode: response.status,
           });
         }
 
-        const result = await response.arrayBuffer();
+        const contentLength = response.headers.get("content-length");
+        if (
+          contentLength !== null &&
+          (!/^\d+$/u.test(contentLength) ||
+            Number(contentLength) > LIMITS.fileDerivativePdfMaxBytes)
+        ) {
+          await response.body?.cancel();
+          throw tooLargeConverterResponse();
+        }
+        const responseBytes =
+          response.body === null
+            ? new Uint8Array()
+            : await readCappedBytes(
+                response.body,
+                LIMITS.fileDerivativePdfMaxBytes,
+              );
+        if (responseBytes === null) {
+          throw tooLargeConverterResponse();
+        }
+        const result = toArrayBuffer(responseBytes);
         return { buffer: result, sizeBytes: result.byteLength };
       },
       catch: (cause) => {
@@ -394,6 +423,7 @@ export const convertToPdf = async (
         }
         return new GotenbergError({
           message: "Failed to reach Gotenberg",
+          kind: "transport",
           cause,
         });
       },

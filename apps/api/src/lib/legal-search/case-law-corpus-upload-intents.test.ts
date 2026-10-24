@@ -154,7 +154,7 @@ describe("case-law corpus upload intents", () => {
     );
     expect(searchIndexSource).toContain('.for("share")');
     expect(schedulerJobsSource).toContain(
-      'id: "caseLaw.backfillRedactionTombstones.v2"',
+      'id: "caseLaw.backfillRedactionTombstones.v3"',
     );
     expect(redactionBackfillTask).toContain(".limit(BACKFILL_LIMIT)");
     expect(redactionBackfillTask).not.toContain(

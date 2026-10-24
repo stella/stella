@@ -40,7 +40,9 @@ export {
   InfoSoudParseError,
   InfoSoudPragueCourtResolutionError,
   InfoSoudRequestError,
+  InfoSoudResponseIdentityError,
 } from "./errors.js";
+export type { InfoSoudResponseIdentityMismatch } from "./errors.js";
 export {
   decodeEventDetail,
   enrichCaseEventWithDetail,

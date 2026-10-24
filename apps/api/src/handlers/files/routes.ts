@@ -18,6 +18,7 @@ import {
   readOcrExport,
 } from "@/api/handlers/files/ocr-export";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
+import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
@@ -421,6 +422,12 @@ export const filesRoute = new Elysia({
     query: ocrExportEndpoint.config.query,
     response: ocrExportEndpoint.config.response,
   });
+
+export const fileContentRoute = new Elysia({ prefix: "/file-content" }).get(
+  "/:grant",
+  readFileContentEndpoint.handler,
+  { params: readFileContentEndpoint.config.params },
+);
 
 // These UI-only endpoints intentionally stay outside the exported Eden
 // contract. Elysia still registers them with the same guards and macros above.

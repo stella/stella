@@ -316,7 +316,9 @@ describe("public corpus fleet request budgets", () => {
   }
 
   const searchRoutes = Object.entries(PUBLIC_CORPUS_ROUTE_POLICY)
-    .filter(([, routeClass]) => routeClass === "search")
+    .filter(
+      ([, policy]) => policy.type === "static" && policy.class === "search",
+    )
     .flatMap(([route]) => {
       const separator = route.indexOf(" ");
       const method = route.slice(0, separator);
@@ -328,7 +330,15 @@ describe("public corpus fleet request budgets", () => {
             method: requestMethod,
           })),
       );
-    });
+    })
+    .concat(
+      ["GET", "HEAD"].flatMap((method) =>
+        [
+          "/law/statutes?query=constitution",
+          "/law/statutes/?query=constitution",
+        ].map((path) => ({ path, method })),
+      ),
+    );
   for (const { path, method } of searchRoutes) {
     test(`search address refusals preserve fleet capacity without double charging: ${method} ${path}`, async () => {
       const previous = env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX;
