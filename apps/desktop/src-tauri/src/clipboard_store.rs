@@ -956,6 +956,9 @@ mod tests {
       source_app_exclusions: Vec::new(),
       source_app_visuals: Vec::new(),
     };
+    let mut initial = state.clone();
+    initial.items.clear();
+    store.persist(&initial).unwrap();
     fs::write(store.record_directory(), b"blocked directory").unwrap();
     store.persist(&state).unwrap();
     assert!(store.load().unwrap_err().contains("directory"));
@@ -1200,6 +1203,28 @@ mod tests {
       .unwrap();
     assert_eq!(loaded, next);
     ClipboardStore::remove(&path).unwrap();
+  }
+
+  #[test]
+  fn missing_history_refuses_obstructed_record_directories() {
+    for extension in ["records", "visuals"] {
+      let path = unique_path();
+      let store = ClipboardStore::new([7; 32], path.clone());
+      let obstruction = path.with_extension(extension);
+      fs::write(&obstruction, b"blocked directory").unwrap();
+
+      assert!(
+        store
+          .load()
+          .unwrap_err()
+          .contains("clipboard record store removal failed")
+      );
+      assert!(!path.exists());
+      assert_eq!(fs::read(&obstruction).unwrap(), b"blocked directory");
+
+      fs::remove_file(obstruction).unwrap();
+      ClipboardStore::remove(&path).unwrap();
+    }
   }
 
   #[test]
