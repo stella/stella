@@ -272,8 +272,8 @@ test("dedicated lazy execution preserves modifiers, results, rejection and one c
   await runWithQueryCounter(async (counter) => {
     const unused = client.unsafe("SELECT unused");
     const query = client.unsafe("SELECT kept").values().raw().simple();
-    expect(unused).toBe(queries.at(0));
-    expect(query).toBe(queries.at(1));
+    expect(queries.at(0)).toBe(unused);
+    expect(queries.at(1)).toBe(query);
     expect(Object.keys(query)).not.toContain("then");
     expect(counter.count).toBe(0);
     expect(statements).toEqual([]);
