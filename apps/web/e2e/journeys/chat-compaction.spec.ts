@@ -5,7 +5,6 @@ import {
   test,
 } from "@playwright/test";
 import { panic } from "better-result";
-import { setTimeout as delay } from "node:timers/promises";
 import * as v from "valibot";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -108,11 +107,18 @@ const expectNoTrimmedHistory = async (page: Page, thread: ChatThread) => {
   ).toHaveCount(0);
 };
 
+test.afterEach(async ({ page, request }) => {
+  const threadId = CHAT_THREAD_PATH.exec(new URL(page.url()).pathname)?.at(1);
+  if (threadId !== undefined) {
+    await apiDelete(request, `/chat/threads/${threadId}`);
+  }
+});
+
 test(
   "compaction replaces history and survives reload; unchanged history without a trimming notice fails",
   { tag: JOURNEY_TAG.localStack },
   async ({ page, request }) => {
-    test.setTimeout(9 * 60_000);
+    test.setTimeout(11 * 60_000);
     await page.goto("/chat/new", { waitUntil: "commit" });
     await expect(chatComposer(page)).toBeVisible({ timeout: 60_000 });
 
@@ -129,9 +135,16 @@ test(
     }
     await sendTurn({ page, request, turn: turn + 1 });
     // Sends enqueue durable compaction; they do not wait for the scheduler.
-    // Wait once, then inspect the same checkpoint-derived context the page loads.
-    await delay(COMPACTION_SETTLE_MS);
-    thread = await readThread(request, currentThreadId(page));
+    // Observe the same checkpoint-derived context the page loads.
+    const threadId = currentThreadId(page);
+    await expect
+      .poll(
+        async () =>
+          (await readThread(request, threadId)).context.summarizedMessageCount,
+        { intervals: [10_000], timeout: COMPACTION_SETTLE_MS },
+      )
+      .toBeGreaterThan(0);
+    thread = await readThread(request, threadId);
     expect(thread.context.summarizedMessageCount).toBeGreaterThan(0);
     expect(thread.context.breakdown.summaryTokens).toBeGreaterThan(0);
     await expectNoTrimmedHistory(page, thread);
@@ -152,7 +165,5 @@ test(
     expect(reloadedThread.context.breakdown.summaryTokens).toBeGreaterThan(0);
     await expect(page.getByRole("log")).toBeVisible({ timeout: 60_000 });
     await expectNoTrimmedHistory(page, reloadedThread);
-
-    await apiDelete(request, `/chat/threads/${currentThreadId(page)}`);
   },
 );

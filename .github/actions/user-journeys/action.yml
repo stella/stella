@@ -5,7 +5,7 @@ inputs:
     description: Playwright project, deployed or local-stack
     required: true
   expected-commit:
-    description: Full commit checked out and, for deployed journeys, served by the target API
+    description: Full commit containing the journey harness, checked out and, for deployed journeys, served by the target API
     required: true
   health-url:
     description: Deployed API health endpoint; required for deployed journeys
