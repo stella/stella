@@ -87,9 +87,11 @@ export const createInspectorAnonymizationSlice = (
       state.anonymizationPipelineStatusByFieldId[fieldId] = "idle";
       state.anonymizationRetryByFieldId[fieldId] =
         (state.anonymizationRetryByFieldId[fieldId] ?? 0) + 1;
-      for (const registration of state.anonymizationDetectionsByFieldId[
-        fieldId
-      ] ?? []) {
+      const registrations = state.anonymizationDetectionsByFieldId[fieldId];
+      if (registrations === undefined) {
+        return;
+      }
+      for (const registration of registrations) {
         retries.push(registration.retry);
       }
     });

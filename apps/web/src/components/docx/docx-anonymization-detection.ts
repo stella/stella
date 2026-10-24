@@ -91,7 +91,7 @@ const publishDetectionStatus = (fieldId: string) => {
         break;
       default:
         status satisfies never;
-        return panic("Unhandled anonymization detection status");
+        panic("Unhandled anonymization detection status");
     }
   }
   if (running) {
