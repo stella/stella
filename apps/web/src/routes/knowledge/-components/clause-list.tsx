@@ -171,10 +171,7 @@ export const ClauseList = ({
                 />
               </InputGroup>
             </ResponsiveActionToolbarItem>
-            <ResponsiveActionToolbarItem
-              className="ms-auto sm:ms-0"
-              slot="action"
-            >
+            <ResponsiveActionToolbarItem slot="action">
               <div className="flex gap-1">
                 {canCreateClause && (
                   <Button

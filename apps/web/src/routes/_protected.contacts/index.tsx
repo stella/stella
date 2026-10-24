@@ -225,7 +225,7 @@ function ContactsPage() {
           </InputGroup>
         </ResponsiveActionToolbarItem>
         <ResponsiveActionToolbarItem slot="secondary">
-          <div className="flex gap-1 overflow-x-auto">
+          <div className="flex flex-wrap gap-1">
             <FilterButton
               active={filter === "all"}
               label={t("common.all")}
@@ -243,7 +243,7 @@ function ContactsPage() {
             />
           </div>
         </ResponsiveActionToolbarItem>
-        <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+        <ResponsiveActionToolbarItem slot="action">
           <div className="flex gap-1">
             {canCreateContact && (
               <Button
@@ -441,10 +441,11 @@ const useContactColumns = () => {
           header: t("common.name"),
           cell: ({ row, getValue }) => (
             <Link
-              className="font-medium hover:underline"
+              className="block max-w-xs truncate font-medium hover:underline"
               dir="auto"
               onClick={(event) => event.stopPropagation()}
               params={{ contactId: row.original.id }}
+              title={getValue()}
               to="/contacts/$contactId"
             >
               {getValue()}
@@ -463,8 +464,9 @@ const useContactColumns = () => {
             }
             return (
               <a
-                className="text-muted-foreground hover:text-foreground hover:underline"
+                className="text-muted-foreground hover:text-foreground block max-w-xs truncate hover:underline"
                 href={`mailto:${primaryEmail.address}`}
+                title={primaryEmail.address}
               >
                 {primaryEmail.address}
               </a>
@@ -728,7 +730,7 @@ const ContactsToolbarPlaceholder = () => {
         </InputGroup>
       </ResponsiveActionToolbarItem>
       <ResponsiveActionToolbarItem slot="secondary">
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex flex-wrap gap-1">
           <Button disabled size="sm" variant="default">
             {t("common.all")}
           </Button>
@@ -740,7 +742,7 @@ const ContactsToolbarPlaceholder = () => {
           </Button>
         </div>
       </ResponsiveActionToolbarItem>
-      <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+      <ResponsiveActionToolbarItem slot="action">
         <div className="flex gap-1">
           {canCreateContact && (
             <Button
