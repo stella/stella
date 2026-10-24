@@ -13,7 +13,7 @@ import {
 } from "@stll/api-contract/mcp-app.fixtures";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
-import { installBrowserClock } from "@stll/ui/testing/browser-clock";
+import { installBrowserClock } from "@stll/ui/browser-clock";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

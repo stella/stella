@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { setFixedBrowserTime } from "@stll/ui/testing/browser-clock";
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import {
   appShellNavigationLink,

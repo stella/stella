@@ -30,7 +30,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
-    "./testing/browser-clock": "./src/testing/browser-clock.ts",
+    "./browser-clock": "./src/testing/browser-clock.ts",
     "./toolbar-icon-action": "./src/components/toolbar-icon-action.tsx",
     "./view-toolbar": "./src/components/view-toolbar.tsx",
     "./accordion": "./src/components/accordion.tsx",

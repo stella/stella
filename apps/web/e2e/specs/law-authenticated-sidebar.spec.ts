@@ -1,4 +1,4 @@
-import { setFixedBrowserTime } from "@stll/ui/testing/browser-clock";
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { expect, test } from "../helpers/test";
