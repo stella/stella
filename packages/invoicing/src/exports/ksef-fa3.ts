@@ -121,13 +121,6 @@ const EU_VAT_NUMBER_PATTERNS = {
   SK: /^\d{10}$/u,
 } as const satisfies Record<EuCountry, RegExp>;
 
-const EU_VAT_NUMBER_PATTERN = new RegExp(
-  `^(?:${Object.values(EU_VAT_NUMBER_PATTERNS)
-    .map((pattern) => pattern.source.replace(/^\^|\$$/gu, ""))
-    .join("|")})$`,
-  "u",
-);
-
 const EU_COUNTRY_NAMES = {
   AT: "Austrian",
   BE: "Belgian",
@@ -164,9 +157,18 @@ const isEuCountry = (country: string): country is EuCountry =>
 const vatPrefixOf = (country: string): string =>
   country === "GR" ? "EL" : country;
 
-/** The EU VAT prefixes (TKodyKrajowUE): the member states with EL for Greece,
- * and XI for Northern Ireland. */
-const EU_VAT_PREFIXES = new Set([...[...EU_COUNTRIES].map(vatPrefixOf), "XI"]);
+/** Each EU VAT prefix (TKodyKrajowUE) with its number shape: the member states
+ * with EL for Greece, and XI for Northern Ireland. */
+const VAT_NUMBER_PATTERN_BY_PREFIX: ReadonlyMap<string, RegExp> = new Map([
+  ...Object.entries(EU_VAT_NUMBER_PATTERNS).map(
+    ([country, pattern]) => [vatPrefixOf(country), pattern] as const,
+  ),
+  ["XI", /^(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$/u],
+]);
+
+const EU_VAT_PREFIXES: ReadonlySet<string> = new Set(
+  VAT_NUMBER_PATTERN_BY_PREFIX.keys(),
+);
 
 /**
  * The invoice's sales totals, in the schema's order: each net sum (P_13_x)
@@ -331,7 +333,7 @@ const buyerTaxIdentity = (
     prefix: string,
     number: string,
   ): BuyerTaxIdentity | { error: string } =>
-    EU_VAT_NUMBER_PATTERN.test(number)
+    VAT_NUMBER_PATTERN_BY_PREFIX.get(prefix)?.test(number) === true
       ? { zone: "eu", prefix, number }
       : { error: `the buyer's EU VAT number ${vatId ?? ""} is not valid` };
   if (vatId && ownPrefix !== undefined && ownPrefix !== "PL") {

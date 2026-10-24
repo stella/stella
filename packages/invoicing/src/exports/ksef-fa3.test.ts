@@ -466,6 +466,16 @@ describe("KSeF FA(3) VAT treatments", () => {
     }
   });
 
+  test("refuses an EU VAT number that does not fit its own country", async () => {
+    // Eight digits fit Danish or Finnish numbers, never a German one.
+    const record = polish({
+      number: "16a/2026",
+      buyer: { ...BUYER, vatId: "DE12345678" },
+      lines: [line("reverse_charge")],
+    });
+    expect(refusal(record)).toContain("is not valid");
+  });
+
   test("a reverse charge to an EU buyer needs its VAT number", async () => {
     const record = polish({
       number: "6/2026",
