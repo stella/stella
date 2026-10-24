@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  persistedUiStateFingerprint,
   PERSISTED_UI_STATE_NAMES,
   PERSISTED_UI_STATE_PREFIXES,
+  persistedUiStateFingerprint,
   resetPersistedUiState,
 } from "@/lib/analytics/web-hang/persisted-ui-state";
 
