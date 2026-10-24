@@ -45,6 +45,7 @@ import {
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import type { InvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
@@ -322,9 +323,7 @@ export const priceLines = (
   for (const [index, draft] of drafts.entries()) {
     const line = calculated.value.lines[index];
     if (!line) {
-      return Result.err(
-        new HandlerError({ status: 500, message: "Line pricing failed" }),
-      );
+      return panic("Pricing invoice drafts returned fewer lines than supplied");
     }
     priced.push({
       ...draft,
@@ -584,13 +583,14 @@ const materialiseAttachedEntryLines = async (
  */
 export const lockDraftInvoiceForLines = async (
   tx: Transaction,
-  scope: InvoiceScope,
+  { matterLocks, ...scope }: InvoiceScope & { matterLocks: InvoiceMatterLocks },
   recordAuditEvent: AuditRecorder,
 ) => {
   const invoice = await lockInvoiceInStatus(tx, {
     invoiceId: scope.invoiceId,
     workspaceId: scope.workspaceId,
     status: INVOICE_STATUS.DRAFT,
+    matterLocks,
   });
   if (invoice) {
     const refusal = invoiceContentMutationRefusal(invoice);
@@ -616,6 +616,7 @@ export const lockDraftInvoiceForLines = async (
 };
 
 type InvoiceEntryChangeLockOptions = InvoiceScope & {
+  matterLocks: InvoiceMatterLocks;
   recordAuditEvent: AuditRecorder;
   conflictMessage: string;
 };
@@ -643,13 +644,19 @@ export const requireDraftInvoiceForEntryChanges = async (
 const calculateInvoiceAmounts = (
   lines: readonly LineAmountInput[],
   documentType: InvoiceDocumentType,
-) =>
-  calculateDocumentTotals({
+) => {
+  const calculated = calculateDocumentTotals({
     documentType,
     lines: lines.map(toLineInput),
-  }).mapError(
-    (error) => new HandlerError({ status: 500, message: error.message }),
-  );
+  });
+  if (calculated.isErr()) {
+    return panic(
+      "Stored invoice amounts violate their validated contract",
+      calculated.error,
+    );
+  }
+  return calculated;
+};
 
 /** Invoice totals and VAT breakdown over the given lines. */
 const invoiceTotals = (

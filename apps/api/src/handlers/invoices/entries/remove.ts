@@ -174,9 +174,10 @@ const removeEntries = createSafeHandler(
 
     const txResult = yield* Result.await(
       resultTx(safeDb, async (tx) => {
-        const runningError = await guardRunningTimeEntries({
+        const running = await guardRunningTimeEntries({
           tx,
           organizationId: session.activeOrganizationId,
+          workspaceId,
           actorUserId: user.id,
           selection: {
             type: "invoice",
@@ -185,13 +186,13 @@ const removeEntries = createSafeHandler(
             additionalIds: body.timeEntryIds,
           },
         });
-        if (runningError) {
-          return Result.err(runningError);
+        if (running.isErr()) {
+          return Result.err(running.error);
         }
-        const invoiceResult = await requireDraftInvoiceForEntryChanges(
-          tx,
-          entryChangeScope,
-        );
+        const invoiceResult = await requireDraftInvoiceForEntryChanges(tx, {
+          ...entryChangeScope,
+          matterLocks: running.value,
+        });
         if (invoiceResult.isErr()) {
           return Result.err(invoiceResult.error);
         }

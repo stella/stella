@@ -5,12 +5,10 @@ import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_BILLING_PURPOSE, invoiceLines } from "@/api/db/schema";
-import {
-  lockBillingArrangement,
-  readBillingUsage,
-} from "@/api/lib/billing/arrangements";
+import { readBillingUsage } from "@/api/lib/billing/arrangements";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const flatFeeInvoiceRefusal = () =>

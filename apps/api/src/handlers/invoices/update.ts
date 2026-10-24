@@ -277,6 +277,7 @@ const updateInvoice = createSafeHandler(
             invoiceId: params.invoiceId,
             workspaceId,
             status: INVOICE_STATUS.DRAFT,
+            matterLocks: { type: "acquire" },
           });
           if (!existing) {
             return Result.ok({ status: "not-updated" });

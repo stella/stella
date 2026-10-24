@@ -5,6 +5,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { cents } from "@stll/money";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   featureEnrolments,
@@ -25,13 +26,21 @@ import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adap
 import createInvoice from "@/api/handlers/invoices/create";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
+import {
+  insertInvoiceLines,
+  lockDraftInvoiceForLines,
+  manualLineDraft,
+  recalculateInvoiceTotals,
+} from "@/api/lib/billing/invoice-lines";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockInvoiceInStatus,
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
+import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -258,6 +267,76 @@ if (!databaseUrl || !runPostgres) {
         actors,
       };
     };
+    type InvoiceEditScope = {
+      tx: Transaction;
+      scenario: Awaited<ReturnType<typeof seedScenario>>;
+      invoiceId: SafeId<"invoice">;
+      workspaceId: SafeId<"workspace">;
+    };
+    const acquireInvoiceEdit = async ({
+      tx,
+      scenario,
+      invoiceId,
+      workspaceId,
+    }: InvoiceEditScope) => {
+      const guarded = await guardRunningTimeEntries({
+        tx,
+        organizationId: scenario.orgId,
+        workspaceId,
+        actorUserId: scenario.actors.owner,
+        selection: { type: "invoice", invoiceId, runningCheck: "additional" },
+      });
+      if (guarded.isErr()) {
+        throw guarded.error;
+      }
+      return guarded.value;
+    };
+    const appendManualLine = async ({
+      tx,
+      scenario,
+      invoiceId,
+      workspaceId,
+      matterLocks,
+    }: InvoiceEditScope & { matterLocks: AcquiredInvoiceMatterLocks }) => {
+      const scope = { invoiceId, organizationId: scenario.orgId, workspaceId };
+      const recordAuditEvent = async () => {};
+      const invoice = await lockDraftInvoiceForLines(
+        tx,
+        { ...scope, matterLocks },
+        recordAuditEvent,
+      );
+      if (invoice.isErr()) {
+        throw invoice.error;
+      }
+      if (invoice.value === undefined) {
+        throw new HandlerError({
+          status: 409,
+          message: "Invoice matters changed; reload and try again",
+        });
+      }
+      const draft = manualLineDraft({
+        description: "Concurrent addition",
+        quantity: "1",
+        unit: null,
+        unitPrice: cents(100),
+        vatRateBps: 2100,
+        vatTreatment: "domestic_vat",
+      });
+      if (draft.isErr()) {
+        throw draft.error;
+      }
+      await insertInvoiceLines(tx, scope, [draft.value], { recordAuditEvent });
+      const totals = await recalculateInvoiceTotals(
+        tx,
+        scope,
+        new Date("2026-10-16T12:00:00Z"),
+        recordAuditEvent,
+      );
+      if (totals.isErr()) {
+        throw totals.error;
+      }
+    };
+
     test("organization deletion cascades through contacts, matters and client-linked invoices", async () => {
       const scenario = await seedScenario();
       // A contact cannot disappear while its invoice remains; an organization
@@ -297,6 +376,321 @@ if (!databaseUrl || !runPostgres) {
       ).toEqual([]);
     });
 
+    test("opposite client-invoice additions acquire their complete matter union first", async () => {
+      const scenario = await seedScenario();
+      await scoped(
+        scenario,
+        scenario.actors.owner,
+      )(
+        async (tx) =>
+          await tx
+            .delete(invoiceLines)
+            .where(eq(invoiceLines.id, scenario.secondLineId)),
+      );
+      const otherInvoiceId = createSafeId<"invoice">();
+      await db.insert(invoices).values({
+        id: otherInvoiceId,
+        organizationId: scenario.orgId,
+        clientId: scenario.clientId,
+        workspaceId: null,
+        invoiceDate: "2026-10-15",
+        currency: "EUR",
+      });
+      await insertLine({
+        organizationId: scenario.orgId,
+        workspaceId: scenario.secondMatterId,
+        invoiceId: otherInvoiceId,
+        ownerId: scenario.actors.owner,
+      });
+      let aLocks: AcquiredInvoiceMatterLocks | undefined;
+      let bLocks: AcquiredInvoiceMatterLocks | undefined;
+      const owner = scoped(scenario, scenario.actors.owner);
+      await withInterleaving({
+        databaseUrl,
+        a: {
+          transaction: owner,
+          steps: [
+            {
+              name: "guard",
+              run: async (tx) => {
+                aLocks = await acquireInvoiceEdit({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.secondMatterId,
+                });
+              },
+            },
+            {
+              name: "append",
+              run: async (tx) =>
+                await appendManualLine({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.secondMatterId,
+                  matterLocks:
+                    aLocks ?? panic("Missing first invoice lock plan"),
+                }),
+            },
+          ],
+        },
+        b: {
+          transaction: owner,
+          steps: [
+            {
+              name: "guard",
+              run: async (tx) => {
+                bLocks = await acquireInvoiceEdit({
+                  tx,
+                  scenario,
+                  invoiceId: otherInvoiceId,
+                  workspaceId: scenario.firstMatterId,
+                });
+              },
+            },
+            {
+              name: "append",
+              run: async (tx) =>
+                await appendManualLine({
+                  tx,
+                  scenario,
+                  invoiceId: otherInvoiceId,
+                  workspaceId: scenario.firstMatterId,
+                  matterLocks:
+                    bLocks ?? panic("Missing second invoice lock plan"),
+                }),
+            },
+          ],
+        },
+        schedules: [
+          [
+            "a.guard",
+            "b.guard",
+            "a.append",
+            "a.commit",
+            "b.append",
+            "b.commit",
+          ],
+        ],
+        reset: async () => {},
+        readState: async () =>
+          await owner(
+            async (tx) =>
+              await tx
+                .select({
+                  invoiceId: invoiceLines.invoiceId,
+                  workspaceId: invoiceLines.workspaceId,
+                })
+                .from(invoiceLines)
+                .where(
+                  inArray(invoiceLines.invoiceId, [
+                    scenario.invoiceId,
+                    otherInvoiceId,
+                  ]),
+                ),
+          ),
+        invariant: ({ outcomes, blocked, state }) => {
+          expect(blocked).toContain("b.guard");
+          expect(outcomes.a.status).toBe("committed");
+          expect(outcomes.b.status).toBe("committed");
+          for (const invoiceId of [scenario.invoiceId, otherInvoiceId]) {
+            expect(
+              state
+                .filter((line) => line.invoiceId === invoiceId)
+                .map((line) => line.workspaceId)
+                .toSorted(),
+            ).toEqual(
+              [scenario.firstMatterId, scenario.secondMatterId].toSorted(),
+            );
+          }
+        },
+      });
+    });
+
+    test("the running guard refuses expanded participation while its first matter acquisition waits", async () => {
+      const scenario = await seedScenario();
+      await scoped(
+        scenario,
+        scenario.actors.owner,
+      )(
+        async (tx) =>
+          await tx
+            .delete(invoiceLines)
+            .where(eq(invoiceLines.id, scenario.secondLineId)),
+      );
+      const thirdMatterId = createSafeId<"workspace">();
+      await db.insert(workspaces).values({
+        id: thirdMatterId,
+        organizationId: scenario.orgId,
+        clientId: scenario.clientId,
+        name: "Concurrent destination",
+        reference: thirdMatterId,
+      });
+      let bLocks: AcquiredInvoiceMatterLocks | undefined;
+      const owner = scoped(scenario, scenario.actors.owner);
+      await withInterleaving({
+        databaseUrl,
+        a: {
+          transaction: owner,
+          steps: [
+            {
+              name: "guard",
+              run: async (tx) => {
+                await acquireInvoiceEdit({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: thirdMatterId,
+                });
+              },
+            },
+          ],
+        },
+        b: {
+          transaction: owner,
+          steps: [
+            {
+              name: "guard",
+              run: async (tx) => {
+                bLocks = await acquireInvoiceEdit({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.secondMatterId,
+                });
+              },
+            },
+            {
+              name: "append",
+              run: async (tx) =>
+                await appendManualLine({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.secondMatterId,
+                  matterLocks: bLocks ?? panic("Missing writer lock plan"),
+                }),
+            },
+          ],
+        },
+        schedules: [["b.guard", "a.guard", "b.append", "b.commit", "a.commit"]],
+        reset: async () => {},
+        readState: async () =>
+          await owner(
+            async (tx) =>
+              await tx
+                .select({ workspaceId: invoiceLines.workspaceId })
+                .from(invoiceLines)
+                .where(eq(invoiceLines.invoiceId, scenario.invoiceId)),
+          ),
+        invariant: ({ outcomes, blocked, state }) => {
+          expect(blocked).toContain("a.guard");
+          expect(outcomes.a.status).toBe("app-error");
+          if (outcomes.a.status === "app-error") {
+            expect(resolveHandlerError(outcomes.a.error)).toMatchObject({
+              status: 409,
+              code: "invoice_participation_changed",
+            });
+          }
+          expect(outcomes.b.status).toBe("committed");
+          expect(state.map((line) => line.workspaceId).toSorted()).toEqual(
+            [scenario.firstMatterId, scenario.secondMatterId].toSorted(),
+          );
+        },
+      });
+    });
+
+    test("an empty invoice's acquired plan rejects later expansion before any added matter lock", async () => {
+      const scenario = await seedScenario();
+      await scoped(
+        scenario,
+        scenario.actors.owner,
+      )(
+        async (tx) =>
+          await tx
+            .delete(invoiceLines)
+            .where(eq(invoiceLines.invoiceId, scenario.invoiceId)),
+      );
+      let aLocks: AcquiredInvoiceMatterLocks | undefined;
+      const owner = scoped(scenario, scenario.actors.owner);
+      await withInterleaving({
+        databaseUrl,
+        a: {
+          transaction: owner,
+          steps: [
+            {
+              name: "guard",
+              run: async (tx) => {
+                aLocks = await acquireInvoiceEdit({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.firstMatterId,
+                });
+              },
+            },
+            {
+              name: "append",
+              run: async (tx) =>
+                await appendManualLine({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.firstMatterId,
+                  matterLocks:
+                    aLocks ?? panic("Missing empty-invoice lock plan"),
+                }),
+            },
+          ],
+        },
+        b: {
+          transaction: owner,
+          steps: [
+            {
+              name: "append",
+              run: async (tx) => {
+                const matterLocks = await acquireInvoiceEdit({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.secondMatterId,
+                });
+                await appendManualLine({
+                  tx,
+                  scenario,
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.secondMatterId,
+                  matterLocks,
+                });
+              },
+            },
+          ],
+        },
+        schedules: [
+          ["a.guard", "b.append", "b.commit", "a.append", "a.commit"],
+        ],
+        reset: async () => {},
+        readState: async () =>
+          await owner(
+            async (tx) =>
+              await tx
+                .select({ workspaceId: invoiceLines.workspaceId })
+                .from(invoiceLines)
+                .where(eq(invoiceLines.invoiceId, scenario.invoiceId)),
+          ),
+        invariant: ({ outcomes, blocked, state }) => {
+          expect(outcomes.a.status).toBe("app-error");
+          if (outcomes.a.status === "app-error") {
+            expect(resolveHandlerError(outcomes.a.error)?.status).toBe(409);
+          }
+          expect(outcomes.b.status).toBe("committed");
+          expect(blocked).not.toContain("a.append");
+          expect(state).toEqual([{ workspaceId: scenario.secondMatterId }]);
+        },
+      });
+    });
+
     test("a newly participating matter invalidates a lock set acquired from an older snapshot", async () => {
       const scenario = await seedScenario();
       const thirdMatterId = createSafeId<"workspace">();
@@ -320,6 +714,7 @@ if (!databaseUrl || !runPostgres) {
                   invoiceId: scenario.invoiceId,
                   workspaceId: scenario.firstMatterId,
                   status: "draft",
+                  matterLocks: { type: "acquire" },
                 });
                 if (invoice === undefined) {
                   throw new HandlerError({

@@ -213,9 +213,10 @@ const createInvoiceLine = createSafeHandler(
     const txResult = await resultTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
-        const runningError = await guardRunningTimeEntries({
+        const running = await guardRunningTimeEntries({
           tx,
           organizationId: session.activeOrganizationId,
+          workspaceId,
           actorUserId: user.id,
           selection: {
             type: "invoice",
@@ -227,13 +228,14 @@ const createInvoiceLine = createSafeHandler(
                 : [],
           },
         });
-        if (runningError) {
-          return Result.err(runningError);
+        if (running.isErr()) {
+          return Result.err(running.error);
         }
         const invoiceResult = await lockDraftInvoiceForLines(
           tx,
           {
             invoiceId: params.invoiceId,
+            matterLocks: running.value,
             organizationId: session.activeOrganizationId,
             workspaceId,
           },

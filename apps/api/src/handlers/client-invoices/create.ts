@@ -7,7 +7,6 @@ import { expenses, invoices, timeEntries, workspaces } from "@/api/db/schema";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
 import {
   createDraftInvoice,
   createInvoiceInput,
@@ -17,7 +16,10 @@ import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { withInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import {
+  lockBillingArrangement,
+  withInvoiceMatterLocks,
+} from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -110,6 +112,7 @@ const createClientInvoice = createSafeRootHandler(
               }),
             );
           }
+          // db-await-in-loop: at most 50 matter arrangements, locked in stable ID order
           const arrangement = await lockBillingArrangement(tx, matter.id);
           if (arrangement?.mode === "flat_fee") {
             return Result.err(

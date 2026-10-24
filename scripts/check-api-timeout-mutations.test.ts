@@ -195,6 +195,7 @@ test("only exempts explicit owners, online migration modules, tests, and scripts
     "apps/api/src/db/corpus-projection-delete-receipt-repair.ts",
     "apps/api/src/db/better-auth-oauth-resource-repair.ts",
     "apps/api/src/db/decision-date-ceiling-repair.ts",
+    "apps/api/src/db/client-invoice-backfill.ts",
     "apps/api/src/scripts/database-census.ts",
     "apps/api/src/handlers/example.test.ts",
   ]) {

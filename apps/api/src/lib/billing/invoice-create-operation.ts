@@ -18,14 +18,12 @@ import {
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
 import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "@/api/lib/billing/invoice-concurrent-modification";
 import type { createInvoiceBodySchema } from "@/api/lib/billing/invoice-create-contract";
 import {
   type tInvoiceDocumentType,
   validateInvoiceDocument,
 } from "@/api/lib/billing/invoice-document-type";
-import { claimInvoiceExpenses } from "@/api/lib/billing/invoice-expenses";
 import {
   ATTACHED_ENTRY_LINE_VAT,
   attachedEntryLineDrafts,
@@ -40,7 +38,11 @@ import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { claimInvoiceTimeEntries } from "@/api/lib/db/transitions";
+import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
+import {
+  claimInvoiceExpenses,
+  claimInvoiceTimeEntries,
+} from "@/api/lib/db/transitions";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { CentsAmount } from "@/api/lib/money";

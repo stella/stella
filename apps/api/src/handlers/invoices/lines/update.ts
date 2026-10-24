@@ -63,7 +63,7 @@ type LineAmountPatch = Pick<
   "quantity" | "unit" | "unitPriceMinor"
 >;
 type StoredLineAmount = Pick<
-  typeof invoiceLines.$inferSelect,
+  InvoiceLineDraft,
   "quantity" | "unit" | "unitPrice"
 >;
 
@@ -136,6 +136,7 @@ const updateInvoiceLine = createSafeHandler(
             tx,
             {
               invoiceId: params.invoiceId,
+              matterLocks: { type: "acquire" },
               organizationId: session.activeOrganizationId,
               workspaceId,
             },

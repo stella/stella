@@ -7,11 +7,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   billingArrangementResponse,
-  lockBillingArrangement,
   readBillingUsage,
   recordBillingCapCrossings,
 } from "@/api/lib/billing/arrangements";
 import { tCurrencyCode, tMinorUnitAmount } from "@/api/lib/custom-schema";
+import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 

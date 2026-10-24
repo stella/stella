@@ -29,6 +29,7 @@ import type {
 import type { Transaction } from "@/api/db/root";
 import type { InvoiceStatus } from "@/api/db/schema";
 import {
+  billingArrangements,
   entities,
   entityVersions,
   fields,
@@ -39,7 +40,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
-import { lockBillingArrangement } from "@/api/lib/billing/arrangement-lock";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -2275,6 +2275,21 @@ export const withDecisionCitationStatsLocks = async ({
   `);
 };
 
+export const lockBillingArrangement = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) => {
+  // Same matter lock as timer/invoice guards; it also serializes first-row creation.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+  const rows = await tx
+    .select()
+    .from(billingArrangements)
+    .where(eq(billingArrangements.workspaceId, workspaceId))
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
 /** Timer guards use the same advisory key order before any matter row lock. */
 export const withInvoiceMatterLocks = async (
   tx: Transaction,
@@ -2300,10 +2315,19 @@ export const withInvoiceMatterLocks = async (
   }
 };
 
+export type AcquiredInvoiceMatterLocks = {
+  type: "acquired";
+  invoiceId: SafeId<"invoice">;
+  workspaceIds: ReadonlySet<SafeId<"workspace">>;
+};
+export type InvoiceMatterLocks =
+  { type: "acquire" } | AcquiredInvoiceMatterLocks;
+
 type LockInvoiceOptions = {
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
   status: InvoiceStatus | readonly InvoiceStatus[];
+  matterLocks: InvoiceMatterLocks;
 };
 
 /**
@@ -2326,7 +2350,7 @@ type LockInvoiceOptions = {
  */
 export const lockInvoiceInStatus = async (
   tx: Transaction,
-  { invoiceId, workspaceId, status }: LockInvoiceOptions,
+  { invoiceId, workspaceId, status, matterLocks }: LockInvoiceOptions,
 ) => {
   const lineMatters = await tx
     .selectDistinct({ workspaceId: invoiceLines.workspaceId })
@@ -2336,6 +2360,21 @@ export const lockInvoiceInStatus = async (
   const matterIds = [
     ...new Set([workspaceId, ...lineMatters.map((line) => line.workspaceId)]),
   ].toSorted();
+  switch (matterLocks.type) {
+    case "acquire":
+      break;
+    case "acquired":
+      if (matterLocks.invoiceId !== invoiceId) {
+        return panic("Invoice matter locks belong to another invoice");
+      }
+      if (matterIds.some((id) => !matterLocks.workspaceIds.has(id))) {
+        return undefined;
+      }
+      break;
+    default:
+      matterLocks satisfies never;
+      return panic("Unknown invoice matter lock scope");
+  }
   await withInvoiceMatterLocks(tx, matterIds);
   const statusFilter =
     typeof status === "string"

@@ -53,19 +53,21 @@ const deleteInvoice = createSafeHandler(
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
-        const runningError = await guardRunningTimeEntries({
+        const running = await guardRunningTimeEntries({
           tx,
           organizationId: session.activeOrganizationId,
+          workspaceId,
           actorUserId: user.id,
           selection: { type: "invoice", invoiceId: params.invoiceId },
         });
-        if (runningError) {
-          return runningError;
+        if (running.isErr()) {
+          return running.error;
         }
         const invoice = await lockInvoiceInStatus(tx, {
           invoiceId: params.invoiceId,
           workspaceId,
           status: INVOICE_STATUS.DRAFT,
+          matterLocks: running.value,
         });
 
         if (!invoice) {

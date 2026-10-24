@@ -19,7 +19,6 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "@/api/lib/billing/invoice-concurrent-modification";
-import { claimInvoiceExpenses } from "@/api/lib/billing/invoice-expenses";
 import {
   ATTACHED_ENTRY_LINE_VAT,
   attachedEntryLineDrafts,
@@ -31,6 +30,7 @@ import {
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { claimInvoiceExpenses } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CentsAmount } from "@/api/lib/money";
 
@@ -343,9 +343,10 @@ const addEntries = createSafeHandler(
     };
 
     const txResult = await resultTx(safeDb, async (tx) => {
-      const runningError = await guardRunningTimeEntries({
+      const running = await guardRunningTimeEntries({
         tx,
         organizationId: session.activeOrganizationId,
+        workspaceId,
         actorUserId: user.id,
         selection: {
           type: "invoice",
@@ -354,13 +355,13 @@ const addEntries = createSafeHandler(
           additionalIds: body.timeEntryIds,
         },
       });
-      if (runningError) {
-        return Result.err(runningError);
+      if (running.isErr()) {
+        return Result.err(running.error);
       }
-      const invoiceResult = await requireDraftInvoiceForEntryChanges(
-        tx,
-        entryChangeScope,
-      );
+      const invoiceResult = await requireDraftInvoiceForEntryChanges(tx, {
+        ...entryChangeScope,
+        matterLocks: running.value,
+      });
       if (invoiceResult.isErr()) {
         return Result.err(invoiceResult.error);
       }

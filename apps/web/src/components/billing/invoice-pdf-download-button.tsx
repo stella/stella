@@ -41,6 +41,7 @@ export const InvoicePdfDownloadButton = ({
             .pdf.post(
               {},
               {
+                ...request,
                 headers: {
                   ...request.headers,
                   "Accept-Language": locale,

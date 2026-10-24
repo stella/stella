@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -7,11 +7,9 @@ import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
-  INVOICE_ATTACHMENT,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
-  timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -32,6 +30,11 @@ import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import type {
+  AcquiredInvoiceMatterLocks,
+  InvoiceMatterLocks,
+} from "@/api/lib/db/aggregate-lock";
+import { releaseInvoiceTimeEntries } from "@/api/lib/db/transitions";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
@@ -124,8 +127,7 @@ const buildVoidEvents = (params: {
 };
 
 type ReleaseInvoiceEntriesOptions = {
-  actorUserId: SafeId<"user">;
-  invoiceId: SafeId<"invoice">;
+  matterLocks: AcquiredInvoiceMatterLocks;
   workspaceId: SafeId<"workspace">;
   previousStatus: InvoiceStatus;
   now: Date;
@@ -134,34 +136,20 @@ type ReleaseInvoiceEntriesOptions = {
 const releaseInvoiceEntries = async (
   tx: Transaction,
   {
-    invoiceId,
+    matterLocks,
     workspaceId,
     previousStatus,
     now,
     recordAuditEvent,
-    actorUserId,
   }: ReleaseInvoiceEntriesOptions,
 ) => {
-  // The caller acquires these locks before the invoice; guard the release too.
-  const runningError = await guardRunningTimeEntries({
-    tx,
-    workspaceId,
-    actorUserId,
-    selection: { type: "invoice", invoiceId },
+  const { invoiceId } = matterLocks;
+  // The caller retains the successful guard's timer-owner, complete matter
+  // and source-row locks; reacquiring them after the invoice would invert order.
+  const revertedTimeEntries = await releaseInvoiceTimeEntries(tx, {
+    matterLocks,
+    now,
   });
-  if (runningError) {
-    return Result.err(runningError);
-  }
-  const revertedTimeEntries = await tx
-    .update(timeEntries)
-    .set({
-      status: BILLING_STATUS.APPROVED,
-      invoiceId: null,
-      invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
-      updatedAt: now,
-    })
-    .where(and(eq(timeEntries.invoiceId, invoiceId)))
-    .returning({ id: timeEntries.id });
 
   const revertedExpenses = await tx
     .update(expenses)
@@ -233,21 +221,25 @@ const transitionInvoice = createSafeHandler(
     const result = await resultTx(
       safeDb,
       async (tx): Promise<Result<{ id: SafeId<"invoice"> }, HandlerError>> => {
+        let matterLocks: InvoiceMatterLocks = { type: "acquire" };
         if (body.action === "void" || body.action === "finalize") {
-          const runningError = await guardRunningTimeEntries({
+          const running = await guardRunningTimeEntries({
             tx,
             organizationId: session.activeOrganizationId,
+            workspaceId,
             actorUserId: user.id,
             selection: { type: "invoice", invoiceId: params.invoiceId },
           });
-          if (runningError) {
-            return Result.err(runningError);
+          if (running.isErr()) {
+            return Result.err(running.error);
           }
+          matterLocks = running.value;
         }
         const existing = await lockInvoiceInStatus(tx, {
           invoiceId: params.invoiceId,
           workspaceId,
           status: transition.from,
+          matterLocks,
         });
         if (!existing) {
           return Result.err(
@@ -302,7 +294,7 @@ const transitionInvoice = createSafeHandler(
           if (existing.finalizedAt === null) {
             const draft = await lockDraftInvoiceForLines(
               tx,
-              scope,
+              { ...scope, matterLocks },
               recordAuditEvent,
             );
             if (draft.isErr()) {
@@ -367,9 +359,13 @@ const transitionInvoice = createSafeHandler(
           );
         }
         if (body.action === "void") {
+          if (matterLocks.type !== "acquired") {
+            return panic(
+              "Invoice release requires the running guard's acquired locks",
+            );
+          }
           const release = await releaseInvoiceEntries(tx, {
-            actorUserId: user.id,
-            invoiceId: row.id,
+            matterLocks,
             workspaceId,
             previousStatus: existing.status,
             now,

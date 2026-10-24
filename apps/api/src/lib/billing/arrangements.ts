@@ -28,8 +28,6 @@ import {
   newBillingCapCrossings,
 } from "./arrangements.logic";
 
-export { lockBillingArrangement } from "./arrangement-lock";
-
 type BillingArrangementConfiguration = Pick<
   typeof billingArrangements.$inferSelect,
   | "mode"

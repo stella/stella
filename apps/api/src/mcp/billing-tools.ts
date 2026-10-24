@@ -456,12 +456,12 @@ const resolveInvoiceWorkspace = async ({
       where: {
         id: { eq: invoiceId },
         RAW: (table) =>
-          and(
-            invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds),
-            requestedMatterId === undefined
-              ? undefined
-              : invoiceInMatter(table, requestedMatterId),
-          ),
+          requestedMatterId === undefined
+            ? invoiceWithinMatterAllowlist(
+                table,
+                context.accessibleWorkspaceIds,
+              )
+            : sql`${invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds)} AND ${invoiceInMatter(table, requestedMatterId)}`,
       },
       columns: { workspaceId: true, originalInvoiceId: true },
       with: {
@@ -1385,10 +1385,7 @@ const readInvoiceDetail = async ({
       where: {
         id: { eq: invoiceId },
         RAW: (table) =>
-          and(
-            invoiceInMatter(table, workspaceId),
-            invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds),
-          ),
+          sql`${invoiceInMatter(table, workspaceId)} AND ${invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds)}`,
       },
       with: INVOICE_DETAIL_RELATIONS,
     }),
