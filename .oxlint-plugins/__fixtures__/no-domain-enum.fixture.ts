@@ -6,8 +6,8 @@ enum LegacyStatus {
   Closed = "closed",
 }
 
-const STATUS = ["open", "closed"] as const;
+const STATUS = { open: "open", closed: "closed" } as const;
 // expect-clean: no-domain-enum/no-domain-enum
-type Status = (typeof STATUS)[number];
+type Status = (typeof STATUS)[keyof typeof STATUS];
 
 export const __domainEnumFixture: Status = STATUS[LegacyStatus.Open];
