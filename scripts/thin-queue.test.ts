@@ -13,6 +13,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
+import { renderResultInputs } from "./ci-result-inputs";
 import {
   contextFromNested,
   contextWithPlanOutputs,
@@ -1112,7 +1113,16 @@ const evaluate = ({
       ];
     }),
   );
-  return Bun.spawnSync(["bash", "-e", "-c", script], {
+  const rendered = renderResultInputs(script, {
+    needs: JSON.stringify(dependencies),
+    plan: JSON.stringify({
+      ...plan,
+      queue_depth: queueDepth,
+      heavy_web_build_required: "false",
+      release_typecheck_required: releaseTypecheck ? "true" : "false",
+    }),
+  });
+  return Bun.spawnSync(["bash", "-e", "-c", rendered], {
     cwd: root,
     env: {
       ...process.env,
@@ -1134,13 +1144,6 @@ const evaluate = ({
       PR_DEPTH_REUSED: "false",
       PR_DEPTH_ONLY: "false",
       PR_DEPTH_SOURCE_RUN_ID: "",
-      PLAN: JSON.stringify({
-        ...plan,
-        queue_depth: queueDepth,
-        heavy_web_build_required: "false",
-        release_typecheck_required: releaseTypecheck ? "true" : "false",
-      }),
-      NEEDS: JSON.stringify(dependencies),
     },
   }).exitCode;
 };

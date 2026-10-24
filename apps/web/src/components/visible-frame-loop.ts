@@ -18,7 +18,7 @@ export const createVisibleFrameLoop = (draw: () => void): VisibleFrameLoop => {
   const tick = () => {
     frame = 0;
     draw();
-    if (visible) {
+    if (visible && frame === 0) {
       frame = requestAnimationFrame(tick);
     }
   };

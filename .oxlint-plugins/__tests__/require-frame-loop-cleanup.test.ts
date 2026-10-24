@@ -178,3 +178,31 @@ test("ignores local functions that shadow the browser timers", async () => {
     ),
   ).toEqual([]);
 });
+
+for (const callback of [
+  "tick",
+  "() => tick()",
+  "() => { tick(); }",
+  "function () { tick(); }",
+]) {
+  for (const ownership of ["discarded", "retained"]) {
+    test(`${ownership} ${callback} kick-offs share their frame loop's ownership check`, async () => {
+      const kickOff = `requestAnimationFrame(${callback});`;
+      expect(
+        await lintSingleRule(
+          RULE,
+          [
+            "useMountEffect(() => {",
+            "  let frame = 0;",
+            "  const tick = () => {",
+            "    if (visible()) frame = requestAnimationFrame(tick);",
+            "  };",
+            ownership === "retained" ? `  frame = ${kickOff}` : `  ${kickOff}`,
+            "  return () => cancelAnimationFrame(frame);",
+            "});",
+          ].join("\n"),
+        ),
+      ).toEqual(ownership === "retained" ? [] : [6]);
+    });
+  }
+}

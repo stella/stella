@@ -93,6 +93,22 @@ describe("createVisibleFrameLoop", () => {
     expect(pending.size).toBe(0);
   });
 
+  test("visibility reports during a draw retain one pending frame", () => {
+    let draws = 0;
+    const loop = createVisibleFrameLoop(() => {
+      draws += 1;
+      loop.setVisible(true);
+    });
+    loop.setVisible(true);
+    for (let frame = 0; frame < 60; frame += 1) {
+      advanceFrames(1);
+      expect(draws).toBe(frame + 1);
+      expect(pending.size).toBe(1);
+    }
+    loop.stop();
+    expect(pending.size).toBe(0);
+  });
+
   test("a hide reported during a draw ends the loop", () => {
     let draws = 0;
     const loop = createVisibleFrameLoop(() => {

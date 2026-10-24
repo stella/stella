@@ -609,7 +609,17 @@ const frameLoops = (
     }
   }
   for (const node of kickOffs) {
-    const loop = functionFor(context, callArguments(node).at(0));
+    const callback = callArguments(node).at(0);
+    const named = functionFor(context, callback);
+    const inline = unwrapExpression(callback);
+    const loop =
+      named !== null && loops.has(named)
+        ? named
+        : isFunctionNode(inline)
+          ? (everyNode(inline)
+              .map((candidate) => namedCallTarget(context, candidate))
+              .find((target) => target !== null && loops.has(target)) ?? null)
+          : null;
     const calls = loop === null ? undefined : loops.get(loop);
     calls?.push(node);
   }

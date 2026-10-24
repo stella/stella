@@ -48,12 +48,12 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
-  isFeatureEnabled,
   isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import type {
-  FeatureAccessSnapshot,
   FeatureAccessProof,
+  FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
 import {
   getContentDeliveryReceiptError,
@@ -470,6 +470,39 @@ export type { AccountAccess } from "@/api/lib/auth/account-access";
 const requiresAccountCheck = (accountAccess: AccountAccess) =>
   accountAccess !== ACCOUNT_ACCESS.sandbox;
 
+export type HandlerConfigurationAdmission =
+  "allowed" | "permission_required" | "account_restricted";
+
+/**
+ * Projects the permission and restricted-account checks performed by safe
+ * handlers without running the handler. Capability endpoints use this to
+ * advertise the same admission decision as the operation they describe.
+ */
+export const checkHandlerConfigurationAdmission = ({
+  principal,
+  config,
+  checkAccountOperation = checkRestrictedAccountOperation,
+}: {
+  // The email is read only when an account check applies: a sandbox handler's
+  // context need not carry a user.
+  principal: { memberRole: AuthorizedMemberRole; readEmail: () => string };
+  config: Pick<HandlerConfig, "permissions" | "accountAccess">;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
+}): HandlerConfigurationAdmission => {
+  if (!hasMemberPermission(principal.memberRole, config.permissions)) {
+    return "permission_required";
+  }
+  if (
+    requiresAccountCheck(config.accountAccess) &&
+    Result.isError(
+      checkAccountOperation(principal.readEmail(), config.accountAccess),
+    )
+  ) {
+    return "account_restricted";
+  }
+  return "allowed";
+};
+
 type SandboxAccountAccess = {
   accountAccess: typeof ACCOUNT_ACCESS.sandbox;
 };
@@ -814,8 +847,7 @@ type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
 type SafeHandlerPayload = NonNullable<unknown>;
 
 type SafeHandlerResult<TResult> =
-  | TResult
-  | SafeStatusResponse<HandlerErrorStatusCode>;
+  TResult | SafeStatusResponse<HandlerErrorStatusCode>;
 
 /**
  * The async-generator a safe handler runs: it may `yield*` intermediate
@@ -1443,24 +1475,28 @@ const createSafeScopedHandler = <
     config,
     handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
       const memberRole = readAuthorizedMemberRole(ctx);
-      if (!memberRole || !hasMemberPermission(memberRole, config.permissions)) {
+      if (!memberRole) {
         return toSafeStatusResponse(403, {
           code: API_ERROR_CODE.forbidden,
           message: "Forbidden",
         });
       }
-
-      if (requiresAccountCheck(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(
-          ctx.user.email,
-          config.accountAccess,
-        );
-        if (Result.isError(accountAccess)) {
-          return toSafeStatusResponse(403, {
-            code: "account_access_unavailable",
-            message: "This operation is unavailable for this account.",
-          });
-        }
+      const configurationAdmission = checkHandlerConfigurationAdmission({
+        principal: { memberRole, readEmail: () => ctx.user.email },
+        config,
+        checkAccountOperation,
+      });
+      if (configurationAdmission === "permission_required") {
+        return toSafeStatusResponse(403, {
+          code: API_ERROR_CODE.forbidden,
+          message: "Forbidden",
+        });
+      }
+      if (configurationAdmission === "account_restricted") {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
       }
       const featureAccessResponse = await admitHandlerFeatureAccess({
         ctx,
@@ -2248,8 +2284,7 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  | ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
-  | Response
+  ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status> | Response
   ? never
   : TResult;
 

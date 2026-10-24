@@ -3,12 +3,12 @@ import * as v from "valibot";
 
 import { GENERATED_ENTRIES, GENERATED_RECOMMENDED } from "./catalogue.gen";
 import {
-  catalogueEntrySchema,
-  recommendedSchema,
   type CatalogueEntry,
+  catalogueEntrySchema,
   type CatalogueKind,
   type GithubSkillEntry,
   type Recommended,
+  recommendedSchema,
 } from "./schema";
 
 export type LoadedCatalogueEntry = CatalogueEntry & {

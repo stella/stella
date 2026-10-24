@@ -25,10 +25,13 @@
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { transformSync, type OxcError } from "oxc-transform-react";
+import { type OxcError, transformSync } from "oxc-transform-react";
 import ts from "typescript6";
 
-import { REACT_COMPILER_OPTIONS } from "../packages/scripts/src/react-compiler-options";
+import {
+  REACT_COMPILER_EXCLUDE,
+  REACT_COMPILER_OPTIONS,
+} from "../packages/scripts/src/react-compiler-options";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const BASELINE_PATH = BASELINE_PATHS.reactCompilerBailouts;
@@ -48,6 +51,7 @@ const SKIPPED_PATH = /(?:^|\/)(?:node_modules|dist|__tests__)\//u;
 
 const isScannedSource = (file: string): boolean =>
   !SKIPPED_PATH.test(file) &&
+  !REACT_COMPILER_EXCLUDE.some((pattern) => pattern.test(file)) &&
   !file.includes(".test.") &&
   !file.includes(".spec.") &&
   !file.endsWith(".d.ts") &&
@@ -521,6 +525,9 @@ const runSelfTest = (): number => {
     "compiler.tsx::RefReader",
   );
   const { diff, diffWorks } = selfTestDiff(firstKey, secondKey);
+  const sourceFilterWorks =
+    isScannedSource("apps/web/src/components/globe.tsx") &&
+    !isScannedSource("apps/web/src/hooks/use-effect.ts");
   const roots = reactPackageRoots();
   const packageScopeWorks =
     roots.includes("packages/ui") &&
@@ -535,7 +542,8 @@ const runSelfTest = (): number => {
     moduleOptOutWorks &&
     compilerDiagnosticWorks &&
     diffWorks &&
-    packageScopeWorks
+    packageScopeWorks &&
+    sourceFilterWorks
   ) {
     console.log("rc-bailouts --self-test: PASS");
     return 0;
@@ -553,6 +561,7 @@ const runSelfTest = (): number => {
     optOutWorks,
     moduleOptOutWorks,
     compilerDiagnosticWorks,
+    sourceFilterWorks,
     diff,
     roots,
   });
