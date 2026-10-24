@@ -312,6 +312,7 @@ export type McpExposure =
       type: "capability";
       reason: McpCapabilityReason;
       consumesServices: ServiceClassification;
+      confirmation?: "required";
       readClass?: McpReadClass;
     }
   | { type: "internal"; reason: McpInternalReason };

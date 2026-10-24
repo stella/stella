@@ -5910,7 +5910,7 @@
         },
         "confirm": {
           "type": "boolean",
-          "description": "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action."
+          "description": "Must be true to run a capability that requires confirmation. Set it only after a human user approved this operation."
         }
       }
     },

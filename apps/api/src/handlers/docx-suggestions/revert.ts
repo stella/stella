@@ -47,6 +47,7 @@ const revertDocxSuggestion = createSafeHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
+      confirmation: "required",
       reason: "document_processing",
       consumesServices: false,
     },

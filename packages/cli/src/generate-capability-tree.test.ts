@@ -43,6 +43,19 @@ const entry = (
   ...overrides,
 });
 
+test("catalog confirmation requirements survive generated leaf projection", () => {
+  const parsed = parseCapabilityCatalog(readCapabilityCatalog());
+  expect(parsed).not.toBeNull();
+  const guarded =
+    parsed?.filter((entry) => entry.confirmation === "required") ?? [];
+  expect(guarded.length).toBeGreaterThan(0);
+  for (const item of guarded) {
+    expect(deriveCapabilityLeaf(item).spec?.confirmation, item.id).toBe(
+      "required",
+    );
+  }
+});
+
 const fileInput = (field: string, required: boolean): CatalogTransport => ({
   type: "file-input",
   input: { field, required },

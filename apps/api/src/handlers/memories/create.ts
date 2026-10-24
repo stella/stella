@@ -30,6 +30,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
+    confirmation: "required",
     reason: "assistant_memory",
     consumesServices: false,
   },

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract/mcp";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -15,6 +16,7 @@ import {
   FEATURE_REGISTRY,
 } from "@/api/lib/feature-access/registry";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -66,7 +68,7 @@ const EXPOSED = {
   },
   "memories.create": {
     access: "write",
-    scope: "stella:chat",
+    scope: "stella:memory_write",
     handlerKind: "root",
     feature: MEMORY_FEATURE_FLAG,
   },
@@ -78,7 +80,7 @@ const EXPOSED = {
   },
   "memories.update": {
     access: "write",
-    scope: "stella:chat",
+    scope: "stella:memory_write",
     handlerKind: "root",
     feature: MEMORY_FEATURE_FLAG,
   },
@@ -181,6 +183,7 @@ const INVALID_INPUT = {
 const ALL_SCOPES = [
   "stella:read",
   "stella:chat",
+  "stella:memory_write",
   "stella:documents_write",
   "stella:matters_write",
 ] as const;
@@ -314,11 +317,13 @@ const invoke = async ({
   input,
   context = createContext(),
   validateOnly = false,
+  confirm = true,
 }: {
   capability: ExposedId;
   input: Record<string, unknown>;
   context?: McpRequestContext;
   validateOnly?: boolean;
+  confirm?: boolean;
 }) =>
   await handleMcpToolCall({
     mode: "advanced",
@@ -327,6 +332,9 @@ const invoke = async ({
       capability,
       input,
       ...(validateOnly ? { validate_only: true } : {}),
+      ...(confirm && EXPOSED[capability].access === "write"
+        ? { confirm: true }
+        : {}),
     },
     context,
   });
@@ -340,6 +348,51 @@ beforeEach(() => {
 });
 
 describe("agent workflow capability census", () => {
+  test("persistent memory and redline writes require fresh confirmation and explicit consent", async () => {
+    const guarded = catalog.filter(
+      (entry) =>
+        entry.access === "write" &&
+        ["memories", "docx-suggestions"].includes(
+          entry.id.split(".").at(0) ?? "",
+        ),
+    );
+    expect(guarded.length).toBeGreaterThan(0);
+    for (const entry of guarded) {
+      expect(entry.confirmation, entry.id).toBe("required");
+      expect(entry.destructive, entry.id).toBe(false);
+      const capability = EXPOSED_IDS.find((id) => id === entry.id);
+      if (capability === undefined)
+        throw new TypeError("Unexercised guarded capability");
+      const response = await invoke({
+        capability,
+        input: VALID_INPUT[capability],
+        confirm: false,
+      });
+      expect(errorOf(response).code, entry.id).toBe("confirmation_required");
+      const unavailable = await invoke({
+        capability,
+        input: VALID_INPUT[capability],
+        context: {
+          ...createContext(),
+          toolConfirmation: TOOL_CONFIRMATION.unavailable,
+        },
+      });
+      expect(errorOf(unavailable).code, entry.id).toBe("permission_denied");
+      if (entry.id.startsWith("memories.")) {
+        expect(entry.scope).toBe("stella:memory_write");
+        expect(
+          MCP_DEFAULT_RESOURCE_SCOPES.some((scope) => scope === entry.scope),
+        ).toBe(false);
+        const missing = await invoke({
+          capability,
+          input: VALID_INPUT[capability],
+          context: createContext({ grantedScopes: ["stella:chat"] }),
+        });
+        expect(errorOf(missing).code).toBe("missing_scope");
+      }
+    }
+  });
+
   test("the three domains expose exactly the reviewed capabilities", () => {
     const domains = new Set(["docx-suggestions", "memories", "notifications"]);
     const exposed = catalog

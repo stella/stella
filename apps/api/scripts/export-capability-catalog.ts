@@ -264,6 +264,7 @@ const SCOPE_STRICTNESS: Record<string, number> = {
   "stella:documents_write": 2,
   "stella:matters_write": 2,
   "stella:chat": 2,
+  "stella:memory_write": 3,
   "stella:knowledge_write": 2,
   "stella:billing_write": 2,
   "stella:skills": 2,
@@ -286,6 +287,8 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  "memories.create": "stella:memory_write",
+  "memories.update": "stella:memory_write",
   // Document writes that reach storage through helpers shared with other
   // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
   // imports; the direct callers of document primitives need no pin.
@@ -511,6 +514,7 @@ type CapabilityEntry = {
   access: "read" | "write";
   readClass?: McpReadClass;
   destructive: boolean;
+  confirmation?: "required";
   consumesServices: CatalogServiceClassification;
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
@@ -843,6 +847,9 @@ const buildCatalogEntry = ({
   access: access.access,
   ...(readClass === undefined ? {} : { readClass }),
   destructive: access.destructive,
+  ...(exposure.type === "capability" && exposure.confirmation === "required"
+    ? { confirmation: exposure.confirmation }
+    : {}),
   consumesServices:
     typeof consumesServices === "function"
       ? VALIDATED_INPUT_SERVICE_CLASSIFICATION

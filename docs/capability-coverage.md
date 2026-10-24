@@ -335,9 +335,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `memories.create` | write | stella:chat | FEATURE_AI_MEMORY | generic invoke → `stella capability memories create` |
+| `memories.create` | write | stella:memory_write | FEATURE_AI_MEMORY | generic invoke → `stella capability memories create` |
 | `memories.list` | read | stella:chat | FEATURE_AI_MEMORY | generic invoke → `stella capability memories list` |
-| `memories.update` | write | stella:chat | FEATURE_AI_MEMORY | generic invoke → `stella capability memories update` |
+| `memories.update` | write | stella:memory_write | FEATURE_AI_MEMORY | generic invoke → `stella capability memories update` |
 
 ## notifications
 
