@@ -1242,7 +1242,10 @@ const hasAmbiguousMemberWrites = ({
     ) {
       continue;
     }
-    if (precedesCreation(node, start)) {
+    if (
+      precedesCreation(node, start) ||
+      mutuallyExclusiveBranches(start, node)
+    ) {
       continue;
     }
     const value = unwrapExpression(
@@ -1302,7 +1305,11 @@ const hasAmbiguousHandleWrites = ({
     }
     const identifier: unknown = reference.identifier;
     const write = isAstNode(identifier) ? parentOf(identifier) : null;
-    if (write !== null && precedesCreation(write, start)) {
+    if (
+      write !== null &&
+      (precedesCreation(write, start) ||
+        mutuallyExclusiveBranches(start, write))
+    ) {
       continue;
     }
     const value = unwrapExpression(

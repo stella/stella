@@ -187,6 +187,47 @@ test("effect-local helpers retain repeated-start ownership checks", async () => 
   expect(results).toEqual(cases.map(([, owned]) => owned));
 });
 
+test("only mutually exclusive writes can share one cleanup handle", async () => {
+  const cases = [
+    [
+      "let id;if(enabled)id=setInterval(tick,10);else id=setInterval(tick,20);return()=>clearInterval(id);",
+      true,
+    ],
+    [
+      "const timer={current:0};if(enabled)timer.current=setInterval(tick,10);else timer.current=setInterval(tick,20);return()=>clearInterval(timer.current);",
+      true,
+    ],
+    [
+      "let id;enabled?(id=setInterval(tick,10)):(id=setInterval(tick,20));return()=>clearInterval(id);",
+      true,
+    ],
+    [
+      "const timer={current:0};enabled?(timer.current=setInterval(tick,10)):(timer.current=setInterval(tick,20));return()=>clearInterval(timer.current);",
+      true,
+    ],
+    [
+      "let id;if(enabled){id=setInterval(tick,10);return()=>clearInterval(id);}id=setInterval(tick,20);return()=>clearInterval(id);",
+      true,
+    ],
+    [
+      "let id;if(enabled)id=setInterval(tick,10);id=setInterval(tick,20);return()=>clearInterval(id);",
+      false,
+    ],
+    [
+      "const timer={current:0};if(enabled)timer.current=setInterval(tick,10);if(alsoEnabled)timer.current=setInterval(tick,20);return()=>clearInterval(timer.current);",
+      false,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(
+      async ([code]) =>
+        (await lintSingleRule(RULE, `useMountEffect(()=>{${code}});`))
+          .length === 0,
+    ),
+  );
+  expect(results).toEqual(cases.map(([, owned]) => owned));
+});
+
 test("effect factories transfer their actual result into cleanup ownership", async () => {
   const cases = [
     [
