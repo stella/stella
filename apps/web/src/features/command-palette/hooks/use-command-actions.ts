@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -27,11 +27,12 @@ import type { CommandAction, CommandActionContext } from "../lib/types";
 
 export type ResolvedCommandAction = CommandAction & {
   title: string;
-  hotkey?: Hotkey;
+  hotkey?: HotkeyChord;
 };
 
 type UploadRequest =
-  { type: "closed" } | { type: "open"; workspaceId: string | undefined };
+  | { type: "closed" }
+  | { type: "open"; workspaceId: string | undefined };
 
 type UseCommandActionsResult = {
   uploadRequest: UploadRequest;
@@ -130,7 +131,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   );
 
   const effectiveHotkeys = useMemo(() => {
-    const hotkeys = new Map<CommandAction["shortcutId"], Hotkey>();
+    const hotkeys = new Map<CommandAction["shortcutId"], HotkeyChord>();
     for (const group of shortcutGroups) {
       for (const shortcut of group.shortcuts) {
         if (shortcut.binding.type === "hotkey") {

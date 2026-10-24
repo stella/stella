@@ -28,6 +28,7 @@ import {
   agentSkillRevisionPolicies,
   aiMemoryPolicies,
   authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
   caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
   caseLawAnalysisWriterPolicies,
@@ -263,7 +264,8 @@ export type SchedulerDailySchedule = {
 };
 
 export type SchedulerSchedule =
-  SchedulerDailySchedule | SchedulerIntervalSchedule;
+  | SchedulerDailySchedule
+  | SchedulerIntervalSchedule;
 
 export type SchedulerPayload = Record<string, unknown>;
 
@@ -556,6 +558,7 @@ export {
   mcpUserConnectionPolicies,
   organizationCheck,
   authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
   organizationOptionalWorkspacePolicies,
   orgPolicies,
   orgReadOnlyPolicies,

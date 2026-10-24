@@ -24,7 +24,8 @@ export const MARGIN_NOTE_KIND_ATTRIBUTE = "data-margin-note";
  * text's own flow, directly under the paragraph it belongs to.
  */
 export type NotePlacement =
-  { type: "gutter"; top: number } | { type: "inline" };
+  | { type: "gutter"; top: number }
+  | { type: "inline" };
 
 export type NotePlacementPresentation = {
   className: string;

@@ -1515,7 +1515,7 @@ const readMatterOverview = async ({
       context.testDependencies?.readOverviewHandler ??
       defaultReadOverviewHandler
     )({
-      scopedDb: context.scopedDb,
+      safeDb: context.safeDb,
       workspaceId,
     }),
     (
@@ -1538,6 +1538,9 @@ const readMatterOverview = async ({
     return notFoundResult("Matter not found or not accessible");
   }
 
+  if (overview.isErr()) {
+    return internalFailureResult(overview.error);
+  }
   if (contacts.isErr()) {
     return internalFailureResult(contacts.error);
   }
@@ -1577,10 +1580,10 @@ const readMatterOverview = async ({
   // The web overview's agenda is not part of the matter detail; agents read
   // open tasks through the task tools.
   const { upcomingAgenda: _upcomingAgenda, ...overviewWithoutAgenda } =
-    overview;
+    overview.value;
   const overviewWithoutAvatarUrls = {
     ...overviewWithoutAgenda,
-    recentEntities: overview.recentEntities.map(
+    recentEntities: overview.value.recentEntities.map(
       ({
         assignedToImage: _assignedToImage,
         createdByImage: _createdByImage,
@@ -2143,7 +2146,8 @@ const facetValuesForFilters = ({
 
 /** One query's page, or the mark of a query whose page had already ended. */
 type CaseLawQueryOutcome =
-  { exhausted: true } | { exhausted: false; page: SearchCaseLawSuccess };
+  | { exhausted: true }
+  | { exhausted: false; page: SearchCaseLawSuccess };
 
 type CaseLawSearchAnswer =
   | { type: "page"; page: SearchCaseLawSuccess }

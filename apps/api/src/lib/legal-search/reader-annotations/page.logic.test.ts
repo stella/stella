@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
 import { propertyConfig } from "@stll/property-testing";
 
-import { pageLengthKeepingMarksWhole } from "@/api/handlers/legal-reader/annotations/page.logic";
+import { pageLengthKeepingMarksWhole } from "@/api/lib/legal-search/reader-annotations/page.logic";
 
 describe("pageLengthKeepingMarksWhole", () => {
   test("no page boundary falls between two rows of one mark", () => {
