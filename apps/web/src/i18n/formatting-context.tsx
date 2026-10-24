@@ -1,11 +1,13 @@
 import { createContext, useContext, useMemo } from "react";
-import type { PropsWithChildren } from "react";
+import type { ComponentProps, PropsWithChildren } from "react";
 
 import { panic } from "better-result";
 import { createFormatter } from "use-intl/core";
 
 import type { Temporal } from "@stll/time";
+import type { Steps } from "@stll/ui/steps";
 
+import type { NumberingPreference } from "@/i18n/i18n-store";
 import { formatRelativeTimeIn } from "@/lib/relative-time";
 
 type Formatter = ReturnType<typeof createFormatter>;
@@ -53,6 +55,30 @@ export const useLocale = (): string => {
   }
   return locale;
 };
+
+const STEPS_MARKER_STYLES = {
+  latn: "decimal",
+  arab: "arabic-indic",
+} as const satisfies Record<
+  Exclude<NumberingPreference, "auto">,
+  ComponentProps<typeof Steps>["markerStyle"]
+>;
+
+const isSupportedNumberingSystem = (
+  value: string,
+): value is keyof typeof STEPS_MARKER_STYLES =>
+  Object.hasOwn(STEPS_MARKER_STYLES, value);
+
+export const stepsMarkerStyle = (locale: string) => {
+  const system = new Intl.NumberFormat(locale).resolvedOptions()
+    .numberingSystem;
+  if (!isSupportedNumberingSystem(system)) {
+    panic("Steps requires a supported formatting numbering system", { system });
+  }
+  return STEPS_MARKER_STYLES[system];
+};
+
+export const useStepsMarkerStyle = () => stepsMarkerStyle(useLocale());
 
 type RelativeTimeFormat = (date: Date | string | Temporal.Instant) => string;
 
