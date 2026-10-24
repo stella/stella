@@ -1108,9 +1108,11 @@ describe("review organization reset task", () => {
       panic("The reset task must be registered without a feature gate");
     }
     const runId = Bun.randomUUIDv7();
-    (await task(contextFor(runId))).unwrap(
-      "Expected the reset run to succeed without time billing",
-    );
+    const outcome = await task(contextFor(runId));
+    if (outcome === undefined) {
+      panic("The registered reset task must return its Result");
+    }
+    outcome.unwrap("Expected the reset run to succeed without time billing");
     expect(await countRows(fixture.reviewOrgId)).toEqual({
       ...SAMPLE_COUNTS,
       timeEntries: 0,
@@ -1150,9 +1152,11 @@ describe("review organization reset task", () => {
     if (restored === undefined) {
       panic("The restored reset task must remain registered");
     }
-    (await restored(contextFor(Bun.randomUUIDv7()))).unwrap(
-      "Expected the reset run to succeed",
-    );
+    const restoredOutcome = await restored(contextFor(Bun.randomUUIDv7()));
+    if (restoredOutcome === undefined) {
+      panic("The restored reset task must return its Result");
+    }
+    restoredOutcome.unwrap("Expected the reset run to succeed");
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
   });
 });

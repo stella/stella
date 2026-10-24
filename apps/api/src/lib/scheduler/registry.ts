@@ -302,15 +302,9 @@ type SchedulerTaskRegistryOptions = {
   resetReviewOrganization?: SchedulerTask;
 };
 
-const schedulerTasks = (
-  reapOwnerlessChatTurns: SchedulerTask,
-  {
-    resetReviewOrganization = resetReviewOrganizationTask,
-  }: SchedulerTaskRegistryOptions = {},
-) => ({
+const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
-  [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganization,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -330,18 +324,24 @@ export const createSchedulerTaskRegistry = (
   options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(schedulerTasks(reapOwnerlessChatTurns, options)).map(
-      ([name, entry]) => [
-        name,
-        async (context: SchedulerTaskContext) =>
-          runWithStatementCeiling({
-            kind: "scheduler",
-            key: name,
-            run: async () =>
-              await (typeof entry === "function"
-                ? entry(context)
-                : entry.task(context)),
-          }),
-      ],
+    Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
+      ([name, registered]) => {
+        const entry =
+          name === RESET_REVIEW_ORGANIZATION_TASK
+            ? (options.resetReviewOrganization ?? registered)
+            : registered;
+        return [
+          name,
+          async (context: SchedulerTaskContext) =>
+            runWithStatementCeiling({
+              kind: "scheduler",
+              key: name,
+              run: async () =>
+                await (typeof entry === "function"
+                  ? entry(context)
+                  : entry.task(context)),
+            }),
+        ];
+      },
     ),
   );
