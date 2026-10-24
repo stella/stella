@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import {
   analyzeModule,
   API_ALL_RULES,
@@ -557,7 +558,11 @@ test("a real web change selects only tests with a web-reaching reader", () => {
     changed: ["apps/web/src/components/globe.tsx"],
   });
   expect(selection.mode).toBe("selected");
-  expect(selection.files.length).toBeLessThan(450);
+  // A share of the suite, not a count: the suite grows, and CI's tree also
+  // holds generated modules. Before this rule a web change selected about
+  // 41% of the API tests; a quarter is a generous ceiling over today's 14%.
+  const suite = listApiTestPaths(path.join(repositoryRoot, "apps/api"));
+  expect(selection.files.length).toBeLessThan(suite.length / 4);
 
   const tests = selection.files.map((file) => `apps/api/${file}`);
   const graph = buildImportGraph(repositoryRoot, tests);

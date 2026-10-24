@@ -421,7 +421,7 @@ const executionOutcome = (
     status: outcome.status,
     ranTests,
     failedTests,
-    failureDetails,
+    ...(runner === "rust" ? {} : { failureDetails }),
   };
 };
 
