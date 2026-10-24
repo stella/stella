@@ -700,6 +700,12 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261020013635_case_law_source_hash_version",
+    form: "replace-view",
+    reason:
+      "The two decision views re-expand their existing SELECT * definitions to include source_hash_version while preserving the redaction and listing filters; replacement updates view metadata without scanning corpus rows, under 5s lock_timeout and 30s statement_timeout.",
+  },
+  {
     migration: "20261023233000_oauth_client_metadata_validated_at",
     form: "add-column",
     reason:
