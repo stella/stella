@@ -1,5 +1,5 @@
 import { LinkifyIt } from "linkify-it";
-import { parse } from "tldts";
+import { getDomain, parse } from "tldts";
 
 export type ChatLinkSpan = {
   start: number;
@@ -68,6 +68,9 @@ export const normalizeChatLink = (input: string) => {
   }
   return { href: url.href, hostname: url.hostname };
 };
+
+export const getChatLinkSite = (hostname: string): string | null =>
+  getDomain(hostname, { allowPrivateDomains: false });
 
 export const detectChatLinks = (text: string): ChatLinkSpan[] => {
   // Candidate suffixes come from the input; tldts is the sole TLD authority.

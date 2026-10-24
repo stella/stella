@@ -6,9 +6,9 @@ import { isPathInside, repoRelativePath } from "@stll/portable-path";
 import { failureFingerprint } from "./failure-fingerprint";
 import {
   PROPERTY_SEEDS_FILE,
+  readPinnedSeeds,
   REPLAY_PATH_PATTERN,
   REPO_ROOT,
-  readPinnedSeeds,
 } from "./pinned-seeds";
 import type { PinnedSeed } from "./pinned-seeds";
 import { PropertyTestConfigError } from "./property-test-config-error";

@@ -80,9 +80,9 @@ import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidan
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import {
+  type ReadOutcome,
   readPresent,
   readUnavailable,
-  type ReadOutcome,
 } from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
@@ -255,6 +255,8 @@ export type McpRequestContext = {
   accessibleWorkspaces: AccessibleWorkspace[];
   /** Resolved transport client IP used by shared gateway/REST abuse budgets. */
   clientIp?: string | null;
+  credentialType?: "oauth" | "api-key" | "anonymous";
+  clientId?: string | null;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -290,8 +292,7 @@ export type McpRequestContext = {
    * registry and the tool is dropped.
    */
   loadEnabledRegistrySlugs?:
-    | (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>)
-    | undefined;
+    (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>) | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -306,8 +307,7 @@ export type McpRequestContext = {
   createOperationDatabaseScope?: (() => McpOperationDatabaseScope) | undefined;
   /** Pin one workspace only after an MCP access/status gate proves it. */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   /**
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
@@ -393,6 +393,19 @@ export const loadAccessibleMcpWorkspaces = async ({
     throw error;
   }
   return outcome.value.workspaces;
+};
+
+const resolveMcpWebHandoffIdentity = (session: McpSession) => {
+  const credential = session.credential;
+  if (credential?.type === "oauth_client") {
+    return { credentialType: "oauth", clientId: credential.clientId } as const;
+  }
+  const credentialType =
+    credential?.type === "machine_api_key" ||
+    credential?.type === "personal_api_key"
+      ? "api-key"
+      : "anonymous";
+  return { credentialType, clientId: null } as const;
 };
 
 const REGISTRY_NARROWING_SINK = failureSink({
@@ -584,8 +597,7 @@ export const resolveMcpSessionContext = async (
   // Read once, on first use within this request: settings and decrypted
   // registry credentials in one scoped transaction.
   let enabledRegistrySlugs:
-    | Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>
-    | undefined;
+    Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> | undefined;
   const loadEnabledRegistrySlugs = async () => {
     enabledRegistrySlugs ??= readEnabledRegistrySlugs({
       organizationId,
@@ -594,7 +606,10 @@ export const resolveMcpSessionContext = async (
     return await enabledRegistrySlugs;
   };
 
+  const webHandoffIdentity = resolveMcpWebHandoffIdentity(session);
+
   return {
+    ...webHandoffIdentity,
     ...(auditExecution ? { auditExecution } : {}),
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,

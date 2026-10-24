@@ -27,11 +27,11 @@ import {
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  buildListingQuery,
   buildDecision,
+  buildListingQuery,
   ecjRawParts,
-  fetchNotice,
   euEcjAdapter,
+  fetchNotice,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -55,13 +55,13 @@ import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corp
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import {
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import {
+  decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  decodeSourceRawEnvelope,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";

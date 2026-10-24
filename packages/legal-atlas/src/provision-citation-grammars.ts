@@ -26,11 +26,12 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
 import {
+  EU_PROVISION_ANCHOR_SEPARATOR,
   euProvisionAnchor,
-  parseEuProvisionReference,
-  parseEuProvisionAnchor,
-  normalizeEuProvisionReference,
   locateEuProvisionCitations,
+  normalizeEuProvisionReference,
+  parseEuProvisionAnchor,
+  parseEuProvisionReference,
   parseEuWorkIdentifier,
 } from "./eu-provision-citations";
 import { formatWorkIdentifier } from "./provision-citation-profile";
@@ -115,6 +116,11 @@ export type SupportedProvisionCitationGrammar<
   TJurisdiction extends CaseLawJurisdiction = CaseLawJurisdiction,
 > = {
   anchor: (reference: ProvisionReference) => string;
+  /**
+   * Joins the levels of an anchor this grammar mints: every prefix of an
+   * anchor that ends before one names the enclosing provision.
+   */
+  anchorSeparator: string;
   parseAnchor: (raw: string) => ProvisionReference | null;
   unit: ProvisionUnit;
   gazette: {
@@ -521,6 +527,7 @@ export const createProvisionCitationGrammar = <
       return referenceOf(compiledLevels, element.values, unit);
     },
     anchor,
+    anchorSeparator,
     parseAnchor,
     gazette: {
       eli: gazette.eli,
@@ -665,6 +672,7 @@ export const PROVISION_CITATION_GRAMMARS = {
     target: "publisher",
     unit: "article",
     anchor: euProvisionAnchor,
+    anchorSeparator: EU_PROVISION_ANCHOR_SEPARATOR,
     parseAnchor: parseEuProvisionAnchor,
     normalizeReference: normalizeEuProvisionReference,
     parseReference: parseEuProvisionReference,

@@ -110,8 +110,8 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
-  restoreReviewRun,
   restoredRunId,
+  restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
@@ -238,8 +238,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type {
   Negotiation,
   PlaybookListItem,
-  Position,
   PlaybookPositionsValue,
+  Position,
 } from "@/lib/knowledge/playbook-types";
 import { positionReferencePassages } from "@/lib/knowledge/playbook-types";
 import {
@@ -4882,7 +4882,9 @@ const ChatSuggestionsSection = ({
           className={cn(REVIEW_SECTION_LABEL_CLASS, "flex items-center gap-2")}
         >
           <span>{t("inspector.review.fromChat")}</span>
-          <span>{format.number(visible.length)}</span>
+          <span className="text-foreground-ghost tabular-nums">
+            {format.number(visible.length)}
+          </span>
         </h3>
         {controls}
       </div>

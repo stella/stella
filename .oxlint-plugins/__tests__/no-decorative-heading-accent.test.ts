@@ -1,0 +1,38 @@
+import { expect, test } from "bun:test";
+
+import { lintSingleRule } from "./lint-single-rule.ts";
+
+test("heading accents preserve layout and numeric meaning", async () => {
+  const cases = [
+    ['<h2><span className="italic">Title</span></h2>', true],
+    ['<h2><em style={{ color: "red" }}>Title</em></h2>', true],
+    [
+      '<CardHeading><span><strong className="font-bold">Title</strong></span></CardHeading>',
+      true,
+    ],
+    ['<h2><span className="truncate min-w-0">Title</span></h2>', false],
+    ['<h2><span className="md:truncate">Title</span></h2>', false],
+    [
+      '<h2><span className="text-muted-foreground font-normal tabular-nums">42</span></h2>',
+      false,
+    ],
+    ['<h2><span className="tabular-nums font-bold">42</span></h2>', true],
+    ['<h2><span className="truncate italic">Title</span></h2>', true],
+    [
+      '<h2><a href="/details"><span className="underline">Details</span></a></h2>',
+      false,
+    ],
+    ['<h2><i className="italic" lang="la">bona fide</i></h2>', false],
+    ['<h2><mark className="bg-yellow" aria-label="new">N</mark></h2>', false],
+    ["<h2><strong>Title</strong></h2>", false],
+    ['<p><span className="italic">Body</span></p>', false],
+  ] as const;
+  const source = cases
+    .map(
+      ([element], index) => `export const Case${index} = () => (${element});`,
+    )
+    .join("\n");
+  expect(await lintSingleRule("no-decorative-heading-accent", source)).toEqual(
+    cases.flatMap(([, reported], index) => (reported ? [index + 1] : [])),
+  );
+});

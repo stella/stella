@@ -2,13 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   GLOBAL_SEARCH_RESULT_TYPES,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toResourceName,
 } from "@stll/api-contract";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { SEARCH_SCOPES } from "@/components/search-scope";
 import type {
   GlobalSearchHit,
   GlobalSearchResultType,
@@ -24,14 +25,16 @@ import {
   getCompanySearchQuery,
   getEntityLocation,
   getRecentFileLocation,
-  getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  getRecentFileRoute,
   isLazySearchGroupActive,
-  resolveRegistryResultsPane,
+  isSearchTypeInScope,
   rememberSelectedFacetLabels,
-  resolveEntityDocumentRoute,
   resolveEagerSearchTypes,
+  resolveEntityDocumentRoute,
+  resolveRegistryResultsPane,
+  resolveSearchScope,
   toAskAIMessageHtml,
 } from "./search-dialog.logic";
 
@@ -40,7 +43,7 @@ type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 
 describe("lazy search groups", () => {
   test("gives the results pane to an expanded registry group only in All scope", () => {
-    for (const scope of ["all", "matters", "registries"] as const) {
+    for (const scope of SEARCH_SCOPES) {
       for (const expanded of [false, true]) {
         const visible = true;
         expect(
@@ -76,7 +79,7 @@ describe("lazy search groups", () => {
 
   test("defers only case law in All browse searches while preserving every other type and its order", () => {
     const modes = ["browse", "pick"] as const;
-    const scopes = ["all", "matters", "registries"] as const;
+    const scopes = SEARCH_SCOPES;
     const inputs = [
       [],
       [...GLOBAL_SEARCH_RESULT_TYPES],
@@ -109,7 +112,7 @@ describe("lazy search groups", () => {
 
   test("only starts an expanded group in an open All browse search", () => {
     const modes = ["browse", "pick"] as const;
-    const scopes = ["all", "matters", "registries"] as const;
+    const scopes = SEARCH_SCOPES;
     const queries = ["", " ", "\t\n", "\u00a0", "ALZA", " 27082440 ", "عقد"];
     let activeStates = 0;
     for (const open of [false, true]) {
@@ -142,6 +145,39 @@ describe("lazy search groups", () => {
       }
     }
     expect(activeStates).toBe(3);
+  });
+});
+
+describe("search scope types", () => {
+  test("Case law scope reaches only case law and Matters never does", () => {
+    for (const type of GLOBAL_SEARCH_RESULT_TYPES) {
+      expect(isSearchTypeInScope(type, "case-law")).toBe(type === "case-law");
+      expect(isSearchTypeInScope(type, "matters")).toBe(
+        type !== "case-law" && type !== "contact",
+      );
+      expect(isSearchTypeInScope(type, "all")).toBe(true);
+    }
+  });
+
+  test("falls back to All only when Case law is picked but unavailable", () => {
+    for (const scope of SEARCH_SCOPES) {
+      expect(resolveSearchScope(scope, true)).toBe(scope);
+      expect(resolveSearchScope(scope, false)).toBe(
+        scope === "case-law" ? "all" : scope,
+      );
+    }
+  });
+
+  test("Case law scope searches case law eagerly in browse", () => {
+    expect(
+      resolveEagerSearchTypes({
+        mode: "browse",
+        scope: "case-law",
+        types: GLOBAL_SEARCH_RESULT_TYPES.filter((type) =>
+          isSearchTypeInScope(type, "case-law"),
+        ),
+      }),
+    ).toEqual(["case-law"]);
   });
 });
 

@@ -67,3 +67,16 @@ export const _outsideHeading = () => (
     <span className="italic">Fine</span>
   </p>
 );
+
+export const _layout = () => (
+  <h2><span className="truncate min-w-0">Title</span></h2>
+);
+export const _counter = () => (
+  <h2>Items <span className="text-muted-foreground font-normal tabular-nums">42</span></h2>
+);
+export const _counterAccent = () => (
+  <h2>Items
+    {/* oxlint-disable-next-line no-decorative-heading-accent/no-decorative-heading-accent -- numeric layout does not authorize a decorative weight */}
+    <span className="tabular-nums font-bold">42</span>
+  </h2>
+);
