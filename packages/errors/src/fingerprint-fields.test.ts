@@ -171,33 +171,35 @@ test("an instance constructor override cannot forge static fingerprint metadata"
 });
 
 test("a foreign prototype cannot borrow another constructor's nested metadata", () => {
-  class StaticStructuredFailure extends Error {
-    override readonly name = "StaticStructuredFailure";
+  class StaticStructuredFailureError extends Error {
+    override readonly name: string = "StaticStructuredFailureError";
     readonly reason = { kind: "read" as const };
     static readonly stellaExceptionFingerprintFields = [
       "reason.kind",
-    ] as const satisfies FingerprintFields<StaticStructuredFailure>;
+    ] as const satisfies FingerprintFields<StaticStructuredFailureError>;
   }
   class ForeignError extends Error {
     override readonly name = "ForeignError";
     readonly reason = { kind: "private foreign value" };
   }
-  expect(fieldsOf(new StaticStructuredFailure("private"))).toEqual({
+  expect(fieldsOf(new StaticStructuredFailureError("private"))).toEqual({
     "reason.kind": "read",
   });
-  class InheritedStaticFailure extends StaticStructuredFailure {}
+  class InheritedStaticFailureError extends StaticStructuredFailureError {
+    override readonly name = "InheritedStaticFailureError";
+  }
   expect(
     readFingerprintFields({
-      value: new InheritedStaticFailure("private"),
+      value: new InheritedStaticFailureError("private"),
       prototypes: [
-        InheritedStaticFailure.prototype,
-        StaticStructuredFailure.prototype,
+        InheritedStaticFailureError.prototype,
+        StaticStructuredFailureError.prototype,
       ],
       read: (object, key): unknown => Reflect.get(object, key),
     }).fields,
   ).toEqual({ "reason.kind": "read" });
   Object.defineProperty(ForeignError.prototype, "constructor", {
-    value: StaticStructuredFailure,
+    value: StaticStructuredFailureError,
   });
   expect(fieldsOf(new ForeignError("private"))).toBeUndefined();
 });

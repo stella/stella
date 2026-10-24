@@ -118,10 +118,10 @@ export const readFingerprintFields = ({
       }
       if (
         path.every(
-          (key, index) =>
+          (key, pathIndex) =>
             FINGERPRINT_KEYS.some((dimension) => dimension === key) ||
-            (index > 0 &&
-              index === path.length - 1 &&
+            (pathIndex > 0 &&
+              pathIndex === path.length - 1 &&
               key === NESTED_DISCRIMINATOR_KEY),
         )
       ) {
