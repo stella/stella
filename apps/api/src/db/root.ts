@@ -1,10 +1,8 @@
-import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
-
 import { databaseRelations } from "@/api/db/database-relations";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -19,12 +17,12 @@ import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservati
 import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
 import { readOAuthClientBinding } from "@/api/lib/db/service-client-binding";
 import {
-  createServiceOAuthClientInTransaction,
   changeServiceOAuthClientInTransaction,
+  createServiceOAuthClientInTransaction,
 } from "@/api/lib/db/service-client-operator";
 import type {
-  CreateServiceOAuthClientOptions,
   ChangeServiceOAuthClientOptions,
+  CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
@@ -55,7 +53,7 @@ const poolRecycling = {
 // its statements count toward that request's query budget, not a neighbour's.
 const rootPoolWindow = createRootPoolWindow();
 const rootPoolSettings = sharedPoolConnectionSettings("root");
-const nativeRootClient = new SQL({
+const nativeRootClient = createSqlClient({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_ROOT_POOL_MAX,
   ...poolRecycling,
@@ -80,7 +78,7 @@ export const readRootPoolReport = async () => {
   );
 };
 const rlsClient = runTransactionsInCallerContext(
-  new SQL({
+  createSqlClient({
     url: envBase.DATABASE_URL,
     max: envBase.DATABASE_RLS_POOL_MAX,
     ...poolRecycling,
@@ -94,13 +92,13 @@ const rlsClient = runTransactionsInCallerContext(
  * for internal infrastructure such as workspace resolution and
  * Better Auth.
  */
-export const rootDb = drizzle({
+export const rootDb = createDatabase({
   client: rootClient,
   relations: databaseRelations,
   logger: queryLogger,
 });
 
-const rawRlsDb = drizzle({
+const rawRlsDb = createDatabase({
   client: rlsClient,
   relations: databaseRelations,
   logger: queryLogger,

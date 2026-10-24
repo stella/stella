@@ -37,7 +37,9 @@ export const ProxyChatLink = ({
   });
   // A disabled query still exposes data another link cached for the site.
   const blob =
-    source.kind === "tool-source" && icon?.type === "icon"
+    source.kind === "tool-source" &&
+    !hasBundledChatLinkIcon(hostname) &&
+    icon?.type === "icon"
       ? icon.blob
       : undefined;
   const [localIcon, setLocalIcon] = useState<{

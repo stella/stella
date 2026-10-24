@@ -34,22 +34,22 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
-import type { FailedTest } from "./ci-failure-digest";
+import { DIGEST_VERSION, type FailedTest } from "./ci-failure-digest";
 import {
   annotationData,
   annotationProperty,
   DAY_MS,
   isExpired,
+  type QuarantineEntry,
+  type QuarantineRecord,
   quarantineRecordSchema,
   readRegistry,
+  type Registry,
   REGISTRY_FILE,
   REPOSITORY_ROOT,
   serializeRegistry,
   splitTestId,
   testId,
-  type QuarantineEntry,
-  type QuarantineRecord,
-  type Registry,
 } from "./flaky-test-quarantine";
 
 export const HISTORY_WINDOW_DAYS = 7;
@@ -1011,16 +1011,20 @@ const artifactPagesSchema = v.array(
   }),
 );
 
-// Digests from before structured test identities parse as unreadable.
-const digestFileSchema = v.array(
-  v.object({
-    job: v.string(),
-    step: v.string(),
-    tests: v.array(
-      v.object({ scope: v.string(), file: v.string(), name: v.string() }),
-    ),
-  }),
-);
+// The `DigestFile` envelope `ci-failure-digest.ts` writes. Digests from
+// before structured test identities parse as unreadable.
+const digestFileSchema = v.object({
+  version: v.literal(DIGEST_VERSION),
+  failures: v.array(
+    v.object({
+      job: v.string(),
+      step: v.string(),
+      tests: v.array(
+        v.object({ scope: v.string(), file: v.string(), name: v.string() }),
+      ),
+    }),
+  ),
+});
 
 const flakeReportFileSchema = v.object({
   results: v.array(
@@ -1245,7 +1249,7 @@ export const collectEvidence = async ({
     const records = readOr(
       digestFileSchema,
       path.join(dir, "ci-failures.json"),
-    );
+    )?.failures;
     return records === undefined
       ? []
       : [

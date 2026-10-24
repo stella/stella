@@ -16,8 +16,7 @@ export const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
 
 /** Whether admission refused a scan for an exhausted period, and until when. */
 export type DeadlineScanAdmission =
-  | { type: "admitted" }
-  | { type: "period_exhausted"; skippedUntil: Date };
+  { type: "admitted" } | { type: "period_exhausted"; skippedUntil: Date };
 
 /**
  * A scan refused for an exhausted period skips until that period resets. The

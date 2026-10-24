@@ -45,6 +45,10 @@ export const workspaceEventsRoute = new Elysia({
         workspaceId,
       });
 
-      return sseResponse(stream);
+      return sseResponse(stream, {
+        kind: "session",
+        sessionId: session.id,
+        userId: user.id,
+      });
     },
   );

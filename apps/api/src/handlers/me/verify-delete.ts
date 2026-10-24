@@ -11,8 +11,8 @@ import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import {
   ACCOUNT_DELETION_ERROR_CODE,
   checkUserOrganizationOwnership,
-  ORGANIZATION_OWNERSHIP,
   getUserEmail,
+  ORGANIZATION_OWNERSHIP,
   verifyAndDeleteUser,
 } from "@/api/lib/delete-account";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

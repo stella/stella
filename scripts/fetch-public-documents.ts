@@ -55,9 +55,7 @@ export type DocumentRecord = {
   reason: FailureReason | null;
   archive: Archive | null;
   extraction:
-    | { status: "extracted"; archive: Archive }
-    | { status: "failed" }
-    | null;
+    { status: "extracted"; archive: Archive } | { status: "failed" } | null;
 };
 
 export const validateUrl = (input: string) => {

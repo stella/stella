@@ -5,12 +5,12 @@ import {
   CASE_LAW_TOTAL_REPORTER,
   caseLawCountryCompleteness,
   caseLawCountryHealth,
+  type CaseLawSourceCompleteness,
   caseLawSourceCompleteness,
   caseLawSourceHealth,
   COVERAGE_CURRENT_WITHIN_MS,
   COVERAGE_DELAYED_WITHIN_MS,
   COVERAGE_REPORTED_TOTAL_FRESH_WITHIN_MS,
-  type CaseLawSourceCompleteness,
 } from "@/api/handlers/case-law/decisions/coverage-health";
 
 const NOW = new Date("2026-09-19T12:00:00.000Z");

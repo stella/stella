@@ -91,63 +91,78 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-test("a model-text link never shows an icon another link cached for its site", async () => {
-  const originalFetch = globalThis.fetch;
-  const originalCreateObjectURL = URL.createObjectURL;
-  const originalRevokeObjectURL = URL.revokeObjectURL;
-  const requests: string[] = [];
-  globalThis.IntersectionObserver = VisibleIntersectionObserver;
-  URL.createObjectURL = () => "blob:cached-site-icon";
-  URL.revokeObjectURL = () => undefined;
-  globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
-      requests.push(new Request(input).url);
-      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
-        headers: { "content-type": "image/png" },
-      });
-    },
-    { preconnect: originalFetch.preconnect },
-  );
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
-  const view = render(
-    <QueryClientProvider client={client}>
-      <ProxyChatLink
-        href="https://a.cached.example/source"
-        iconSource={{ kind: "tool-source" }}
-      >
-        {LINK_LABELS.source}
-      </ProxyChatLink>
-      <ProxyChatLink
-        href="https://b.cached.example/prose"
-        iconSource={{ kind: "model-text" }}
-      >
-        {LINK_LABELS.absent}
-      </ProxyChatLink>
-    </QueryClientProvider>,
-  );
-  const iconIn = (label: string) =>
-    view.getByText(label).closest("a")?.querySelector("img") ?? null;
-  try {
-    await act(async () => {
-      for (const observer of [...observers]) {
-        observer.intersectObserved();
-      }
+test.each([
+  {
+    kind: "model-text" as const,
+    site: "cached.example",
+    sourceHref: "https://a.cached.example/source",
+    blockedHref: "https://b.cached.example/prose",
+  },
+  {
+    kind: "tool-source" as const,
+    site: "github.com",
+    sourceHref: "https://a.github.com/source",
+    blockedHref: "https://github.com/stella/stella",
+  },
+])(
+  "a $kind link keeps its own icon policy when its site icon is cached",
+  async ({ kind, site, sourceHref, blockedHref }) => {
+    const originalFetch = globalThis.fetch;
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const requests: string[] = [];
+    globalThis.IntersectionObserver = VisibleIntersectionObserver;
+    URL.createObjectURL = () => "blob:cached-site-icon";
+    URL.revokeObjectURL = () => undefined;
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL) => {
+        requests.push(new Request(input).url);
+        return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+          headers: { "content-type": "image/png" },
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
     });
-    // The tool-source link fetched and shows the site icon; the model-text
-    // link for the same site shares that cache entry but must not show it.
-    await waitFor(() => expect(iconIn(LINK_LABELS.source)).not.toBeNull());
-    expect(iconIn(LINK_LABELS.absent)).toBeNull();
-    expect(requests).toEqual([apiUrl("/chat/link-icons/cached.example")]);
-  } finally {
-    view.unmount();
-    client.clear();
-    globalThis.fetch = originalFetch;
-    URL.createObjectURL = originalCreateObjectURL;
-    URL.revokeObjectURL = originalRevokeObjectURL;
-  }
-});
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ProxyChatLink href={sourceHref} iconSource={{ kind: "tool-source" }}>
+          {LINK_LABELS.source}
+        </ProxyChatLink>
+        <ProxyChatLink href={blockedHref} iconSource={{ kind }}>
+          {LINK_LABELS.absent}
+        </ProxyChatLink>
+      </QueryClientProvider>,
+    );
+    const iconIn = (label: string) =>
+      view.getByText(label).closest("a")?.querySelector("img") ?? null;
+    try {
+      await act(async () => {
+        for (const observer of [...observers]) {
+          observer.intersectObserved();
+        }
+      });
+      // The eligible source fetched the shared site icon; the other link keeps
+      // its model-text or bundled-icon policy despite sharing the cache entry.
+      await waitFor(() => expect(iconIn(LINK_LABELS.source)).not.toBeNull());
+      expect(iconIn(LINK_LABELS.absent)).toBeNull();
+      expect(requests).toEqual([apiUrl(`/chat/link-icons/${site}`)]);
+      if (kind === "tool-source") {
+        const link = view.getByText(LINK_LABELS.absent).closest("a");
+        expect(link?.querySelector("svg")).not.toBeNull();
+        expect(link?.querySelector(".lucide-globe")).toBeNull();
+      }
+    } finally {
+      view.unmount();
+      client.clear();
+      globalThis.fetch = originalFetch;
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+  },
+);
 
 test("requests one site icon only for visible tool-source links", async () => {
   const originalFetch = globalThis.fetch;

@@ -83,11 +83,16 @@ test("a running turn rejoins when its page mounts after the runtime was created"
   // Hydration subscribes well after the loader built the runtime.
   await sleep(50);
   const unsubscribe = page.runtime.subscribe(() => undefined);
+  const deadline = Promise.withResolvers<undefined>();
+  const deadlineTimer = setTimeout(() => {
+    deadline.resolve(undefined);
+  }, 2000);
   try {
-    await Promise.race([joined.promise, sleep(2000)]);
+    await Promise.race([joined.promise, deadline.promise]);
     expect(joins).toBe(1);
     expect(page.errors).toEqual([]);
   } finally {
+    clearTimeout(deadlineTimer);
     unsubscribe();
   }
 });
