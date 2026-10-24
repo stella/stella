@@ -267,6 +267,8 @@ export class ConfigurationError extends TaggedError("ConfigurationError")<{
 }> {}
 
 export class TelemetryError extends TaggedError("TelemetryError")<{
+  /** Stable outcome code; it becomes `error.code`, so it splits the issue. */
+  code?: string | undefined;
   message: string;
   cause?: unknown;
 }> {}
@@ -497,8 +499,7 @@ export class ChatLoopDetectedError extends TaggedError(
  * `isAnticipatedAIFailure`.
  */
 export type ChatTerminalError =
-  | ChatEmptyCompletionError
-  | ChatLoopDetectedError;
+  ChatEmptyCompletionError | ChatLoopDetectedError;
 
 /**
  * A text generation ended because the abort signal its caller passed fired:
@@ -781,6 +782,8 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
+  /** Parser error class recovered from worker stderr; null for termination. */
+  workerErrorClass: string | null;
 }> {}
 
 /**

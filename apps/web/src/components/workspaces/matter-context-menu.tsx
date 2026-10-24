@@ -18,10 +18,10 @@ import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -462,8 +462,7 @@ type MatterContextMenuProps = {
   target: MatterTarget;
   className?: string;
   children:
-    | React.ReactNode
-    | ((args: MatterContextMenuChildArgs) => React.ReactNode);
+    React.ReactNode | ((args: MatterContextMenuChildArgs) => React.ReactNode);
 };
 
 export const MatterContextMenu = ({

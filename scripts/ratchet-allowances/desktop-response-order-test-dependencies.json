@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 3,
+  "reason": "The desktop response-order property exercises the mounted React interface with happy-dom, Testing Library and fast-check. Declare these three test dependencies in the package that imports them."
+}

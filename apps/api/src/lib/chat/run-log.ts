@@ -383,8 +383,8 @@ const createRunLogReader = ({
 
 // A reconnect replays at most 256 deltas or a 1 MiB suffix. Larger prefixes
 // fold into one canonical SDK transcript snapshot, bounded by MAX_RUN_BYTES.
-const MAX_CATCHUP_CHUNKS = 256n;
-const MAX_CATCHUP_BYTES = 1024n * 1024n;
+export const MAX_CATCHUP_CHUNKS = 256n;
+export const MAX_CATCHUP_BYTES = 1024n * 1024n;
 
 export const createChatRunLogReplay = async ({
   db,

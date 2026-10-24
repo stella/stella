@@ -12,9 +12,9 @@ import {
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisionJudges,
+  caseLawJudges,
   caseLawSources,
   publishedCaseLawDecisions,
-  caseLawJudges,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
@@ -324,6 +324,7 @@ export const decisionRecordQuery = (
       languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
       decisionDate: publishedCaseLawDecisions.decisionDate,
       decisionType: publishedCaseLawDecisions.decisionType,
+      citationCount: publishedCaseLawDecisions.citationCount,
       documentAst: publishedCaseLawDecisions.documentAst,
       sections: publishedCaseLawDecisions.sections,
       sourceUrl: publishedCaseLawDecisions.sourceUrl,
@@ -542,6 +543,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       languageGroupKey: decision.languageGroupKey,
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
+      citationCount: decision.citationCount,
       documentAst,
       projectionDigest:
         decision.redactedAt === null ? astRead.projectionDigest : null,

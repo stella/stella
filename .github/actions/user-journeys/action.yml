@@ -1,0 +1,131 @@
+name: User journeys
+description: Exercise the pinned deployed or mock-model application with the shared journey suite
+inputs:
+  project:
+    description: Playwright project, deployed or local-stack
+    required: true
+  expected-commit:
+    description: Full commit containing the journey harness, checked out and, for deployed journeys, served by the target API
+    required: true
+  health-url:
+    description: Deployed API health endpoint; required for deployed journeys
+    required: false
+    default: ""
+  dockerhub-username:
+    description: Docker Hub username for mock stack image pulls
+    required: false
+    default: ""
+  dockerhub-token:
+    description: Docker Hub token for mock stack image pulls
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Validate the journey source
+      id: source
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        EXPECTED_COMMIT: ${{ inputs.expected-commit }}
+        HEALTH_URL: ${{ inputs.health-url }}
+      run: |
+        set -euo pipefail
+        case "$PROJECT" in
+          deployed) test -n "$HEALTH_URL" ;;
+          local-stack) ;;
+          *) echo "::error::Unknown journey project"; exit 1 ;;
+        esac
+        if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [[ "$(git rev-parse HEAD)" != "$EXPECTED_COMMIT" ]]; then
+          echo "::error::Journey source does not match the pinned commit."
+          exit 1
+        fi
+
+    - name: Prepare mock-model environment
+      id: environment
+      if: ${{ !cancelled() && steps.source.outcome == 'success' && inputs.project == 'local-stack' }}
+      shell: bash
+      run: |
+        cp apps/api/.env.example apps/api/.env
+        cp apps/web/.env.example apps/web/.env
+
+    - name: Build mock-model production web
+      id: build
+      if: ${{ !cancelled() && steps.environment.outcome == 'success' }}
+      shell: bash
+      run: timeout 15m bun --filter @stll/web build
+
+    - name: Start mock-model stack
+      id: stack
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      uses: ./.github/actions/setup-e2e-stack
+      with:
+        dockerhub-username: ${{ inputs.dockerhub-username }}
+        dockerhub-token: ${{ inputs.dockerhub-token }}
+
+    - name: Start mock-model production web
+      id: web
+      if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd apps/web
+        NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > "$RUNNER_TEMP/web-user-journeys.log" 2>&1 &
+        echo "$!" > "$RUNNER_TEMP/web-user-journeys.pid"
+        for _ in {1..60}; do
+          if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000/health > /dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::Production web never came up"
+        tail -200 "$RUNNER_TEMP/web-user-journeys.log"
+        exit 1
+
+    - name: Verify image-provided Chromium
+      id: browser
+      if: ${{ !cancelled() && steps.source.outcome == 'success' && (inputs.project == 'deployed' || steps.web.outcome == 'success') }}
+      uses: ./.github/actions/setup-playwright
+
+    - name: Run pinned journeys
+      if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
+      shell: bash
+      env:
+        PROJECT: ${{ inputs.project }}
+        EXPECTED_COMMIT: ${{ inputs.expected-commit }}
+        HEALTH_URL: ${{ inputs.health-url }}
+        E2E_OUTPUT_DIR: test-results/user-journeys-${{ inputs.project }}
+      run: |
+        set -euo pipefail
+        verify_deployed_commit() {
+          if [[ "$PROJECT" != "deployed" ]]; then
+            return
+          fi
+          edge_args=()
+          if [[ -n "${E2E_EDGE_HEADER_NAME:-}" && -n "${E2E_EDGE_HEADER_VALUE:-}" ]]; then
+            edge_args+=(--header "${E2E_EDGE_HEADER_NAME}: ${E2E_EDGE_HEADER_VALUE}")
+          fi
+          body="$(bash scripts/retry.sh curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "${edge_args[@]}" "$HEALTH_URL")"
+          if [[ "$(printf '%s' "$body" | jq -r '.commit // empty')" != "$EXPECTED_COMMIT" ]]; then
+            echo "::error::Journey target no longer serves the pinned commit."
+            return 1
+          fi
+        }
+        verify_deployed_commit
+        timeout 12m bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:journeys --project "$PROJECT"
+        verify_deployed_commit
+
+    - name: Stop mock-model services
+      if: ${{ always() && inputs.project == 'local-stack' && steps.stack.outcome != '' && steps.stack.outcome != 'skipped' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        for pid_file in "$RUNNER_TEMP/web-user-journeys.pid" /tmp/api.pid; do
+          if [[ -f "$pid_file" ]]; then
+            kill "$(cat "$pid_file")" || true
+            rm -f "$pid_file"
+          fi
+        done
+        export COMPOSE_FILE="$PWD/docker-compose.yml:$RUNNER_TEMP/ci-compose.json"
+        docker compose --profile dev down --volumes --remove-orphans

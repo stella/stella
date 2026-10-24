@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -33,16 +33,27 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
+import {
+  VIEWER_OVERLAY_BAR_BAND_PX,
+  VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+} from "@/components/inspector/viewer-overlay-bar";
 import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type {
+  AnalysisMarginItem,
+  AnswerMarginItem,
+  ProvisionMarginItem,
+} from "@/components/legal-reader/margin-notes";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import Tooltip from "@/components/tooltip";
+import { hasIncomingCitations } from "@/features/case-law/citation-treatment";
 import {
   AiHeadnotes,
   hasAiHeadnotes,
@@ -54,12 +65,6 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type {
-  AnalysisMarginItem,
-  AnswerMarginItem,
-  ProvisionMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -85,6 +90,7 @@ import { useDecisionProvisionAnchors } from "@/features/case-law/components/case
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -94,6 +100,7 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 import {
@@ -170,8 +177,7 @@ type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
 };
 
 export type DecisionWorkspaceProps =
-  | EnabledDecisionWorkspaceProps
-  | GatedDecisionWorkspaceProps;
+  EnabledDecisionWorkspaceProps | GatedDecisionWorkspaceProps;
 
 /** What the margin's source filter means for the reader's own marks. */
 /** A decision without a parsed body has no blocks to range over. */
@@ -265,6 +271,15 @@ const ReaderStatusNotices = ({
 
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
+  // The citation strip's own summary, already cached for this decision: a
+  // later-treatment note is drawn only once it shows a later citing decision.
+  // The strip reports a failed read; here it only keeps the note hidden.
+  const citationSummary = useQueryView(
+    useQuery(decisionCitationSummaryOptions(decisionId)),
+  );
+  const citedLater =
+    citationSummary.type === "items" &&
+    hasIncomingCitations(citationSummary.items);
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
   const astBlocks = decisionBlocks(ast);
@@ -661,7 +676,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       id: heading.id,
       heading: heading.label,
       text: first?.summary ?? "",
-      category: heading.category,
+      accentVar: getCategoryVar(heading.category),
       depth: heading.depth,
       startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
     });
@@ -671,7 +686,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         kind: "annotation",
         id: annotation.id,
         text: annotation.summary,
-        category: heading.category,
+        accentVar: getCategoryVar(heading.category),
         depth: heading.depth + 1,
         startAnchorId: annotation.startAnchorId,
       });
@@ -704,7 +719,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   kind: "example",
                   id: `example:${note.category}`,
                   heading: t(`caseLaw.analysis.categories.${note.category}`),
-                  category: note.category,
+                  accentVar: getCategoryVar(note.category),
                   depth: 0,
                   lines: note.lines,
                   startAnchorId,
@@ -817,6 +832,9 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               <OutlineRail
                 ariaLabel={t("statutes.outline")}
                 items={analysisOutline.items}
+                // The zoom bar floats beside the rail's top; the rail starts
+                // below it so reaching for the bar never opens the outline.
+                topOffset={VIEWER_OVERLAY_BAR_BAND_PX}
                 onJump={(id, container) => {
                   const anchorId = analysisOutline.anchorById.get(id);
                   if (anchorId === undefined) {
@@ -900,7 +918,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   }
                 >
                   {completeAnalysis !== null && showAiNotes && (
-                    <AnalysisLayers analysis={completeAnalysis} />
+                    <AnalysisLayers
+                      analysis={completeAnalysis}
+                      citedLater={citedLater}
+                    />
                   )}
                   {hasAnalysis &&
                     showAiNotes &&
@@ -980,7 +1001,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 </aside>
 
                 <main
-                  className="reader-paper min-w-0 py-8"
+                  className={cn(
+                    "reader-paper min-w-0 pb-8",
+                    VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+                  )}
                   data-slot="reader-document-column"
                 >
                   {/* Below lg the analysis column, and the offer in it, is

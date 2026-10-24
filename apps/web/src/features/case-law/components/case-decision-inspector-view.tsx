@@ -13,6 +13,7 @@ import { InfoIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
@@ -22,10 +23,13 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
@@ -34,8 +38,6 @@ import {
   DecisionInspectorOutline,
   scrollDecisionInspectorToAnchor,
 } from "@/features/case-law/components/case-viewer/analysis/decision-inspector-outline";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
@@ -234,7 +236,10 @@ export const CaseDecisionInspectorView = ({
             its own box. */}
         <ScrollArea axis="vertical" className="h-full" viewportRef={scrollRef}>
           <main
-            className="reader-paper min-h-full px-4 pt-10 pb-6"
+            className={cn(
+              "reader-paper min-h-full px-4 pb-6",
+              VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+            )}
             ref={contentRef}
             {...textScale.rootProps}
           >

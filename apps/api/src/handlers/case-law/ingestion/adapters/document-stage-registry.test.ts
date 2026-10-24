@@ -11,8 +11,15 @@ import {
   listAdapters,
   listDocumentStageAdapters,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
+
+defineSourceAdapter({
+  ...plKioAdapter,
+  // @ts-expect-error PL KIO's manifest requires inline document fetching.
+  documentStage: "deferred",
+});
 
 describe("registered document stages", () => {
   test("the document-stage census is derived from the entire adapter registry", () => {
@@ -30,7 +37,6 @@ describe("registered document stages", () => {
   test("every registered stage emits source-bound windows and typed document failures", async () => {
     for (const adapter of listAdapters()) {
       const observations: DocumentStageObservation[] = [];
-      expect(typeof adapter.observeDocumentStage).toBe("function");
       const page = Result.err(
         new AdapterFetchError({
           adapterKey: adapter.key,

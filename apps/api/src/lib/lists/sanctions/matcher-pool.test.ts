@@ -26,8 +26,8 @@ import { createSanctionsMatcherPoolCore } from "./matcher-pool-core";
 import type { SanctionsMatcherSession } from "./matcher-pool-core";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
 import type {
-  SanctionsMatcherFailureCause,
   reportSanctionsScreeningFailure,
+  SanctionsMatcherFailureCause,
 } from "./screening-failure";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";

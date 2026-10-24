@@ -129,12 +129,21 @@ const policyProblems = ({
     problems.push("release must be able to read the merge-group receipt");
   }
   const steps = workflowSteps(release);
-  if (
-    !steps.some(({ run }) =>
-      /bash\s+scripts\/prepare-release-tag\.sh(?:\s|$)/u.test(run),
-    )
-  ) {
-    problems.push("release selection must use the verified candidate selector");
+  // Both the candidate selection and the release evidence gate run the
+  // verified selector.
+  for (const [id, part] of [
+    ["candidate", "selection"],
+    ["evidence", "evidence"],
+  ] as const) {
+    if (
+      !steps.some(
+        (step) =>
+          step.id === id &&
+          /bash\s+scripts\/prepare-release-tag\.sh(?:\s|$)/u.test(step.run),
+      )
+    ) {
+      problems.push(`release ${part} must use the verified candidate selector`);
+    }
   }
   const preserve = steps.findIndex(({ run }) =>
     run.includes(`cp scripts/${verifier} "$RUNNER_TEMP/${verifier}"`),
@@ -224,6 +233,11 @@ const dispatcherProblems = (source: string) => {
     verification >= script.indexOf("gh workflow run")
   ) {
     problems.push("dispatcher must verify the PR chain before dispatch");
+  }
+  if (!script.includes('if [[ "$verified" -eq 3 ]]; then')) {
+    problems.push(
+      "dispatcher must skip, not fail, when main moved past the head",
+    );
   }
   if (
     !script.includes("for workflow in deploy-staging main-heavy; do") ||

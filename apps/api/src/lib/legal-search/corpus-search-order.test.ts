@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 
 import {
-  type CorpusSearchOrder,
   corpusEngineSortBy,
+  type CorpusSearchOrder,
   RELEVANCE_ORDER,
   SEARCH_SORTS,
 } from "@/api/lib/legal-search/corpus-search-order";
