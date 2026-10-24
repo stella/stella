@@ -939,6 +939,30 @@ type RunSafeHandlerWithOptions<
   toErrorStatus: ErrorStatusBuilder<TErrorStatus>;
 };
 
+const getResponseHeader = (
+  headers: Context["set"]["headers"],
+  name: string,
+): unknown => {
+  if (headers instanceof Headers) {
+    return headers.get(name);
+  }
+  return Object.entries(headers)
+    .find(([key]) => key.toLowerCase() === name.toLowerCase())
+    ?.at(1);
+};
+
+const setResponseHeader = (
+  headers: Context["set"]["headers"],
+  name: string,
+  value: string,
+): void => {
+  if (headers instanceof Headers) {
+    headers.set(name, value);
+    return;
+  }
+  headers[name] = value;
+};
+
 const applyRetryAfterHeader = (
   ctx: SafeHandlerLogContext,
   retryAfterMs: number | undefined,
@@ -946,8 +970,12 @@ const applyRetryAfterHeader = (
   if (retryAfterMs === undefined || ctx.set === undefined) {
     return;
   }
-  ctx.set.headers["Retry-After"] = String(
-    Math.max(1, Math.ceil((retryAfterMs * (1 + Math.random() * 0.5)) / 1000)),
+  setResponseHeader(
+    ctx.set.headers,
+    "Retry-After",
+    String(
+      Math.max(1, Math.ceil((retryAfterMs * (1 + Math.random() * 0.5)) / 1000)),
+    ),
   );
 };
 
@@ -967,15 +995,9 @@ const runSafeHandlerInDeliveryScope = async <
 
     if (Result.isOk(result)) {
       const response = result.value;
-      const headers = ctx.set?.headers;
-      let disposition: unknown;
-      if (headers instanceof Headers) {
-        disposition = headers.get("Content-Disposition");
-      } else if (typeof headers === "object") {
-        disposition = Object.entries(headers)
-          .find(([key]) => key.toLowerCase() === "content-disposition")
-          ?.at(1);
-      }
+      const disposition = ctx.set
+        ? getResponseHeader(ctx.set.headers, "Content-Disposition")
+        : undefined;
       if (
         (response instanceof Response &&
           response.ok &&

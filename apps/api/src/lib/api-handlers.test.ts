@@ -21,6 +21,7 @@ import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
   createSafeHandler,
+  createSafePublicHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
   resolveMeteringContext,
@@ -36,6 +37,7 @@ import {
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { runWithContentDeliveryScope } from "@/api/lib/files/content-delivery";
 import { WorkRefusal } from "@/api/lib/load/work-admission";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -136,6 +138,93 @@ test("a thrown retryable handler error sets Retry-After", async () => {
     response: { retryable: true, retryAfterMs: 2000 },
   });
 });
+
+test.each([
+  ["Headers", () => new Headers()],
+  ["plain record", () => ({})],
+] as const)(
+  "a retryable handler error sets Retry-After on %s",
+  async (_name, createHeaders) => {
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* () {
+        return Result.err(
+          new HandlerError({
+            status: 503,
+            message: "Work capacity is unavailable",
+            retryable: true,
+            retryAfterMs: 2000,
+          }),
+        );
+      },
+    );
+    const safeDb: SafeDb = async <T>() =>
+      Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+    const ctx = createContext(endpoint, safeDb);
+    const headers = createHeaders();
+    ctx.set.headers = headers;
+
+    await endpoint.handler(ctx);
+
+    const retryAfter =
+      headers instanceof Headers
+        ? headers.get("Retry-After")
+        : Object.entries(headers)
+            .find(([name]) => name === "Retry-After")
+            ?.at(1);
+    expect(retryAfter).toMatch(/^\d+$/u);
+    expect(Number(retryAfter)).toBeGreaterThanOrEqual(2);
+  },
+);
+
+test.each([
+  [
+    "Headers",
+    () =>
+      new Headers({
+        "Content-Disposition": "attachment; filename=fixture.txt",
+      }),
+  ],
+  [
+    "plain record",
+    () => ({ "content-disposition": "attachment; filename=fixture.txt" }),
+  ],
+] as const)(
+  "reads Content-Disposition from %s",
+  async (_name, createHeaders) => {
+    const endpoint = createSafePublicHandler(
+      {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        cache: { kind: "none" },
+        mcp: { type: "internal", reason: "health_infra" },
+        contentDelivery: { type: "audited" },
+      },
+      async function* () {
+        return Result.ok("fixture");
+      },
+    );
+
+    const response = await runWithContentDeliveryScope(
+      { type: "audited" },
+      async () =>
+        await endpoint.handler(
+          asTestRaw({
+            request: new Request("https://example.test/delivery"),
+            route: "/delivery",
+            set: { headers: createHeaders() },
+          }),
+        ),
+    );
+
+    expect(response).toMatchObject({ code: 500 });
+  },
+);
 
 describe("createSafeHandler workspace audit binding", () => {
   test("rebinds audit recording to the validated workspace", async () => {
