@@ -248,7 +248,14 @@ export const listAuthSessions = async () => {
             status: 502,
             statusText: "Bad Gateway",
           }),
-          { type: "detached", operation: "auth.list_sessions.handoffs" },
+          {
+            fingerprintKey: "auth.listSessions.handoffs:schema",
+            scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
+            context: {
+              type: "detached",
+              operation: "auth.list_sessions.handoffs",
+            },
+          },
         );
       }
     }

@@ -188,6 +188,7 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@stll/folio-core": "0.60.0",
     "adm-zip": "0.6.1",
+    "body-parser": "2.4.0",
     "brace-expansion": "5.0.11",
     "expo-constants": "57.0.21",
     "expo-modules-core": "57.0.21",
@@ -210,7 +211,7 @@
     "sharp": "0.35.5",
     "shell-quote": "1.12.0",
     "svgo": "4.1.0",
-    "undici": "8.11.2"
+    "undici": "8.12.2"
   },
   "packageManager": "bun@1.4.4",
   "catalog": {
@@ -330,7 +331,7 @@
     "@better-auth/oauth-provider@1.7.6": "patches/@better-auth%2Foauth-provider@1.7.6.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
     "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
-    "happy-dom@21.0.1": "patches/happy-dom@21.0.1.patch",
+    "happy-dom@21.0.4": "patches/happy-dom@21.0.4.patch",
     "@tanstack/ai@0.65.1": "patches/@tanstack%2Fai@0.65.1.patch",
     "@tanstack/ai-code-mode@0.4.21": "patches/@tanstack%2Fai-code-mode@0.4.21.patch",
     "@tanstack/openai-base@0.12.4": "patches/@tanstack%2Fopenai-base@0.12.4.patch",

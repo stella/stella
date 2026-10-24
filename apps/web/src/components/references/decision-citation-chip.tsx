@@ -35,6 +35,8 @@ export type DecisionCitationMetadata = {
 type DecisionCitationChipProps = {
   decision: DecisionCitationMetadata;
   passage?: ReactNode;
+  /** A complete, lazily mounted preview for surfaces with richer metadata. */
+  preview?: ReactNode;
   presentation?: DecisionCitationPresentation | undefined;
   /** The court's own number on the cited block; null when it printed none. */
   paragraphNumber?: number | null | undefined;
@@ -132,6 +134,7 @@ const triggerShapeClassName = ({
 export const DecisionCitationChip = ({
   decision,
   passage,
+  preview,
   presentation = DECISION_CITATION_PRESENTATION.compact,
   paragraphNumber = null,
   onOpen,
@@ -246,20 +249,22 @@ export const DecisionCitationChip = ({
           return false;
         }}
       >
-        <div className="flex flex-col gap-1">
-          <BidiText as="span" className="text-sm font-medium">
-            {decision.court}
-          </BidiText>
-          <BidiText as="span" className="text-sm">
-            {decision.caseNumber}
-          </BidiText>
-          {paragraph !== null && (
-            <span className="text-sm">
-              {t("caseLaw.citation.paragraphLabel", { paragraph })}
-            </span>
-          )}
-          <span className="text-muted-foreground text-xs">{date}</span>
-        </div>
+        {preview ?? (
+          <div className="flex flex-col gap-1">
+            <BidiText as="span" className="text-sm font-medium">
+              {decision.court}
+            </BidiText>
+            <BidiText as="span" className="text-sm">
+              {decision.caseNumber}
+            </BidiText>
+            {paragraph !== null && (
+              <span className="text-sm">
+                {t("caseLaw.citation.paragraphLabel", { paragraph })}
+              </span>
+            )}
+            <span className="text-muted-foreground text-xs">{date}</span>
+          </div>
+        )}
         {passage !== undefined && (
           <ScrollArea axis="vertical" className="max-h-64">
             <div

@@ -102,6 +102,8 @@ const createSafeDb = (): Parameters<
     versionCounts,
     fileFields,
     [],
+    [],
+    new Map(),
   ];
 
   return asTestRaw<ReadWindowCtx["safeDb"]>(async () => {

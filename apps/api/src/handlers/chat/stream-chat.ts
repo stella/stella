@@ -249,6 +249,7 @@ import {
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import {
   modelAcceptsStreamingToolUse,
@@ -386,6 +387,9 @@ type StreamChatProps = {
   tools: ChatToolMap;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
+  /** What authorized the request this turn answers; its response ends with
+   *  it, while the turn runs on for the thread's other viewers. */
+  viewer: SseStreamBinding;
   workspaceId: SafeId<"workspace"> | null;
 };
 
@@ -603,6 +607,7 @@ export const streamChat = async ({
   tools,
   externalMcpToolSource,
   userId,
+  viewer,
   workspaceId,
 }: StreamChatProps): Promise<StreamChatOutcome> => {
   const admittedAt = performance.now();
@@ -1107,6 +1112,7 @@ export const streamChat = async ({
         finishSettlement,
         readTiming,
       }),
+      viewer,
     ),
   };
 };

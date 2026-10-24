@@ -148,12 +148,9 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
 export const RECONCILE_BATCH_SIZE = 100;
-const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
+const OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
+export const NATIVE_CONTENT_SEARCH_BOUND_MS = 2 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
-const QUEUED_OCR_SELECTION = {
-  ALL_DUE: "all-due",
-  SCHEDULED_RETRIES: "scheduled-retries",
-} as const;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
@@ -2227,18 +2224,21 @@ const updateQueuedRunSchedule = async ({
     );
 };
 
+type DocumentProcessingDispatchSelection = {
+  kind: "native-extraction" | "ocr" | "any";
+  scheduledRetriesOnly: boolean;
+};
+
 export const dispatchQueuedDocumentProcessingRuns = async ({
   database,
   enqueue = enqueueDocumentProcessingRun,
   limit = RECONCILE_BATCH_SIZE,
-  selection = QUEUED_OCR_SELECTION.ALL_DUE,
+  selection,
 }: {
   database: typeof rootDb;
   enqueue?: typeof enqueueDocumentProcessingRun;
   limit?: number;
-  selection?:
-    | typeof QUEUED_OCR_SELECTION.ALL_DUE
-    | typeof QUEUED_OCR_SELECTION.SCHEDULED_RETRIES;
+  selection: DocumentProcessingDispatchSelection;
 }): Promise<{
   attempted: number;
   hasMore: boolean;
@@ -2246,11 +2246,17 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
 }> => {
   const now = new Date();
   const runs = await database
-    .select({ id: documentProcessingRuns.id })
+    .select({
+      id: documentProcessingRuns.id,
+      kind: documentProcessingRuns.kind,
+    })
     .from(documentProcessingRuns)
     .where(
       and(
         eq(documentProcessingRuns.status, "queued"),
+        selection.kind === "any"
+          ? undefined
+          : eq(documentProcessingRuns.kind, selection.kind),
         lt(
           documentProcessingRuns.attemptCount,
           DOCUMENT_PROCESSING_MAX_ATTEMPTS,
@@ -2259,7 +2265,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
           isNull(documentProcessingRuns.nextDeliveryAt),
           lte(documentProcessingRuns.nextDeliveryAt, now),
         ),
-        selection === QUEUED_OCR_SELECTION.SCHEDULED_RETRIES
+        selection.scheduledRetriesOnly
           ? isNotNull(documentProcessingRuns.nextAttemptAt)
           : undefined,
         or(
@@ -2276,17 +2282,22 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
     .limit(limit);
 
   const attempts = await Promise.all(
-    runs.map(
-      async ({ id }) =>
-        await tryEnqueueDocumentProcessingRun({ enqueue, runId: id }),
-    ),
+    runs.map(async ({ id, kind }) => ({
+      ...(await tryEnqueueDocumentProcessingRun({ enqueue, runId: id })),
+      kind,
+    })),
   );
-  const enqueuedIds: SafeId<"documentProcessingRun">[] = [];
+  const enqueuedNativeExtractionIds: SafeId<"documentProcessingRun">[] = [];
+  const enqueuedOcrIds: SafeId<"documentProcessingRun">[] = [];
   const failedIds: SafeId<"documentProcessingRun">[] = [];
   for (const attempt of attempts) {
     switch (attempt.status) {
       case "enqueued":
-        enqueuedIds.push(attempt.runId);
+        if (attempt.kind === "native-extraction") {
+          enqueuedNativeExtractionIds.push(attempt.runId);
+        } else {
+          enqueuedOcrIds.push(attempt.runId);
+        }
         break;
       case "failed":
         failedIds.push(attempt.runId);
@@ -2300,8 +2311,14 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   const updatedAt = new Date();
   await updateQueuedRunSchedule({
     database,
-    delayMs: ENQUEUE_VISIBILITY_TIMEOUT_MS,
-    runIds: enqueuedIds,
+    delayMs: NATIVE_CONTENT_SEARCH_BOUND_MS,
+    runIds: enqueuedNativeExtractionIds,
+    updatedAt,
+  });
+  await updateQueuedRunSchedule({
+    database,
+    delayMs: OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS,
+    runIds: enqueuedOcrIds,
     updatedAt,
   });
   await updateQueuedRunSchedule({
@@ -2345,7 +2362,7 @@ const dispatchScheduledDocumentProcessingRetries = async (
     await dispatchQueuedDocumentProcessingRuns({
       database: dependencies.database,
       enqueue: dependencies.enqueueDocumentProcessingRun,
-      selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+      selection: { kind: "any", scheduledRetriesOnly: true },
     });
   return resolveScheduledDeliveryBatch({
     attempted,

@@ -36,6 +36,7 @@ import {
   ATTACHMENT_EXTRACTION_OUTCOME,
   parseAttachmentIssues,
 } from "@/api/lib/search/extraction-worker-attachments";
+import { parseWorkerErrorClass } from "@/api/lib/search/extraction-worker-error";
 import { spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
@@ -173,6 +174,7 @@ export const extractFileTextResult = async (
       mimeType: normalizedMimeType,
       sizeBytes: buffer.byteLength,
       termination,
+      workerErrorClass: parseWorkerErrorClass(result.error.message),
     });
     return Result.err(error);
   }

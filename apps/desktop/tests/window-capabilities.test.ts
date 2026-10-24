@@ -50,6 +50,9 @@ const WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
   ],
+  "src-tauri/capabilities/accessibility-guide.json": [
+    "src/onboarding/AccessibilityGuideApp.tsx",
+  ],
   "src-tauri/capabilities/onboarding.json": [
     "src/onboarding/OnboardingApp.tsx",
     "src/onboarding/ConnectStep.tsx",

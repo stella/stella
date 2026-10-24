@@ -290,6 +290,9 @@ describe.skipIf(!enabled)(
               },
               pollMs: 1,
               retryMs: 7,
+              // The writer this test holds is the wait under test.
+              idleHolderMs: 3_600_000,
+              longHolderMs: 3_600_000,
             };
             const outcome = await runOnlineMigrations(
               { reserve: async () => connection },

@@ -10,7 +10,7 @@ import type {
   PendingUploadPurposeData,
 } from "@/api/db/schema";
 import { pendingUploads } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -43,6 +43,8 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 import type { UploadFinalizeError } from "@/api/lib/uploads/runtime";
@@ -287,6 +289,7 @@ export const finalizeEntityVersion = async function* ({
         // file. The post-promote call below only accelerates the queue handoff,
         // so it resolves the same source file: no property pin, same as there.
         await requestNativeExtractionRun({ entityId, tx });
+        await enqueueEntitySearchRepairs(tx, [entityId]);
       }
       return versionResult;
     });
@@ -307,6 +310,9 @@ export const finalizeEntityVersion = async function* ({
     const finalizedResult =
       finalized ??
       panic("Entity version write completed without finalize result");
+    flushEntitySearchRepairs([entityId]).catch(
+      createErrorCapture(handlerErrorContext("entityVersion.flushSearch")),
+    );
     const afterPromote = () => {
       processExtraction(entityId).catch((error: unknown) => {
         const context = { entityId };

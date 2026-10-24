@@ -34,7 +34,7 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -77,6 +77,8 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -651,6 +653,7 @@ export const finalizeEntityCreate = async function* ({
       // Durable extraction request, committed with the file it reads. The
       // post-promote call below only accelerates the queue handoff.
       await requestNativeExtractionRun({ entityId, tx });
+      await enqueueEntitySearchRepairs(tx, [entityId]);
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.CREATE,
@@ -720,6 +723,10 @@ export const finalizeEntityCreate = async function* ({
       });
     }
     const { finalized } = writeResult;
+
+    flushEntitySearchRepairs([entityId]).catch(
+      createErrorCapture(handlerErrorContext("entityCreate.flushSearch")),
+    );
 
     const afterPromote = () => {
       // Async kickoffs mirror the legacy handler. They run only after
