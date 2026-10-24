@@ -353,7 +353,12 @@ export const failureAnnotation = ({
     `${file} failed iteration${failedIterations.length === 1 ? "" : "s"} ${failedIterations.join(", ")}`,
   )}`;
 
-type RunOptions = { target: Target; seed: number; timeoutMs: number };
+type RunOptions = {
+  target: Target;
+  seed: number;
+  timeoutMs: number;
+  onFailureOutput?: ((output: string) => void) | undefined;
+};
 export type RunOutcome =
   | {
       type: "executed";
@@ -374,11 +379,21 @@ export const trialCommand = (target: BunTarget, seed: number) => [
   `--seed=${seed}`,
 ];
 
-const executionOutcome = (
-  runner: Target["runner"],
-  outcome: FlakeProcessOutcome,
-): Extract<RunOutcome, { type: "executed" }> => {
+type ExecutionOutcomeOptions = {
+  runner: Target["runner"];
+  outcome: FlakeProcessOutcome;
+  onFailureOutput?: ((output: string) => void) | undefined;
+};
+
+const executionOutcome = ({
+  runner,
+  outcome,
+  onFailureOutput,
+}: ExecutionOutcomeOptions): Extract<RunOutcome, { type: "executed" }> => {
   if (outcome.type === "timeout") {
+    onFailureOutput?.(
+      "Trial deadline expired; no completed output is available.",
+    );
     return {
       type: "executed",
       passed: false,
@@ -415,9 +430,13 @@ const executionOutcome = (
       runner satisfies never;
       return panic("Unknown flake trial output");
   }
+  const passed = outcome.status === 0 && ranTests;
+  if (!passed) {
+    onFailureOutput?.(output);
+  }
   return {
     type: "executed",
-    passed: outcome.status === 0 && ranTests,
+    passed,
     status: outcome.status,
     ranTests,
     failedTests,
@@ -454,6 +473,7 @@ export const runOnce = async ({
   target,
   seed,
   timeoutMs,
+  onFailureOutput,
 }: RunOptions): Promise<RunOutcome> => {
   const deadline = performance.now() + timeoutMs;
   switch (target.runner) {
@@ -461,15 +481,16 @@ export const runOnce = async ({
     case "api":
     case "web":
       // Fresh invocations reset setup and shuffle the entire file for each trial.
-      return executionOutcome(
-        target.runner,
-        await runFlakeProcess({
+      return executionOutcome({
+        runner: target.runner,
+        outcome: await runFlakeProcess({
           command: trialCommand(target, seed),
           cwd: target.cwd,
           env: target.env,
           deadline,
         }),
-      );
+        onFailureOutput,
+      });
     case "rust": {
       const listing = createRustTestListing(target.module);
       const discovery = await runFlakeProcess({
@@ -480,7 +501,11 @@ export const runOnce = async ({
         onStdoutLine: listing.acceptLine,
       });
       if (discovery.type === "timeout" || discovery.status !== 0) {
-        return executionOutcome("rust", discovery);
+        return executionOutcome({
+          runner: "rust",
+          outcome: discovery,
+          onFailureOutput,
+        });
       }
       const batches = listing.batches();
       if (batches.length === 0) {
@@ -497,7 +522,6 @@ export const runOnce = async ({
           env: target.env,
           deadline,
         });
-        const execution = executionOutcome("rust", completed);
         if (completed.type === "completed" && completed.status === 0) {
           const ignored =
             /^test result: ok\. 0 passed; 0 failed; (?<count>[1-9]\d*) ignored;/mu.exec(
@@ -508,6 +532,11 @@ export const runOnce = async ({
             continue;
           }
         }
+        const execution = executionOutcome({
+          runner: "rust",
+          outcome: completed,
+          onFailureOutput,
+        });
         // Once listing selected names, zero execution without ignored evidence is a failure.
         if (!execution.passed) {
           return execution;
@@ -539,6 +568,7 @@ type ExecuteOptions = {
   run?: typeof runOnce;
   now?: () => number;
   budgetMs?: number;
+  reportFailureOutput?: ((output: string) => void) | undefined;
 };
 export const executeGate = async ({
   targets,
@@ -546,6 +576,9 @@ export const executeGate = async ({
   run = runOnce,
   now = () => performance.now(),
   budgetMs = BUDGET_MS,
+  reportFailureOutput = (output) => {
+    process.stderr.write(output);
+  },
 }: ExecuteOptions): Promise<Report> => {
   const start = now();
   const report: Report = {
@@ -556,9 +589,24 @@ export const executeGate = async ({
     elapsedMs: 0,
   };
   const measured: Measured[] = [];
+  const reportedFailures = new Set<string>();
+  const failureOutputLimit = 16_384;
   const remaining = () => Math.max(0, budgetMs - (now() - start));
   const attempt = async (options: RunOptions): Promise<RunOutcome> => {
-    const outcome = await Result.tryPromise(async () => run(options));
+    const outcome = await Result.tryPromise(async () =>
+      run({
+        ...options,
+        onFailureOutput: (output) => {
+          if (reportedFailures.has(options.target.file)) {
+            return;
+          }
+          reportedFailures.add(options.target.file);
+          reportFailureOutput(
+            `Flake trial failed: ${options.target.file}, seed ${options.seed}\n${output.slice(-failureOutputLimit)}\n`,
+          );
+        },
+      }),
+    );
     if (outcome.isOk()) {
       return outcome.value;
     }
