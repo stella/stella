@@ -162,6 +162,73 @@ test("repeated interval helper proof stays bounded and shared aliases stay share
   }
 });
 
+test("unrelated effect registrations preserve loop ownership", async () => {
+  const layouts = [
+    [0, 0],
+    [64, 0],
+    [0, 64],
+    [64, 64],
+  ] as const;
+  const cases = ["interval", "frame"].flatMap((kind) =>
+    [false, true].flatMap((owned) => {
+      const setup =
+        kind === "interval"
+          ? "const timer={current:0};const begin=()=>{timer.current=setInterval(tick,10);};"
+          : "let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};";
+      const registration =
+        kind === "interval"
+          ? `useMountEffect(()=>{begin();${owned ? "return()=>clearInterval(timer.current);" : ""}});`
+          : `useMountEffect(()=>{frame=requestAnimationFrame(tick);${owned ? "return()=>cancelAnimationFrame(frame);" : ""}});`;
+      return layouts.map(([before, after]) => ({
+        owned,
+        source: `const Comp=()=>{${setup}${"useMountEffect(()=>unrelated());".repeat(before)}${registration}${"useMountEffect(()=>unrelated());".repeat(after)}};`,
+      }));
+    }),
+  );
+  const results = await Promise.all(
+    cases.map(async ({ source }) => lintSingleRule(RULE, source)),
+  );
+  expect(results).toEqual(cases.map(({ owned }) => (owned ? [] : [1])));
+});
+
+test("unrelated helper graphs do not consume a reachable loop path budget", async () => {
+  const noise = Array.from(
+    { length: 70 },
+    (_, index) =>
+      `const noise${index}=()=>${index === 0 ? "unrelated" : `noise${index - 1}`}();`,
+  ).join("");
+  const setups = [
+    `${noise}useMountEffect(()=>noise69());`,
+    "const noise0=()=>{if(again())noise1();};const noise1=()=>noise0();useMountEffect(()=>noise0());",
+  ];
+  const cases = setups.flatMap((unrelated) => [
+    `const Comp=()=>{${unrelated}const timer={current:0};const begin=()=>{timer.current=setInterval(tick,10);};useMountEffect(()=>{begin();return()=>clearInterval(timer.current);});};`,
+    `const Comp=()=>{${unrelated}let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};useMountEffect(()=>{frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);});};`,
+  ]);
+  cases.push(
+    `const Comp=()=>{${noise}const timer={current:0};const begin=()=>{timer.current=setInterval(tick,10);};useMountEffect(()=>{noise69();begin();return()=>clearInterval(timer.current);});};`,
+  );
+  const results = await Promise.all(
+    cases.map(async (source) => lintSingleRule(RULE, source)),
+  );
+  expect(results).toEqual(cases.map(() => []));
+});
+
+test("reachable loop helper depth still fails closed at the proof limit", async () => {
+  const cases = [65, 96].map((depth) => {
+    const helpers = Array.from(
+      { length: depth },
+      (_, index) =>
+        `const step${index}=()=>${index === 0 ? "begin" : `step${index - 1}`}();`,
+    ).join("");
+    return `const Comp=()=>{const timer={current:0};const begin=()=>{timer.current=setInterval(tick,10);};${helpers}useMountEffect(()=>{step${depth - 1}();return()=>clearInterval(timer.current);});};`;
+  });
+  const results = await Promise.all(
+    cases.map(async (source) => lintSingleRule(RULE, source)),
+  );
+  expect(results.map((lines) => lines.length > 0)).toEqual([true, true]);
+});
+
 test("effect-local helpers retain repeated-start ownership checks", async () => {
   const cases = [
     [

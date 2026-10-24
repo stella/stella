@@ -290,11 +290,14 @@ type LoopContext = ScopeContext & {
   sourceCode: { text: string };
   effectCallbacks: ReadonlySet<AstNode>;
   effectRegistrations: ReadonlyMap<AstNode, AstNode>;
+  functionCallers: ReadonlyMap<AstNode, ReadonlySet<AstNode>>;
+  reachingFunctions: Map<AstNode, ReadonlySet<AstNode>>;
 };
 
 type LoopStart = { kind: LoopKind; node: AstNode };
 
 type LoopCalls = {
+  invocations: AstNode[];
   effectInvocations: AstNode[];
   cancels: Record<LoopKind, Cancel[]>;
   starts: LoopStart[];
@@ -409,6 +412,45 @@ const namedCallTarget = (
 const startupTarget = (context: LoopContext, invocation: AstNode) =>
   context.effectRegistrations.get(invocation) ??
   namedCallTarget(context, invocation);
+
+const indexFunctionCallers = (
+  context: LoopContext,
+  invocations: readonly AstNode[],
+): Map<AstNode, Set<AstNode>> => {
+  const callers = new Map<AstNode, Set<AstNode>>();
+  for (const invocation of invocations) {
+    const owner = enclosingFunctions(invocation).at(0);
+    const target = startupTarget(context, invocation);
+    if (owner === undefined || target === null) {
+      continue;
+    }
+    const incoming = callers.get(target) ?? new Set<AstNode>();
+    incoming.add(owner);
+    callers.set(target, incoming);
+  }
+  return callers;
+};
+
+// Reachability only prunes unrelated calls; ownership still needs the bounded
+// execution-path proof. Each function enters this reverse walk at most once.
+const functionsReaching = (context: LoopContext, target: AstNode) => {
+  const cached = context.reachingFunctions.get(target);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const reachable = new Set([target]);
+  const pending = [target];
+  for (const current of pending) {
+    for (const caller of context.functionCallers.get(current) ?? []) {
+      if (!reachable.has(caller)) {
+        reachable.add(caller);
+        pending.push(caller);
+      }
+    }
+  }
+  context.reachingFunctions.set(target, reachable);
+  return reachable;
+};
 
 const directFunctionCalls = (callback: AstNode): AstNode[] =>
   everyNode(callback).filter(
@@ -2145,7 +2187,6 @@ type AsyncFrameOwnerOptions = Pick<
   "context" | "cancels" | "starts" | "effectInvocations"
 > & {
   loopBody: AstNode;
-  budget: { remaining: number };
   unowned: Set<AstNode>;
 };
 
@@ -2160,7 +2201,6 @@ const asyncFrameOwner = ({
   starts,
   effectInvocations,
   loopBody,
-  budget,
   unowned,
 }: AsyncFrameOwnerOptions): AsyncFrameOwnership => {
   let unownedStartup: AstNode | undefined;
@@ -2177,7 +2217,7 @@ const asyncFrameOwner = ({
         context,
         invocation,
         target: kickoffOwner,
-        budget,
+        budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
       });
       if (paths === null) {
         unowned.add(invocation);
@@ -2230,7 +2270,6 @@ const loopOwnershipReports = ({
         owner,
         invocations: effectInvocations,
       });
-    const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
     let reached = false;
     for (const invocation of effectInvocations) {
       if (owner === undefined) {
@@ -2240,7 +2279,7 @@ const loopOwnershipReports = ({
         context,
         invocation,
         target: owner,
-        budget,
+        budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
       });
       if (paths === null) {
         unowned.add(invocation);
@@ -2277,7 +2316,6 @@ const loopOwnershipReports = ({
             starts,
             effectInvocations,
             loopBody,
-            budget,
             unowned,
           })
         : ({ type: "factory-contract" } as const);
@@ -2358,14 +2396,18 @@ const loopInvocationPaths = ({
   visiting = new Set(),
   budget,
 }: LoopInvocationOptions): AstNode[][] | null => {
+  const called = startupTarget(context, invocation);
+  if (
+    called === null ||
+    visiting.has(called) ||
+    !functionsReaching(context, target).has(called)
+  ) {
+    return [];
+  }
   if (budget.remaining <= 0) {
     return null;
   }
   budget.remaining -= 1;
-  const called = startupTarget(context, invocation);
-  if (called === null || visiting.has(called)) {
-    return [];
-  }
   const paths: AstNode[][] = [];
   if (called === target) {
     paths.push([invocation]);
@@ -2510,13 +2552,12 @@ const hasUncancelledRepeatedInvocation = ({
     return false;
   }
   const paths: AstNode[][] = [];
-  const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
   for (const invocation of invocations) {
     const nested = loopInvocationPaths({
       context,
       invocation,
       target: owner,
-      budget,
+      budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
     });
     if (
       nested === null ||
@@ -2582,6 +2623,8 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const effectRegistrations = new Map<AstNode, AstNode>();
+        let functionCallers = new Map<AstNode, Set<AstNode>>();
+        const reachingFunctions = new Map<AstNode, ReadonlySet<AstNode>>();
         let effectCallbacks = new Set<AstNode>();
         const loopContext = {
           get sourceCode() {
@@ -2591,8 +2634,13 @@ export default eslintCompatPlugin({
             return effectCallbacks;
           },
           effectRegistrations,
+          get functionCallers() {
+            return functionCallers;
+          },
+          reachingFunctions,
         } satisfies LoopContext;
         const calls: LoopCalls = {
+          invocations: [],
           effectInvocations: [],
           cancels: { frame: [], interval: [] },
           starts: [],
@@ -2601,6 +2649,9 @@ export default eslintCompatPlugin({
           before() {
             effectCallbacks.clear();
             effectRegistrations.clear();
+            functionCallers.clear();
+            reachingFunctions.clear();
+            calls.invocations.length = 0;
             calls.starts.length = 0;
             calls.effectInvocations.length = 0;
             calls.cancels.frame.length = 0;
@@ -2616,6 +2667,7 @@ export default eslintCompatPlugin({
             if (!isAstNode(call)) {
               return;
             }
+            calls.invocations.push(call);
             const callback = effectCallbackFor(loopContext, call);
             if (callback !== null) {
               effectRegistrations.set(call, callback);
@@ -2634,6 +2686,10 @@ export default eslintCompatPlugin({
           },
           "Program:exit"() {
             effectCallbacks = new Set(effectRegistrations.values());
+            functionCallers = indexFunctionCallers(
+              loopContext,
+              calls.invocations,
+            );
             calls.effectInvocations.push(...effectRegistrations.keys());
             const reports = [
               ...frameLoopReports(loopContext, calls),
