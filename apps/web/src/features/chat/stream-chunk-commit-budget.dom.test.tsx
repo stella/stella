@@ -333,6 +333,7 @@ const createStreamingServer = (
   const burst: Burst = { firstAt: undefined, lastAt: undefined };
   const unexpected: string[] = [];
   let finished = false;
+  const streamEnded = Promise.withResolvers<undefined>();
 
   const threadPage = () =>
     Response.json({
@@ -381,6 +382,7 @@ const createStreamingServer = (
           index += 1;
           if (event === undefined) {
             finished = true;
+            streamEnded.resolve(undefined);
             controller.close();
             return;
           }
@@ -426,7 +428,14 @@ const createStreamingServer = (
     return Response.json({ message: "Not served" }, { status: 404 });
   };
 
-  return { burst, fetch, finished: () => finished, unexpected };
+  return {
+    burst,
+    fetch,
+    finished: () => finished,
+    /** Resolves once the answer stream has sent its last event. */
+    streamEnded: streamEnded.promise,
+    unexpected,
+  };
 };
 
 // --- The measurement --------------------------------------------------------
@@ -453,9 +462,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
         id: toSafeId<"chatMessage">(USER_MESSAGE_ID),
       }),
   );
-  for (let wait = 0; wait < 2000 && !server.finished(); wait += 1) {
-    await sleep(5);
-  }
+  await server.streamEnded;
   // Let the page settle what the end of the run started.
   await sleep(100);
   expect(await sent).toEqual(Result.ok(undefined));

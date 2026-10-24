@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -672,20 +673,18 @@ if (!runPostgresTests || databaseUrl === undefined) {
               second = commitFirst ? disable() : commit();
               const firstPid = commitFirst ? commitPid : disablePid;
               const secondPid = commitFirst ? disablePid : commitPid;
-              let blockers: number[] = [];
-              for (let attempt = 0; attempt < 200; attempt += 1) {
-                blockers =
+              await waitForExternalState({
+                description: "the second writer waits on the first",
+                timeoutMs: 2000,
+                read: async () =>
                   (
-                    await admin.execute<{ blockers: number[] }>(
-                      sql`SELECT pg_blocking_pids(${secondPid}) AS blockers`,
-                    )
-                  ).at(0)?.blockers ?? [];
-                if (blockers.includes(firstPid)) {
-                  break;
-                }
-                await Bun.sleep(10);
-              }
-              expect(blockers).toContain(firstPid);
+                    (
+                      await admin.execute<{ blockers: number[] }>(
+                        sql`SELECT pg_blocking_pids(${secondPid}) AS blockers`,
+                      )
+                    ).at(0)?.blockers ?? []
+                  ).includes(firstPid),
+              });
             } finally {
               firstRelease.resolve(undefined);
               await Promise.all([first, second]);

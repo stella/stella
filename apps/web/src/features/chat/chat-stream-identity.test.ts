@@ -5,7 +5,6 @@ import type { RunAgentInputContext, UIMessage } from "@tanstack/ai-client";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -356,8 +355,6 @@ type Emit = {
 const isUiMessage = (message: ModelMessage | UIMessage): message is UIMessage =>
   "parts" in message && Array.isArray(message.parts);
 
-const IDLE_WAIT_TICKS = 2000;
-
 /** Plays `session` through the SDK client, its connection wrapped as the
  *  runtime wraps it, and records what the page shows on every emit with
  *  its cause, and every object that changed in place. */
@@ -448,6 +445,8 @@ const streamSession = async ({
     }
     yield finished;
   };
+  // Woken when the client stops loading.
+  const idleWaiters = new Set<() => void>();
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     initialMessages: session.history,
     connection: {
@@ -461,6 +460,14 @@ const streamSession = async ({
     onChunk: (chunk) => {
       cause = chunk;
     },
+    onLoadingChange: (isLoading) => {
+      if (!isLoading) {
+        for (const wake of idleWaiters) {
+          wake();
+        }
+        idleWaiters.clear();
+      }
+    },
     onMessagesChange: (messages) => {
       latest = messages;
       const shown = onMessages(messages);
@@ -473,13 +480,14 @@ const streamSession = async ({
     client.stop();
   };
   const settle = async () => {
-    for (
-      let tick = 0;
-      tick < IDLE_WAIT_TICKS && client.getIsLoading();
-      tick += 1
-    ) {
-      await sleep(0);
+    if (!client.getIsLoading()) {
+      return;
     }
+    const idle = Promise.withResolvers<undefined>();
+    idleWaiters.add(() => {
+      idle.resolve(undefined);
+    });
+    await idle.promise;
   };
   client.attach();
   try {
@@ -914,6 +922,15 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
 
   const SSE_HEADERS = { "Content-Type": "text/event-stream" };
 
+  /** Wakes `waitFor` whenever the page, the replay client or the server
+   *  changes. */
+  const changeListeners = new Set<() => void>();
+  const notifyChange = () => {
+    for (const listener of changeListeners) {
+      listener();
+    }
+  };
+
   /** Answers each page request with a stream the test writes to, and keeps
    *  an identical copy of it for the replay client. */
   const installServer = () => {
@@ -932,6 +949,7 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
         const [page, replay] = body.tee();
         replayBodies.push(replay);
         requests += 1;
+        notifyChange();
         return new Response(page, { headers: SSE_HEADERS });
       },
       { preconnect: previousFetch.preconnect },
@@ -962,13 +980,24 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
     };
   };
 
-  /** The client reads the stream a chunk per task: wait until it has read
-   *  as far as the test needs. */
+  /** The client reads the stream a chunk per task: resolves once it has
+   *  read as far as the test needs. */
   const waitFor = async (reached: () => boolean) => {
-    for (let index = 0; index < 2000 && !reached(); index += 1) {
-      await sleep(0);
+    if (reached()) {
+      return;
     }
-    expect(reached()).toBe(true);
+    const done = Promise.withResolvers<undefined>();
+    const listener = () => {
+      if (reached()) {
+        done.resolve(undefined);
+      }
+    };
+    changeListeners.add(listener);
+    try {
+      await done.promise;
+    } finally {
+      changeListeners.delete(listener);
+    }
   };
 
   const answer = (runtime: ChatRuntime, id = ANSWER_ID) =>
@@ -1001,8 +1030,20 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
       onError: () => undefined,
       onFinish: () => undefined,
       reloadThread: () => undefined,
-      scheduleEmit: () => () => undefined,
+      // Emits each change a microtask later, so `waitFor` hears every chunk.
+      scheduleEmit: (emit) => {
+        let cancelled = false;
+        queueMicrotask(() => {
+          if (!cancelled) {
+            emit();
+          }
+        });
+        return () => {
+          cancelled = true;
+        };
+      },
     });
+    const unsubscribe = runtime.subscribe(notifyChange);
     // A second SDK client reads the same stream with nothing cached: the
     // page's cached projection must equal a fresh projection of its
     // messages after every chunk.
@@ -1011,6 +1052,7 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
     });
     const replay = new ChatClient<ChatClientTools, unknown, readonly []>({
       initialMessages: history,
+      onMessagesChange: notifyChange,
       connection: {
         connect: (messages, data, signal, run) => {
           if (!messages.every(isUiMessage)) {
@@ -1181,6 +1223,7 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
     await regenerated;
     await replayRegenerated;
     await expectFresh();
+    unsubscribe();
     replay.detach();
     expect(watch.changed).toEqual([]);
   });

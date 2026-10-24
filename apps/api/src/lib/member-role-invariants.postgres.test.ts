@@ -3,6 +3,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -35,16 +36,12 @@ const BLOCK_OBSERVATION_INTERVAL_MS = 10;
 setDefaultTimeout(120_000);
 
 const waitForMembershipBlock = async (observeBlock: () => Promise<boolean>) => {
-  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    if (await observeBlock()) {
-      return;
-    }
-    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
-  }
-  throw new Error(
-    "Membership mutation did not reach its database lock before the deadline",
-  );
+  await waitForExternalState({
+    description: "the membership mutation reaches its database lock",
+    intervalMs: BLOCK_OBSERVATION_INTERVAL_MS,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: observeBlock,
+  });
 };
 
 const fixture = async (db: GatedTestDb, ownerCount: number) => {

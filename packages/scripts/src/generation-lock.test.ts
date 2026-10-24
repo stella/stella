@@ -9,6 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { withGenerationLock } from "./generation-lock";
 
 const fixture = () => {
@@ -58,13 +60,10 @@ const fixture = () => {
 };
 
 const waitFor = async (filename: string) => {
-  const deadline = performance.now() + 5000;
-  while (!existsSync(filename)) {
-    if (performance.now() > deadline) {
-      throw new Error(`Worker did not publish ${filename}`);
-    }
-    await Bun.sleep(10);
-  }
+  await waitForExternalState({
+    description: `a worker publishes ${filename}`,
+    read: () => existsSync(filename),
+  });
 };
 
 test("independent generation processes never overlap", async () => {

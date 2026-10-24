@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
+import { setInterval } from "node:timers/promises";
 
 import {
   currentQueryCount,
@@ -100,12 +101,22 @@ const buildCountingApp = () =>
     });
 
 // Queries from work that belongs to no request: started before any request
-// exists and never awaited by one.
-const runBackgroundQueries = (signal: { done: boolean }) => {
+// exists and never awaited by one. Each tick resumes this function after a
+// timer, until `signal` stops it.
+const runBackgroundQueries = (signal: AbortSignal) => {
   const loop = async () => {
-    while (!signal.done) {
-      await Bun.sleep(BACKGROUND_QUERY_WAIT_MS);
-      queryCountLogger.logQuery("SELECT background", []);
+    try {
+      for await (const _tick of setInterval(
+        BACKGROUND_QUERY_WAIT_MS,
+        undefined,
+        { signal },
+      )) {
+        queryCountLogger.logQuery("SELECT background", []);
+      }
+    } catch (error) {
+      if (!signal.aborted) {
+        throw error;
+      }
     }
   };
   void loop();
@@ -113,8 +124,8 @@ const runBackgroundQueries = (signal: { done: boolean }) => {
 
 describe("db query counter HTTP header", () => {
   test("a request counts its own queries and no others", async () => {
-    const signal = { done: false };
-    runBackgroundQueries(signal);
+    const background = new AbortController();
+    runBackgroundQueries(background.signal);
     const app = buildCountingApp().listen({ port: 0 });
     const origin = `http://localhost:${app.server?.port ?? panic("test server bound no port")}`;
 
@@ -124,7 +135,7 @@ describe("db query counter HTTP header", () => {
       counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
     }
 
-    signal.done = true;
+    background.abort();
     await app.stop();
 
     expect(counts).toEqual(Array.from({ length: REQUEST_ROUNDS }, () => "4"));

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -174,87 +176,94 @@ const verifyOnceCaughtUp = async ({
 
 /** The index must stop publishing shard updates before it is removed. */
 const waitForIngestIdle = async (): Promise<void> => {
-  const deadline = performance.now() + INGEST_IDLE_TIMEOUT_MS;
   let stable: { state: string; since: number } | undefined;
   let lastState: string[] = [];
-  while (performance.now() < deadline) {
-    const response = await fetch(`${mutationBase()}/api/v1/cluster`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) {
+  await waitForExternalState({
+    description: `ingest on ${INDEX_ID} stays idle for ${String(INGEST_IDLE_STABLE_MS)} ms`,
+    intervalMs: POLL_MS,
+    timeoutMs: INGEST_IDLE_TIMEOUT_MS,
+    onTimeout: () => {
       throw new CorpusIndexError({
-        message: `cluster state ${response.status}`,
+        message: `ingest did not become idle: ${JSON.stringify(lastState)}`,
       });
-    }
-    const cluster: unknown = await response.json();
-    const snapshot = isRecord(cluster)
-      ? cluster["chitchat_state_snapshot"]
-      : undefined;
-    const nodes = isRecord(snapshot) ? snapshot["node_states"] : undefined;
-    if (!Array.isArray(nodes)) {
-      throw new CorpusIndexError({
-        message: "cluster state has no node states",
+    },
+    read: async () => {
+      const response = await fetch(`${mutationBase()}/api/v1/cluster`, {
+        signal: AbortSignal.timeout(5000),
       });
-    }
-    const shards: string[] = [];
-    for (const node of nodes) {
-      const keyValues = isRecord(node) ? node["key_values"] : undefined;
-      if (!isRecord(keyValues)) {
+      if (!response.ok) {
         throw new CorpusIndexError({
-          message: "cluster node has no key values",
+          message: `cluster state ${response.status}`,
         });
       }
-      for (const [key, entry] of Object.entries(keyValues)) {
-        if (!key.startsWith(`ingester.primary_shards:${INDEX_ID}:`)) {
-          continue;
-        }
-        if (!isRecord(entry)) {
-          throw new CorpusIndexError({
-            message: "ingest shard entry is unreadable",
-          });
-        }
-        if (entry["status"] !== "Set") {
-          continue;
-        }
-        const value = entry["value"];
-        if (typeof value !== "string") {
-          throw new CorpusIndexError({
-            message: "ingest shard value is unreadable",
-          });
-        }
-        const parsed = Result.try((): unknown => JSON.parse(value));
-        if (parsed.isErr()) {
-          throw new CorpusIndexError({
-            message: "ingest shard value is not JSON",
-            cause: parsed.error,
-          });
-        }
-        const infos = parsed.value;
-        if (
-          !Array.isArray(infos) ||
-          !infos.every((info: unknown) => typeof info === "string")
-        ) {
-          throw new CorpusIndexError({
-            message: "ingest shard value is not a shard list",
-          });
-        }
-        shards.push(...infos);
+      const cluster: unknown = await response.json();
+      const snapshot = isRecord(cluster)
+        ? cluster["chitchat_state_snapshot"]
+        : undefined;
+      const nodes = isRecord(snapshot) ? snapshot["node_states"] : undefined;
+      if (!Array.isArray(nodes)) {
+        throw new CorpusIndexError({
+          message: "cluster state has no node states",
+        });
       }
-    }
-    lastState = shards.toSorted();
-    const state = JSON.stringify(lastState);
-    const now = performance.now();
-    if (!lastState.every((info) => /^[^:]+:[a-z_]+:0:0$/u.test(info))) {
-      stable = undefined;
-    } else if (stable?.state !== state) {
-      stable = { state, since: now };
-    } else if (now - stable.since >= INGEST_IDLE_STABLE_MS) {
-      return;
-    }
-    await Bun.sleep(POLL_MS);
-  }
-  throw new CorpusIndexError({
-    message: `ingest did not become idle: ${JSON.stringify(lastState)}`,
+      const shards: string[] = [];
+      for (const node of nodes) {
+        const keyValues = isRecord(node) ? node["key_values"] : undefined;
+        if (!isRecord(keyValues)) {
+          throw new CorpusIndexError({
+            message: "cluster node has no key values",
+          });
+        }
+        for (const [key, entry] of Object.entries(keyValues)) {
+          if (!key.startsWith(`ingester.primary_shards:${INDEX_ID}:`)) {
+            continue;
+          }
+          if (!isRecord(entry)) {
+            throw new CorpusIndexError({
+              message: "ingest shard entry is unreadable",
+            });
+          }
+          if (entry["status"] !== "Set") {
+            continue;
+          }
+          const value = entry["value"];
+          if (typeof value !== "string") {
+            throw new CorpusIndexError({
+              message: "ingest shard value is unreadable",
+            });
+          }
+          const parsed = Result.try((): unknown => JSON.parse(value));
+          if (parsed.isErr()) {
+            throw new CorpusIndexError({
+              message: "ingest shard value is not JSON",
+              cause: parsed.error,
+            });
+          }
+          const infos = parsed.value;
+          if (
+            !Array.isArray(infos) ||
+            !infos.every((info: unknown) => typeof info === "string")
+          ) {
+            throw new CorpusIndexError({
+              message: "ingest shard value is not a shard list",
+            });
+          }
+          shards.push(...infos);
+        }
+      }
+      lastState = shards.toSorted();
+      const state = JSON.stringify(lastState);
+      const now = performance.now();
+      if (!lastState.every((info) => /^[^:]+:[a-z_]+:0:0$/u.test(info))) {
+        stable = undefined;
+        return false;
+      }
+      if (stable?.state !== state) {
+        stable = { state, since: now };
+        return false;
+      }
+      return now - stable.since >= INGEST_IDLE_STABLE_MS;
+    },
   });
 };
 

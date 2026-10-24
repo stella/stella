@@ -45,9 +45,13 @@ type OpenChatRequest = {
   end: () => void;
 };
 
+type CancelRequest = { answer: Deferred; turnId: string };
+
 type Server = {
   /** Stop requests, in the order the page sent them. */
-  cancels: { answer: Deferred; turnId: string }[];
+  cancels: CancelRequest[];
+  /** Resolves with the stop request at `index` once the page sends it. */
+  cancelAt: (index: number) => Promise<CancelRequest>;
   /** Chat requests past the planned turns, held until the test answers. */
   held: Deferred[];
   /** Chat requests, in the order the page sent them. */
@@ -177,7 +181,20 @@ const installServer = (
   turnIds: readonly string[],
   answer: Answer = "streaming",
 ): Server => {
-  const server: Server = { cancels: [], chats: [], held: [], log: [] };
+  const cancelArrivals: PromiseWithResolvers<CancelRequest>[] = [];
+  const cancelArrival = (index: number) => {
+    const arrival =
+      cancelArrivals[index] ?? Promise.withResolvers<CancelRequest>();
+    cancelArrivals[index] = arrival;
+    return arrival;
+  };
+  const server: Server = {
+    cancels: [],
+    cancelAt: async (index) => await cancelArrival(index).promise,
+    chats: [],
+    held: [],
+    log: [],
+  };
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       await Promise.resolve();
@@ -186,7 +203,9 @@ const installServer = (
       if (cancel !== undefined) {
         server.log.push(`cancel ${cancel}`);
         const stopAnswer = deferred();
-        server.cancels.push({ answer: stopAnswer, turnId: cancel });
+        const request = { answer: stopAnswer, turnId: cancel };
+        cancelArrival(server.cancels.length).resolve(request);
+        server.cancels.push(request);
         return await stopAnswer.promise;
       }
       const turnId = turnIds[server.chats.length];
@@ -534,22 +553,13 @@ describe("the composer's Stop", () => {
         { status: 202 },
       ),
     );
-    const askedTimes = async (count: number) => {
-      // The page asks again after its poll interval (500 ms).
-      for (
-        let poll = 0;
-        poll < 300 && server.cancels.length < count;
-        poll += 1
-      ) {
-        await Bun.sleep(10);
-      }
-    };
-    await askedTimes(2);
+    // The page asks again after its poll interval (500 ms).
+    const repeated = await server.cancelAt(1);
     // The fixture must reach the fault: the page asked again, and the server
     // held its request open until it accepted the stop.
     expect(server.cancels).toHaveLength(2);
     expect(server.chats[0]?.aborted()).toBe(true);
-    server.cancels[1]?.answer.resolve(
+    repeated.answer.resolve(
       Response.json({ message: "Unavailable" }, { status: 503 }),
     );
     await tick();
@@ -572,9 +582,9 @@ describe("the composer's Stop", () => {
     ).toBe(true);
     expect(page.reloads).toBe(0);
 
-    await askedTimes(3);
+    const settling = await server.cancelAt(2);
     expect(server.cancels).toHaveLength(3);
-    server.cancels[2]?.answer.resolve(settled(TURN_A, "cancelled"));
+    settling.answer.resolve(settled(TURN_A, "cancelled"));
     await tick();
 
     expect(page.reloads).toBe(1);

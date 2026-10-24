@@ -24,16 +24,35 @@ const getFreePort = async () =>
     });
   });
 
-const waitForHealth = async (baseUrl: string) => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const response = await fetch(`${baseUrl}/healthz`).catch(() => undefined);
-    if (response?.ok) {
-      expect(await response.text()).toBe("ok");
-      return;
+const LISTENING = "[stella-docs] HTTP server listening";
+
+/** Resolves once the server reports it listens, then keeps draining its
+ *  stderr so a chatty server never blocks on a full pipe. */
+const waitForListening = async (stderr: ReadableStream<Uint8Array>) => {
+  const decoder = new TextDecoder();
+  let seen = "";
+  const listening = Promise.withResolvers<undefined>();
+  const drain = async () => {
+    for await (const chunk of stderr) {
+      seen += decoder.decode(chunk, { stream: true });
+      if (seen.includes(LISTENING)) {
+        listening.resolve(undefined);
+      }
     }
-    await Bun.sleep(25);
-  }
-  throw new Error("HTTP MCP server did not become healthy");
+    listening.reject(
+      new Error(`HTTP MCP server exited before listening:\n${seen}`),
+    );
+  };
+  drain().catch((error: unknown) => {
+    listening.reject(error);
+  });
+  await listening.promise;
+};
+
+const expectHealthy = async (baseUrl: string) => {
+  const response = await fetch(`${baseUrl}/healthz`);
+  expect(response.ok).toBe(true);
+  expect(await response.text()).toBe("ok");
 };
 
 const getSessionCount = async (baseUrl: string) => {
@@ -59,11 +78,12 @@ const startHttpServer = async () => {
     env: { ...process.env, STELLA_DOCS_PORT: String(port) },
     stdin: "ignore",
     stdout: "ignore",
-    stderr: "ignore",
+    stderr: "pipe",
   });
   children.add(child);
   const baseUrl = `http://127.0.0.1:${port}`;
-  await waitForHealth(baseUrl);
+  await waitForListening(child.stderr);
+  await expectHealthy(baseUrl);
   return { baseUrl, child };
 };
 
