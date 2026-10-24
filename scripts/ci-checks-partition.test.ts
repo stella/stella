@@ -1401,7 +1401,10 @@ test("code-quality pool preserves every moved check exactly once", () => {
   };
 
   expect(pooled.map(({ name }) => name)).toEqual(movedNames);
-  expect(pooled.map(withoutPoolMetadata)).toEqual(originals);
+  // A merge base may already carry the pool; normalize both sides alike.
+  expect(pooled.map(withoutPoolMetadata)).toEqual(
+    originals.map(withoutPoolMetadata),
+  );
 });
 
 test("task result cache checks belong exactly once to the rest leg", () => {
