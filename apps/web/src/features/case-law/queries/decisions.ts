@@ -321,6 +321,7 @@ export const decisionsPageOptions = ({
             reach: data.pageReach,
           }),
           total: data.total,
+          relaxedHitCount: data.relaxedHitCount,
           // What the search answered, beside what it found: the query it
           // required and what it did not require of the one it was given.
           answered: { queryUsed: data.queryUsed, warnings: data.warnings },
@@ -366,6 +367,7 @@ export const decisionsPageOptions = ({
           reach: SEARCH_PAGE_REACH.REACHED,
         }),
         total: SEARCH_TOTAL_NOT_COUNTED,
+        relaxedHitCount: 0,
         // A listing answers no query, so there is nothing it could have
         // required less of and nothing to report about it.
         answered: null,

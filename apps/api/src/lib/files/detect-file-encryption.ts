@@ -59,6 +59,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { DesktopEditMimeType } from "@/api/lib/desktop-edit-file-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { SubprocessError } from "@/api/lib/errors/tagged-errors";
+import { scanMediaType } from "@/api/lib/file-scan/media-type";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   OOXML_MIME_TYPES,
@@ -67,6 +68,8 @@ import {
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import type { PdfEncryptionProbe } from "@/api/lib/files/pdf-utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const PDF_MEDIA_TYPE = scanMediaType(PDF_MIME_TYPE);
 
 /**
  * What every consumer answers for an encrypted file's content, PDF or Office:
@@ -148,10 +151,11 @@ export const detectFileEncryption = async ({
   scanned,
   probe = isEncryptedPdf,
 }: DetectFileEncryptionInput): Promise<FileEncryptionDetection> => {
-  if (OOXML_MIME_TYPES.has(mimeType)) {
+  const mediaType = scanMediaType(mimeType);
+  if (OOXML_MIME_TYPES.has(mediaType)) {
     return detectOoxmlEncryption(scanned);
   }
-  if (mimeType !== PDF_MIME_TYPE) {
+  if (mediaType !== PDF_MEDIA_TYPE) {
     return { status: "known", encryption: mint(false, "type-not-inspected") };
   }
   const result = await probe(scanned);

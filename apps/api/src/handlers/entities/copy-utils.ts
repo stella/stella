@@ -51,7 +51,10 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
-import type { S3PresignError } from "@/api/lib/s3-presign";
+import type {
+  S3ObjectMissingError,
+  S3PresignError,
+} from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -348,7 +351,10 @@ type CopyFileObjectOptions = FileCopySource & {
 export const copyFileObject = async (
   options: CopyFileObjectOptions,
 ): Promise<
-  Result<FileMapping, S3PresignError | OrganizationFileUsageError>
+  Result<
+    FileMapping,
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
 > => {
   const copied = await stageAndCopyFiles({
     sources: [options],
@@ -384,7 +390,10 @@ const stageAndCopyFiles = async ({
   targetWorkspaceId,
   copiedS3Keys,
 }: CopyFileObjectsOptions): Promise<
-  Result<FileMapping[], S3PresignError | OrganizationFileUsageError>
+  Result<
+    FileMapping[],
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
 > => {
   const mappings = sources.map((source) => {
     const newFileId = allocateFileObject();

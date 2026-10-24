@@ -2,8 +2,9 @@ import { expect, type TestInfo } from "@playwright/test";
 import { Result } from "better-result";
 import { readFile, writeFile } from "node:fs/promises";
 
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
+
 import { apiStatus } from "../helpers/api";
-import { setFixedBrowserTime } from "../helpers/clock";
 import {
   E2E_CLEANUP_TARGET_TYPE,
   registerDeferredE2eCleanup,
