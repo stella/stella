@@ -2623,10 +2623,6 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
-      "id": "POST /v1/vat-rates/apply-preset",
-      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
-    },
-    {
       "id": "POST /v1/views/:workspaceId/reorder",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },

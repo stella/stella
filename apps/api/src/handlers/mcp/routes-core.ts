@@ -23,9 +23,11 @@ import {
   MCP_HTTP_PATH,
   MCP_LAW_DISCOVERY_PATH,
   MCP_LAW_HTTP_PATH,
+  MCP_STATELESS_ALLOW_HEADER,
   ROOT_MCP_DISCOVERY_PATH,
 } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
+import { mcpMethodNotAllowedResponse } from "@/api/mcp/json-rpc-error-response";
 import {
   createMcpDiscoveryPreflightHeaders,
   createMcpPreflightHeaders,
@@ -41,8 +43,16 @@ type RouteSet = {
   status?: number | string;
 };
 
-const MCP_HTTP_METHOD_ALLOW_HEADER = "OPTIONS, GET, POST, DELETE";
-const MCP_HTTP_METHODS = new Set(MCP_HTTP_METHOD_ALLOW_HEADER.split(", "));
+/**
+ * The methods handed to the transport: the ones it serves, plus `DELETE`,
+ * which it refuses only after the token is accepted so an unauthenticated
+ * probe still receives the 401 that drives OAuth discovery. Every other
+ * method is refused here with the transport's own 405.
+ */
+const MCP_TRANSPORT_ROUTED_METHODS = new Set([
+  ...MCP_STATELESS_ALLOW_HEADER.split(", "),
+  "DELETE",
+]);
 
 const applyHeaders = ({
   headers,
@@ -124,11 +134,8 @@ export const createMcpRoute = ({
   }) => {
     dropCredentialedCors(set);
 
-    if (!MCP_HTTP_METHODS.has(request.method)) {
-      return new Response("Method Not Allowed", {
-        headers: { Allow: MCP_HTTP_METHOD_ALLOW_HEADER },
-        status: 405,
-      });
+    if (!MCP_TRANSPORT_ROUTED_METHODS.has(request.method)) {
+      return mcpMethodNotAllowedResponse();
     }
 
     if (!limitAuthenticationFailure) {

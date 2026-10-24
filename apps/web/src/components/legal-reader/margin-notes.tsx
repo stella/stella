@@ -14,20 +14,21 @@ import { useTranslations } from "use-intl";
 
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
-import { Building2Icon, Trash2Icon } from "@stll/ui/icons";
+import { Building2Icon, PenIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import { CitedProvisionExpansion } from "@/components/legal-reader/cited-provision-link";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import { AnnotationVisibilityToggle } from "@/features/case-law/components/case-viewer/analysis/annotation-visibility-toggle";
+import { ReaderAnswerCard } from "@/features/case-law/components/case-viewer/reader-answer-card";
+import type { ReaderAnswerCardProps } from "@/features/case-law/components/case-viewer/reader-answer-card";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
-import { ReaderAnswerCard } from "../reader-answer-card";
-import type { ReaderAnswerCardProps } from "../reader-answer-card";
-import { AnnotationVisibilityToggle } from "./annotation-visibility-toggle";
 import type { AnchoredNote, NotePlacement } from "./margin-notes.logic";
 import {
   gutterIsAvailable,
@@ -35,7 +36,6 @@ import {
   placeGutterNotes,
   UNMEASURED_NOTE_HEIGHT_PX,
 } from "./margin-notes.logic";
-import { getCategoryVar } from "./types";
 
 const capitalize = (s: string): string =>
   s.charAt(0).toUpperCase() + s.slice(1);
@@ -43,7 +43,8 @@ const capitalize = (s: string): string =>
 type AnalysisMarginItemBase = {
   id: string;
   heading?: string | undefined;
-  category: string;
+  /** The CSS custom property the note's stripe and leader are drawn in. */
+  accentVar: string;
   depth: number;
   startAnchorId: string;
 };
@@ -62,6 +63,9 @@ export type AnalysisMarginItem = AnalysisMarginItemBase &
       }
   );
 
+/** What the author saved: the comment's words and who sees it, together. */
+export type CommentEdit = { body: string; visibility: "private" | "shared" };
+
 export type CommentMarginItem = {
   kind: "comment";
   id: string;
@@ -72,6 +76,11 @@ export type CommentMarginItem = {
   mine: boolean;
   visibility: "private" | "shared";
   onDelete: () => void;
+  /**
+   * Saves an edit of the words and visibility in one call, so the owner can
+   * order the writes; absent where a comment is not editable.
+   */
+  onEdit?: ((edit: CommentEdit) => void) | undefined;
   onToggleVisibility: () => void;
 };
 
@@ -80,6 +89,9 @@ export type ComposerMarginItem = {
   kind: "composer";
   id: string;
   startAnchorId: string;
+  /** The words and audience the composer opens with, when editing. */
+  initialBody?: string | undefined;
+  initialVisibility?: "private" | "shared" | undefined;
   onCancel: () => void;
   onSubmit: (body: string, visibility: "private" | "shared") => void;
 };
@@ -352,7 +364,7 @@ const GutterNotes = ({
           item.kind === "answer" ||
           item.kind === "provision"
             ? "var(--option-sky)"
-            : `var(${getCategoryVar(item.category)})`;
+            : `var(${item.accentVar})`;
         return (
           <div
             className="pointer-events-none absolute end-0 opacity-90"
@@ -533,7 +545,7 @@ const analysisNoteStyle = ({
   placement,
   presence,
 }: AnalysisNoteStyleOptions) => {
-  const cssVar = getCategoryVar(item.category);
+  const cssVar = item.accentVar;
   // Reverse hover speaks through the colour stripe alone — the words stay
   // readable in every state. Dimmed washes the stripe out; highlighted goes
   // full colour, doubled by an inset glow.
@@ -680,8 +692,10 @@ const ComposerNote = ({
 }) => {
   const t = useTranslations();
   const position = notePlacementPresentation(placement);
-  const [body, setBody] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "shared">("private");
+  const [body, setBody] = useState(item.initialBody ?? "");
+  const [visibility, setVisibility] = useState<"private" | "shared">(
+    item.initialVisibility ?? "private",
+  );
   const submit = () => {
     const trimmed = body.trim();
     if (trimmed !== "") {
@@ -771,8 +785,36 @@ const CommentNote = ({
   presence,
 }: NoteProps<CommentMarginItem>) => {
   const t = useTranslations();
+  const [editing, setEditing] = useState(false);
   const shared = item.visibility === "shared";
   const position = notePlacementPresentation(placement);
+  // A comment the server has not stored yet has no id to change or remove it
+  // by; its controls appear once the create answers.
+  const controllable = item.mine && !isPendingAnnotationId(item.id);
+  const onEdit = controllable ? item.onEdit : undefined;
+
+  if (editing && onEdit !== undefined) {
+    return (
+      <ComposerNote
+        item={{
+          id: item.id,
+          kind: "composer",
+          startAnchorId: item.startAnchorId,
+          initialBody: item.text,
+          initialVisibility: item.visibility,
+          onCancel: () => setEditing(false),
+          onSubmit: (body, visibility) => {
+            if (body !== item.text || visibility !== item.visibility) {
+              onEdit({ body, visibility });
+            }
+            setEditing(false);
+          },
+        }}
+        measureRef={measureRef}
+        placement={placement}
+      />
+    );
+  }
 
   const stripe =
     presence === "dimmed"
@@ -831,7 +873,7 @@ const CommentNote = ({
           {item.text}
         </button>
       )}
-      {item.mine && (
+      {controllable && (
         <div
           className={cn(
             "mt-1 flex items-center gap-1 transition-opacity",
@@ -847,6 +889,21 @@ const CommentNote = ({
             visibility={item.visibility}
             onToggle={item.onToggleVisibility}
           />
+          {onEdit !== undefined && (
+            <Tooltip
+              content={t("common.edit")}
+              render={
+                <button
+                  aria-label={t("common.edit")}
+                  className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
+                  onClick={() => setEditing(true)}
+                  type="button"
+                />
+              }
+            >
+              <PenIcon className="size-3" />
+            </Tooltip>
+          )}
           <Tooltip
             content={t("common.delete")}
             render={

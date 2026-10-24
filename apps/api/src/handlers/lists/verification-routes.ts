@@ -3,6 +3,10 @@ import Elysia from "elysia";
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import createSampleCase from "@/api/handlers/lists/sample-case/create";
+import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
+import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
+import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
+import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
 import createVerification from "@/api/handlers/lists/verifications/create";
@@ -39,6 +43,29 @@ export const createListVerificationRoutes = (
       body: createBulkClaimReviews.config.body,
       permissions: createBulkClaimReviews.config.permissions,
       accountAccess: createBulkClaimReviews.config.accountAccess,
+    })
+    .get("/claim-comments", listClaimComments.handler, {
+      params: listClaimComments.config.params,
+      permissions: listClaimComments.config.permissions,
+      accountAccess: listClaimComments.config.accountAccess,
+      query: listClaimComments.config.query,
+    })
+    .post("/claim-comments", createClaimComment.handler, {
+      body: createClaimComment.config.body,
+      params: createClaimComment.config.params,
+      permissions: createClaimComment.config.permissions,
+      accountAccess: createClaimComment.config.accountAccess,
+    })
+    .patch("/claim-comments/:annotationId", updateClaimComment.handler, {
+      body: updateClaimComment.config.body,
+      params: updateClaimComment.config.params,
+      permissions: updateClaimComment.config.permissions,
+      accountAccess: updateClaimComment.config.accountAccess,
+    })
+    .delete("/claim-comments/:annotationId", deleteClaimComment.handler, {
+      params: deleteClaimComment.config.params,
+      permissions: deleteClaimComment.config.permissions,
+      accountAccess: deleteClaimComment.config.accountAccess,
     })
     .post("/sample-case", createSampleCase.handler, {
       body: createSampleCase.config.body,

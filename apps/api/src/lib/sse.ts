@@ -28,15 +28,11 @@ import {
   SSE_MEDIA_TYPE,
 } from "@/api/lib/security-headers";
 import {
+  defaultSseBroadcastPublisher,
   INSTANCE_ID,
   parseRedisPayload,
-  publishOrganizationEvent,
-  publishSessionEvent,
-  publishUserAccessRevoked,
-  publishUserEvent,
-  publishWorkspaceAccessRevoked,
-  publishWorkspaceEvent,
   REDIS_CHANNEL,
+  type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
@@ -930,15 +926,15 @@ export const revokeWorkspaceSseAccess = async (
   userId: SafeId<"user">,
 ): Promise<void> => {
   closeLocalWorkspaceUserConnections(workspaceId, userId);
-  const publishAccessRevoked =
-    activeLifecycle?.publishAccessRevoked ?? publishWorkspaceAccessRevoked;
-  await publishAccessRevoked(workspaceId, userId, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.error("sse.access_revocation_publish_failed", {
-      "error.type": errorTag(error),
+  await activePublisher()
+    .publishWorkspaceAccessRevoked(workspaceId, userId, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.access_revocation_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 /**
@@ -952,13 +948,15 @@ export const revokeUserSseAccess = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
   closeLocalUserConnections(userId, organizationId);
-  await publishUserAccessRevoked(userId, organizationId, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.error("sse.user_access_revocation_publish_failed", {
-      "error.type": errorTag(error),
+  await activePublisher()
+    .publishUserAccessRevoked(userId, organizationId, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.user_access_revocation_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 /**
@@ -979,19 +977,21 @@ export const broadcastToUser = (
     );
   }
 
-  publishUserEvent(userId, organizationId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishUserEvent(userId, organizationId, event, {
+      originInstanceId: INSTANCE_ID,
+      deliveredInline: deliveredLocally,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
+      if (!deliveredLocally) {
+        queueUserDelivery(userId, async () =>
+          broadcastLocalToUser(userId, organizationId, event),
+        );
+      }
     });
-    if (!deliveredLocally) {
-      queueUserDelivery(userId, async () =>
-        broadcastLocalToUser(userId, organizationId, event),
-      );
-    }
-  });
 };
 
 /**
@@ -1005,7 +1005,8 @@ export const broadcast = (
   {
     publishWorkspace: publishWorkspaceOverride,
   }: {
-    publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+    publishWorkspace?:
+      SseBroadcastPublisher["publishWorkspaceEvent"] | undefined;
   } = {},
 ): void => {
   // When this instance has no attached subscriber it never receives its
@@ -1028,9 +1029,7 @@ export const broadcast = (
   }
 
   const publishWorkspace =
-    publishWorkspaceOverride ??
-    activeLifecycle?.publishWorkspace ??
-    publishWorkspaceEvent;
+    publishWorkspaceOverride ?? activePublisher().publishWorkspaceEvent;
   publishWorkspace(workspaceId, event, {
     originInstanceId: INSTANCE_ID,
     deliveredInline: deliveredLocally,
@@ -1058,17 +1057,19 @@ export const broadcastToOrganization = (
     broadcastLocalToOrganization(organizationId, event);
   }
 
-  publishOrganizationEvent(organizationId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishOrganizationEvent(organizationId, event, {
+      originInstanceId: INSTANCE_ID,
+      deliveredInline: deliveredLocally,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
+      if (!deliveredLocally) {
+        broadcastLocalToOrganization(organizationId, event);
+      }
     });
-    if (!deliveredLocally) {
-      broadcastLocalToOrganization(organizationId, event);
-    }
-  });
 };
 
 // ── Desktop-edit session events ─────────────────────────
@@ -1106,13 +1107,15 @@ export const broadcastSessionEvent = (
 ): void => {
   sessionDeliveryHandler?.(sessionId, event);
 
-  publishSessionEvent(sessionId, event, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishSessionEvent(sessionId, event, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 // ── Keep-alive heartbeat ────────────────────────────────
@@ -1192,8 +1195,7 @@ export type SseConnectionAuthorizers = {
 
 type StartSseDependencies = {
   createClient?: CreateSseRedisClient | undefined;
-  publishAccessRevoked?: typeof publishWorkspaceAccessRevoked | undefined;
-  publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+  publisher?: SseBroadcastPublisher | undefined;
 };
 
 type SseLifecycle = {
@@ -1201,8 +1203,8 @@ type SseLifecycle = {
   /** Runs `sweepBoundStreams` every `LIMITS.sseCredentialRecheckMs`. */
   credentialSweepTimer: ReturnType<typeof setInterval>;
   keepAliveTimer: ReturnType<typeof setInterval>;
-  publishAccessRevoked: typeof publishWorkspaceAccessRevoked;
-  publishWorkspace: typeof publishWorkspaceEvent;
+  /** Every scope's cross-instance publish goes through this one publisher. */
+  publisher: SseBroadcastPublisher;
   subscriber: SseRedisClient | null;
   /**
    * Whether `subscriber` currently holds a live SUBSCRIBE on its present
@@ -1233,6 +1235,13 @@ type SseLifecycle = {
 };
 
 let activeLifecycle: SseLifecycle | null = null;
+
+/**
+ * The publisher the running lifecycle was started with, or the process-wide
+ * one before `startSse` (see the ordering note on `startSse`).
+ */
+const activePublisher = (): SseBroadcastPublisher =>
+  activeLifecycle?.publisher ?? defaultSseBroadcastPublisher;
 
 /**
  * Whether this instance currently has a live, subscribed Redis subscriber. Used
@@ -1502,9 +1511,7 @@ export const startSse = (
       LIMITS.sseCredentialRecheckMs,
     ),
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
-    publishAccessRevoked:
-      dependencies.publishAccessRevoked ?? publishWorkspaceAccessRevoked,
-    publishWorkspace: dependencies.publishWorkspace ?? publishWorkspaceEvent,
+    publisher: dependencies.publisher ?? defaultSseBroadcastPublisher,
     subscriber: null,
     subscriptionLive: false,
     attachTimer: null,

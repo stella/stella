@@ -480,50 +480,52 @@ const CONTRACT_CORPUS = {
           },
           stampedVersionCount: 0,
         } satisfies Awaited<ReturnType<typeof readWorkspaceHandler>>);
-        readOverviewHandlerMock.mockResolvedValue({
-          entityCount: 1,
-          documentCount: 1,
-          taskCount: 0,
-          recentEntities: [
-            {
-              entityId: toSafeId<"entity">(uid(2)),
-              name: "NDA draft.docx",
-              kind: "document",
-              status: null,
-              priority: null,
-              listItemType: null,
-              dueDate: null,
-              mimeType:
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-              // The exact trio that tripped the prod backstop on every
-              // non-empty matter: primary-field plumbing ids, now stripped.
-              fieldId: uid(3),
-              propertyId: uid(4),
-              pdfFileId: uid(5),
-              encrypted: false,
-              createdAt: "2026-01-01T00:00:00.000Z",
-              updatedAt: null,
-              createdBy: "Jana",
-              createdByImage: null,
-              createdByDeletedAt: null,
-              assignedTo: "Petr",
-              assignedToImage: null,
-              assignedToDeletedAt: null,
-            },
-          ],
-          // The web agenda stays out of the matter detail projection.
-          upcomingAgenda: [
-            {
-              entityId: toSafeId<"entity">(uid(43)),
-              name: "File the response",
-              status: null,
-              dueDate: "2026-01-10",
-              assignedTo: "Petr",
-              assignedToImage: null,
-              assignedToDeletedAt: null,
-            },
-          ],
-        } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
+        readOverviewHandlerMock.mockResolvedValue(
+          Result.ok({
+            entityCount: 1,
+            documentCount: 1,
+            taskCount: 0,
+            recentEntities: [
+              {
+                entityId: toSafeId<"entity">(uid(2)),
+                name: "NDA draft.docx",
+                kind: "document",
+                status: null,
+                priority: null,
+                listItemType: null,
+                dueDate: null,
+                mimeType:
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                // The exact trio that tripped the prod backstop on every
+                // non-empty matter: primary-field plumbing ids, now stripped.
+                fieldId: uid(3),
+                propertyId: uid(4),
+                pdfFileId: uid(5),
+                encrypted: false,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: null,
+                createdBy: "Jana",
+                createdByImage: null,
+                createdByDeletedAt: null,
+                assignedTo: "Petr",
+                assignedToImage: null,
+                assignedToDeletedAt: null,
+              },
+            ],
+            // The web agenda stays out of the matter detail projection.
+            upcomingAgenda: [
+              {
+                entityId: toSafeId<"entity">(uid(43)),
+                name: "File the response",
+                status: null,
+                dueDate: "2026-01-10",
+                assignedTo: "Petr",
+                assignedToImage: null,
+                assignedToDeletedAt: null,
+              },
+            ],
+          } satisfies InferOk<Awaited<ReturnType<typeof readOverviewHandler>>>),
+        );
         readWorkspaceContactsHandlerMock.mockResolvedValue(
           Result.ok({
             contacts: [

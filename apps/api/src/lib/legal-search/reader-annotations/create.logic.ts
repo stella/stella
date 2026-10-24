@@ -1,4 +1,4 @@
-import type { CreateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
+import type { CreateAnnotationRequest } from "@/api/lib/legal-search/reader-annotations/schema";
 
 type StoredAnnotation = {
   blockAnchorId: string;
@@ -36,7 +36,7 @@ export const storedAnnotationMatchesRequest = ({
   body,
   rows,
 }: {
-  body: CreateAnnotationBody;
+  body: CreateAnnotationRequest;
   rows: readonly StoredAnnotation[];
 }): boolean => {
   if (rows.length !== body.spans.length) {

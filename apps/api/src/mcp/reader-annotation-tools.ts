@@ -18,29 +18,30 @@ import {
   READER_ANNOTATION_MAX_SPANS,
   READER_ANNOTATION_QUOTE_MAX_LENGTH,
   READER_ANNOTATION_STYLES,
-  READER_ANNOTATION_TARGET_TYPES,
   READER_ANNOTATION_VISIBILITIES,
+  READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
-import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { createSha256 } from "@stll/sha256/bun";
 
-import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
-import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
 import { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
-import { listReaderAnnotationsHandler } from "@/api/handlers/legal-reader/annotations/list";
 import { locatePassages } from "@/api/handlers/legal-reader/annotations/locate.logic";
-import type {
-  CreateAnnotationBody,
-  UpdateAnnotationBody,
-} from "@/api/handlers/legal-reader/annotations/schema";
-import { updateReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/update";
 import {
   CREATE_READER_ANNOTATION_PROJECTION,
   DELETED_TRUE_PROJECTION,
   LIST_READER_ANNOTATIONS_PROJECTION,
   UPDATE_READER_ANNOTATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
+import { deleteReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/delete";
+import { listReaderAnnotationsHandler } from "@/api/lib/legal-search/reader-annotations/list";
+import type {
+  CreateAnnotationBody,
+  UpdateAnnotationBody,
+} from "@/api/lib/legal-search/reader-annotations/schema";
+import { DOCUMENT_ANNOTATION_REACH } from "@/api/lib/legal-search/reader-annotations/target";
+import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
@@ -83,7 +84,7 @@ const TARGET_ID_DESCRIPTION =
 
 const targetArgs = {
   target_type: v.pipe(
-    v.picklist(READER_ANNOTATION_TARGET_TYPES),
+    v.picklist(READER_DOCUMENT_TARGET_TYPES),
     v.description("decision (case law) or statute (legislation)."),
   ),
   target_id: uuidInputSchema(TARGET_ID_DESCRIPTION),
@@ -136,7 +137,7 @@ const resolveTargetForAgent = async ({
 }: {
   context: McpRequestContext;
   targetId: string;
-  targetType: ReaderAnnotationTargetType;
+  targetType: ReaderDocumentTargetType;
 }): Promise<TargetAccessResult> => {
   const resolve =
     context.testDependencies?.resolveAnnotationTarget ??
@@ -578,6 +579,7 @@ const handleUpdateTool: TypedMcpToolHandler<
       annotationId,
       change: toHandlerChange(parsed.output.change),
       organizationId: context.organizationId,
+      reach: DOCUMENT_ANNOTATION_REACH,
       recordAuditEvent: context.recordAuditEvent,
       safeDb: context.safeDb,
       userId: context.userId,
@@ -630,6 +632,7 @@ const handleDeleteTool: TypedMcpToolHandler<
         parsed.output.annotation_id,
       ),
       organizationId: context.organizationId,
+      reach: DOCUMENT_ANNOTATION_REACH,
       recordAuditEvent: context.recordAuditEvent,
       safeDb: context.safeDb,
       userId: context.userId,

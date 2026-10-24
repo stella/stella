@@ -50,6 +50,7 @@ const actionStep = (name: string) => {
   return { condition: step.if, script };
 };
 const versionStaging = actionStep("Dispatch version commit staging");
+const prDepthDispatch = actionStep("Dispatch release PR-depth checks");
 
 const runActionScript = async (
   script: string,
@@ -212,6 +213,7 @@ test("only trusted main tooling is checked out before target verification", () =
     // Uncached runtime for the release queue history check; no target code.
     "Setup Bun",
     "Reuse completed release proof",
+    "Check the version commit's merge-group receipt",
     "Dispatch release PR-depth checks",
     "Dispatch version commit staging",
     "Select untested heavy SHA",
@@ -226,6 +228,53 @@ test("only trusted main tooling is checked out before target verification", () =
   expect(checkouts.at(0)?.with?.["ref"]).toBe("main");
   expect(checkouts.at(0)?.with?.["path"]).toBe(".release-proof");
   expect(checkouts.at(0)?.with?.["persist-credentials"]).toBe(false);
+});
+
+test("a version commit whose receipt does not cover its history also dispatches PR-depth", () => {
+  const dispatches = ({
+    event,
+    message = "",
+    covered,
+    releaseCandidate = false,
+  }: {
+    event: string;
+    message?: string;
+    covered?: string;
+    releaseCandidate?: boolean;
+  }) =>
+    evaluate(
+      prDepthDispatch.condition,
+      contextFromNested({
+        github: { event_name: event, event: { head_commit: { message } } },
+        inputs: releaseCandidate
+          ? { sha: "a".repeat(40), release_candidate: true }
+          : { sha: "", release_candidate: false },
+        steps: {
+          reuse: { outputs: { run: "true" } },
+          // GitHub reads a skipped step's outputs as empty strings.
+          receipt: { outputs: { covered: covered ?? "" } },
+        },
+      }),
+    );
+  // The receipt step runs only on a version commit push.
+  expect(
+    dispatches({
+      event: "push",
+      message: "chore: release v1.2.3",
+      covered: "false",
+    }),
+  ).toBe(true);
+  expect(
+    dispatches({
+      event: "push",
+      message: "chore: release v1.2.3",
+      covered: "true",
+    }),
+  ).toBe(false);
+  expect(dispatches({ event: "push", message: "ordinary change" })).toBe(false);
+  expect(
+    dispatches({ event: "workflow_dispatch", releaseCandidate: true }),
+  ).toBe(true);
 });
 
 test("version commit staging reuses only an identical head's newest bot proof", async () => {

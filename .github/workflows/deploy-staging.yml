@@ -595,10 +595,17 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  # The builds run after a skipped wake when staging was already up. A job's
+  # default condition skips it when any job it depends on through `needs` was
+  # skipped, which promoted nothing yet ended the run green, so promotion
+  # names the build results it depends on instead.
   promote-staging:
     name: Promote staging images
     needs: [resolve, build-api, build-web]
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.resolve.result == 'success' &&
+      needs.build-api.result == 'success' && needs.build-web.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     # Deployment and its smoke verification are one serialized side-effecting

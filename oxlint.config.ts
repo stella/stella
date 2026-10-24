@@ -2456,6 +2456,12 @@ const config = defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
+      // This helper serializes its boundary into the page before modules load,
+      // so it cannot import `panic()` there.
+      files: ["apps/desktop/tests/browser/tauri-ipc.ts"],
+      rules: { "no-bare-error/no-bare-error": "off" },
+    },
+    {
       // Playwright end-to-end tests. They run outside the app process
       // (no env module, no `panic()` plumbing) and talk to a live HTTP
       // API where bare `throw new Error(...)` is the right signal.

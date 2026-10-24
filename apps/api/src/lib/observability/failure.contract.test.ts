@@ -179,6 +179,9 @@ const SQL_STATE_EXPECTED = {
   "57014": ["pg_query_canceled", "defect"],
   "28P01": ["pg_auth_failed", "defect"],
   "28000": ["pg_auth_failed", "defect"],
+  "22007": ["pg_invalid_input", "defect"],
+  "22008": ["pg_invalid_input", "defect"],
+  "22P02": ["pg_invalid_input", "defect"],
 } as const satisfies Record<keyof typeof PG_SQL_STATE_REASON, Expected>;
 
 // SQLSTATEs no set grades: they stay defects whatever the shape.

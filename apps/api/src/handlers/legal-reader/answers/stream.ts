@@ -16,7 +16,6 @@ import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { runReaderAnswerModel } from "@/api/handlers/legal-reader/answers/model";
 import type { ReaderAnswerModelRunner } from "@/api/handlers/legal-reader/answers/model";
 import { answerOwnerPredicate } from "@/api/handlers/legal-reader/answers/operation";
@@ -34,6 +33,7 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import {
@@ -28,7 +28,7 @@ import {
 
 type AnnotationTarget = {
   targetId: string;
-  targetType: ReaderAnnotationTargetType;
+  targetType: ReaderDocumentTargetType;
 };
 
 /**
