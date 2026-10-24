@@ -1,5 +1,5 @@
 {
   "kind": "support",
   "qualifier": "Smoke-tests the built API image by digest before release publication and promotion.",
-  "reviewedDigest": "354e2bf2682381ef6724d4c94f88492a6ae912d5ca6ec7a8221a9e8bfd6e5fa1"
+  "reviewedDigest": "d8357d52f2bd75b03d7f46183c470fd05b121033e957290685d2dfa0d0dfd10f"
 }
