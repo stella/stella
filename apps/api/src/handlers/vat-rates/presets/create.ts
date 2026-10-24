@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { VAT_RATE_PRESETS } from "@stll/invoicing";
 
 import { vatRates } from "@/api/db/schema";
@@ -8,12 +9,14 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  checkVatRateOverlap,
   lockVatRateOrganization,
+  overlappingVatRatePeriods,
 } from "@/api/lib/billing/vat-rates";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.VAT_RATE),
   description:
     "Add the statutory VAT rate preset for Slovakia or Czechia to the active organization. Existing overlapping periods with the same code are skipped.",
   permissions: { organizationSettings: ["update"] },
@@ -29,40 +32,43 @@ export default createSafeRootHandler(
     const result = yield* Result.await(
       safeDb(async (tx) => {
         await lockVatRateOrganization(tx, session.activeOrganizationId);
-        let added = 0;
-        let skipped = 0;
-        for (const preset of VAT_RATE_PRESETS[body.country]) {
-          const overlap = await checkVatRateOverlap(tx, {
-            organizationId: session.activeOrganizationId,
-            code: preset.code,
-            startDate: preset.validFrom,
-            endDate: preset.validTo,
-          });
-          if (Result.isError(overlap)) {
-            skipped += 1;
-            continue;
-          }
-          const inserted = await tx
-            .insert(vatRates)
-            .values({
+        const presets = VAT_RATE_PRESETS[body.country];
+        const overlapping = await overlappingVatRatePeriods(tx, {
+          organizationId: session.activeOrganizationId,
+          periods: presets,
+        });
+        const additions = presets.filter(
+          (_preset, position) => !overlapping.has(position),
+        );
+        const skipped = presets.length - additions.length;
+        if (additions.length === 0) {
+          return { added: 0, skipped };
+        }
+        // A country's preset periods never overlap each other (the preset
+        // census in @stll/invoicing), so they are inserted together.
+        const inserted = await tx
+          .insert(vatRates)
+          .values(
+            additions.map((preset) => ({
               ...preset,
               organizationId: session.activeOrganizationId,
-            })
-            .returning({ id: vatRates.id });
-          const row = inserted.at(0);
-          if (!row) {
-            panic("Failed to add VAT preset rate");
-          }
-          await recordAuditEvent(tx, {
+            })),
+          )
+          .returning({ id: vatRates.id, code: vatRates.code });
+        if (inserted.length !== additions.length) {
+          panic("Failed to add VAT preset rate");
+        }
+        await recordAuditEvent(
+          tx,
+          inserted.map((row) => ({
             action: AUDIT_ACTION.CREATE,
             resourceType: AUDIT_RESOURCE_TYPE.VAT_RATE,
             resourceId: row.id,
             workspaceId: null,
-            metadata: { code: preset.code, presetCountry: body.country },
-          });
-          added += 1;
-        }
-        return { added, skipped };
+            metadata: { code: row.code, presetCountry: body.country },
+          })),
+        );
+        return { added: inserted.length, skipped };
       }),
     );
     return Result.ok(result);
