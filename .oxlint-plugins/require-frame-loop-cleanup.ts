@@ -464,8 +464,12 @@ const assignedHandle = (
     !isSingleAssignment(rootVariable) ||
     rootVariable.references.some((reference) => {
       const identifier: unknown = reference.identifier;
-      if (!isAstNode(identifier)) return true;
-      if (reference.init && reference.isWrite()) return false;
+      if (!isAstNode(identifier)) {
+        return true;
+      }
+      if (reference.init && reference.isWrite()) {
+        return false;
+      }
       const parent = parentOf(identifier);
       return (
         parent?.type !== "MemberExpression" || parent.object !== identifier
@@ -931,11 +935,15 @@ const hasAmbiguousMemberWrites = ({
   start,
   loopBody,
 }: AmbiguousHandleOptions) => {
-  if (handle.kind !== "member") return false;
+  if (handle.kind !== "member") {
+    return false;
+  }
   let root = start;
   while (parentOf(root) !== null) {
     const parent = parentOf(root);
-    if (parent === null) break;
+    if (parent === null) {
+      break;
+    }
     root = parent;
   }
   const proof: CleanupProof = {
@@ -959,20 +967,29 @@ const hasAmbiguousMemberWrites = ({
     if (
       target?.type !== "MemberExpression" ||
       !cancelsHandle(context, { argument: target, node }, handle)
-    )
+    ) {
       continue;
+    }
     const value = unwrapExpression(
       node.type === "AssignmentExpression" && node.operator === "="
         ? node.right
         : null,
     );
-    if (value === start) continue;
+    if (value === start) {
+      continue;
+    }
     const empty = emptyHandleValue(context, value);
-    if (empty && cancelledBeforeWrite(proof, node)) continue;
+    if (empty && cancelledBeforeWrite(proof, node)) {
+      continue;
+    }
     const insideLoop = loopBody !== null && isWithin(node, loopBody);
     const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
-    if (frame && insideLoop && (empty || startsLoop)) continue;
-    if (startsLoop && !insideLoop && ++kickOffs <= 1) continue;
+    if (frame && insideLoop && (empty || startsLoop)) {
+      continue;
+    }
+    if (startsLoop && !insideLoop && ++kickOffs <= 1) {
+      continue;
+    }
     return true;
   }
   return false;
