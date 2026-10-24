@@ -183,15 +183,6 @@ export const useReaderAnnotations = (
     );
   }, [queryClient, signedIn, storage, t]);
 
-  // Steps belong to one document under one account: signing in, switching
-  // organization or opening another document starts a fresh history.
-  const historyScope = [
-    user?.id ?? "guest",
-    user?.activeOrganizationId ?? "",
-    targetKey.targetType,
-    targetKey.targetId,
-  ].join(":");
-
   // The tab's marks as they are now, not as this render saw them: a step
   // taken right after another reads what that one left.
   const currentGuestStore = () =>
@@ -199,34 +190,18 @@ export const useReaderAnnotations = (
 
   const commit = (
     next: typeof guestStore,
-    action: "create" | "delete" | "update",
+    action: GuestAnnotationAction,
   ): Result<void, Error> => {
-    if (storage === null) {
-      notifyUserError(
-        undefined,
-        t("legalReader.annotations.guestStorageUnavailable"),
-      );
-      return Result.err(
-        new ClientOperationError({
-          action: `${action}-guest-reader-annotation`,
-          message: "Guest annotation storage is unavailable",
-        }),
-      );
+    const persisted = persistGuestAnnotationStore({
+      action,
+      next,
+      storage,
+      unavailableMessage: t("legalReader.annotations.guestStorageUnavailable"),
+    });
+    if (Result.isOk(persisted)) {
+      setStore(next);
     }
-    const stored = writeGuestAnnotationStore(storage, next);
-    if (Result.isError(stored)) {
-      getAnalytics().captureError(stored.error, {
-        operation: `legal-reader.guest-annotation.${action}`,
-        type: "detached",
-      });
-      notifyUserError(
-        stored.error,
-        t("legalReader.annotations.guestStorageUnavailable"),
-      );
-      return Result.err(stored.error);
-    }
-    setStore(next);
-    return Result.ok(undefined);
+    return persisted;
   };
 
   const guestWrites: ReaderAnnotationWrites = {
@@ -272,28 +247,17 @@ export const useReaderAnnotations = (
       ),
   };
 
-  // A failed write has already rolled the cache back and told the reader why
-  // (`settle.onError`); the result only says whether it held.
-  const accountWrites: ReaderAnnotationWrites = {
-    create: async (input: CreateAnnotationInput) =>
-      (await Result.tryPromise(async () => create(input))).map(
-        (created) => created.ids,
-      ),
-    remove: async (id: string) =>
-      (await Result.tryPromise(async () => remove(id))).map(
-        () => undefined,
-      ),
-    // The cache, not this render: it already holds what a write just stored.
-    rows: () => optionalArray(queryClient.getQueryData(queryKey)),
-    update: async (input: UpdateAnnotationInput) =>
-      (await Result.tryPromise(async () => update(input))).map(
-        () => undefined,
-      ),
-  };
-
   const controller = useReaderAnnotationHistory({
-    scope: historyScope,
-    writes: user === null ? guestWrites : accountWrites,
+    scope: readerAnnotationHistoryScope(user, targetKey),
+    writes:
+      user === null
+        ? guestWrites
+        : accountAnnotationWrites({
+            mutations: { create, remove, update },
+            // The cache, not this render: it already holds what a write just
+            // stored.
+            rows: () => optionalArray(queryClient.getQueryData(queryKey)),
+          }),
   });
 
   if (user !== null) {
@@ -316,3 +280,89 @@ export const useReaderAnnotations = (
     mode: "guest",
   };
 };
+
+type HistoryScopeUser = {
+  id: string;
+  activeOrganizationId?: string | null | undefined;
+};
+
+/** Steps belong to one document under one account: signing in, switching
+ * organization or opening another document starts a fresh history. */
+function readerAnnotationHistoryScope(
+  user: HistoryScopeUser | null,
+  targetKey: { targetId: string; targetType: string },
+): string {
+  return [
+    user?.id ?? "guest",
+    user?.activeOrganizationId ?? "",
+    targetKey.targetType,
+    targetKey.targetId,
+  ].join(":");
+}
+
+type AccountAnnotationWritesOptions = {
+  mutations: {
+    create: (
+      input: CreateAnnotationInput,
+    ) => Promise<{ ids: readonly string[] }>;
+    remove: (id: string) => Promise<unknown>;
+    update: (input: UpdateAnnotationInput) => Promise<unknown>;
+  };
+  rows: () => readonly ReaderAnnotation[];
+};
+
+/** A failed write has already rolled the cache back and told the reader why
+ * (the mutations' error handler); the result only says whether it held. */
+function accountAnnotationWrites({
+  mutations: { create, remove, update },
+  rows,
+}: AccountAnnotationWritesOptions): ReaderAnnotationWrites {
+  return {
+    create: async (input) =>
+      (await Result.tryPromise(async () => create(input))).map(
+        (created) => created.ids,
+      ),
+    remove: async (id) =>
+      (await Result.tryPromise(async () => remove(id))).map(() => undefined),
+    rows,
+    update: async (input) =>
+      (await Result.tryPromise(async () => update(input))).map(() => undefined),
+  };
+}
+
+type GuestAnnotationAction = "create" | "delete" | "update";
+
+type PersistGuestAnnotationStoreOptions = {
+  action: GuestAnnotationAction;
+  next: Parameters<typeof writeGuestAnnotationStore>[1];
+  storage: Parameters<typeof writeGuestAnnotationStore>[0] | null;
+  unavailableMessage: string;
+};
+
+/** Writes the tab's marks, telling the reader when the tab cannot keep them. */
+function persistGuestAnnotationStore({
+  action,
+  next,
+  storage,
+  unavailableMessage,
+}: PersistGuestAnnotationStoreOptions): Result<void, Error> {
+  if (storage === null) {
+    notifyUserError(undefined, unavailableMessage);
+    return Result.err(
+      new ClientOperationError({
+        action: `${action}-guest-reader-annotation`,
+        message: "Guest annotation storage is unavailable",
+      }),
+    );
+  }
+  const stored = writeGuestAnnotationStore(storage, next);
+  if (Result.isError(stored)) {
+    getAnalytics().captureError(stored.error, {
+      operation: `legal-reader.guest-annotation.${action}`,
+      type: "detached",
+    });
+    notifyUserError(stored.error, unavailableMessage);
+    return Result.err(stored.error);
+  }
+  return Result.ok(undefined);
+}

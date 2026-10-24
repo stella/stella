@@ -6,7 +6,6 @@ import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { listAnswersQuerySchema } from "@/api/handlers/legal-reader/answers/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
