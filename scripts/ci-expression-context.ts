@@ -221,6 +221,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "query-perf-scope": { query_perf_required: "false" },
   "root-checks": { root_checks: "[]" },
   "target-base": { base_sha: "" },
+  "ui-playground-plan": { specs: "[]" },
 };
 
 const NEEDS = [

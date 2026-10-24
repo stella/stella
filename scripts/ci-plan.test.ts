@@ -4650,6 +4650,23 @@ test("split service suites preserve their scopes and independent verdicts", () =
   }
 });
 
+test("the UI playground plan consumes the changed-files output and exposes its selection", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["ui_playground_specs"]).toBe(
+    ["$", "{{ steps.ui-playground-plan.outputs.specs || '[]' }}"].join(""),
+  );
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Plan UI playground geometry specs",
+  );
+  expect(step?.env?.["CHANGED_FILES"]).toBe(
+    ["$", "{{ steps.changed-files.outputs.changed_files }}"].join(""),
+  );
+  expect(step?.run).toContain("bun scripts/ui-playground-selection.ts");
+});
+
 test("Bun cache saves are main-only and trusted Turbo results remain readable", () => {
   const configured = v.parse(
     v.object({ env: v.record(v.string(), v.string()) }),
@@ -4841,11 +4858,23 @@ test("every browser suite runs on its required matrix legs, the playground on ev
   );
   expect(matrixSuites).toHaveLength(2 + playgroundLegs.length);
   expect(playgroundLegs.length).toBeGreaterThan(1);
-  expect(
-    evaluate(browser.strategy.matrix.suite, {
-      values: { "github.event_name": "pull_request" },
-    }),
-  ).toEqual(["desktop"]);
+  // A pull request runs only its selected geometry specs, unsharded.
+  for (const [desktop, specs, expected] of [
+    ["true", '["spec"]', ["desktop", "playground"]],
+    ["false", '["spec"]', ["playground"]],
+    ["true", "[]", ["desktop"]],
+    ["false", "[]", ["desktop"]],
+  ] as const) {
+    expect(
+      evaluate(browser.strategy.matrix.suite, {
+        values: {
+          "github.event_name": "pull_request",
+          "needs.ci-plan.outputs.desktop_browser_required": desktop,
+          "needs.ci-plan.outputs.ui_playground_specs": specs,
+        },
+      }),
+    ).toEqual([...expected]);
+  }
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
@@ -4866,6 +4895,10 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     // are legs, so a leg can neither be dropped nor duplicate another's tests.
     if (suite.name === "Test UI playground visuals") {
       expect(legs, suite.name).toEqual(playgroundLegs);
+      expect(suite.if, suite.name).toContain("matrix.suite == 'playground'");
+      expect(suite.run, suite.name).toContain(
+        `bun run test:e2e:ui-playground "\${specs[@]}"`,
+      );
       expect(suite.run, suite.name).toContain(
         `--shard="\${SUITE#playground-}/${String(playgroundLegs.length)}"`,
       );
@@ -7028,6 +7061,7 @@ type BrowserPlanOptions = {
   queueDepth?: string;
   packageChecksRequired?: string;
   browserScopeRequired?: string;
+  uiPlaygroundSpecs?: string;
 };
 type HeavyGatePlanOptions = {
   event: Event;
@@ -7072,6 +7106,7 @@ const browserPlanOutput = ({
   queueDepth = "full",
   packageChecksRequired = "true",
   browserScopeRequired = "true",
+  uiPlaygroundSpecs = "[]",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -7091,10 +7126,32 @@ const browserPlanOutput = ({
           packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
         "steps.depth.outputs.queue_depth": queueDepth,
+        "steps.ui-playground-plan.outputs.specs": uiPlaygroundSpecs,
       },
     }),
   );
 };
+
+test("a PR that selects UI playground specs requires the browser job", () => {
+  // ci-result requires every job whose scope output is true, so a planned
+  // UI leg that is skipped or cancelled fails the run; an unplanned one does
+  // not make the job required.
+  const plan = (desktopRequired: "true" | "false", uiPlaygroundSpecs: string) =>
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired,
+      uiPlaygroundSpecs,
+    });
+  expect(
+    plan(
+      "false",
+      '["apps/web/e2e/ui-playground/reader-selection.geometry.spec.ts"]',
+    ),
+  ).toBe("true");
+  expect(plan("false", "[]")).toBe("false");
+  expect(plan("true", "[]")).toBe("true");
+});
 
 test("Playwright image-only changes admit browser suites in merge groups", () => {
   for (const file of [
