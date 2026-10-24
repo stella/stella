@@ -157,9 +157,9 @@ import {
   sealEdgeHeaders,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
-import { runWithStatementCeiling } from "@/api/lib/db-statement-ceiling";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
@@ -193,7 +193,7 @@ import {
   emitEventLoopDelayMetric,
   emitProcessMemoryLog,
 } from "@/api/lib/observability/request-metrics";
-import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { runWithHttpRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
@@ -221,10 +221,10 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
-  finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
-  setSecurityHeaders,
   CORS_EXPOSED_HEADERS,
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
@@ -784,42 +784,39 @@ const scopeRequestAsyncStores = (): void => {
     strictPath: api.config.strictPath,
     aot: api.config.aot,
   });
-  api.wrap(
-    (handleRequest) => async (request: Request) =>
-      runWithRequestScope(async () => {
-        const run = async () => {
-          if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-            return handleRequest(request);
-          }
-          return withFinalResponseCompletion(request, async () =>
-            runTenantHttpAction(request, {
-              handleRequest: async (bounded) => {
-                // The private HOC types erase the response type; validate the
-                // framework boundary before applying serialized JSON limits.
-                const response: unknown = await Promise.resolve(
-                  handleRequest(bounded),
-                );
-                if (!(response instanceof Response)) {
-                  return panic(
-                    "The HTTP framework returned an invalid response",
-                  );
-                }
-                return response;
-              },
-              isTenantAction,
-              decorateRefusal: decorateActionSizeRefusal,
-            }),
-          );
-        };
-        return statementRoutes === undefined
-          ? run()
-          : runWithStatementCeiling({
-              kind: "request",
-              key: statementRouteKey(request),
-              run,
-            });
-      }),
-  );
+  api.wrap((handleRequest) => async (request: Request) => {
+    const scopedRequest = async () => {
+      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+        return handleRequest(request);
+      }
+      return withFinalResponseCompletion(request, async () =>
+        runTenantHttpAction(request, {
+          handleRequest: async (bounded) => {
+            // The private HOC types erase the response type; validate the
+            // framework boundary before applying serialized JSON limits.
+            const response: unknown = await Promise.resolve(
+              handleRequest(bounded),
+            );
+            if (!(response instanceof Response)) {
+              return panic("The HTTP framework returned an invalid response");
+            }
+            return response;
+          },
+          isTenantAction,
+          decorateRefusal: decorateActionSizeRefusal,
+        }),
+      );
+    };
+    return runWithHttpRequestScope(async () =>
+      statementRoutes === undefined
+        ? await scopedRequest()
+        : await runWithStatementCeiling({
+            kind: "request",
+            key: statementRouteKey(request),
+            run: scopedRequest,
+          }),
+    );
+  });
 };
 
 // Imported test applications never run startServer, but must exercise the

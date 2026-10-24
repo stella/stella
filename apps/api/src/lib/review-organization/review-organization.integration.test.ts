@@ -22,13 +22,13 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
+  chatThreads,
   clauses,
   contacts,
   CORRESPONDENCE_ERASURE_SETTING,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
   correspondenceAllowedSenders,
   entities,
-  chatThreads,
   entityDeletionCleanupRequests,
   featureEnrolments,
   fileComparisonUploads,
@@ -55,8 +55,8 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { reviewOrganizationConfigFrom } from "@/api/lib/review-organization/config";
 import {
-  REVIEW_RESET_REFUSAL,
   resetReviewOrganization,
+  REVIEW_RESET_REFUSAL,
 } from "@/api/lib/review-organization/reset";
 import type {
   ReviewResetDependencies,
@@ -74,12 +74,12 @@ import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import {
   createResetReviewOrganizationTask,
   RESET_REVIEW_ORGANIZATION_TASK,
-  resetReviewOrganizationTask,
 } from "@/api/lib/scheduler/tasks/review-organization-reset";
 import type {
   SchedulerDb,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -98,6 +98,8 @@ const documentDependencies: CreateEntityFromBufferDependencies = {
   enqueueImageThumbnailOrMarkFailed: async () => {},
   enqueuePdfDerivativeOrMarkFailed: async () => {},
   processExtraction: async () => {},
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: async () => null,
 };
 
@@ -1083,18 +1085,11 @@ describe("review organization reset task", () => {
   });
 
   test("is registered ungated and, without time billing, seeds everything else", async () => {
-    // The registry runs the task itself, with no feature gate in front of it.
-    expect(
-      createSchedulerTaskRegistry(async () => {}).get(
-        RESET_REVIEW_ORGANIZATION_TASK,
-      ),
-    ).toBe(resetReviewOrganizationTask);
-
     // Enrolments survive resets (they are the account's preferences).
     await testDb
       .delete(featureEnrolments)
       .where(eq(featureEnrolments.organizationId, fixture.reviewOrgId));
-    const task = createResetReviewOrganizationTask({
+    const reset = createResetReviewOrganizationTask({
       readConfig: () => config(fixture.reviewOrgId),
       dependencies: {
         ...resetDependencies,
@@ -1105,7 +1100,15 @@ describe("review organization reset task", () => {
       },
       rlsDatabase: rlsDatabase(),
     });
-    (await task(contextFor(Bun.randomUUIDv7()))).unwrap(
+    // Exercise the registered counting wrapper without a feature gate.
+    const task = createSchedulerTaskRegistry(async () => {}, {
+      resetReviewOrganization: reset,
+    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    if (task === undefined) {
+      panic("The reset task must be registered without a feature gate");
+    }
+    const runId = Bun.randomUUIDv7();
+    (await task(contextFor(runId))).unwrap(
       "Expected the reset run to succeed without time billing",
     );
     expect(await countRows(fixture.reviewOrgId)).toEqual({
@@ -1124,12 +1127,29 @@ describe("review organization reset task", () => {
       ),
     ).toBe(0);
 
-    // With time billing back, the next run completes the sample data.
-    const restored = createResetReviewOrganizationTask({
-      readConfig: () => config(fixture.reviewOrgId),
-      dependencies: resetDependencies,
-      rlsDatabase: rlsDatabase(),
+    const audit = await testDb
+      .select({ counts: systemAuditRuns.counts })
+      .from(systemAuditRuns)
+      .where(eq(systemAuditRuns.subject, runId));
+    expect(audit).toHaveLength(1);
+    expect(audit.at(0)?.counts).toMatchObject({
+      failedDeletes: 0,
+      seedFailed: 0,
+      seededDocuments: SAMPLE_COUNTS.documents,
+      seededTimeEntries: 0,
     });
+
+    // With time billing back, the registered task completes the sample data.
+    const restored = createSchedulerTaskRegistry(async () => {}, {
+      resetReviewOrganization: createResetReviewOrganizationTask({
+        readConfig: () => config(fixture.reviewOrgId),
+        dependencies: resetDependencies,
+        rlsDatabase: rlsDatabase(),
+      }),
+    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    if (restored === undefined) {
+      panic("The restored reset task must remain registered");
+    }
     (await restored(contextFor(Bun.randomUUIDv7()))).unwrap(
       "Expected the reset run to succeed",
     );

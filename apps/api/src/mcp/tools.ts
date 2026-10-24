@@ -8,7 +8,7 @@ import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { captureError } from "@/api/lib/analytics/capture";
-import { runWithStatementCeiling } from "@/api/lib/db-statement-ceiling";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
@@ -127,8 +127,7 @@ export const findUndeclaredArguments = ({
  * cannot describe different operations.
  */
 type TransportConfirmation =
-  | { required: false }
-  | { required: true; message: string; hint: string };
+  { required: false } | { required: true; message: string; hint: string };
 
 const NO_CONFIRMATION: TransportConfirmation = { required: false };
 
@@ -299,8 +298,7 @@ const featureUnavailableToolResult = ({
   toolName,
   args,
 }: McpToolSurface & { toolName: string; args: Record<string, unknown> }):
-  | CallToolResult
-  | undefined => {
+  CallToolResult | undefined => {
   const definition = getStaticMcpToolDefinition(toolName, mode);
   if (
     isMcpDescriptorFeatureEnabled({

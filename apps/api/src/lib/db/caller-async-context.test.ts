@@ -2,11 +2,12 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createDatabase } from "@/api/db/sql-client";
 import {
+  instrumentSqlTransactionCounts,
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
@@ -46,7 +47,7 @@ const withTransactionClient = async (run: (client: SQL) => Promise<void>) =>
       });
       const wrapped = runTransactionsInCallerContext(client);
       expect(runTransactionsInCallerContext(wrapped)).toBe(wrapped);
-      await run(wrapped);
+      await run(instrumentSqlTransactionCounts(wrapped));
     },
   );
 
@@ -64,13 +65,9 @@ describe("native transaction statement accounting", () => {
               ? await client.begin(query)
               : await client.begin(options, query);
           expect(result).toBe("result");
-          expect(counter.count).toBe(3);
-          expect(counter.transactions).toBe(1);
-          expect([...counter.statements.keys()]).toEqual([
-            "BEGIN",
-            "SELECT ?",
-            "COMMIT",
-          ]);
+          expect(counter.count).toBe(1);
+          expect(counter.transactions).toBe(2);
+          expect(counter.count + counter.transactions).toBe(3);
         });
       });
     });
@@ -87,20 +84,16 @@ describe("native transaction statement accounting", () => {
             }),
           ),
         ).toMatchObject({ message: "transaction rejected" });
-        expect(counter.count).toBe(3);
-        expect(counter.transactions).toBe(1);
-        expect([...counter.statements.keys()]).toEqual([
-          "BEGIN",
-          "SELECT ?",
-          "ROLLBACK",
-        ]);
+        expect(counter.count).toBe(1);
+        expect(counter.transactions).toBe(2);
+        expect(counter.count + counter.transactions).toBe(3);
       });
     });
   });
 
   test("counts one native transaction around nested Drizzle savepoints", async () => {
     await withTransactionClient(async (client) => {
-      const db = drizzle({ client, logger: queryCountLogger });
+      const db = createDatabase({ client, logger: queryCountLogger });
       await runWithQueryCounter(async (counter) => {
         await db.transaction(async (tx) => {
           await tx.execute(sql`SELECT 1`);
@@ -108,13 +101,9 @@ describe("native transaction statement accounting", () => {
             await savepoint.execute(sql`SELECT 2`);
           });
         });
-        expect(counter.count).toBe(4);
-        expect(counter.transactions).toBe(1);
-        expect([...counter.statements.keys()]).toEqual([
-          "BEGIN",
-          "SELECT ?",
-          "COMMIT",
-        ]);
+        expect(counter.count).toBe(2);
+        expect(counter.transactions).toBe(2);
+        expect(counter.count + counter.transactions).toBe(4);
       });
     });
   });

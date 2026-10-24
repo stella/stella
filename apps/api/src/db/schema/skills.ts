@@ -1,8 +1,8 @@
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
-  agentSkillRevisionPolicies,
   agentSkillResourcePolicies,
+  agentSkillRevisionPolicies,
   jsonb,
   organization,
   p,
@@ -10,8 +10,8 @@ import {
   safeOrganizationId,
   safeUuid,
   sql,
-  user,
   timestamptz,
+  user,
 } from "./common";
 import {
   AGENT_SKILL_INVOCATIONS,

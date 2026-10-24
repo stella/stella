@@ -1,7 +1,7 @@
 import {
   Client,
-  StreamableHTTPClientTransport,
   type FetchLike,
+  StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import {
   CLIENT_CAPABILITIES_META_KEY,
@@ -10,9 +10,9 @@ import {
 } from "@modelcontextprotocol/server";
 import type {
   CallToolResult,
-  Tool as McpTool,
   ReadResourceResult,
   Resource,
+  Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
@@ -42,6 +42,8 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
+import { sweepBoundStreams } from "@/api/lib/sse";
+import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -1160,6 +1162,59 @@ describe("handleMcpHttpRequest", () => {
     await reader.cancel();
     await firstRead;
     expect(captureErrorMock).not.toHaveBeenCalled();
+  });
+
+  test("stream sweeps select read-only key verification and preserve retryable failures", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        headers: { accept: "text/event-stream", authorization: "Bearer token" },
+        method: "GET",
+      }),
+    );
+    expect(response.status).toBe(200);
+    const reader =
+      response.body?.getReader() ??
+      expect.unreachable("An event stream has a body");
+    try {
+      expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {
+        mode: "default",
+      });
+      await sweepBoundStreams(async () => new Set());
+      expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {
+        mode: "default",
+        resolveApiKeySession: revalidateMachineApiKeySession,
+      });
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.err(
+          new McpTokenVerificationError({
+            message: "Credential store unavailable",
+          }),
+        ),
+      );
+      await sweepBoundStreams(async () => new Set());
+      // Another sweep reaches the same binding after the retryable failure.
+      authenticateMcpRequestMock.mockClear();
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.err(
+          new McpAuthenticationError({
+            message: "Invalid or expired API key",
+          }),
+        ),
+      );
+      await sweepBoundStreams(async () => new Set());
+      expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
+      expect((await reader.read()).done).toBe(true);
+    } finally {
+      await reader.cancel();
+    }
   });
 
   test("refuses session termination with 405", async () => {

@@ -5,10 +5,10 @@ import ts from "typescript6";
 import * as v from "valibot";
 
 import {
-  DOC_SOURCE_FILE,
-  ZERO_AGE_OVERRIDE,
   type DatedWaiver,
+  DOC_SOURCE_FILE,
   type ProbeKind,
+  ZERO_AGE_OVERRIDE,
 } from "./dated-waivers";
 import {
   parseRegistry,

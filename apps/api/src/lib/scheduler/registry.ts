@@ -1,4 +1,4 @@
-import { runWithStatementCeiling } from "@/api/lib/db-statement-ceiling";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
   SWEEP_ACTION_COSTS_TASK,
@@ -86,6 +86,10 @@ import {
   recoverDocumentDeadlineScouts,
 } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
 import {
+  DISPATCH_NATIVE_EXTRACTION_TASK,
+  dispatchNativeExtraction,
+} from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
+import {
   DISPATCH_DOCUMENT_OCR_TASK,
   dispatchDocumentOcr,
 } from "@/api/lib/scheduler/tasks/document-processing-ocr";
@@ -134,12 +138,12 @@ import {
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import {
-  MEMORY_CURATOR_TASK,
   curateAiMemories,
+  MEMORY_CURATOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-curator";
 import {
-  MEMORY_EXTRACTOR_TASK,
   extractMemoriesFromCompactions,
+  MEMORY_EXTRACTOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
   RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
@@ -206,8 +210,8 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
-  WORK_ATTENTION_SCOUT_TASK,
   runWorkAttentionScoutTask,
+  WORK_ATTENTION_SCOUT_TASK,
 } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import {
   BACKFILL_WORK_OBLIGATIONS_TASK,
@@ -238,6 +242,7 @@ const SCHEDULER_TASKS = {
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
+  [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
   [FLOW_RUN_TASK]: runScheduledFlow,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,
@@ -293,9 +298,19 @@ const SCHEDULER_TASKS = {
   SchedulerTask | { featureId: string; task: SchedulerTask }
 >;
 
-const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+type SchedulerTaskRegistryOptions = {
+  resetReviewOrganization?: SchedulerTask;
+};
+
+const schedulerTasks = (
+  reapOwnerlessChatTurns: SchedulerTask,
+  {
+    resetReviewOrganization = resetReviewOrganizationTask,
+  }: SchedulerTaskRegistryOptions = {},
+) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
+  [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganization,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -312,19 +327,20 @@ export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
+    Object.entries(schedulerTasks(reapOwnerlessChatTurns, options)).map(
       ([name, entry]) => [
         name,
         async (context: SchedulerTaskContext) =>
           runWithStatementCeiling({
             kind: "scheduler",
             key: name,
-            run: () =>
-              typeof entry === "function"
+            run: async () =>
+              await (typeof entry === "function"
                 ? entry(context)
-                : entry.task(context),
+                : entry.task(context)),
           }),
       ],
     ),

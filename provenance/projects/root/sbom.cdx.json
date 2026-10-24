@@ -979,9 +979,6 @@
             "location": "apps/web/src/components/assistant-setup.tsx#1"
           },
           {
-            "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
           },
           {
@@ -1792,6 +1789,9 @@
             "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
@@ -2030,6 +2030,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-decision-rail-icon-lazy.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
@@ -2392,9 +2395,6 @@
             "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/-app-frame-host.tsx#1"
           },
           {
@@ -2582,9 +2582,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
@@ -2899,6 +2896,12 @@
             "location": "apps/web/src/routes/dev/-components/chat-status-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx#26"
           },
           {
@@ -2921,6 +2924,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/task-metadata-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#1"
@@ -5630,9 +5636,6 @@
             "location": "apps/web/src/components/assistant-setup.tsx#1"
           },
           {
-            "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
           },
           {
@@ -6443,6 +6446,9 @@
             "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
@@ -6681,6 +6687,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-decision-rail-icon-lazy.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
@@ -7043,9 +7052,6 @@
             "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/-app-frame-host.tsx#1"
           },
           {
@@ -7233,9 +7239,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
@@ -7550,6 +7553,12 @@
             "location": "apps/web/src/routes/dev/-components/chat-status-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx#26"
           },
           {
@@ -7572,6 +7581,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/task-metadata-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#1"
@@ -8364,6 +8376,12 @@
           },
           {
             "location": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/api-key-auth.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/api-key-auth.ts#2"
           }
         ]
       },
@@ -8508,6 +8526,12 @@
             "location": "apps/api/src/scripts/mcp-canary.ts#5"
           },
           {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/auth/oauth-registration-policy.ts#1"
           },
           {
@@ -8530,6 +8554,9 @@
           },
           {
             "location": "apps/api/src/lib/db/review-account-organization-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/api-key-auth.ts#3"
           }
         ]
       },
@@ -8680,7 +8707,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/server.ts#1"
+            "location": "apps/api/src/server.ts#2"
           }
         ]
       },
@@ -9465,6 +9492,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "packages/render-probe/node_modules/@happy-dom/global-registrator/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "packages/mcp-apps/node_modules/@happy-dom/global-registrator/package.json"
         },
         {
@@ -9636,7 +9667,7 @@
             "location": "apps/collab/src/server.ts#2"
           },
           {
-            "location": "apps/collab/src/server.ts#6"
+            "location": "apps/collab/src/server.ts#8"
           }
         ]
       },
@@ -10139,6 +10170,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/benchmark-mcp-call.ts#19"
+          },
+          {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#1"
           },
           {
@@ -10185,6 +10219,12 @@
           },
           {
             "location": "apps/api/src/mcp/tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/mcp/web-handoff-links-core.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/web-handoff-links.ts#1"
           },
           {
             "location": "apps/api/src/scripts/mcp-canary.ts#11"
@@ -11112,7 +11152,7 @@
             "location": "apps/api/src/lib/properties/create-schema.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#3"
+            "location": "apps/api/src/mcp/capability-tools.ts#4"
           },
           {
             "location": "apps/api/scripts/lib/capability-input-schema.ts#1"
@@ -11229,10 +11269,13 @@
             "location": "apps/api/src/mcp/advertised-schema.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#1"
+            "location": "apps/api/src/mcp/capability-tools.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#2"
+            "location": "apps/api/src/register-schema-formats.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#3"
           }
         ]
       },
@@ -11799,7 +11842,7 @@
         ],
         "occurrences": [
           {
-            "location": "packages/mcp-apps/scripts/build-mcp-apps.ts#5"
+            "location": "packages/mcp-apps/scripts/build-mcp-apps.ts#4"
           }
         ]
       },
@@ -12126,6 +12169,9 @@
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft.logic.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/chat/chat-persisted-messages.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/chat-rejoin-messages.ts#1"
@@ -13202,6 +13248,12 @@
             "location": "apps/web/src/features/chat/chat-snapshot-history.ts#2"
           },
           {
+            "location": "apps/web/src/features/chat/chat-test-fixtures.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/chat-test-fixtures.ts#2"
+          },
+          {
             "location": "apps/web/src/features/chat/stream-chunk-commit-budget.ts#1"
           },
           {
@@ -14161,7 +14213,7 @@
             "location": "apps/web/src/lib/auth-capabilities.ts#1"
           },
           {
-            "location": "apps/web/src/lib/auth-queries.ts#1"
+            "location": "apps/web/src/lib/auth-queries.ts#5"
           },
           {
             "location": "apps/web/src/lib/auth-query-options.ts#1"
@@ -14851,6 +14903,9 @@
             "location": "apps/web/src/components/search-matter-preview.tsx#1"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
           },
           {
@@ -15247,9 +15302,6 @@
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.time.tsx#1"
           },
           {
@@ -15407,6 +15459,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/auth/handoff.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#10"
@@ -15766,6 +15821,9 @@
             "location": "apps/web/src/hooks/use-unsaved-work.ts#2"
           },
           {
+            "location": "apps/web/src/lib/account/mcp-handoff.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/capabilities/screen-model.ts#1"
           },
           {
@@ -15976,6 +16034,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#16"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#2"
           },
           {
@@ -16066,9 +16127,6 @@
             "location": "apps/web/src/router.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/-admin-app-frame.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/-app-frame-host.tsx#5"
           },
           {
@@ -16078,7 +16136,7 @@
             "location": "apps/web/src/routes/-protected-app.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/__root.tsx#13"
+            "location": "apps/web/src/routes/__root.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-card.tsx#2"
@@ -16222,7 +16280,7 @@
             "location": "apps/web/src/routes/_protected.settings/index.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#7"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time.tsx#2"
@@ -16357,6 +16415,9 @@
             "location": "apps/web/src/routes/auth/error.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/auth/handoff.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/auth/index.tsx#3"
           },
           {
@@ -16367,6 +16428,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/professional-use.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/auth/reauth.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/route.tsx#1"
@@ -18008,9 +18072,6 @@
             "location": "apps/web/src/components/assistant-setup.tsx#1"
           },
           {
-            "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
           },
           {
@@ -18821,6 +18882,9 @@
             "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
@@ -19059,6 +19123,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-decision-rail-icon-lazy.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
@@ -19421,9 +19488,6 @@
             "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/-app-frame-host.tsx#1"
           },
           {
@@ -19611,9 +19675,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
@@ -19928,6 +19989,12 @@
             "location": "apps/web/src/routes/dev/-components/chat-status-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx#26"
           },
           {
@@ -19950,6 +20017,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/task-metadata-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#1"
@@ -20673,6 +20743,10 @@
       ],
       "name": "react",
       "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/ui/node_modules/@testing-library/react/package.json"
+        },
         {
           "name": "SrcFile",
           "value": "packages/mcp-apps/node_modules/@testing-library/react/package.json"
@@ -22489,9 +22563,6 @@
             "location": "apps/web/src/components/assistant-setup.tsx#1"
           },
           {
-            "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
           },
           {
@@ -23302,6 +23373,9 @@
             "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
@@ -23540,6 +23614,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-decision-rail-icon-lazy.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
@@ -23902,9 +23979,6 @@
             "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/-app-frame-host.tsx#1"
           },
           {
@@ -24092,9 +24166,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
@@ -24409,6 +24480,12 @@
             "location": "apps/web/src/routes/dev/-components/chat-status-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx#26"
           },
           {
@@ -24431,6 +24508,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/task-metadata-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#1"
@@ -25788,6 +25868,21 @@
             "location": "apps/api/src/lib/auth/email-otp-reset-confirmation.ts#2"
           },
           {
+            "location": "apps/api/src/lib/auth/handoff-auth-endpoint-policy.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-plugin.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-plugin.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#4"
+          },
+          {
             "location": "apps/api/src/lib/auth/oauth-consent-info.ts#3"
           },
           {
@@ -25825,6 +25920,12 @@
           },
           {
             "location": "apps/api/src/lib/auth/session-lifetime.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/auth/session-token-redaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/session-token-redaction.ts#2"
           },
           {
             "location": "apps/api/src/lib/auth/social-identity-policy.ts#2"
@@ -25878,6 +25979,9 @@
             "location": "apps/api/src/lib/user-shortcuts.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/api-key-auth.ts#4"
+          },
+          {
             "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#1"
           },
           {
@@ -25911,6 +26015,12 @@
             "location": "apps/api/src/lib/auth/demo-account-policy.ts#2"
           },
           {
+            "location": "apps/api/src/lib/auth/handoff-auth-endpoint-policy.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-plugin.ts#7"
+          },
+          {
             "location": "apps/api/src/lib/auth/oauth-consent-info.ts#4"
           },
           {
@@ -25924,6 +26034,9 @@
           },
           {
             "location": "apps/api/src/lib/auth/session-lifetime.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/auth/session-token-redaction.ts#2"
           },
           {
             "location": "apps/api/src/lib/auth/social-link-hint.ts#7"
@@ -25953,6 +26066,18 @@
             "location": "apps/api/src/lib/user-shortcuts.ts#1"
           },
           {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#7"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#15"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#4"
+          },
+          {
             "location": "apps/api/src/lib/auth/session-bearer.ts#1"
           },
           {
@@ -25963,12 +26088,6 @@
           },
           {
             "location": "apps/api/src/lib/auth/session-lifetime.ts#11"
-          },
-          {
-            "location": "apps/api/src/lib/auth.ts#7"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#15"
           },
           {
             "location": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts#2"
@@ -26132,6 +26251,9 @@
           },
           {
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
+          },
+          {
+            "location": "apps/api/scripts/benchmark-mcp-call.ts#20"
           },
           {
             "location": "apps/api/scripts/benchmark-sanctions-monitoring.ts#1"
@@ -26449,6 +26571,9 @@
             "location": "apps/api/src/db/json-utils.ts#1"
           },
           {
+            "location": "apps/api/src/db/lock-retry-ladder.ts#1"
+          },
+          {
             "location": "apps/api/src/db/long-running-connection.ts#1"
           },
           {
@@ -26461,7 +26586,7 @@
             "location": "apps/api/src/db/online-constraint-completion.ts#9"
           },
           {
-            "location": "apps/api/src/db/online-ddl.ts#15"
+            "location": "apps/api/src/db/online-ddl.ts#17"
           },
           {
             "location": "apps/api/src/db/online-index-gate.ts#1"
@@ -26495,6 +26620,9 @@
           },
           {
             "location": "apps/api/src/db/shared-pool-timeouts.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/sql-client.ts#11"
           },
           {
             "location": "apps/api/src/db-url.ts#1"
@@ -29806,6 +29934,18 @@
             "location": "apps/api/src/lib/auth/feature-access/context.ts#1"
           },
           {
+            "location": "apps/api/src/lib/auth/handoff-step-up-policy.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-plugin.ts#8"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#5"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/auth/new-device-notice.ts#1"
           },
           {
@@ -30607,6 +30747,9 @@
             "location": "apps/api/src/lib/files/compound-file.ts#22"
           },
           {
+            "location": "apps/api/src/lib/files/conversion-input.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/files/copy-organization-files.ts#1"
           },
           {
@@ -30796,7 +30939,7 @@
             "location": "apps/api/src/lib/json-schema/null-optionals.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/adapter-manifest.ts#3"
+            "location": "apps/api/src/lib/legal-search/adapter-manifest.ts#4"
           },
           {
             "location": "apps/api/src/lib/legal-search/browse-facets-cache.ts#1"
@@ -30995,6 +31138,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-version-blocks.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/legislation-work-identifiers.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-work-names.ts#2"
@@ -31297,6 +31443,9 @@
             "location": "apps/api/src/lib/observability/process-memory-limit.ts#1"
           },
           {
+            "location": "apps/api/src/lib/observability/provider-error-reason.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/observability/release-failures.ts#16"
           },
           {
@@ -31514,6 +31663,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/document-deadline-scout-recovery.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/document-processing-native-extraction.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/document-processing-ocr.ts#1"
@@ -31996,7 +32148,7 @@
             "location": "apps/api/src/mcp/capability-rate-limit.ts#16"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#4"
+            "location": "apps/api/src/mcp/capability-tools.ts#5"
           },
           {
             "location": "apps/api/src/mcp/case-law-court-filter.ts#1"
@@ -32144,6 +32296,12 @@
           },
           {
             "location": "apps/api/src/mcp/valibot-tool-definition.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/web-handoff-links-core.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/web-handoff-links.ts#2"
           },
           {
             "location": "apps/api/src/mcp/write-tool-authority.ts#1"
@@ -32323,7 +32481,16 @@
             "location": "apps/api/src/scripts/image-smoke.ts#16"
           },
           {
+            "location": "apps/api/src/scripts/import-cz-us-roster.ts#15"
+          },
+          {
             "location": "apps/api/src/scripts/inspect-courtlistener-record.ts#19"
+          },
+          {
+            "location": "apps/api/src/scripts/link-republished-decisions-plan.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/link-republished-decisions.ts#1"
           },
           {
             "location": "apps/api/src/scripts/materialize-runtime-worker-native-assets.ts#1"
@@ -32407,7 +32574,7 @@
             "location": "apps/api/src/server-shutdown.ts#1"
           },
           {
-            "location": "apps/api/src/server.ts#2"
+            "location": "apps/api/src/server.ts#3"
           },
           {
             "location": "apps/collab/src/env.ts#2"
@@ -32422,7 +32589,7 @@
             "location": "apps/collab/src/server-test-process.ts#2"
           },
           {
-            "location": "apps/collab/src/server.ts#7"
+            "location": "apps/collab/src/server.ts#9"
           },
           {
             "location": "apps/desktop/src/clipboard/clipboard-logic.ts#1"
@@ -33124,7 +33291,13 @@
             "location": "apps/web/src/hooks/use-unsaved-work.ts#3"
           },
           {
+            "location": "apps/web/src/lib/account/auth-code-report.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/account/browser-storage.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/account/mcp-handoff.ts#2"
           },
           {
             "location": "apps/web/src/lib/account/session-signal.ts#1"
@@ -33224,6 +33397,9 @@
           },
           {
             "location": "apps/web/src/lib/files/upload-entity-version.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/files/upload-file-validation.ts#1"
           },
           {
             "location": "apps/web/src/lib/folio-ui-components.ts#5"
@@ -33976,6 +34152,9 @@
             "location": "packages/legal-ast/src/analysis.ts#5"
           },
           {
+            "location": "packages/legal-ast/src/case-law-reader.ts#1"
+          },
+          {
             "location": "packages/legal-ast/src/court-paragraph-numbers.ts#21"
           },
           {
@@ -34279,6 +34458,9 @@
             "location": "packages/scripts/src/query-cache-types.ts#1"
           },
           {
+            "location": "packages/scripts/src/react-compiler-bun-plugin.ts#1"
+          },
+          {
             "location": "packages/scripts/src/result-consumption.ts#1"
           },
           {
@@ -34534,6 +34716,9 @@
             "location": "scripts/ci-postgres-test-plan.ts#1"
           },
           {
+            "location": "scripts/ci-result-inputs.ts#1"
+          },
+          {
             "location": "scripts/ci-root-checks.ts#1"
           },
           {
@@ -34579,7 +34764,7 @@
             "location": "scripts/dependency-audit-scope.ts#1"
           },
           {
-            "location": "scripts/dependency-audit.ts#34"
+            "location": "scripts/dependency-audit.ts#37"
           },
           {
             "location": "scripts/design-lint-baseline.ts#30"
@@ -34912,9 +35097,6 @@
             "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#5"
           },
           {
-            "location": "apps/web/src/components/assistant-setup.tsx#4"
-          },
-          {
             "location": "apps/web/src/components/auth/last-used-sign-in.tsx#1"
           },
           {
@@ -34961,9 +35143,6 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-selection-toolbar.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/chat-table-chart.tsx#5"
@@ -35023,9 +35202,6 @@
             "location": "apps/web/src/components/company-registry-preview.tsx#2"
           },
           {
-            "location": "apps/web/src/components/company-specification.tsx#4"
-          },
-          {
             "location": "apps/web/src/components/conditions/formula-editor.tsx#3"
           },
           {
@@ -35033,9 +35209,6 @@
           },
           {
             "location": "apps/web/src/components/copy-action-button.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/copy-field.tsx#1"
           },
           {
             "location": "apps/web/src/components/dev/public-law-connection-item.tsx#9"
@@ -35092,9 +35265,6 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#15"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#4"
-          },
-          {
             "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#4"
           },
           {
@@ -35102,6 +35272,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#5"
@@ -35440,6 +35613,9 @@
             "location": "apps/web/src/routes/-protected-app.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/__root.tsx#16"
+          },
+          {
             "location": "apps/web/src/routes/_protected.admin/-components/audit-change-details.tsx#1"
           },
           {
@@ -35497,9 +35673,6 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#24"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#10"
           },
           {
@@ -35519,9 +35692,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#17"
@@ -35582,6 +35752,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/-components/social-recovery-panel.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/auth/handoff.tsx#3"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#17"
@@ -36128,6 +36301,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/case-law-parse-profile.ts#2"
+          },
+          {
             "location": "apps/api/scripts/repair-plans/cz-ns-complaints-dry-run.ts#3"
           },
           {
@@ -36254,10 +36430,13 @@
             "location": "apps/api/src/lib/email/inbound/message.ts#2"
           },
           {
+            "location": "apps/api/src/lib/files/conversion-input.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/files/email-to-html.ts#15"
           },
           {
-            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#14"
+            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#15"
           },
           {
             "location": "apps/api/src/lib/legal-search/parsers/visible-html-text.ts#2"
@@ -36609,13 +36788,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/collab/src/server.ts#8"
+            "location": "apps/collab/src/server.ts#10"
           },
           {
-            "location": "apps/collab/src/server.ts#9"
+            "location": "apps/collab/src/server.ts#11"
           },
           {
-            "location": "apps/collab/src/server.ts#9"
+            "location": "apps/collab/src/server.ts#11"
           }
         ]
       },
@@ -36970,10 +37149,13 @@
             "location": "apps/api/src/handlers/visual-sandbox/sanitize.ts#3"
           },
           {
+            "location": "apps/api/src/lib/files/conversion-input.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/files/email-to-html.ts#16"
           },
           {
-            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#15"
+            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#16"
           },
           {
             "location": "apps/api/src/lib/legal-search/parsers/visible-html-text.ts#3"
@@ -37268,6 +37450,12 @@
             "location": "apps/api/src/db/entity-feature-gate-metadata.ts#10"
           },
           {
+            "location": "apps/api/src/db/entity-feature-gate-repair.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/entity-feature-gate-repair.ts#3"
+          },
+          {
             "location": "apps/api/src/db/entity-feature-policies.ts#2"
           },
           {
@@ -37283,9 +37471,6 @@
             "location": "apps/api/src/db/json-utils.ts#2"
           },
           {
-            "location": "apps/api/src/db/long-running-connection.ts#4"
-          },
-          {
             "location": "apps/api/src/db/migration-runner.ts#3"
           },
           {
@@ -37296,9 +37481,6 @@
           },
           {
             "location": "apps/api/src/db/migration-runner.ts#6"
-          },
-          {
-            "location": "apps/api/src/db/migration-runner.ts#7"
           },
           {
             "location": "apps/api/src/db/registration-budget-schema.ts#1"
@@ -37320,9 +37502,6 @@
           },
           {
             "location": "apps/api/src/db/rls.ts#3"
-          },
-          {
-            "location": "apps/api/src/db/root.ts#2"
           },
           {
             "location": "apps/api/src/db/safe-db.ts#3"
@@ -37397,6 +37576,12 @@
             "location": "apps/api/src/db/schema/legislation.ts#1"
           },
           {
+            "location": "apps/api/src/db/schema/mcp-web-handoff.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/schema/mcp-web-handoff.ts#9"
+          },
+          {
             "location": "apps/api/src/db/schema/mcp.ts#1"
           },
           {
@@ -37440,6 +37625,15 @@
           },
           {
             "location": "apps/api/src/db/shared-pool-timeouts.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/sql-client.ts#13"
+          },
+          {
+            "location": "apps/api/src/db/sql-client.ts#14"
+          },
+          {
+            "location": "apps/api/src/db/sql-client.ts#15"
           },
           {
             "location": "apps/api/src/handlers/audit-logs/export.ts#2"
@@ -37521,6 +37715,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/coverage-arrivals.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/coverage-years.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/coverage.ts#2"
@@ -37644,6 +37841,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/pipeline/ruling-identity-match.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/pipeline/ruling-identity-match.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline/source-contract.ts#2"
@@ -39299,6 +39502,12 @@
             "location": "apps/api/src/lib/auth/feature-access/view-eligibility.ts#2"
           },
           {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/auth/professional-use.ts#2"
           },
           {
@@ -39315,6 +39524,9 @@
           },
           {
             "location": "apps/api/src/lib/auth/session-lifetime-store.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/auth/sse-session-liveness.ts#1"
           },
           {
             "location": "apps/api/src/lib/auth-artifacts.ts#2"
@@ -39608,9 +39820,6 @@
             "location": "apps/api/src/lib/db/aggregate-lock-child.fixture.ts#1"
           },
           {
-            "location": "apps/api/src/lib/db/aggregate-lock-child.fixture.ts#2"
-          },
-          {
             "location": "apps/api/src/lib/db/aggregate-lock.ts#13"
           },
           {
@@ -39840,6 +40049,9 @@
           },
           {
             "location": "apps/api/src/lib/entities/create-from-buffer.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/entities/document-processing-status.ts#1"
           },
           {
             "location": "apps/api/src/lib/entities/entity-removal-state.ts#2"
@@ -40214,6 +40426,9 @@
             "location": "apps/api/src/lib/legal-search/legislation-window-gap.ts#2"
           },
           {
+            "location": "apps/api/src/lib/legal-search/legislation-work-identifiers.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/legislation-work-names.ts#3"
           },
           {
@@ -40454,13 +40669,10 @@
             "location": "apps/api/src/lib/properties/property-status.ts#1"
           },
           {
+            "location": "apps/api/src/lib/public-law-read-db.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/public-law-read-db.ts#3"
-          },
-          {
-            "location": "apps/api/src/lib/public-law-read-db.ts#4"
-          },
-          {
-            "location": "apps/api/src/lib/public-law-read-db.ts#5"
           },
           {
             "location": "apps/api/src/lib/report-export-enqueue.ts#12"
@@ -40554,6 +40766,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/sanctions-monitoring.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/scheduler-pause-audit.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/search-semantic-timestamps.ts#2"
@@ -40943,13 +41158,7 @@
             "location": "apps/api/src/scripts/better-auth-17-backfill.ts#12"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-17-backfill.ts#13"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#13"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#14"
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#12"
           },
           {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#10"
@@ -40958,13 +41167,7 @@
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#11"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#13"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#14"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#19"
+            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#12"
           },
           {
             "location": "apps/api/src/scripts/build-expansion-dictionary.ts#1"
@@ -40997,16 +41200,13 @@
             "location": "apps/api/src/scripts/cz-regional-repair.ts#2"
           },
           {
+            "location": "apps/api/src/scripts/decision-analysis.db.ts#14"
+          },
+          {
             "location": "apps/api/src/scripts/decision-analysis.db.ts#15"
           },
           {
             "location": "apps/api/src/scripts/decision-analysis.db.ts#16"
-          },
-          {
-            "location": "apps/api/src/scripts/decision-analysis.db.ts#17"
-          },
-          {
-            "location": "apps/api/src/scripts/decision-analysis.db.ts#18"
           },
           {
             "location": "apps/api/src/scripts/eu-completion-tick.ts#3"
@@ -41019,6 +41219,9 @@
           },
           {
             "location": "apps/api/src/scripts/eu-ecj-refetch.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/link-republished-decisions-plan.ts#2"
           },
           {
             "location": "apps/api/src/scripts/normalize-case-numbers-sql.ts#13"
@@ -41132,13 +41335,16 @@
             "location": "apps/api/src/db/entity-feature-gate-metadata.ts#10"
           },
           {
+            "location": "apps/api/src/db/entity-feature-gate-repair.ts#3"
+          },
+          {
             "location": "apps/api/src/db/entity-feature-policies.ts#4"
           },
           {
             "location": "apps/api/src/db/entity-feature-policies.ts#5"
           },
           {
-            "location": "apps/api/src/db/migration-runner.ts#7"
+            "location": "apps/api/src/db/migration-runner.ts#6"
           },
           {
             "location": "apps/api/src/db/registration-budget-schema.ts#9"
@@ -41162,10 +41368,16 @@
             "location": "apps/api/src/db/schema/common.ts#4"
           },
           {
+            "location": "apps/api/src/db/schema/mcp-web-handoff.ts#9"
+          },
+          {
             "location": "apps/api/src/db/schema/service-oauth-clients.ts#9"
           },
           {
             "location": "apps/api/src/db/schema/synthetic-session.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/sql-client.ts#15"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#4"
@@ -41184,6 +41396,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline/citations.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/pipeline/ruling-identity-match.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/rule-engine.ts#14"
@@ -41217,6 +41432,9 @@
           },
           {
             "location": "apps/api/src/lib/account-export/schema-census.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth/session-lifetime-store.ts#3"
@@ -41306,43 +41524,13 @@
             "location": "apps/api/src/lib/workflow/resolve-standards.ts#2"
           },
           {
-            "location": "apps/api/src/scripts/decision-analysis.db.ts#18"
+            "location": "apps/api/src/scripts/decision-analysis.db.ts#16"
           },
           {
             "location": "scripts/check-dead-columns.ts#14"
           },
           {
-            "location": "apps/api/src/db/long-running-connection.ts#4"
-          },
-          {
             "location": "apps/api/src/db/migration-runner.ts#4"
-          },
-          {
-            "location": "apps/api/src/db/root.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/db/aggregate-lock-child.fixture.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/public-law-read-db.ts#5"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-17-backfill.ts#13"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#14"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-migration-audit.ts#14"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#19"
-          },
-          {
-            "location": "apps/api/src/scripts/decision-analysis.db.ts#17"
-          },
-          {
-            "location": "apps/api/src/db/migration-runner.ts#5"
           },
           {
             "location": "apps/api/src/lib/db/migration-ledger.ts#2"
@@ -41351,7 +41539,10 @@
             "location": "scripts/check-migration-order.ts#4"
           },
           {
-            "location": "apps/api/src/db/migration-runner.ts#6"
+            "location": "apps/api/src/db/migration-runner.ts#5"
+          },
+          {
+            "location": "apps/api/src/db/sql-client.ts#14"
           },
           {
             "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#4"
@@ -43667,6 +43858,9 @@
             "location": "apps/api/src/lib/auth/feature-access/route.ts#1"
           },
           {
+            "location": "apps/api/src/lib/auth/handoff-step-up-policy.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/auth.ts#35"
           },
           {
@@ -43877,7 +44071,10 @@
             "location": "apps/api/src/lib/workflow/playbook-positions.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#5"
+            "location": "apps/api/src/mcp/capability-tools.ts#6"
+          },
+          {
+            "location": "apps/api/src/register-schema-formats.ts#1"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke-chat.ts#25"
@@ -43886,7 +44083,7 @@
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#30"
           },
           {
-            "location": "apps/api/src/server.ts#3"
+            "location": "apps/api/src/server.ts#4"
           },
           {
             "location": "packages/api-client/src/index.ts#3"
@@ -44296,6 +44493,10 @@
         {
           "name": "SrcFile",
           "value": "packages/concurrency/node_modules/fast-check/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/collation/node_modules/fast-check/package.json"
         },
         {
           "name": "SrcFile",
@@ -44942,10 +45143,10 @@
             "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts#3"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#19"
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#17"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#20"
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#19"
           },
           {
             "location": "apps/api/src/scripts/mcp-canary.ts#19"
@@ -45256,12 +45457,6 @@
         ],
         "occurrences": [
           {
-            "location": "packages/ui/src/icons.ts#27"
-          },
-          {
-            "location": "packages/ui/src/icons.ts#30"
-          },
-          {
             "location": "packages/ui/src/icons.ts#33"
           },
           {
@@ -45271,10 +45466,25 @@
             "location": "packages/ui/src/icons.ts#39"
           },
           {
-            "location": "packages/ui/src/icons.ts#43"
+            "location": "packages/ui/src/icons.ts#42"
           },
           {
-            "location": "packages/ui/src/icons.ts#301"
+            "location": "packages/ui/src/icons.ts#45"
+          },
+          {
+            "location": "packages/ui/src/icons.ts#50"
+          },
+          {
+            "location": "packages/ui/src/icons.ts#54"
+          },
+          {
+            "location": "packages/ui/src/icons.ts#59"
+          },
+          {
+            "location": "packages/ui/src/icons.ts#63"
+          },
+          {
+            "location": "packages/ui/src/icons.ts#319"
           }
         ]
       },
@@ -45305,7 +45515,7 @@
         },
         {
           "name": "ExportedModules",
-          "value": "lucide-react,ActivityIcon,lucide-react/ActivityIcon,AlarmClockIcon,lucide-react/AlarmClockIcon,AlertCircleIcon,lucide-react/AlertCircleIcon,AlertTriangleIcon,lucide-react/AlertTriangleIcon,AlignJustifyIcon,lucide-react/AlignJustifyIcon,AlignLeftIcon,lucide-react/AlignLeftIcon,ArchiveIcon,lucide-react/ArchiveIcon,ArchiveRestoreIcon,lucide-react/ArchiveRestoreIcon,ArrowDownIcon,lucide-react/ArrowDownIcon,ArrowLeftIcon,lucide-react/ArrowLeftIcon,ArrowRightIcon,lucide-react/ArrowRightIcon,ArrowUpDownIcon,lucide-react/ArrowUpDownIcon,ArrowUpIcon,lucide-react/ArrowUpIcon,AtSignIcon,lucide-react/AtSignIcon,BanIcon,lucide-react/BanIcon,BanknoteIcon,lucide-react/BanknoteIcon,BellIcon,lucide-react/BellIcon,BlocksIcon,lucide-react/BlocksIcon,BoldIcon,lucide-react/BoldIcon,BookOpenCheckIcon,lucide-react/BookOpenCheckIcon,BookTextIcon,lucide-react/BookTextIcon,BookmarkIcon,lucide-react/BookmarkIcon,BookmarkPlusIcon,lucide-react/BookmarkPlusIcon,BotIcon,lucide-react/BotIcon,BracesIcon,lucide-react/BracesIcon,BrainIcon,lucide-react/BrainIcon,Building2Icon,lucide-react/Building2Icon,BuildingIcon,lucide-react/BuildingIcon,CableIcon,lucide-react/CableIcon,CalendarClockIcon,lucide-react/CalendarClockIcon,CalendarIcon,lucide-react/CalendarIcon,CheckCheckIcon,lucide-react/CheckCheckIcon,CheckCircle2Icon,lucide-react/CheckCircle2Icon,CheckIcon,lucide-react/CheckIcon,ChevronDownIcon,lucide-react/ChevronDownIcon,ChevronLeftIcon,lucide-react/ChevronLeftIcon,ChevronRightIcon,lucide-react/ChevronRightIcon,ChevronUpIcon,lucide-react/ChevronUpIcon,ChevronsUpDownIcon,lucide-react/ChevronsUpDownIcon,CircleAlertIcon,lucide-react/CircleAlertIcon,CircleCheckIcon,lucide-react/CircleCheckIcon,CircleDashedIcon,lucide-react/CircleDashedIcon,CircleDotIcon,lucide-react/CircleDotIcon,CircleHelpIcon,lucide-react/CircleHelpIcon,CircleIcon,lucide-react/CircleIcon,CircleOffIcon,lucide-react/CircleOffIcon,CircleUserRoundIcon,lucide-react/CircleUserRoundIcon,ClipboardCheckIcon,lucide-react/ClipboardCheckIcon,ClipboardCopyIcon,lucide-react/ClipboardCopyIcon,ClipboardIcon,lucide-react/ClipboardIcon,ClipboardListIcon,lucide-react/ClipboardListIcon,ClipboardPasteIcon,lucide-react/ClipboardPasteIcon,Clock3Icon,lucide-react/Clock3Icon,ClockIcon,lucide-react/ClockIcon,CogIcon,lucide-react/CogIcon,Columns2Icon,lucide-react/Columns2Icon,Columns3Icon,lucide-react/Columns3Icon,ColumnsIcon,lucide-react/ColumnsIcon,CommandIcon,lucide-react/CommandIcon,CompassIcon,lucide-react/CompassIcon,CopyIcon,lucide-react/CopyIcon,CopyPlusIcon,lucide-react/CopyPlusIcon,CornerDownLeftIcon,lucide-react/CornerDownLeftIcon,CpuIcon,lucide-react/CpuIcon,CropIcon,lucide-react/CropIcon,DatabaseIcon,lucide-react/DatabaseIcon,DollarSignIcon,lucide-react/DollarSignIcon,DownloadIcon,lucide-react/DownloadIcon,EditIcon,lucide-react/EditIcon,EllipsisIcon,lucide-react/EllipsisIcon,EllipsisVerticalIcon,lucide-react/EllipsisVerticalIcon,EqualIcon,lucide-react/EqualIcon,ExternalLinkIcon,lucide-react/ExternalLinkIcon,EyeIcon,lucide-react/EyeIcon,EyeOffIcon,lucide-react/EyeOffIcon,FileBadgeIcon,lucide-react/FileBadgeIcon,FileCheckIcon,lucide-react/FileCheckIcon,FileCodeIcon,lucide-react/FileCodeIcon,FileDiffIcon,lucide-react/FileDiffIcon,FileDigitIcon,lucide-react/FileDigitIcon,FileDownIcon,lucide-react/FileDownIcon,FileIcon,lucide-react/FileIcon,FileImageIcon,lucide-react/FileImageIcon,FileOutputIcon,lucide-react/FileOutputIcon,FilePenLineIcon,lucide-react/FilePenLineIcon,FilePlus2Icon,lucide-react/FilePlus2Icon,FilePlusIcon,lucide-react/FilePlusIcon,FileQuestionIcon,lucide-react/FileQuestionIcon,FileSearchIcon,lucide-react/FileSearchIcon,FileSpreadsheetIcon,lucide-react/FileSpreadsheetIcon,FileTextIcon,lucide-react/FileTextIcon,FileUpIcon,lucide-react/FileUpIcon,FilterIcon,lucide-react/FilterIcon,FilterXIcon,lucide-react/FilterXIcon,FlagIcon,lucide-react/FlagIcon,FlaskConicalIcon,lucide-react/FlaskConicalIcon,FoldHorizontalIcon,lucide-react/FoldHorizontalIcon,FolderIcon,lucide-react/FolderIcon,FolderInputIcon,lucide-react/FolderInputIcon,FolderOpenIcon,lucide-react/FolderOpenIcon,FolderPlusIcon,lucide-react/FolderPlusIcon,FolderSyncIcon,lucide-react/FolderSyncIcon,FolderTreeIcon,lucide-react/FolderTreeIcon,FunctionSquareIcon,lucide-react/FunctionSquareIcon,GanttChartIcon,lucide-react/GanttChartIcon,GaugeIcon,lucide-react/GaugeIcon,GitBranchIcon,lucide-react/GitBranchIcon,GitCommitHorizontalIcon,lucide-react/GitCommitHorizontalIcon,GitPullRequestIcon,lucide-react/GitPullRequestIcon,GlobeIcon,lucide-react/GlobeIcon,GraduationCapIcon,lucide-react/GraduationCapIcon,GripVerticalIcon,lucide-react/GripVerticalIcon,HashIcon,lucide-react/HashIcon,Heading1Icon,lucide-react/Heading1Icon,Heading2Icon,lucide-react/Heading2Icon,Heading3Icon,lucide-react/Heading3Icon,HelpCircleIcon,lucide-react/HelpCircleIcon,HighlighterIcon,lucide-react/HighlighterIcon,HistoryIcon,lucide-react/HistoryIcon,ImageIcon,lucide-react/ImageIcon,ImageOffIcon,lucide-react/ImageOffIcon,InboxIcon,lucide-react/InboxIcon,InfoIcon,lucide-react/InfoIcon,ItalicIcon,lucide-react/ItalicIcon,KanbanIcon,lucide-react/KanbanIcon,KeyRoundIcon,lucide-react/KeyRoundIcon,KeyboardIcon,lucide-react/KeyboardIcon,LandmarkIcon,lucide-react/LandmarkIcon,LanguagesIcon,lucide-react/LanguagesIcon,LaptopIcon,lucide-react/LaptopIcon,LayersIcon,lucide-react/LayersIcon,LayoutDashboardIcon,lucide-react/LayoutDashboardIcon,LayoutGridIcon,lucide-react/LayoutGridIcon,LayoutTemplateIcon,lucide-react/LayoutTemplateIcon,LibraryBigIcon,lucide-react/LibraryBigIcon,LibraryIcon,lucide-react/LibraryIcon,Link2Icon,lucide-react/Link2Icon,LinkIcon,lucide-react/LinkIcon,ListChecksIcon,lucide-react/ListChecksIcon,ListFilterIcon,lucide-react/ListFilterIcon,ListIcon,lucide-react/ListIcon,ListMinusIcon,lucide-react/ListMinusIcon,ListOrderedIcon,lucide-react/ListOrderedIcon,ListTodoIcon,lucide-react/ListTodoIcon,ListTreeIcon,lucide-react/ListTreeIcon,ListXIcon,lucide-react/ListXIcon,Loader2Icon,lucide-react/Loader2Icon,LoaderCircleIcon,lucide-react/LoaderCircleIcon,LoaderIcon,lucide-react/LoaderIcon,LockIcon,lucide-react/LockIcon,LockKeyholeIcon,lucide-react/LockKeyholeIcon,LockOpenIcon,lucide-react/LockOpenIcon,LogOutIcon,lucide-react/LogOutIcon,MailIcon,lucide-react/MailIcon,Maximize2Icon,lucide-react/Maximize2Icon,MegaphoneIcon,lucide-react/MegaphoneIcon,MessageCircleQuestionIcon,lucide-react/MessageCircleQuestionIcon,MessageSquareIcon,lucide-react/MessageSquareIcon,MessageSquareTextIcon,lucide-react/MessageSquareTextIcon,MessageSquareWarningIcon,lucide-react/MessageSquareWarningIcon,MessagesSquareIcon,lucide-react/MessagesSquareIcon,Minimize2Icon,lucide-react/Minimize2Icon,MinusIcon,lucide-react/MinusIcon,MonitorIcon,lucide-react/MonitorIcon,MoonIcon,lucide-react/MoonIcon,MoreHorizontalIcon,lucide-react/MoreHorizontalIcon,NetworkIcon,lucide-react/NetworkIcon,PackageIcon,lucide-react/PackageIcon,PaletteIcon,lucide-react/PaletteIcon,PanelLeftIcon,lucide-react/PanelLeftIcon,PanelRightIcon,lucide-react/PanelRightIcon,PaperclipIcon,lucide-react/PaperclipIcon,PauseIcon,lucide-react/PauseIcon,PenIcon,lucide-react/PenIcon,PenLineIcon,lucide-react/PenLineIcon,PencilIcon,lucide-react/PencilIcon,PencilLineIcon,lucide-react/PencilLineIcon,PhoneIcon,lucide-react/PhoneIcon,PinIcon,lucide-react/PinIcon,PinOffIcon,lucide-react/PinOffIcon,PlayIcon,lucide-react/PlayIcon,PlugIcon,lucide-react/PlugIcon,PlusIcon,lucide-react/PlusIcon,PowerIcon,lucide-react/PowerIcon,PresentationIcon,lucide-react/PresentationIcon,PrinterIcon,lucide-react/PrinterIcon,QuoteIcon,lucide-react/QuoteIcon,Redo2Icon,lucide-react/Redo2Icon,RefreshCcwIcon,lucide-react/RefreshCcwIcon,RefreshCwIcon,lucide-react/RefreshCwIcon,RepeatIcon,lucide-react/RepeatIcon,RotateCcwIcon,lucide-react/RotateCcwIcon,RotateCwIcon,lucide-react/RotateCwIcon,RouteIcon,lucide-react/RouteIcon,Rows2Icon,lucide-react/Rows2Icon,Rows3Icon,lucide-react/Rows3Icon,SaveIcon,lucide-react/SaveIcon,ScanSearchIcon,lucide-react/ScanSearchIcon,ScanTextIcon,lucide-react/ScanTextIcon,ScissorsIcon,lucide-react/ScissorsIcon,ScrollTextIcon,lucide-react/ScrollTextIcon,SearchIcon,lucide-react/SearchIcon,SearchXIcon,lucide-react/SearchXIcon,SendIcon,lucide-react/SendIcon,ServerIcon,lucide-react/ServerIcon,Settings2Icon,lucide-react/Settings2Icon,ShapesIcon,lucide-react/ShapesIcon,ShieldAlertIcon,lucide-react/ShieldAlertIcon,ShieldCheckIcon,lucide-react/ShieldCheckIcon,ShieldIcon,lucide-react/ShieldIcon,SigmaIcon,lucide-react/SigmaIcon,SignatureIcon,lucide-react/SignatureIcon,SlashIcon,lucide-react/SlashIcon,SlidersHorizontalIcon,lucide-react/SlidersHorizontalIcon,SparklesIcon,lucide-react/SparklesIcon,SplitIcon,lucide-react/SplitIcon,SquareCheckIcon,lucide-react/SquareCheckIcon,SquareIcon,lucide-react/SquareIcon,SquareMinusIcon,lucide-react/SquareMinusIcon,SquarePenIcon,lucide-react/SquarePenIcon,StarIcon,lucide-react/StarIcon,StarOffIcon,lucide-react/StarOffIcon,StickyNoteIcon,lucide-react/StickyNoteIcon,StrikethroughIcon,lucide-react/StrikethroughIcon,SunIcon,lucide-react/SunIcon,TableIcon,lucide-react/TableIcon,TagIcon,lucide-react/TagIcon,TagsIcon,lucide-react/TagsIcon,TerminalIcon,lucide-react/TerminalIcon,TextIcon,lucide-react/TextIcon,TextQuoteIcon,lucide-react/TextQuoteIcon,ToggleLeftIcon,lucide-react/ToggleLeftIcon,Trash2Icon,lucide-react/Trash2Icon,TrashIcon,lucide-react/TrashIcon,TriangleAlertIcon,lucide-react/TriangleAlertIcon,UnderlineIcon,lucide-react/UnderlineIcon,Undo2Icon,lucide-react/Undo2Icon,UndoIcon,lucide-react/UndoIcon,UnfoldHorizontalIcon,lucide-react/UnfoldHorizontalIcon,UngroupIcon,lucide-react/UngroupIcon,UploadIcon,lucide-react/UploadIcon,UserCheckIcon,lucide-react/UserCheckIcon,UserIcon,lucide-react/UserIcon,UserPlusIcon,lucide-react/UserPlusIcon,UserRoundIcon,lucide-react/UserRoundIcon,UsersIcon,lucide-react/UsersIcon,VideoIcon,lucide-react/VideoIcon,WavesIcon,lucide-react/WavesIcon,WindIcon,lucide-react/WindIcon,WorkflowIcon,lucide-react/WorkflowIcon,WrapTextIcon,lucide-react/WrapTextIcon,WrenchIcon,lucide-react/WrenchIcon,XCircleIcon,lucide-react/XCircleIcon,XIcon,lucide-react/XIcon,XSquareIcon,lucide-react/XSquareIcon,ZapIcon,lucide-react/ZapIcon"
+          "value": "lucide-react,ActivityIcon,lucide-react/ActivityIcon,AlarmClockIcon,lucide-react/AlarmClockIcon,AlertCircleIcon,lucide-react/AlertCircleIcon,AlertTriangleIcon,lucide-react/AlertTriangleIcon,AlignJustifyIcon,lucide-react/AlignJustifyIcon,AlignLeftIcon,lucide-react/AlignLeftIcon,ArchiveIcon,lucide-react/ArchiveIcon,ArchiveRestoreIcon,lucide-react/ArchiveRestoreIcon,ArrowDownIcon,lucide-react/ArrowDownIcon,ArrowLeftIcon,lucide-react/ArrowLeftIcon,ArrowRightIcon,lucide-react/ArrowRightIcon,ArrowUpDownIcon,lucide-react/ArrowUpDownIcon,ArrowUpIcon,lucide-react/ArrowUpIcon,AtSignIcon,lucide-react/AtSignIcon,BanIcon,lucide-react/BanIcon,BanknoteIcon,lucide-react/BanknoteIcon,BellIcon,lucide-react/BellIcon,BlocksIcon,lucide-react/BlocksIcon,BoldIcon,lucide-react/BoldIcon,BookOpenCheckIcon,lucide-react/BookOpenCheckIcon,BookTextIcon,lucide-react/BookTextIcon,BookmarkIcon,lucide-react/BookmarkIcon,BookmarkPlusIcon,lucide-react/BookmarkPlusIcon,BracesIcon,lucide-react/BracesIcon,BrainIcon,lucide-react/BrainIcon,Building2Icon,lucide-react/Building2Icon,BuildingIcon,lucide-react/BuildingIcon,CableIcon,lucide-react/CableIcon,CalendarClockIcon,lucide-react/CalendarClockIcon,CalendarIcon,lucide-react/CalendarIcon,CheckCheckIcon,lucide-react/CheckCheckIcon,CheckCircle2Icon,lucide-react/CheckCircle2Icon,CheckIcon,lucide-react/CheckIcon,ChevronDownIcon,lucide-react/ChevronDownIcon,ChevronLeftIcon,lucide-react/ChevronLeftIcon,ChevronRightIcon,lucide-react/ChevronRightIcon,ChevronUpIcon,lucide-react/ChevronUpIcon,ChevronsUpDownIcon,lucide-react/ChevronsUpDownIcon,CircleAlertIcon,lucide-react/CircleAlertIcon,CircleCheckIcon,lucide-react/CircleCheckIcon,CircleDashedIcon,lucide-react/CircleDashedIcon,CircleDotIcon,lucide-react/CircleDotIcon,CircleHelpIcon,lucide-react/CircleHelpIcon,CircleIcon,lucide-react/CircleIcon,CircleOffIcon,lucide-react/CircleOffIcon,CircleUserRoundIcon,lucide-react/CircleUserRoundIcon,ClipboardCheckIcon,lucide-react/ClipboardCheckIcon,ClipboardCopyIcon,lucide-react/ClipboardCopyIcon,ClipboardIcon,lucide-react/ClipboardIcon,ClipboardListIcon,lucide-react/ClipboardListIcon,ClipboardPasteIcon,lucide-react/ClipboardPasteIcon,Clock3Icon,lucide-react/Clock3Icon,ClockIcon,lucide-react/ClockIcon,CogIcon,lucide-react/CogIcon,Columns2Icon,lucide-react/Columns2Icon,Columns3Icon,lucide-react/Columns3Icon,ColumnsIcon,lucide-react/ColumnsIcon,CommandIcon,lucide-react/CommandIcon,CompassIcon,lucide-react/CompassIcon,CopyPlusIcon,lucide-react/CopyPlusIcon,CornerDownLeftIcon,lucide-react/CornerDownLeftIcon,CpuIcon,lucide-react/CpuIcon,CropIcon,lucide-react/CropIcon,DatabaseIcon,lucide-react/DatabaseIcon,DollarSignIcon,lucide-react/DollarSignIcon,DownloadIcon,lucide-react/DownloadIcon,EditIcon,lucide-react/EditIcon,EllipsisIcon,lucide-react/EllipsisIcon,EllipsisVerticalIcon,lucide-react/EllipsisVerticalIcon,EqualIcon,lucide-react/EqualIcon,ExternalLinkIcon,lucide-react/ExternalLinkIcon,EyeIcon,lucide-react/EyeIcon,EyeOffIcon,lucide-react/EyeOffIcon,FileBadgeIcon,lucide-react/FileBadgeIcon,FileCheckIcon,lucide-react/FileCheckIcon,FileCodeIcon,lucide-react/FileCodeIcon,FileDiffIcon,lucide-react/FileDiffIcon,FileDigitIcon,lucide-react/FileDigitIcon,FileDownIcon,lucide-react/FileDownIcon,FileIcon,lucide-react/FileIcon,FileImageIcon,lucide-react/FileImageIcon,FileOutputIcon,lucide-react/FileOutputIcon,FilePenLineIcon,lucide-react/FilePenLineIcon,FilePlus2Icon,lucide-react/FilePlus2Icon,FilePlusIcon,lucide-react/FilePlusIcon,FileQuestionIcon,lucide-react/FileQuestionIcon,FileSearchIcon,lucide-react/FileSearchIcon,FileSpreadsheetIcon,lucide-react/FileSpreadsheetIcon,FileTextIcon,lucide-react/FileTextIcon,FileUpIcon,lucide-react/FileUpIcon,FilterIcon,lucide-react/FilterIcon,FilterXIcon,lucide-react/FilterXIcon,FlagIcon,lucide-react/FlagIcon,FlaskConicalIcon,lucide-react/FlaskConicalIcon,FoldHorizontalIcon,lucide-react/FoldHorizontalIcon,FolderIcon,lucide-react/FolderIcon,FolderInputIcon,lucide-react/FolderInputIcon,FolderOpenIcon,lucide-react/FolderOpenIcon,FolderPlusIcon,lucide-react/FolderPlusIcon,FolderSyncIcon,lucide-react/FolderSyncIcon,FolderTreeIcon,lucide-react/FolderTreeIcon,FunctionSquareIcon,lucide-react/FunctionSquareIcon,GanttChartIcon,lucide-react/GanttChartIcon,GaugeIcon,lucide-react/GaugeIcon,GitBranchIcon,lucide-react/GitBranchIcon,GitCommitHorizontalIcon,lucide-react/GitCommitHorizontalIcon,GitPullRequestIcon,lucide-react/GitPullRequestIcon,GlobeIcon,lucide-react/GlobeIcon,GraduationCapIcon,lucide-react/GraduationCapIcon,GripVerticalIcon,lucide-react/GripVerticalIcon,HashIcon,lucide-react/HashIcon,Heading1Icon,lucide-react/Heading1Icon,Heading2Icon,lucide-react/Heading2Icon,Heading3Icon,lucide-react/Heading3Icon,HelpCircleIcon,lucide-react/HelpCircleIcon,HighlighterIcon,lucide-react/HighlighterIcon,HistoryIcon,lucide-react/HistoryIcon,ImageIcon,lucide-react/ImageIcon,ImageOffIcon,lucide-react/ImageOffIcon,InboxIcon,lucide-react/InboxIcon,InfoIcon,lucide-react/InfoIcon,ItalicIcon,lucide-react/ItalicIcon,KanbanIcon,lucide-react/KanbanIcon,KeyRoundIcon,lucide-react/KeyRoundIcon,KeyboardIcon,lucide-react/KeyboardIcon,LandmarkIcon,lucide-react/LandmarkIcon,LanguagesIcon,lucide-react/LanguagesIcon,LaptopIcon,lucide-react/LaptopIcon,LayersIcon,lucide-react/LayersIcon,LayoutDashboardIcon,lucide-react/LayoutDashboardIcon,LayoutGridIcon,lucide-react/LayoutGridIcon,LayoutTemplateIcon,lucide-react/LayoutTemplateIcon,LibraryBigIcon,lucide-react/LibraryBigIcon,LibraryIcon,lucide-react/LibraryIcon,Link2Icon,lucide-react/Link2Icon,LinkIcon,lucide-react/LinkIcon,ListChecksIcon,lucide-react/ListChecksIcon,ListFilterIcon,lucide-react/ListFilterIcon,ListIcon,lucide-react/ListIcon,ListMinusIcon,lucide-react/ListMinusIcon,ListOrderedIcon,lucide-react/ListOrderedIcon,ListTodoIcon,lucide-react/ListTodoIcon,ListTreeIcon,lucide-react/ListTreeIcon,ListXIcon,lucide-react/ListXIcon,Loader2Icon,lucide-react/Loader2Icon,LoaderCircleIcon,lucide-react/LoaderCircleIcon,LoaderIcon,lucide-react/LoaderIcon,LockIcon,lucide-react/LockIcon,LockKeyholeIcon,lucide-react/LockKeyholeIcon,LockOpenIcon,lucide-react/LockOpenIcon,LogOutIcon,lucide-react/LogOutIcon,MailIcon,lucide-react/MailIcon,Maximize2Icon,lucide-react/Maximize2Icon,MegaphoneIcon,lucide-react/MegaphoneIcon,MessageCircleQuestionIcon,lucide-react/MessageCircleQuestionIcon,MessageSquareIcon,lucide-react/MessageSquareIcon,MessageSquareTextIcon,lucide-react/MessageSquareTextIcon,MessageSquareWarningIcon,lucide-react/MessageSquareWarningIcon,MessagesSquareIcon,lucide-react/MessagesSquareIcon,Minimize2Icon,lucide-react/Minimize2Icon,MinusIcon,lucide-react/MinusIcon,MonitorIcon,lucide-react/MonitorIcon,MoonIcon,lucide-react/MoonIcon,MoreHorizontalIcon,lucide-react/MoreHorizontalIcon,NetworkIcon,lucide-react/NetworkIcon,PackageIcon,lucide-react/PackageIcon,PaletteIcon,lucide-react/PaletteIcon,PanelLeftIcon,lucide-react/PanelLeftIcon,PanelRightIcon,lucide-react/PanelRightIcon,PaperclipIcon,lucide-react/PaperclipIcon,PauseIcon,lucide-react/PauseIcon,PenIcon,lucide-react/PenIcon,PenLineIcon,lucide-react/PenLineIcon,PencilIcon,lucide-react/PencilIcon,PencilLineIcon,lucide-react/PencilLineIcon,PhoneIcon,lucide-react/PhoneIcon,PinIcon,lucide-react/PinIcon,PinOffIcon,lucide-react/PinOffIcon,PlayIcon,lucide-react/PlayIcon,PlugIcon,lucide-react/PlugIcon,PlusIcon,lucide-react/PlusIcon,PowerIcon,lucide-react/PowerIcon,PresentationIcon,lucide-react/PresentationIcon,PrinterIcon,lucide-react/PrinterIcon,QuoteIcon,lucide-react/QuoteIcon,Redo2Icon,lucide-react/Redo2Icon,RefreshCcwIcon,lucide-react/RefreshCcwIcon,RefreshCwIcon,lucide-react/RefreshCwIcon,RepeatIcon,lucide-react/RepeatIcon,RotateCcwIcon,lucide-react/RotateCcwIcon,RotateCwIcon,lucide-react/RotateCwIcon,RouteIcon,lucide-react/RouteIcon,Rows2Icon,lucide-react/Rows2Icon,Rows3Icon,lucide-react/Rows3Icon,SaveIcon,lucide-react/SaveIcon,ScanSearchIcon,lucide-react/ScanSearchIcon,ScanTextIcon,lucide-react/ScanTextIcon,ScissorsIcon,lucide-react/ScissorsIcon,ScrollTextIcon,lucide-react/ScrollTextIcon,SearchIcon,lucide-react/SearchIcon,SearchXIcon,lucide-react/SearchXIcon,SendIcon,lucide-react/SendIcon,ServerIcon,lucide-react/ServerIcon,Settings2Icon,lucide-react/Settings2Icon,ShapesIcon,lucide-react/ShapesIcon,ShieldAlertIcon,lucide-react/ShieldAlertIcon,ShieldCheckIcon,lucide-react/ShieldCheckIcon,ShieldIcon,lucide-react/ShieldIcon,SigmaIcon,lucide-react/SigmaIcon,SignatureIcon,lucide-react/SignatureIcon,SlashIcon,lucide-react/SlashIcon,SlidersHorizontalIcon,lucide-react/SlidersHorizontalIcon,SparklesIcon,lucide-react/SparklesIcon,SplitIcon,lucide-react/SplitIcon,SquareCheckIcon,lucide-react/SquareCheckIcon,SquareIcon,lucide-react/SquareIcon,SquareMinusIcon,lucide-react/SquareMinusIcon,SquarePenIcon,lucide-react/SquarePenIcon,StarIcon,lucide-react/StarIcon,StarOffIcon,lucide-react/StarOffIcon,StickyNoteIcon,lucide-react/StickyNoteIcon,StrikethroughIcon,lucide-react/StrikethroughIcon,SunIcon,lucide-react/SunIcon,TableIcon,lucide-react/TableIcon,TagIcon,lucide-react/TagIcon,TagsIcon,lucide-react/TagsIcon,TerminalIcon,lucide-react/TerminalIcon,TextIcon,lucide-react/TextIcon,TextQuoteIcon,lucide-react/TextQuoteIcon,ToggleLeftIcon,lucide-react/ToggleLeftIcon,Trash2Icon,lucide-react/Trash2Icon,TrashIcon,lucide-react/TrashIcon,TriangleAlertIcon,lucide-react/TriangleAlertIcon,UnderlineIcon,lucide-react/UnderlineIcon,Undo2Icon,lucide-react/Undo2Icon,UndoIcon,lucide-react/UndoIcon,UnfoldHorizontalIcon,lucide-react/UnfoldHorizontalIcon,UngroupIcon,lucide-react/UngroupIcon,UploadIcon,lucide-react/UploadIcon,UserCheckIcon,lucide-react/UserCheckIcon,UserIcon,lucide-react/UserIcon,UserPlusIcon,lucide-react/UserPlusIcon,UserRoundIcon,lucide-react/UserRoundIcon,UsersIcon,lucide-react/UsersIcon,VideoIcon,lucide-react/VideoIcon,WavesIcon,lucide-react/WavesIcon,WindIcon,lucide-react/WindIcon,WorkflowIcon,lucide-react/WorkflowIcon,WrapTextIcon,lucide-react/WrapTextIcon,WrenchIcon,lucide-react/WrenchIcon,XCircleIcon,lucide-react/XCircleIcon,XIcon,lucide-react/XIcon,XSquareIcon,lucide-react/XSquareIcon,ZapIcon,lucide-react/ZapIcon"
         },
         {
           "name": "SrcFile",
@@ -45886,7 +46096,7 @@
         ],
         "occurrences": [
           {
-            "location": "packages/mcp-apps/scripts/build-mcp-apps.ts#4"
+            "location": "packages/scripts/src/react-compiler-bun-plugin.ts#2"
           },
           {
             "location": "packages/scripts/src/react-compiler-options.ts#1"
@@ -45920,10 +46130,6 @@
         {
           "name": "SrcFile",
           "value": "packages/scripts/node_modules/oxc-transform-react/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "packages/mcp-apps/node_modules/oxc-transform-react/package.json"
         },
         {
           "name": "SrcFile",
@@ -46539,7 +46745,7 @@
         ],
         "occurrences": [
           {
-            "location": "packages/mcp-apps/scripts/build-mcp-apps.ts#5"
+            "location": "packages/mcp-apps/scripts/build-mcp-apps.ts#4"
           }
         ]
       },
@@ -47153,6 +47359,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/react-dom/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/render-probe/node_modules/react-dom/package.json"
         },
         {
           "name": "SrcFile",
@@ -48194,9 +48404,6 @@
             "location": "apps/web/src/components/assistant-setup.tsx#1"
           },
           {
-            "location": "apps/web/src/components/assistant-setup.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/auth/otp-panel.tsx#1"
           },
           {
@@ -49007,6 +49214,9 @@
             "location": "apps/web/src/components/settings-page-header.tsx#1"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
@@ -49245,6 +49455,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-decision-rail-icon-lazy.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
@@ -49607,9 +49820,6 @@
             "location": "apps/web/src/lib/workspaces/mutations/upload-failure-toast.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/-admin-app-frame.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/-app-frame-host.tsx#1"
           },
           {
@@ -49797,9 +50007,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
@@ -50114,6 +50321,12 @@
             "location": "apps/web/src/routes/dev/-components/chat-status-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx#26"
           },
           {
@@ -50136,6 +50349,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/task-metadata-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#1"
@@ -50873,6 +51089,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "packages/render-probe/node_modules/react/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "packages/mcp-apps/node_modules/react/package.json"
         },
         {
@@ -51222,6 +51442,9 @@
           },
           {
             "location": "apps/api/src/lib/entity-versions/validate-docx-buffer.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/conversion-input.ts#4"
           },
           {
             "location": "apps/api/src/lib/files/document-properties.ts#14"
@@ -52160,7 +52383,7 @@
             "location": "apps/web/src/components/chat-editor-provider.tsx#29"
           },
           {
-            "location": "apps/web/src/components/company-specification.tsx#5"
+            "location": "apps/web/src/components/company-specification.tsx#4"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#6"
@@ -52633,7 +52856,10 @@
             "location": "apps/web/src/components/app-sidebar.tsx#27"
           },
           {
-            "location": "apps/web/src/components/assistant-setup.tsx#5"
+            "location": "apps/web/src/components/assistant-setup.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/auth/handoff-confirmation-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/auth/inbox-quick-jump.tsx#1"
@@ -52771,7 +52997,7 @@
             "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/chat-selection-toolbar.tsx#5"
+            "location": "apps/web/src/components/chat/chat-selection-toolbar.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/chat-table-chart.tsx#8"
@@ -52840,9 +53066,6 @@
             "location": "apps/web/src/components/chat/tool-call-card.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#6"
-          },
-          {
             "location": "apps/web/src/components/chat/unrestored-fields-notice.tsx#1"
           },
           {
@@ -52867,7 +53090,7 @@
             "location": "apps/web/src/components/company-registry-preview.tsx#3"
           },
           {
-            "location": "apps/web/src/components/company-specification.tsx#6"
+            "location": "apps/web/src/components/company-specification.tsx#5"
           },
           {
             "location": "apps/web/src/components/conditions/condition-builder.tsx#3"
@@ -52883,9 +53106,6 @@
           },
           {
             "location": "apps/web/src/components/copy-action-button.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/copy-field.tsx#2"
           },
           {
             "location": "apps/web/src/components/date-picker-popover.tsx#1"
@@ -52984,7 +53204,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#16"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#5"
+            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/file-facets.tsx#4"
@@ -53017,7 +53237,7 @@
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#13"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#1"
+            "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#6"
@@ -53260,6 +53480,9 @@
             "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
           },
           {
+            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/shortcut-echo-hud.tsx#1"
           },
           {
@@ -53333,6 +53556,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/create-property.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/document-extraction-status.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#5"
@@ -53518,7 +53744,7 @@
             "location": "apps/web/src/features/case-law/components/case-law-search.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#1"
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#3"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-error-notice.tsx#2"
@@ -53851,9 +54077,6 @@
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/-admin-app-frame.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/-knowledge-public-frame.tsx#4"
           },
           {
@@ -53980,9 +54203,6 @@
             "location": "apps/web/src/routes/_protected.admin/general.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/index.tsx#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.admin/matter-numbering.tsx#2"
           },
           {
@@ -54076,7 +54296,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#9"
@@ -54113,9 +54333,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#11"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.time.tsx#3"
@@ -54205,7 +54422,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#1"
@@ -54388,7 +54605,16 @@
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#10"
           },
           {
+            "location": "apps/web/src/routes/auth/error.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/auth/handoff.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/auth/organization.tsx#18"
+          },
+          {
+            "location": "apps/web/src/routes/auth/reauth.tsx#2"
           },
           {
             "location": "apps/web/src/routes/auth/route.tsx#2"
@@ -54401,6 +54627,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/upload-rejections-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-catalogue-template-actions.tsx#3"
@@ -54876,7 +55105,16 @@
             "location": "apps/api/scripts/ai-provider-cassette.ts#2"
           },
           {
+            "location": "apps/api/scripts/audit-decision-kinds.ts#4"
+          },
+          {
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
+          },
+          {
+            "location": "apps/api/scripts/benchmark-mcp-call.ts#21"
+          },
+          {
+            "location": "apps/api/scripts/citation-kind-suspects.ts#8"
           },
           {
             "location": "apps/api/scripts/gated-test-selection.ts#1"
@@ -55239,6 +55477,9 @@
             "location": "apps/api/src/lib/auth/agent-auth-user.ts#3"
           },
           {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-plugin.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/auth/oauth-consent-info.ts#5"
           },
           {
@@ -55584,7 +55825,7 @@
             "location": "apps/api/src/lib/workflow/verdict-engine.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/api-key-auth.ts#1"
+            "location": "apps/api/src/mcp/api-key-auth.ts#5"
           },
           {
             "location": "apps/api/src/mcp/app-browser-contracts.ts#1"
@@ -55602,7 +55843,7 @@
             "location": "apps/api/src/mcp/billing-tools.ts#3"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#6"
+            "location": "apps/api/src/mcp/capability-tools.ts#7"
           },
           {
             "location": "apps/api/src/mcp/case-law-search-headnotes.ts#1"
@@ -55713,6 +55954,9 @@
             "location": "apps/api/src/mcp/valibot-tool-definition.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/web-handoff-links.ts#3"
+          },
+          {
             "location": "apps/api/src/scripts/apply-reviewed-citation-labels-doctrine.ts#1"
           },
           {
@@ -55722,13 +55966,13 @@
             "location": "apps/api/src/scripts/apply-reviewed-citation-labels.ts#39"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#22"
+            "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#20"
           },
           {
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#12"
           },
           {
-            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#21"
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#20"
           },
           {
             "location": "apps/api/src/scripts/complete-sk-us-raw-checkpoint.ts#3"
@@ -55782,7 +56026,7 @@
             "location": "apps/collab/src/env-schema.ts#1"
           },
           {
-            "location": "apps/collab/src/server.ts#10"
+            "location": "apps/collab/src/server.ts#12"
           },
           {
             "location": "apps/extension/src/lib/popup-request.ts#1"
@@ -55908,6 +56152,12 @@
             "location": "apps/web/src/features/statutes/statute-sitemap.ts#2"
           },
           {
+            "location": "apps/web/src/lib/account/mcp-handoff.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/auth-client.ts#12"
+          },
+          {
             "location": "apps/web/src/lib/desktop-bridge.ts#2"
           },
           {
@@ -55998,6 +56248,9 @@
             "location": "apps/web/src/routes/auth/-components/social-link-hint.ts#2"
           },
           {
+            "location": "apps/web/src/routes/auth/-otp.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/knowledge/-components/template-studio-model.ts#2"
           },
           {
@@ -56071,6 +56324,9 @@
           },
           {
             "location": "packages/api-contract/src/mcp-app.fixtures.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/mcp-web-handoff.ts#1"
           },
           {
             "location": "packages/api-contract/src/provider-setup.ts#1"
@@ -56490,7 +56746,7 @@
             "location": "apps/web/src/routes/auth/-components/social-recovery-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/auth/error.tsx#2"
+            "location": "apps/web/src/routes/auth/error.tsx#3"
           },
           {
             "location": "apps/web/src/routes/auth/index.tsx#4"
@@ -56499,10 +56755,10 @@
             "location": "apps/web/src/routes/auth/organization.tsx#19"
           },
           {
-            "location": "apps/web/src/routes/auth/otp.tsx#2"
+            "location": "apps/web/src/routes/auth/professional-use.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/auth/professional-use.tsx#3"
+            "location": "apps/web/src/routes/auth/reauth.tsx#3"
           },
           {
             "location": "apps/web/src/routes/auth/two-factor.tsx#2"
@@ -56909,7 +57165,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/collab/src/server.ts#11"
+            "location": "apps/collab/src/server.ts#13"
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#9"

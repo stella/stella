@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { createDatabase } from "@/api/db/sql-client";
 import {
   queryCountLogger,
   runWithQueryCounter,
@@ -31,7 +31,7 @@ if (!databaseUrl || !runPostgresTests) {
   describe("transactions in the caller's async context", () => {
     test("each request counts exactly its own statements on a one-connection pool", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const db = drizzle({
+        const db = createDatabase({
           client: runTransactionsInCallerContext(openClient({ max: 1 }).sql),
           logger: queryCountLogger,
         });
@@ -55,7 +55,10 @@ if (!databaseUrl || !runPostgresTests) {
               }),
             );
             await db.execute(sql`SELECT 6`);
-            return counter.count;
+            return {
+              queries: counter.count,
+              transactionRoundTrips: counter.transactions,
+            };
           });
 
         // The first round opens the pool's connection; later rounds wait on it.
@@ -64,7 +67,10 @@ if (!databaseUrl || !runPostgresTests) {
             Array.from({ length: CONCURRENT_REQUESTS }, request),
           );
           expect(counts).toEqual(
-            Array.from({ length: CONCURRENT_REQUESTS }, () => 17),
+            Array.from({ length: CONCURRENT_REQUESTS }, () => ({
+              queries: 9,
+              transactionRoundTrips: 8,
+            })),
           );
         }
       });

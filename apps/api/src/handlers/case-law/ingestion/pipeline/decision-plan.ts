@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { InferOk } from "better-result";
 import { eq } from "drizzle-orm";
 
@@ -23,8 +23,8 @@ import type { DecisionCitationExtraction } from "@/api/handlers/case-law/ingesti
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import {
   CITATION_SCOPE_METADATA_KEY,
-  CitationScopesRejectedError,
   citationScopeEnvelope,
+  CitationScopesRejectedError,
   validatedCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {

@@ -6,12 +6,12 @@ import { useTranslations } from "use-intl";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import {
   AlertDialog,
-  AlertDialogPopup,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogClose,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogClose,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";

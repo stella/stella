@@ -2,10 +2,6 @@ import { panic } from "better-result";
 import type { SQL } from "bun";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { NODE_ENV, readRuntimeMode } from "@stll/runtime-mode";
-
-import { queryCountLogger } from "@/api/lib/db-query-counter";
-
 const wrappedBegin = new WeakMap<SQL, unknown>();
 
 /**
@@ -32,36 +28,19 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     callback?: SQL.TransactionContextCallback<T>,
   ): Promise<SQL.ContextCallbackResult<T>> => {
     const runInCaller = AsyncLocalStorage.snapshot();
-    const transactionCallback =
-      typeof optionsOrCallback === "string" ? callback : optionsOrCallback;
-    if (transactionCallback === undefined) {
+    if (typeof optionsOrCallback !== "string") {
+      return await begin(
+        async (transaction) =>
+          await runInCaller(optionsOrCallback, transaction),
+      );
+    }
+    if (callback === undefined) {
       panic("begin(options) needs a transaction callback");
     }
-    // Bun owns these statements internally, so Drizzle never logs them.
-    const countNativeTransaction = readRuntimeMode().nodeEnv === NODE_ENV.test;
-    if (countNativeTransaction) {
-      queryCountLogger.logQuery("BEGIN", []);
-    }
-    let committed = false;
-    try {
-      const result =
-        typeof optionsOrCallback === "string"
-          ? await begin(
-              optionsOrCallback,
-              async (transaction) =>
-                await runInCaller(transactionCallback, transaction),
-            )
-          : await begin(
-              async (transaction) =>
-                await runInCaller(transactionCallback, transaction),
-            );
-      committed = true;
-      return result;
-    } finally {
-      if (countNativeTransaction) {
-        queryCountLogger.logQuery(committed ? "COMMIT" : "ROLLBACK", []);
-      }
-    }
+    return await begin(
+      optionsOrCallback,
+      async (transaction) => await runInCaller(callback, transaction),
+    );
   };
   Object.defineProperty(client, "begin", {
     configurable: true,

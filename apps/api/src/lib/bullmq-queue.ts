@@ -4,7 +4,7 @@ import type { JobProgress, QueueOptions } from "bullmq";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
-import { runWithStatementCeiling } from "@/api/lib/db-statement-ceiling";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import {
   createBullMqConnection,
   type RedisClientOverrides,

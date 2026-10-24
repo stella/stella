@@ -34,8 +34,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   detectReviewParties,
-  REVIEW_PARTIES_PROMPT_VERSION,
   type DetectReviewPartiesArgs,
+  REVIEW_PARTIES_PROMPT_VERSION,
 } from "@/api/lib/document-review/parties";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

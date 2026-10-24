@@ -8,8 +8,8 @@ import {
 import {
   activeStatementCeiling,
   statementCeilingMeasurements,
-} from "@/api/lib/db-statement-ceiling";
-import ledger from "@/api/lib/db-statement-ceiling.json";
+} from "@/api/lib/db/statement-ceiling";
+import ledger from "@/api/lib/db/statement-ceiling.json";
 import { REGISTERED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/registry";
 import api from "@/api/server";
 
@@ -20,7 +20,7 @@ test("mounted read and write requests retain their canonical statement ceiling s
     if (
       request.headers.get("x-statement-ceiling-probe") !== "mounted-request"
     ) {
-      return;
+      return undefined;
     }
     queryCountLogger.logQuery("select 1", []);
     return {

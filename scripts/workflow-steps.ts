@@ -1,8 +1,8 @@
 import {
   checkPoolJob,
+  type ReadCheckPool,
   readCheckPool,
   readWorkingTreeCheckPool,
-  type ReadCheckPool,
 } from "./ci-check-pool-registry";
 
 // Pre-install guards cannot import better-result; keep their errors tagged locally.

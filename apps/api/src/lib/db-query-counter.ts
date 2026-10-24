@@ -1,3 +1,5 @@
+import { panic, TaggedError } from "better-result";
+import type { SQL } from "bun";
 import type { Logger } from "drizzle-orm";
 // Per-request database query counter.
 //
@@ -7,7 +9,7 @@ import type { Logger } from "drizzle-orm";
 // response header this feeds).
 //
 // The module is deliberately side-effect free and framework-agnostic: it only
-// creates an ALS instance and pure helpers. Module initialization neither reads env nor touches
+// creates an ALS instance and pure helpers. Nothing here reads env or touches
 // the database, so it is safe to import from shared modules (see the
 // "Module Side Effects" rules in AGENTS.md). Callers decide when to activate a
 // store; the Drizzle logger is a no-op whenever no store is active (background
@@ -15,16 +17,17 @@ import type { Logger } from "drizzle-orm";
 // on those paths. Deployed environments wire no logger at all.
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { NODE_ENV, readRuntimeMode } from "@stll/runtime-mode";
-
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
+export const DB_TRANSACTION_COUNT_HEADER = "x-db-transactions";
 
 export type QueryCounter = {
   count: number;
-  diagnostics: boolean;
   transactions: number;
-  statements: Map<string, { count: number; callSite: string }>;
+  fingerprints: Map<string, number>;
+  detectRepeatedQueries: boolean;
+  countTransactions: boolean;
+  diagnostics: boolean;
   parent: QueryCounter | undefined;
   onQuery?: () => void;
 };
@@ -34,8 +37,8 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 /**
  * Run `fn` inside a fresh counter store. Every query logged through
  * {@link queryCountLogger} while `fn` (and its awaited continuations) run
- * increments this store and its enclosing counters. Sibling async contexts
- * remain independent; an MCP call also belongs to its enclosing HTTP request.
+ * increments this store and its enclosing counters. Interleaved sibling
+ * contexts remain independent.
  *
  * This is the only supported way to open a store. `AsyncLocalStorage.enterWith`
  * would be the convenient alternative for a lifecycle split across separate
@@ -50,13 +53,19 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
  * from a hook.
  */
 export const runWithQueryCounter = <TResult>(
-  fn: (counter: QueryCounter) => TResult,
+  fn: (counter: Readonly<QueryCounter>) => TResult,
+  {
+    detectRepeatedQueries = false,
+    countTransactions = true,
+  }: { detectRepeatedQueries?: boolean; countTransactions?: boolean } = {},
 ): TResult => {
   const counter: QueryCounter = {
     count: 0,
-    diagnostics: readRuntimeMode().nodeEnv === NODE_ENV.test,
     transactions: 0,
-    statements: new Map(),
+    fingerprints: new Map(),
+    detectRepeatedQueries,
+    countTransactions,
+    diagnostics: false,
     parent: queryCounterStore.getStore(),
   };
   return queryCounterStore.run(counter, () => fn(counter));
@@ -64,9 +73,130 @@ export const runWithQueryCounter = <TResult>(
 
 export const currentQueryCounter = () => queryCounterStore.getStore();
 
+export class RepeatedQueryFingerprintError extends TaggedError(
+  "RepeatedQueryFingerprintError",
+)<{ message: string; fingerprints: readonly string[] }> {}
+
+export const runWithMeasuredQueryCounter = async <TResult>(
+  fn: (counter: Readonly<QueryCounter>) => Promise<TResult>,
+  ledger: readonly { id: string; count: number }[] = [],
+): Promise<TResult> =>
+  await runWithQueryCounter(
+    async (counter) => {
+      const result = await fn(counter);
+      const allowed = new Map(ledger.map(({ id, count }) => [id, count]));
+      const fingerprints = [...counter.fingerprints]
+        .filter(
+          ([fingerprint, count]) =>
+            count > 1 && count > (allowed.get(fingerprint) ?? 0),
+        )
+        .map(([fingerprint]) => fingerprint);
+      if (fingerprints.length > 0) {
+        panic(
+          "Measured request exceeded its repeated SQL callsite budget",
+          new RepeatedQueryFingerprintError({
+            message: `Repeated SQL callsites detected: ${fingerprints.join("; ")}`,
+            fingerprints,
+          }),
+        );
+      }
+      return result;
+    },
+    { detectRepeatedQueries: true, countTransactions: true },
+  );
+
 /** Current active store's query count, or `undefined` when no store is active. */
 export const currentQueryCount = (): number | undefined =>
   queryCounterStore.getStore()?.count;
+
+export const currentTransactionCount = (): number | undefined =>
+  queryCounterStore.getStore()?.transactions;
+
+const recordTransactionRoundTrip = (): void => {
+  let counter = queryCounterStore.getStore();
+  const updated: QueryCounter[] = [];
+  while (counter !== undefined) {
+    if (counter.countTransactions) {
+      counter.transactions += 1;
+      updated.push(counter);
+    }
+    counter = counter.parent;
+  }
+  for (const store of updated) {
+    store.onQuery?.();
+  }
+};
+
+export const runCountedTransaction = async <T>(
+  operation: () => Promise<T>,
+): Promise<T> => {
+  recordTransactionRoundTrip();
+  try {
+    return await operation();
+  } finally {
+    recordTransactionRoundTrip();
+  }
+};
+
+export const instrumentSqlTransactionCounts = (client: SQL): SQL => {
+  const begin = client.begin.bind(client);
+  const countedBegin = async <const T>(
+    optionsOrCallback: string | SQL.TransactionContextCallback<T>,
+    callback?: SQL.TransactionContextCallback<T>,
+  ): Promise<SQL.ContextCallbackResult<T>> =>
+    await runCountedTransaction(async () => {
+      if (typeof optionsOrCallback !== "string") {
+        return await begin(optionsOrCallback);
+      }
+      if (callback === undefined) {
+        return panic("begin(options) needs a transaction callback");
+      }
+      return await begin(optionsOrCallback, callback);
+    });
+  Object.defineProperty(client, "begin", {
+    configurable: true,
+    value: countedBegin,
+  });
+  Object.defineProperty(client, "transaction", {
+    configurable: true,
+    value: countedBegin,
+  });
+  return client;
+};
+
+export const currentRepeatedQueryFingerprints = (): readonly string[] => {
+  const counter = queryCounterStore.getStore();
+  if (!counter?.detectRepeatedQueries) {
+    return [];
+  }
+  return [...counter.fingerprints]
+    .filter(([, count]) => count > 1)
+    .map(([key]) => key);
+};
+
+const normalizeSql = (query: string): string =>
+  query
+    .replace(/\$\d+|\?/gu, "?")
+    .replace(/\b\d+(?:\.\d+)?\b/gu, "?")
+    .replace(/'([^']|'')*'/gu, "?")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase();
+
+const queryCallsite = (): string => {
+  const frame = new Error("SQL query fingerprint callsite capture").stack
+    ?.split("\n")
+    .find(
+      (line) =>
+        line.includes(" at ") &&
+        !line.includes("db-query-counter.ts") &&
+        !line.includes("/node_modules/"),
+    );
+  return frame?.trim().replaceAll(`${process.cwd()}/`, "") ?? "unknown";
+};
+
+const isSessionConfigurationQuery = (query: string): boolean =>
+  /^\s*select\s+set_config\s*\(/iu.test(query);
 
 /**
  * Drizzle-compatible logger that increments the active store's count per query.
@@ -80,38 +210,25 @@ export const queryCountLogger: Logger = {
     if (!counter) {
       return;
     }
-    if (
-      /^\s*(?:savepoint|release\s+(?:savepoint\s+)?|rollback\s+to)\b/iu.test(
-        query,
-      )
-    ) {
+    if (/^\s*(begin|commit|rollback)\b/iu.test(query)) {
       return;
     }
-    const fingerprint = query
-      .replaceAll(/'(?:''|[^'])*'/gu, "?")
-      .replaceAll(/\$\d+|\b\d+(?:\.\d+)?\b/gu, "?")
-      .replaceAll(/\s+/gu, " ")
-      .trim();
-    // Bind values are never retained. Stacks are test diagnostics only.
-    const callSite = counter.diagnostics
-      ? (new Error("SQL call site").stack ?? "SQL call site unavailable")
-          .split("\n")
-          .filter((line) => !line.includes("db-query-counter.ts"))
-          .slice(1, 9)
-          .join("\n")
-      : "";
+    // Reuse the repeated-query owner's normalization and callsite identity.
+    // Session setup contributes to the count, never to repeated-work findings.
+    let fingerprint: string | undefined;
+    const sessionConfiguration = isSessionConfigurationQuery(query);
     const updated: QueryCounter[] = [];
-    while (counter) {
+    while (counter !== undefined) {
       counter.count += 1;
-      if (/^\s*(?:begin|start\s+transaction)\b/iu.test(query)) {
-        counter.transactions += 1;
-      }
-      if (counter.diagnostics) {
-        const previous = counter.statements.get(fingerprint);
-        counter.statements.set(fingerprint, {
-          count: (previous?.count ?? 0) + 1,
-          callSite: previous?.callSite ?? callSite,
-        });
+      if (
+        !sessionConfiguration &&
+        (counter.detectRepeatedQueries || counter.diagnostics)
+      ) {
+        fingerprint ??= `${queryCallsite()} :: ${normalizeSql(query)}`;
+        counter.fingerprints.set(
+          fingerprint,
+          (counter.fingerprints.get(fingerprint) ?? 0) + 1,
+        );
       }
       updated.push(counter);
       counter = counter.parent;

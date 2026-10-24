@@ -154,11 +154,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/handlers/organization-settings/ai-availability/get.test.ts": {
-    "count": 6,
-    "owner": "ai",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/handlers/organization-settings/read.test.ts": {
     "count": 2,
     "owner": "guards",
