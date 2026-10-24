@@ -700,6 +700,24 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261023160000_organization_access_state_origin",
+    form: "add-column",
+    reason:
+      "The constant text default uses PostgreSQL's fast-default catalog path without rewriting the one-row-per-organization access states; lock acquisition is bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261023160000_organization_access_state_origin",
+    form: "alter-column",
+    reason:
+      "Changing the column default is catalog-only and leaves the stored fast default of existing rows in place, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261023160000_organization_access_state_origin",
+    form: "add-constraint",
+    reason:
+      "The origin CHECK is added NOT VALID without scanning rows, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released.",
+  },
+  {
     migration: "20261020013635_case_law_source_hash_version",
     form: "add-column",
     reason:
