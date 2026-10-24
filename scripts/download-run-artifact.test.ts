@@ -108,13 +108,11 @@ afterEach(async () => {
   );
 });
 
-const treeOf = async (directory: string): Promise<Record<string, string>> => {
-  if (!existsSync(directory)) {
-    return {};
-  }
-  const files = [
-    ...new Bun.Glob("**/*").scanSync({ cwd: directory, dot: true }),
-  ].toSorted();
+// Every file under a scenario directory, relative to it.
+const treeOf = async (
+  directory: string,
+  files: readonly string[],
+): Promise<Record<string, string>> => {
   const entries = await Promise.all(
     files.map(
       async (file) =>
@@ -185,7 +183,14 @@ const runScenario = async ({ responses, args, existing }: ScenarioOptions) => {
     calls,
     elapsedMs: performance.now() - started,
     destination,
-    files: await treeOf(destination),
+    files: await treeOf(
+      destination,
+      existsSync(destination)
+        ? [
+            ...new Bun.Glob("**/*").scanSync({ cwd: destination, dot: true }),
+          ].toSorted()
+        : [],
+    ),
     leftovers: readdirSync(runnerTemp),
   };
 };
