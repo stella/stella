@@ -274,6 +274,18 @@ test("a root helper in another module and segment-built app paths reach another 
   });
 });
 
+test("a quoted app directory reaches that app", () => {
+  withRepository((root, write) => {
+    write(
+      "apps/api/src/web-dir-scanner.test.ts",
+      'import { readdirSync } from "node:fs"; readdirSync("apps/web");',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/web-dir-scanner.test.ts"]);
+  });
+});
+
 test("caller-only readers do not reach another app", () => {
   withRepository((root, write) => {
     write(

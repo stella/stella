@@ -234,7 +234,7 @@ const textReach = (
     apps.add(app);
   }
   for (const match of code.matchAll(
-    /(?:apps\/|\.\.\/)([^/'"`$}\s]+)(?:\/|$)/gu,
+    /(?:apps\/|\.\.\/)([^/'"`$}\s]+)(?=\/|["'`]|$)/gu,
   )) {
     const app = match[1];
     if (app !== undefined && appNames.has(app)) {
