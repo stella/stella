@@ -388,6 +388,7 @@
         "reading": "Lasīšanas skats"
       },
       "notLocated": "{count, plural, zero {# apgalvojumi oriģinālā netika atrasti} one {# apgalvojums oriģinālā netika atrasts} other {# apgalvojumi oriģinālā netika atrasti}}",
+      "pdfTextFailed": "PDF tekstu neizdevās nolasīt, tāpēc apgalvojumi lapās nav atzīmēti.",
       "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
       "showQueue": "Rādīt rindu",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 importa tabula (XLSX)",
         "exporting": "Gatavo eksportu…",
         "isdoc": "ISDOC e-rēķins (ABRA Gen u. c.)",
+        "ksefFa3": "KSeF e-rēķins FA(3) (XML)",
         "spreadsheets": "Izklājlapas",
         "xlsx": "Rēķini (XLSX)",
         "xlsxLines": "Rēķinu rindas (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "{page}. lapa no {pageCount}",
       "pageOfEstimatedCount": "{page}. lapa no ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page}. lapa no aptuveni {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page}. lapa · aptuveni {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
       "pageWithEstimatedResultCount": "{page}. lapa · aptuveni {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
+      "pageWithMatchCounts": "{page}. lapa · {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
+      "pageWithPartialMatchCount": "{page}. lapa · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā",
       "refineForMore": "Precizējiet meklēšanu, lai redzētu vairāk rezultātu"

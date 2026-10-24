@@ -553,6 +553,7 @@ jobs:
 
       - name: Build and publish web image
         id: build
+        timeout-minutes: 45
         uses: ./.github/actions/build-web-image
         with:
           release-ref: ${{ steps.ref.outputs.release-ref }}

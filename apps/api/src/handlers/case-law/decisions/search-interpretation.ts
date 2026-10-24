@@ -206,6 +206,7 @@ type SearchAnswerOptions = {
 
 export type SearchAnswer = {
   queryUsed: string;
+  relaxedHitCount: number;
   warnings: CaseLawSearchWarning[];
 };
 
@@ -221,6 +222,7 @@ export const searchAnswer = ({
   countsResultSet,
 }: SearchAnswerOptions): SearchAnswer => ({
   queryUsed: interpretation.queryUsed,
+  relaxedHitCount: partialHitCount,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
     partialHitCount,

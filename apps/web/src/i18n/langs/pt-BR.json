@@ -388,6 +388,7 @@
         "reading": "Modo de leitura"
       },
       "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
+      "pdfTextFailed": "Não foi possível ler o texto do PDF, por isso as alegações não estão marcadas nas páginas.",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Planilha de importação ESO9 (XLSX)",
         "exporting": "Preparando exportação…",
         "isdoc": "Fatura eletrônica ISDOC (ABRA Gen e outros)",
+        "ksefFa3": "Fatura eletrônica KSeF FA(3) (XML)",
         "spreadsheets": "Planilhas",
         "xlsx": "Faturas (XLSX)",
         "xlsxLines": "Itens de fatura (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Página {page} de {pageCount}",
       "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
       "pageOfEstimatedCountLabel": "Página {page} de cerca de {pageCount}",
+      "pageWithEstimatedMatchCounts": "Página {page} · cerca de {exactCount, plural, one {# correspondência exata} many {# correspondências exatas} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
+      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# correspondência exata} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Refine a pesquisa para ver mais resultados"

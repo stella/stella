@@ -23,6 +23,7 @@ const createPDFSearchRequestId = (): number => {
 export const findPDFSearchResultsInWorker = async ({
   bytes,
   password,
+  pageSource,
   searchText,
   signal,
 }: FindPDFSearchResultsInWorkerOptions): Promise<PDFSearchResult | null> => {
@@ -89,6 +90,7 @@ export const findPDFSearchResultsInWorker = async ({
       const request: PDFSearchWorkerRequest = {
         bytes,
         requestId,
+        pageSource,
         searchText,
         ...(password !== undefined && { password }),
       };

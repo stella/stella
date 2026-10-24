@@ -388,6 +388,7 @@
         "reading": "Text ke čtení"
       },
       "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
+      "pdfTextFailed": "Text PDF se nepodařilo přečíst, proto tvrzení nejsou na stránkách vyznačena.",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Importní tabulka ESO9 (XLSX)",
         "exporting": "Připravuji export…",
         "isdoc": "E-faktura ISDOC (ABRA Gen a další)",
+        "ksefFa3": "E-faktura KSeF FA(3) (XML)",
         "spreadsheets": "Tabulky",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Položky faktur (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z přibližně {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · přibližně {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku",
       "refineForMore": "Upřesněte hledání, abyste viděli další výsledky"

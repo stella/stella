@@ -653,25 +653,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Tooltip
-            content={
+          <Button
+            className={SIDE_RAIL_ICON_BUTTON_SIZE}
+            disabled={!mounted}
+            onClick={toggleSidebar}
+            size="icon"
+            tooltip={
               isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
             }
-            render={
-              <Button
-                className={SIDE_RAIL_ICON_BUTTON_SIZE}
-                onClick={toggleSidebar}
-                size="icon"
-                variant="muted"
-              />
-            }
-            side="right"
+            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
             <span className="sr-only">
               {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
             </span>
-          </Tooltip>
+          </Button>
         </div>
       </SidebarHeader>
 
