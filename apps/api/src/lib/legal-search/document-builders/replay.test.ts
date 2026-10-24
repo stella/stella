@@ -284,3 +284,15 @@ describe.each(REPLAYS)("replaying $name", (replay) => {
     expect(summaryOf(await buildReplay(replay))).toMatchSnapshot();
   });
 });
+
+test("unseparated captured PDF notes retain their labels and text", async () => {
+  const replay = REPLAYS.find(({ format }) => format === "pdf");
+  if (replay === undefined) {
+    return panic("The captured PDF replay is missing");
+  }
+  const ast = await buildReplay(replay);
+  const note = ast.blocks.find(({ id }) => id === "fn-97");
+  expect(note?.plainText).toContain("98 Article 9(1) GDPR:");
+  expect(note?.plainText).toContain("102 Article 22(4) GDPR.");
+  expect(ast.blocks.some(({ id }) => id === "fn-98")).toBe(false);
+});

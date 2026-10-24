@@ -348,6 +348,18 @@ describe("the PDF text builder", () => {
     ]);
   });
 
+  test("keeps an unresolved mark-shaped line outside the preceding heading", () => {
+    const ast = build(
+      "1 Introduction\n1 First paragraph.\n1.1 Details\n98\n2 Next paragraph.",
+    );
+    expect(
+      ast.blocks
+        .filter((block) => block.type === "heading")
+        .map(({ plainText }) => plainText),
+    ).toEqual(["1 Introduction", "1.1 Details"]);
+    expect(ast.blocks.map(({ plainText }) => plainText)).toContain("98");
+  });
+
   test("never reads a section number as a footnote mark", () => {
     const ast = build(
       [
@@ -564,7 +576,7 @@ const render = ({
 describe("PDF text builder output", () => {
   test("preserves every unseparated numeric fact with arbitrary indentation", () => {
     assertProperty(
-      "pdf-note-unseparated-numeric-facts",
+      "preserves every unseparated numeric fact with arbitrary indentation",
       fc.property(
         fc.array(fc.tuple(fc.integer({ min: 1, max: 999 }), fc.boolean()), {
           minLength: 1,

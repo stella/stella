@@ -592,7 +592,8 @@ const segment = (lines: readonly Line[]): Draft[] => {
       isDueParagraph(line.text, state) ||
       BULLET_LINE.test(line.text) ||
       open.type === "contents" ||
-      (open.type === "heading" && headingLines >= MAX_HEADING_LINES) ||
+      (open.type === "heading" &&
+        (headingLines >= MAX_HEADING_LINES || MARK_RUN_LINE.test(line.text))) ||
       (open.type === "paragraph" &&
         SENTENCE_END.test(previous) &&
         previous.length < state.usualLength * SHORT_LINE_SHARE &&

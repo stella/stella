@@ -1062,16 +1062,11 @@ test("a progress stall interrupts a longer group drain window", async () => {
   const cwd = await scratch();
   try {
     const completion = path.join(cwd, "descendant-completion");
-    const descendant = `
-      const {writeFileSync}=require('fs');
-      const completion=${JSON.stringify(completion)};
-      process.on('SIGTERM',()=>{writeFileSync(completion,'interrupted'); process.exit(0)});
-      process.stdout.write('ready');
-      setTimeout(()=>{writeFileSync(completion,'completed'); process.exit(0)},5000);
-    `;
+    // Kernel sleep keeps this quiescence fixture independent of JS runtime CPU work.
+    const descendant = `trap 'printf interrupted > "$1"; exit 0' TERM; printf ready; sleep 5; printf completed > "$1"`;
     const leader = `
       const {spawn}=require('child_process');
-      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      const nested=spawn('/bin/sh',['-c',${JSON.stringify(descendant)},'descendant',${JSON.stringify(completion)}],{stdio:['ignore','pipe','inherit']});
       nested.stdout.once('data',()=>process.exit(0));
     `;
     const result = await runBudgetedCheck({
