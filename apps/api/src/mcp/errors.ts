@@ -19,8 +19,7 @@ export class McpOrganizationAccessError extends TaggedError(
  * added here cannot reach a client as a retryable server error.
  */
 export type McpAccessRefusalError =
-  | McpAuthenticationError
-  | McpOrganizationAccessError;
+  McpAuthenticationError | McpOrganizationAccessError;
 
 /**
  * An infrastructure failure while verifying the bearer token (JWKS fetch/network

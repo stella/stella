@@ -3158,8 +3158,7 @@ const buildPromptParts = ({
   // anonymizer in anonymized mode. The tail carries no cache marker, so its
   // user and volatile sections keep the order they have always had.
   const untrustedSections: (
-    | ChatUserPromptSection
-    | ChatVolatilePromptSection
+    ChatUserPromptSection | ChatVolatilePromptSection
   )[] = [
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
     chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),
