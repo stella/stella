@@ -154,14 +154,25 @@ describe(RULE, () => {
       'await connection.execute("DROP INDEX CONCURRENTLY public.x");',
       "await connection.execute(index.createSql);",
     ].join("\n");
-    for (const sourcePath of [
-      "apps/api/src/db/online-ddl.ts",
-      "apps/api/src/db/online-migrations.test.ts",
-      "apps/api/src/db/__fixtures__/example.ts",
-      "apps/api/src/tests/helpers/example.ts",
-    ]) {
-      expect(await lint(source, sourcePath), sourcePath).toEqual([]);
-    }
+    const results = await Promise.all(
+      [
+        "apps/api/src/db/online-ddl.ts",
+        "apps/api/src/db/online-migrations.test.ts",
+        "apps/api/src/db/__fixtures__/example.ts",
+        "apps/api/src/tests/helpers/example.ts",
+      ].map(async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(source, sourcePath),
+          expected: [],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
     // The schema phase keeps its ledger DDL; the gate stays confined there too.
     expect(await lint(source, "apps/api/src/db/migration-runner.ts")).toEqual([
       1, 3,

@@ -172,7 +172,7 @@
   "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
     "kind": "support",
     "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
-    "reviewedDigest": "85453ca7f39bd79786afc0c49879e3705666255c25e958145b3cd62a623f072b"
+    "reviewedDigest": "3deabca819edfbea306954afb0cb702042f8d08000532d29864a26331ee3f5af"
   },
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
@@ -472,7 +472,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "f53961233190d87207ae203de9a87695b3b32b1b0bc1911cf1f5b813ed606002"
+    "reviewedDigest": "c0bffd68dedd799c4d4852284e959945f62c9e350cbd8ab575857125c3ec4522"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -487,7 +487,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "9f21991f46c857e5fe77de32bff375785ce04fcd786e096d84511f4373204b16"
+    "reviewedDigest": "0e191f5e7a1ff9a4206ec7eaa128b988a4665eae083be472d488c824e752e0ae"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
