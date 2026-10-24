@@ -329,7 +329,8 @@ const environmentName = ({
   }
   const process = unwrapTransparentExpression(environment.expression);
   const name = literalMemberName(node);
-  return ts.isIdentifier(process) &&
+  return name !== undefined &&
+    ts.isIdentifier(process) &&
     process.text === "process" &&
     isGlobal(process) &&
     literalMemberName(environment) === "env" &&
