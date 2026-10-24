@@ -1491,8 +1491,7 @@
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/oxlint.config.ts",
-        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
-        "$TURBO_ROOT$/scripts/react-compiler-bailouts.json"
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts"
       ]
     },
     "@stll/web#test": {
