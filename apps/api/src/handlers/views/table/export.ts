@@ -175,6 +175,7 @@ const exportTableView = createSafeHandler(
     // widths or content wrapping does not affect cell values.
     const queryResult = yield* Result.await(
       queryEntities({
+        textMode: "full",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: user.id,

@@ -38,6 +38,58 @@ are intentionally available through explicit subpaths; use those subpaths to
 declare a module's
 boundary.
 
+## Feature previews
+
+`@stll/workspace-ui/feature-previews` exports small, static product scenes for
+marketing pages, menus and slides. They are composed from the components the
+app renders (kanban card shell, comment cards, tracked-change marks, court
+badges, matter icons, task status glyphs, money formatting), so they follow
+the product as it changes.
+
+| Component             | Shows                                              | `labels`                                                      |
+| --------------------- | -------------------------------------------------- | ------------------------------------------------------------- |
+| `MattersPreview`      | A matter's task board                              | `open`, `inProgress`, `done`                                  |
+| `DocumentsPreview`    | A Word document with a tracked change and comments | `comments`                                                    |
+| `ResearchPreview`     | Case-law search results with matched passages      | `caseLaw`                                                     |
+| `BillingPreview`      | An invoice's time entries and total                | `date`, `description`, `billedTime`, `rate`, `fee`, `summary` |
+| `ContactsPreview`     | A company contact filled from a business registry  | `businessRegistry`, `matters`                                 |
+| `TimeTrackingPreview` | A running timer above the day's entries            | `time`, `summary`                                             |
+
+Every scene takes the same props:
+
+- `labels`: the interface strings it draws, typed per scene
+  (`MattersPreviewLabels`, …). The package carries no catalogs.
+- `locale`: the formatting locale for dates, times, durations and money
+  (`en-GB`, `cs-CZ`).
+- `className` (optional): classes for the outer surface.
+
+A scene fills the box it is given (`size-full`) and clips what does not fit;
+size it with the parent. It reads well from about 540 to 900 px wide at a
+16:10 to 16:9 aspect. The mock content (names, documents, decisions, amounts)
+is fictional and deliberately English in every locale; only `labels` are
+translated. Scenes are decorative: the surface is `aria-hidden` and takes no
+pointer input, so name what it illustrates beside it.
+
+```tsx
+import { MattersPreview } from "@stll/workspace-ui/feature-previews";
+
+<div className="aspect-[16/10] w-[720px]">
+  <MattersPreview
+    labels={{ open: "Open", inProgress: "In progress", done: "Done" }}
+    locale="en-GB"
+  />
+</div>;
+```
+
+Styling: the scenes use Tailwind utilities against the `@stll/ui` theme
+tokens, so the host's Tailwind entry needs the theme and both packages'
+shipped sources (the CSS block under Development below). Light and dark follow
+the theme: put `dark` on the root element (`<html class="dark">`); the theme's
+derived tokens resolve there, so a `dark` class lower in the tree leaves them
+on their light values. The theme's
+`--font-sans` names DM Sans; load it (for example from Google Fonts) or the
+system sans serif stands in. The document page uses Tailwind's `font-serif`.
+
 ## Development
 
 ```sh
