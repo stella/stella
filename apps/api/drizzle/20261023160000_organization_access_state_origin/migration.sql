@@ -25,14 +25,6 @@ ALTER TABLE "organization_access_states"
     CHECK ("origin" IN ('creation', 'legacy_reconcile')) NOT VALID;
 --> statement-breakpoint
 
-SET LOCAL statement_timeout = '30min';
---> statement-breakpoint
-ALTER TABLE "organization_access_states"
-  VALIDATE CONSTRAINT "organization_access_states_origin_domain";
---> statement-breakpoint
-SET LOCAL statement_timeout = '5s';
---> statement-breakpoint
-
 -- Serialize every member admission before interpreting a missing access
 -- state. The first membership bootstraps organization creation; any later
 -- membership fails closed until the creation hook records the state.
