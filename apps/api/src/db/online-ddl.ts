@@ -493,18 +493,18 @@ export const runGatedTableWork = async ({
       if (typeof pid !== "number") {
         panic("Invalid migration backend pid response");
       }
-      const attempt = await Result.tryPromise({
-        try: async () =>
-          await observeMigrationLockAttempt({
-            observer,
-            pid,
-            phase: "online",
-            step: target.name,
-            table: target.tableName,
-            telemetry: gate.lockTelemetry ?? createMigrationLockTelemetry(),
-            cancelWork: connection.terminate,
-            additionalRetries: () => statementRetries,
-            work: async () =>
+      const outcome = await observeMigrationLockAttempt({
+        observer,
+        pid,
+        phase: "online",
+        step: target.name,
+        table: target.tableName,
+        telemetry: gate.lockTelemetry ?? createMigrationLockTelemetry(),
+        cancelWork: connection.terminate,
+        additionalRetries: () => statementRetries,
+        work: async () => {
+          const attempt = await Result.tryPromise({
+            try: async () =>
               await runtime.attempt(
                 async (guardedConnection) =>
                   await work(
@@ -516,21 +516,18 @@ export const runGatedTableWork = async ({
                     }),
                   ),
               ),
-            outcome: (result) => (result === "done" ? "done" : "deferred"),
-          }),
-        catch: (cause) => cause,
-      });
-      if (attempt.isErr()) {
-        if (!(attempt.error instanceof OnlineLockRetryDeferred)) {
+            catch: (cause) => cause,
+          });
+          if (attempt.isOk()) {
+            return attempt.value;
+          }
+          if (attempt.error instanceof OnlineLockRetryDeferred) {
+            return "retry";
+          }
           throw attempt.error;
-        }
-        return {
-          type: "deferred",
-          step: target.name,
-          retryAfterMs: runtime.retryAfterMs,
-        };
-      }
-      const outcome = attempt.value;
+        },
+        outcome: (result) => (result === "done" ? "done" : "deferred"),
+      });
 
       switch (outcome) {
         case "done":

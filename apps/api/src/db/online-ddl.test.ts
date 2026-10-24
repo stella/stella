@@ -1,9 +1,14 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
+import {
+  AUTOVACUUM_SQL,
+  LONG_TRANSACTION_SQL,
+} from "@stll/db-load-gate/indicators";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { blockStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
+import { readOnlineIndexConfig } from "../env-online-index";
 import { createMigrationLockTelemetry } from "./migration-lock-observation";
 import type { MigrationLockEvent } from "./migration-lock-observation";
 import {
@@ -298,6 +303,90 @@ const POLICY = {
   using: "probe.gate = 'open'",
   withCheck: "probe.gate = 'open'",
 } as const satisfies PolicyDefinition;
+
+test("exhausted statement retries report the same deferred outcome as the gate", async () => {
+  const records: MigrationLockEvent[] = [];
+  const lockTelemetry = createMigrationLockTelemetry();
+  lockTelemetry.emit = (record) => records.push(record);
+  const observedAt = "2026-10-02T12:00:00.000Z";
+  let attempts = 0;
+  const connection: OnlineMigrationConnection = {
+    execute: async (text) => {
+      if (text.startsWith("DO ")) {
+        attempts += 1;
+        throw Object.assign(new Error("lock unavailable"), { code: "55P03" });
+      }
+    },
+    query: async (text) => {
+      if (text.includes("advisory")) return [{ acquired: true }];
+      if (text.includes("pg_backend_pid"))
+        return [{ pid: 11, database: "test" }];
+      return [];
+    },
+    terminate: async () => undefined,
+    release: () => undefined,
+  };
+  const observer: OnlineMigrationConnection = {
+    execute: async () => undefined,
+    query: async (text) => {
+      if (text === LONG_TRANSACTION_SQL) return [{ ageMs: 0, observedAt }];
+      if (text === AUTOVACUUM_SQL) return [{ active: false, observedAt }];
+      if (text.includes('"stateAgeMs"')) return [];
+      if (text.includes("pg_backend_pid"))
+        return [{ pid: 12, database: "test" }];
+      return [];
+    },
+    release: () => undefined,
+  };
+  const result = await runGatedTableWork({
+    connection,
+    reserveObserver: async () => observer,
+    target: { tableName: POLICY.tableName, name: POLICY.name },
+    kind: "index_repair",
+    lockRetry: {
+      config: {
+        lockTimeoutsMs: [100, 250],
+        pauseBaseMs: 10,
+        pauseCapMs: 20,
+        budgetMs: 2000,
+      },
+      runtime: { now: () => 0, sleep: async () => undefined, random: () => 0 },
+    },
+    gate: {
+      config: readOnlineIndexConfig({ DB_LOAD_GATE_BUSY_WINDOWS: "[]" }),
+      clock: () => Date.parse(observedAt),
+      lockTelemetry,
+      log: () => undefined,
+      ebs: {
+        type: "reader",
+        read: async () => ({
+          indicator: "ebs_balance",
+          kind: "normal",
+          value: 100,
+          threshold: 70,
+          observedAt,
+          reason: "Injected reading",
+        }),
+      },
+      wait: async (_milliseconds, signal) =>
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) resolve();
+          else
+            signal.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    },
+    work: async (session) => await session.run(createPolicy(POLICY)),
+  });
+  expect(result.type).toBe("deferred");
+  expect(attempts).toBe(2);
+  expect(records).toHaveLength(1);
+  expect(records.at(0)).toMatchObject({
+    outcome: "deferred",
+    attempt: 2,
+    retriesSpent: 1,
+    step: POLICY.name,
+  });
+});
 
 describe("online ACCESS EXCLUSIVE statements", () => {
   test("each runs atomically and declares its writer-blocking lock class", async () => {
