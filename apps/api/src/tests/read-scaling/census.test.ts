@@ -94,9 +94,9 @@ test("previously measured scenarios retain their handler or tool identity", asyn
           `Scaling owner has no handler: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
         );
       }
-      expect(
+      expect(owner["handler"]).toBe(
         measuredApiScenarios.find(({ name }) => name === entry.name)?.handler,
-      ).toBe(owner["handler"]);
+      );
     }
     expect(
       scenarioMembershipViolations({
