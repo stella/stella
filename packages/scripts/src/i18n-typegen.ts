@@ -101,6 +101,8 @@ if (checkOnly) {
   }
   console.log(`${outputPath} is in sync (${keyCount} keys)`);
 } else {
-  if (existing !== declaration) await Bun.write(outputPath, declaration);
+  if (existing !== declaration) {
+    await Bun.write(outputPath, declaration);
+  }
   console.log(`Generated ${outputPath} (${keyCount} keys)`);
 }

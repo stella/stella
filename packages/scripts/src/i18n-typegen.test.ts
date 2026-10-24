@@ -35,7 +35,7 @@ test("matching locale declarations remain immutable across concurrent generation
   try {
     await writeFile(input, JSON.stringify({ greeting: "Hello {name}" }));
     expect((await generate()).exitCode).toBe(0);
-    const declaration = await readFile(output, "utf8");
+    const declaration = await readFile(output, "utf-8");
     expect(declaration).toContain('"greeting": "Hello {name}"');
     const fixedTime = new Date("2000-01-01T00:00:00Z");
     await utimes(output, fixedTime, fixedTime);
@@ -47,15 +47,15 @@ test("matching locale declarations remain immutable across concurrent generation
     ]);
     expect(results.map(({ exitCode }) => exitCode)).toEqual([0, 0, 0]);
     expect((await stat(output)).mtimeMs).toBe(before.mtimeMs);
-    expect(await readFile(output, "utf8")).toBe(declaration);
+    expect(await readFile(output, "utf-8")).toBe(declaration);
 
     await writeFile(input, JSON.stringify({ greeting: "Welcome {name}" }));
     const stale = await generate(["--check"]);
     expect(stale.exitCode).toBe(1);
     expect(stale.output).toContain("out of sync with en.json");
-    expect(await readFile(output, "utf8")).toBe(declaration);
+    expect(await readFile(output, "utf-8")).toBe(declaration);
     expect((await generate()).exitCode).toBe(0);
-    expect(await readFile(output, "utf8")).toContain(
+    expect(await readFile(output, "utf-8")).toContain(
       '"greeting": "Welcome {name}"',
     );
     expect((await generate(["--check"])).exitCode).toBe(0);
