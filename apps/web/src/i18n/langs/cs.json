@@ -388,6 +388,7 @@
         "reading": "Text ke čtení"
       },
       "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
+      "pdfTextFailed": "Text PDF se nepodařilo přečíst, proto tvrzení nejsou na stránkách vyznačena.",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Importní tabulka ESO9 (XLSX)",
         "exporting": "Připravuji export…",
         "isdoc": "E-faktura ISDOC (ABRA Gen a další)",
+        "ksefFa3": "E-faktura KSeF FA(3) (XML)",
         "spreadsheets": "Tabulky",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Položky faktur (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z přibližně {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · přibližně {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku",
       "refineForMore": "Upřesněte hledání, abyste viděli další výsledky"
@@ -1596,6 +1601,7 @@
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
     "sendErrorConnectionFailed": "Připojení k chatu selhalo. Zkontrolujte připojení a zkuste to znovu.",
+    "sendErrorContinuationRejected": "V chatu se nepodařilo pokračovat. Začněte znovu odesláním nové zprávy.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnou odpověď. Zkuste to znovu, nebo zprávu přeformulujte.",
     "sendErrorLoopDetected": "Odpověď AI se příliš opakovala. Zkuste to znovu s užším požadavkem.",
     "sendErrorModelUnavailable": "Nastavený AI model už není dostupný. Požádejte správce pracovního prostoru, aby model aktualizoval v nastavení organizace.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Vytvoření, úprava a smazání vašich vzorových ustanovení a spouštění playbooků",
     "scopeLawRead": "Číst veřejné právní předpisy a judikaturu",
     "scopeMattersWrite": "Vytvoření a úprava vašich spisů a úkolů",
+    "scopeMemoryWrite": "Vytváření a úprava paměti asistenta",
     "scopeOfflineAccess": "Udržení vašeho přihlášení bez nutnosti opakovaného souhlasu",
     "scopeOnboarding": "Nastavit jurisdikce, ve kterých vaše organizace působí",
     "scopeProfile": "Přístup k informacím vašeho profilu",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Čtení:</group> {items}",
     "summaryLineUse": "<group>Používání:</group> {items}",
     "summaryMattersWrite": "spisy a úkoly",
+    "summaryMemoryWrite": "paměť asistenta",
     "summaryProfile": "profil",
     "summaryRead": "dokumenty, spisy a kontakty",
     "summaryReadAnonymized": "anonymizované dokumenty a spisy",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "Tato akce je dočasně pozastavena. Zkuste to prosím za chvíli.",
       "concurrencyBusy": "Probíhá jiná práce. Zkuste to prosím za chvíli.",
       "contact": "Kontaktujte nás",
+      "featureDisabled": "Tato funkce je dočasně vypnutá.",
       "notEnabled": "Tato akce není pro vaši organizaci povolena.",
       "periodExhausted": "Tato akce je pro vaši organizaci pozastavena."
     },

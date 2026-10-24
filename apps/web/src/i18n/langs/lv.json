@@ -388,6 +388,7 @@
         "reading": "Lasīšanas skats"
       },
       "notLocated": "{count, plural, zero {# apgalvojumi oriģinālā netika atrasti} one {# apgalvojums oriģinālā netika atrasts} other {# apgalvojumi oriģinālā netika atrasti}}",
+      "pdfTextFailed": "PDF tekstu neizdevās nolasīt, tāpēc apgalvojumi lapās nav atzīmēti.",
       "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
       "showQueue": "Rādīt rindu",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 importa tabula (XLSX)",
         "exporting": "Gatavo eksportu…",
         "isdoc": "ISDOC e-rēķins (ABRA Gen u. c.)",
+        "ksefFa3": "KSeF e-rēķins FA(3) (XML)",
         "spreadsheets": "Izklājlapas",
         "xlsx": "Rēķini (XLSX)",
         "xlsxLines": "Rēķinu rindas (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "{page}. lapa no {pageCount}",
       "pageOfEstimatedCount": "{page}. lapa no ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page}. lapa no aptuveni {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page}. lapa · aptuveni {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
       "pageWithEstimatedResultCount": "{page}. lapa · aptuveni {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
+      "pageWithMatchCounts": "{page}. lapa · {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
+      "pageWithPartialMatchCount": "{page}. lapa · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}} šajā lapā",
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā",
       "refineForMore": "Precizējiet meklēšanu, lai redzētu vairāk rezultātu"
@@ -1596,6 +1601,7 @@
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorConnectionFailed": "Neizdevās izveidot savienojumu ar tērzēšanu. Pārbaudiet savienojumu un mēģiniet vēlreiz.",
+    "sendErrorContinuationRejected": "Tērzēšanu neizdevās turpināt. Nosūtiet jaunu ziņojumu, lai sāktu no jauna.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
     "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
     "sendErrorModelUnavailable": "Konfigurētais AI modelis vairs nav pieejams. Sazinieties ar darba telpas administratoru, lai atjauninātu modeli organizācijas iestatījumos.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Izveidot, rediģēt un dzēst jūsu klauzulas un palaist pārbaudes ceļvežus",
     "scopeLawRead": "Lasīt publiski pieejamos tiesību aktus un judikatūru",
     "scopeMattersWrite": "Izveidot un rediģēt jūsu lietas un uzdevumus",
+    "scopeMemoryWrite": "Izveidot un atjaunināt asistenta atmiņu",
     "scopeOfflineAccess": "Paturēt jūs pieslēgtu bez atkārtotas apstiprināšanas",
     "scopeOnboarding": "Konfigurēt jūsu organizācijas prakses jurisdikcijas",
     "scopeProfile": "Piekļūt jūsu profila informācijai",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Lasīt:</group> {items}",
     "summaryLineUse": "<group>Lietot:</group> {items}",
     "summaryMattersWrite": "lietas un uzdevumi",
+    "summaryMemoryWrite": "asistenta atmiņa",
     "summaryProfile": "profils",
     "summaryRead": "dokumenti, lietas un kontakti",
     "summaryReadAnonymized": "anonimizēti dokumenti un lietas",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "contact": "Sazinieties ar mums",
+      "featureDisabled": "Šī funkcija ir īslaicīgi izslēgta.",
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
       "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
     },

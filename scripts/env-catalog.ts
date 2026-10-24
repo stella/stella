@@ -114,6 +114,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
+  "KILL_SWITCHES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
   "PUBLIC_CORPUS_ASSUMED_REPLICAS",
@@ -233,6 +234,7 @@ const INTERNAL_SERVER_KEYS = new Set([
 
 const EXAMPLE_VALUES: Record<string, string> = {
   API_FEATURE_ACCESS_GRANTS: "{}",
+  KILL_SWITCHES: "{}",
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
   BETTER_AUTH_URL: "http://localhost:3001",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
@@ -348,6 +350,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Stop background case-law replay at the next batch boundary. Defaults to false.",
   CASE_LAW_REPLAY_DISABLED_SOURCES:
     "Comma-separated adapter keys excluded from background case-law replay.",
+  KILL_SWITCHES:
+    'Operator kill-switch overrides: a JSON object of switch id to "on" or "off", such as {"chat":"off"}. A switched-off feature refuses new work with a typed "turned off" refusal; restarting the running build applies a change. Switch ids live in apps/api/src/lib/kill-switches/registry.ts; an unknown id or state refuses startup.',
   UNUSED_CLIENT_RETENTION_DAYS:
     "Age in days before unused client registrations expire (1–365; default 30).",
   AGENT_REGISTRATION_DAILY_LIMIT:
@@ -822,6 +826,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
+  KILL_SWITCHES: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
@@ -1449,6 +1454,21 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
+  // the commit it deploys, the infrastructure repository and its App token,
+  // the readiness endpoint and edge header, and the bounds tests shorten.
+  "DEPLOY_SHA",
+  "INFRA_REPO",
+  "STAGING_POWER_TOKEN",
+  "STAGING_HEALTH_URL",
+  "EDGE_HEADER_NAME",
+  "EDGE_HEADER_VALUE",
+  "STAGING_WAKE_LOOKUP_ATTEMPTS",
+  "STAGING_WAKE_LOOKUP_INTERVAL_SECONDS",
+  "STAGING_WAKE_START_MINUTES",
+  "STAGING_WAKE_START_POLL_SECONDS",
+  "STAGING_WAKE_READY_MINUTES",
+  "STAGING_WAKE_READY_POLL_SECONDS",
   // Dated-waiver healing: the private repository its fix tasks go to, and
   // the merge hold that keeps it from arming removals.
   "DATED_WAIVER_FIX_REPO",
@@ -1543,6 +1563,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SIGN_IN",
+  "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
   "JOURNEY_WEB_DECISION_URL",
   "JOURNEY_WEB_SEARCH_URL",
@@ -1575,6 +1597,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
+  // Tailwind lint worker liveness tuning. The test hooks are confined to the
+  // plugin regression suite and are inert unless explicitly set.
+  "OXLINT_TAILWINDCSS_CACHE_DIR",
+  "OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
+  "OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS",
+  "OXLINT_TAILWINDCSS_WORKER_TEST_HOOK",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",

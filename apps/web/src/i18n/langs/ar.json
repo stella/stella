@@ -388,6 +388,7 @@
         "reading": "عرض القراءة"
       },
       "notLocated": "{count, plural, zero {لم يُعثر على # ادعاء في الأصل} one {لم يُعثر على ادعاء واحد في الأصل} two {لم يُعثر على ادعاءين في الأصل} few {لم يُعثر على # ادعاءات في الأصل} many {لم يُعثر على # ادعاءً في الأصل} other {لم يُعثر على # ادعاء في الأصل}}",
+      "pdfTextFailed": "تعذّرت قراءة نص ملف PDF، لذلك لم تُعلَّم الادعاءات على صفحاته.",
       "selectClaim": "اختر ادعاءً لفحص السجل الذي يستند إليه.",
       "showQueue": "عرض قائمة الانتظار",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "جدول استيراد ESO9 (XLSX)",
         "exporting": "جارٍ تجهيز التصدير…",
         "isdoc": "فاتورة ISDOC الإلكترونية (ABRA Gen وغيره)",
+        "ksefFa3": "فاتورة KSeF الإلكترونية FA(3) (XML)",
         "spreadsheets": "جداول البيانات",
         "xlsx": "الفواتير (XLSX)",
         "xlsxLines": "بنود الفواتير (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "الصفحة {page} من {pageCount}",
       "pageOfEstimatedCount": "الصفحة {page} من ~{pageCount}",
       "pageOfEstimatedCountLabel": "الصفحة {page} من نحو {pageCount}",
+      "pageWithEstimatedMatchCounts": "الصفحة {page} · نحو {exactCount, plural, zero {صفر تطابق تام} one {تطابق تام واحد} two {تطابقين تامين} few {# تطابقات تامة} many {# تطابقًا تامًا} other {# تطابق تام}} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
+      "pageWithMatchCounts": "الصفحة {page} · {exactCount, plural, zero {لا تطابقات تامة} one {تطابق تام واحد} two {تطابقان تامان} few {# تطابقات تامة} many {# تطابقًا تامًا} other {# تطابق تام}} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
+      "pageWithPartialMatchCount": "الصفحة {page} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة",
       "refineForMore": "ضيّق نطاق البحث لعرض مزيد من النتائج"
@@ -1596,6 +1601,7 @@
     "sendError": "حدثت مشكلة أثناء إرسال رسالتك. تواصل مع الدعم إذا استمرّ الخطأ.",
     "sendErrorAnonymizationBlocked": "تعذّر على stella تجهيل أحد المرفقات، لذا لم يُرسَل شيء. أزِل الملف أو أرسِل هذه الرسالة دون تجهيل.",
     "sendErrorConnectionFailed": "تعذّر الاتصال بالدردشة. تحقّق من اتصالك وحاول مرة أخرى.",
+    "sendErrorContinuationRejected": "تعذّر متابعة الدردشة. أرسل رسالة جديدة للبدء من جديد.",
     "sendErrorEmptyCompletion": "أعاد الذكاء الاصطناعي ردّاً فارغاً. حاول مجدداً أو أعد صياغة رسالتك.",
     "sendErrorLoopDetected": "تكرّر ردّ الذكاء الاصطناعي مرّات كثيرة جداً. حاول مجدداً بطلب أكثر تحديداً.",
     "sendErrorModelUnavailable": "نموذج الذكاء الاصطناعي المُهيّأ لم يعد متاحاً. اطلب من مسؤول مساحة العمل تحديث النموذج في إعدادات المؤسسة.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "إنشاء بنودك وتعديلها وحذفها وتشغيل أدلّة المراجعة",
     "scopeLawRead": "قراءة التشريعات العامة وأحكام القضاء",
     "scopeMattersWrite": "إنشاء وتعديل ملفاتك ومهامك",
+    "scopeMemoryWrite": "إنشاء ذكريات المساعد وتحديثها",
     "scopeOfflineAccess": "إبقاء تسجيل دخولك نشطًا دون الحاجة إلى موافقة متكررة",
     "scopeOnboarding": "ضبط الولايات القضائية للممارسة لمؤسستك",
     "scopeProfile": "الوصول إلى معلومات ملفك الشخصي",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>قراءة:</group> {items}",
     "summaryLineUse": "<group>استخدام:</group> {items}",
     "summaryMattersWrite": "الملفات والمهام",
+    "summaryMemoryWrite": "ذكريات المساعد",
     "summaryProfile": "الملف الشخصي",
     "summaryRead": "المستندات والملفات القانونية وجهات الاتصال",
     "summaryReadAnonymized": "المستندات والملفات المُخفاة الهوية",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "هذا الإجراء متوقف مؤقتًا. يُرجى المحاولة مجددًا بعد قليل.",
       "concurrencyBusy": "هناك أعمال أخرى قيد التنفيذ. يُرجى المحاولة مجددًا بعد قليل.",
       "contact": "تواصل معنا",
+      "featureDisabled": "هذه الميزة متوقفة مؤقتًا.",
       "notEnabled": "هذا الإجراء غير مفعّل لمؤسستك.",
       "periodExhausted": "هذا الإجراء متوقف لمؤسستك."
     },

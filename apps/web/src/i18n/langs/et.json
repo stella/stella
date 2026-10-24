@@ -388,6 +388,7 @@
         "reading": "Lugemisvaade"
       },
       "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
+      "pdfTextFailed": "PDF-i teksti ei õnnestunud lugeda, seetõttu pole väited lehekülgedel märgitud.",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 impordileht (XLSX)",
         "exporting": "Eksporti valmistatakse ette…",
         "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "ksefFa3": "KSeF e-arve FA(3) (XML)",
         "spreadsheets": "Tabelid",
         "xlsx": "Arved (XLSX)",
         "xlsxLines": "Arveread (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Lehekülg {page}/{pageCount}",
       "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
       "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
+      "pageWithEstimatedMatchCounts": "Lehekülg {page} · ligikaudu {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
+      "pageWithMatchCounts": "Lehekülg {page} · {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
+      "pageWithPartialMatchCount": "Lehekülg {page} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
       "perPage": "Lehekülje kohta",
       "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
@@ -1596,6 +1601,7 @@
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorConnectionFailed": "Vestlusega ühenduse loomine ebaõnnestus. Kontrollige ühendust ja proovige uuesti.",
+    "sendErrorContinuationRejected": "Vestlust ei saanud jätkata. Uuesti alustamiseks saatke uus sõnum.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
     "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
+    "scopeMemoryWrite": "Assistendi mälestuste loomine ja muutmine",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Lugemine:</group> {items}",
     "summaryLineUse": "<group>Kasutamine:</group> {items}",
     "summaryMattersWrite": "toimikud ja ülesanded",
+    "summaryMemoryWrite": "assistendi mälestused",
     "summaryProfile": "profiil",
     "summaryRead": "dokumendid, toimikud ja kontaktid",
     "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
       "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
       "contact": "Võtke meiega ühendust",
+      "featureDisabled": "See funktsioon on ajutiselt välja lülitatud.",
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
       "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
     },

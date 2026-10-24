@@ -388,6 +388,7 @@
         "reading": "Mode lecture"
       },
       "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
+      "pdfTextFailed": "Le texte du PDF n’a pas pu être lu : les affirmations ne sont donc pas signalées sur ses pages.",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Feuille d'import ESO9 (XLSX)",
         "exporting": "Préparation de l'export…",
         "isdoc": "Facture électronique ISDOC (ABRA Gen et autres)",
+        "ksefFa3": "Facture électronique KSeF FA(3) (XML)",
         "spreadsheets": "Feuilles de calcul",
         "xlsx": "Factures (XLSX)",
         "xlsxLines": "Lignes de facture (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Page {page} sur {pageCount}",
       "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page n° {page} · environ {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
+      "pageWithMatchCounts": "Page n° {page} · {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
+      "pageWithPartialMatchCount": "Page n° {page} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page",
       "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
@@ -1596,6 +1601,7 @@
     "sendError": "Un problème est survenu lors de l’envoi de votre message. Contactez le support si l’erreur persiste.",
     "sendErrorAnonymizationBlocked": "stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retirez le fichier ou envoyez ce message sans anonymisation.",
     "sendErrorConnectionFailed": "La connexion à la conversation a échoué. Vérifiez votre connexion et réessayez.",
+    "sendErrorContinuationRejected": "La conversation n’a pas pu continuer. Envoyez un nouveau message pour recommencer.",
     "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
     "sendErrorLoopDetected": "La réponse de l’IA s’est trop répétée. Réessayez avec une demande plus ciblée.",
     "sendErrorModelUnavailable": "Le modèle d’IA configuré n’est plus disponible. Demandez à l’administrateur de l’espace de travail de le mettre à jour dans les paramètres de l’organisation.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Créer, modifier et supprimer vos clauses, et exécuter des playbooks",
     "scopeLawRead": "Lire les textes législatifs publics et la jurisprudence",
     "scopeMattersWrite": "Créer et modifier vos dossiers et tâches",
+    "scopeMemoryWrite": "Créer et modifier les souvenirs de l’assistant",
     "scopeOfflineAccess": "Vous garder connecté sans approbation répétée",
     "scopeOnboarding": "Configurer les juridictions d’exercice de votre organisation",
     "scopeProfile": "Accéder aux informations de votre profil",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Lire :</group> {items}",
     "summaryLineUse": "<group>Utiliser :</group> {items}",
     "summaryMattersWrite": "dossiers et tâches",
+    "summaryMemoryWrite": "souvenirs de l’assistant",
     "summaryProfile": "profil",
     "summaryRead": "documents, dossiers et contacts",
     "summaryReadAnonymized": "documents et dossiers anonymisés",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "Cette action est temporairement suspendue. Veuillez réessayer dans un instant.",
       "concurrencyBusy": "D’autres opérations sont en cours. Veuillez réessayer dans un instant.",
       "contact": "Contactez-nous",
+      "featureDisabled": "Cette fonctionnalité est temporairement désactivée.",
       "notEnabled": "Cette action n’est pas activée pour votre organisation.",
       "periodExhausted": "Cette action est suspendue pour votre organisation."
     },

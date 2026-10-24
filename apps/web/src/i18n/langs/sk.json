@@ -388,6 +388,7 @@
         "reading": "Text na čítanie"
       },
       "notLocated": "{count, plural, one {# tvrdenie sa v origináli nepodarilo nájsť} few {# tvrdenia sa v origináli nepodarilo nájsť} many {# tvrdenia sa v origináli nepodarilo nájsť} other {# tvrdení sa v origináli nepodarilo nájsť}}",
+      "pdfTextFailed": "Text PDF sa nepodarilo prečítať, preto tvrdenia nie sú na stranách vyznačené.",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Importná tabuľka ESO9 (XLSX)",
         "exporting": "Pripravujem export…",
         "isdoc": "E-faktúra ISDOC (ABRA Gen a ďalšie)",
+        "ksefFa3": "E-faktúra KSeF FA(3) (XML)",
         "spreadsheets": "Tabuľky",
         "xlsx": "Faktúry (XLSX)",
         "xlsxLines": "Položky faktúr (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · približne {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
       "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "perPage": "Na stránku",
       "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"
@@ -1596,6 +1601,7 @@
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorConnectionFailed": "Pripojenie k chatu zlyhalo. Skontrolujte pripojenie a skúste to znova.",
+    "sendErrorContinuationRejected": "V chate sa nepodarilo pokračovať. Začnite znova odoslaním novej správy.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
     "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
     "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
     "scopeLawRead": "Čítať verejné právne predpisy a judikatúru",
     "scopeMattersWrite": "Vytvoriť a upraviť vaše spisy a úlohy",
+    "scopeMemoryWrite": "Vytváranie a úprava pamäte asistenta",
     "scopeOfflineAccess": "Udržať vás prihláseného bez opakovaného schválenia",
     "scopeOnboarding": "Nastavte jurisdikcie praxe vašej organizácie",
     "scopeProfile": "Pristupovať k informáciám o vašom profile",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Čítanie:</group> {items}",
     "summaryLineUse": "<group>Používanie:</group> {items}",
     "summaryMattersWrite": "spisy a úlohy",
+    "summaryMemoryWrite": "pamäť asistenta",
     "summaryProfile": "profil",
     "summaryRead": "dokumenty, spisy a kontakty",
     "summaryReadAnonymized": "anonymizované dokumenty a spisy",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
       "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
       "contact": "Kontaktujte nás",
+      "featureDisabled": "Táto funkcia je dočasne vypnutá.",
       "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
       "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
     },

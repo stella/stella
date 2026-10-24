@@ -1,1 +1,324 @@
-{}
+{
+  "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx::FileChatOverlayInner": {
+    "memos": 2,
+    "reasons": [
+      "Cannot access refs during render",
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/components/bilingual-review-rows.tsx::BilingualReviewRows": {
+    "memos": 0,
+    "reasons": ["Use of incompatible library"]
+  },
+  "apps/web/src/components/chat-editor-provider.tsx::useChatEditor": {
+    "memos": 19,
+    "reasons": [
+      "(BuildHIR::lowerExpression) Handle ThisExpression expressions",
+      "Cannot access refs during render",
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/components/chat/chat-thread-messages.tsx::StickyUserTurn": {
+    "memos": 0,
+    "reasons": ["This value cannot be modified"]
+  },
+  "apps/web/src/components/chat/chat-thread-messages.tsx::useOlderMessagePaging": {
+    "memos": 0,
+    "reasons": ["This value cannot be modified"]
+  },
+  "apps/web/src/components/chat/needs-matter-card.tsx::MatterPickerSection": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/components/chat/prompt-slash-list.tsx::PromptSlashList": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::lowerExpression) Handle UpdateExpression to variables captured within lambdas."
+    ]
+  },
+  "apps/web/src/components/docx/docx-browser-editor.tsx::DocxBrowserEditorContent": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts::useDocxCheckpointAutosave": {
+    "memos": 5,
+    "reasons": [
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/components/docx/use-docx-preview-file.ts::useDocxPreviewFile": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/components/docx/use-edit-session.ts::useEditSession": {
+    "memos": 1,
+    "reasons": [
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/components/docx/use-retained-style-picker-label.ts::useRetainedStylePickerLabel": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/components/inspector/anonymization-facet.tsx::AnonymizationFacet": {
+    "memos": 0,
+    "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
+  },
+  "apps/web/src/components/inspector/chat-tab-panel.tsx::ChatTabPanel": {
+    "memos": 1,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/components/inspector/inspector-panel.tsx::InspectorPanel": {
+    "memos": 8,
+    "reasons": [
+      "Cannot access refs during render",
+      "Existing memoization could not be preserved"
+    ]
+  },
+  "apps/web/src/components/inspector/versions-facet.tsx::VersionsFacet": {
+    "memos": 1,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/components/keyboard-shortcuts-dialog.tsx::RebindableBinding": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
+    ]
+  },
+  "apps/web/src/components/pdf/page-citation.tsx::PageCitation": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/components/pdf/versions-sidebar.tsx::VersionsSidebar": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/components/render-storm-canary.tsx::RenderStormProfiler": {
+    "memos": 0,
+    "reasons": [
+      "Expected temporaries to be promoted to named identifiers in an earlier pass"
+    ]
+  },
+  "apps/web/src/components/search-dialog.tsx::SearchDialog": {
+    "memos": 6,
+    "reasons": ["Use of incompatible library"]
+  },
+  "apps/web/src/components/templates/template-form.tsx::TemplateForm": {
+    "memos": 12,
+    "reasons": [
+      "(BuildHIR::lowerAssignment) Handle computed properties in ObjectPattern",
+      "Cannot access refs during render",
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx::CopyToMatterDialog": {
+    "memos": 0,
+    "reasons": [
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts::useCreateBBoxes": {
+    "memos": 1,
+    "reasons": [
+      "Cannot access refs during render",
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts::useSyncJustificationChunks": {
+    "memos": 3,
+    "reasons": [
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/components/workspaces/row-actions.tsx::RowActions": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause",
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/components/workspaces/table/select-row-content.tsx::SelectRowContent": {
+    "memos": 0,
+    "reasons": ["This value cannot be modified"]
+  },
+  "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx::WorkspaceTable": {
+    "memos": 9,
+    "reasons": ["Use of incompatible library"]
+  },
+  "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx::WorkflowStartConfirmationPromptProvider": {
+    "memos": 1,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/features/case-law/components/case-viewer/use-decision-provision-anchors.ts::useDecisionProvisionAnchors": {
+    "memos": 0,
+    "reasons": ["Support non-trivial for..of inits"]
+  },
+  "apps/web/src/features/chat/hooks/use-chat-session.ts::useChatSession": {
+    "memos": 34,
+    "reasons": [
+      "(BuildHIR::lowerExpression) Handle Import expressions",
+      "Cannot access refs during render"
+    ]
+  },
+  "apps/web/src/features/guides/use-guide-runner.ts::useGuideRunner": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts::usePlaybookSaveQueue": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/features/statutes/components/statute-compare-view.tsx::VirtualCompareGroups": {
+    "memos": 1,
+    "reasons": ["Use of incompatible library"]
+  },
+  "apps/web/src/features/workspaces/team-avatars.tsx::TeamAvatars": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::node.lowerReorderableExpression) Expression type `MemberExpression` cannot be safely reordered"
+    ]
+  },
+  "apps/web/src/hooks/use-single-flight.ts::useSingleFlight": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/lib/pdf/pdf-viewport.tsx::PDFViewerContent": {
+    "memos": 2,
+    "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
+  },
+  "apps/web/src/routes/-protected-app.tsx::ProtectedAppFrame": {
+    "memos": 1,
+    "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
+  },
+  "apps/web/src/routes/-protected-app.tsx::ProtectedContent": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/routes/_protected.chat/index.tsx::ChatIndex": {
+    "memos": 4,
+    "reasons": [
+      "Cannot access refs during render",
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/routes/_protected.contacts/index.tsx::CreateContactDialog": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::RouteComponentInner": {
+    "memos": 2,
+    "reasons": [
+      "Cannot access refs during render",
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::VersionDropZone": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day.tsx::PersonalTimesheetDay": {
+    "memos": 1,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog.tsx::SplitEntryDialog": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::lowerExpression) Support UpdateExpression where argument is a global"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx::CalendarView": {
+    "memos": 0,
+    "reasons": [
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx::FilesystemView": {
+    "memos": 19,
+    "reasons": ["Use of incompatible library"]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx::KanbanColumn": {
+    "memos": 0,
+    "reasons": ["Use of incompatible library"]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx::PropertyPopover": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx::SelectionActions": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx::PdfViewerControls": {
+    "memos": 0,
+    "reasons": [
+      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
+    ]
+  },
+  "apps/web/src/routes/auth/organization.tsx::OrganizationList": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "apps/web/src/routes/knowledge/-components/catalogue/install-pack-button.tsx::InstallPackButton": {
+    "memos": 0,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx::TemplateStudioChatInner": {
+    "memos": 1,
+    "reasons": [
+      "Cannot access refs during render",
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
+    ]
+  },
+  "apps/web/src/routes/knowledge/-components/template-studio.tsx::TemplateStudioPage": {
+    "memos": 6,
+    "reasons": [
+      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
+    ]
+  },
+  "apps/web/src/routes/knowledge/clauses.tsx::RouteComponent": {
+    "memos": 5,
+    "reasons": [
+      "`try`/`finally` without `catch` is not supported by React Compiler"
+    ]
+  },
+  "packages/ui/src/components/combobox.tsx::ComboboxChips": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "packages/ui/src/components/hex-color-picker.tsx::InteractiveArea": {
+    "memos": 0,
+    "reasons": ["Cannot access refs during render"]
+  },
+  "packages/ui/src/components/table-chart.tsx::PiePlot": {
+    "memos": 0,
+    "reasons": ["Support non-trivial for..of inits"]
+  },
+  "packages/ui/src/kanban/virtual-cell.tsx::KanbanVirtualCell": {
+    "memos": 0,
+    "reasons": ["Use of incompatible library"]
+  }
+}

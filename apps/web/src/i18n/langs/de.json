@@ -388,6 +388,7 @@
         "reading": "Leseansicht"
       },
       "notLocated": "{count, plural, one {# Behauptung wurde im Original nicht gefunden} other {# Behauptungen wurden im Original nicht gefunden}}",
+      "pdfTextFailed": "Der Text der PDF konnte nicht gelesen werden, daher sind die Behauptungen auf den Seiten nicht markiert.",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9-Importtabelle (XLSX)",
         "exporting": "Export wird vorbereitet…",
         "isdoc": "ISDOC-E-Rechnung (ABRA Gen u. a.)",
+        "ksefFa3": "KSeF-E-Rechnung FA(3) (XML)",
         "spreadsheets": "Tabellen",
         "xlsx": "Rechnungen (XLSX)",
         "xlsxLines": "Rechnungspositionen (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Seite {page} von {pageCount}",
       "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
       "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
+      "pageWithEstimatedMatchCounts": "Seite {page} · etwa {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+      "pageWithMatchCounts": "Seite {page} · {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
+      "pageWithPartialMatchCount": "Seite {page} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite",
       "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
@@ -1596,6 +1601,7 @@
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
     "sendErrorConnectionFailed": "Die Verbindung zum Chat ist fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "sendErrorContinuationRejected": "Der Chat konnte nicht fortgesetzt werden. Senden Sie eine neue Nachricht, um neu zu beginnen.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuchen Sie es mit einer enger gefassten Anfrage erneut.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitten Sie Ihren Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Ihre Klauseln erstellen, bearbeiten und löschen und Playbooks ausführen",
     "scopeLawRead": "Öffentliche Rechtsvorschriften und Rechtsprechung lesen",
     "scopeMattersWrite": "Ihre Akten und Aufgaben erstellen und bearbeiten",
+    "scopeMemoryWrite": "Erinnerungen des Assistenten erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
     "scopeProfile": "Auf Ihre Profilinformationen zugreifen",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Lesen:</group> {items}",
     "summaryLineUse": "<group>Verwenden:</group> {items}",
     "summaryMattersWrite": "Akten und Aufgaben",
+    "summaryMemoryWrite": "Erinnerungen des Assistenten",
     "summaryProfile": "Profil",
     "summaryRead": "Dokumente, Akten und Kontakte",
     "summaryReadAnonymized": "anonymisierte Dokumente und Akten",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
       "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
       "contact": "Kontaktieren Sie uns",
+      "featureDisabled": "Diese Funktion ist vorübergehend deaktiviert.",
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
       "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
     },

@@ -388,6 +388,7 @@
         "reading": "Skaitymo rodinys"
       },
       "notLocated": "{count, plural, one {# teiginys originale nerastas} few {# teiginiai originale nerasti} many {# teiginio originale nerasta} other {# teiginių originale nerasta}}",
+      "pdfTextFailed": "Nepavyko perskaityti PDF teksto, todėl teiginiai puslapiuose nepažymėti.",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 importo lentelė (XLSX)",
         "exporting": "Ruošiamas eksportas…",
         "isdoc": "ISDOC el. sąskaita (ABRA Gen ir kt.)",
+        "ksefFa3": "KSeF el. sąskaita FA(3) (XML)",
         "spreadsheets": "Skaičiuoklės",
         "xlsx": "Sąskaitos (XLSX)",
         "xlsxLines": "Sąskaitų eilutės (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "{page} psl. iš {pageCount}",
       "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page} psl. · apytiksliai {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "pageWithMatchCounts": "{page} psl. · {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
+      "pageWithPartialMatchCount": "{page} psl. · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje",
       "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
@@ -1596,6 +1601,7 @@
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorConnectionFailed": "Nepavyko prisijungti prie pokalbio. Patikrinkite ryšį ir bandykite dar kartą.",
+    "sendErrorContinuationRejected": "Pokalbio tęsti nepavyko. Norėdami pradėti iš naujo, išsiųskite naują žinutę.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",
     "scopeLawRead": "Skaityti viešus teisės aktus ir teismų praktiką",
     "scopeMattersWrite": "Kurti ir redaguoti jūsų bylas ir užduotis",
+    "scopeMemoryWrite": "Kurti ir atnaujinti asistento atmintį",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
     "scopeProfile": "Pasiekti jūsų profilio informaciją",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Skaitymas:</group> {items}",
     "summaryLineUse": "<group>Naudojimas:</group> {items}",
     "summaryMattersWrite": "bylos ir užduotys",
+    "summaryMemoryWrite": "asistento atmintis",
     "summaryProfile": "profilis",
     "summaryRead": "dokumentai, bylos ir kontaktai",
     "summaryReadAnonymized": "anonimizuoti dokumentai ir bylos",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
       "contact": "Susisiekite su mumis",
+      "featureDisabled": "Ši funkcija laikinai išjungta.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },

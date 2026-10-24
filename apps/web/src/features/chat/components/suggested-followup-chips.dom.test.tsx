@@ -72,3 +72,24 @@ test("reports each shown set once and the selected chip without prompt text", as
   ]);
   expect(JSON.stringify(captured)).not.toContain("private prompt");
 });
+
+test("wraps follow-ups without horizontal overflow and preserves full labels", () => {
+  const longLabel = "A follow-up prompt long enough to truncate";
+  const view = render(
+    <AnalyticsContext.Provider value={noopAnalytics}>
+      <IntlProvider locale="en" messages={messages}>
+        <SuggestedFollowupChips
+          analyticsSurface="chat-thread"
+          messageId="message-1"
+          onSelect={() => undefined}
+          prompts={[longLabel, "Short"]}
+          threadId={toChatThreadId("thread-wrap")}
+        />
+      </IntlProvider>
+    </AnalyticsContext.Provider>,
+  );
+  const group = view.getByRole("group");
+  expect(group.className).toContain("flex-wrap");
+  expect(group.className).not.toContain("overflow-x");
+  expect(view.getByText(longLabel).title).toBe(longLabel);
+});

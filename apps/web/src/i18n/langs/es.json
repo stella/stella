@@ -388,6 +388,7 @@
         "reading": "Vista de lectura"
       },
       "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
+      "pdfTextFailed": "No se ha podido leer el texto del PDF, por lo que las afirmaciones no están marcadas en sus páginas.",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Hoja de importación ESO9 (XLSX)",
         "exporting": "Preparando la exportación…",
         "isdoc": "Factura electrónica ISDOC (ABRA Gen y otros)",
+        "ksefFa3": "Factura electrónica KSeF FA(3) (XML)",
         "spreadsheets": "Hojas de cálculo",
         "xlsx": "Facturas (XLSX)",
         "xlsxLines": "Líneas de factura (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Página {page} de {pageCount}",
       "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
       "pageOfEstimatedCountLabel": "Página {page} de aproximadamente {pageCount}",
+      "pageWithEstimatedMatchCounts": "Página {page} · aproximadamente {exactCount, plural, one {# coincidencia exacta} other {# coincidencias exactas}} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
       "pageWithEstimatedResultCount": "Página {page} · aproximadamente {count, plural, one {# resultado} other {# resultados}}",
+      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# coincidencia exacta} other {# coincidencias exactas}} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Acote la búsqueda para ver más resultados"
@@ -1596,6 +1601,7 @@
     "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
     "sendErrorAnonymizationBlocked": "stella no pudo anonimizar un archivo adjunto, así que no se envió nada. Quita el archivo o envía este mensaje sin anonimización.",
     "sendErrorConnectionFailed": "No se pudo conectar con el chat. Compruebe su conexión e inténtelo de nuevo.",
+    "sendErrorContinuationRejected": "No se pudo continuar el chat. Envía un nuevo mensaje para empezar de nuevo.",
     "sendErrorEmptyCompletion": "La IA devolvió una respuesta vacía. Inténtalo de nuevo o reformula tu mensaje.",
     "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
     "sendErrorModelUnavailable": "El modelo de IA configurado ya no está disponible. Pídele al administrador del espacio de trabajo que actualice el modelo en la configuración de la organización.",
@@ -2282,6 +2288,7 @@
     "scopeKnowledgeWrite": "Crear, editar y eliminar sus cláusulas y ejecutar playbooks",
     "scopeLawRead": "Leer legislación pública y jurisprudencia",
     "scopeMattersWrite": "Crear y editar sus asuntos y tareas",
+    "scopeMemoryWrite": "Crear y actualizar los recuerdos del asistente",
     "scopeOfflineAccess": "Mantenerlo con la sesión iniciada sin necesidad de aprobación repetida",
     "scopeOnboarding": "Configurar las jurisdicciones de práctica de su organización",
     "scopeProfile": "Acceder a la información de su perfil",
@@ -2309,6 +2316,7 @@
     "summaryLineRead": "<group>Leer:</group> {items}",
     "summaryLineUse": "<group>Usar:</group> {items}",
     "summaryMattersWrite": "asuntos y tareas",
+    "summaryMemoryWrite": "recuerdos del asistente",
     "summaryProfile": "perfil",
     "summaryRead": "documentos, asuntos y contactos",
     "summaryReadAnonymized": "documentos y asuntos anonimizados",
@@ -2674,6 +2682,7 @@
       "admissionUnavailable": "Esta acción está pausada temporalmente. Inténtelo de nuevo en unos momentos.",
       "concurrencyBusy": "Hay otras tareas en curso. Inténtelo de nuevo en unos momentos.",
       "contact": "Contáctenos",
+      "featureDisabled": "Esta función está desactivada temporalmente.",
       "notEnabled": "Esta acción no está habilitada para su organización.",
       "periodExhausted": "Esta acción está pausada para su organización."
     },

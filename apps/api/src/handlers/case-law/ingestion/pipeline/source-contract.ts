@@ -14,12 +14,14 @@ import {
 import {
   IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
+  SOURCE_FINGERPRINT_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sourceRegistryMembership } from "@/api/lib/legal-search/source-registry-membership";
 
 /** What the pipeline reads off a source's declarations for each decision. */
 export type SourceContract = {
   metadataUrlSchema: unknown;
+  sourceFingerprintVersion: number;
   statedEcliIdentity: StatedEcliIdentity;
 };
 
@@ -44,10 +46,21 @@ const statedEcliIdentityForAdapter = (
 /** Callers carry the adapter identity; metadata values never select their own contract. */
 export const sourceContractForAdapter = (
   adapterKey: string,
-): SourceContract => ({
-  metadataUrlSchema: metadataUrlSchemaForAdapter(adapterKey),
-  statedEcliIdentity: statedEcliIdentityForAdapter(adapterKey),
-});
+): SourceContract => {
+  const membership = sourceRegistryMembership(adapterKey);
+  let sourceFingerprintVersion = 0;
+  if (membership.type === "registered") {
+    sourceFingerprintVersion =
+      SOURCE_FINGERPRINT_VERSIONS[membership.adapterKey];
+  } else if (isImportSourceKey(adapterKey)) {
+    sourceFingerprintVersion = SOURCE_FINGERPRINT_VERSIONS[adapterKey];
+  }
+  return {
+    metadataUrlSchema: metadataUrlSchemaForAdapter(adapterKey),
+    sourceFingerprintVersion,
+    statedEcliIdentity: statedEcliIdentityForAdapter(adapterKey),
+  };
+};
 
 /** Both pipeline entries classify metadata from the persisted source, before any text projection. */
 export const readSourceContract = async (
