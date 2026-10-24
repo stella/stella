@@ -261,10 +261,7 @@ const SHORT_PIN_LEAD_RE = /\s{0,2},?\s{1,2}at\s{1,2}|\s{0,2},\s{0,2}/uy;
 // Tokens
 
 export type BarrierKind =
-  | "statute"
-  | "electronic"
-  | "unsupported-authority"
-  | "treatise";
+  "statute" | "electronic" | "unsupported-authority" | "treatise";
 
 type Span = { start: number; end: number };
 

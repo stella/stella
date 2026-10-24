@@ -92,8 +92,7 @@ export type LegislationV2ProjectionInput = ProjectionInputBase &
   };
 
 export type CorpusIndexProjectionInput =
-  | CaseLawProjectionInput
-  | LegislationV2ProjectionInput;
+  CaseLawProjectionInput | LegislationV2ProjectionInput;
 
 export type CorpusIndexProjectionDescriptor =
   | { action: "erase" }

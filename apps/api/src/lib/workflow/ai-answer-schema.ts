@@ -15,10 +15,7 @@ import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 
 /** `null` is an explicit "the source does not state this", valid for every kind. */
 export type Answer =
-  | string
-  | string[]
-  | null
-  | { amount: number; currency: string | null };
+  string | string[] | null | { amount: number; currency: string | null };
 
 type AnswerKind = AiExtractablePropertyContent["type"];
 
