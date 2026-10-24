@@ -26,7 +26,7 @@ const upstreamWithToolCall = (
         releaseDate: null,
         reasoning: false,
         effortValues: null,
-        inputModalities: ["text"],
+        inputModalities: provider === "mistral" ? ["text", "pdf"] : ["text"],
         outputTokens: 8192,
         temperature: false,
         toolCall: toolCallFor(modelId),

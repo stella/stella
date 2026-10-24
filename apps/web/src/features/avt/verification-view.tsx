@@ -78,11 +78,7 @@ const OriginalDocxView = React.lazy(async () => {
 type DocumentView = "reading" | "original";
 
 type VerdictFilter =
-  | "all"
-  | "conflicts"
-  | "needsreview"
-  | "reviewed"
-  | ClaimState;
+  "all" | "conflicts" | "needsreview" | "reviewed" | ClaimState;
 
 type VerificationViewProps = {
   workspaceId: string;

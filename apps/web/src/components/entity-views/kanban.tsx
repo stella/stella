@@ -10,11 +10,11 @@ import { UserText } from "@stll/ui/bidi-text";
 import {
   buildKanbanBoardMatrix,
   KANBAN_BOARD_AUTO_SCROLL_SOURCES,
-  registerKanbanBoardAutoScroll,
-  KanbanColumnHeader,
   type KanbanBoardCell,
+  KanbanColumnHeader,
   KanbanSubgroupBoard,
   KanbanVirtualCell,
+  registerKanbanBoardAutoScroll,
   resolveKanbanGrouping,
 } from "@stll/ui/kanban";
 import { cn } from "@stll/ui/utils";
@@ -36,7 +36,7 @@ import type { ViewLayout } from "@/lib/types";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { invalidateTaskQueries } from "@/lib/workspaces/mutations/tasks";
 
-import { ENTITY_VIEW_GROUP, entryId, entryGroupValue } from "./model";
+import { ENTITY_VIEW_GROUP, entryGroupValue, entryId } from "./model";
 import { NewEntityViewTask } from "./new-task";
 import type { EntityViewRow, EntityViewScope } from "./types";
 import { useEntityViewGroupingSchema } from "./use-grouping-schema";

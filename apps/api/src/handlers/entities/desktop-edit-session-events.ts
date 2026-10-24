@@ -263,7 +263,18 @@ export const desktopEditSessionEventsHandler = async (
     },
   });
 
-  return sseResponse(stream);
+  // The stream holds while its edit session does: taken over, expired,
+  // closed or no longer permitted all end it.
+  return sseResponse(stream, {
+    kind: "credential",
+    revalidate: async () =>
+      (
+        await dependencies.authorizeDesktopEditSession({
+          sessionId,
+          sessionToken,
+        })
+      ).status === "authorized",
+  });
 };
 
 /**

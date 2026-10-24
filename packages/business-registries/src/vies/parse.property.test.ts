@@ -10,9 +10,9 @@ import {
 import {
   expectRegistryOutcome,
   expectRegistryResponse,
+  forEachRegistryMutation,
   registryExtras,
   registryString,
-  forEachRegistryMutation,
 } from "../shared/property-test-helpers.test.js";
 import { validateVat } from "./client.js";
 import { parseValidation } from "./parse.js";

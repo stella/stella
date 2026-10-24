@@ -16,21 +16,21 @@ import {
   scopeOutputLines,
 } from "./ci-plan-scope";
 import {
-  BUDGET_MS,
-  MAX_CHANGED_TEST_FILES,
-  REPEATS,
   annotationData,
   annotationProperty,
+  BUDGET_MS,
   executeGate,
   failureAnnotation,
+  MAX_CHANGED_TEST_FILES,
   planRepeats,
   renderReport,
+  REPEATS,
+  type Report,
   reportExitCode,
   runOnce,
   selectTargets,
-  trialCommand,
-  type Report,
   type Target,
+  trialCommand,
 } from "./flake-gate";
 
 // Markdown reads consume temporary CLI output only.
@@ -43,11 +43,15 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
   expect(source).toContain("github.event_name == 'pull_request'");
   expect(source).toContain("matrix.shard == 'rest-web'");
   expect(source).toContain(
-    ["CHANGED_FILES_JSON: $", "{{ needs.ci-plan.outputs.changed_files }}"].join(
-      "",
-    ),
+    [
+      `cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'\n`,
+      "          $",
+      "{{ needs.ci-plan.outputs.changed_files }}\n",
+      "          CHANGED_FILES_JSON\n",
+      `          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
+    ].join(""),
   );
-  expect(source).toContain("bun scripts/flake-gate.ts --blocking");
+  expect(source).not.toContain("CHANGED_FILES_JSON: $");
   expect(MAX_CHANGED_TEST_FILES).toBeGreaterThan(0);
   expect(REPEATS).toBe(5);
 });
@@ -417,6 +421,41 @@ test("selected files replace package directory filters and exclude failing sibli
     expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
       { type: "executed", passed: true },
     );
+  });
+});
+
+test("package ignore patterns keep dedicated tests out of normal repeat trials", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "packages/filtered/package.json",
+      JSON.stringify({
+        scripts: {
+          test: "bun test src --path-ignore-patterns '**/*.property.test.ts'",
+        },
+      }),
+    );
+    const eligible = "packages/filtered/src/ordinary.test.ts";
+    const dedicated = "packages/filtered/src/nested/edition.property.test.ts";
+    for (const file of [eligible, dedicated]) {
+      write(
+        root,
+        file,
+        'import {test} from "bun:test"; test("case", () => {});',
+      );
+    }
+    const selected = selectTargets({
+      root,
+      changed: [eligible, dedicated],
+      hasDb: false,
+    });
+    expect(selected.targets.map(({ file }) => file)).toEqual([eligible]);
+    expect(selected.skipped).toEqual([
+      {
+        file: dedicated,
+        reason: "not gated (excluded by package test script)",
+      },
+    ]);
   });
 });
 
@@ -811,10 +850,49 @@ test("pending", async () => await new Promise(() => {}));
   });
 });
 
+test("the CLI reads a changed-file list larger than one environment variable from its file", async () => {
+  const { CHANGED_FILES_PATH: _suppliedChanged, ...inherited } = process.env;
+  await withFixture(async (root) => {
+    const changed = Array.from(
+      { length: 5000 },
+      (_, index) =>
+        `apps/web/src/features/generated/area-${String(index)}/module.ts`,
+    );
+    const list = path.join(root, "changed-files.json");
+    await Bun.write(list, `${JSON.stringify(changed)}\n`);
+    // Linux refuses a single environment string above 128 KiB.
+    expect((await Bun.file(list).text()).length).toBeGreaterThan(128 * 1024);
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "flake-gate.ts"),
+        "--blocking",
+      ],
+      {
+        cwd: root,
+        env: {
+          ...inherited,
+          // Reading the diff instead of the file would fail on this base.
+          BASE_SHA: "refs/heads/missing-flake-gate-fixture-base",
+          CHANGED_FILES_PATH: list,
+          GITHUB_STEP_SUMMARY: path.join(root, "summary.md"),
+        },
+        stdout: "ignore",
+        stderr: "ignore",
+      },
+    );
+    expect(await child.exited).toBe(0);
+    const report: unknown = await Bun.file(
+      path.join(root, "flake-gate-report.json"),
+    ).json();
+    expect(report).toMatchObject({ results: [], errors: [] });
+  });
+}, 30_000);
+
 test("the CLI emits a JSON error report and report/blocking exit codes on an unreadable diff", async () => {
   // The CI step that repeats this file supplies its own changed-file list,
   // which the CLI prefers over the diff; drop it so the diff is read.
-  const { CHANGED_FILES_JSON: _suppliedChanged, ...inherited } = process.env;
+  const { CHANGED_FILES_PATH: _suppliedChanged, ...inherited } = process.env;
   await withFixture(async (root) => {
     for (const blocking of [false, true]) {
       const child = Bun.spawn(

@@ -2,11 +2,11 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  PropertyAssertionError,
-  runProperty,
   assertProperty,
   failureFingerprint,
+  PropertyAssertionError,
   propertyConfig,
+  runProperty,
 } from "./index";
 
 const ENV_KEYS = [

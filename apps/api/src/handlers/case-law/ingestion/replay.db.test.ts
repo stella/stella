@@ -34,14 +34,14 @@ import type {
   ReplayVisitBound,
 } from "@/api/handlers/case-law/ingestion/replay";
 import {
-  ReplayStageError,
   replayFailure,
+  ReplayStageError,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";

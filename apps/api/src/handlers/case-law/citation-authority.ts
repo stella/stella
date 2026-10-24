@@ -167,8 +167,7 @@ export const CITATION_AUTHORITY_WRITE_TOLERANCE = 1e-3;
  * against `citationScore` at the same instant.
  */
 type CitationAuthorityInstant =
-  | { type: "database" }
-  | { type: "pinned"; at: Date };
+  { type: "database" } | { type: "pinned"; at: Date };
 
 const instantSql = (instant: CitationAuthorityInstant): SQL => {
   switch (instant.type) {

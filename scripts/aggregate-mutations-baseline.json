@@ -1150,11 +1150,6 @@
     "reason": "Existing POST route apps/api/src/handlers/memories/create.ts.handler awaits ownership declaration at its handler boundary."
   },
   {
-    "key": "apps/api/src/handlers/notifications/routes.ts|PATCH|/v1/notifications/:notificationId/read|apps/api/src/handlers/notifications/read.ts.handler",
-    "count": 1,
-    "reason": "Existing PATCH route apps/api/src/handlers/notifications/read.ts.handler awaits ownership declaration at its handler boundary."
-  },
-  {
     "key": "apps/api/src/handlers/notifications/routes.ts|POST|/v1/notifications/announcements|apps/api/src/handlers/notifications/announce.ts.handler",
     "count": 1,
     "reason": "Existing POST route apps/api/src/handlers/notifications/announce.ts.handler awaits ownership declaration at its handler boundary."
