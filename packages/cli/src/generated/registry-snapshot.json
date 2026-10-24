@@ -3065,7 +3065,7 @@
       "scope": "matters_write"
     },
     "name": "save_contact",
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from, and optionally external: the contact's source system and id there); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -3233,18 +3233,18 @@
               "type": "string",
               "maxLength": 64,
               "pattern": "^[a-z0-9][a-z0-9._-]*$",
-              "description": "Lowercase key of the system the contact came from"
+              "description": "Lowercase source-system key"
             },
             "id": {
               "type": "string",
               "minLength": 1,
               "maxLength": 256,
-              "description": "The contact's id in that system"
+              "description": "ID in the source system"
             }
           },
           "required": ["source", "id"],
           "additionalProperties": false,
-          "description": "When creating, the contact's identity in the system it came from, as read_contact returns it; a second contact with the same source and id is refused"
+          "description": "Creation only. read_contact returns it; duplicate source/id is refused."
         }
       }
     },
