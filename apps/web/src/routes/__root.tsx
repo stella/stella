@@ -76,6 +76,10 @@ export const Route = createRootRouteWithContext<{
     if (import.meta.env.SSR) {
       return;
     }
+    // Development fixtures supply their own auth providers without an API.
+    if (isDev && location.pathname === "/dev") {
+      return;
+    }
     await requireProfessionalUseForSignedInRoute({
       queryClient: context.queryClient,
       location,

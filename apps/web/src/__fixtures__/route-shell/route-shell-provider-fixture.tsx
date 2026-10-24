@@ -1163,6 +1163,30 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
   if (fixture.suite !== "professional-use") {
     return;
   }
+  test("the development playground loads without an authentication service", async () => {
+    const requestsBeforeLoad = fixture.requests.length;
+    const { router, queryClient } = fixture.createFixtureRouter(
+      "/dev?visual=control-sizes",
+    );
+    try {
+      await router.load();
+      expect(router.state.location.pathname).toBe("/dev");
+      expect(
+        router.state.matches.find((match) => match.routeId === "/dev")?.status,
+      ).toBe("success");
+      expect(queryClient.getQueryState(sessionOptions.queryKey)).toBeUndefined();
+      expect(
+        fixture.requests.slice(requestsBeforeLoad).filter(
+          (request) =>
+            request.startsWith("/api/auth/") ||
+            request === "/v1/me/professional-use",
+        ),
+      ).toEqual([]);
+    } finally {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+    }
+  });
   const casePath = "/law/cze/cases/ns/cs/fixture?q=contract";
   const caseRoute = fixture.registeredRoutes.find(
     ({ id }) => id === "/law/$country/cases/$court/$language/$slug",
