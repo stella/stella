@@ -63,6 +63,12 @@ const precedentProposal = v.parse(
 const steps = Object.values(workflow.jobs).flatMap(
   ({ steps: jobSteps }) => jobSteps,
 );
+const REFRESH_PATHS = [
+  "packages/catalogue/entries/**/manifest.json",
+  "packages/catalogue/src/catalogue.gen.ts",
+  "packages/catalogue/src/catalogue-install-payloads.gen.ts",
+  "packages/catalogue/upstream/pinned-content.gen.json",
+] as const;
 const directories: string[] = [];
 
 afterEach(async () => {
@@ -89,6 +95,18 @@ test("retains least-privilege grants and the reviewed publication identity", () 
   for (const job of Object.values(workflow.jobs)) {
     expect(job.permissions).toEqual({ contents: "read" });
   }
+  const confinement = v.parse(
+    stepSchema,
+    steps.find(({ run }) =>
+      run?.includes("git status --porcelain --untracked-files=all -- ."),
+    ),
+  );
+  const exclusions = [
+    ...v
+      .parse(v.string(), confinement.run)
+      .matchAll(/:\(exclude,(?:glob|literal)\)([^"\n]+)/gu),
+  ].map((match) => match[1]);
+  expect(exclusions.toSorted()).toEqual([...REFRESH_PATHS].toSorted());
   expect(steps.slice(0, 3).map(({ name }) => name)).toEqual([
     "Checkout",
     "Setup Bun",
@@ -353,6 +371,7 @@ esac
         .parse(v.string(), step.with?.["paths"])
         .trim()
         .split("\n");
+      expect(configuredPaths.toSorted()).toEqual([...REFRESH_PATHS].toSorted());
       const status = Bun.spawn(
         [
           "git",
@@ -427,12 +446,9 @@ test.each([
     mode: "advanced",
     exitCode: 0,
     published: [
-      [
-        "packages/catalogue/entries/skills/reviewed/manifest.json",
-        "packages/catalogue/src/catalogue-install-payloads.gen.ts",
-        "packages/catalogue/src/catalogue.gen.ts",
-        "packages/catalogue/upstream/pinned-content.gen.json",
-      ],
+      REFRESH_PATHS.map((pattern) =>
+        pattern.replace("**", "skills/reviewed"),
+      ).toSorted(),
     ],
   },
   { mode: "failed", exitCode: 1, published: [[]] },
