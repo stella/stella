@@ -278,7 +278,7 @@ const putFileEntity = async ({
       headers,
       body: file,
       signal,
-      timeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
+      timeout: { type: "idle", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
     });
   } catch (error) {
     // Best-effort cleanup: abortUpload swallows its own errors and its
