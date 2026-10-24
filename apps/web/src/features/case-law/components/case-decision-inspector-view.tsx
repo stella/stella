@@ -28,6 +28,8 @@ import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
@@ -36,8 +38,6 @@ import {
   DecisionInspectorOutline,
   scrollDecisionInspectorToAnchor,
 } from "@/features/case-law/components/case-viewer/analysis/decision-inspector-outline";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";

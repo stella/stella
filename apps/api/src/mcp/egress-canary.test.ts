@@ -384,12 +384,14 @@ describe("MCP anonymization canary corpus", () => {
       status: "active",
       client: null,
     });
-    readOverviewHandlerMock.mockResolvedValue({
-      entityCount: 0,
-      documentCount: 0,
-      taskCount: 0,
-      recentEntities: [],
-    });
+    readOverviewHandlerMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 0,
+        documentCount: 0,
+        taskCount: 0,
+        recentEntities: [],
+      }),
+    );
     readWorkspaceMembersHandlerMock.mockResolvedValue([]);
     readWorkspaceContactsHandlerMock.mockResolvedValue(
       Result.ok({
@@ -635,34 +637,36 @@ describe("MCP anonymization canary corpus", () => {
         status: "active",
         client: { displayName: clientNameSeed },
       });
-      readOverviewHandlerMock.mockResolvedValue({
-        entityCount: 1,
-        documentCount: 1,
-        taskCount: 0,
-        recentEntities: [
-          {
-            entityId: "00000000-0000-4000-8000-0000000e0001",
-            name: recentNameSeed,
-            kind: "document",
-            status: null,
-            priority: null,
-            dueDate: null,
-            mimeType: null,
-            fieldId: null,
-            propertyId: null,
-            pdfFileId: null,
-            encrypted: false,
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: null,
-            createdBy: createdBySeed,
-            createdByImage: null,
-            createdByDeletedAt: null,
-            assignedTo: assignedToSeed,
-            assignedToImage: null,
-            assignedToDeletedAt: null,
-          },
-        ],
-      });
+      readOverviewHandlerMock.mockResolvedValue(
+        Result.ok({
+          entityCount: 1,
+          documentCount: 1,
+          taskCount: 0,
+          recentEntities: [
+            {
+              entityId: "00000000-0000-4000-8000-0000000e0001",
+              name: recentNameSeed,
+              kind: "document",
+              status: null,
+              priority: null,
+              dueDate: null,
+              mimeType: null,
+              fieldId: null,
+              propertyId: null,
+              pdfFileId: null,
+              encrypted: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: null,
+              createdBy: createdBySeed,
+              createdByImage: null,
+              createdByDeletedAt: null,
+              assignedTo: assignedToSeed,
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
+        }),
+      );
       readWorkspaceContactsHandlerMock.mockResolvedValue(
         Result.ok({
           contacts: [

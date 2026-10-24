@@ -1,4 +1,9 @@
-import { setFixedBrowserTime } from "../helpers/clock";
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
+
+import {
+  SIDEBAR_STATE_COOKIE,
+  SIDEBAR_STATE_VALUES,
+} from "../../src/components/sidebar/sidebar-state-cookie";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
@@ -6,6 +11,62 @@ import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 const MACOS_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+for (const persistence of ["browser-default", "without-cookie-store"]) {
+  test(`sidebar toggles survive reload: ${persistence}`, async ({ page }) => {
+    const context = page.context();
+    await context.clearCookies({ name: SIDEBAR_STATE_COOKIE });
+    if (persistence === "without-cookie-store") {
+      await page.addInitScript(() => {
+        Reflect.deleteProperty(globalThis, "cookieStore");
+      });
+    }
+    const scripts = Promise.withResolvers<undefined>();
+    // Keep parser-blocking prepaint scripts available; delay the app modules.
+    await page.route("**/assets/*.js", async (route) => {
+      await scripts.promise;
+      await route.fallback();
+    });
+    await page.goto("/law", { waitUntil: "commit" });
+    const sidebar = page.locator('[data-slot="sidebar"]');
+    const toggle = sidebar
+      .locator('[data-slot="sidebar-header"]')
+      .getByRole("button");
+    try {
+      await expect(sidebar).toHaveAttribute("data-state", "expanded");
+      // Server-rendered controls stay unavailable until their handlers mount.
+      await expect(toggle).toBeDisabled();
+      if (persistence === "without-cookie-store") {
+        expect(await page.evaluate(() => "cookieStore" in globalThis)).toBe(
+          false,
+        );
+      }
+    } finally {
+      scripts.resolve(undefined);
+    }
+    for (const state of [
+      SIDEBAR_STATE_VALUES.collapsed,
+      SIDEBAR_STATE_VALUES.expanded,
+    ]) {
+      await toggle.click();
+      await expect(sidebar).toHaveAttribute("data-state", state);
+      await expect
+        .poll(
+          async () =>
+            (await context.cookies()).find(
+              ({ name }) => name === SIDEBAR_STATE_COOKIE,
+            )?.value,
+        )
+        .toBe(state);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-sidebar-state",
+        state,
+      );
+      await expect(sidebar).toHaveAttribute("data-state", state);
+    }
+  });
+}
 
 test("authenticated law pages retain the user's recent matters", async ({
   page,
