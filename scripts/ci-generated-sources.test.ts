@@ -889,16 +889,18 @@ const startsWebFromSource = (run: string) =>
     ) {
       return true;
     }
-    const args =
-      words.at(0) === "vite"
-        ? words.slice(1)
-        : words.at(0) === "bunx" && words.at(1) === "vite"
-          ? words.slice(2)
-          : words.at(0) === "bun" &&
-              words.at(1) === "--bun" &&
-              words.at(2) === "vite"
-            ? words.slice(3)
-            : null;
+    let args: string[] | null = null;
+    if (words.at(0) === "vite") {
+      args = words.slice(1);
+    } else if (words.at(0) === "bunx" && words.at(1) === "vite") {
+      args = words.slice(2);
+    } else if (
+      words.at(0) === "bun" &&
+      words.at(1) === "--bun" &&
+      words.at(2) === "vite"
+    ) {
+      args = words.slice(3);
+    }
     if (
       args === null ||
       args.includes("--help") ||
