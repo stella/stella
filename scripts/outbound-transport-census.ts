@@ -63,14 +63,14 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "packages/scan-engine/src/scan-engine.ts",
     class: "package-owned-client",
     reason: "Loads the package-owned WebAssembly binary before initialization.",
-    transports: ["module:@stll/fetch"],
+    transports: ["global:fetch"],
   },
   {
     path: "packages/scan-engine/src/scan-engine.worker.ts",
     class: "package-owned-client",
     reason:
       "Loads the package-owned WebAssembly binary inside the scan worker before initialization.",
-    transports: ["module:@stll/fetch"],
+    transports: ["global:fetch"],
   },
   {
     path: "apps/web/src/runtime.ts",

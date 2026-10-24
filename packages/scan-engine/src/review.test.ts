@@ -10,13 +10,13 @@ import {
   setPageReview,
   targetPageBox,
   undoCleanScanReview,
-} from "./clean-scan.logic";
+} from "./review";
 import type {
   CleanScanResult,
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
-} from "./scan-engine";
+} from "./types";
 
 class FakeScanEngine implements ScanEngine {
   receivedOptions: ScanOptions[] = [];

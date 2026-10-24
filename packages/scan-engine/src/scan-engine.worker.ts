@@ -1,5 +1,3 @@
-import { fetchWithTimeout } from "@stll/fetch";
-
 import initWasm, { clean_scan_rgba } from "../generated/scan_engine.js";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
 
@@ -12,9 +10,9 @@ const post = (response: WorkerResponse, transfer: ArrayBuffer[] = []) => {
 let initialized: Promise<void> | undefined;
 
 const initialize = async () => {
-  initialized ??= fetchWithTimeout(
+  initialized ??= fetch(
     new URL("../generated/scan_engine_bg.wasm", import.meta.url),
-    { timeout: { type: "idle", ms: WASM_LOAD_TIMEOUT_MS } },
+    { signal: AbortSignal.timeout(WASM_LOAD_TIMEOUT_MS) },
   )
     .then(async (response) => await response.arrayBuffer())
     .then(async (module_or_path) => {

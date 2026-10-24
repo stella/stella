@@ -8,7 +8,7 @@ import type {
   ScanEngineError,
   ScanOptions,
   ScanPageRotation,
-} from "./scan-engine";
+} from "./types";
 
 type CleanedScan = Extract<CleanScanResult, { type: "cleaned" }>;
 

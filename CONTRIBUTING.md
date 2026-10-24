@@ -233,6 +233,7 @@ it:
 - `@stll/docx-utils`
 - `@stll/mcp-kit`
 - `@stll/money`
+- `@stll/scan-engine`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`
 - `@stll/stable-stringify`

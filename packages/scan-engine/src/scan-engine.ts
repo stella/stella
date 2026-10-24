@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 
-import { fetchWithTimeout } from "@stll/fetch";
-
 import { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import type {
   CleanScanResult,
@@ -67,9 +65,9 @@ type WorkerEngineOptions = {
 };
 
 const loadWasmBindings = async () => {
-  const response = await fetchWithTimeout(
+  const response = await fetch(
     new URL("../generated/scan_engine_bg.wasm", import.meta.url),
-    { timeout: { type: "idle", ms: WASM_LOAD_TIMEOUT_MS } },
+    { signal: AbortSignal.timeout(WASM_LOAD_TIMEOUT_MS) },
   );
   const module = await WebAssembly.compile(await response.arrayBuffer());
   initSync({ module });
@@ -78,7 +76,7 @@ const loadWasmBindings = async () => {
 
 const createWorkerEngine = ({
   createWorker = () =>
-    new Worker(new URL("scan-engine.worker.ts", import.meta.url), {
+    new Worker(new URL("./scan-engine.worker.js", import.meta.url), {
       type: "module",
     }),
   requestTimeoutMs = WORKER_REQUEST_TIMEOUT_MS,
