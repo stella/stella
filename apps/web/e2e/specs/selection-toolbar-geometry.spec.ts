@@ -14,6 +14,7 @@ const directory = mkdtempSync(path.join(tmpdir(), "selection-toolbar-"));
 const fixture = { bundle: "" };
 test.use({
   storageState: { cookies: [], origins: [] },
+  viewport: { width: 900, height: 700 },
 });
 test.beforeAll(() => {
   const output = path.join(directory, "fixture.js");
@@ -38,21 +39,67 @@ test.beforeAll(() => {
 test.afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
 const cases = {
-  pointer: { pointer: true, first: 0, last: 11, endOffset: null },
-  clippedEnd: { pointer: false, first: 0, last: 11, endOffset: null },
-  visibleEnd: { pointer: false, first: 0, last: 0, endOffset: 60 },
-  offscreen: { pointer: false, first: 11, last: 11, endOffset: null },
+  pointer: {
+    pointer: true,
+    first: 0,
+    last: 11,
+    endOffset: null,
+    width: 280,
+    left: 28,
+  },
+  clippedEnd: {
+    pointer: false,
+    first: 0,
+    last: 11,
+    endOffset: null,
+    width: 280,
+    left: 28,
+  },
+  visibleEnd: {
+    pointer: false,
+    first: 0,
+    last: 0,
+    endOffset: 60,
+    width: 280,
+    left: 28,
+  },
+  offscreen: {
+    pointer: false,
+    first: 11,
+    last: 11,
+    endOffset: null,
+    width: 280,
+    left: 28,
+  },
+  rightEdge: {
+    pointer: true,
+    first: 0,
+    last: 11,
+    endOffset: null,
+    width: 280,
+    left: 600,
+  },
+  narrowRightEdge: {
+    pointer: true,
+    first: 0,
+    last: 11,
+    endOffset: null,
+    width: 160,
+    left: 720,
+  },
 };
 for (const [name, selectionCase] of Object.entries(cases)) {
   test(`selection toolbar follows ${name} within its pane`, async ({
     page,
+    context,
   }) => {
     // Vite injects styles in development; production emits hashed asset links.
-    await page.goto("/auth", { waitUntil: "domcontentloaded" });
+    const stylesheetPage = await context.newPage();
+    await stylesheetPage.goto("/auth", { waitUntil: "domcontentloaded" });
     await expect
       .poll(
         async () =>
-          await page.evaluate(() => {
+          await stylesheetPage.evaluate(() => {
             const probe = window.document.createElement("div");
             probe.className = "fixed -translate-x-1/2";
             window.document.body.append(probe);
@@ -62,7 +109,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
           }),
       )
       .toBe("fixed");
-    const styles = await page.evaluate(() =>
+    const styles = await stylesheetPage.evaluate(() =>
       Array.from(
         window.document.querySelectorAll("style, link[rel='stylesheet']"),
       )
@@ -79,8 +126,11 @@ for (const [name, selectionCase] of Object.entries(cases)) {
         })
         .join("\n"),
     );
-    const fixtureUrl = new URL("/e2e/selection-toolbar-fixture", page.url())
-      .href;
+    const fixtureUrl = new URL(
+      "/e2e/selection-toolbar-fixture",
+      stylesheetPage.url(),
+    ).href;
+    await stylesheetPage.close();
     await page.route(fixtureUrl, async (route) => {
       await route.fulfill({
         contentType: "text/html",
@@ -123,6 +173,8 @@ for (const [name, selectionCase] of Object.entries(cases)) {
       ) {
         throw new Error("Selection fixture did not mount");
       }
+      root.style.width = `${selectionInput.width}px`;
+      root.style.marginLeft = `${selectionInput.left - 28}px`;
       const range = window.document.createRange();
       range.setStart(start, 0);
       range.setEnd(
@@ -155,7 +207,24 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toHaveCSS("position", "fixed");
     await waitForStableGeometry(page, [pane, toolbar, page.locator("header")]);
-    expect((await stableBoundingBox(page, toolbar)).width).toBeGreaterThan(200);
+    expect((await stableBoundingBox(page, toolbar)).width).toBeGreaterThan(
+      name === "narrowRightEdge" ? 100 : 200,
+    );
+    const rows = expect.poll(async () =>
+      toolbar
+        .locator("button")
+        .evaluateAll(
+          (buttons) =>
+            new Set(buttons.map((button) => button.getBoundingClientRect().top))
+              .size,
+        ),
+    );
+    if (name === "narrowRightEdge") {
+      await rows.toBeGreaterThan(1);
+    } else {
+      await rows.toBe(1);
+    }
+    await waitForStableGeometry(page, [pane, toolbar, page.locator("header")]);
     const geometry = await page.evaluate((usePointer) => {
       const paneElement = window.document.querySelector<HTMLElement>(
         '[data-testid="pane"]',

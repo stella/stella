@@ -23,6 +23,7 @@ import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
+import type { LinkIconSource } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
@@ -30,6 +31,8 @@ type StatuteCitationLinks = Extract<LegalCitationLinks, { type: "statute" }>;
 
 type LegalCitationLinkProps = {
   source: ExternalSourceReference;
+  /** Whether `source` is a record a tool returned or was built from model text. */
+  linkIconSource: LinkIconSource;
   externalHref?: string;
   children: ReactNode;
   interactive: boolean;
@@ -115,10 +118,12 @@ const DecisionTrayLink = ({
   decisionId,
   href,
   children,
+  linkIconSource,
 }: {
   decisionId: string;
   href: string;
   children: ReactNode;
+  linkIconSource: LinkIconSource;
 }) => {
   const t = useTranslations();
   const { open } = useOpenDecisionTab();
@@ -136,6 +141,7 @@ const DecisionTrayLink = ({
     <ProxyChatLink
       appearance="tray"
       href={href}
+      iconSource={linkIconSource}
       newTabLabel={t("common.openInNewTab")}
       onClick={onClick}
     >
@@ -161,7 +167,11 @@ const FullLabelTrayLink = ({
       : null);
   if (props.interactive && decisionId !== null) {
     return (
-      <DecisionTrayLink decisionId={decisionId} href={href}>
+      <DecisionTrayLink
+        decisionId={decisionId}
+        href={href}
+        linkIconSource={props.linkIconSource}
+      >
         {props.children}
       </DecisionTrayLink>
     );
@@ -170,6 +180,7 @@ const FullLabelTrayLink = ({
     <ProxyChatLink
       appearance="tray"
       href={href}
+      iconSource={props.linkIconSource}
       newTabLabel={t("common.openInNewTab")}
     >
       {props.children}
@@ -270,6 +281,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
           href={
             citation.url === null ? "" : (props.externalHref ?? citation.url)
           }
+          iconSource={props.linkIconSource}
           newTabLabel={t("common.openInNewTab")}
         >
           {props.children}
