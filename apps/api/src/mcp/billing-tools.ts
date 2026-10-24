@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
