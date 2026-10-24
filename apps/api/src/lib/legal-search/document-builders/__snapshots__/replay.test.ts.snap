@@ -3,11 +3,13 @@
 exports[`replaying EDPB Guidelines 3/2025 (PDF) matches the reviewed outline 1`] = `
 {
   "blocks": 377,
-  "digest": "ca6fee49386968736cb521566f0f89191ae6b32f84264f6bf9cccca8213f2546",
+  "digest": "8dd134058edb800f0540248693db481b81d399030f10c6de8b2582cff0c20114",
   "footnotes": 190,
   "footnotesWithoutReference": [
     "151",
+    "170",
     "173",
+    "178",
   ],
   "legislation": {
     "eu-directive 1995/46": 2,
@@ -72,7 +74,7 @@ exports[`replaying EDPB Guidelines 3/2025 (record page) matches the reviewed out
 exports[`replaying WP29 transparency guidelines (record page) matches the reviewed outline 1`] = `
 {
   "blocks": 10,
-  "digest": "923018646cfbb7252b2090c37ede5f8a5c948a1ae29c1bda278ae0024107fa5c",
+  "digest": "b426c5727d924d1d96f383990f4ce410b660e2cc886b4be44e2b2edd353a88b7",
   "footnotes": 0,
   "footnotesWithoutReference": [],
   "legislation": {},
