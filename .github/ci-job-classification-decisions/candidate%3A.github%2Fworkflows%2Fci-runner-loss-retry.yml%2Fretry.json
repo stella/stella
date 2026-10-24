@@ -1,5 +1,5 @@
 {
   "kind": "ordinary",
-  "qualifier": "Retries failed pull-request jobs once after verified runner loss; no publication or deployment.",
-  "reviewedDigest": "cbeb2c67816ef3effc734919c668c3434803634a4fe765ac9cfd65be749429b8"
+  "qualifier": "Retries jobs after verified runner loss and reconciles pull-request metadata mirrors after completed CI attempts; no publication or deployment.",
+  "reviewedDigest": "1ff58d4e18896ab3b244a722df276378c53d1184fb04cffb7c69e51ff088d44a"
 }

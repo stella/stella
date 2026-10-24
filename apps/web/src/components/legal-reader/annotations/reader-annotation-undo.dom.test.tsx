@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
@@ -6,12 +6,15 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { CreateAnnotationInput } from "@/components/legal-reader/annotations/annotation-types";
 import type { GuestAnnotationStore } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
 import type { ReaderAnnotationWrites } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import type { ReaderAnnotationController } from "./use-reader-annotation-history";
+
 GlobalRegistrator.register({ url: "https://app.example.test/reader" });
-const { act, cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, renderHook, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -277,4 +280,201 @@ test("Mod+Z after pressing outside the reader does not reach its marks", async (
     await sleep(20);
   });
   expect(calls).toHaveLength(1);
+});
+
+const scopeInput = {
+  kind: "highlight",
+  color: "yellow",
+  style: "highlight",
+  visibility: "private",
+  spans: [
+    {
+      blockAnchorId: "p-1",
+      startOffset: 0,
+      endOffset: PASSAGE.length,
+      quote: PASSAGE,
+    },
+  ],
+} satisfies CreateAnnotationInput;
+
+type ScopeHistoryProps = {
+  scope: string;
+  writes: ReaderAnnotationWrites;
+  onCommit?: (controller: ReaderAnnotationController) => void;
+  onDispose?: (controller: ReaderAnnotationController) => void;
+};
+
+const scopeHistory = (initialProps: ScopeHistoryProps) =>
+  renderHook(
+    ({ scope, writes, onCommit, onDispose }: ScopeHistoryProps) => {
+      const controller = useReaderAnnotationHistory({ scope, writes });
+      useLayoutEffect(() => {
+        onCommit?.(controller);
+      });
+      useLayoutEffect(
+        () => () => onDispose?.(controller),
+        [controller, onDispose],
+      );
+      return controller;
+    },
+    {
+      initialProps,
+      wrapper: ({ children }) => (
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ToastProvider>{children}</ToastProvider>
+        </IntlProvider>
+      ),
+    },
+  );
+
+test("queued undo stays with its requesting scope while another document completes a write", async () => {
+  const a = recordingStore();
+  const b = recordingStore();
+  const pending = Promise.withResolvers<undefined>();
+  const delayed = {
+    ...a.writes,
+    create: async (input: CreateAnnotationInput) => {
+      await pending.promise;
+      return await a.writes.create(input);
+    },
+  };
+  const view = scopeHistory({ scope: "A", writes: delayed });
+  const creating = view.result.current.create(scopeInput);
+  const undoing = view.result.current.undo();
+  await act(async () => {
+    await Promise.resolve();
+  });
+  view.rerender({ scope: "B", writes: b.writes });
+  await act(async () => {
+    await view.result.current.create(scopeInput);
+  });
+  await act(async () => {
+    pending.resolve(undefined);
+    await Promise.all([creating, undoing]);
+  });
+  expect(a.calls).toHaveLength(1);
+  expect(b.calls).toHaveLength(1);
+  expect(b.calls.at(0)).toStartWith("create:");
+  await act(async () => {
+    await view.result.current.undo();
+  });
+  expect(b.calls.at(1)).toStartWith("remove:");
+});
+
+test("returning to a previous document or account starts a fresh history", async () => {
+  const a = recordingStore();
+  const b = recordingStore();
+  const view = scopeHistory({ scope: "A", writes: a.writes });
+  await act(async () => {
+    await view.result.current.create(scopeInput);
+  });
+  view.rerender({ scope: "B", writes: b.writes });
+  view.rerender({ scope: "A", writes: a.writes });
+  await act(async () => {
+    await view.result.current.undo();
+  });
+  expect(a.calls).toHaveLength(1);
+  expect(b.calls).toEqual([]);
+});
+
+test("a previous scope's deferred write cannot repopulate history after returning", async () => {
+  const a = recordingStore();
+  const pending = Promise.withResolvers<undefined>();
+  const delayed = {
+    ...a.writes,
+    create: async (input: CreateAnnotationInput) => {
+      await pending.promise;
+      return await a.writes.create(input);
+    },
+  };
+  const view = scopeHistory({ scope: "A", writes: delayed });
+  const creating = view.result.current.create(scopeInput);
+  view.rerender({ scope: "B", writes: recordingStore().writes });
+  view.rerender({ scope: "A", writes: a.writes });
+  await act(async () => {
+    pending.resolve(undefined);
+    await creating;
+  });
+  await act(async () => {
+    await view.result.current.undo();
+  });
+  expect(a.calls).toHaveLength(1);
+});
+
+test("unmounting discards an undo waiting on an earlier write", async () => {
+  const store = recordingStore();
+  const pending = Promise.withResolvers<undefined>();
+  const view = scopeHistory({
+    scope: "A",
+    writes: {
+      ...store.writes,
+      create: async (input) => {
+        await pending.promise;
+        return await store.writes.create(input);
+      },
+    },
+  });
+  const creating = view.result.current.create(scopeInput);
+  const undoing = view.result.current.undo();
+  await act(async () => {
+    await Promise.resolve();
+  });
+  view.unmount();
+  await act(async () => {
+    pending.resolve(undefined);
+    await Promise.all([creating, undoing]);
+  });
+  expect(store.calls).toHaveLength(1);
+});
+
+test("scope commit retires old work and accepts new writes before passive effects", async () => {
+  const a = recordingStore();
+  const b = recordingStore();
+  const pending = Promise.withResolvers<undefined>();
+  const view = scopeHistory({
+    scope: "A",
+    writes: {
+      ...a.writes,
+      create: async (input) => {
+        await pending.promise;
+        return await a.writes.create(input);
+      },
+    },
+  });
+  const previous = view.result.current;
+  const creating = previous.create(scopeInput);
+  const undoing = previous.undo();
+  const next = Promise.withResolvers<Promise<void>[]>();
+  view.rerender({
+    scope: "B",
+    writes: b.writes,
+    onCommit: (controller) => {
+      pending.resolve(undefined);
+      next.resolve([
+        previous.create(scopeInput),
+        controller.create(scopeInput),
+      ]);
+    },
+  });
+  await act(async () => {
+    await Promise.all([creating, undoing, ...(await next.promise)]);
+  });
+  expect(a.calls).toHaveLength(1);
+  expect(b.calls).toHaveLength(1);
+});
+
+test("unmount commit rejects stale writes before passive cleanup", async () => {
+  const store = recordingStore();
+  const view = scopeHistory({ scope: "A", writes: store.writes });
+  const completed = Promise.withResolvers<Promise<void>>();
+  view.rerender({
+    scope: "A",
+    writes: store.writes,
+    onDispose: (controller) => completed.resolve(controller.create(scopeInput)),
+  });
+  view.unmount();
+  await act(async () => {
+    await completed.promise;
+  });
+  expect(store.calls).toEqual([]);
 });
