@@ -28,7 +28,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
+import { patchContactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
@@ -317,12 +317,12 @@ export const updateContactHandler = async function* ({
                 : [],
             }),
         ...pickDefined(rateUpdates.value, ["defaultHourlyRate"]),
-        // Either identifier changes the pair, stored the way every writer does.
         ...(rest.taxId === undefined && rest.vatId === undefined
           ? {}
-          : contactTaxIdentifiers({
-              taxId: rest.taxId === undefined ? existing.taxId : rest.taxId,
-              vatId: rest.vatId === undefined ? existing.vatId : rest.vatId,
+          : patchContactTaxIdentifiers({
+              stored: { taxId: existing.taxId, vatId: existing.vatId },
+              taxId: rest.taxId,
+              vatId: rest.vatId,
             })),
       };
       if (Object.keys(updates).length === 0) {

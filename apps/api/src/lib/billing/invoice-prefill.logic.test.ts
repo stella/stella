@@ -13,6 +13,7 @@ import {
   isWellFormedEuVatId,
   isWellFormedNonEuTaxId,
   latestDate,
+  patchContactTaxIdentifiers,
 } from "./invoice-prefill.logic";
 import type { InvoiceVatReason } from "./invoice-prefill.logic";
 
@@ -405,6 +406,42 @@ describe("contact tax and VAT IDs", () => {
         vatId: null,
       });
     }
+  });
+
+  test("an update keeps an explicit clear and classifies only a tax ID it writes", () => {
+    const both = { taxId: "DE298765432", vatId: "DE111111111" };
+    // Clearing only the VAT ID keeps the tax ID as stored.
+    expect(
+      patchContactTaxIdentifiers({
+        stored: both,
+        taxId: undefined,
+        vatId: null,
+      }),
+    ).toEqual({ taxId: "DE298765432", vatId: null });
+    // A VAT number typed into the tax ID field becomes the VAT ID.
+    expect(
+      patchContactTaxIdentifiers({
+        stored: { taxId: null, vatId: null },
+        taxId: "SK2020123456",
+        vatId: undefined,
+      }),
+    ).toEqual({ taxId: null, vatId: "SK2020123456" });
+    // A legacy pair is read by the rule before a new VAT ID replaces it.
+    expect(
+      patchContactTaxIdentifiers({
+        stored: { taxId: "DE298765432", vatId: null },
+        taxId: undefined,
+        vatId: "DE111111111",
+      }),
+    ).toEqual({ taxId: null, vatId: "DE111111111" });
+    // A national tax number written beside a stored VAT ID stays a tax ID.
+    expect(
+      patchContactTaxIdentifiers({
+        stored: both,
+        taxId: "2020123456",
+        vatId: undefined,
+      }),
+    ).toEqual({ taxId: "2020123456", vatId: "DE111111111" });
   });
 
   test("an un-repaired contact is still reverse charged from its snapshot", () => {

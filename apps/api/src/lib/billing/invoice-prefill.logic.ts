@@ -150,6 +150,30 @@ export const contactTaxIdentifiers = ({
     ? { taxId: null, vatId: taxId }
     : { taxId, vatId };
 
+type ContactTaxIdentifierPatch = {
+  stored: ContactTaxIdentifiers;
+  taxId: string | null | undefined;
+  vatId: string | null | undefined;
+};
+
+/**
+ * The pair an update writes. The stored pair is read by the rule first, the
+ * request's fields then replace it as sent (an explicit clear stays a clear),
+ * and only a tax ID the request itself writes is classified again.
+ */
+export const patchContactTaxIdentifiers = ({
+  stored,
+  taxId,
+  vatId,
+}: ContactTaxIdentifierPatch): ContactTaxIdentifiers => {
+  const current = contactTaxIdentifiers(stored);
+  const next = {
+    taxId: taxId === undefined ? current.taxId : taxId,
+    vatId: vatId === undefined ? current.vatId : vatId,
+  };
+  return taxId === undefined ? next : contactTaxIdentifiers(next);
+};
+
 /**
  * The number part of business tax IDs outside the EU whose syntax is fixed;
  * any other country needs at least five characters, four of them digits.
