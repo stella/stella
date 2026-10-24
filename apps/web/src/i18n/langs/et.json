@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "professionalUse": {
-      "description": "Teie konto loomisel seda kinnitust teile ei näidatud. Jätkamiseks nõustuge sellega.",
       "title": "Kinnitage kutsealane kasutus"
     },
     "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
@@ -4762,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
     "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "continueInChat": "Jätka vestluses",
@@ -4819,6 +4819,7 @@
     "savedSearchesEmpty": "Salvesta otsing, et seda hiljem uuesti kasutada.",
     "scopeFilter": "Otsingu ulatus",
     "scopePlaceholderAll": "Otsi kõigist <scope>allikatest</scope>…",
+    "scopePlaceholderCaseLaw": "Otsi <scope>kohtupraktikast</scope>…",
     "scopePlaceholderMatters": "Otsi kõigist <scope>toimikutest</scope>…",
     "scopePlaceholderRegistries": "Otsi <scope>registritest</scope>…",
     "scopeRegistries": "Registrid",

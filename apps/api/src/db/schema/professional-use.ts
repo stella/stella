@@ -14,6 +14,8 @@ export const PROFESSIONAL_USE_ACCEPTANCE_SOURCE = {
   registration: "registration",
   recordedBeforeProvenance: "recorded_before_provenance",
   ownerBackfill20261022: "owner_backfill_2026_10_22",
+  /** Recorded by the operator command that provisions the review account. */
+  operatorProvisioning: "operator_provisioning",
 } as const;
 
 export const PROFESSIONAL_USE_ACCEPTANCE_SOURCES = [
@@ -21,6 +23,7 @@ export const PROFESSIONAL_USE_ACCEPTANCE_SOURCES = [
   PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration,
   PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance,
   PROFESSIONAL_USE_ACCEPTANCE_SOURCE.ownerBackfill20261022,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning,
 ] as const;
 
 const ownsUserAcceptances = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.user_professional_use_acceptances'::regclass)`;
