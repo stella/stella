@@ -74,6 +74,28 @@ test("effects own invoked component interval helpers", async () => {
   const cases = [
     ["useMountEffect(() => { begin(); });", false],
     ["useMountEffect(() => { begin(); return stop; });", true],
+    ["useMountEffect(() => { begin(); begin(); return stop; });", false],
+    [
+      "const alias = begin; useMountEffect(() => { begin(); alias(); return stop; });",
+      false,
+    ],
+    [
+      "const twice = () => { begin(); begin(); }; useMountEffect(() => { twice(); return stop; });",
+      false,
+    ],
+    ["useMountEffect(() => { begin(); stop(); begin(); return stop; });", true],
+    [
+      "useMountEffect(() => { begin(); if (ready()) stop(); begin(); return stop; });",
+      false,
+    ],
+    [
+      "useMountEffect(() => { if (ready()) begin(); else begin(); return stop; });",
+      true,
+    ],
+    [
+      "useMountEffect(() => { for (let i=0;i<2;i++) begin(); return stop; });",
+      false,
+    ],
     ["const alias = begin; useMountEffect(() => { alias(); });", false],
     ["const unused = () => begin(); useMountEffect(() => {});", true],
   ] as const;
@@ -88,6 +110,23 @@ test("effects own invoked component interval helpers", async () => {
   expect(results.map((lines) => lines.length === 0)).toEqual(
     cases.map(([, owned]) => owned),
   );
+});
+
+test("repeated interval helper proof stays bounded and shared aliases stay shared", async () => {
+  const doubling = Array.from(
+    { length: 10 },
+    (_, index) =>
+      `const wrap${index}=()=>{${index === 0 ? "begin" : `wrap${index - 1}`}();${index === 0 ? "begin" : `wrap${index - 1}`}();};`,
+  ).join(" ");
+  const cases = [
+    `const shared={current:0}; const begin=()=>{const timer=shared;timer.current=setInterval(tick,10);}; useMountEffect(()=>{begin();begin();return()=>clearInterval(shared.current);});`,
+    `const timer={current:0};const begin=()=>{timer.current=setInterval(tick,10);};${doubling}useMountEffect(()=>{wrap9();return()=>clearInterval(timer.current);});`,
+  ];
+  for (const code of cases) {
+    expect(
+      (await lintSingleRule(RULE, `const Comp=()=>{${code}};`)).length,
+    ).toBeGreaterThan(0);
+  }
 });
 
 test("requires the effect cleanup to clear an interval the effect starts", async () => {

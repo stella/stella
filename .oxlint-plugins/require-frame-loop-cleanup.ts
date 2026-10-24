@@ -1803,6 +1803,176 @@ const frameLoopReports = (
   return reports;
 };
 
+type IntervalInvocationOptions = {
+  context: LoopContext;
+  invocation: AstNode;
+  target: AstNode;
+  visiting?: ReadonlySet<AstNode>;
+  budget: { remaining: number };
+};
+
+const MAX_INTERVAL_INVOCATION_PATHS = 64;
+
+const intervalInvocationPaths = ({
+  context,
+  invocation,
+  target,
+  visiting = new Set(),
+  budget,
+}: IntervalInvocationOptions): AstNode[][] | null => {
+  if (budget.remaining <= 0) {
+    return null;
+  }
+  budget.remaining -= 1;
+  const called = namedCallTarget(context, invocation);
+  if (called === null || visiting.has(called)) {
+    return [];
+  }
+  const paths: AstNode[][] = [];
+  if (called === target) {
+    paths.push([invocation]);
+  } else {
+    for (const call of directFunctionCalls(called)) {
+      const nested = intervalInvocationPaths({
+        context,
+        invocation: call,
+        target,
+        visiting: new Set([...visiting, called]),
+        budget,
+      });
+      if (
+        nested === null ||
+        paths.length + nested.length > MAX_INTERVAL_INVOCATION_PATHS
+      ) {
+        return null;
+      }
+      for (const path of nested) {
+        paths.push([invocation, ...path]);
+      }
+    }
+  }
+  // One call node in a loop can execute repeatedly and overwrite the handle.
+  const owner = enclosingFunctions(invocation).at(0);
+  for (
+    let parent = parentOf(invocation);
+    parent !== null && parent !== owner;
+    parent = parentOf(parent)
+  ) {
+    if (
+      [
+        "ForStatement",
+        "ForInStatement",
+        "ForOfStatement",
+        "WhileStatement",
+        "DoWhileStatement",
+      ].includes(parent.type)
+    ) {
+      return paths.length * 2 > MAX_INTERVAL_INVOCATION_PATHS
+        ? null
+        : [...paths, ...paths];
+    }
+  }
+  return paths;
+};
+
+type RepeatedIntervalInvocationOptions = {
+  context: LoopContext;
+  cancels: Cancel[];
+  start: AstNode;
+  owner: AstNode;
+  invocations: AstNode[];
+};
+
+const hasUncancelledRepeatedInvocation = ({
+  context,
+  cancels,
+  start,
+  owner,
+  invocations,
+}: RepeatedIntervalInvocationOptions): boolean => {
+  const handle = handleOf(context, start);
+  if (handle === null || handle.kind === "transferred") {
+    return false;
+  }
+  const variable =
+    handle.kind === "binding" ? handle.variable : handle.rootVariable;
+  if (
+    variable.defs.some(
+      (definition) =>
+        isAstNode(definition.node) &&
+        isWithin(definition.node, owner) &&
+        (handle.kind === "binding" ||
+          ["ObjectExpression", "ArrayExpression"].includes(
+            unwrapExpression(definition.node.init)?.type ?? "",
+          )),
+    )
+  ) {
+    return false;
+  }
+  const proof: CleanupProof = {
+    context,
+    handle,
+    cancels: cancels.filter((cancel) => cancelsHandle(context, cancel, handle)),
+    visiting: new Set(),
+    completed: new Map(),
+  };
+  const write = parentOf(start);
+  // A helper that clears the shared handle before replacing it is restartable.
+  if (write !== null && cancelledBeforeWrite({ proof, write, start })) {
+    return false;
+  }
+  const paths: AstNode[][] = [];
+  const budget = { remaining: MAX_INTERVAL_INVOCATION_PATHS };
+  for (const invocation of invocations) {
+    const nested = intervalInvocationPaths({
+      context,
+      invocation,
+      target: owner,
+      budget,
+    });
+    if (
+      nested === null ||
+      paths.length + nested.length > MAX_INTERVAL_INVOCATION_PATHS
+    ) {
+      return true;
+    }
+    paths.push(...nested);
+  }
+  for (let index = 0; index < paths.length; index += 1) {
+    const left = paths[index];
+    if (left === undefined) {
+      continue;
+    }
+    for (const right of paths.slice(index + 1)) {
+      if (
+        enclosingEffect(left[0] ?? start) !== enclosingEffect(right[0] ?? start)
+      ) {
+        continue;
+      }
+      const divergence = left.findIndex(
+        (call, position) => call !== right[position],
+      );
+      if (divergence < 0) {
+        return true;
+      }
+      const earlier = left[divergence];
+      const later = right[divergence];
+      if (earlier === undefined || later === undefined) {
+        return true;
+      }
+      if (mutuallyExclusiveBranches(earlier, later)) {
+        continue;
+      }
+      const [first, second] =
+        earlier.range[0] < later.range[0] ? [earlier, later] : [later, earlier];
+      if (!cancelledBeforeWrite({ proof, write: second, start: first })) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 const intervalReports = (
   context: LoopContext,
   { cancels, starts, effectInvocations }: LoopCalls,
@@ -1823,14 +1993,22 @@ const intervalReports = (
     if (owner === undefined || enclosingEffect(node) !== null) {
       continue;
     }
+    const repeated = hasUncancelledRepeatedInvocation({
+      context,
+      cancels: cancels.interval,
+      start: node,
+      owner,
+      invocations: effectInvocations,
+    });
     for (const invocation of effectInvocations) {
       if (
         invokesFunction(context, invocation, owner) &&
-        !isOwned(context, cancels.interval, {
-          effectAnchor: invocation,
-          loopBody: functionFor(context, callArguments(node).at(0)),
-          start: node,
-        })
+        (repeated ||
+          !isOwned(context, cancels.interval, {
+            effectAnchor: invocation,
+            loopBody: functionFor(context, callArguments(node).at(0)),
+            start: node,
+          }))
       ) {
         reports.push({
           kind: "interval",
