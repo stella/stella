@@ -55,7 +55,7 @@ import { logger } from "@/api/lib/observability/logger";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ObjectBounded } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
-import { headObject } from "@/api/lib/s3-presign";
+import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
 import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
@@ -99,6 +99,8 @@ const config = {
 } satisfies WorkspaceHandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
+
+const UPLOAD_FINALIZE_DEADLINE_PASSED = "Upload finalize deadline passed";
 
 const fileSecurityRejectionDetails = (
   error: UploadFinalizeError,
@@ -327,7 +329,7 @@ const claimAndFinalize = async function* ({
           .update(pendingUploads)
           .set({
             status: "rejected",
-            rejectReason: "Upload URL expired",
+            rejectReason: UPLOAD_FINALIZE_DEADLINE_PASSED,
             finalizedAt: new Date(),
           })
           .where(
@@ -348,7 +350,10 @@ const claimAndFinalize = async function* ({
     );
     if (expiredRows.at(0)) {
       return Result.err(
-        new HandlerError({ status: 422, message: "Upload URL expired" }),
+        new HandlerError({
+          status: 422,
+          message: UPLOAD_FINALIZE_DEADLINE_PASSED,
+        }),
       );
     }
     return Result.err(
@@ -459,17 +464,25 @@ type StagedUploadObject = {
   tmpKey: string;
 };
 
+/**
+ * The staged object under its scoped key, else under the legacy key. Absent
+ * only when the store confirms both keys are empty: a store that failed to
+ * answer for either key leaves the question open.
+ */
 const resolveStagedUploadObject = async ({
   organizationId,
   uploadId,
   workspaceId,
 }: StagedUploadKeyProps): Promise<
-  Result<StagedUploadObject, S3PresignError>
+  Result<StagedUploadObject, S3ObjectMissingError | S3PresignError>
 > => {
   const scopedTmpKey = tmpUploadKey({ organizationId, uploadId, workspaceId });
   const scopedHead = await headObject(scopedTmpKey);
   if (Result.isOk(scopedHead)) {
     return Result.ok({ head: scopedHead.value, tmpKey: scopedTmpKey });
+  }
+  if (!S3ObjectMissingError.is(scopedHead.error)) {
+    return Result.err(scopedHead.error);
   }
 
   const legacyTmpKey = legacyTmpUploadKey(uploadId);
@@ -477,8 +490,7 @@ const resolveStagedUploadObject = async ({
   if (Result.isOk(legacyHead)) {
     return Result.ok({ head: legacyHead.value, tmpKey: legacyTmpKey });
   }
-
-  return Result.err(scopedHead.error);
+  return Result.err(legacyHead.error);
 };
 
 const deleteStagedUploadObjects = async ({
@@ -527,12 +539,21 @@ const runFinalize = async function* ({
     workspaceId,
   });
   if (Result.isError(stagedObject)) {
+    // Only a confirmed absence is terminal. Any other storage failure keeps
+    // the row retryable (status 500 marks it `failed`) and the staged bytes
+    // in place, so the next finalize after the claim cool-down reads them.
     return Result.err(
-      new UploadFinalizeError({
-        status: 404,
-        message: "Upload not found in staging — URL likely expired",
-        rejectReason: "tmp-head-failed",
-      }),
+      S3ObjectMissingError.is(stagedObject.error)
+        ? new UploadFinalizeError({
+            status: 404,
+            message: "Upload not found in staging",
+            rejectReason: "tmp-missing",
+          })
+        : new UploadFinalizeError({
+            status: 500,
+            message: "Upload storage is unavailable; retry shortly",
+            rejectReason: "tmp-head-failed",
+          }),
     );
   }
   const { head, tmpKey } = stagedObject.value;

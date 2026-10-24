@@ -1,10 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
+
 import {
   appShellNavigationLink,
   ROUTE_ERROR_HEADING,
 } from "../helpers/app-shell";
-import { setFixedBrowserTime } from "../helpers/clock";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { seedSidebarState } from "../helpers/sidebar-state";
 import { STAGING_CHECKS } from "../helpers/staging-state";

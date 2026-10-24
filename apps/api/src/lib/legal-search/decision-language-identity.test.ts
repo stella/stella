@@ -57,6 +57,7 @@ describe("decision language identity", () => {
       "AUT",
       "CZE",
       "EU",
+      "GBR",
       "HUN",
       "POL",
       "SVK",

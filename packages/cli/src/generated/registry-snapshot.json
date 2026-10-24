@@ -342,7 +342,16 @@
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
-              "admitted": ["AUT", "CZE", "EU", "HUN", "POL", "SVK", "USA"],
+              "admitted": [
+                "AUT",
+                "CZE",
+                "EU",
+                "GBR",
+                "HUN",
+                "POL",
+                "SVK",
+                "USA"
+              ],
               "tool": "case_law_coverage"
             }
           }

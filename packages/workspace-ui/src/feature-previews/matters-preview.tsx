@@ -6,7 +6,7 @@ import { cn } from "@stll/ui/utils";
 import { TASK_STATUS_COLORS, TASK_STATUS_ICONS } from "../task-status";
 import { formatPreviewCount, formatPreviewDate } from "./format";
 import { PREVIEW_MATTERS, PREVIEW_PEOPLE } from "./mock-data";
-import type { PreviewPerson } from "./mock-data";
+import type { PreviewMatter, PreviewPerson } from "./mock-data";
 import {
   FeaturePreviewSurface,
   PreviewAvatar,
@@ -21,24 +21,45 @@ export type MattersPreviewLabels = {
   done: string;
 };
 
+export type MattersPreviewTaskStatus = "open" | "in_progress" | "done";
+
+export type MattersPreviewTask = {
+  name: string;
+  status: MattersPreviewTaskStatus;
+  /** `YYYY-MM-DD`. */
+  due: string;
+  assignee: PreviewPerson;
+  /** File name of an attached document, if any. */
+  attachment: string | null;
+};
+
+/** The board's content: the matter in the title row, its team, and the tasks
+ *  (grouped into columns by status, in the given order). */
+export type MattersPreviewData = {
+  matter: PreviewMatter;
+  team: readonly PreviewPerson[];
+  tasks: readonly MattersPreviewTask[];
+};
+
 /** A matter's task board: three status columns of task cards with due dates,
  *  assignees and an attached document. */
 export const MattersPreview = ({
   labels,
   locale,
+  data = DEFAULT_DATA,
   className,
-}: FeaturePreviewProps<MattersPreviewLabels>) => (
+}: FeaturePreviewProps<MattersPreviewLabels, MattersPreviewData>) => (
   <FeaturePreviewSurface
     className={className}
-    icon={
-      <MatterIcon className="size-4 shrink-0" matter={PREVIEW_MATTERS.cargo} />
-    }
-    meta={<PreviewAvatarStack people={TEAM} />}
-    title={PREVIEW_MATTERS.cargo.name}
+    icon={<MatterIcon className="size-4 shrink-0" matter={data.matter} />}
+    meta={<PreviewAvatarStack people={data.team} />}
+    title={data.matter.name}
   >
     <div className="grid h-full grid-cols-3 gap-2 p-2">
       {COLUMNS.map((column) => {
-        const tasks = TASKS.filter((task) => task.status === column.status);
+        const tasks = data.tasks.filter(
+          (task) => task.status === column.status,
+        );
         const Icon = TASK_STATUS_ICONS[column.status];
         return (
           <div
@@ -70,7 +91,7 @@ export const MattersPreview = ({
   </FeaturePreviewSurface>
 );
 
-type PreviewTaskCardProps = { task: PreviewTask; locale: string };
+type PreviewTaskCardProps = { task: MattersPreviewTask; locale: string };
 
 const PreviewTaskCard = ({ task, locale }: PreviewTaskCardProps) => {
   const Icon = TASK_STATUS_ICONS[task.status];
@@ -110,70 +131,61 @@ const PreviewTaskCard = ({ task, locale }: PreviewTaskCardProps) => {
   );
 };
 
-type PreviewTaskStatus = "open" | "in_progress" | "done";
-
-type PreviewTask = {
-  name: string;
-  status: PreviewTaskStatus;
-  due: string;
-  assignee: PreviewPerson;
-  attachment: string | null;
-};
-
 const COLUMNS = [
   { status: "open", label: "open" },
   { status: "in_progress", label: "inProgress" },
   { status: "done", label: "done" },
 ] as const satisfies readonly {
-  status: PreviewTaskStatus;
+  status: MattersPreviewTaskStatus;
   label: keyof MattersPreviewLabels;
 }[];
 
-const TEAM = [PREVIEW_PEOPLE.laura, PREVIEW_PEOPLE.tomas, PREVIEW_PEOPLE.amira];
-
-// Mock content depicting user data, not interface text; deliberately
-// untranslated.
-const TASKS: readonly PreviewTask[] = [
-  {
-    name: "Draft statement of claim",
-    status: "open",
-    due: "2026-10-28",
-    assignee: PREVIEW_PEOPLE.laura,
-    attachment: null,
-  },
-  {
-    name: "Collect shipping manifests",
-    status: "open",
-    due: "2026-10-30",
-    assignee: PREVIEW_PEOPLE.tomas,
-    attachment: null,
-  },
-  {
-    name: "Review expert report on cargo damage",
-    status: "in_progress",
-    due: "2026-10-21",
-    assignee: PREVIEW_PEOPLE.amira,
-    attachment: "Expert report – cargo damage.pdf",
-  },
-  {
-    name: "Prepare witness statements",
-    status: "in_progress",
-    due: "2026-10-23",
-    assignee: PREVIEW_PEOPLE.laura,
-    attachment: null,
-  },
-  {
-    name: "Send letter before action",
-    status: "done",
-    due: "2026-10-12",
-    assignee: PREVIEW_PEOPLE.tomas,
-    attachment: "Letter before action.docx",
-  },
-  {
-    name: "Run conflict check",
-    status: "done",
-    due: "2026-10-02",
-    assignee: PREVIEW_PEOPLE.amira,
-    attachment: null,
-  },
-];
+// The default content; see `mock-data.ts`.
+const DEFAULT_DATA = {
+  matter: PREVIEW_MATTERS.cargo,
+  team: [PREVIEW_PEOPLE.laura, PREVIEW_PEOPLE.tomas, PREVIEW_PEOPLE.amira],
+  tasks: [
+    {
+      name: "Draft statement of claim",
+      status: "open",
+      due: "2026-10-28",
+      assignee: PREVIEW_PEOPLE.laura,
+      attachment: null,
+    },
+    {
+      name: "Collect shipping manifests",
+      status: "open",
+      due: "2026-10-30",
+      assignee: PREVIEW_PEOPLE.tomas,
+      attachment: null,
+    },
+    {
+      name: "Review expert report on cargo damage",
+      status: "in_progress",
+      due: "2026-10-21",
+      assignee: PREVIEW_PEOPLE.amira,
+      attachment: "Expert report – cargo damage.pdf",
+    },
+    {
+      name: "Prepare witness statements",
+      status: "in_progress",
+      due: "2026-10-23",
+      assignee: PREVIEW_PEOPLE.laura,
+      attachment: null,
+    },
+    {
+      name: "Send letter before action",
+      status: "done",
+      due: "2026-10-12",
+      assignee: PREVIEW_PEOPLE.tomas,
+      attachment: "Letter before action.docx",
+    },
+    {
+      name: "Run conflict check",
+      status: "done",
+      due: "2026-10-02",
+      assignee: PREVIEW_PEOPLE.amira,
+      attachment: null,
+    },
+  ],
+} as const satisfies MattersPreviewData;

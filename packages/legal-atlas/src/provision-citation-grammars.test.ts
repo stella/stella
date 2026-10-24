@@ -32,6 +32,7 @@ const FIXTURES = {
     gazette: [],
     text: "Article 6(1)(a) GDPR",
   },
+  GBR: null,
   HUN: null,
   POL: null,
   SVK: null,

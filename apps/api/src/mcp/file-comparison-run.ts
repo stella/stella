@@ -43,7 +43,7 @@ import {
   ENCRYPTED_CONTENT_MESSAGE,
 } from "@/api/lib/files/detect-file-encryption";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { headObject } from "@/api/lib/s3-presign";
+import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import {
   DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
   deliverTemporaryRedline,
@@ -270,10 +270,17 @@ const loadInput = async ({
   if (Result.isError(head)) {
     return {
       status: "error",
-      response: notFoundResult(
-        "One of the files to compare was never uploaded",
-        `PUT the bytes to the url prepare_file_comparison returned before comparing. ${PREPARE_HINT}`,
-      ),
+      response: S3ObjectMissingError.is(head.error)
+        ? notFoundResult(
+            "One of the files to compare was never uploaded",
+            `PUT the bytes to the url prepare_file_comparison returned before comparing. ${PREPARE_HINT}`,
+          )
+        : structuredErrorResult({
+            code: "internal_error",
+            message: "One of the files to compare could not be read",
+            hint: "Retry the comparison; if it repeats, stage the files again.",
+            retryable: true,
+          }),
     };
   }
   if (head.value.contentLength !== row.declaredSize) {

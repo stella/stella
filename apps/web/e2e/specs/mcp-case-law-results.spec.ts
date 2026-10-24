@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/mcp-app.fixtures";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
+import { installBrowserClock } from "@stll/ui/browser-clock";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -272,7 +273,7 @@ const hostHistory = async (page: Page, key: "appCalls" | "appLinks") =>
 test("case-law app filters, pages and opens links through the MCP host", async ({
   page,
 }) => {
-  await page.clock.install({ time: new Date("2024-04-15T12:00:00Z") });
+  await installBrowserClock(page, new Date("2024-04-15T12:00:00Z"));
   const errors: string[] = [];
   page.on("pageerror", ({ message }) => errors.push(message));
   const app = await mountApp({

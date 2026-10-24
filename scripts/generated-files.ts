@@ -317,6 +317,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/case-law/search-warnings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "packages/api-contract/src/case-law-court-year.ts",
+      "packages/api-contract/src/document-version-upload.ts",
       "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       "packages/api-contract/src/mcp-capability-executors.ts",

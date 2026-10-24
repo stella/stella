@@ -45,6 +45,40 @@ supplied seed is preserved.
 not. A non-integer value throws rather than being silently ignored. A seed
 explicitly supplied by the caller takes precedence over this default.
 
+## Response order
+
+`responseOrderProperty` from `@stll/property-testing/response-order` checks
+code that issues overlapping async requests (a refresh racing a user action,
+two overlapping searches) against the response orders fast-check's scheduler
+explores. The scenario answers each request through `hold`, computing the
+reply when the request is made and delivering it when the scheduler releases
+it; `settle` releases everything before the assertions run.
+
+```ts
+test("search shows the newest query's results", async () => {
+  await assertProperty(
+    "search shows the newest query's results",
+    responseOrderProperty({
+      scenario: fc.array(fc.string(), { minLength: 2 }),
+      act: reactAct,
+      run: async (order, queries) => {
+        const search = renderSearch((query) =>
+          order.hold(`search ${query}`, () => resultsFor(query)),
+        );
+        for (const query of queries) {
+          search.type(query);
+        }
+        await order.settle();
+        expect(search.shownQuery()).toBe(queries.at(-1));
+      },
+    }),
+  );
+});
+```
+
+A run fails as misconfigured when it never had two responses in flight or
+asserts while a response is still held.
+
 ## Seeds and failures
 
 `assertProperty` first replays every entry under `<repo-relative file>::<id>`

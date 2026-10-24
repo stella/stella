@@ -8,8 +8,8 @@ import {
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
 import marketingCaseLaw from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
-import { setFixedBrowserTime } from "../helpers/clock";
 import {
   getMarketingAgentThreadId,
   MARKETING_AGENT_FIRST_QUESTION,
