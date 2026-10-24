@@ -53,7 +53,7 @@ jobs:
       task_cache_producer: ${{ steps.ancestor.outputs.task_cache_producer }}
       proof: ${{ steps.reuse.outputs.proof }}
       main-base: ${{ steps.ancestor.outputs.main-base }}
-      run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
+      run: ${{ steps.commit-heavy.outputs.heavy_passed == 'true' && 'false' || steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
       - name: Check release candidate
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
@@ -116,28 +116,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ inputs.sha || github.sha }}
-          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          # One heavy run per commit: a dispatch for a commit whose heavy run
-          # already passed (for a version commit, the run its push started)
-          # reuses that result. PR depth is decided on its own status, so a
-          # passed heavy run never stands in for a failed or missing PR depth.
-          if [[ "$EVENT" == workflow_dispatch ]]; then
-            read -r heavy depth < <(bash scripts/gh-retry.sh api "repos/$GITHUB_REPOSITORY/commits/$SHA/statuses?per_page=100" \
-              --jq '[.[] | select(.creator.login == "github-actions[bot]")] as $own
-                | [($own | map(select(.context == "main/heavy")) | first | .state // "none"),
-                   ($own | map(select(.context == "main/pr-depth")) | first | .state // "none")] | join(" ")')
-            if [[ "$depth" == success ]]; then
-              echo "depth_passed=true" >> "$GITHUB_OUTPUT"
-            fi
-            if [[ "$heavy" == success ]]; then
-              echo "::notice::main/heavy already passed on $SHA; reusing it."
-              echo "heavy_reused=true" >> "$GITHUB_OUTPUT"
-              echo "run=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
           if proof=$(bash scripts/verify-release-tree-proof.sh --find-proof "$GITHUB_REPOSITORY" "$SHA") && [[ -n "$proof" ]]; then
             if bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"; then
               echo "proof=$proof" >> "$GITHUB_OUTPUT"
@@ -147,12 +127,30 @@ jobs:
             fi
           fi
 
+      # One heavy run per commit: a dispatch for a commit whose own heavy run
+      # already passed (for a version commit, the run its push started)
+      # reuses it. PR depth is decided on its own status, so a passed heavy
+      # run never stands in for a failed or missing PR depth.
+      - name: Reuse this commit's passed heavy run
+        id: commit-heavy
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.reuse.outputs.run != 'false' }}
+        working-directory: .release-proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/gh-retry.sh api "repos/$GITHUB_REPOSITORY/commits/$SHA/statuses?per_page=100" \
+            --jq '[.[] | select(.creator.login == "github-actions[bot]")] as $own
+              | "heavy_passed=\($own | map(select(.context == "main/heavy")) | first | .state == "success")",
+                "depth_passed=\($own | map(select(.context == "main/pr-depth")) | first | .state == "success")"' \
+            >> "$GITHUB_OUTPUT"
+
       # A version commit gets PR depth for itself: main/pr-depth otherwise runs
       # only on whichever commit is main's tip when it starts.
       - name: Dispatch release PR-depth checks
         if: >-
-          ${{ (steps.reuse.outputs.run != 'false' || steps.reuse.outputs.heavy_reused == 'true')
-          && steps.reuse.outputs.depth_passed != 'true' && (
+          ${{ steps.reuse.outputs.run != 'false' && steps.commit-heavy.outputs.depth_passed != 'true' && (
           (github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true)
           || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v'))) }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

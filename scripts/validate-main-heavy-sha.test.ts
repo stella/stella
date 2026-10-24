@@ -182,6 +182,8 @@ test("only trusted main tooling is checked out before target verification", () =
     // Uncached runtime for the release queue history check; no target code.
     "Setup Bun",
     "Reuse completed release proof",
+    // Reads statuses only, through trusted main tooling.
+    "Reuse this commit's passed heavy run",
     "Dispatch release PR-depth checks",
     "Select untested heavy SHA",
     "Validate SHA format",
@@ -227,152 +229,172 @@ test("scheduled main validation delegates ancestry to trusted main tooling befor
   }
 });
 
-// The raw steps, with their conditions, for the release dispatch rules.
-const rawValidationSteps = v.parse(
-  v.array(
-    v.looseObject({
-      name: v.optional(v.string()),
-      if: v.optional(v.string()),
-      run: v.optional(v.string()),
-    }),
-  ),
-  v.parse(
-    v.object({
-      jobs: v.object({
-        validate: v.looseObject({ steps: v.array(v.unknown()) }),
+// The raw workflow, with conditions and job outputs, for the release rules.
+const rawWorkflow = v.parse(
+  v.object({
+    jobs: v.object({
+      validate: v.looseObject({
+        outputs: v.record(v.string(), v.string()),
+        steps: v.array(
+          v.looseObject({
+            name: v.optional(v.string()),
+            if: v.optional(v.string()),
+            run: v.optional(v.string()),
+          }),
+        ),
       }),
     }),
-    Bun.YAML.parse(
-      readFileSync(
-        new URL("../.github/workflows/main-heavy.yml", import.meta.url),
-        "utf-8",
-      ),
+  }),
+  Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/main-heavy.yml", import.meta.url),
+      "utf-8",
     ),
-  ).jobs.validate.steps,
+  ),
 );
 const rawStep = (name: string) =>
-  rawValidationSteps.find((step) => step.name === name) ??
+  rawWorkflow.jobs.validate.steps.find((step) => step.name === name) ??
   panic(`main-heavy.yml is missing step ${name}`);
 
-test("a version commit's push run and a release candidate dispatch PR depth for that commit", () => {
+type ReleaseContext = {
+  github: object;
+  inputs?: object;
+  reuse?: object;
+  commitHeavy?: object;
+};
+// GitHub reads an output a step did not write as an empty string.
+const releaseContext = ({
+  github,
+  inputs = {},
+  reuse = {},
+  commitHeavy = {},
+}: ReleaseContext) =>
+  contextFromNested({
+    github,
+    inputs: { sha: "", release_candidate: false, ...inputs },
+    steps: {
+      reuse: { outputs: { run: "", proof: "", ...reuse } },
+      "commit-heavy": {
+        outputs: { heavy_passed: "", depth_passed: "", ...commitHeavy },
+      },
+      selection: { outputs: { run: "true" } },
+    },
+  });
+const releasePush = {
+  github: {
+    event_name: "push",
+    event: { head_commit: { message: "chore: release v0.9.63 (#6740)" } },
+  },
+};
+const candidate = {
+  github: { event_name: "workflow_dispatch", event: {} },
+  inputs: { sha: "a".repeat(40), release_candidate: true },
+};
+
+test("a version commit's push run and a release candidate dispatch PR depth unless it passed", () => {
   const condition =
     rawStep("Dispatch release PR-depth checks").if ??
     panic("the PR-depth dispatch needs a condition");
-  // GitHub reads an output a step did not write as an empty string.
-  const none = { run: "", heavy_reused: "", depth_passed: "" };
-  type DecideContext = {
-    github: object;
-    inputs?: object;
-    steps: { reuse: { outputs: object } };
-  };
-  const decide = (context: DecideContext) =>
-    evaluate(
-      condition,
-      contextFromNested({
-        inputs: { sha: "", release_candidate: false },
-        ...context,
-        steps: {
-          reuse: { outputs: { ...none, ...context.steps.reuse.outputs } },
-        },
-      }),
-    );
-  const release = {
-    event_name: "push",
-    event: { head_commit: { message: "chore: release v0.9.63 (#6740)" } },
-  };
-  expect(decide({ github: release, steps: { reuse: { outputs: {} } } })).toBe(
-    true,
-  );
+  const decide = (context: ReleaseContext) =>
+    evaluate(condition, releaseContext(context));
+  expect(decide(releasePush)).toBe(true);
   expect(
     decide({
       github: {
         event_name: "push",
         event: { head_commit: { message: "fix(web): keep one row" } },
       },
-      steps: { reuse: { outputs: {} } },
     }),
   ).toBe(false);
-  const candidate = {
-    github: { event_name: "workflow_dispatch", event: {} },
-    inputs: { sha: "a".repeat(40), release_candidate: true },
-  };
-  expect(decide({ ...candidate, steps: { reuse: { outputs: {} } } })).toBe(
+  expect(decide(candidate)).toBe(true);
+  // A passed heavy run never stands in for PR depth that did not pass.
+  expect(decide({ ...candidate, commitHeavy: { heavy_passed: "true" } })).toBe(
     true,
   );
-  // A tree proof covers heavy and PR depth: nothing is dispatched again.
-  expect(
-    decide({ ...candidate, steps: { reuse: { outputs: { run: "false" } } } }),
-  ).toBe(false);
-  // A reused heavy run never stands in for PR depth that did not pass.
-  const reusedHeavy = { run: "false", heavy_reused: "true" };
-  expect(
-    decide({ ...candidate, steps: { reuse: { outputs: reusedHeavy } } }),
-  ).toBe(true);
   expect(
     decide({
       ...candidate,
-      steps: { reuse: { outputs: { ...reusedHeavy, depth_passed: "true" } } },
+      commitHeavy: { heavy_passed: "true", depth_passed: "true" },
     }),
   ).toBe(false);
+  // A tree proof covers heavy and PR depth: nothing is dispatched again.
+  expect(decide({ ...candidate, reuse: { run: "false" } })).toBe(false);
 });
 
-test("a dispatch reuses a commit's passed heavy run and a push never asks", () => {
+test("a passed heavy run of the commit skips the suites", () => {
+  const output =
+    rawWorkflow.jobs.validate.outputs["run"] ??
+    panic("validate needs a run output");
+  expect(
+    evaluate(
+      output,
+      releaseContext({ ...candidate, commitHeavy: { heavy_passed: "true" } }),
+    ),
+  ).toBe("false");
+  expect(evaluate(output, releaseContext(candidate))).toBe("true");
+  expect(
+    evaluate(output, releaseContext({ ...candidate, reuse: { run: "false" } })),
+  ).toBe("false");
+});
+
+test("the commit's heavy and PR-depth results come from the workflow's own statuses", () => {
   const script =
-    rawStep("Reuse completed release proof").run ??
-    panic("the reuse step needs a script");
-  const run = (event: string, heavy: string, depth = "none") => {
-    const directory = mkdtempSync(path.join(tmpdir(), "main-heavy-reuse-"));
+    rawStep("Reuse this commit's passed heavy run").run ??
+    panic("the commit reuse step needs a script");
+  const outputsFor = (statuses: object[]) => {
+    const directory = mkdtempSync(path.join(tmpdir(), "main-heavy-commit-"));
     try {
-      const calls = path.join(directory, "calls");
       const output = path.join(directory, "output");
+      const fixture = path.join(directory, "statuses.json");
       writeFileSync(output, "");
+      writeFileSync(fixture, JSON.stringify(statuses));
       mkdirSync(path.join(directory, "scripts"));
+      // Answers like gh: the --jq filter runs over the status list.
       writeFileSync(
         path.join(directory, "scripts/gh-retry.sh"),
-        `echo "$*" >> "${calls}"\necho '${heavy} ${depth}'\n`,
-      );
-      // No tree proof: the step falls through to running the suites.
-      writeFileSync(
-        path.join(directory, "scripts/verify-release-tree-proof.sh"),
-        `echo verify >> "${calls}"\nexit 1\n`,
+        `filter=""
+while (($# > 0)); do
+  case "$1" in
+    --jq) filter=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+jq -r "$filter" "${fixture}"
+`,
       );
       const child = Bun.spawnSync(["bash", "-euc", script], {
         cwd: directory,
         env: {
           ...process.env,
-          EVENT: event,
           SHA: "b".repeat(40),
           GITHUB_REPOSITORY: "stella/stella",
           GITHUB_OUTPUT: output,
         },
       });
-      return {
-        exitCode: child.exitCode,
-        output: readFileSync(output, "utf-8"),
-        calls: readFileSync(calls, "utf-8").trim().split("\n"),
-      };
+      expect(child.exitCode, child.stderr.toString()).toBe(0);
+      return readFileSync(output, "utf-8");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   };
-  // Heavy passed, PR depth missing or failed: heavy is reused, depth is not.
-  for (const depth of ["none", "failure"]) {
-    const reused = run("workflow_dispatch", "success", depth);
-    expect(reused.exitCode).toBe(0);
-    expect(reused.output).toBe("heavy_reused=true\nrun=false\n");
-    expect(reused.calls[0]).toContain(`commits/${"b".repeat(40)}/statuses`);
-    expect(reused.calls).not.toContain("verify");
-  }
-  expect(run("workflow_dispatch", "success", "success").output).toBe(
-    "depth_passed=true\nheavy_reused=true\nrun=false\n",
+  const own = (context: string, state: string) => ({
+    context,
+    state,
+    creator: { login: "github-actions[bot]" },
+  });
+  expect(outputsFor([own("main/heavy", "success")])).toBe(
+    "heavy_passed=true\ndepth_passed=false\n",
   );
-  // A failed or missing heavy result is tested again.
-  for (const heavy of ["failure", "none"]) {
-    const retried = run("workflow_dispatch", heavy, "success");
-    expect(retried.output).toBe("depth_passed=true\n");
-    expect(retried.calls.at(-1)).toBe("verify");
-  }
-  const pushed = run("push", "success");
-  expect(pushed.output).toBe("");
-  expect(pushed.calls).toEqual(["verify"]);
+  expect(
+    outputsFor([own("main/heavy", "success"), own("main/pr-depth", "success")]),
+  ).toBe("heavy_passed=true\ndepth_passed=true\n");
+  // The newest status decides, and only the workflow's own statuses count.
+  expect(
+    outputsFor([
+      own("main/heavy", "failure"),
+      own("main/heavy", "success"),
+      { ...own("main/pr-depth", "success"), creator: { login: "someone" } },
+    ]),
+  ).toBe("heavy_passed=false\ndepth_passed=false\n");
+  expect(outputsFor([])).toBe("heavy_passed=false\ndepth_passed=false\n");
 });
