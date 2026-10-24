@@ -89,9 +89,11 @@ jobs:
               );
               const result = jobs.filter(job => job.name === "ci-result").sort((left, right) => right.id - left.id).at(0);
               if (!result || result.status !== "completed") continue;
-              if (jobs.some(job => job.name === "ci-metadata-plan")) {
+              const planned = name => jobs.some(job => job.name === name
+                && job.status === "completed" && job.conclusion !== "skipped");
+              if (planned("ci-metadata-plan")) {
                 mirrors.push({ run, result });
-              } else if (run.run_attempt > 1 && jobs.some(job => job.name === "ci-plan")) {
+              } else if (run.run_attempt > 1 && planned("ci-plan")) {
                 const completed = Date.parse(result.completed_at);
                 if (!Number.isFinite(completed)) {
                   failures.push(`code run ${run.id} has no readable ci-result completion time`);

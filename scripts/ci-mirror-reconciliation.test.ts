@@ -95,7 +95,15 @@ const reconcile = async (
         return [
           {
             id: run.id * 10,
-            name: run.kind === "code" ? "ci-plan" : "ci-metadata-plan",
+            name: "ci-plan",
+            status: "completed",
+            conclusion: run.kind === "code" ? "success" : "skipped",
+          },
+          {
+            id: run.id * 10 - 1,
+            name: "ci-metadata-plan",
+            status: "completed",
+            conclusion: run.kind === "metadata" ? "success" : "skipped",
           },
           {
             id: run.id * 10 + 1,
