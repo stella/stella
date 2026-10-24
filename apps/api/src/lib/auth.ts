@@ -191,6 +191,10 @@ import {
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import {
+  carriesSessionCredential,
+  skippableSessionCookieOf,
+} from "@/api/lib/auth/session-credential";
 import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
@@ -2590,8 +2594,22 @@ type AuthSessionReadOptions = {
   headers: Headers | Record<string, string>;
   returnHeaders: true;
 };
-const readAuthSession = async (options: AuthSessionReadOptions) =>
-  await getAuth().api.getSession(options);
+/** The caller's session; a request without a session credential skips the lookup. */
+const readAuthSession = async (options: AuthSessionReadOptions) => {
+  const auth = getAuth();
+  const headers =
+    options.headers instanceof Headers
+      ? options.headers
+      : new Headers(options.headers);
+  const sessionCookie = await skippableSessionCookieOf(auth);
+  if (
+    sessionCookie !== null &&
+    !carriesSessionCredential(headers, sessionCookie)
+  ) {
+    return { headers: new Headers(), response: null };
+  }
+  return await auth.api.getSession(options);
+};
 type AuthSessionReader = typeof readAuthSession;
 
 type GetSessionAndMemberAuthorizationOptions = {
