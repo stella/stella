@@ -38,6 +38,42 @@ describe("online DDL lock census", () => {
     expect(censusOnlineDdlSource(ownerSource)).toEqual([]);
   });
 
+  test.each([
+    ["const createSqlTarget", "export const createSqlTarget"],
+    ["const match =", "const /* target proof */ match ="],
+  ])("constant declarations retain their AST proof: %s", (before, after) => {
+    const source = ownerSource.replace(before, () => after);
+    expect(source).not.toBe(ownerSource);
+    expect(censusOnlineDdlSource(source)).toEqual([]);
+  });
+
+  test.each([
+    ["const createSqlTarget", "let createSqlTarget"],
+    ["const createSqlTarget", "var createSqlTarget"],
+    ["const match =", "let match ="],
+    ["const match =", "var match ="],
+  ])(
+    "mutable declarations cannot supply the concurrent proof: %s",
+    (before, after) => {
+      const source = ownerSource.replace(before, () => after);
+      expect(source).not.toBe(ownerSource);
+      expect(censusOnlineDdlSource(source)).toContain(
+        "createSql pass-through lacks an anchored concurrent-index AST proof",
+      );
+    },
+  );
+
+  test("a dormant constant declaration cannot supply the concurrent proof", () => {
+    const source = ownerSource.replace(
+      /const createSqlTarget =[\s\S]*?;/u,
+      (declaration) => `if (false) {\n${declaration}\n}`,
+    );
+    expect(source).not.toBe(ownerSource);
+    expect(censusOnlineDdlSource(source)).toContain(
+      "createSql pass-through lacks an anchored concurrent-index AST proof",
+    );
+  });
+
   test("unknown DDL in a gated SQL template fails the census", () => {
     const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`CREATE MATERIALIZED VIEW probe_view AS SELECT 1\` });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
@@ -175,7 +211,7 @@ describe("online DDL lock census", () => {
     (replacement) => {
       const source = ownerSource.replace(
         "connection: guardedConnection,",
-        replacement,
+        () => replacement,
       );
       expect(source).not.toBe(ownerSource);
       expect(censusOnlineDdlSource(source).join("\n")).toMatch(
@@ -215,10 +251,13 @@ describe("online DDL lock census", () => {
     "the concurrent target guard must execute before building SQL: %s",
     (wrapper) => {
       const guard =
-        / {2}if \(builtName !== name \|\| builtTable !== tableName\) \{[\s\S]*?\n  \}/u
+        / {2}if \(builtName !== name \|\| builtTable !== tableName\) \{[\s\S]*?\n {2}\}/u
           .exec(ownerSource)
           ?.at(0) ?? panic("Missing concurrent-index target guard");
-      const source = ownerSource.replace(guard, `${wrapper} {\n${guard}\n}`);
+      const source = ownerSource.replace(
+        guard,
+        () => `${wrapper} {\n${guard}\n}`,
+      );
       expect(source).not.toBe(ownerSource);
       expect(censusOnlineDdlSource(source)).toContain(
         "createSql pass-through lacks an anchored concurrent-index AST proof",

@@ -530,16 +530,23 @@ const isRuntimeAttemptCallback = (call: ts.CallExpression): boolean => {
   return false;
 };
 
+const constantDeclarations = (
+  statements: readonly ts.Statement[],
+  source: ts.SourceFile,
+) =>
+  statements.flatMap((statement) =>
+    ts.isVariableStatement(statement) &&
+    statement.declarationList.getFirstToken(source)?.kind ===
+      ts.SyntaxKind.ConstKeyword
+      ? [...statement.declarationList.declarations]
+      : [],
+  );
+
 const provesConcurrentCreateSql = (
   source: ts.SourceFile,
   call: ts.CallExpression,
 ): boolean => {
-  const sourceNodes = source.statements.flatMap((statement) =>
-    ts.isVariableStatement(statement) &&
-    (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
-      ? [...statement.declarationList.declarations]
-      : [],
-  );
+  const sourceNodes = constantDeclarations(source.statements, source);
   const anchoredPattern = sourceNodes.some(
     (node) =>
       ts.isVariableDeclaration(node) &&
@@ -573,12 +580,7 @@ const provesConcurrentCreateSql = (
   if (!ts.isBlock(body)) {
     return false;
   }
-  const declarations = body.statements.flatMap((statement) =>
-    ts.isVariableStatement(statement) &&
-    (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
-      ? [...statement.declarationList.declarations]
-      : [],
-  );
+  const declarations = constantDeclarations(body.statements, source);
   const guardedTarget = body.statements.some((node) => {
     if (
       !ts.isIfStatement(node) ||
@@ -935,6 +937,81 @@ const provesBlockBuilder = (context: SourceContext): boolean => {
   );
 };
 
+const validateSessionCalls = (
+  context: SourceContext,
+  sessionCalls: readonly ts.CallExpression[],
+): string[] => {
+  const { source } = context;
+  const errors: string[] = [];
+  for (const call of sessionCalls) {
+    const owner = enclosingVariableName(call);
+    const options = call.arguments.at(0);
+    const properties = new Map(
+      options && ts.isObjectLiteralExpression(options)
+        ? options.properties.map((property) => [
+            "name" in property ? property.name.getText(source) : undefined,
+            property,
+          ])
+        : [],
+    );
+    const closedOptions =
+      call.arguments.length === 1 &&
+      options !== undefined &&
+      ts.isObjectLiteralExpression(options) &&
+      options.properties.length === 4 &&
+      properties.size === 4 &&
+      ["connection", "target", "lockRetry", "onRetry"].every((name) =>
+        properties.has(name),
+      ) &&
+      options.properties.every(
+        (property) =>
+          ts.isPropertyAssignment(property) ||
+          ts.isShorthandPropertyAssignment(property),
+      );
+    const property = properties.get("connection");
+    let connection: ts.Expression | undefined;
+    if (property && ts.isPropertyAssignment(property)) {
+      connection = property.initializer;
+    } else if (property && ts.isShorthandPropertyAssignment(property)) {
+      connection = property.name;
+    }
+    const line =
+      source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
+    if (owner === "runGatedTableWork") {
+      if (
+        !closedOptions ||
+        !connection ||
+        !ts.isIdentifier(connection) ||
+        connection.text !== "guardedConnection" ||
+        !isRuntimeAttemptCallback(call)
+      ) {
+        errors.push(
+          `sessionOn at line ${line} in runGatedTableWork must use the guarded runtime.attempt connection`,
+        );
+      }
+      continue;
+    }
+    if (owner === "createUngatedTableGateForTests") {
+      if (
+        !closedOptions ||
+        !connection ||
+        !ts.isIdentifier(connection) ||
+        connection.text !== "connection"
+      ) {
+        errors.push(
+          `sessionOn at line ${line} in the test gate must use its supplied connection`,
+        );
+      }
+      continue;
+    }
+    errors.push(
+      `sessionOn at line ${line} is outside runGatedTableWork or createUngatedTableGateForTests`,
+    );
+  }
+
+  return errors;
+};
+
 export const censusOnlineDdlSource = (sourceText: string): string[] => {
   const source = ts.createSourceFile(
     OWNER_PATH,
@@ -1065,71 +1142,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
     }
   }
 
-  for (const call of sessionCalls) {
-    const owner = enclosingVariableName(call);
-    const options = call.arguments.at(0);
-    const properties = new Map(
-      options && ts.isObjectLiteralExpression(options)
-        ? options.properties.map((property) => [
-            "name" in property ? property.name.getText(source) : undefined,
-            property,
-          ])
-        : [],
-    );
-    const closedOptions =
-      call.arguments.length === 1 &&
-      options !== undefined &&
-      ts.isObjectLiteralExpression(options) &&
-      options.properties.length === 4 &&
-      properties.size === 4 &&
-      ["connection", "target", "lockRetry", "onRetry"].every((name) =>
-        properties.has(name),
-      ) &&
-      options.properties.every(
-        (property) =>
-          ts.isPropertyAssignment(property) ||
-          ts.isShorthandPropertyAssignment(property),
-      );
-    const property = properties.get("connection");
-    const connection =
-      property && ts.isPropertyAssignment(property)
-        ? property.initializer
-        : property && ts.isShorthandPropertyAssignment(property)
-          ? property.name
-          : undefined;
-    const line =
-      source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
-    if (owner === "runGatedTableWork") {
-      if (
-        !closedOptions ||
-        !connection ||
-        !ts.isIdentifier(connection) ||
-        connection.text !== "guardedConnection" ||
-        !isRuntimeAttemptCallback(call)
-      ) {
-        errors.push(
-          `sessionOn at line ${line} in runGatedTableWork must use the guarded runtime.attempt connection`,
-        );
-      }
-      continue;
-    }
-    if (owner === "createUngatedTableGateForTests") {
-      if (
-        !closedOptions ||
-        !connection ||
-        !ts.isIdentifier(connection) ||
-        connection.text !== "connection"
-      ) {
-        errors.push(
-          `sessionOn at line ${line} in the test gate must use its supplied connection`,
-        );
-      }
-      continue;
-    }
-    errors.push(
-      `sessionOn at line ${line} is outside runGatedTableWork or createUngatedTableGateForTests`,
-    );
-  }
+  errors.push(...validateSessionCalls(context, sessionCalls));
 
   errors.push(...validateStatementBrand(source));
 
