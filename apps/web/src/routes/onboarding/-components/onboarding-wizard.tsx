@@ -72,12 +72,7 @@ import { OrganizationStep } from "@/routes/onboarding/-components/steps/organiza
 import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
 
 type Step =
-  | "organization"
-  | "jurisdiction"
-  | "catalogue"
-  | "ai"
-  | "invite"
-  | "download";
+  "organization" | "jurisdiction" | "catalogue" | "ai" | "invite" | "download";
 
 type WizardData = {
   orgName: string;

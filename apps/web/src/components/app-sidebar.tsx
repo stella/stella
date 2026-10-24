@@ -879,8 +879,7 @@ const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
 type MatterExpansion =
-  | { type: "automatic" }
-  | { type: "selected"; workspaceId: string | null };
+  { type: "automatic" } | { type: "selected"; workspaceId: string | null };
 
 // Pinned workspaces are local UI state until backend user preferences or a
 // workspace-member `pinned` flag exists.

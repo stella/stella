@@ -47,8 +47,7 @@ type OpenedDocumentInput = {
   > & { title: SearchHistoryTitleParts };
 }[OpenedDocumentKind];
 type HistoryRecordInput =
-  | SearchRecordInput
-  | (OpenedDocumentInput & { path: string });
+  SearchRecordInput | (OpenedDocumentInput & { path: string });
 type LawHistoryScope = {
   userId: string | undefined;
   organizationId: string | null | undefined;
