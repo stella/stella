@@ -125,7 +125,7 @@ test("loads the stored summary endpoint instead of the full decision read", asyn
   const client = new QueryClient();
 
   clients.push(client);
-  const result = await client.fetchQuery(decisionCardSummaryOptions(cited.id));
+  const result = await client.query(decisionCardSummaryOptions(cited.id));
 
   expect(result.court).toBe(cited.court);
   expect(requests).toHaveLength(1);
