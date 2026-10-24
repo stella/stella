@@ -700,46 +700,22 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
-    migration: "20261021080000_reader_annotation_verification_claims",
+    migration: "20261019010000_invoice_party_tax_vat_ids",
     form: "add-column",
     reason:
-      "The three claim columns are nullable and default-free, a catalog-only addition to reader notes without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
+      "The seller, contact and invoice party identifier columns are nullable and default-free, a catalog-only addition without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
   },
   {
-    migration: "20261021080000_reader_annotation_verification_claims",
+    migration: "20261019020000_invoice_language",
+    form: "add-column",
+    reason:
+      "The nullable language preferences are catalog-only; invoices.language takes a constant literal default on PostgreSQL's fast-default path without rewriting invoice rows; lock acquisition is bounded by 5s and the statement by 30s.",
+  },
+  {
+    migration: "20261019020000_invoice_language",
     form: "add-constraint",
     reason:
-      "The widened target-type and claim-shape CHECKs are added NOT VALID without scanning existing notes, under 1s lock_timeout and 5s statement_timeout; the online phase validates them after the schema lock is released.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "add-foreign-key",
-    reason:
-      "The matter key is added NOT VALID, so existing notes (all with a null matter) are not scanned, under 1s lock_timeout and 5s statement_timeout; the online phase validates it.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "create-policy",
-    reason:
-      "Replacing the reader-note policies installs catalog metadata without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "row-level-security",
-    reason:
-      "FORCE ROW LEVEL SECURITY on reader notes changes only catalog flags; the owner paths it affects get their own policies in the same migration, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261021080000_reader_annotation_verification_claims",
-    form: "create-trigger",
-    reason:
-      "The statement-level claim cleanup trigger installs metadata on the claims table without scanning rows, under 1s lock_timeout and 5s statement_timeout.",
-  },
-  {
-    migration: "20261022130000_account_export_annotation_authorship",
-    form: "create-policy",
-    reason:
-      "The account export owner policy adds catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
+      "The three language CHECKs are added NOT VALID without scanning existing rows, under 5s lock_timeout and 30s statement_timeout; they are validated in the online phase after the schema lock is released.",
   },
   {
     migration: "20261024190200_case_law_decision_date_floor_gbr",
@@ -962,6 +938,48 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     form: "create-trigger",
     reason:
       "Creating the trigger is a metadata-only change with lock acquisition bounded by the 1s lock_timeout.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "add-column",
+    reason:
+      "The three claim columns are nullable and default-free, a catalog-only addition to reader notes without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "add-constraint",
+    reason:
+      "The widened target-type and claim-shape CHECKs are added NOT VALID without scanning existing notes, under 1s lock_timeout and 5s statement_timeout; the online phase validates them after the schema lock is released.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "add-foreign-key",
+    reason:
+      "The matter key is added NOT VALID, so existing notes (all with a null matter) are not scanned, under 1s lock_timeout and 5s statement_timeout; the online phase validates it.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "create-policy",
+    reason:
+      "Replacing the reader-note policies installs catalog metadata without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "row-level-security",
+    reason:
+      "FORCE ROW LEVEL SECURITY on reader notes changes only catalog flags; the owner paths it affects get their own policies in the same migration, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "create-trigger",
+    reason:
+      "The statement-level claim cleanup trigger installs metadata on the claims table without scanning rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261022130000_account_export_annotation_authorship",
+    form: "create-policy",
+    reason:
+      "The account export owner policy adds catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
   },
 ];
 export type LockBaselineEntry = {
