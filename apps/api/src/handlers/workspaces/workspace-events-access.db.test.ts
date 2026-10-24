@@ -104,18 +104,6 @@ const isHeartbeatOnly = (chunk: Uint8Array) =>
     .split(SSE_HEARTBEAT_FRAME)
     .every((part) => part === "");
 
-// A heartbeat keeps an idle connection open and says nothing about delivery;
-// a slow setup can queue one before the step under test, so it is skipped.
-const readPastHeartbeats = async (
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  deadline: Promise<"timeout">,
-): Promise<"timeout" | ReadableStreamReadResult<Uint8Array>> => {
-  const result = await Promise.race([reader.read(), deadline]);
-  return result !== "timeout" && !result.done && isHeartbeatOnly(result.value)
-    ? await readPastHeartbeats(reader, deadline)
-    : result;
-};
-
 const readNextChunk = async (response: Response) => {
   const { body } = response;
   if (!body) {
@@ -123,10 +111,21 @@ const readNextChunk = async (response: Response) => {
   }
   const reader = body.getReader();
   try {
-    return await readPastHeartbeats(
-      reader,
-      Bun.sleep(STREAM_CLOSE_WAIT_MS).then(() => "timeout" as const),
+    const deadline = Bun.sleep(STREAM_CLOSE_WAIT_MS).then(
+      () => "timeout" as const,
     );
+    // A heartbeat keeps an idle connection open and says nothing about
+    // delivery; a slow setup can queue one before the step under test.
+    for (;;) {
+      const result = await Promise.race([reader.read(), deadline]);
+      if (
+        result === "timeout" ||
+        result.done ||
+        !isHeartbeatOnly(result.value)
+      ) {
+        return result;
+      }
+    }
   } finally {
     try {
       await reader.cancel();
