@@ -1199,7 +1199,7 @@ test("target-owned journeys require their harness before setup and execution", (
     const workflow = Bun.YAML.parse(
       readFileSync(
         new URL(`../.github/workflows/${file}`, import.meta.url),
-        "utf8",
+        "utf-8",
       ),
     );
     const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
