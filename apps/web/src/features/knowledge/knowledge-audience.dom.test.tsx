@@ -258,7 +258,8 @@ const { createRouteErrorLifecycleController } =
 const { HotkeysProvider } = await import("@tanstack/react-hotkeys");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
-const { refreshAuthQueries } = await import("@/lib/auth-queries");
+const { professionalUseOptions, refreshAuthQueries } =
+  await import("@/lib/auth-queries");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
 const { RouteProviderScopeBoundary } =
   await import("@/components/route-provider-scope/route-provider-scope");
@@ -482,6 +483,11 @@ describe("Knowledge for every visitor, on one live client", () => {
       requests.map(() => "/api/auth/get-session"),
     );
     expect(cachedKeys(queryClient)).toEqual([JSON.stringify(["session"])]);
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: professionalUseOptions(undefined).queryKey }),
+    ).toBeUndefined();
     view.unmount();
   });
 
@@ -494,6 +500,11 @@ describe("Knowledge for every visitor, on one live client", () => {
     );
 
     expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: professionalUseOptions(undefined).queryKey }),
+    ).toBeUndefined();
     for (const key of cachedKeys(queryClient)) {
       expect(
         key === JSON.stringify(["session"]) ||

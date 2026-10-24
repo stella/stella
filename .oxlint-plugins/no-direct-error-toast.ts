@@ -7,10 +7,10 @@ import {
   isIdentifierReference,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   staticStringValue,
   unwrapExpression,
-  type ScopeContext,
 } from "./utils.ts";
 
 const TOAST_MODULES = new Set(["@stll/ui/toast", "@stll/ui/components/toast"]);

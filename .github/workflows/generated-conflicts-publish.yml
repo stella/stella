@@ -1,4 +1,5 @@
 name: Publish generated-only conflict resolutions
+run-name: "Publish generated-only conflict resolution of run ${{ inputs.resolve_run_id }}"
 
 defaults:
   run:

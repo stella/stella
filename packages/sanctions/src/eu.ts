@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { countryFromIso } from "./countries";
 import type {
@@ -26,8 +26,8 @@ import {
 } from "./values";
 import {
   attribute,
-  childText,
   childrenNamed,
+  childText,
   parseXmlList,
   readXmlListVersion,
 } from "./xml";

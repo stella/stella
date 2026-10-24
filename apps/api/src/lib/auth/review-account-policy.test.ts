@@ -7,11 +7,11 @@ import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import {
   checkReviewAccountAccess,
   narrowReviewOrganizationScopes,
+  resolveReviewAccountBodyEmailOperation,
+  resolveReviewAccountSessionOperation,
   REVIEW_ACCOUNT_EXCLUDED_SCOPES,
   REVIEW_ACCOUNT_OPERATION,
   REVIEW_ACCOUNT_POLICY,
-  resolveReviewAccountBodyEmailOperation,
-  resolveReviewAccountSessionOperation,
 } from "@/api/lib/auth/review-account-policy";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 

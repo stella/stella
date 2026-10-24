@@ -6,11 +6,59 @@ export type DependencyChanges = {
   added: string[];
   changed: string[];
   removed: string[];
+  registry: ReadonlySet<string>;
 };
 
-const packageName = (resolution: string): string => {
-  const separator = resolution.lastIndexOf("@");
-  return separator > 0 ? resolution.slice(0, separator) : resolution;
+export type ResolutionSource =
+  "registry" | "workspace" | "link" | "file" | "git" | "tarball";
+
+const resolutionParts = (resolution: string): [name: string, spec: string] => {
+  const separator = resolution.indexOf("@", resolution.startsWith("@") ? 1 : 0);
+  return separator > 0
+    ? [resolution.slice(0, separator), resolution.slice(separator + 1)]
+    : [resolution, ""];
+};
+
+export const resolutionSource = (resolution: string): ResolutionSource => {
+  const [, spec] = resolutionParts(resolution);
+  if (spec.startsWith("workspace:")) {
+    return "workspace";
+  }
+  if (spec.startsWith("link:")) {
+    return "link";
+  }
+  if (spec.startsWith("file:")) {
+    return "file";
+  }
+  if (
+    spec.startsWith("git+") ||
+    spec.startsWith("github:") ||
+    spec.startsWith("git@") ||
+    /\.git(?:#|$)/u.test(spec)
+  ) {
+    return "git";
+  }
+  if (spec.startsWith("http://") || spec.startsWith("https://")) {
+    return "tarball";
+  }
+  return "registry";
+};
+
+const isRegistryResolution = (resolution: string): boolean => {
+  const source = resolutionSource(resolution);
+  switch (source) {
+    case "registry":
+      return true;
+    case "workspace":
+    case "link":
+    case "file":
+    case "git":
+    case "tarball":
+      return false;
+    default:
+      source satisfies never;
+      return panic("unhandled dependency resolution source");
+  }
 };
 
 const resolutions = (text: string): Map<string, string[]> => {
@@ -32,7 +80,7 @@ const resolutions = (text: string): Map<string, string[]> => {
       continue;
     }
     const resolution = value.at(0);
-    const name = packageName(resolution);
+    const [name] = resolutionParts(resolution);
     const entries = grouped.get(name) ?? [];
     entries.push(resolution);
     grouped.set(name, entries);
@@ -56,6 +104,7 @@ export const dependencyChanges = (
   const added: string[] = [];
   const changed: string[] = [];
   const removed: string[] = [];
+  const registry = new Set<string>();
   const names = new Set([...base.keys(), ...head.keys()]);
   for (const name of names) {
     const before = base.get(name);
@@ -67,15 +116,25 @@ export const dependencyChanges = (
     } else if (!same(before, after)) {
       changed.push(name);
     }
+    const beforeRegistry = before?.filter(isRegistryResolution) ?? [];
+    const afterRegistry = after?.filter(isRegistryResolution) ?? [];
+    if (
+      afterRegistry.some((resolution) => !beforeRegistry.includes(resolution))
+    ) {
+      registry.add(name);
+    }
   }
   return {
     added: added.toSorted(compareCodeUnit),
     changed: changed.toSorted(compareCodeUnit),
     removed: removed.toSorted(compareCodeUnit),
+    registry,
   };
 };
 
 export const auditablePackages = ({
   added,
   changed,
-}: DependencyChanges): Set<string> => new Set([...added, ...changed]);
+  registry,
+}: DependencyChanges): Set<string> =>
+  new Set([...added, ...changed].filter((name) => registry.has(name)));

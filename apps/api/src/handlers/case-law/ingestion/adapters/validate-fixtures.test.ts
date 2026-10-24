@@ -16,8 +16,8 @@ import { describe, expect, test } from "bun:test";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
-  toPlainTextIngestionResult,
   type RawIngestionResult,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);

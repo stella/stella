@@ -22,36 +22,37 @@ import { CONDITION_RAW_VALUES } from "@/api/lib/docx/block-directives";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import { partParagraphTexts } from "@/api/lib/docx/rich-patch";
-import type { TemplateData, FieldMeta } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateData } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { buildTemplateS3Key } from "./storage-keys";
 import {
   decideTemplateFillCompletion,
   fillDiagnosticsOf,
   templateFillStatus,
 } from "./template-fill-completion";
 import {
+  type AiFillAdmission,
+  type AiFillCollaborators,
+  clauseDirectiveRecoveryHint,
   describeStoredTemplate,
+  discoverTemplateSource,
   fillStoredTemplateDocx,
   fillTemplateDocx,
   fillTemplateDocxStrict,
-  discoverTemplateSource,
-  clauseDirectiveRecoveryHint,
-  type AiFillAdmission,
-  type AiFillCollaborators,
 } from "./template-fill-service";
 import { runAdmittedAiFill } from "./template-fill-usage";
 
@@ -675,7 +676,7 @@ describe("fillTemplateDocx required-field rejection", () => {
 
 describe("fillStoredTemplateDocx use recording", () => {
   const usedTemplateId = toSafeId<"template">("tmpl_use");
-  const storedS3Key = "fake-key-use-recording";
+  const storedS3Key = buildTemplateS3Key(organizationId, usedTemplateId);
   const storedRow = {
     name: "NDA",
     fileName: "nda.docx",
@@ -1025,7 +1026,7 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
 
 describe("describeStoredTemplate gated blocks", () => {
   const templateId = toSafeId<"template">("tmpl_2");
-  const s3Key = "fake-key-conditions";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -1119,7 +1120,7 @@ describe("describeStoredTemplate gated blocks", () => {
 describe("describeStoredTemplate array shape", () => {
   const templateId = toSafeId<"template">("tmpl_1");
 
-  const s3Key = "fake-key-unused-because-loadTemplate-is-bypassed";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -2017,10 +2018,11 @@ test("stored web discovery, description and effective fill declarations agree fo
   const templateId = toSafeId<"template">(
     "00000000-0000-4000-8000-000000000001",
   );
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
   const fakeS3 = startFakeS3();
   try {
-    fakeS3.put("stella", "clause-web-discovery", new Uint8Array(file.bytes));
-    const scopedDb = stubScopedDb(clauseBody, "clause-web-discovery");
+    fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
+    const scopedDb = stubScopedDb(clauseBody, s3Key);
     const app = new Elysia().post(
       "/templates/discover",
       async ({ body, request }) =>

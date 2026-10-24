@@ -35,10 +35,7 @@ export const BatchActionBar = ({
 
   const handleAction = (
     action:
-      | "approve"
-      | "revert_to_draft"
-      | "mark_billable"
-      | "mark_non_billable",
+      "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable",
   ) => {
     batchUpdate.mutate(
       { workspaceId, ids: selectedIds, action },
