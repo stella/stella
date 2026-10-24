@@ -1,21 +1,19 @@
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 
 import { VAT_RATE_PRESET_COUNTRIES } from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 
+import { createTestState } from "../../../../api/src/tests/helpers/test-state";
+
+const fixture = createTestState({ file: import.meta.path, config: {} });
 const originalFetch = globalThis.fetch;
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+fixture.setEnv(
+  "VITE_API_URL",
+  process.env["VITE_API_URL"] ?? "https://api.example.test",
+);
 const { sendVatRateCommand } = await import("./vat-rates");
 afterEach(() => {
   globalThis.fetch = originalFetch;
-});
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-  } else {
-    process.env["VITE_API_URL"] = previousApiUrl;
-  }
 });
 
 test.each(VAT_RATE_PRESET_COUNTRIES)(
