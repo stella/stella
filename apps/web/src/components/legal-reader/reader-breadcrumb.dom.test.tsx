@@ -10,6 +10,8 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
+const { useReaderTextScale } =
+  await import("@stll/decision-reader/use-reader-text-scale");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { useAnalysisReaderBreadcrumb } =
   await import("@/features/case-law/components/case-viewer/analysis/reader-breadcrumb");
@@ -94,6 +96,7 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
         },
       ]}
       content={content}
+      textScale={useReaderTextScale()}
       viewport={viewport}
     />
   );
@@ -109,9 +112,17 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
     const row = navigation.parentElement;
     expect(row?.classList.contains("absolute")).toBe(true);
     expect(viewport.contains(row)).toBe(false);
-    expect(screen.queryByRole("button", { name: "Zoom in" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Zoom out" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Reset zoom" })).toBeNull();
+    for (const name of ["Zoom in", "Zoom out", "Reset zoom"]) {
+      expect(row?.contains(screen.getByRole("button", { name }))).toBe(true);
+    }
+    const resetZoom = screen.getByRole("button", { name: "Reset zoom" });
+    expect(resetZoom.hasAttribute("disabled")).toBe(true);
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Zoom in" })),
+    );
+    expect(resetZoom.hasAttribute("disabled")).toBe(false);
+    await act(async () => fireEvent.click(resetZoom));
+    expect(resetZoom.hasAttribute("disabled")).toBe(true);
     await act(async () => {
       viewport.scrollTop = 200;
       viewport.dispatchEvent(new Event("scroll"));
@@ -122,7 +133,7 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
       ).toBeTruthy(),
     );
     expect(navigation.parentElement === row).toBe(true);
-    expect(row?.querySelectorAll("button").length).toBe(1);
+    expect(row?.querySelectorAll("button").length).toBe(4);
   } finally {
     cleanup();
     viewport.remove();

@@ -1,4 +1,4 @@
-import type { HookEndpointContext } from "better-auth";
+import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { Result } from "better-result";
 import {
   afterAll,
@@ -26,19 +26,20 @@ import {
   AUTHORITATIVE_SESSION_PATHS,
   checkNewAccountEmailAllowedForCreation,
   ensureDisplayName,
-  getEmailOtpMinimumResponseDuration,
   getAuth,
+  getEmailOtpMinimumResponseDuration,
   getNewAccountEmailOtpAction,
   isSessionCreatingAuthPath,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
-  runEmailOtpRequestOnResponseSchedule,
+  OAUTH_PROVIDER_SESSION_PATHS,
+  resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveMemberAuthorization,
   resolveUserRealtimeAuthorization,
   resolveWorkspaceMemberAccess,
-  resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveWorkspaceRealtimeAudience,
+  runEmailOtpRequestOnResponseSchedule,
   SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
   TWO_FACTOR_MANAGE_PATHS,
   TWO_FACTOR_SESSION_PATHS,
@@ -577,6 +578,7 @@ describe("isSessionCreatingAuthPath", () => {
     // The hosted flow is passwordless email OTP; social providers all land on
     // the shared callback; the credential path serves the self-host bootstrap
     // admin, and first verification signs the new account in.
+    expect(isSessionCreatingAuthPath("/mcp-handoff/redeem")).toBe(true);
     expect(isSessionCreatingAuthPath("/sign-in/email-otp")).toBe(true);
     expect(isSessionCreatingAuthPath("/callback/google")).toBe(true);
     expect(isSessionCreatingAuthPath("/callback/microsoft")).toBe(true);
@@ -615,24 +617,71 @@ describe("TWO_FACTOR_MANAGE_PATHS", () => {
 });
 
 describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
-  const sensitiveCtx = (path: string) => ({
-    path,
-    request: new Request(`http://localhost/api/auth${path}`),
-  });
+  const sensitiveCtx = (path: string) => {
+    const headers = new Headers({
+      cookie: "session-token=token; preference=compact; session-data=snapshot",
+    });
+    return {
+      context: {
+        authCookies: {
+          sessionData: { name: "session-data" },
+          sessionToken: { name: "session-token" },
+        },
+      },
+      headers,
+      path,
+      request: new Request(`http://localhost/api/auth${path}`, { headers }),
+    };
+  };
 
   test("loads storage-backed session state before OAuth authorization can mint a durable token", async () => {
     const resolvedPaths: string[] = [];
 
+    const ctx = sensitiveCtx("/oauth2/authorize");
     const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
-      ctx: sensitiveCtx("/oauth2/authorize"),
-      resolveSession: async (ctx) => {
-        resolvedPaths.push(ctx.path);
+      ctx,
+      resolveSession: async (sessionContext) => {
+        resolvedPaths.push(sessionContext.path);
         return null;
       },
     });
 
     expect(Result.isOk(handled) && handled.value).toBeUndefined();
     expect(resolvedPaths).toEqual(["/oauth2/authorize"]);
+    expect(ctx.headers.get("cookie")).toBe("preference=compact");
+  });
+
+  test("treats a server-side OAuth call carrying a revoked session's cookies as signed out", async () => {
+    const resolvedPaths: string[] = [];
+    const { request: _request, ...serverCall } =
+      sensitiveCtx("/oauth2/consent");
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: serverCall,
+      resolveSession: async (sessionContext) => {
+        resolvedPaths.push(sessionContext.path);
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolvedPaths).toEqual(["/oauth2/consent"]);
+    expect(serverCall.headers.get("cookie")).toBe("preference=compact");
+  });
+
+  test("reads no session for an OAuth call without cookies", async () => {
+    let resolved = false;
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: { path: "/oauth2/consent", headers: new Headers() },
+      resolveSession: async () => {
+        resolved = true;
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolved).toBe(false);
   });
 
   test("refuses two-factor management when storage holds no session", async () => {
@@ -677,12 +726,13 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
     expect(resolved).toBe(false);
   });
 
-  test("declares every two-factor endpoint and both OAuth code-flow endpoints as authoritative", () => {
+  test("declares every session-reading sensitive endpoint as authoritative", () => {
     expect(AUTHORITATIVE_SESSION_PATHS).toEqual(
       new Set([
         ...Object.keys(TWO_FACTOR_SESSION_PATHS),
-        "/oauth2/authorize",
-        "/oauth2/consent",
+        ...Object.entries(OAUTH_PROVIDER_SESSION_PATHS).flatMap(
+          ([path, use]) => (use === "browser-session" ? [path] : []),
+        ),
       ]),
     );
   });
@@ -1100,6 +1150,38 @@ describe("OAuth resource provisioning", () => {
 
     expect(oauthProviderIndex).toBeGreaterThanOrEqual(0);
     expect(fragmentBridgeIndex).toBeGreaterThan(oauthProviderIndex);
+  });
+});
+
+describe("session token responses", () => {
+  test("every auth endpoint answer passes the session token redaction", () => {
+    const plugins = getAuth().options.plugins;
+    const pluginIds = plugins.map((plugin) => plugin.id);
+    // Read through the public plugin contract: the census checks what any
+    // endpoint matcher receives, not this plugin's literal type.
+    const redaction: BetterAuthPlugin | undefined = plugins.find(
+      (plugin) => plugin.id === "stella-session-token-redaction",
+    );
+    const after = redaction?.hooks?.after ?? [];
+    expect(after).toHaveLength(1);
+    // The matcher accepts every endpoint, so no auth response escapes it.
+    expect(
+      after.every(({ matcher }) =>
+        [
+          "/list-sessions",
+          "/get-session",
+          "/organization/list",
+          "/oauth2/token",
+          "/oauth2/userinfo",
+          "/mcp-handoff/sessions",
+          "/x",
+        ].every((path) => matcher(fakeCtx(path))),
+      ),
+    ).toBe(true);
+    // Only the refusal log, which records the final answer, runs after it.
+    expect(
+      pluginIds.slice(pluginIds.indexOf("stella-session-token-redaction") + 1),
+    ).toEqual(["stella-auth-refusal-log"]);
   });
 });
 

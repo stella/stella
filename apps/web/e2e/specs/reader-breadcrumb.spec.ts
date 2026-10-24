@@ -258,6 +258,8 @@ for (const view of views) {
             available: true,
             instanceProvisioned: true,
             orgConfigured: false,
+            unavailableReason: null,
+            providerConfiguration: "allowed",
             deferredServiceTierAvailable: false,
             mockAnswers: false,
           } satisfies OrganizationAIAvailability;

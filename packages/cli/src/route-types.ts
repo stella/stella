@@ -212,6 +212,7 @@ export type CapabilityLeafSpec = {
   /** Result envelope items key for a list-shaped capability (`Page<T>` -> `items`). */
   itemsKey?: string;
   destructive: boolean;
+  confirmation?: "required";
   scope?: ToolScope;
   additionalScopes?: readonly ToolScope[];
   /**

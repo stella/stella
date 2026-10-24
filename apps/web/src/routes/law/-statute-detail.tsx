@@ -21,7 +21,7 @@ import {
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { OutlineRail, outlineEntryText } from "@stll/ui/outline-rail";
+import { outlineEntryText, OutlineRail } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -47,9 +47,10 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
+import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
-import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
 import { PendingStatuteChanges } from "@/features/statutes/components/pending-statute-changes";
 import {
   StatuteIneligibleVersionNotice,
@@ -63,7 +64,7 @@ import {
 } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
@@ -178,39 +179,24 @@ const useRecordStatuteOpen = ({
   eli: string;
   title: string;
 }) => {
-  const openedPath = useRouterState({
-    select: ({ location }) => location.pathname,
+  const { citation, rest } = splitStatuteTitleCitation(title);
+  const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
+  const year = eliCitation?.at(1);
+  const number = eliCitation?.at(2);
+  useRecordOpenedLawDocument({
+    kind: "statute",
+    documentId: eli,
+    documentIdentity:
+      number === undefined || year === undefined
+        ? { kind: "unknown" }
+        : { kind: "statute", number, year },
+    title: {
+      identifier:
+        citation ??
+        (year === undefined || number === undefined ? "" : `${number}/${year}`),
+      description: rest,
+    },
   });
-  const {
-    record: { mutate: recordHistory },
-    enabled: historyEnabled,
-  } = useLawHistory();
-  useExternalSyncEffect(() => {
-    if (!historyEnabled) {
-      return;
-    }
-    const { citation, rest } = splitStatuteTitleCitation(title);
-    const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
-    const year = eliCitation?.at(1);
-    const number = eliCitation?.at(2);
-    recordHistory({
-      kind: "statute",
-      documentId: eli,
-      documentIdentity:
-        number === undefined || year === undefined
-          ? { kind: "unknown" }
-          : { kind: "statute", number, year },
-      title: {
-        identifier:
-          citation ??
-          (year === undefined || number === undefined
-            ? ""
-            : `${number}/${year}`),
-        description: rest,
-      },
-      path: openedPath,
-    });
-  }, [historyEnabled, recordHistory, title, eli, openedPath]);
 };
 
 /**
@@ -304,45 +290,39 @@ export const PublicStatuteViewer = ({
 
   // A comparison is a view of the text on screen, not another address: it
   // lives in the search params, beside the path that names the text.
-  const navigateComparison = useCallback(
-    (next: StatuteCompareSearch) => {
-      detached(
-        navigate({
-          search: (previous) => ({
-            ...previous,
-            compare: next.compare,
-            provision: next.provision,
-            show: next.show,
-          }),
-          to: ".",
+  const navigateComparison = (next: StatuteCompareSearch) => {
+    detached(
+      navigate({
+        search: (previous) => ({
+          ...previous,
+          compare: next.compare,
+          provision: next.provision,
+          show: next.show,
         }),
-        "statutes.reader-compare",
-      );
-    },
-    [navigate],
-  );
+        to: ".",
+      }),
+      "statutes.reader-compare",
+    );
+  };
 
   const handleCompare = (versionValidFrom: string) => {
     navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
   };
 
-  const handleAsOfChange = useCallback(
-    (value: string | null) => {
-      // A day is a lookup, not an address: it is asked on the act's own page
-      // and the loader forwards to the consolidation that applied.
-      goTo(
-        createStatuteRouteParams({
-          country: header.country,
-          documentId: work.id,
-          eli: work.eli,
-          slug: work.slug,
-          version: null,
-        }),
-        value === null || value === "" ? undefined : value,
-      );
-    },
-    [goTo, header.country, work.eli, work.id, work.slug],
-  );
+  const handleAsOfChange = (value: string | null) => {
+    // A day is a lookup, not an address: it is asked on the act's own page
+    // and the loader forwards to the consolidation that applied.
+    goTo(
+      createStatuteRouteParams({
+        country: header.country,
+        documentId: work.id,
+        eli: work.eli,
+        slug: work.slug,
+        version: null,
+      }),
+      value === null || value === "" ? undefined : value,
+    );
+  };
 
   // The query and its selection move together: typing puts the selection
   // back on the best match, which is what Enter is expected to go to.
@@ -486,6 +466,7 @@ export const PublicStatuteViewer = ({
           >
             {/* The rail hides itself when a document has no outline to show. */}
             <OutlineRail
+              topOffset={READER_BREADCRUMB_CLEARANCE}
               ariaLabel={t("statutes.outline")}
               // While the field has a query, the panel points at the selected match
               // rather than at the scroll position, and the ranked list it shows is
@@ -554,6 +535,7 @@ export const PublicStatuteViewer = ({
             {readerWithChat}
             {statute !== null && (
               <LegalReaderControls
+                textScale={textScale}
                 blocks={blocks}
                 content={contentElement}
                 viewport={viewportElement}

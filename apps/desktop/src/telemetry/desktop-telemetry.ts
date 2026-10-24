@@ -388,6 +388,7 @@ export const desktopTelemetryWindowFromLabel = (
     case "activity":
       return DESKTOP_TELEMETRY_WINDOWS.activity;
     case "onboarding":
+    case "accessibility-guide":
       return DESKTOP_TELEMETRY_WINDOWS.onboarding;
     default:
       reportDesktopError({

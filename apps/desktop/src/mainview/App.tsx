@@ -465,6 +465,52 @@ const GeneralPane = ({
           </Combobox>
         </div>
       </PanelGroup>
+      <PanelGroup>
+        <SetupGuideSetting />
+      </PanelGroup>
+    </div>
+  );
+};
+
+/** Starts the setup tour again in its own window. */
+const SetupGuideSetting = () => {
+  const t = useTranslations("settings");
+  const [failed, setFailed] = useState(false);
+  const restart = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_restart"),
+    );
+    if (Result.isError(result)) {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+        window: DESKTOP_TELEMETRY_WINDOWS.main,
+      });
+    }
+    setFailed(Result.isError(result));
+  };
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{t("setupGuide")}</p>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("setupGuideDescription")}
+        </p>
+        {failed ? (
+          <p className="text-destructive-foreground mt-1 text-sm" role="alert">
+            {t("errorSetupGuide")}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        onClick={() => {
+          void restart();
+        }}
+        size="sm"
+        variant="outline"
+      >
+        {t("setupGuideAction")}
+      </Button>
     </div>
   );
 };

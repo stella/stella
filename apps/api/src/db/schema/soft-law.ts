@@ -1,3 +1,5 @@
+import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
+
 import { caseLawIngestionOnlyPolicies } from "@/api/db/rls";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type {
@@ -7,10 +9,9 @@ import type {
 } from "@/api/lib/legal-search/soft-law-types";
 import {
   SOFT_LAW_ATTEMPT_STATES,
-  SOFT_LAW_ITEM_TAGS,
-  SOFT_LAW_FAILURE_TAGS,
   SOFT_LAW_EXTRACTION_QUALITIES,
-  SOFT_LAW_KINDS,
+  SOFT_LAW_FAILURE_TAGS,
+  SOFT_LAW_ITEM_TAGS,
   SOFT_LAW_LISTING_STATES,
   SOFT_LAW_LOCATOR_STATES,
   SOFT_LAW_RUN_STATES,
@@ -82,7 +83,7 @@ export const softLawDocuments = p.pgTable.withRLS(
     identityKey: p.text("identity_key").notNull(),
     jurisdiction: p.text().notNull(),
     authority: p.text().notNull(),
-    kind: p.text({ enum: SOFT_LAW_KINDS }).notNull(),
+    kind: p.text({ enum: GUIDANCE_KINDS }).notNull(),
     title: p.text().notNull(),
     statedReference: p.text("stated_reference"),
     statedReferenceState: p
@@ -118,7 +119,7 @@ export const softLawDocuments = p.pgTable.withRLS(
     }),
     p.check(
       "soft_law_documents_kind_check",
-      sql`${t.kind} IN (${values(SOFT_LAW_KINDS)})`,
+      sql`${t.kind} IN (${values(GUIDANCE_KINDS)})`,
     ),
     p.check(
       "soft_law_documents_listing_check",

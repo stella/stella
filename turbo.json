@@ -610,15 +610,6 @@
       ],
       "cache": false
     },
-    "format": {
-      "dependsOn": ["transit"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.oxfmtrc.json",
-        "$TURBO_ROOT$/scripts/check-format-environment.ts",
-        "$TURBO_ROOT$/scripts/run-oxfmt.ts"
-      ]
-    },
     "i18n:check": {
       "dependsOn": ["transit"],
       "cache": false
@@ -800,7 +791,6 @@
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**",
-        "$TURBO_ROOT$/.oxfmtrc.json",
         "!.env*",
         "!.turbo/**",
         "!.cache/**",
@@ -886,7 +876,7 @@
     "@stll/mcp-apps#build": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.oxfmtrc.json",
+        "$TURBO_ROOT$/bunfig.toml",
         "!.env*",
         "!.turbo/**",
         "!.cache/**",
@@ -1050,6 +1040,7 @@
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
+        "$TURBO_ROOT$/packages/analytics-config/**",
         "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
@@ -1058,6 +1049,7 @@
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
         "$TURBO_ROOT$/packages/chat-limits/**",
+        "$TURBO_ROOT$/packages/chat/**",
         "$TURBO_ROOT$/packages/cli/**",
         "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",
@@ -1475,6 +1467,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/check-write-contracts.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
@@ -1570,7 +1563,7 @@
         "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.claude/mcp/package.json",
         "$TURBO_ROOT$/.github/workflows/**",
-        "$TURBO_ROOT$/.github/ci-job-classification-decisions.json",
+        "$TURBO_ROOT$/.github/ci-job-classification-decisions/**",
         "$TURBO_ROOT$/.github/ci-job-classification-sources.json",
         "$TURBO_ROOT$/.github/actions/**",
         "$TURBO_ROOT$/apps/**",

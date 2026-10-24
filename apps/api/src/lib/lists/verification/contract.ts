@@ -192,8 +192,7 @@ export const CLAIM_REVIEW_EVENT_KINDS = [
 /** How a record conflict was resolved: a fact governs (the claim adopts its
  *  verdict), or it went to the evidence team without picking a side. */
 export type RecordConflictResolution =
-  | { kind: "governed"; factEntityId: SafeId<"entity"> }
-  | { kind: "escalated" };
+  { kind: "governed"; factEntityId: SafeId<"entity"> } | { kind: "escalated" };
 
 /** `bulk` marks a status set by accepting routine claims in one action. */
 const CLAIM_REVIEW_ORIGINS = ["single", "bulk"] as const;

@@ -23,7 +23,6 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
@@ -305,18 +304,12 @@ export const CaseDecisionInspectorView = ({
         </ScrollArea>
         {/* The same bar the PDF floats over its page, over the text. */}
         <LegalReaderControls
+          textScale={textScale}
           blocks={ast === null ? [] : ast.blocks}
           content={contentElement}
           fallbackBreadcrumb={fallbackBreadcrumb}
           viewport={viewportElement}
           key={decisionId}
-        />
-        <FloatingZoomControls
-          atMax={textScale.atMax}
-          atMin={textScale.atMin}
-          level={textScale.level}
-          onReset={textScale.reset}
-          onZoom={textScale.zoom}
         />
       </LegalReaderAIChat>
       <AnnotationToolbar
