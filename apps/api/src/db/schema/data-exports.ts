@@ -1,3 +1,5 @@
+import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export-version-scope";
+
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {
   jsonb,
@@ -29,10 +31,6 @@ export const ACTIVE_DATA_EXPORT_STATUSES = [
   "queued",
   "running",
 ] as const satisfies readonly DataExportStatus[];
-
-/** Which document versions the export carries; mirrors the manifest's
- *  `scope.versions`. */
-export const DATA_EXPORT_VERSION_SCOPE_VALUES = ["all", "current"] as const;
 
 /** Something that needs attention; mirrors the manifest's `problems`. */
 export type DataExportProblemRecord =

@@ -61,9 +61,19 @@ const queueExport = async () => {
   return id;
 };
 
+type RunOptions = {
+  wrapSource?: (source: ExportSource) => ExportSource;
+  beforePartClose?: () => Promise<void>;
+  beforeManifestWrite?: () => Promise<void>;
+};
+
 const run = async (
   exportId: SafeId<"dataExport">,
-  wrapSource: (source: ExportSource) => ExportSource = (source) => source,
+  {
+    wrapSource = (source) => source,
+    beforePartClose = async () => {},
+    beforeManifestWrite = async () => {},
+  }: RunOptions = {},
 ) => {
   const actor = createRootRunActor(
     {
@@ -94,10 +104,10 @@ const run = async (
         sink: {
           openPart: (fileName) => {
             parts.push(fileName);
-            return { write: async () => {}, close: async () => {} };
+            return { write: async () => {}, close: beforePartClose };
           },
         },
-        writeManifest: async () => {},
+        writeManifest: beforeManifestWrite,
       }),
       pace,
       signal,
@@ -124,13 +134,15 @@ describe("organisation data export revocation", () => {
     await setRole("admin");
     try {
       const exportId = await queueExport();
-      const { outcome, parts, row } = await run(exportId, (source) => ({
-        ...source,
-        listMatters: async (scope) => {
-          await setRole("member");
-          return await source.listMatters(scope);
-        },
-      }));
+      const { outcome, parts, row } = await run(exportId, {
+        wrapSource: (source) => ({
+          ...source,
+          listMatters: async (scope) => {
+            await setRole("member");
+            return await source.listMatters(scope);
+          },
+        }),
+      });
       expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
       expect(parts).toEqual([]);
       expect(row?.status).toBe("failed");
@@ -139,6 +151,28 @@ describe("organisation data export revocation", () => {
       await setRole("member");
     }
   });
+
+  test.each(["last-part", "manifest"] as const)(
+    "revocation while committing the %s refuses publication",
+    async (phase) => {
+      await setRole("admin");
+      try {
+        const exportId = await queueExport();
+        const revoke = async () => await setRole("member");
+        const { outcome, parts, row } = await run(exportId, {
+          ...(phase === "last-part"
+            ? { beforePartClose: revoke }
+            : { beforeManifestWrite: revoke }),
+        });
+        expect(parts).toHaveLength(1);
+        expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
+        expect(row?.status).toBe("failed");
+        expect(row?.error).toBe(DATA_EXPORT_FAILURE_MESSAGE.notAuthorized);
+      } finally {
+        await setRole("member");
+      }
+    },
+  );
 
   test("a run stops when its requester has left the organization", async () => {
     const [membership] = await testDb

@@ -1,6 +1,8 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
+export type { ConversionRefusal } from "./conversion-refusal";
+
 export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
 export {
   currencyCodeSchema,
@@ -62,6 +64,7 @@ export {
   DEFAULT_INVOICE_DUE_DAYS,
   INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
@@ -77,6 +80,7 @@ export {
 } from "./billing";
 export type {
   ExpenseCategory,
+  InvoiceLanguage,
   InvoiceLineSource,
   InvoiceStatus,
   TimeEntrySource,
@@ -361,6 +365,7 @@ export {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "./document-version-upload";
@@ -996,3 +1001,6 @@ export type {
   RulingIdentityKeys,
   RulingIdentityDefect,
 } from "./decision-ruling-identity";
+export * from "./vat-rate-presets";
+export { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
+export { SELLER_PROFILE_TEXT_FIELDS } from "./seller-profile-fields";

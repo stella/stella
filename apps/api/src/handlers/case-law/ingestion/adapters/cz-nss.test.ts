@@ -29,13 +29,13 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildCzNssDecision,
+  CZ_NSS_CONTINUATION_PAGE_ROWS,
+  CZ_NSS_FIRST_PAGE_ROWS,
+  CZ_NSS_FIRST_SLICE,
   czNssAdapter,
   czNssExpectedRows,
   czNssListingIdentity,
   czNssTotalPages,
-  CZ_NSS_CONTINUATION_PAGE_ROWS,
-  CZ_NSS_FIRST_SLICE,
-  CZ_NSS_FIRST_PAGE_ROWS,
   parseCzNssDetailMetadata,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
@@ -45,12 +45,12 @@ import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliatio
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
+  absentDecisionTextFields,
+  readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  storeDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
-  storeDecisionTextFields,
-  splitStoredDecisionTextMetadata,
-  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {

@@ -1,3 +1,5 @@
+import { UPLOAD_FILE_MIN_BYTES } from "@stll/api-contract/limits";
+
 import type {
   DroppedFileTree,
   DroppedFileTreeFile,
@@ -107,3 +109,23 @@ export const buildDroppedFolderUploadPlan = (
     files,
   };
 };
+
+export type FolderReservableFile = {
+  /** The file's index in the plan; the folder reservation echoes it back. */
+  key: string;
+  placement: FileUploadPlacement;
+};
+
+/**
+ * The plan's files the folder reservation can accept. A file smaller than
+ * `UPLOAD_FILE_MIN_BYTES` is left out: it takes the single-file path, where
+ * the API refuses that file alone instead of the whole folder.
+ */
+export const folderReservableFiles = (
+  plan: DroppedFolderUploadPlan,
+): FolderReservableFile[] =>
+  plan.files.flatMap((placement, index) =>
+    placement.file.size >= UPLOAD_FILE_MIN_BYTES
+      ? [{ key: String(index), placement }]
+      : [],
+  );

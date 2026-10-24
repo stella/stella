@@ -1,5 +1,25 @@
 import { panic } from "better-result";
 
+export const MULTIPART_MAX_PARTS = 10_000;
+/** Fixed per-stream buffering budget, including uploads of large objects. */
+export const STREAMING_UPLOAD_PART_BYTES = 16 * 1024 * 1024;
+/** Leave room for an object's actual size to exceed its estimate. */
+const STREAMING_UPLOAD_SIZE_HEADROOM = 2;
+export const STREAMING_UPLOAD_MAX_EXPECTED_BYTES = Math.floor(
+  (STREAMING_UPLOAD_PART_BYTES * MULTIPART_MAX_PARTS) /
+    STREAMING_UPLOAD_SIZE_HEADROOM,
+);
+
+/** Refuse objects that cannot fit the provider limit within the buffer budget. */
+export const multipartPartBytes = (expectedBytes: number): number | null => {
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0) {
+    return null;
+  }
+  return expectedBytes <= STREAMING_UPLOAD_MAX_EXPECTED_BYTES
+    ? STREAMING_UPLOAD_PART_BYTES
+    : null;
+};
+
 type CompletedPart = { PartNumber: number; ETag: string };
 
 type MultipartSinkOptions = {
@@ -25,8 +45,14 @@ export const createMultipartSink = ({
   complete,
   putEmpty,
 }: MultipartSinkOptions) => {
-  if (!Number.isSafeInteger(partBytes) || partBytes <= 0) {
-    return panic("Multipart buffer size must be a positive safe integer");
+  if (
+    !Number.isSafeInteger(partBytes) ||
+    partBytes <= 0 ||
+    partBytes > STREAMING_UPLOAD_PART_BYTES
+  ) {
+    return panic(
+      "Multipart buffer size must be a positive safe integer within the stream budget",
+    );
   }
   let uploadId: string | null = null;
   let chunks: Uint8Array[] = [];

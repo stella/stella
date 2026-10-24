@@ -7,8 +7,8 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
-  UploadPartCommand,
   S3Client as AwsS3Client,
+  UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
@@ -36,7 +36,10 @@ import {
   isUsableStaticCredential,
   type OptionalS3Credentials,
 } from "@/api/lib/s3/credentials";
-import { createMultipartSink } from "@/api/lib/s3/multipart-sink";
+import {
+  createMultipartSink,
+  MULTIPART_MAX_PARTS,
+} from "@/api/lib/s3/multipart-sink";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -1270,28 +1273,6 @@ export const openS3ObjectStream = async ({
     sizeBytes: opened.contentLength,
     chunks: readableChunks(opened.body),
   };
-};
-
-/** S3 multipart limits: at most 10,000 parts of 5 MiB to 5 GiB each. */
-const MULTIPART_MAX_PARTS = 10_000;
-const MULTIPART_MAX_PART_BYTES = 5 * 1024 ** 3;
-/** Smallest part used: large enough to keep request counts low. */
-const STREAMING_UPLOAD_MIN_PART_BYTES = 16 * 1024 * 1024;
-/** An object's real size may exceed its estimate; parts leave room for it. */
-const STREAMING_UPLOAD_SIZE_HEADROOM = 2;
-
-/**
- * The part size that fits an object of about `expectedBytes` (with
- * headroom) into the multipart part limit, or `null` when no part size can.
- */
-export const multipartPartBytes = (expectedBytes: number): number | null => {
-  const needed = Math.ceil(
-    (expectedBytes * STREAMING_UPLOAD_SIZE_HEADROOM) / MULTIPART_MAX_PARTS,
-  );
-  if (needed > MULTIPART_MAX_PART_BYTES) {
-    return null;
-  }
-  return Math.max(needed, STREAMING_UPLOAD_MIN_PART_BYTES);
 };
 
 class S3MultipartResponseError extends TaggedError("S3MultipartResponseError")<{

@@ -33,14 +33,23 @@ test("confines every supported primitive and immutable alias", async () => {
 
 test("admits only the exact runtime owners", async () => {
   expect(Object.keys(SHA256_OWNERS).length).toBeLessThanOrEqual(4);
-  for (const owner of Object.keys(SHA256_OWNERS)) {
-    expect(
-      await lintSingleRule("no-raw-sha256", source, {
-        sourcePath: owner,
-        cwd: "scratch",
-      }),
-    ).toEqual([]);
-  }
+  const results = await Promise.all(
+    Object.keys(SHA256_OWNERS).map(async (lintCase, index) => {
+      const owner = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule("no-raw-sha256", source, {
+          sourcePath: owner,
+          cwd: "scratch",
+        }),
+        expected: [],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
   expect(
     await lintSingleRule("no-raw-sha256", 'new Bun.CryptoHasher("sha256");', {
       sourcePath: "packages/sha256/src/bun.ts.copy.ts",
@@ -308,7 +317,8 @@ const cryptoReExports = [
   "export const { subtle: api } = crypto;",
 ];
 
-test.each(cryptoReExports)(
+// Scratch-rooted cases lint alone: concurrent, they would queue on one oxlint.
+test.serial.each(cryptoReExports)(
   "confines crypto-bearing re-exports: %s",
   async (bridge) => {
     const reports = await lintSingleRule("no-raw-sha256", bridge, {
@@ -316,14 +326,23 @@ test.each(cryptoReExports)(
       cwd: "scratch",
     });
     expect(reports).toEqual([1]);
-    for (const owner of Object.keys(SHA256_OWNERS)) {
-      expect(
-        await lintSingleRule("no-raw-sha256", bridge, {
-          sourcePath: owner,
-          cwd: "scratch",
-        }),
-      ).toEqual([]);
-    }
+    const results = await Promise.all(
+      Object.keys(SHA256_OWNERS).map(async (lintCase, index) => {
+        const owner = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule("no-raw-sha256", bridge, {
+            sourcePath: owner,
+            cwd: "scratch",
+          }),
+          expected: [],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   },
 );
 

@@ -17,7 +17,10 @@ import {
   DATA_EXPORT_HEARTBEAT_STALE_MS,
   enqueueDataExport,
 } from "@/api/lib/data-export-queue";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  lockStaleDataExportRun,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { transition } from "@/api/lib/db/transitions";
@@ -229,8 +232,19 @@ const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
   summary.resumed += await moveEach(
     db,
     resumable,
-    async (tx, row) =>
-      await transition({
+    async (tx, row) => {
+      if (
+        !(await lockStaleDataExportRun({
+          tx,
+          exportId: row.id,
+          organizationId: row.organizationId,
+          attempt: row.attempt,
+          staleBefore,
+        }))
+      ) {
+        return { type: "stale" };
+      }
+      return await transition({
         tx,
         spec: DATA_EXPORT_TRANSITIONS,
         id: row.id,
@@ -241,15 +255,27 @@ const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
           set: { failures: sql`${organizationDataExports.failures} + 1` },
         },
         recordTransitionAuditEvent: recordSweepChange(row, "worker_lost"),
-      }),
+      });
+    },
     summary,
   );
   // Parts already written age out through the bucket lifecycle.
   summary.failedStale += await moveEach(
     db,
     exhausted,
-    async (tx, row) =>
-      await transition({
+    async (tx, row) => {
+      if (
+        !(await lockStaleDataExportRun({
+          tx,
+          exportId: row.id,
+          organizationId: row.organizationId,
+          attempt: row.attempt,
+          staleBefore,
+        }))
+      ) {
+        return { type: "stale" };
+      }
+      return await transition({
         tx,
         spec: DATA_EXPORT_TRANSITIONS,
         id: row.id,
@@ -260,7 +286,8 @@ const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
           set: { error: STALE_RUN_ERROR, completedAt: now },
         },
         recordTransitionAuditEvent: recordSweepChange(row, "out_of_attempts"),
-      }),
+      });
+    },
     summary,
   );
 };

@@ -30,11 +30,7 @@ export const TextMark = ({
 );
 
 export type TextMarkVariant =
-  | "fill"
-  | "underline"
-  | "dotted"
-  | "wavy"
-  | "strike";
+  "fill" | "underline" | "dotted" | "wavy" | "strike";
 
 export type TextMarkTone =
   | "warning"
@@ -108,6 +104,25 @@ export const textMarkClass = ({
     .join(" ");
 
 /**
+ * The classes of one mark drawn as an empty box over painted text (a PDF
+ * page's canvas), where no text decoration can reach the words: a line
+ * variant becomes the box's bottom edge (wavy reads as dashed) or, for a
+ * strike, a rule through its middle; hue, wash and ring are the text mark's.
+ */
+export const textMarkBoxClass = ({
+  variant,
+  tone,
+  state = "rest",
+}: Omit<TextMarkOptions, "weight">): string =>
+  [
+    BOX_LINE_CLASS[variant],
+    TONE_CLASS[tone],
+    WASH_CLASS[variant === "fill" ? "fill" : "line"][state],
+  ]
+    .filter((part) => part !== "")
+    .join(" ");
+
+/**
  * The search-hit mark reached through a descendant selector, for markup that
  * arrives already highlighted (the search endpoints' `<mark>` snippets).
  * Spelled out because Tailwind emits only the classes it can read in the
@@ -169,6 +184,15 @@ const VARIANT_CLASS = {
   wavy: `${LINE_CLASS} decoration-wavy`,
   strike:
     "text-inherit line-through decoration-2 decoration-[color:var(--text-mark)]",
+} as const satisfies Record<TextMarkVariant, string>;
+
+const BOX_LINE_CLASS = {
+  fill: "",
+  underline: "border-b-2 border-(--text-mark)",
+  dotted: "border-b-2 border-dotted border-(--text-mark)",
+  wavy: "border-b-2 border-dashed border-(--text-mark)",
+  strike:
+    "bg-[linear-gradient(transparent_calc(50%-1px),var(--text-mark)_calc(50%-1px),var(--text-mark)_calc(50%+1px),transparent_calc(50%+1px))]",
 } as const satisfies Record<TextMarkVariant, string>;
 
 // Literal per tone rather than built from `TEXT_MARK_TONE_COLOR`: Tailwind

@@ -1,9 +1,51 @@
 import { describe, expect, test } from "bun:test";
 
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
-import { createMultipartSink } from "@/api/lib/s3/multipart-sink";
+import {
+  createMultipartSink,
+  multipartPartBytes,
+  STREAMING_UPLOAD_MAX_EXPECTED_BYTES,
+  STREAMING_UPLOAD_PART_BYTES,
+} from "@/api/lib/s3/multipart-sink";
 
 describe("multipart upload sink", () => {
+  test("refuses a buffer exceeding the stream budget before starting storage", () => {
+    let started = false;
+    expect(() =>
+      createMultipartSink({
+        partBytes: STREAMING_UPLOAD_PART_BYTES + 1,
+        start: async () => {
+          started = true;
+          return "upload";
+        },
+        sendPart: async () => "etag",
+        complete: async () => {},
+        putEmpty: async () => {},
+      }),
+    ).toThrow(
+      "Multipart buffer size must be a positive safe integer within the stream budget",
+    );
+    expect(started).toBe(false);
+  });
+
+  test("keeps the buffer fixed and refuses estimates beyond its streaming capacity", () => {
+    for (const expectedBytes of [0, 1, STREAMING_UPLOAD_MAX_EXPECTED_BYTES]) {
+      expect(multipartPartBytes(expectedBytes)).toBe(
+        STREAMING_UPLOAD_PART_BYTES,
+      );
+    }
+    for (const expectedBytes of [
+      STREAMING_UPLOAD_MAX_EXPECTED_BYTES + 1,
+      Number.MAX_SAFE_INTEGER,
+      Number.POSITIVE_INFINITY,
+      Number.NaN,
+      -1,
+      0.5,
+    ]) {
+      expect(multipartPartBytes(expectedBytes)).toBeNull();
+    }
+  });
+
   test("preserves bytes across producer chunk sizes and full, partial, or empty parts", async () => {
     const partBytes = 4;
     for (const length of [0, 1, 4, 8, 11]) {

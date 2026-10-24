@@ -15,8 +15,8 @@ import {
   isAutofixProtectedPath,
 } from "./autofix-protected-paths";
 import {
-  GENERATORS,
   allowedOutputs,
+  GENERATORS,
   generatorsForFiles,
   matchesGeneratedGlob,
 } from "./generated-files";
@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Converts the static manifest schema and shared version policy; no DB imports.
+  "data-export-schema": "apps/api/scripts/generate-data-export-schema.ts",
   // Reads `<dir>/en.json` alone and prints its key tree in source order.
   "i18n-messages-landing": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",
@@ -33,12 +35,16 @@ const PURE_AUTOFIX = {
   // `generate` renders the env catalog and schema defaults plus the web
   // Dockerfile; only `doctor` reads the process environment or env files.
   "env-examples": "env:generate",
-  // Renders the env catalog and the self-host contract, formatted by the
-  // pinned oxfmt; `check` alone reads workflows and runs the manifest script.
+  // Renders the env catalog and the self-host contract, formatted by
+  // bun fmt; `check` alone reads workflows and runs the manifest script.
   selfhost: "selfhost:generate",
   // Parsers and AST repairs are pure (no clock, network or database on the
   // re-parse path); it fails rather than re-stamping an analysis.
   "case-law-fixture-reparse": "apps/api/scripts/reparse-case-law-fixtures.ts",
+  // Copies .ai/shared modules and skills (the pinned submodule, checked out
+  // by autofix) and .ai/local* into AGENTS.md, GEMINI.md and skill copies,
+  // staging in a temp directory; no network, clock or environment input.
+  "ai-instructions": "sync-ai",
 } as const;
 
 const generator = (id: string) => {
@@ -119,6 +125,29 @@ test("every module the case-law re-parse imports selects it", () => {
       (file) => !inputs.some((input) => matchesGeneratedGlob(input, file)),
     ),
   ).toEqual([]);
+});
+
+test("export schema inputs select the canonical producer without database initialization", () => {
+  const manifest = readFileSync(
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "utf-8",
+  );
+  expect(manifest).toContain("@/api/lib/data-export-version-scope");
+  expect(manifest).not.toContain("@/api/db/");
+  for (const file of [
+    "apps/api/scripts/generate-data-export-schema.ts",
+    "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "apps/api/src/lib/data-export-version-scope.ts",
+    "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
+    "packages/api-contract/src/json-schema-regex.ts",
+    "packages/legal-ast/src/analysis.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("data-export-schema");
+  }
 });
 
 test("translation content never becomes an autofix output", () => {

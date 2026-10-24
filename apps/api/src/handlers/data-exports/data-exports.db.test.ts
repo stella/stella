@@ -54,6 +54,7 @@ import {
   createRootMembershipScopedDb,
   createRootScopedDb,
 } from "@/api/lib/root-scoped-db";
+import { STREAMING_UPLOAD_MAX_EXPECTED_BYTES } from "@/api/lib/s3/multipart-sink";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
   createMaintainDataExportsTask,
@@ -858,6 +859,32 @@ describe("run ownership", () => {
         await testDb.delete(contacts).where(eq(contacts.id, contact.id));
       }
     }
+  });
+
+  test("an oversized indivisible part fails before opening an upload", async () => {
+    const estimatedBytes = STREAMING_UPLOAD_MAX_EXPECTED_BYTES + 1;
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+      plan: {
+        parts: [{ index: 1, matterIds: [ids.wsA1], estimatedBytes }],
+        mattersTotal: 1,
+        bytesTotal: estimatedBytes,
+      },
+    });
+    const { outcome, memory, manifest } = await runFor(ids.userAdmin, exportId);
+    expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
+    expect(memory.parts.size).toBe(0);
+    expect(manifest).toBeNull();
+    const [row] = await testDb
+      .select({
+        status: organizationDataExports.status,
+        error: organizationDataExports.error,
+      })
+      .from(organizationDataExports)
+      .where(eq(organizationDataExports.id, exportId));
+    expect(row?.status).toBe("failed");
+    expect(row?.error).toBe(DATA_EXPORT_FAILURE_MESSAGE.partTooLarge);
   });
 
   test("a resumed attempt measures its records again before loading them", async () => {

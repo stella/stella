@@ -19,7 +19,7 @@
 import { TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import { member, organization } from "@/api/db/auth-schema";
+import { organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   DATA_EXPORT_MAX_FAILURES,
@@ -61,6 +61,7 @@ import {
   getDataExportQueue,
 } from "@/api/lib/data-export-queue";
 import type { DataExportJobData } from "@/api/lib/data-export-queue";
+import { lockMemberAccessRow } from "@/api/lib/db/aggregate-lock";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import { transition } from "@/api/lib/db/transitions";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -72,11 +73,8 @@ import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
-import {
-  multipartPartBytes,
-  openS3StreamingUpload,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { openS3StreamingUpload, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { multipartPartBytes } from "@/api/lib/s3/multipart-sink";
 import { brandPersistedDataExportId } from "@/api/lib/safe-id-boundaries";
 
 const dataExportHeartbeatFailed = failureSink({
@@ -106,7 +104,7 @@ export const DATA_EXPORT_FAILURE_MESSAGE = {
     "The export was stopped because its requester is no longer an organization owner or admin.",
   failed: "The export could not be completed. Please start a new export.",
   partTooLarge:
-    "A matter is larger than one export part can hold. Contact support to export it.",
+    "A matter exceeds the bounded export stream size. Contact support to export it.",
   recordsTooLarge:
     "The organization has more records than one export can hold. Contact support to export it.",
 } as const;
@@ -190,13 +188,13 @@ const readAuthorized = async (
   tx: RunTransaction,
   { organizationId, userId }: RunIds,
 ): Promise<boolean> => {
-  const roles = await tx
-    .select({ role: member.role })
-    .from(member)
-    .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
-    );
-  const role = roles.at(0)?.role;
+  const requester = await lockMemberAccessRow({
+    tx,
+    organizationId,
+    userId,
+    mode: "share",
+  });
+  const role = requester?.role;
   return (
     role !== undefined &&
     isMemberRole(role) &&
@@ -321,21 +319,25 @@ const markReady = async ({
   values,
   audit,
 }: MarkReadyArgs): Promise<boolean> => {
-  const moved = await db(
-    async (tx) =>
-      await transition({
-        tx,
-        spec: DATA_EXPORT_TRANSITIONS,
-        id: ids.exportId,
-        options: {
-          from: ["running"],
-          to: "ready",
-          fence: attempt,
-          set: { heartbeatAt: values.completedAt, ...values },
-        },
-        recordTransitionAuditEvent: recordStatusChange(ids, audit),
-      }),
-  );
+  const moved = await db(async (tx) => {
+    if (!(await readAuthorized(tx, ids))) {
+      throw new DataExportNotAuthorizedError({
+        message: DATA_EXPORT_FAILURE_MESSAGE.notAuthorized,
+      });
+    }
+    return await transition({
+      tx,
+      spec: DATA_EXPORT_TRANSITIONS,
+      id: ids.exportId,
+      options: {
+        from: ["running"],
+        to: "ready",
+        fence: attempt,
+        set: { heartbeatAt: values.completedAt, ...values },
+      },
+      recordTransitionAuditEvent: recordStatusChange(ids, audit),
+    });
+  });
   // Stale: superseded by a newer attempt, which owns the row now.
   return moved.type === "transitioned";
 };
@@ -563,6 +565,17 @@ export const runDataExport = async (
       return DATA_EXPORT_RUN_OUTCOME.FAILED;
     }
     const plan = planned.value;
+    // Refuse before opening any upload: indivisible matters must fit the
+    // provider's part count without increasing the stream buffer budget.
+    if (
+      plan.parts.some(
+        (part) => multipartPartBytes(part.estimatedBytes) === null,
+      )
+    ) {
+      throw new DataExportPartTooLargeError({
+        message: DATA_EXPORT_FAILURE_MESSAGE.partTooLarge,
+      });
+    }
     if (run.plan === null) {
       await heartbeat({ plan });
     }
@@ -698,9 +711,7 @@ const createS3RunDependencies = ({
     storage: (attempt) => ({
       sink: {
         openPart: (fileName, estimatedBytes) => {
-          // A matter is never split, so one huge matter makes one huge part:
-          // size the upload parts for it, and stop with a clear message when
-          // even the largest parts cannot hold it.
+          // Keep the same fixed buffer budget when opening each admitted part.
           const partBytes = multipartPartBytes(estimatedBytes);
           if (partBytes === null) {
             throw new DataExportPartTooLargeError({

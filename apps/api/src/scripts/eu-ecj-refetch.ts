@@ -18,8 +18,8 @@ import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
-  openCaseLawReadOnlySession,
   enterCaseLawMaintenanceLane,
+  openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
