@@ -141,7 +141,12 @@ export type HandlerErrorValidationIssue = {
   message: string;
 };
 
-export type HandlerErrorProps<
+// parser-output-unchanged: retry advice only shapes HTTP and capability error responses.
+type HandlerErrorRetryAdvice =
+  | { retryable: true; retryAfterMs: number }
+  | { retryable?: boolean | undefined; retryAfterMs?: undefined };
+
+type HandlerErrorBaseProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
   code?: HandlerErrorCode | undefined;
@@ -153,7 +158,6 @@ export type HandlerErrorProps<
     | { slotKey: string; id?: string | undefined; name?: string | undefined }
     | undefined;
   contactUrl?: ActionAdmissionRefusal["contactUrl"];
-  retryable?: boolean | undefined;
   /**
    * OAuth-style machine-readable error identifier (e.g. `login_required`,
    * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
@@ -176,20 +180,27 @@ export type HandlerErrorProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
 };
+
+export type HandlerErrorProps<
+  TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
+> = HandlerErrorBaseProps<TStatus> & HandlerErrorRetryAdvice;
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows
 // `status` back down for callers.
 export class HandlerError<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> extends TaggedError("HandlerError")<HandlerErrorProps> {
+> extends TaggedError("HandlerError")<HandlerErrorBaseProps> {
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare hint?: string | undefined;
   declare clause?: HandlerErrorProps["clause"];
   declare contactUrl?: string | undefined;
   declare retryable?: boolean | undefined;
+  declare retryAfterMs?: number | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
@@ -206,6 +217,7 @@ export class HandlerError<
     this.clause = props.clause;
     this.contactUrl = props.contactUrl;
     this.retryable = props.retryable;
+    this.retryAfterMs = props.retryAfterMs;
     this.usage = props.usage;
     this.confirmation = props.confirmation;
     this.error = props.error;

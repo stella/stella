@@ -699,6 +699,8 @@ type SafeErrorBody = {
   clause?: HandlerError["clause"];
   contactUrl?: string;
   retryable?: boolean;
+  /** Advised wait before retrying, in milliseconds. */
+  retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
   /**
@@ -918,6 +920,7 @@ function toSafeStatusResponse(
 type SafeHandlerLogContext = {
   request: Request;
   route: string;
+  set?: Context["set"];
 };
 
 type ErrorStatusBuilder<TErrorStatus> = (
@@ -936,6 +939,18 @@ type RunSafeHandlerWithOptions<
   toErrorStatus: ErrorStatusBuilder<TErrorStatus>;
 };
 
+const applyRetryAfterHeader = (
+  ctx: SafeHandlerLogContext,
+  retryAfterMs: number | undefined,
+) => {
+  if (retryAfterMs === undefined || ctx.set === undefined) {
+    return;
+  }
+  ctx.set.headers["Retry-After"] = String(
+    Math.max(1, Math.ceil((retryAfterMs * (1 + Math.random() * 0.5)) / 1000)),
+  );
+};
+
 const runSafeHandlerInDeliveryScope = async <
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
@@ -952,15 +967,11 @@ const runSafeHandlerInDeliveryScope = async <
 
     if (Result.isOk(result)) {
       const response = result.value;
-      const responseSet: unknown = Reflect.get(ctx, "set");
-      const headers: unknown =
-        typeof responseSet === "object" && responseSet !== null
-          ? Reflect.get(responseSet, "headers")
-          : undefined;
+      const headers = ctx.set?.headers;
       let disposition: unknown;
       if (headers instanceof Headers) {
         disposition = headers.get("Content-Disposition");
-      } else if (typeof headers === "object" && headers !== null) {
+      } else if (typeof headers === "object") {
         disposition = Object.entries(headers)
           .find(([key]) => key.toLowerCase() === "content-disposition")
           ?.at(1);
@@ -991,6 +1002,8 @@ const runSafeHandlerInDeliveryScope = async <
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       const statusCode = handlerError.status;
+
+      applyRetryAfterHeader(ctx, handlerError.retryAfterMs);
 
       logAndCaptureSafeError({
         request: ctx.request,
@@ -1060,6 +1073,7 @@ const runSafeHandlerInDeliveryScope = async <
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
+      applyRetryAfterHeader(ctx, handlerError.retryAfterMs);
       logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
@@ -2022,6 +2036,9 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.clause ? { clause: error.clause } : {}),
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
   ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
+  ...(error.retryAfterMs === undefined
+    ? {}
+    : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).

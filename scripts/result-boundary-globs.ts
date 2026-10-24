@@ -110,6 +110,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
+  "apps/api/src/lib/load/**/*.ts",
   "apps/api/src/lib/machine-api-keys/**/*.ts",
   "apps/api/src/lib/synthetic-principal/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
