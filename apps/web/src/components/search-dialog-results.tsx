@@ -68,77 +68,40 @@ type SearchSummaryItemProps = {
   onCitationClick: (citationId: string) => void;
 };
 
-export type CommandActionEntry = {
-  type: "command-action";
-  title: string;
-  action: ResolvedCommandAction;
-};
-
 type CommandActionItemProps = {
-  entry: CommandActionEntry;
-  navigation: { type: "button" } | { type: "command"; index: number };
+  action: ResolvedCommandAction;
   onSelect: (actionId: string) => void;
 };
 
+/** An action row on the blank search screen; results never list actions. */
 export const CommandActionItem = ({
-  entry,
-  navigation,
+  action,
   onSelect,
 }: CommandActionItemProps) => {
-  const { action } = entry;
   const Icon = action.icon;
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
-  const content = (
-    <>
-      <Icon className="text-muted-foreground size-4 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{action.title}</span>
-      {action.hotkey && (
-        <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
-          {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
-        </kbd>
+  return (
+    <CapabilityAction action={action} surface="control">
+      {(capabilityProps) => (
+        <Button
+          data-command-action-id={action.id}
+          data-search-empty-row=""
+          onClick={() => onSelect(action.id)}
+          size="row"
+          variant="ghost"
+          {...capabilityProps}
+        >
+          <Icon className="text-muted-foreground size-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{action.title}</span>
+          {action.hotkey && (
+            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
+              {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
+            </kbd>
+          )}
+        </Button>
       )}
-    </>
+    </CapabilityAction>
   );
-  switch (navigation.type) {
-    case "command":
-      return (
-        <CapabilityAction action={action} surface="control">
-          {(capabilityProps) => (
-            <CommandItem
-              data-command-action-id={action.id}
-              data-command-action-index={navigation.index}
-              index={navigation.index}
-              onClick={() => onSelect(action.id)}
-              size="row"
-              value={entry}
-              {...capabilityProps}
-            >
-              {content}
-            </CommandItem>
-          )}
-        </CapabilityAction>
-      );
-    case "button":
-      return (
-        <CapabilityAction action={action} surface="control">
-          {(capabilityProps) => (
-            <Button
-              data-command-action-id={action.id}
-              data-search-empty-row=""
-              onClick={() => onSelect(action.id)}
-              size="row"
-              variant="ghost"
-              {...capabilityProps}
-            >
-              {content}
-            </Button>
-          )}
-        </CapabilityAction>
-      );
-    default:
-      navigation satisfies never;
-      return panic("Unhandled command action navigation type");
-  }
 };
 
 export const SearchSummaryItem = ({

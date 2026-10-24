@@ -229,6 +229,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/auth/request-budget-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
+  // The OAuth provider consumes a client discovery's refusal as a rejected
+  // APIError, which the stale-if-error wrapper passes through unchanged.
+  "apps/api/src/lib/auth/cimd-stale-if-error.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
