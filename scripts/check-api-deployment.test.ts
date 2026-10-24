@@ -141,6 +141,8 @@ describe("API deployment health receipt", () => {
     const success = {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
       MCP_SMOKE: "success",
       CORPUS_PREFLIGHT: "success",
       CORPUS_SEARCH_WAIVED: "false",
@@ -149,7 +151,13 @@ describe("API deployment health receipt", () => {
     };
     const cases = [
       { outcomes: success, state: "success" },
-      ...["WEB_SMOKE", "API_SMOKE", "MCP_SMOKE"].flatMap((smoke) =>
+      ...[
+        "WEB_SMOKE",
+        "API_SMOKE",
+        "MCP_SMOKE",
+        "DEPLOYED_JOURNEYS",
+        "MOCK_JOURNEYS",
+      ].flatMap((smoke) =>
         ["failure", "skipped", ""].map((outcome) => ({
           outcomes: { ...success, [smoke]: outcome },
           state: "failure",

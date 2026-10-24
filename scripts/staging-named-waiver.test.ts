@@ -274,7 +274,7 @@ test("the sole named waiver validates before checkout and derives its downstream
   for (const [name, id] of [
     ["DEPLOYED_JOURNEYS", "deployed-journeys"],
     ["MOCK_JOURNEYS", "mock-journeys"],
-  ]) {
+  ] as const) {
     expect(recordEnv?.[name]).toBe(`\${{ steps.${id}.outcome }}`);
   }
   assertValidation();
