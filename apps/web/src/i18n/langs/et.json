@@ -388,6 +388,7 @@
         "reading": "Lugemisvaade"
       },
       "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
+      "pdfTextFailed": "PDF-i teksti ei õnnestunud lugeda, seetõttu pole väited lehekülgedel märgitud.",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 impordileht (XLSX)",
         "exporting": "Eksporti valmistatakse ette…",
         "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "ksefFa3": "KSeF e-arve FA(3) (XML)",
         "spreadsheets": "Tabelid",
         "xlsx": "Arved (XLSX)",
         "xlsxLines": "Arveread (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Lehekülg {page}/{pageCount}",
       "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
       "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
+      "pageWithEstimatedMatchCounts": "Lehekülg {page} · ligikaudu {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
+      "pageWithMatchCounts": "Lehekülg {page} · {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
+      "pageWithPartialMatchCount": "Lehekülg {page} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
       "perPage": "Lehekülje kohta",
       "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
