@@ -358,6 +358,7 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
           workspaceId: ids.wsA1,
           userId: ids.userA1,
           scopedDb: actor.inputDb,
+          extractionRunStore: extractionRuns,
           runStateStore: asTestRaw<
             NonNullable<Parameters<typeof startWorkflow>[0]["runStateStore"]>
           >({ tryClaim: async () => false }),
