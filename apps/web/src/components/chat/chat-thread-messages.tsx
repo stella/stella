@@ -103,6 +103,7 @@ import {
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  canRetryChatRequest,
 } from "@/components/chat/chat-user-actions";
 import { ContextNotice } from "@/components/chat/context-notice";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
@@ -426,6 +427,7 @@ export const ChatThreadMessages = ({
                             messages,
                           })}
                           canRetry={canRetryAssistantMessage({
+                            error,
                             isGenerating: generationActive,
                             messageId: message.id,
                             messages,
@@ -1118,7 +1120,8 @@ export const ChatErrorMessage = ({
   error: Error;
   isGenerating: boolean;
   onResend?:
-    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
@@ -1131,9 +1134,12 @@ export const ChatErrorMessage = ({
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
-  const errorMessage = rejectedInput
-    ? t("errors.api.validation")
-    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
+  let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
+  if (!canRetryChatRequest(error)) {
+    errorMessage = t("chat.sendErrorContinuationRejected");
+  } else if (rejectedInput) {
+    errorMessage = t("errors.api.validation");
+  }
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1179,7 +1185,7 @@ export const ChatErrorMessage = ({
               {t("chat.sendWithoutAnonymization")}
             </Button>
           )}
-          {onResend && (
+          {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
               onClick={() => {
@@ -1276,7 +1282,8 @@ const AssistantMessageActions = ({
   exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
-    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
   /** Present on the main chat surface; enables the export action. Omitted on
    *  embedded surfaces (file-chat overlay, template studio) that don't export. */
   threadRef?: ChatThreadRef | undefined;
@@ -1382,7 +1389,10 @@ type ChatThreadMessagesProps = {
   messages: ChatUIMessage[];
   onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
   answerRewriteAvailability?:
-    "available" | "anonymized" | "unknown" | undefined;
+    | "available"
+    | "anonymized"
+    | "unknown"
+    | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1390,7 +1400,8 @@ type ChatThreadMessagesProps = {
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:
-    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
@@ -1408,7 +1419,8 @@ type ChatThreadMessagesProps = {
   /** Mirrors an ask-user card's local edit-mode up to the page so it can
    *  keep treating a reopened answered card as a live clarification. */
   onAskUserEditingChange?:
-    ((toolCallId: string, isEditing: boolean) => void) | undefined;
+    | ((toolCallId: string, isEditing: boolean) => void)
+    | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
     destination: CreateDocumentDestination,
@@ -1773,7 +1785,8 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
 };
 
 type ProcessStepTitleKey =
-  ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
+  | ReturnType<typeof getChatToolTitleKey>
+  | "chat.reasoning";
 
 const getProcessStepTitleKey = (
   entry: AssistantPartRenderEntry,
