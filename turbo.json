@@ -297,7 +297,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/VERSION",
-        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png",
+        "$TURBO_ROOT$/apps/landing/public/brand/stella-symbol.svg"
       ],
       "outputs": [".output/**"]
     },
@@ -1040,7 +1041,6 @@
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
-        "$TURBO_ROOT$/packages/analytics-config/**",
         "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
@@ -1049,7 +1049,6 @@
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
         "$TURBO_ROOT$/packages/chat-limits/**",
-        "$TURBO_ROOT$/packages/chat/**",
         "$TURBO_ROOT$/packages/cli/**",
         "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",

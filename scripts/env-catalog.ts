@@ -1747,6 +1747,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
   "VERSION",
+  // Web image build: the previous release image whose own assets carry forward.
+  "PREVIOUS_WEB_IMAGE",
   // Release dependency-audit gate: a reasoned waiver and the remediation branch.
   "WAIVE_DEPENDENCY_AUDIT",
   "WAIVER_REASON",
