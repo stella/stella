@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.50.2
+
+### Patch Changes
+
+- [#6204](https://github.com/stella/stella/pull/6204) [`81f8075`](https://github.com/stella/stella/commit/81f80750038583d4b7377622cc93108c4c7c89ab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `HorizontalScroller`: a horizontal scroll area with a visible scrollbar, edge fades, previous and next buttons, vertical-wheel scrolling and focus scroll-into-view.
+
 ## 0.50.1
 
 ### Patch Changes

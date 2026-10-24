@@ -14,7 +14,9 @@ export type MigrationTimingRecord =
       event: "migrate.phase_duration";
       phase: "schema";
       durationMs: number;
-      outcome: "applied" | "stale_bundle_noop" | "failed";
+      retriesSpent: number;
+      outcome:
+        "applied" | "stale_bundle_noop" | "stale_bundle_refused" | "failed";
       /** Waiting for the corpus schema lane, part of the phase; null when it failed first. */
       laneWaitMs: number | null;
       appliedCount: number | null;
@@ -23,6 +25,7 @@ export type MigrationTimingRecord =
       event: "migrate.phase_duration";
       phase: "online";
       durationMs: number;
+      retriesSpent: number;
       outcome: "complete" | "deferred" | "failed";
     }
   | {
@@ -30,16 +33,21 @@ export type MigrationTimingRecord =
       kind: OnlineStepKind;
       name: string;
       durationMs: number;
+      retriesSpent: number;
       outcome: "complete" | "deferred" | "pending" | "failed";
     };
 
 /** Distributes `Omit` over the union, so each record keeps its own shape. */
-type WithoutDuration<T> = T extends unknown ? Omit<T, "durationMs"> : never;
+type WithoutMeasurements<T> = T extends unknown
+  ? Omit<T, "durationMs" | "retriesSpent">
+  : never;
 
-export type MigrationTimingFields = WithoutDuration<MigrationTimingRecord>;
+export type MigrationTimingFields = WithoutMeasurements<MigrationTimingRecord>;
 
 export type MigrationTiming = {
   clock: () => number;
+  /** Cumulative retries; each timed scope reports the retries spent within it. */
+  retriesSpent?: () => number;
   emit: (record: MigrationTimingRecord) => void;
 };
 
@@ -67,13 +75,23 @@ export const timed = async <TResult>({
   failure: MigrationTimingFields & { outcome: "failed" };
 }): Promise<TResult> => {
   const startedAt = timing.clock();
+  const retriesAtStart = timing.retriesSpent?.() ?? 0;
+  const retriesSpent = () => (timing.retriesSpent?.() ?? 0) - retriesAtStart;
   const elapsed = () => Math.max(0, Math.round(timing.clock() - startedAt));
   try {
     const result = await work();
-    timing.emit({ ...describe(result), durationMs: elapsed() });
+    timing.emit({
+      ...describe(result),
+      durationMs: elapsed(),
+      retriesSpent: retriesSpent(),
+    });
     return result;
   } catch (error: unknown) {
-    timing.emit({ ...failure, durationMs: elapsed() });
+    timing.emit({
+      ...failure,
+      durationMs: elapsed(),
+      retriesSpent: retriesSpent(),
+    });
     throw error;
   }
 };
