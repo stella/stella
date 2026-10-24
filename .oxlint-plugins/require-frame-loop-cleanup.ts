@@ -1131,6 +1131,55 @@ const startsInFinally = (start: AstNode, owner: AstNode) => {
   return false;
 };
 
+const precedesCreation = (write: AstNode, start: AstNode): boolean =>
+  write.range[1] < start.range[0] &&
+  enclosingFunctions(write).at(0) === enclosingFunctions(start).at(0);
+
+type RepeatedIntervalWriteOptions = {
+  context: LoopContext;
+  write: AstNode;
+  start: AstNode;
+};
+
+const repeatsMutableIntervalWrite = ({
+  context,
+  write,
+  start,
+}: RepeatedIntervalWriteOptions): boolean => {
+  if (!isGlobalCall(context, start, START_NAMES.interval)) {
+    return false;
+  }
+  if (write.type === "VariableDeclarator" && parentOf(write)?.kind !== "var") {
+    return false;
+  }
+  const owner = enclosingFunctions(write).at(0);
+  for (
+    let parent = parentOf(write);
+    parent !== null && parent !== owner;
+    parent = parentOf(parent)
+  ) {
+    if (
+      parent.type === "ForStatement" &&
+      isAstNode(parent.init) &&
+      isWithin(write, parent.init)
+    ) {
+      continue;
+    }
+    if (
+      [
+        "ForStatement",
+        "ForInStatement",
+        "ForOfStatement",
+        "WhileStatement",
+        "DoWhileStatement",
+      ].includes(parent.type)
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const hasAmbiguousMemberWrites = ({
   context,
   cancels,
@@ -1173,16 +1222,21 @@ const hasAmbiguousMemberWrites = ({
     ) {
       continue;
     }
+    if (precedesCreation(node, start)) {
+      continue;
+    }
     const value = unwrapExpression(
       node.type === "AssignmentExpression" && node.operator === "="
         ? node.right
         : null,
     );
-    if (value === start && (loopBody === null || !isWithin(node, loopBody))) {
+    if (cancelledBeforeWrite({ proof, write: node, start })) {
       continue;
     }
-    const empty = emptyHandleValue(context, value);
-    if (empty && cancelledBeforeWrite({ proof, write: node, start })) {
+    if (repeatsMutableIntervalWrite({ context, write: node, start })) {
+      return true;
+    }
+    if (value === start && (loopBody === null || !isWithin(node, loopBody))) {
       continue;
     }
     const insideLoop = loopBody !== null && isWithin(node, loopBody);
@@ -1228,6 +1282,9 @@ const hasAmbiguousHandleWrites = ({
     }
     const identifier: unknown = reference.identifier;
     const write = isAstNode(identifier) ? parentOf(identifier) : null;
+    if (write !== null && precedesCreation(write, start)) {
+      continue;
+    }
     const value = unwrapExpression(
       write?.type === "VariableDeclarator"
         ? write.init
@@ -1238,11 +1295,16 @@ const hasAmbiguousHandleWrites = ({
     const empty =
       (value === null && write?.type === "VariableDeclarator") ||
       emptyHandleValue(context, value);
+    if (write !== null && cancelledBeforeWrite({ proof, write, start })) {
+      continue;
+    }
     if (
-      empty &&
-      (reference.init ||
-        (write !== null && cancelledBeforeWrite({ proof, write, start })))
+      write !== null &&
+      repeatsMutableIntervalWrite({ context, write, start })
     ) {
+      return true;
+    }
+    if (empty && reference.init) {
       continue;
     }
     const frame = isGlobalCall(context, start, START_NAMES.frame);

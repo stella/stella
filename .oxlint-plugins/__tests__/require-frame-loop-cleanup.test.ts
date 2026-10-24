@@ -633,6 +633,43 @@ test("member handles retain one stable root and an unambiguous pending timer", a
   );
 });
 
+test("replacing a timer requires executed cancellation of the previous handle", async () => {
+  const cases = [
+    ["clearInterval(id); id = setInterval(tick, 20);", true],
+    [
+      "const stop = () => clearInterval(id); stop(); id = setInterval(tick, 20);",
+      true,
+    ],
+    ["if (ready()) clearInterval(id); id = setInterval(tick, 20);", false],
+    [
+      "const unused = () => clearInterval(id); id = setInterval(tick, 20);",
+      false,
+    ],
+    [
+      "clearInterval(id); id = setInterval(tick, 20); id = setInterval(tick, 30);",
+      false,
+    ],
+    ["for (let i = 0; i < 2; i++) id = setInterval(tick, 20);", false],
+    [
+      "for (let i = 0; i < 2; i++) { clearInterval(id); id = setInterval(tick, 20); }",
+      true,
+    ],
+  ] as const;
+  for (const member of [false, true]) {
+    const results = await Promise.all(
+      cases.map(async ([body]) =>
+        lintSingleRule(
+          RULE,
+          `useEffect(() => { ${member ? "const ref = { current: 0 }; ref.current" : "let id"} = setInterval(tick, 10); ${member ? body.replaceAll("id", "ref.current") : body} return () => clearInterval(${member ? "ref.current" : "id"}); }, []);`,
+        ),
+      ),
+    );
+    expect(results.map((lines) => lines.length === 0)).toEqual(
+      cases.map(([, owned]) => owned),
+    );
+  }
+});
+
 test("cancellation must execute after creation, independent of helper declaration order", async () => {
   const cases = [
     ["let id; clearInterval(id); id = setInterval(tick, 10);", false],
