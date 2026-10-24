@@ -38,7 +38,7 @@ const renderHeading = (
 test("reports exact and appended partial matches separately", () => {
   const view = renderHeading({ relaxedHitCount: 3 });
   expect(
-    view.getByText("Page 1 · 0 exact matches · 3 partial matches"),
+    view.getByText("Page 1 · 0 exact matches · 3 partial matches on this page"),
   ).toBeTruthy();
 });
 
@@ -48,7 +48,9 @@ test("keeps an estimated exact-match total approximate beside partial matches", 
     total: { type: SEARCH_TOTAL_TYPE.ESTIMATE, count: 120 },
   });
   expect(
-    view.getByText("Page 1 · about 120 exact matches · 3 partial matches"),
+    view.getByText(
+      "Page 1 · about 120 exact matches · 3 partial matches on this page",
+    ),
   ).toBeTruthy();
 });
 
@@ -58,8 +60,8 @@ test("keeps the ordinary result total when no partial matches were appended", ()
 });
 
 test.each([
-  [1, "Page 1 · 1 partial match"],
-  [3, "Page 1 · 3 partial matches"],
+  [1, "Page 1 · 1 partial match on this page"],
+  [3, "Page 1 · 3 partial matches on this page"],
 ] as const)(
   "reports %i partial matches when the exact total is uncounted",
   (count, text) => {
@@ -80,7 +82,9 @@ test("keeps the page without inventing a total when no partial matches were appe
 
 test("keeps the displayed count busy while replacement results are pending", () => {
   const view = renderHeading({ isRefreshing: true, relaxedHitCount: 3 });
-  const text = view.getByText("Page 1 · 0 exact matches · 3 partial matches");
+  const text = view.getByText(
+    "Page 1 · 0 exact matches · 3 partial matches on this page",
+  );
   expect(text.parentElement?.getAttribute("aria-busy")).toBe("true");
 });
 

@@ -1027,10 +1027,10 @@
       "pageOfCount": "Page {page} sur {pageCount}",
       "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
-      "pageWithEstimatedMatchCounts": "Page n° {page} · environ {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}}",
+      "pageWithEstimatedMatchCounts": "Page n° {page} · environ {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
-      "pageWithMatchCounts": "Page n° {page} · {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}}",
-      "pageWithPartialMatchCount": "Page n° {page} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}}",
+      "pageWithMatchCounts": "Page n° {page} · {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
+      "pageWithPartialMatchCount": "Page n° {page} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page",
       "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
