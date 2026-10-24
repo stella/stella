@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Evaluates a dispatched stable release after its observation window and records health evidence for the next promotion gate.",
+  "reviewedDigest": "9ae035fe4e777b13eb0b705b53e0f71e29f81e490dce6d203b0d67d3f0fc47eb"
+}

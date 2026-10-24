@@ -241,6 +241,7 @@
     "strikethrough": "Pārsvītrots",
     "underline": "Pasvītrots",
     "unnamedClip": "Teksts",
+    "clipName": "Nosaukums",
     "allClips": "Visi izgriezumi",
     "clips": "Izgriezumi",
     "externalRegistry": "Ārējais reģistrs",
