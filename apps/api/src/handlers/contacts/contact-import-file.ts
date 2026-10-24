@@ -31,6 +31,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { classifyBrazilianTaxId } from "@/api/handlers/contacts/contact-import-receipt";
 import { isValidDateOfBirth } from "@/api/handlers/contacts/person-details";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { CSV_DELIMITERS, CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import type { CSVDelimiter } from "@/api/lib/csv";
@@ -1161,3 +1162,16 @@ export const previewContactImport = ({
     validCount: rows.filter(({ issues }) => issues.length === 0).length,
   });
 };
+
+/**
+ * An import's single tax column holds a national tax number or an EU VAT
+ * number; it is stored the way every contact writer stores the pair
+ * (`contactTaxIdentifiers`). Brazilian tax ids stay tax ids.
+ */
+export const importedTaxIdentifiers = (
+  taxId: string | undefined,
+  taxIdScheme: ContactImportTaxIdScheme,
+) =>
+  taxIdScheme === "none"
+    ? contactTaxIdentifiers({ taxId: taxId ?? null, vatId: null })
+    : { taxId: taxId ?? null, vatId: null };

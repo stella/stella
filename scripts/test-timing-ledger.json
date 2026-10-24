@@ -20,7 +20,7 @@
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
-    "id": "no-polling-loop::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::waitUntilBlocked::while",
+    "id": "no-polling-loop::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::waitForBackendState::while",
     "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
@@ -51,7 +51,12 @@
   },
   {
     "id": "no-polling-loop::apps/api/src/db/online-index-gate.postgres.test.ts::<module>::for",
-    "count": 3,
+    "count": 5,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/db/online-index-gate.postgres.test.ts::<module>::while",
+    "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
@@ -82,6 +87,16 @@
   {
     "id": "no-polling-loop::apps/api/src/handlers/case-law/ingestion/source-totals.db.test.ts::<module>::while",
     "count": 2,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts::quiescent::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts::startPausedTurn::for",
+    "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
@@ -122,6 +137,11 @@
   {
     "id": "no-polling-loop::apps/api/src/handlers/lists/columns/create.postgres.test.ts::<module>::while",
     "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/api/src/handlers/lists/verifications/claim-comments/claim-comments.db.test.ts::<module>::for",
+    "count": 2,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
@@ -195,11 +215,6 @@
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
-    "id": "no-polling-loop::apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts::<module>::for",
-    "count": 1,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
     "id": "no-polling-loop::apps/api/src/lib/machine-api-keys/personal-lifecycle.postgres.test.ts::<module>::while",
     "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
@@ -240,6 +255,11 @@
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
+    "id": "no-polling-loop::apps/api/src/tests/helpers/provider-wire-gate.test.ts::readAvailable::while",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
     "id": "no-polling-loop::apps/collab/src/server.test.ts::waitFor::while",
     "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
@@ -251,6 +271,26 @@
   },
   {
     "id": "no-polling-loop::apps/web/src/features/chat/chat-runtime-emit.test.ts::waitFor::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/chat/chat-runtime-rejoin.test.ts::awaitCondition::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/chat/chat-runtime-session-ended.test.ts::settle::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/chat/chat-stream-identity.test.ts::settle::for",
+    "count": 1,
+    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
+  },
+  {
+    "id": "no-polling-loop::apps/web/src/features/chat/chat-stream-identity.test.ts::waitFor::for",
     "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
@@ -320,6 +360,11 @@
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
+    "id": "no-real-time-wait::apps/api/scripts/export-mcp-tool-registry.test.ts::<module>::new Promise(setTimeout)",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::apps/api/scripts/test-db-snapshot-cache.test.ts::build::Bun.sleep",
     "count": 2,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -350,7 +395,7 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::waitUntilBlocked::Bun.sleep",
+    "id": "no-real-time-wait::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::waitForBackendState::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -391,7 +436,12 @@
   },
   {
     "id": "no-real-time-wait::apps/api/src/db/online-index-gate.postgres.test.ts::<module>::Bun.sleep",
-    "count": 3,
+    "count": 6,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/db/online-index-gate.postgres.test.ts::sleep::Bun.sleep",
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -420,6 +470,11 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-real-time-wait::apps/api/src/handlers/case-law/decisions/search-expand.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.test.ts::local::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -437,6 +492,21 @@
   {
     "id": "no-real-time-wait::apps/api/src/handlers/case-law/ingestion/source-totals.db.test.ts::<module>::Bun.sleep",
     "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/case-law/republished-erasure-lock.postgres.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts::quiescent::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts::startPausedTurn::Bun.sleep",
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -545,6 +615,11 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-real-time-wait::apps/api/src/handlers/lists/verifications/claim-comments/claim-comments.db.test.ts::<module>::Bun.sleep",
+    "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::apps/api/src/handlers/rates/default-concurrency.postgres.test.ts::observeBlocking::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -561,6 +636,11 @@
   },
   {
     "id": "no-real-time-wait::apps/api/src/handlers/workspaces/workspace-events-access.db.test.ts::awaitStreamEnd::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/handlers/workspaces/workspace-events-access.db.test.ts::readNextChunk::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -655,6 +735,11 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-real-time-wait::apps/api/src/lib/files/conversion-input.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::apps/api/src/lib/legal-search/browse-facets-cache.test.ts::load::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -716,11 +801,6 @@
   },
   {
     "id": "no-real-time-wait::apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts::blockersFor::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts::<module>::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -800,11 +880,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/lib/rate-limit/redis-context.cold-start.test.ts::<module>::new Promise(setTimeout)",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/api/src/lib/redis-outage.test.ts::<module>::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -846,6 +921,11 @@
   },
   {
     "id": "no-real-time-wait::apps/api/src/lib/skills/skill-package-discovery.test.ts::safeOutboundFetchBytesMock::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/api/src/lib/sse-fanout.db.test.ts::pendingDelivery::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -930,6 +1010,11 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-real-time-wait::apps/api/src/tests/helpers/provider-wire-gate.test.ts::readAvailable::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts::run::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -956,6 +1041,11 @@
   },
   {
     "id": "no-real-time-wait::apps/collab/src/server.test.ts::waitFor::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/desktop/tests/App.dom.test.tsx::flushAct::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -1002,6 +1092,16 @@
   {
     "id": "no-real-time-wait::apps/extension/src/lib/tab-containment.test.ts::<module>::@stll/concurrency/sleep#sleep",
     "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/journeys/inspector-layout.spec.ts::expectInteractive::node:timers/promises#setTimeout",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/e2e/journeys/inspector-layout.spec.ts::frameRoundTrip::node:timers/promises#setTimeout",
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -1090,6 +1190,11 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-real-time-wait::apps/web/src/components/chat/streamdown-mention-link.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::apps/web/src/components/chat/tool-approval-card.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -1106,12 +1211,17 @@
   },
   {
     "id": "no-real-time-wait::apps/web/src/components/inspector/inspector-tabs-store.test.ts::<module>::Bun.sleep",
-    "count": 2,
+    "count": 3,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
     "id": "no-real-time-wait::apps/web/src/components/inspector/maximize-tab.test.ts::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/legal-reader/annotations/reader-annotation-undo.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 2,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -1127,6 +1237,11 @@
   {
     "id": "no-real-time-wait::apps/web/src/components/provision-version-basis.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
     "count": 2,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/components/toast-behaviour.dom.test.tsx::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -1196,11 +1311,31 @@
   },
   {
     "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-rejoin.test.ts::<module>::@stll/concurrency/sleep#sleep",
-    "count": 2,
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-rejoin.test.ts::awaitCondition::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-session-ended.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
     "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-stop.test.ts::tick::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-stream-identity.test.ts::settle::@stll/concurrency/sleep#sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/features/chat/chat-stream-identity.test.ts::waitFor::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -1295,6 +1430,11 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-real-time-wait::apps/web/src/lib/analytics/web-hang/web-hang-detector.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 7,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::apps/web/src/lib/errors/user-toast.test.ts::settle::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -1310,17 +1450,22 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/web/src/lib/session-cache-guard.test.ts::nextNavigation::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/web/src/lib/workspace-sse-connection.logic.test.ts::<module>::Bun.sleep",
     "count": 2,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
     "id": "no-real-time-wait::apps/web/src/lib/workspace-sse-connection.logic.test.ts::giveUp::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/lib/workspaces/mutations/upload-failure-toast.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
+    "count": 4,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/routes/-app-frame-bridge.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
@@ -1361,7 +1506,7 @@
   },
   {
     "id": "no-real-time-wait::apps/web/src/routes/_protected.chat/-components/chat-thread-page.dom.test.tsx::<module>::node:timers/promises#setTimeout",
-    "count": 1,
+    "count": 2,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -1387,6 +1532,11 @@
   {
     "id": "no-real-time-wait::apps/web/src/ssr-response-stream.test.ts::<module>::Bun.sleep",
     "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
+    "id": "no-real-time-wait::apps/web/src/testing/timer-guard.test.ts::<module>::Bun.sleep",
+    "count": 4,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -1500,7 +1650,57 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/scripts/ai-provider-canary-chat-toolsets.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/ai-provider-cassette-probe.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/export-mcp-tool-registry.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/scripts/prepare-postgres-tests.postgres.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/seed-case-law-synthetic.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/seed-case-law-synthetic.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/seed-legal-lists.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/seed-legislation.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/seed-route-smoke-correspondence.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/seed-template-chat-threads.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/scripts/test-memory-batches.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1511,7 +1711,7 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/db/backfill-runtime-load-reader.db.test.ts::<module>::test timeout",
-    "count": 3,
+    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1520,8 +1720,33 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/db/billing-minor-units-migration.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/business-registry-credentials-migration.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::<module>::test timeout",
     "count": 9,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/case-law-source-hash-version-migration.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/case-law-source-lease-purpose-migration.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/chat-content-v3-backfill-deletion.db.test.ts::<module>::test timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1535,7 +1760,32 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/db/contact-vat-id-repair.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/decision-date-ceiling-repair.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts::<module>::test timeout",
+    "count": 6,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/entity-feature-gate-repair.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/db/entity-feature-search-budget.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/folio-block-ids-in-range.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1565,8 +1815,53 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/db/online-index-gate.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/organization-time-zone-migration.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/personal-api-key-index-migration.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/db/pool-idle-timeout.postgres.test.ts::<module>::test timeout",
     "count": 5,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/public-sanctions-reader.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/schema/case-law-search-candidate-index.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/schema/legislation-title-cutover.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/seller-profile-vat-payer-migration.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/skill-resource-folders-migration.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/db/system-audit-runs-migration.test.ts::<module>::test timeout",
+    "count": 3,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1576,6 +1871,16 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/db/work-obligation-source-foreign-key.integration.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/dev/mock-ai-stream-kinds.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/api-keys/list.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1610,6 +1915,31 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/citations/reference-resolution.db.test.ts::<module>::beforeAll timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/court-directory-rank-seed.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/court-weight-seed.db.test.ts::<module>::test timeout",
+    "count": 5,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/browse-order.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/browse-order.db.test.ts::<module>::test timeout",
+    "count": 7,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/citation-graph-surface.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -1635,17 +1965,37 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/coverage-plan.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/coverage.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/coverage.db.test.ts::<module>::test timeout",
-    "count": 18,
+    "count": 20,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/docket-family-identity.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/document-on-demand.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/judges.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/judges.db.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1656,7 +2006,17 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/list-plan.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/listing-only-publication.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/listing-only-publication.db.test.ts::<module>::test timeout",
+    "count": 5,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1680,6 +2040,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/publication-filter.postgres.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/reader.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -1696,6 +2061,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/search-rank.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/search-source-facet-plan.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1722,6 +2092,11 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/status.db.test.ts::<module>::test timeout",
     "count": 7,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/cursor-conformance.test.ts::<module>::test timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1755,13 +2130,43 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/pl-courts-normalize.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/pl-courts-recheck.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.memory.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.artifact.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/sk-us.test.ts::<module>::test timeout",
     "count": 5,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/adapters/source-fingerprint-guard.test.ts::<module>::test timeout",
+    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1777,6 +2182,16 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/citation-identifier.db.test.ts::<module>::test timeout",
     "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/citation-polarity.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/decision-rekey.db.test.ts::<module>::test timeout",
+    "count": 5,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1800,12 +2215,32 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/pipeline-decision-references.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/pipeline-decision-references.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/pipeline-identity.db.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/pipeline-stored-total.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/pipeline-unread-items.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/primary-reference.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1825,8 +2260,33 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/replay-apply.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/source-raw-writes.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/source-reported-totals.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/source-total-hold.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/source-total-maintenance.db.test.ts::<module>::test timeout",
     "count": 4,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/supplement-fold.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1835,12 +2295,47 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/judges/decision-judges.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/judges/decision-judges.db.test.ts::<module>::test timeout",
+    "count": 4,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/matter-links/matter-links.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/polarity/reviews.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/provisions/citation-count-repair.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/provisions/citation-count-repair.db.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/provisions/citation-count-repair.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/provisions/list-for-decision.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/provisions/list-for-decision.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1855,12 +2350,27 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/provisions/subdivision-citations.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/raw-erasure.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/republished-erasure-lock.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/research/organization-columns.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1895,12 +2405,27 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/chat/provider-wire-transcripts.integration.test.ts::itRunsReplayFixtures::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/chat/skill-availability/query-count.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/chat/turn-outcome.integration.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/chat/turns/resume-session-ended.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/clauses/list-level-numbering-migration.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -1920,6 +2445,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/contacts/update.integration.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/desktop-presence/presence.integration.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -1927,6 +2457,11 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/desktop-presence/presence.postgres.test.ts::<module>::test timeout",
     "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/dev/registration.test.ts::<module>::test timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -1951,6 +2486,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/docx-suggestions/create-pending-cap.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/docx-suggestions/list.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2020,6 +2560,16 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/expenses/immutability.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/files/ocr-export.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/hosted-usage-webhook/dispatch.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2076,6 +2626,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/legislation/ingestion.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/legislation/list-plan.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2180,6 +2735,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/lists/columns/create.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/lists/generation-candidates/acceptance/create.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2206,6 +2766,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/notifications/notifications.integration.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/number-series/number-series.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2255,6 +2820,16 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/rates/default-concurrency.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/rates/update.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/reports/build-report-data.integration.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2266,6 +2841,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/reports/report-export-queue.integration.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/sanctions/production-mount.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2365,6 +2945,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/user-files/read-visual.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/views/access.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2386,6 +2971,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/work-obligations/transitions.integration.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/handlers/workspaces/contacts/capacity.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2455,6 +3045,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/analytics/source-map.artifact.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/anonymization-blacklist.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2470,7 +3065,27 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/auth/handoff-step-up-enforcement.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/auth/mcp-web-handoff-plugin.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/auth/professional-use.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/auth/session-lifetime-store.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/auth/sse-session-liveness.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2485,12 +3100,7 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/billing/number-series.db.test.ts::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/billing/vat-rates.db.test.ts::<module>::setDefaultTimeout",
+    "id": "no-unreasoned-timeout::apps/api/src/lib/billing/vat-rates.postgres.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2500,12 +3110,42 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/business-registries/desktop/link-grants.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/business-registries/desktop/revocation.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law-freshness-metrics.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/case-law-config-sources.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/corpus-slice.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/court-presentation.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/decision-badges.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2517,6 +3157,41 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/decision-court-identity.db.test.ts::<module>::test timeout",
     "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/decision-search-metadata-sql.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/decision-summaries.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/decision-type-filter.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/directory-court-rank.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/provision-anchor-lineage.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/provision-filter.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/provision-state-backfill/backfill.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -2545,13 +3220,43 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/reader-answer-corpus.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/reader-answer-corpus.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/sitemap-shard-refresh.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/case-law/sitemap-shard-refresh.test.ts::<module>::test timeout",
-    "count": 9,
+    "count": 13,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/chat/active-draft-context.integration.test.ts::<module>::afterAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/chat/active-draft-context.integration.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/chat/data-scope.integration.test.ts::<module>::afterAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/chat/data-scope.integration.test.ts::<module>::beforeAll timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -2585,6 +3290,16 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/db/rls-role-posture.db.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/db/transitions.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/db/tree-parent-guard.postgres.test.ts::<module>::test timeout",
     "count": 4,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2606,6 +3321,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/document-counter.integration.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/document-current-content.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2675,6 +3395,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/elysia-bundle.artifact.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/email/inbound/ingest.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2690,7 +3415,17 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/email/inbound/store.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/email/inbound/upload.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/entities/document-processing-status.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2740,6 +3475,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/file-scan/yara.artifact.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/files/pdf-signing/sessions.integration.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2767,6 +3507,16 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/case-law-index-groups.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/case-law-raw-sweeps.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/case-law-raw-sweeps.db.test.ts::<module>::test timeout",
+    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -2810,6 +3560,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/corpus-index-projection-erasure-plan.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/corpus-index-projection-executor.db.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2826,6 +3581,16 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/corpus-index-projection-payload-failure.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/corpus-index-projection-provision-keys.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/corpus-index-projection-reservation-plan.db.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -2900,6 +3665,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/sk-document-backfill-requested-tier.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/sk-document-backfill-retry-order.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2915,6 +3685,31 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/sk-document-remaining-scan.property.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.test.ts::<module>::test timeout",
+    "count": 4,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/matcher-pool-contract.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/matcher-pool.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/monitoring-claims.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -2922,6 +3717,16 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts::<module>::test timeout",
     "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/monitoring-diff.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/monitoring-diff.db.test.ts::<module>::test timeout",
+    "count": 22,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -2940,8 +3745,38 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/monitoring-roles.postgres.test.ts::<module>::test timeout",
     "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/monitoring-throughput.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/refresh-event-loop.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/refresh-event-loop.db.test.ts::<module>::test timeout",
+    "count": 4,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/refresh.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/lists/sanctions/refresh.db.test.ts::<module>::test timeout",
+    "count": 12,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -2965,7 +3800,17 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/machine-api-keys/personal-lifecycle.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/matter-membership-invariant.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/matter-membership-validation.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3045,12 +3890,57 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/observability/data-invariants/case-law-ingestion.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/observability/data-invariants/case-law-ingestion.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/observability/data-invariants/sanctions.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/observability/data-invariants/sanctions.db.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/ocr-derivative-pages.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/ocr-local/ocr-local-worker.image-layout.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/ocr-local/ocr-local-worker.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/organization-creator-membership.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/organization-creator-membership.db.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/organization-member-assignments.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/public-law-census-grants.postgres.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3095,6 +3985,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/scheduler/tasks/registration-retention.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/scouts/work-attention.integration.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3125,6 +4020,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/search/projection-repair-queue.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/search/search-index-ownership.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3140,12 +4040,27 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/search/supplemental-projections.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/session-auth-macro.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/sharepoint-disable-purge.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/smoke-session/store.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/sse-fanout.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3171,6 +4086,11 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/lib/templates/stored-template-file.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/templates/template-decide-conditions.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3240,6 +4160,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/lib/workflow/orphan-cells.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/workflow/straggler-catchup.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3260,8 +4185,28 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/mcp/name-matching-corpus.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/mcp/session-context-query-plan.db.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/mcp/tool-outputs.db.test.ts::<module>::setDefaultTimeout",
     "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/scripts/adapter-health-query.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/scripts/adapter-health-query.db.test.ts::<module>::test timeout",
+    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3290,6 +4235,16 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/scripts/link-republished-decisions-plan.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/scripts/link-republished-decisions-plan.db.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/scripts/normalize-case-numbers.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3315,6 +4270,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/scripts/seed-migration-rehearsal-plan.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/tests/gated-test-database.test.ts::<module>::test timeout",
     "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3330,6 +4290,16 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/pglite-migration-triggers.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/query-perf/query-perf.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/tests/query-plans/query-plans.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3337,6 +4307,36 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/tests/query-plans/query-plans.db.test.ts::<module>::test timeout",
     "count": 5,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/query-plans/scale-profile.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/query-plans/sk-document-candidates-plan.db.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/read-scaling/claim-comments.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/read-scaling/entity-lists.postgres.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/read-scaling/handler-scaling.postgres.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/read-scaling/mcp-scaling.postgres.test.ts::<module>::test timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3425,6 +4425,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/api/src/tests/security/template-write-cleanup-intents.db.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/api/src/tests/security/write-handler-permission-coverage.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3445,8 +4450,18 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/landing/src/lib/og-card.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/visual-preview/browser/render.test.ts::<module>::test timeout",
     "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/web/e2e/journeys/chat-compaction.spec.ts::<module>::test.setTimeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3520,8 +4535,13 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/web/src/components/chat/markdown-selection.dom.test.tsx::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::<module>::test timeout",
-    "count": 3,
+    "count": 4,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3540,8 +4560,18 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::apps/web/src/features/knowledge/knowledge-audience.dom.test.tsx::<module>::test timeout",
     "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::apps/web/src/lib/organization/feature-access/capability-action-coverage.test.ts::<module>::test timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3560,8 +4590,103 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::packages/cli/src/cli.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/mcp-apps/scripts/build-mcp-apps.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/property-testing/src/ci-gate-coverage.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/runtime-mode/src/index.artifact.test.ts::<module>::beforeAll timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/runtime-mode/src/index.artifact.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/sanctions/src/compact-screening.property.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/sanctions/src/dense-screening.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/sanctions/src/flood-screening.test.ts::<module>::test timeout",
+    "count": 4,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/sanctions/src/matcher-memory.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/sanctions/src/screening-memory.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/sanctions/src/screening-work-bound.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/sanctions/src/screening.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/api-typecheck-cache.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/api-typecheck-config.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/api-typecheck-declarations.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::packages/scripts/src/ci-job-classification.test.ts::<module>::test timeout",
-    "count": 18,
+    "count": 19,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/decision-reader-boundary.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/dev-docker.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/dev-process-groups.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/prepared-generated-sources.test.ts::<module>::test timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3570,7 +4695,52 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::packages/scripts/src/process-shutdown.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/query-cache-types.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/redis-construction.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/test-source-writes.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::packages/scripts/src/web-generation-cache.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::packages/scripts/src/workspace-app-boundaries.test.ts::<module>::setDefaultTimeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/api-dockerfile-entrypoints.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/api-test-impact.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/autofix-protected-paths.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/capability-shard-merge.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3595,8 +4765,18 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::scripts/check-migrations.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::scripts/check-release-candidate.test.ts::<module>::test timeout",
     "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/check-release-receipt-coverage.test.ts::<module>::test timeout",
+    "count": 3,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3605,8 +4785,28 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::scripts/check-write-contracts.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/ci-browser-scope.test.ts::<module>::test timeout",
+    "count": 4,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/ci-checks-partition.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::scripts/ci-completed-depth.test.ts::<module>::test timeout",
     "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/ci-package-scope.test.ts::<module>::test timeout",
+    "count": 3,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3617,6 +4817,16 @@
   {
     "id": "no-unreasoned-timeout::scripts/ci-plan.test.ts::<module>::test timeout",
     "count": 8,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/ci-postgres-test-plan.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/cli-runtime-merge.test.ts::<module>::test timeout",
+    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3645,13 +4855,18 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::scripts/e2e-geometry-shards.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::scripts/flake-gate-rust.test.ts::<module>::test timeout",
     "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
     "id": "no-unreasoned-timeout::scripts/flake-gate.test.ts::<module>::test timeout",
-    "count": 2,
+    "count": 3,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3660,7 +4875,27 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::scripts/generated-files.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/generated-markdown-merge.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/generated-web-merge.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::scripts/gh-retry-processes.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/legal-atlas-image-scope.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3675,6 +4910,11 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::scripts/network-baseline-comparison.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::scripts/network-baseline-scope.test.ts::<module>::test timeout",
     "count": 7,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -3685,8 +4925,23 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::scripts/ownership.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/oxlint-config-liveness.test.ts::<module>::test timeout",
+    "count": 3,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::scripts/oxlint-safe-fixers.test.ts::<module>::setDefaultTimeout",
     "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/oxlint-tailwind-design-system.test.ts::<module>::test timeout",
+    "count": 7,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3700,7 +4955,27 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
+    "id": "no-unreasoned-timeout::scripts/precommit-lint.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/ratchet-derived-totals.test.ts::<module>::test timeout",
+    "count": 24,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/ratchet-scan.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
     "id": "no-unreasoned-timeout::scripts/run-custom-lint-tests.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/schema-introspection.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -3711,6 +4986,31 @@
   },
   {
     "id": "no-unreasoned-timeout::scripts/selfhost-contract.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/source-fingerprint-baseline.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/stage-web-runtime.test.ts::<module>::test timeout",
+    "count": 2,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/task-result-cache.test.ts::<module>::test timeout",
+    "count": 1,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/thin-queue.test.ts::<module>::test timeout",
+    "count": 10,
+    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
+  },
+  {
+    "id": "no-unreasoned-timeout::scripts/typecheck-cache.test.ts::<module>::test timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },

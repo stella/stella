@@ -72,7 +72,6 @@ import ledger from "../scripts/test-timing-ledger.json" with { type: "json" };
 import { createBudgetLedger } from "./budget-ledger.ts";
 import {
   type AstNode,
-  everyNode,
   filenameForContext,
   isAstNode,
   isIdentifier,
@@ -377,17 +376,27 @@ const realTimeWait = (context: ScopeContext, node: unknown): Wait | null => {
 
 // `jest.useFakeTimers()` / `vi.useFakeTimers()`: the file replaces the global
 // timers, so a `setTimeout`-built wait in it runs when the test advances them.
-const installsFakeTimers = (node: unknown): boolean => {
+const installsFakeTimers = (context: ScopeContext, node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
     return false;
   }
   const callee = unwrapExpression(node.callee);
+  if (
+    !isAstNode(callee) ||
+    callee.type !== "MemberExpression" ||
+    memberPropertyName(callee) !== "useFakeTimers"
+  ) {
+    return false;
+  }
+  const binding = resolveImportedExpressionForEnforcement(
+    context,
+    callee.object,
+  );
   return (
-    isAstNode(callee) &&
-    callee.type === "MemberExpression" &&
-    memberPropertyName(callee) === "useFakeTimers" &&
-    (isIdentifier(unwrapExpression(callee.object), "jest") ||
-      isIdentifier(unwrapExpression(callee.object), "vi"))
+    binding !== null &&
+    ((binding.source === "bun:test" && binding.imported === "jest") ||
+      (binding.source === "vitest" &&
+        (binding.imported === "vi" || binding.imported === "vitest")))
   );
 };
 
@@ -444,6 +453,9 @@ const localFunction = (
   callee: unknown,
 ): AstNode | null => {
   const expression = unwrapExpression(callee);
+  if (isFunctionNode(expression)) {
+    return expression;
+  }
   if (!isIdentifierReference(expression)) {
     return null;
   }
@@ -459,6 +471,17 @@ const localFunction = (
   return isFunctionNode(initializer) ? initializer : null;
 };
 
+const invokesCallback = (context: ScopeContext, callee: unknown): boolean => {
+  const binding = resolveImportedExpressionForEnforcement(context, callee);
+  return (
+    binding !== null &&
+    binding.imported === "act" &&
+    (binding.source === "react" ||
+      binding.source === "react-dom/test-utils" ||
+      binding.source === "@testing-library/react")
+  );
+};
+
 // Whether running `root` waits on the clock or the scheduler, directly, in a
 // callback it passes, or through a function of this file it calls.
 const waitsOnClock = (
@@ -466,7 +489,7 @@ const waitsOnClock = (
   root: unknown,
   seen = new Set<AstNode>(),
 ): boolean =>
-  everyNode(root).some((node) => {
+  ownNodes(root).some((node) => {
     if (
       realTimeWait(context, node) !== null ||
       isSchedulerTick(context, node)
@@ -476,12 +499,20 @@ const waitsOnClock = (
     if (node.type !== "CallExpression") {
       return false;
     }
-    const helper = localFunction(context, node.callee);
-    if (helper === null || seen.has(helper)) {
-      return false;
-    }
-    seen.add(helper);
-    return waitsOnClock(context, helper.body, seen);
+    const invoked = [
+      node.callee,
+      ...(invokesCallback(context, node.callee) && Array.isArray(node.arguments)
+        ? node.arguments.slice(0, 1)
+        : []),
+    ];
+    return invoked.some((callee) => {
+      const helper = localFunction(context, callee);
+      if (helper === null || seen.has(helper)) {
+        return false;
+      }
+      seen.add(helper);
+      return waitsOnClock(context, helper.body, seen);
+    });
   });
 
 const LOOP_PATTERNS: ReadonlyMap<string, string> = new Map([
@@ -490,21 +521,57 @@ const LOOP_PATTERNS: ReadonlyMap<string, string> = new Map([
   ["WhileStatement", "while"],
 ]);
 
-const EXIT_TYPES: ReadonlySet<string> = new Set([
-  "BreakStatement",
-  "ReturnStatement",
-  "ThrowStatement",
-]);
+// Only a break whose target encloses this loop can stop this loop. A break
+// captured by an inner loop, switch or label leaves the outer flush running.
+const breakExitsLoop = (node: AstNode, loop: AstNode): boolean => {
+  const label = unwrapExpression(node.label);
+  let current = node.parent;
+  while (isAstNode(current)) {
+    if (isIdentifier(label)) {
+      if (
+        current.type === "LabeledStatement" &&
+        isIdentifier(current.label, label.name)
+      ) {
+        let enclosing: unknown = loop;
+        while (isAstNode(enclosing)) {
+          if (enclosing === current) {
+            return true;
+          }
+          enclosing = enclosing.parent;
+        }
+        return false;
+      }
+    } else if (
+      LOOP_PATTERNS.has(current.type) ||
+      current.type === "ForOfStatement" ||
+      current.type === "ForInStatement" ||
+      current.type === "SwitchStatement"
+    ) {
+      return current === loop;
+    }
+    current = current.parent;
+  }
+  return false;
+};
 
-// A `break`, `return` or `throw` under an `if` of the loop's own body.
-const hasConditionalExit = (body: unknown): boolean =>
-  ownNodes(body).some(
-    (node) =>
-      node.type === "IfStatement" &&
-      ownNodes([node.consequent, node.alternate]).some((inner) =>
-        EXIT_TYPES.has(inner.type),
-      ),
-  );
+const hasConditionalExit = (loop: AstNode): boolean =>
+  ownNodes(loop.body).some((node) => {
+    if (
+      node.type !== "ReturnStatement" &&
+      node.type !== "ThrowStatement" &&
+      (node.type !== "BreakStatement" || !breakExitsLoop(node, loop))
+    ) {
+      return false;
+    }
+    let current = node.parent;
+    while (isAstNode(current) && current !== loop) {
+      if (current.type === "IfStatement") {
+        return true;
+      }
+      current = current.parent;
+    }
+    return false;
+  });
 
 const COUNTER_OPERATORS: ReadonlySet<string> = new Set(["<", "<=", ">", ">="]);
 
@@ -561,7 +628,7 @@ const isTrueLiteral = (node: unknown): boolean => {
 
 // Whether a predicate, not a pass count, decides when the loop stops.
 const stopsOnPredicate = (loop: AstNode): boolean =>
-  hasConditionalExit(loop.body) ||
+  hasConditionalExit(loop) ||
   (isAstNode(loop.test) && !isTrueLiteral(loop.test) && !isCounterTest(loop));
 
 const POLL_HINT =
@@ -661,19 +728,29 @@ const staticNumber = (
   return null;
 };
 
-const isOwnedTimeoutHelper = (node: unknown): boolean => {
+const isOwnedTimeoutHelper = (
+  context: ScopeContext,
+  node: unknown,
+): boolean => {
   const expression = unwrapExpression(node);
   if (!isAstNode(expression) || expression.type !== "CallExpression") {
     return false;
   }
-  const callee = unwrapExpression(expression.callee);
-  return isIdentifier(callee) && OWNED_TIMEOUT_HELPERS.has(callee.name);
+  const binding = resolveImportedExpressionForEnforcement(
+    context,
+    expression.callee,
+  );
+  return (
+    binding !== null &&
+    binding.source === "@stll/property-testing" &&
+    OWNED_TIMEOUT_HELPERS.has(binding.imported)
+  );
 };
 
 // Whether a timeout value raises the budget above Bun's default, or cannot be
 // read and so may.
 const raisesTimeout = (context: ScopeContext, node: unknown): boolean => {
-  if (isOwnedTimeoutHelper(node)) {
+  if (isOwnedTimeoutHelper(context, node)) {
     return false;
   }
   const value = staticNumber(context, node);
@@ -818,8 +895,6 @@ const raisedTimeout = (
   return name === null ? raisedPlaywrightTimeout(call) : null;
 };
 
-const TIMEOUT_HINT = /[Tt]imeout|retry|retries|\.slow\(/u;
-
 type WaitSite = { node: ESTree.Node; wait: Wait };
 
 export default eslintCompatPlugin({
@@ -875,7 +950,7 @@ export default eslintCompatPlugin({
             comments = null;
           },
           CallExpression(node) {
-            fakeTimers ||= installsFakeTimers(node);
+            fakeTimers ||= installsFakeTimers(context, node);
             if (hinted) {
               record(node);
             }
@@ -989,18 +1064,16 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const tracker = budgetTracker(TIMEOUT_RULE);
-        let hinted = false;
         let comments: readonly SourceComment[] | null = null;
 
         return {
           before() {
             tracker.reset(filenameForContext(context));
-            hinted = TIMEOUT_HINT.test(context.sourceCode.text);
             comments = null;
           },
           CallExpression(call) {
             const node: unknown = call;
-            if (!hinted || !isAstNode(node)) {
+            if (!isAstNode(node)) {
               return;
             }
             const raised = raisedTimeout(context, node);

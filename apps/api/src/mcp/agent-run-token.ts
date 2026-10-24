@@ -47,6 +47,7 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
   "stella:matters_write": "default",
   "stella:contacts_write": "excluded",
   "stella:chat": "default",
+  "stella:memory_write": "excluded",
   "stella:knowledge_write": "default",
   "stella:billing_write": "excluded",
   "stella:admin_read": "excluded",

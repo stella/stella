@@ -86,6 +86,27 @@ describe("no-real-time-wait", () => {
     ).toEqual([6]);
   });
 
+  test("fake timer exemptions follow canonical imported owners", async () => {
+    expect(
+      await lint(
+        [
+          "const jest = { useFakeTimers() {} };",
+          "jest.useFakeTimers();",
+          "await new Promise((resolve) => setTimeout(resolve, 5));",
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+    expect(
+      await lint(
+        [
+          'import { jest as clock } from "bun:test";',
+          "clock.useFakeTimers();",
+          "await new Promise((resolve) => setTimeout(resolve, 5));",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("accepts a stated real-time reason on the line or directly above", async () => {
     expect(
       await lint(
@@ -148,6 +169,7 @@ describe("no-polling-loop", () => {
       await lintLoops(
         [
           'import { sleep } from "@stll/concurrency/sleep";',
+          'import { act } from "react";',
           "const tick = async () => {",
           "  await sleep(0);",
           "};",
@@ -163,7 +185,7 @@ describe("no-polling-loop", () => {
           "}",
         ].join("\n"),
       ),
-    ).toEqual([8, 9]);
+    ).toEqual([9, 10]);
   });
 
   test("accepts fixed-count flushes, waits on the work, and stated reasons", async () => {
@@ -189,6 +211,60 @@ describe("no-polling-loop", () => {
         ].join("\n"),
       ),
     ).toEqual([]);
+  });
+
+  test("only exits targeting the observed loop turn a flush into polling", async () => {
+    expect(
+      await lintLoops(
+        [
+          "for (let i = 0; i < 3; i++) {",
+          "  for (const item of items) { if (item.ready) break; }",
+          '  switch (kind) { case "ready": if (ready()) break; }',
+          "  local: { if (ready()) break local; }",
+          "  await Promise.resolve();",
+          "}",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+    expect(
+      await lintLoops(
+        [
+          "outer: for (let i = 0; i < 3; i++) {",
+          "  for (const item of items) { if (item.ready) break outer; }",
+          "  await Promise.resolve();",
+          "}",
+          "for (let i = 0; i < 3; i++) {",
+          "  for (const item of items) { if (item.ready) return; }",
+          "  await Promise.resolve();",
+          "}",
+          "for (let i = 0; i < 3; i++) {",
+          "  if (failed()) throw failure;",
+          "  await Promise.resolve();",
+          "}",
+        ].join("\n"),
+      ),
+    ).toEqual([1, 5, 9]);
+  });
+
+  test("dormant functions do not wait while reached helpers and callbacks do", async () => {
+    expect(
+      await lintLoops(
+        [
+          'import { act as flush } from "react";',
+          "while (!done()) {",
+          "  const dormant = async () => { await Bun.sleep(5); };",
+          "  await work.next();",
+          "}",
+          "const tick = async () => { await Bun.sleep(5); };",
+          "while (!done()) await tick();",
+          "while (!done()) await flush(tick);",
+          "while (!done()) await (async () => { await Bun.sleep(5); })();",
+          "while (!done()) { callbacks.push(tick); await event.next(); }",
+          "while (!done()) { await Promise.resolve(tick); await event.next(); }",
+          "while (!done()) { const act = (fn) => fn; await act(tick); }",
+        ].join("\n"),
+      ),
+    ).toEqual([7, 8, 9]);
   });
 
   test("a deadline or an unadvanced counter is a predicate, not a pass count", async () => {
@@ -224,6 +300,37 @@ describe("no-unreasoned-timeout", () => {
         ].join("\n"),
       ),
     ).toEqual([4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  test("numeric timeout arguments need no timeout-like text", async () => {
+    expect(
+      await lintTimeouts(
+        'import { test } from "bun:test"; test("case", () => {}, 30_000);',
+      ),
+    ).toEqual([1]);
+  });
+
+  test("property timeout exemptions require the canonical imported owner", async () => {
+    expect(
+      await lintTimeouts(
+        [
+          'import { test } from "bun:test";',
+          "const propertyTestTimeout = () => 30_000;",
+          'test("case", () => {}, propertyTestTimeout());',
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+    expect(
+      await lintTimeouts(
+        [
+          'import { test } from "bun:test";',
+          'import { propertyTestTimeout as budget } from "@stll/property-testing";',
+          'import * as properties from "@stll/property-testing";',
+          'test("case", () => {}, budget(30_000));',
+          'test("case", () => {}, properties.propertyTestDefaultTimeout());',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
   });
 
   test("reports Playwright timeout and retry changes", async () => {

@@ -42,14 +42,14 @@ expect_output() {
 }
 
 expect_output "no release open" '[]' \
-  $'open_other=0\ncurrent_is_release=false' --repo stella/stella --number 12
+  $'open_other=0\ncurrent_is_release=false\nnumbers=' --repo stella/stella --number 12
 expect_output "workflow recognizes the release without a number" "$fixtures" \
-  $'open_other=1\ncurrent_is_release=false' --repo stella/stella
+  $'open_other=1\ncurrent_is_release=false\nnumbers=4193' --repo stella/stella
 expect_output "queue recognizes the current release" "$fixtures" \
-  $'open_other=0\ncurrent_is_release=true' --repo stella/stella --number 4193
+  $'open_other=0\ncurrent_is_release=true\nnumbers=4193' --repo stella/stella --number 4193
 for number in 12 4194 4195 4196 4197; do
   expect_output "ignores non-release $number" "$fixtures" \
-    $'open_other=1\ncurrent_is_release=false' --repo stella/stella --number "$number"
+    $'open_other=1\ncurrent_is_release=false\nnumbers=4193' --repo stella/stella --number "$number"
 done
 
 limit_fixture=$(jq -cn '[range(500) | {number:.,title:"fix: ordinary",isDraft:false,isCrossRepository:false}]')

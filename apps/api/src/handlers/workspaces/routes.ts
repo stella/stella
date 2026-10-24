@@ -86,16 +86,13 @@ const readOverview = createSafeHandler(
       agendaFrom: t.Optional(t.String({ format: "date" })),
     }),
   } satisfies WorkspaceHandlerConfig,
-  async function* ({ scopedDb, workspaceId, query }) {
+  async function* ({ safeDb, workspaceId, query }) {
     const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readOverviewHandler({
-            workspaceId,
-            scopedDb,
-            agendaFrom: query.agendaFrom,
-          }),
-      ),
+      readOverviewHandler({
+        workspaceId,
+        safeDb,
+        agendaFrom: query.agendaFrom,
+      }),
     );
 
     return Result.ok(response);

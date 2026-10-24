@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
@@ -60,7 +60,7 @@ export const useEffectiveShortcutGroups = (): ShortcutGroup[] => {
  * default is a `char` binding. The registry is a small compiled-in constant, so
  * scanning it beats holding a module-level lookup table alive.
  */
-const defaultHotkeyFor = (id: ShortcutId): Hotkey | undefined => {
+const defaultHotkeyFor = (id: ShortcutId): HotkeyChord | undefined => {
   for (const group of SHORTCUT_GROUPS) {
     for (const shortcut of group.shortcuts) {
       if (shortcut.id === id && shortcut.binding.type === "hotkey") {
@@ -77,7 +77,7 @@ const defaultHotkeyFor = (id: ShortcutId): Hotkey | undefined => {
  * re-registers when the returned string changes, so a rebind rebinds the real
  * handler. Only ids with a hotkey default are passed here.
  */
-export const useEffectiveHotkey = (id: ShortcutId): Hotkey => {
+export const useEffectiveHotkey = (id: ShortcutId): HotkeyChord => {
   const overrides = useShortcutOverrides();
   const override = overrides[id];
   if (override) {

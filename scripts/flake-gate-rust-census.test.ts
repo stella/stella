@@ -92,6 +92,10 @@ test("tracked Rust test attributes remain within the supported detector census",
         "hasArgs": false,
         "path": "tokio::test",
       },
+      {
+        "hasArgs": true,
+        "path": "tokio::test",
+      },
     ]
   `);
 

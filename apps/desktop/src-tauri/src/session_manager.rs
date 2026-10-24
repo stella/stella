@@ -1,11 +1,12 @@
 use futures_util::{StreamExt, future::join_all};
 use notify::{
-  Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::AccessKind,
+  Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+  event::{AccessKind, AccessMode},
 };
 use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::io::{Cursor, ErrorKind};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -66,7 +67,8 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(20);
 const REMOTE_SAVE_TIMEOUT: Duration = Duration::from_secs(60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(15);
 const KEYCHAIN_RESTORE_TIMEOUT: Duration = Duration::from_secs(10);
-const OPEN_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const OPEN_PROBE_INTERVAL: Duration = Duration::from_secs(1);
+const OPEN_PROBE_IDLE_INTERVAL: Duration = Duration::from_secs(15);
 const CLOSED_RECHECK_COUNT: u8 = 5;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
 const LIBRE_OFFICE_LOCK_PREFIX: &str = ".~lock.";
@@ -101,6 +103,8 @@ struct DesktopSession {
   takeover_detected: bool,
   workspace_id: String,
   // Runtime-only
+  generation: uuid::Uuid,
+  last_observed_file: Option<FileFingerprint>,
   changed_during_remote_save: bool,
   checkpoint_in_flight: bool,
   finalize_in_flight: bool,
@@ -109,11 +113,61 @@ struct DesktopSession {
   retry_notice_shown: bool,
   watcher: Option<RecommendedWatcher>,
   checkpoint_timer: Option<JoinHandle<()>>,
-  open_poll_timer: Option<JoinHandle<()>>,
+  open_probe_timer: Option<JoinHandle<()>>,
   sse_listener: Option<JoinHandle<()>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FileFingerprint {
+  size: u64,
+  modified: std::time::SystemTime,
+  identity: u64,
+}
+
+trait SessionFileSystem: Send + Sync {
+  fn fingerprint(&self, path: &Path) -> std::io::Result<FileFingerprint>;
+  fn read<'a>(
+    &'a self,
+    path: &'a Path,
+  ) -> futures_util::future::BoxFuture<'a, std::io::Result<Vec<u8>>>;
+}
+
+struct LocalSessionFileSystem;
+
+impl SessionFileSystem for LocalSessionFileSystem {
+  fn fingerprint(&self, path: &Path) -> std::io::Result<FileFingerprint> {
+    let metadata = std::fs::metadata(path)?;
+    #[cfg(unix)]
+    let identity = {
+      use std::os::unix::fs::MetadataExt;
+      metadata.ino()
+    };
+    #[cfg(not(unix))]
+    let identity = 0;
+    Ok(FileFingerprint {
+      size: metadata.len(),
+      modified: metadata.modified()?,
+      identity,
+    })
+  }
+
+  fn read<'a>(
+    &'a self,
+    path: &'a Path,
+  ) -> futures_util::future::BoxFuture<'a, std::io::Result<Vec<u8>>> {
+    Box::pin(tokio::fs::read(path))
+  }
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct SessionCosts {
+  writes: std::sync::atomic::AtomicUsize,
+  emits: std::sync::atomic::AtomicUsize,
+}
+
 struct SyncCheckpointInput {
+  generation: uuid::Uuid,
   session_id: String,
   file_type: DesktopEditFileType,
   file_path: String,
@@ -121,6 +175,9 @@ struct SyncCheckpointInput {
   session_token: String,
   file_name: String,
   last_checkpoint_sha: Option<String>,
+  fingerprint: FileFingerprint,
+  last_local_sha: String,
+  pending_finalize: bool,
 }
 
 impl DesktopSession {
@@ -168,7 +225,7 @@ impl DesktopSession {
     if let Some(handle) = self.checkpoint_timer.take() {
       handle.abort();
     }
-    if let Some(handle) = self.open_poll_timer.take() {
+    if let Some(handle) = self.open_probe_timer.take() {
       handle.abort();
     }
     if let Some(handle) = self.sse_listener.take() {
@@ -178,6 +235,9 @@ impl DesktopSession {
 }
 
 pub struct SessionManager {
+  file_system: Arc<dyn SessionFileSystem>,
+  #[cfg(test)]
+  costs: Arc<SessionCosts>,
   sessions: HashMap<String, DesktopSession>,
   session_ids_by_key: HashMap<String, String>,
   unconfirmed_sessions: HashMap<String, PersistedDesktopSession>,
@@ -477,6 +537,7 @@ async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> bool {
   }
 }
 
+#[cfg(target_os = "windows")]
 async fn append_probe_reports_locked(file_path: &Path) -> bool {
   match tokio::fs::OpenOptions::new()
     .append(true)
@@ -486,7 +547,7 @@ async fn append_probe_reports_locked(file_path: &Path) -> bool {
     Ok(_) => false,
     Err(e) => matches!(
       e.kind(),
-      ErrorKind::PermissionDenied | ErrorKind::WouldBlock
+      std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::WouldBlock
     ),
   }
 }
@@ -507,6 +568,7 @@ async fn local_file_appears_open(file_path: &Path, file_name: &str) -> bool {
     return true;
   }
 
+  #[cfg(target_os = "windows")]
   if append_probe_reports_locked(file_path).await {
     return true;
   }
@@ -531,6 +593,9 @@ impl SessionManager {
     let bridge_port = config::resolve_bridge_port();
 
     Self {
+      file_system: Arc::new(LocalSessionFileSystem),
+      #[cfg(test)]
+      costs: Arc::new(SessionCosts::default()),
       sessions: HashMap::new(),
       session_ids_by_key: HashMap::new(),
       unconfirmed_sessions: HashMap::new(),
@@ -662,6 +727,8 @@ impl SessionManager {
         status: persisted.status,
         takeover_detected: persisted.takeover_detected,
         workspace_id: persisted.workspace_id,
+        generation: uuid::Uuid::new_v4(),
+        last_observed_file: None,
         changed_during_remote_save: false,
         checkpoint_in_flight: false,
         finalize_in_flight: false,
@@ -670,7 +737,7 @@ impl SessionManager {
         retry_notice_shown: false,
         watcher: None,
         checkpoint_timer: None,
-        open_poll_timer: None,
+        open_probe_timer: None,
         sse_listener: None,
       };
 
@@ -753,7 +820,7 @@ impl SessionManager {
   pub async fn open_file(
     &mut self,
     request: OpenFileRequest,
-    prefetched_buffer: Option<Vec<u8>>,
+    prefetched_buffer: Vec<u8>,
   ) -> Result<OpenFileResponse, String> {
     let key = session_key(
       &request.workspace_id,
@@ -801,6 +868,9 @@ impl SessionManager {
       // Update session fields, then extract what we need before dropping the borrow
       let (file_path, session_id, file_name) = {
         let session = self.sessions.get_mut(&eid).unwrap();
+        session.generation = uuid::Uuid::new_v4();
+        session.checkpoint_in_flight = false;
+        session.finalize_in_flight = false;
         session.api_base_url = normalize_api_base_url(&request.api_base_url);
         session.base_version_number = remote.base_version_number;
         session.file_type = file_type;
@@ -857,10 +927,7 @@ impl SessionManager {
     };
 
     // Use prefetched buffer (downloaded outside the lock) or download now
-    let buffer = match prefetched_buffer {
-      Some(buf) => buf,
-      None => self.download_file(file_type, &remote.download_url).await?,
-    };
+    let buffer = prefetched_buffer;
     let local_sha = hash_bytes(&buffer);
 
     // Write to local disk
@@ -880,6 +947,8 @@ impl SessionManager {
       entity_id: request.entity_id,
       file_type,
       file_name: managed_file_name,
+      generation: uuid::Uuid::new_v4(),
+      last_observed_file: self.file_system.fingerprint(Path::new(&file_path)).ok(),
       file_path: file_path.clone(),
       id: remote.session_id.clone(),
       key: key.clone(),
@@ -905,7 +974,7 @@ impl SessionManager {
       retry_notice_shown: false,
       watcher: None,
       checkpoint_timer: None,
-      open_poll_timer: None,
+      open_probe_timer: None,
       sse_listener: None,
     };
 
@@ -996,6 +1065,18 @@ impl SessionManager {
 
     self.emit_state_change();
     true
+  }
+
+  fn finish_confirmed_closed_session(&mut self, session_id: &str) -> bool {
+    let confirmed = self.sessions.get(session_id).is_some_and(|session| {
+      session.local_open_seen
+        && session.closed_recheck_count >= CLOSED_RECHECK_COUNT
+        && !session.pending_finalize
+        && !session.checkpoint_in_flight
+        && !session.finalize_in_flight
+        && !session.takeover_detected
+    });
+    confirmed && self.finish_session(session_id)
   }
 
   pub fn retry_session_now(&mut self, session_id: &str) -> bool {
@@ -1288,48 +1369,25 @@ impl SessionManager {
     });
   }
 
-  /// Respond to a takeover request (called from tray menu action).
-  pub async fn respond_to_takeover(&self, session_id: &str, approved: bool) -> bool {
-    let Some(session) = self.sessions.get(session_id) else {
-      return false;
-    };
-
+  fn prepare_takeover_response(
+    &self,
+    session_id: &str,
+    approved: bool,
+  ) -> Option<reqwest::RequestBuilder> {
+    let session = self.sessions.get(session_id)?;
     let url = format!(
-      "{}/v1/desktop-edit-sessions/{}/respond-takeover",
-      session.api_base_url, session_id
+      "{}/v1/desktop-edit-sessions/{session_id}/respond-takeover",
+      session.api_base_url
     );
-
-    let body = serde_json::json!({
-      "sessionToken": session.session_token,
-      "approved": approved,
-    });
-
-    match self
-      .http_client
-      .post(&url)
-      .json(&body)
-      .timeout(Duration::from_secs(10))
-      .send()
-      .await
-    {
-      Ok(r) if r.status().is_success() => true,
-      Ok(r) => {
-        tracing::warn!(
-          session_id,
-          status = r.status().as_u16(),
-          "respond-takeover failed"
-        );
-        false
-      }
-      Err(e) => {
-        tracing::warn!(
-          session_id,
-          error = %e,
-          "respond-takeover network error"
-        );
-        false
-      }
-    }
+    Some(
+      self
+        .http_client
+        .post(url)
+        .json(&serde_json::json!({
+          "sessionToken": session.session_token, "approved": approved,
+        }))
+        .timeout(Duration::from_secs(10)),
+    )
   }
 
   pub async fn open_edit_root(&self) -> bool {
@@ -1364,35 +1422,49 @@ impl SessionManager {
 
   // --- Checkpoint sync ---
 
-  pub async fn sync_checkpoint(&mut self, session_id: &str) -> bool {
+  async fn prepare_checkpoint(
+    &mut self,
+    session_id: &str,
+  ) -> Option<SyncCheckpointInput> {
+    let session = self.sessions.get_mut(session_id)?;
+    if session.checkpoint_in_flight
+      || session.finalize_in_flight
+      || session.takeover_detected
     {
-      let session = match self.sessions.get(session_id) {
-        Some(s)
-          if !s.checkpoint_in_flight
-            && !s.finalize_in_flight
-            && !s.takeover_detected =>
-        {
-          s
-        }
-        _ => return false,
-      };
-
-      if !Path::new(&session.file_path).exists() {
-        let session = self.sessions.get_mut(session_id).unwrap();
-        session.last_error = Some("The managed local file is missing.".to_string());
-        session.status = SessionStatus::Error;
-        self.persist_sessions().await;
-        self.emit_state_change();
-        return false;
-      }
+      return None;
     }
-
-    let session = self.sessions.get_mut(session_id).unwrap();
+    let fingerprint = match self.file_system.fingerprint(Path::new(&session.file_path))
+    {
+      Ok(fingerprint) => fingerprint,
+      Err(error) => {
+        let message = format!("Failed to read file: {error}");
+        if session.last_error.as_ref() != Some(&message) {
+          session.last_error = Some(message);
+          session.status = SessionStatus::Error;
+          self.persist_sessions().await;
+          self.emit_state_change();
+        }
+        return None;
+      }
+    };
+    if session.last_observed_file.as_ref() == Some(&fingerprint)
+      && session.last_error.is_none()
+      && session.status
+        == (if session.pending_finalize {
+          SessionStatus::Finalizing
+        } else {
+          SessionStatus::Ready
+        })
+      && (session.last_checkpoint_sha.as_deref()
+        == Some(session.last_local_sha.as_str())
+        || (session.last_checkpoint_sha.is_none() && !session.pending_finalize))
+    {
+      return None;
+    }
     session.changed_during_remote_save = false;
     session.checkpoint_in_flight = true;
-    session.last_error = None;
-    session.status = SessionStatus::Syncing;
-    let input = SyncCheckpointInput {
+    Some(SyncCheckpointInput {
+      generation: session.generation,
       session_id: session.id.clone(),
       file_type: session.file_type,
       file_path: session.file_path.clone(),
@@ -1400,27 +1472,48 @@ impl SessionManager {
       session_token: session.session_token.clone(),
       file_name: session.file_name.clone(),
       last_checkpoint_sha: session.last_checkpoint_sha.clone(),
-    };
+      fingerprint,
+      last_local_sha: session.last_local_sha.clone(),
+      pending_finalize: session.pending_finalize,
+    })
+  }
 
-    self.persist_sessions().await;
-    self.emit_state_change();
-
-    let result = self.do_sync_checkpoint(input).await;
-
+  async fn apply_checkpoint(
+    &mut self,
+    session_id: &str,
+    fingerprint: FileFingerprint,
+    generation: uuid::Uuid,
+    result: CheckpointResult,
+  ) -> bool {
     let Some(session) = self.sessions.get_mut(session_id) else {
       return false;
     };
+    if session.generation != generation || session.takeover_detected {
+      return false;
+    }
     session.checkpoint_in_flight = false;
 
     match result {
-      CheckpointResult::Unchanged => {
-        session.status = if session.pending_finalize {
+      CheckpointResult::Unchanged { sha } => {
+        if session.changed_during_remote_save {
+          session.last_observed_file = None;
+          return false;
+        }
+        session.last_observed_file = Some(fingerprint);
+        let status = if session.pending_finalize {
           SessionStatus::Finalizing
         } else {
           SessionStatus::Ready
         };
-        self.persist_sessions().await;
-        self.emit_state_change();
+        let state_changed = session.last_error.take().is_some()
+          || session.last_local_sha != sha
+          || session.status != status;
+        session.last_local_sha = sha;
+        session.status = status;
+        if state_changed {
+          self.persist_sessions().await;
+          self.emit_state_change();
+        }
         true
       }
       CheckpointResult::Uploaded {
@@ -1431,6 +1524,12 @@ impl SessionManager {
       } => {
         let changed_during_upload =
           session.changed_during_remote_save || current_sha != next_sha;
+
+        session.last_observed_file = if changed_during_upload {
+          None
+        } else {
+          Some(fingerprint)
+        };
 
         // Apply rotated token from server
         if let Some(ref new_token) = rotated_token {
@@ -1496,35 +1595,42 @@ impl SessionManager {
     }
   }
 
-  async fn do_sync_checkpoint(&self, input: SyncCheckpointInput) -> CheckpointResult {
-    let file_bytes = match tokio::fs::read(&input.file_path).await {
+  async fn do_sync_checkpoint(
+    client: &DesktopHttpClient,
+    file_system: &dyn SessionFileSystem,
+    input: &SyncCheckpointInput,
+  ) -> CheckpointResult {
+    let file_bytes = match file_system.read(Path::new(&input.file_path)).await {
       Ok(b) => b,
       Err(e) => return CheckpointResult::Error(format!("Failed to read file: {e}")),
     };
 
     let next_sha = hash_bytes(&file_bytes);
 
-    if Some(next_sha.as_str()) == input.last_checkpoint_sha.as_deref() {
-      return CheckpointResult::Unchanged;
+    if Some(next_sha.as_str()) == input.last_checkpoint_sha.as_deref()
+      || (input.last_checkpoint_sha.is_none()
+        && !input.pending_finalize
+        && next_sha == input.last_local_sha)
+    {
+      return CheckpointResult::Unchanged { sha: next_sha };
     }
 
     let form = reqwest::multipart::Form::new()
       .part(
         "file",
         reqwest::multipart::Part::bytes(file_bytes)
-          .file_name(input.file_name)
+          .file_name(input.file_name.clone())
           .mime_str(input.file_type.mime_type())
           .unwrap(),
       )
-      .text("sessionToken", input.session_token);
+      .text("sessionToken", input.session_token.clone());
 
     let url = format!(
       "{}/v1/desktop-edit-sessions/{}/checkpoint",
       input.api_base_url, input.session_id
     );
 
-    let response = match self
-      .http_client
+    let response = match client
       .post(&url)
       .multipart(form)
       .timeout(REMOTE_SAVE_TIMEOUT)
@@ -1567,12 +1673,21 @@ impl SessionManager {
 
     match response.json::<CheckpointResponse>().await {
       Ok(cp) => {
-        let current_sha = match tokio::fs::read(&input.file_path).await {
-          Ok(bytes) => hash_bytes(&bytes),
-          Err(e) => {
-            return CheckpointResult::Error(format!(
-              "Failed to re-read file after checkpoint upload: {e}"
-            ));
+        let current_sha = if file_system
+          .fingerprint(Path::new(&input.file_path))
+          .ok()
+          .as_ref()
+          == Some(&input.fingerprint)
+        {
+          next_sha.clone()
+        } else {
+          match file_system.read(Path::new(&input.file_path)).await {
+            Ok(bytes) => hash_bytes(&bytes),
+            Err(e) => {
+              return CheckpointResult::Error(format!(
+                "Failed to re-read file after checkpoint upload: {e}"
+              ));
+            }
           }
         };
 
@@ -1591,25 +1706,29 @@ impl SessionManager {
 
   // --- Finalize ---
 
-  pub async fn finalize_session(&mut self, session_id: &str) -> bool {
+  async fn prepare_finalize(&mut self, session_id: &str) -> Option<FinalizeInput> {
     let (file_path, checkpoint_sha) = {
       let session = match self.sessions.get(session_id) {
-        Some(s) if !s.finalize_in_flight && !s.takeover_detected => s,
-        _ => return false,
+        Some(s)
+          if !s.checkpoint_in_flight
+            && !s.finalize_in_flight
+            && !s.takeover_detected =>
+        {
+          s
+        }
+        _ => return None,
       };
 
-      let Some(checkpoint_sha) = session.last_checkpoint_sha.clone() else {
-        return false;
-      };
+      let checkpoint_sha = session.last_checkpoint_sha.clone()?;
 
       if session.last_local_sha != checkpoint_sha {
-        return false;
+        return None;
       }
 
       (session.file_path.clone(), checkpoint_sha)
     };
 
-    let current_sha = match tokio::fs::read(&file_path).await {
+    let current_sha = match self.file_system.read(Path::new(&file_path)).await {
       Ok(bytes) => hash_bytes(&bytes),
       Err(e) => {
         let session = self.sessions.get_mut(session_id).unwrap();
@@ -1617,7 +1736,7 @@ impl SessionManager {
         session.status = SessionStatus::Error;
         self.persist_sessions().await;
         self.emit_state_change();
-        return false;
+        return None;
       }
     };
 
@@ -1628,7 +1747,7 @@ impl SessionManager {
       session.status = SessionStatus::Syncing;
       self.persist_sessions().await;
       self.emit_state_change();
-      return false;
+      return None;
     }
 
     let session = self.sessions.get_mut(session_id).unwrap();
@@ -1641,14 +1760,28 @@ impl SessionManager {
     let session_token = session.session_token.clone();
     let pending_finalize = session.pending_finalize;
 
-    self.persist_sessions().await;
-    self.emit_state_change();
+    Some(FinalizeInput {
+      generation: session.generation,
+      api_base_url,
+      session_id: sid,
+      session_token,
+      pending_finalize,
+    })
+  }
 
-    let result = self.do_finalize(&sid, &api_base_url, &session_token).await;
-
+  async fn apply_finalize(
+    &mut self,
+    session_id: &str,
+    pending_finalize: bool,
+    generation: uuid::Uuid,
+    result: FinalizeResult,
+  ) -> bool {
     let Some(session) = self.sessions.get_mut(session_id) else {
       return false;
     };
+    if session.generation != generation || session.takeover_detected {
+      return false;
+    }
     session.finalize_in_flight = false;
 
     match result {
@@ -1734,7 +1867,7 @@ impl SessionManager {
   }
 
   async fn do_finalize(
-    &self,
+    client: &DesktopHttpClient,
     session_id: &str,
     api_base_url: &str,
     session_token: &str,
@@ -1742,8 +1875,7 @@ impl SessionManager {
     let url = format!("{api_base_url}/v1/desktop-edit-sessions/{session_id}/finalize");
     let body = serde_json::json!({ "sessionToken": session_token });
 
-    let response = match self
-      .http_client
+    let response = match client
       .post(&url)
       .json(&body)
       .timeout(REMOTE_SAVE_TIMEOUT)
@@ -1795,57 +1927,6 @@ impl SessionManager {
 
   // --- Retry loop (called from spawned timer) ---
 
-  pub async fn retry_pending_work(&mut self) {
-    self.retry_pending_cleanup().await;
-
-    let session_ids: Vec<String> = self.sessions.keys().cloned().collect();
-    for sid in session_ids {
-      self.retry_session(&sid).await;
-    }
-  }
-
-  pub async fn retry_session(&mut self, session_id: &str) {
-    if self
-      .sessions
-      .get(session_id)
-      .is_none_or(|s| s.takeover_detected)
-    {
-      return;
-    }
-
-    let mut checkpoint_ready = false;
-    for _ in 0..3 {
-      checkpoint_ready = self.sync_checkpoint(session_id).await;
-      if checkpoint_ready {
-        break;
-      }
-
-      let should_retry_checkpoint = self.sessions.get(session_id).is_some_and(|s| {
-        !s.takeover_detected
-          && !s.checkpoint_in_flight
-          && !s.finalize_in_flight
-          && s.last_error.is_none()
-          && s.status == SessionStatus::Syncing
-          && s
-            .last_checkpoint_sha
-            .as_deref()
-            .is_none_or(|sha| s.last_local_sha != sha)
-      });
-      if !should_retry_checkpoint {
-        break;
-      }
-    }
-
-    let should_finalize = self
-      .sessions
-      .get(session_id)
-      .is_some_and(|s| s.pending_finalize);
-
-    if should_finalize && checkpoint_ready {
-      self.finalize_session(session_id).await;
-    }
-  }
-
   // --- File watcher ---
 
   pub async fn attach_watcher(manager: &Arc<Mutex<Self>>, session_id: &str) {
@@ -1873,44 +1954,45 @@ impl SessionManager {
     let sid_for_watcher = sid.clone();
     let fname_for_watcher = file_name.clone();
 
+    let runtime = tokio::runtime::Handle::current();
     let watcher_result = notify::recommended_watcher(move |res: Result<Event, _>| {
       if let Ok(event) = res {
-        match event.kind {
-          EventKind::Modify(_)
-          | EventKind::Create(_)
-          | EventKind::Remove(_)
-          | EventKind::Access(AccessKind::Close(_)) => {
-            let changed_file = event
-              .paths
-              .first()
-              .and_then(|p| p.file_name())
-              .and_then(|n| n.to_str())
-              .map(|s| s.to_string());
-
-            let mgr = Arc::clone(&mgr_for_watcher);
-            let sid = sid_for_watcher.clone();
-            let fname = fname_for_watcher.clone();
-
-            let _ = tokio::runtime::Handle::try_current().map(|handle| {
-              handle.spawn(async move {
-                handle_filesystem_event(mgr, &sid, changed_file.as_deref(), &fname)
-                  .await;
-              });
-            });
-          }
-          _ => {}
+        if !event_needs_open_probe(&event.kind) {
+          return;
         }
+        let changed_file = event
+          .paths
+          .iter()
+          .filter_map(|path| path.file_name().and_then(|name| name.to_str()))
+          .find(|name| {
+            *name == fname_for_watcher
+              || is_temporary_lock_file_for(name, &fname_for_watcher)
+          })
+          .map(str::to_string);
+        if !event.paths.is_empty() && changed_file.is_none() {
+          return;
+        }
+
+        let mgr = Arc::clone(&mgr_for_watcher);
+        let sid = sid_for_watcher.clone();
+        let fname = fname_for_watcher.clone();
+
+        runtime.spawn(async move {
+          handle_filesystem_event(mgr, &sid, changed_file.as_deref(), &fname).await;
+        });
       }
     });
 
     let mut mgr = manager.lock().await;
     if let Some(session) = mgr.sessions.get_mut(&sid) {
       match watcher_result {
-        Ok(mut w) => {
-          let _ = w.watch(&watch_dir, RecursiveMode::NonRecursive);
-          ensure_open_poll_loop(session, manager, &sid);
-          session.watcher = Some(w);
-        }
+        Ok(mut w) => match w.watch(&watch_dir, RecursiveMode::NonRecursive) {
+          Ok(()) => {
+            ensure_open_probe_loop(session, manager, &sid);
+            session.watcher = Some(w);
+          }
+          Err(error) => tracing::warn!(%error, "failed to watch editing directory"),
+        },
         Err(e) => {
           tracing::warn!(error = %e, "failed to create file watcher");
         }
@@ -1926,6 +2008,9 @@ impl SessionManager {
     };
 
     session.cancel_timers();
+    session.generation = uuid::Uuid::new_v4();
+    session.checkpoint_in_flight = false;
+    session.finalize_in_flight = false;
     session.last_error = Some(message.to_string());
     session.pending_finalize = false;
     session.retry_notice_shown = false;
@@ -2079,30 +2164,6 @@ impl SessionManager {
     session.sse_listener = Some(handle);
   }
 
-  async fn download_file(
-    &self,
-    file_type: DesktopEditFileType,
-    url: &str,
-  ) -> Result<Vec<u8>, String> {
-    let response = self
-      .http_client
-      .get(url)
-      .timeout(DOWNLOAD_TIMEOUT)
-      .send()
-      .await
-      .map_err(|e| format!("stella desktop could not download the Office file: {e}"))?;
-
-    if !response.status().is_success() {
-      return Err("stella desktop could not download the Office file.".to_string());
-    }
-
-    validate_office_download_response(file_type, &response)?;
-
-    let bytes = read_office_download_bytes(response).await?;
-    validate_office_download_bytes(file_type, &bytes)?;
-    Ok(bytes)
-  }
-
   async fn write_managed_copy(
     &self,
     folder_name: &str,
@@ -2124,6 +2185,11 @@ impl SessionManager {
   }
 
   async fn persist_sessions_result(&self) -> Result<(), String> {
+    #[cfg(test)]
+    self
+      .costs
+      .writes
+      .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut persisted: Vec<PersistedDesktopSession> = self
       .unconfirmed_sessions
       .values()
@@ -2161,6 +2227,11 @@ impl SessionManager {
   }
 
   fn emit_state_change(&self) {
+    #[cfg(test)]
+    self
+      .costs
+      .emits
+      .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if let Some(ref handle) = self.app_handle {
       let snapshot = self.get_snapshot();
       let _ = handle.emit_to("main", "state-changed", &snapshot);
@@ -2240,7 +2311,9 @@ impl SessionManager {
 // --- Helper types ---
 
 enum CheckpointResult {
-  Unchanged,
+  Unchanged {
+    sha: String,
+  },
   Uploaded {
     next_sha: String,
     current_sha: String,
@@ -2250,6 +2323,14 @@ enum CheckpointResult {
   TakenOver(String),
   SessionClosed(String),
   Error(String),
+}
+
+struct FinalizeInput {
+  generation: uuid::Uuid,
+  api_base_url: String,
+  session_id: String,
+  session_token: String,
+  pending_finalize: bool,
 }
 
 enum FinalizeResult {
@@ -2264,6 +2345,16 @@ enum NotifType {
   DocumentReady,
   RevisionCreated,
   SyncIssues,
+}
+
+fn event_needs_open_probe(kind: &EventKind) -> bool {
+  matches!(
+    kind,
+    EventKind::Modify(_)
+      | EventKind::Create(_)
+      | EventKind::Remove(_)
+      | EventKind::Access(AccessKind::Close(AccessMode::Write))
+  )
 }
 
 // --- File system event handler (called from watcher callback) ---
@@ -2288,6 +2379,9 @@ async fn handle_filesystem_event(
     };
 
     if is_relevant {
+      if is_managed {
+        session.last_observed_file = None;
+      }
       if session.pending_finalize && !session.finalize_in_flight {
         session.pending_finalize = false;
         session.local_open_seen = true;
@@ -2307,7 +2401,7 @@ async fn handle_filesystem_event(
       if is_managed && (session.checkpoint_in_flight || session.finalize_in_flight) {
         session.changed_during_remote_save = true;
       }
-      ensure_open_poll_loop(session, &manager, session_id);
+      ensure_open_probe_loop(session, &manager, session_id);
     }
     drop(mgr);
   }
@@ -2333,113 +2427,286 @@ async fn handle_filesystem_event(
         let sid_for_timer = sid.clone();
         session.checkpoint_timer = Some(tokio::spawn(async move {
           tokio::time::sleep(CHECKPOINT_DEBOUNCE).await;
-          mgr_for_timer
-            .lock()
-            .await
-            .retry_session(&sid_for_timer)
-            .await;
+          if let Some(session) =
+            mgr_for_timer.lock().await.sessions.get_mut(&sid_for_timer)
+          {
+            session.checkpoint_timer.take();
+          }
+          retry_session(mgr_for_timer, &sid_for_timer).await;
         }));
       }
     }
   }
 }
 
-fn ensure_open_poll_loop(
+fn ensure_open_probe_loop(
   session: &mut DesktopSession,
   manager: &Arc<Mutex<SessionManager>>,
   session_id: &str,
 ) {
-  if session
-    .open_poll_timer
-    .as_ref()
-    .is_some_and(|handle| !handle.is_finished())
-  {
-    return;
+  if let Some(handle) = session.open_probe_timer.take() {
+    handle.abort();
   }
-
+  session.closed_recheck_count = 0;
   let mgr_clone = Arc::clone(manager);
   let sid = session_id.to_string();
-  session.open_poll_timer = Some(tokio::spawn(async move {
-    open_poll_loop(mgr_clone, sid).await;
+  session.open_probe_timer = Some(tokio::spawn(async move {
+    run_open_probe_loop(|| probe_session_open(&mgr_clone, &sid)).await;
   }));
 }
 
-async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String) {
-  let mut interval = tokio::time::interval(OPEN_POLL_INTERVAL);
-  interval.tick().await; // skip first immediate tick
+enum OpenProbeSchedule {
+  Stopped,
+  Watching,
+  ConfirmingClose,
+}
 
+/// Lockless editors can close without a filesystem event. Keep a sparse
+/// fallback alive; only a suspected close needs the faster confirmation rate.
+async fn run_open_probe_loop<F, Fut>(mut probe: F)
+where
+  F: FnMut() -> Fut,
+  Fut: std::future::Future<Output = OpenProbeSchedule>,
+{
+  let mut interval = OPEN_PROBE_INTERVAL;
   loop {
-    interval.tick().await;
+    tokio::time::sleep(interval).await;
+    interval = match probe().await {
+      OpenProbeSchedule::Stopped => return,
+      OpenProbeSchedule::Watching => OPEN_PROBE_IDLE_INTERVAL,
+      OpenProbeSchedule::ConfirmingClose => OPEN_PROBE_INTERVAL,
+    };
+  }
+}
 
-    let Some((file_path, file_name)) = ({
-      let mgr = manager.lock().await;
-      match mgr.sessions.get(&session_id) {
-        Some(s)
-          if !s.pending_finalize
+async fn probe_session_open(
+  manager: &Arc<Mutex<SessionManager>>,
+  session_id: &str,
+) -> OpenProbeSchedule {
+  probe_session_open_with(manager, session_id, |file_path, file_name| async move {
+    local_file_appears_open(Path::new(&file_path), &file_name).await
+  })
+  .await
+}
+
+async fn probe_session_open_with<F, Fut>(
+  manager: &Arc<Mutex<SessionManager>>,
+  session_id: &str,
+  observe_open: F,
+) -> OpenProbeSchedule
+where
+  F: FnOnce(String, String) -> Fut,
+  Fut: std::future::Future<Output = bool>,
+{
+  let Some((file_path, file_name, generation)) = ({
+    let mgr = manager.lock().await;
+    let input = mgr.sessions.get(session_id).and_then(|session| {
+      (!session.pending_finalize && !session.takeover_detected).then(|| {
+        (
+          session.file_path.clone(),
+          session.file_name.clone(),
+          session.generation,
+        )
+      })
+    });
+    drop(mgr);
+    input
+  }) else {
+    return OpenProbeSchedule::Stopped;
+  };
+
+  let appears_open = observe_open(file_path, file_name).await;
+  let mut mgr = manager.lock().await;
+  let Some(session) = mgr.sessions.get_mut(session_id) else {
+    return OpenProbeSchedule::Stopped;
+  };
+  if session.generation != generation
+    || session.pending_finalize
+    || session.takeover_detected
+  {
+    return OpenProbeSchedule::Stopped;
+  }
+  if appears_open {
+    session.local_open_seen = true;
+    session.closed_recheck_count = 0;
+    return OpenProbeSchedule::Watching;
+  }
+  if !session.local_open_seen {
+    return OpenProbeSchedule::Watching;
+  }
+  session.closed_recheck_count = session.closed_recheck_count.saturating_add(1);
+  if session.closed_recheck_count < CLOSED_RECHECK_COUNT
+    || session.checkpoint_in_flight
+    || session.finalize_in_flight
+  {
+    return OpenProbeSchedule::ConfirmingClose;
+  }
+
+  // Stop detection before remote work: a new watcher event may safely rearm
+  // the timer without canceling a checkpoint upload.
+  session.open_probe_timer.take();
+  mgr.finish_session(session_id);
+  mgr.persist_sessions().await;
+  drop(mgr);
+  retry_session(Arc::clone(manager), session_id).await;
+  OpenProbeSchedule::Stopped
+}
+
+pub async fn respond_to_takeover(
+  manager: Arc<Mutex<SessionManager>>,
+  session_id: &str,
+  approved: bool,
+) -> bool {
+  let request = manager
+    .lock()
+    .await
+    .prepare_takeover_response(session_id, approved);
+  let Some(request) = request else {
+    return false;
+  };
+  match request.send().await {
+    Ok(r) if r.status().is_success() => true,
+    Ok(r) => {
+      tracing::warn!(
+        session_id,
+        status = r.status().as_u16(),
+        "respond-takeover failed"
+      );
+      false
+    }
+    Err(e) => {
+      tracing::warn!(
+        session_id,
+        error = %e,
+        "respond-takeover network error"
+      );
+      false
+    }
+  }
+}
+
+/// Each remote operation owns its input; the manager guard cannot cross the request.
+pub async fn retry_session(manager: Arc<Mutex<SessionManager>>, session_id: &str) {
+  for _ in 0..3 {
+    let (input, client, file_system) = {
+      let mut mgr = manager.lock().await;
+      (
+        mgr.prepare_checkpoint(session_id).await,
+        mgr.http_client.clone(),
+        Arc::clone(&mgr.file_system),
+      )
+    };
+    let checkpoint_ready = match input {
+      Some(input) => {
+        let result =
+          SessionManager::do_sync_checkpoint(&client, file_system.as_ref(), &input)
+            .await;
+        manager
+          .lock()
+          .await
+          .apply_checkpoint(session_id, input.fingerprint, input.generation, result)
+          .await
+      }
+      None => manager
+        .lock()
+        .await
+        .sessions
+        .get(session_id)
+        .is_some_and(|s| {
+          !s.checkpoint_in_flight
+            && !s.finalize_in_flight
             && !s.takeover_detected
-            && !s.checkpoint_in_flight
-            && !s.finalize_in_flight =>
-        {
-          Some((s.file_path.clone(), s.file_name.clone()))
+            && s.last_error.is_none()
+            && s.last_checkpoint_sha.as_deref() == Some(s.last_local_sha.as_str())
+        }),
+    };
+    if checkpoint_ready {
+      let input = {
+        let mut mgr = manager.lock().await;
+        // A confirmed close remains pending when its last probe overlapped
+        // the upload. The save owner resumes finalization after it settles.
+        if mgr.finish_confirmed_closed_session(session_id) {
+          mgr.persist_sessions().await;
         }
-        Some(s)
-          if !s.pending_finalize
-            && !s.takeover_detected
-            && (s.checkpoint_in_flight || s.finalize_in_flight) =>
+        if mgr
+          .sessions
+          .get(session_id)
+          .is_some_and(|s| s.pending_finalize)
         {
+          mgr.prepare_finalize(session_id).await
+        } else {
           None
         }
-        _ => return,
+      };
+      if let Some(input) = input {
+        let result = SessionManager::do_finalize(
+          &client,
+          &input.session_id,
+          &input.api_base_url,
+          &input.session_token,
+        )
+        .await;
+        manager
+          .lock()
+          .await
+          .apply_finalize(session_id, input.pending_finalize, input.generation, result)
+          .await;
       }
-    }) else {
-      continue;
-    };
-
-    let appears_open = local_file_appears_open(Path::new(&file_path), &file_name).await;
-
-    let mut mgr = manager.lock().await;
-    let Some(session) = mgr.sessions.get_mut(&session_id) else {
-      return;
-    };
-    if session.pending_finalize || session.takeover_detected {
-      session.open_poll_timer.take();
       return;
     }
-    if session.checkpoint_in_flight || session.finalize_in_flight {
-      continue;
+    let should_retry = manager
+      .lock()
+      .await
+      .sessions
+      .get(session_id)
+      .is_some_and(|s| {
+        !s.takeover_detected
+          && !s.checkpoint_in_flight
+          && !s.finalize_in_flight
+          && s.last_error.is_none()
+          && (s.status == SessionStatus::Syncing || s.changed_during_remote_save)
+      });
+    if !should_retry {
+      return;
     }
-
-    if appears_open {
-      session.local_open_seen = true;
-      session.closed_recheck_count = 0;
-      continue;
-    }
-
-    if !session.local_open_seen {
-      continue;
-    }
-
-    session.closed_recheck_count = session.closed_recheck_count.saturating_add(1);
-    if session.closed_recheck_count < CLOSED_RECHECK_COUNT {
-      continue;
-    }
-
-    session.open_poll_timer.take();
-    mgr.finish_session(&session_id);
-    mgr.persist_sessions().await;
-    mgr.retry_session(&session_id).await;
-    drop(mgr);
-    return;
   }
 }
 
 // --- Retry loop (spawned as background task) ---
 
+trait RetryClock {
+  fn tick(&mut self) -> futures_util::future::BoxFuture<'_, bool>;
+}
+
+struct IntervalRetryClock(tokio::time::Interval);
+
+impl RetryClock for IntervalRetryClock {
+  fn tick(&mut self) -> futures_util::future::BoxFuture<'_, bool> {
+    Box::pin(async move {
+      self.0.tick().await;
+      true
+    })
+  }
+}
+
 pub async fn run_retry_loop(manager: Arc<Mutex<SessionManager>>) {
-  let mut interval = tokio::time::interval(RETRY_INTERVAL);
-  loop {
-    interval.tick().await;
-    manager.lock().await.retry_pending_work().await;
+  let mut clock = IntervalRetryClock(tokio::time::interval(RETRY_INTERVAL));
+  run_retry_clock(manager, &mut clock).await;
+}
+
+async fn run_retry_clock(
+  manager: Arc<Mutex<SessionManager>>,
+  clock: &mut (impl RetryClock + Send),
+) {
+  while clock.tick().await {
+    let session_ids = {
+      let mut mgr = manager.lock().await;
+      mgr.retry_pending_cleanup().await;
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in session_ids {
+      retry_session(Arc::clone(&manager), &id).await;
+    }
   }
 }
 
@@ -2623,6 +2890,8 @@ mod tests {
       status: persisted.status,
       takeover_detected: persisted.takeover_detected,
       workspace_id: persisted.workspace_id,
+      generation: uuid::Uuid::new_v4(),
+      last_observed_file: None,
       changed_during_remote_save: false,
       checkpoint_in_flight: false,
       finalize_in_flight: false,
@@ -2631,9 +2900,661 @@ mod tests {
       retry_notice_shown: false,
       watcher: None,
       checkpoint_timer: None,
-      open_poll_timer: None,
+      open_probe_timer: None,
       sse_listener: None,
     }
+  }
+
+  #[test]
+  fn open_detection_ignores_its_own_file_read_events() {
+    for access in [
+      AccessKind::Read,
+      AccessKind::Open(AccessMode::Read),
+      AccessKind::Close(AccessMode::Read),
+    ] {
+      assert!(!event_needs_open_probe(&EventKind::Access(access)));
+    }
+    assert!(event_needs_open_probe(&EventKind::Access(
+      AccessKind::Close(AccessMode::Write)
+    )));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn open_detection_bounds_probes_for_five_idle_sessions() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let spawns = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+    for _ in 0..5 {
+      let spawns = Arc::clone(&spawns);
+      handles.push(tokio::spawn(async move {
+        run_open_probe_loop(|| {
+          spawns.fetch_add(1, Ordering::SeqCst);
+          std::future::ready(OpenProbeSchedule::Watching)
+        })
+        .await;
+      }));
+    }
+    tokio::task::yield_now().await;
+    tokio::time::advance(OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(spawns.load(Ordering::SeqCst), 5);
+    for _ in 0..3 {
+      tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL).await;
+      tokio::task::yield_now().await;
+    }
+    tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL - OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert_eq!(spawns.load(Ordering::SeqCst), 20);
+    for handle in handles {
+      assert!(!handle.is_finished());
+      handle.abort();
+      assert!(handle.await.unwrap_err().is_cancelled());
+    }
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn closing_an_unchanged_lockless_document_finalizes_without_a_filesystem_event()
+  {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let (manager, _, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(move || {
+        let requests = Arc::clone(&request_count);
+        async move {
+          requests.fetch_add(1, Ordering::SeqCst);
+          axum::Json(serde_json::json!({ "outcome": "no_changes" }))
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut("idle-0").unwrap();
+      session.api_base_url = base_url;
+      assert!(
+        session.last_checkpoint_sha.as_deref() == Some(session.last_local_sha.as_str())
+      );
+      drop(mgr);
+    }
+    let open = Arc::new(AtomicBool::new(true));
+    let observed_open = Arc::clone(&open);
+    let probe_manager = Arc::clone(&manager);
+    let handle = tokio::spawn(async move {
+      run_open_probe_loop(|| {
+        probe_session_open_with(&probe_manager, "idle-0", |_, _| {
+          std::future::ready(observed_open.load(Ordering::SeqCst))
+        })
+      })
+      .await;
+    });
+    tokio::task::yield_now().await;
+    tokio::time::advance(OPEN_PROBE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert!(manager.lock().await.sessions["idle-0"].local_open_seen);
+    assert_eq!(requests.load(Ordering::SeqCst), 0);
+    // Closing changes only the OS observation, with no watcher event or save.
+    open.store(false, Ordering::SeqCst);
+    tokio::time::advance(OPEN_PROBE_IDLE_INTERVAL).await;
+    tokio::task::yield_now().await;
+    for _ in 1..CLOSED_RECHECK_COUNT {
+      tokio::time::advance(OPEN_PROBE_INTERVAL).await;
+      tokio::task::yield_now().await;
+    }
+    tokio::time::resume();
+    handle.await.unwrap();
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+    assert!(!manager.lock().await.sessions.contains_key("idle-0"));
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[derive(Default)]
+  struct CountingFileSystem {
+    files: std::sync::Mutex<HashMap<PathBuf, (FileFingerprint, Vec<u8>)>>,
+    reads: std::sync::atomic::AtomicUsize,
+  }
+
+  impl CountingFileSystem {
+    fn put(&self, path: &str, bytes: &[u8], revision: u64) -> FileFingerprint {
+      let fingerprint = FileFingerprint {
+        size: bytes.len() as u64,
+        modified: std::time::UNIX_EPOCH + Duration::from_secs(revision),
+        identity: revision,
+      };
+      self
+        .files
+        .lock()
+        .unwrap()
+        .insert(PathBuf::from(path), (fingerprint.clone(), bytes.to_vec()));
+      fingerprint
+    }
+  }
+
+  impl SessionFileSystem for CountingFileSystem {
+    fn fingerprint(&self, path: &Path) -> std::io::Result<FileFingerprint> {
+      self
+        .files
+        .lock()
+        .unwrap()
+        .get(path)
+        .map(|(fingerprint, _)| fingerprint.clone())
+        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))
+    }
+
+    fn read<'a>(
+      &'a self,
+      path: &'a Path,
+    ) -> futures_util::future::BoxFuture<'a, std::io::Result<Vec<u8>>> {
+      self
+        .reads
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+      Box::pin(async move {
+        self
+          .files
+          .lock()
+          .unwrap()
+          .get(path)
+          .map(|(_, bytes)| bytes.clone())
+          .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))
+      })
+    }
+  }
+
+  fn idle_test_manager() -> (
+    Arc<Mutex<SessionManager>>,
+    Arc<CountingFileSystem>,
+    Arc<SessionCosts>,
+  ) {
+    crate::i18n::init_en();
+    let mut manager = SessionManager::new();
+    let fs = Arc::new(CountingFileSystem::default());
+    manager.file_system = fs.clone();
+    let root =
+      std::env::temp_dir().join(format!("stella-idle-{}", uuid::Uuid::new_v4()));
+    manager.store_path = root.join("sessions.json");
+    manager.edit_root = root.join("editing");
+    for n in 0..5 {
+      let mut session = desktop_session_for_test(
+        persisted_session_for_test(&format!("idle-{n}")),
+        "token",
+      );
+      session.file_path = manager
+        .edit_root
+        .join(&session.id)
+        .join(&session.file_name)
+        .to_string_lossy()
+        .into_owned();
+      session.last_local_sha = hash_bytes(b"unchanged document");
+      session.last_checkpoint_sha = if n % 2 == 0 {
+        Some(session.last_local_sha.clone())
+      } else {
+        None
+      };
+      session.last_observed_file =
+        Some(fs.put(&session.file_path, b"unchanged document", 1));
+      manager.sessions.insert(session.id.clone(), session);
+    }
+    let costs = Arc::clone(&manager.costs);
+    (Arc::new(Mutex::new(manager)), fs, costs)
+  }
+
+  struct MinuteRetryClock {
+    elapsed: Duration,
+  }
+
+  impl RetryClock for MinuteRetryClock {
+    fn tick(&mut self) -> futures_util::future::BoxFuture<'_, bool> {
+      Box::pin(async move {
+        if self.elapsed == Duration::from_secs(60) {
+          return false;
+        }
+        self.elapsed += RETRY_INTERVAL;
+        true
+      })
+    }
+  }
+
+  #[tokio::test]
+  async fn idle_cost_all_sessions_do_no_work_for_one_minute() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    let mut clock = MinuteRetryClock {
+      elapsed: Duration::ZERO,
+    };
+    run_retry_clock(Arc::clone(&manager), &mut clock).await;
+    assert_eq!(clock.elapsed, Duration::from_secs(60));
+    assert_eq!(manager.lock().await.sessions.len(), 5);
+    tracing::debug!(
+      "idle minute / 5 sessions: reads={} writes={} emits={}",
+      fs.reads.load(Ordering::Relaxed),
+      costs.writes.load(Ordering::Relaxed),
+      costs.emits.load(Ordering::Relaxed)
+    );
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 0, "idle file reads");
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0, "idle store writes");
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0, "idle state emits");
+  }
+
+  #[tokio::test]
+  async fn idle_cost_fingerprint_changes_read_once_without_publishing_equal_content() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    // Enumerate the manager's entire registry; every session follows the same gate.
+    let sessions = manager
+      .lock()
+      .await
+      .sessions
+      .values()
+      .map(|s| (s.id.clone(), s.file_path.clone()))
+      .collect::<Vec<_>>();
+    for (id, path) in &sessions {
+      // A replacement inode with identical content must refresh the observation,
+      // without a remote save or a persisted/UI state transition.
+      fs.put(path, b"unchanged document", 2);
+      retry_session(Arc::clone(&manager), id).await;
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert_eq!(fs.reads.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+  }
+
+  #[tokio::test]
+  async fn idle_cost_remote_operations_release_manager_and_publish_once() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let manager_in_request = Arc::clone(&manager);
+    let router = Router::new().route("/v1/desktop-edit-sessions/{id}/checkpoint", post(move || {
+      let manager = Arc::clone(&manager_in_request);
+      let requests = Arc::clone(&request_count);
+      async move {
+        assert!(manager.try_lock().is_ok(), "manager held across upload");
+        requests.fetch_add(1, Ordering::Relaxed);
+        axum::Json(serde_json::json!({ "checkpointedAt": "2026-01-01T00:00:00Z", "noop": false }))
+      }
+    }));
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let sessions = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.api_base_url = base_url.clone();
+      }
+      mgr
+        .sessions
+        .values()
+        .map(|s| (s.id.clone(), s.file_path.clone()))
+        .collect::<Vec<_>>()
+    };
+    for (id, path) in &sessions {
+      fs.put(path, b"changed document", 2);
+      retry_session(Arc::clone(&manager), id).await;
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert_eq!(requests.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(fs.reads.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.emits.load(Ordering::Relaxed), sessions.len());
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test]
+  async fn managed_file_events_checkpoint_changed_bytes_with_the_same_fingerprint() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, fs, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/checkpoint",
+      post(move || {
+        let requests = Arc::clone(&request_count);
+        async move {
+          requests.fetch_add(1, Ordering::Relaxed);
+          axum::Json(serde_json::json!({
+            "checkpointedAt": "2026-01-01T00:00:00Z",
+            "noop": false
+          }))
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let (id, path, name, previous_fingerprint) = {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut("idle-0").unwrap();
+      session.api_base_url = base_url;
+      let values = (
+        session.id.clone(),
+        session.file_path.clone(),
+        session.file_name.clone(),
+        session.last_observed_file.clone().unwrap(),
+      );
+      drop(mgr);
+      values
+    };
+    let changed = b"modified! document";
+    assert_ne!(hash_bytes(changed), hash_bytes(b"unchanged document"));
+    assert_eq!(fs.put(&path, changed, 1), previous_fingerprint);
+    retry_session(Arc::clone(&manager), &id).await;
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 0);
+    assert_eq!(requests.load(Ordering::Relaxed), 0);
+
+    handle_filesystem_event(Arc::clone(&manager), &id, Some(&name), &name).await;
+    {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut(&id).unwrap();
+      assert!(session.last_observed_file.is_none());
+      // Drive the same retry boundary directly, without waiting on debounce
+      // or starting platform-specific open-file probes in this fixture.
+      if let Some(timer) = session.checkpoint_timer.take() {
+        timer.abort();
+      }
+      if let Some(timer) = session.open_probe_timer.take() {
+        timer.abort();
+      }
+      drop(mgr);
+    }
+    retry_session(Arc::clone(&manager), &id).await;
+    retry_session(Arc::clone(&manager), &id).await;
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 1);
+    assert_eq!(requests.load(Ordering::Relaxed), 1);
+    let checkpoint = manager.lock().await.sessions[&id]
+      .last_checkpoint_sha
+      .clone();
+    assert_eq!(checkpoint, Some(hash_bytes(changed)));
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test]
+  async fn idle_cost_finalize_releases_manager_during_request() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, _, costs) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let manager_in_request = Arc::clone(&manager);
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(move || {
+        let manager = Arc::clone(&manager_in_request);
+        let requests = Arc::clone(&request_count);
+        async move {
+          assert!(manager.try_lock().is_ok(), "manager held across finalize");
+          requests.fetch_add(1, Ordering::Relaxed);
+          // Keep this isolated fixture out of keychain/session-removal code.
+          (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({"message": "retry fixture"})),
+          )
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let sessions = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.api_base_url = base_url.clone();
+        s.last_checkpoint_sha = Some(s.last_local_sha.clone());
+        s.pending_finalize = true;
+        s.status = SessionStatus::Finalizing;
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &sessions {
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert_eq!(requests.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), sessions.len());
+    assert_eq!(costs.emits.load(Ordering::Relaxed), sessions.len());
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn confirmed_close_finishes_after_in_flight_checkpoint_settles() {
+    use axum::{Router, routing::post};
+    let (manager, _, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/finalize",
+      post(|| async {
+        (
+          axum::http::StatusCode::SERVICE_UNAVAILABLE,
+          axum::Json(serde_json::json!({"message": "retry fixture"})),
+        )
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let ids = {
+      let mut mgr = manager.lock().await;
+      for session in mgr.sessions.values_mut() {
+        session.api_base_url = base_url.clone();
+        session.last_checkpoint_sha = Some(session.last_local_sha.clone());
+        session.local_open_seen = true;
+        session.closed_recheck_count = CLOSED_RECHECK_COUNT;
+        session.checkpoint_in_flight = true;
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      assert!(!manager.lock().await.sessions[id].pending_finalize);
+    }
+    tokio::time::advance(OPEN_PROBE_INTERVAL * u32::from(CLOSED_RECHECK_COUNT)).await;
+    {
+      let mut mgr = manager.lock().await;
+      for session in mgr.sessions.values_mut() {
+        session.checkpoint_in_flight = false;
+      }
+    }
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      assert!(manager.lock().await.sessions[id].pending_finalize);
+    }
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test]
+  async fn idle_cost_stale_responses_preserve_the_current_generation() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    let mut mgr = manager.lock().await;
+    let ids = mgr.sessions.keys().cloned().collect::<Vec<_>>();
+    for id in &ids {
+      let (old_generation, fingerprint) = {
+        let session = mgr.sessions.get_mut(id).unwrap();
+        let old_generation = session.generation;
+        session.generation = uuid::Uuid::new_v4();
+        session.session_token = "refreshed-token".into();
+        (
+          old_generation,
+          fs.fingerprint(Path::new(&session.file_path)).unwrap(),
+        )
+      };
+      let before = serde_json::to_value(mgr.sessions[id].to_persisted()).unwrap();
+      assert!(
+        !mgr
+          .apply_checkpoint(
+            id,
+            fingerprint,
+            old_generation,
+            CheckpointResult::Uploaded {
+              next_sha: "obsolete-sha".into(),
+              current_sha: "obsolete-sha".into(),
+              checkpointed_at: "obsolete-time".into(),
+              rotated_token: None,
+            }
+          )
+          .await
+      );
+      assert!(
+        !mgr
+          .apply_finalize(
+            id,
+            true,
+            old_generation,
+            FinalizeResult::Error("obsolete-error".into())
+          )
+          .await
+      );
+      assert_eq!(
+        serde_json::to_value(mgr.sessions[id].to_persisted()).unwrap(),
+        before
+      );
+      assert_eq!(mgr.sessions[id].session_token, "refreshed-token");
+    }
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+  }
+
+  #[tokio::test]
+  async fn idle_cost_unchanged_content_converges_after_an_event_during_save() {
+    use std::sync::atomic::Ordering;
+    let (manager, fs, costs) = idle_test_manager();
+    let mut mgr = manager.lock().await;
+    let ids = mgr.sessions.keys().cloned().collect::<Vec<_>>();
+    for id in &ids {
+      let (fingerprint, generation, sha) = {
+        let session = mgr.sessions.get_mut(id).unwrap();
+        session.changed_during_remote_save = true;
+        session.checkpoint_in_flight = true;
+        (
+          fs.fingerprint(Path::new(&session.file_path)).unwrap(),
+          session.generation,
+          session.last_local_sha.clone(),
+        )
+      };
+      assert!(
+        !mgr
+          .apply_checkpoint(
+            id,
+            fingerprint,
+            generation,
+            CheckpointResult::Unchanged { sha }
+          )
+          .await
+      );
+      let input = mgr.prepare_checkpoint(id).await.unwrap();
+      // The save owner rechecks after an event, even when it ultimately reads equal bytes.
+      assert!(
+        mgr
+          .apply_checkpoint(
+            id,
+            input.fingerprint,
+            input.generation,
+            CheckpointResult::Unchanged {
+              sha: input.last_local_sha
+            }
+          )
+          .await
+      );
+      assert_eq!(mgr.sessions[id].status, SessionStatus::Ready);
+      assert!(mgr.prepare_checkpoint(id).await.is_none());
+    }
+    drop(mgr);
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+  }
+
+  #[tokio::test]
+  async fn idle_cost_takeover_response_releases_manager_during_request() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, _, costs) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let manager_in_request = Arc::clone(&manager);
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/respond-takeover",
+      post(move || {
+        let manager = Arc::clone(&manager_in_request);
+        let requests = Arc::clone(&request_count);
+        async move {
+          assert!(
+            manager.try_lock().is_ok(),
+            "manager held across takeover response"
+          );
+          requests.fetch_add(1, Ordering::Relaxed);
+          axum::http::StatusCode::OK
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let ids = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.api_base_url = base_url.clone();
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &ids {
+      assert!(respond_to_takeover(Arc::clone(&manager), id, true).await);
+    }
+    assert_eq!(requests.load(Ordering::Relaxed), ids.len());
+    assert_eq!(costs.writes.load(Ordering::Relaxed), 0);
+    assert_eq!(costs.emits.load(Ordering::Relaxed), 0);
+    server.abort();
+  }
+
+  #[tokio::test]
+  async fn idle_cost_restored_syncing_state_converges_once() {
+    use std::sync::atomic::Ordering;
+    let (manager, _, costs) = idle_test_manager();
+    let ids = {
+      let mut mgr = manager.lock().await;
+      for s in mgr.sessions.values_mut() {
+        s.status = SessionStatus::Syncing;
+      }
+      mgr.sessions.keys().cloned().collect::<Vec<_>>()
+    };
+    for id in &ids {
+      retry_session(Arc::clone(&manager), id).await;
+      retry_session(Arc::clone(&manager), id).await;
+    }
+    assert!(
+      manager
+        .lock()
+        .await
+        .sessions
+        .values()
+        .all(|s| s.status == SessionStatus::Ready)
+    );
+    assert_eq!(costs.writes.load(Ordering::Relaxed), ids.len());
+    assert_eq!(costs.emits.load(Ordering::Relaxed), ids.len());
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
   }
 
   #[test]
@@ -3140,3 +4061,7 @@ mod tests {
     );
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+#[path = "session_allocation_harness.rs"]
+pub mod allocation_harness;

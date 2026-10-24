@@ -169,12 +169,16 @@ export const runCapabilityCommand = async ({
   }
 
   // Write capabilities own confirmation; read arguments never carry a gate.
-  if (spec.access === "write" && spec.destructive) {
+  if (
+    spec.access === "write" &&
+    (spec.destructive || spec.confirmation === "required")
+  ) {
     const outcome = await confirmDestructive({
       context,
       flags,
       writers,
       label: spec.commandPath.join(" "),
+      operation: spec.destructive ? "destructive" : "approval",
     });
     if (outcome === "aborted") {
       setExit(context, EXIT_CODES.aborted);

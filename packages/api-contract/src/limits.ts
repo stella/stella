@@ -158,3 +158,11 @@ export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;
 export const READER_PAGE_MAX_CHARS = 60_000;
 export const READER_PROVISION_ANCHOR_MIN_CHARS = 1;
 export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;
+
+/**
+ * Smallest file a presigned upload may declare, single or in a dropped folder.
+ * An empty document is never a legitimate upload, so the API refuses it before
+ * minting a URL, and a folder drop sends empty files down the single-file path
+ * where the user sees that refusal for the file alone.
+ */
+export const UPLOAD_FILE_MIN_BYTES = 1;

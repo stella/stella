@@ -614,6 +614,31 @@ export const selectChecks = (
   return checks.filter(({ name }) => selected.has(name));
 };
 
+/** Split a manifest into stable, disjoint CI matrix partitions. */
+export const partitionChecks = (
+  checks: readonly PoolCheck[],
+  partition: string | undefined,
+): PoolCheck[] => {
+  if (partition === undefined) {
+    return [...checks];
+  }
+  const match = /^(?<index>\d+)\/(?<count>\d+)$/u.exec(partition);
+  const index = Number(match?.groups?.["index"]);
+  const count = Number(match?.groups?.["count"]);
+  if (
+    !Number.isInteger(index) ||
+    !Number.isInteger(count) ||
+    index < 1 ||
+    count < 1 ||
+    index > count
+  ) {
+    throw new CheckPoolError(
+      "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
+    );
+  }
+  return checks.filter((_, checkIndex) => checkIndex % count === index - 1);
+};
+
 const main = async () => {
   const [mode, job = "", option, value, ...extra] = process.argv.slice(2);
   if (
@@ -656,7 +681,13 @@ const main = async () => {
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
     inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
-  const planned = planChecks(selectChecks(readCheckPool(job), value), context);
+  const planned = planChecks(
+    partitionChecks(
+      selectChecks(readCheckPool(job), value),
+      process.env["CI_CHECK_POOL_PARTITION"],
+    ),
+    context,
+  );
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   // One check per CPU but one: four concurrent checks on a four-CPU runner
   // pushed default 5 s Bun test budgets past their limit; three did not.
