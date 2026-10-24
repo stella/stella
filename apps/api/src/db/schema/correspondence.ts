@@ -688,6 +688,7 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
+    ...reviewResetOwnerPolicies("correspondence_allowed_sender_matters"),
     ...wsOrganizationPolicies("correspondence_allowed_sender_matters", {
       columns: table,
     }),
@@ -719,6 +720,7 @@ export const correspondenceDropLogs = p.pgTable.withRLS(
       "correspondence_drop_logs_reason_check",
       sql`${table.reason} in (${valuesSql(CORRESPONDENCE_DROP_REASONS)})`,
     ),
+    ...reviewResetOwnerPolicies("correspondence_drop_logs"),
     ...wsOrganizationPolicies("correspondence_drop_logs", { columns: table }),
   ],
 );
