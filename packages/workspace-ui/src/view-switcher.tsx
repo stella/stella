@@ -14,10 +14,10 @@ import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import {
-  reorderInlineIds,
-  toInlineDropPosition,
   type InlineDirection,
   type InlineDropPosition,
+  reorderInlineIds,
+  toInlineDropPosition,
 } from "@stll/ui/inline-reorder";
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -254,11 +254,9 @@ type WorkspaceViewTabProps<View extends WorkspaceViewSwitcherItem> = {
   isDragBlocked: boolean;
   instanceId: symbol;
   onContextMenu:
-    | ((view: View, event: React.MouseEvent<HTMLElement>) => void)
-    | undefined;
+    ((view: View, event: React.MouseEvent<HTMLElement>) => void) | undefined;
   onDoubleClick:
-    | ((view: View, event: React.MouseEvent<HTMLElement>) => void)
-    | undefined;
+    ((view: View, event: React.MouseEvent<HTMLElement>) => void) | undefined;
   onReorder: (
     draggedId: string,
     targetId: string,

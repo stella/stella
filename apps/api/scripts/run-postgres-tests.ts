@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { createSqlClient } from "../src/db/sql-client";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   mergeJunitReports,
@@ -74,7 +75,7 @@ process.exitCode = await runGatedTests({
       "application_name",
       `stella-postgres-runner-${process.pid}`,
     );
-    const sql = new Bun.SQL({ url: adminUrl.toString(), max: 1 });
+    const sql = createSqlClient({ url: adminUrl.toString(), max: 1 });
     const temporaryDirectory = await mkdtemp(
       path.join(os.tmpdir(), "stella-postgres-junit-"),
     );
@@ -134,12 +135,16 @@ process.exitCode = await runGatedTests({
             .map(async (source) => {
               const report = Bun.file(source);
               if (await report.exists()) {
-                return { source, xml: await report.text() };
+                return { source, xml: await report.text(), missing: false };
               }
-              missingReport = true;
-              return { source, xml: missingBatchReport(source) };
+              return {
+                source,
+                xml: missingBatchReport(source),
+                missing: true,
+              };
             }),
         );
+        missingReport = reports.some(({ missing }) => missing);
         await Bun.write(
           path.resolve(import.meta.dir, "..", reporterPlan.requestedOutfile),
           mergeJunitReports(reports),

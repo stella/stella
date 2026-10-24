@@ -3,7 +3,11 @@ import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
 import { isValidLinkIconImage } from "@/api/handlers/chat/link-icons/image";
-import { createLinkIconOrigin } from "@/api/handlers/chat/link-icons/origin";
+import {
+  createLinkIconOrigin,
+  toRegistrableIconSite,
+} from "@/api/handlers/chat/link-icons/origin";
+import type { LinkIconTarget } from "@/api/handlers/chat/link-icons/origin";
 import type { CacheableLinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
@@ -14,6 +18,50 @@ import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 const ICON_BYTES = Uint8Array.fromBase64(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=",
 );
+
+test("registrable sites share one fetch and invalid hosts never reach origin", async () => {
+  const outcomes = new Map<string, CacheableLinkIconOutcome>();
+  let requests = 0;
+  const cache = {
+    readOrLease: async ({ hostname }: { hostname: LinkIconTarget }) =>
+      outcomes.get(hostname.value) ??
+      ({ type: "lease", token: "lease" } as const),
+    store: async ({
+      hostname,
+      outcome,
+    }: {
+      hostname: LinkIconTarget;
+      outcome: CacheableLinkIconOutcome;
+    }) => {
+      outcomes.set(hostname.value, outcome);
+      return true;
+    },
+  };
+  const read = async (hostname: string) => {
+    const site = toRegistrableIconSite(hostname);
+    if (Result.isError(site)) {
+      return { type: "no-icon" } as const;
+    }
+    return await readLinkIcon({
+      hostname: site.value,
+      userId: toSafeId<"user">("site-user"),
+      ip: "192.0.2.2",
+      cache,
+      readOrigin: async () => {
+        requests += 1;
+        return { type: "no-icon" };
+      },
+    });
+  };
+
+  expect(await read("x.y.attacker.example")).toEqual({ type: "no-icon" });
+  expect(await read("attacker.example")).toEqual({ type: "no-icon" });
+  expect(requests).toBe(1);
+  for (const hostname of ["co.uk", "127.0.0.1", "localhost", "[::1]"]) {
+    expect(await read(hostname)).toEqual({ type: "no-icon" });
+  }
+  expect(requests).toBe(1);
+});
 
 for (const failure of ["timeout", "deadline", 503] as const) {
   test(`a ${failure} followed by a valid icon recovers without a negative cache entry`, async () => {
@@ -64,7 +112,7 @@ for (const failure of ["timeout", "deadline", 503] as const) {
     const app = new Elysia().get("/icon", async ({ set }) =>
       linkIconBody(
         await readLinkIcon({
-          hostname: "example.com",
+          hostname: toRegistrableIconSite("example.com").unwrap(),
           userId: toSafeId<"user">("retry-user"),
           ip: "192.0.2.1",
           cache,

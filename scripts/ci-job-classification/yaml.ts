@@ -212,14 +212,38 @@ const stepShapes = (value: unknown): JsonRecord[] => {
 // GitHub-hosted image labels only; a self-hosted, grouped or computed runner
 // can change what a job can reach, so it stays in the shape and in the
 // privilege check that reads it.
-const GITHUB_HOSTED_RUNNER = /^(?:ubuntu|windows|macos)-[a-z0-9.-]+$/u;
+// Standard labels: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+// Unknown labels remain classification inputs until reviewed as hosted images.
+const GITHUB_HOSTED_RUNNERS = new Set([
+  "ubuntu-slim",
+  "ubuntu-latest",
+  "ubuntu-24.04",
+  "ubuntu-22.04",
+  "ubuntu-26.04",
+  "ubuntu-24.04-arm",
+  "ubuntu-22.04-arm",
+  "ubuntu-26.04-arm",
+  "windows-latest",
+  "windows-2025",
+  "windows-2025-vs2026",
+  "windows-2022",
+  "windows-11-arm",
+  "windows-11-vs2026-arm",
+  "macos-15-intel",
+  "macos-26-intel",
+  "macos-latest",
+  "macos-14",
+  "macos-15",
+  "macos-26",
+  "xcode-27",
+]);
 const projectRunner = (job: JsonRecord, shape: JsonRecord) => {
   const runner = job["runs-on"];
   const labels: unknown[] = Array.isArray(runner) ? runner : [runner];
   const hosted =
     labels.length > 0 &&
     labels.every(
-      (label) => typeof label === "string" && GITHUB_HOSTED_RUNNER.test(label),
+      (label) => typeof label === "string" && GITHUB_HOSTED_RUNNERS.has(label),
     );
   if (!hosted) {
     return shape;
@@ -316,6 +340,11 @@ const privileged = (value: unknown): boolean => {
     return false;
   }
   return Object.entries(value).some(([key, child]) => {
+    // Hosted labels were removed by projectRunner; a retained runner can reach
+    // infrastructure outside the standard hosted boundary.
+    if (key === "runs-on") {
+      return true;
+    }
     if (key === "publication-command" && child === true) {
       return true;
     }

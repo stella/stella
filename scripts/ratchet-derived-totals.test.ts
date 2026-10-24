@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
-  readFileSync,
-  readdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -12,12 +12,14 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   allowanceAdjustmentCommand,
   allowanceRemovalCommand,
   inspectConfiguration,
-  scanAll,
   type RatchetMetric,
+  scanAll,
 } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
@@ -96,6 +98,48 @@ const commit = (root: string, message: string) => {
   git(root, "-c", "commit.gpgsign=false", "commit", "-m", message);
 };
 
+// The definition paths name the guard's entry points and the files it loads
+// by path; their relative imports are followed here, so a module the guard
+// starts importing is copied without being listed by hand.
+const RELATIVE_SPECIFIER = /^\.\.?\//u;
+const SCANNED_SOURCE = /\.[cm]?ts$/u;
+// The transpiler rejects a hashbang; it carries no imports.
+const HASHBANG = /^#!.*/u;
+const RATCHET_DEFINITION_CLOSURE = ((): readonly string[] => {
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  const pending = ratchetDefinitionPaths.flatMap((pattern) => [
+    ...new Bun.Glob(pattern).scanSync({ cwd: ROOT, onlyFiles: true }),
+  ]);
+  const closure = new Set<string>();
+  for (
+    let relative = pending.pop();
+    relative !== undefined;
+    relative = pending.pop()
+  ) {
+    if (closure.has(relative)) {
+      continue;
+    }
+    closure.add(relative);
+    if (!SCANNED_SOURCE.test(relative)) {
+      continue;
+    }
+    const absolute = path.join(ROOT, relative);
+    for (const { path: specifier } of transpiler.scanImports(
+      readFileSync(absolute, "utf-8").replace(HASHBANG, ""),
+    )) {
+      if (RELATIVE_SPECIFIER.test(specifier)) {
+        pending.push(
+          repoRelativePath(
+            ROOT,
+            Bun.resolveSync(specifier, path.dirname(absolute)),
+          ),
+        );
+      }
+    }
+  }
+  return [...closure];
+})();
+
 // Copy the real guard and its import closure; the clone's scans and Git
 // history stay small while both branches execute production CLI behavior.
 const withClone = (exercise: (root: string) => void, branch?: string) => {
@@ -104,9 +148,7 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
   const clone = path.join(temporary, "clone");
   try {
     mkdirSync(seed);
-    for (const relative of ratchetDefinitionPaths.flatMap((pattern) => [
-      ...new Bun.Glob(pattern).scanSync({ cwd: ROOT, onlyFiles: true }),
-    ])) {
+    for (const relative of RATCHET_DEFINITION_CLOSURE) {
       mkdirSync(path.dirname(path.join(seed, relative)), { recursive: true });
       copyFileSync(path.join(ROOT, relative), path.join(seed, relative));
     }
@@ -136,6 +178,8 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
       temporary,
       "clone",
       "--quiet",
+      // Keep each fixture's object database independent of its disposable seed.
+      "--no-local",
       ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
       seed,
       clone,
@@ -977,6 +1021,7 @@ test("the base may predate a required domain action definition but head may not 
   });
 }, 30_000);
 
+// Measured p95: 10.2 s; this must run the ratchet repeatedly in a real Git clone.
 test("untracked files cannot increase file, duplication, directory or dependency metrics", () => {
   withClone((root) => {
     const libFile = "apps/api/src/lib/domain/helper.ts";
@@ -1033,7 +1078,7 @@ test("untracked files cannot increase file, duplication, directory or dependency
     expect(staged.code, staged.output).toBe(1);
     expect(staged.output).toContain("as-casts: 6 -> 16");
   });
-}, 30_000);
+}, 25_000);
 
 test("malformed ledger and dependency schemas fail in both measurement roles", () => {
   withClone((root) => {

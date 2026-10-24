@@ -1,7 +1,7 @@
 import {
   existsSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -39,11 +39,65 @@ export const stampDesktopRelease = (
     `https://downloads.stll.app/desktop/${channel || "prod"}/latest.json`,
   ];
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-  const cargo = readFileSync(cargoPath, "utf-8").replace(
-    /^version = "[^"]+"/mu,
-    () => `version = "${version}"`,
+  stampCargoPackageVersion(path.dirname(cargoPath), version);
+};
+
+const singleMatch = (
+  source: string,
+  pattern: RegExp,
+  what: string,
+): RegExpMatchArray => {
+  const matches = [...source.matchAll(pattern)];
+  const [match] = matches;
+  if (matches.length !== 1 || match === undefined) {
+    throw new DesktopReleaseStepError(
+      `Expected exactly one ${what}, found ${matches.length}`,
+    );
+  }
+  return match;
+};
+
+// The package version lives in the manifest and in the lockfile entry of the
+// workspace root. Both change together, so `--locked` cargo commands accept the
+// stamped tree and no build rewrites the committed lockfile.
+export const stampCargoPackageVersion = (
+  crateDir: string,
+  version: string,
+): void => {
+  const manifestPath = path.join(crateDir, "Cargo.toml");
+  const lockPath = path.join(crateDir, "Cargo.lock");
+  const manifest = readFileSync(manifestPath, "utf-8");
+  const lock = readFileSync(lockPath, "utf-8");
+  const packageHeader = singleMatch(
+    manifest,
+    /^\[package\]\r?\nname = "([^"]+)"\r?\nversion = "([^"]+)"/gmu,
+    "[package] name and version in Cargo.toml",
   );
-  writeFileSync(cargoPath, cargo);
+  const [, name, previous] = packageHeader;
+  if (name === undefined || previous === undefined) {
+    throw new DesktopReleaseStepInvariantError("Unmatched package header");
+  }
+  const lockEntry = singleMatch(
+    lock,
+    new RegExp(
+      `^\\[\\[package\\]\\]\\r?\\nname = "${RegExp.escape(name)}"\\r?\\nversion = "${RegExp.escape(previous)}"(?=\\r?\\n)`,
+      "gmu",
+    ),
+    `Cargo.lock entry for ${name} ${previous}`,
+  );
+  const stamp = (source: string, match: RegExpMatchArray): string => {
+    const [matched] = match;
+    if (match.index === undefined) {
+      throw new DesktopReleaseStepInvariantError("Unmatched version line");
+    }
+    const stamped = matched.replace(
+      /version = "[^"]+"$/u,
+      () => `version = "${version}"`,
+    );
+    return `${source.slice(0, match.index)}${stamped}${source.slice(match.index + matched.length)}`;
+  };
+  writeFileSync(manifestPath, stamp(manifest, packageHeader));
+  writeFileSync(lockPath, stamp(lock, lockEntry));
 };
 
 export const configureWindowsSigning = (
@@ -135,10 +189,7 @@ const runTauriSigner: CommandRunner = (cwd, file) => {
 };
 
 type DesktopReleaseCommand =
-  | "stamp"
-  | "configure-windows"
-  | "resign"
-  | "upload";
+  "stamp" | "configure-windows" | "resign" | "upload";
 
 const isDesktopReleaseCommand = (
   command: string,

@@ -21,6 +21,45 @@ afterEach(() => {
 });
 
 describe("workspace hygiene", () => {
+  test("rejects alternate test runners and their types", () => {
+    const deniedNames = [
+      "jest",
+      "vitest",
+      "mocha",
+      "@types/jest",
+      "@types/vitest",
+      "@types/mocha",
+    ];
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          ...Object.fromEntries(
+            deniedNames
+              .filter((name) => name !== "@types/mocha")
+              .map((name) => [name, "1.0.0"]),
+          ),
+          "mocha-types": "npm:@types/mocha@1.0.0",
+        },
+      },
+      webPackageJson: {
+        dependencies: { "jest-compatible": "1.0.0" },
+        devDependencies: { "vitest-utils": "1.0.0" },
+        name: "@stll/web",
+      },
+    });
+
+    expect(
+      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+        issue.message.endsWith(" is blocked; tests run on bun test"),
+      ),
+    ).toEqual(
+      deniedNames.map((name) => ({
+        message: `${name} is blocked; tests run on bun test`,
+        path: "package.json",
+      })),
+    );
+  });
+
   test("rejects exact npm text-search dependencies and accepts similar names", () => {
     const deniedNames = [
       "fuse.js",
@@ -64,9 +103,10 @@ describe("workspace hygiene", () => {
         peerDependencies: { "lunr-pro": "1.0.0" },
       },
     });
-    mkdirSync(path.join(rootDir, ".claude/mcp"), { recursive: true });
+    const mcpManifest = path.join(rootDir, ".claude/mcp/package.json");
+    mkdirSync(path.dirname(mcpManifest), { recursive: true });
     writeFileSync(
-      path.join(rootDir, ".claude/mcp/package.json"),
+      mcpManifest,
       JSON.stringify({
         dependencies: { fuzzywuzzy: "1.0.0" },
         name: "stella-docs-mcp",

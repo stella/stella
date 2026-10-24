@@ -12,11 +12,11 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 
 import {
-  publishedCaseLawDecisions,
   caseLawProvisionCitations,
-  caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
   caseLawProvisionExtractionRevisionsRegistry,
+  caseLawProvisionExtractions,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -37,8 +37,8 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 import { provisionStatusForCapability } from "./status-for-capability";
 import {
-  PROVISION_VERSION_COLUMNS,
   projectProvisionVersion,
+  PROVISION_VERSION_COLUMNS,
 } from "./version-response";
 
 export const listDecisionProvisionsQuerySchema = t.Object({

@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+  type PublicCountryCapabilities,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
-  PUBLIC_COUNTRY_CAPABILITIES,
-  type PublicCountryCapabilities,
 } from "@stll/api-contract/public-country-capability";
 
-import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
   isPublicLawMiss,
@@ -17,7 +17,10 @@ import {
   PublicLawUnavailableError,
   unwrapPublicLawEden,
 } from "@/lib/public-law-api";
-import { createAppQueryClient } from "@/lib/react-query";
+import {
+  createAppQueryClient,
+  CriticalQueryTimeoutError,
+} from "@/lib/react-query";
 
 const thrownBy = (status: number, value: unknown): unknown => {
   try {
@@ -251,6 +254,18 @@ describe("isSearchUnavailableError", () => {
     expect(
       isSearchUnavailableError(thrownBy(404, { error: "Not Found" })),
     ).toBe(false);
+  });
+
+  test("a read the page stopped waiting for is a search outage", () => {
+    expect(
+      isSearchUnavailableError(
+        new CriticalQueryTimeoutError({
+          message: "Critical query timed out after 10000ms",
+          queryKey: ["case-law-decisions", "page"],
+          timeoutMs: 10_000,
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("anything that is not an API failure is not a search outage", () => {

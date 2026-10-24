@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { ChatSourceCitationTarget } from "@stll/api-contract";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -166,6 +167,69 @@ describe("inline citation chips draw the cited file's type", () => {
       view.container.querySelector("svg")?.getAttribute("aria-hidden"),
     ).toBe("true");
   });
+});
+
+// Reports every observed element visible as soon as it is observed.
+class ImmediatelyVisibleObserver implements IntersectionObserver {
+  readonly root: Element | Document | null = null;
+  readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
+  readonly thresholds: readonly number[] = [0];
+  private readonly callback: IntersectionObserverCallback;
+
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(target: Element): void {
+    const rect = new DOMRect(0, 0, 100, 24);
+    this.callback(
+      [
+        {
+          boundingClientRect: rect,
+          intersectionRect: rect,
+          intersectionRatio: 1,
+          isIntersecting: true,
+          rootBounds: null,
+          target,
+          time: performance.now(),
+        },
+      ],
+      this,
+    );
+  }
+
+  unobserve(): void {}
+
+  disconnect(): void {}
+
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+}
+
+test("an assistant link absent from the source store requests no site icon", async () => {
+  const requests: string[] = [];
+  const previousFetch = globalThis.fetch;
+  const previousObserver = globalThis.IntersectionObserver;
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      requests.push(new Request(input).url);
+      return Response.json({ type: "no-icon" });
+    },
+    { preconnect: () => undefined },
+  );
+  globalThis.IntersectionObserver = ImmediatelyVisibleObserver;
+  try {
+    renderChip("https://encoded-data.attacker.example/page");
+    await act(async () => {
+      await sleep(0);
+    });
+    expect(requests.filter((url) => url.includes("link-icons"))).toEqual([]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.IntersectionObserver = previousObserver;
+  }
 });
 
 test("dot-relative markdown destinations stay clickable with their original href", () => {

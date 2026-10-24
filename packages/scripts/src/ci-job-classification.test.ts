@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -21,14 +21,15 @@ import {
   generateClassification,
   readClassificationInputs,
 } from "../../../scripts/ci-job-classification/generate";
+import { CLASSIFICATION_INPUT_PATHS } from "../../../scripts/ci-job-classification/inputs";
 import {
-  PUBLIC_METADATA,
   createCandidateMetadataReader,
+  PUBLIC_METADATA,
   verifyPublicMetadata,
 } from "../../../scripts/ci-job-classification/public-metadata";
 import type {
-  PublicMetadata,
   MetadataReader,
+  PublicMetadata,
 } from "../../../scripts/ci-job-classification/public-metadata";
 import { parseRemoteReference } from "../../../scripts/ci-job-classification/references";
 import type { MetadataOrigin } from "../../../scripts/ci-job-classification/references";
@@ -92,6 +93,25 @@ test("committed classifications cover the repository and its pinned metadata cal
   // Parses every reachable workflow and action document in a child process.
 }, 60_000);
 
+test("the classification CLI accepts an explicit check flag and source directory", () => {
+  const result = Bun.spawnSync(
+    [
+      process.execPath,
+      path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
+      "--check",
+      repositoryRoot,
+      "--base",
+      "HEAD",
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  expect(new TextDecoder().decode(result.stderr)).toBe("");
+  expect(result.exitCode).toBe(0);
+  expect(new TextDecoder().decode(result.stdout)).toMatch(
+    /^Classified \d+ workflows\n$/u,
+  );
+}, 60_000);
+
 test("the consolidated quick checks retain the support classification of the jobs they replace", () => {
   const { decisions } = readClassificationInputs(repositoryRoot);
   expect(
@@ -131,7 +151,7 @@ test("the quick checks invoke classification after a successful install", () => 
   const check = policy.findIndex(
     (step) =>
       step.run ===
-      "trap 'rm -rf .workflow-tooling' EXIT\nbun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling\n",
+      `trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT\ncd .workflow-tooling\nbun scripts/check-ci-job-classification.ts\n`,
   );
   expect(install).toBeGreaterThanOrEqual(0);
   expect(check).toBeGreaterThan(install);
@@ -148,6 +168,10 @@ test("the quick checks invoke classification after a successful install", () => 
   );
   expect(policy.at(checkout)?.with?.["persist-credentials"]).toBe(false);
   expect(policy.at(checkout)?.with?.["fetch-depth"]).toBe(0);
+  // The tooling checkout holds exactly what the classification reads.
+  expect(
+    String(policy.at(checkout)?.with?.["sparse-checkout"]).trim().split("\n"),
+  ).toEqual([...CLASSIFICATION_INPUT_PATHS]);
   for (const index of [checkout, check]) {
     const step = policy.at(index);
     expect(step?.if).toBe(
@@ -1624,7 +1648,7 @@ test("GitHub on keys retain their string identity in canonical YAML", () => {
 });
 
 // The digest asks for a re-review only when the job's kind can change: its
-// runner and a github-script body cannot, while the secrets a script reads,
+// hosted runner and a github-script body cannot, while the secrets a script reads,
 // the job's permissions and the actions it uses can.
 test("job digests follow kind inputs, not the runner or a github-script body", () => {
   type WorkflowOptions = {
@@ -1667,12 +1691,26 @@ test("job digests follow kind inputs, not the runner or a github-script body", (
     original,
   );
   for (const runner of [
+    ...["ubuntu", "windows", "macos"].flatMap((platform) => [
+      `${platform}-internal`,
+      `${platform}-24.04-private`,
+      `${platform}-latest-custom`,
+      `private-${platform}-latest`,
+    ]),
+    "[ubuntu-latest, ubuntu-internal]",
+    "[]",
     "[self-hosted, linux]",
     "stella-mini",
     githubExpression("matrix.runner"),
     "{group: larger}",
   ]) {
-    expect(digest(workflow({ runner }))).not.toBe(original);
+    const source = workflow({ runner });
+    expect(digest(source)).not.toBe(original);
+    const parsed = parseDocument(source);
+    if (parsed.isErr()) {
+      throw parsed.error;
+    }
+    expect(parsed.value.privileged).toBe(true);
   }
   expect(
     digest(workflow({ script: "for (;;) { await github.paginate(x); }" })),
