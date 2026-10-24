@@ -62,6 +62,7 @@ import {
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -637,10 +638,13 @@ const containPayloadUnavailable = async <TPayload>(
     );
   }
 
-  captureError(raised, {
-    decisionId,
-    step: "readDecision.corpusPayloadUnavailable",
-  });
+  captureError(
+    raised,
+    handlerErrorContext("decisions.containPayloadUnavailable.raised", {
+      decisionId,
+      step: "readDecision.corpusPayloadUnavailable",
+    }),
+  );
   return { payload: null, unavailable: true };
 };
 

@@ -29,7 +29,7 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -47,6 +47,7 @@ import {
   OrganizationFileUsageError,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import {
   copyObject,
@@ -571,7 +572,12 @@ const rollbackCopiedS3Keys = async (
   });
   const completed = Result.flatten(deleted);
   if (Result.isError(completed)) {
-    captureError(completed.error, { source: "chat-fork-rollback" });
+    captureError(
+      completed.error,
+      handlerErrorContext("fork.rollbackCopiedS3Keys.completed_error", {
+        source: "chat-fork-rollback",
+      }),
+    );
   }
 };
 
@@ -801,10 +807,10 @@ export const createForkThread = ({
             message:
               "Chat fork prefix references attachments with no user_files row",
           }),
-          {
+          handlerErrorContext("chat.fork.missingAttachmentRow", {
             fileIds: unresolvedFileIds.join(","),
             threadId: params.threadId,
-          },
+          }),
         );
       }
       const forkWorkspaceId = source.workspaceId;
@@ -850,11 +856,11 @@ export const createForkThread = ({
             message:
               "Chat fork prefix references attachments whose storage objects are gone",
           }),
-          {
+          handlerErrorContext("chat.fork.missingAttachmentObject", {
             fileIds: missingObjectFileIds.join(","),
             threadId: params.threadId,
             thumbnailFileIds: missingThumbnailFileIds.join(","),
-          },
+          }),
         );
       }
       const copiedFileIds = new Map(
@@ -1007,7 +1013,11 @@ export const createForkThread = ({
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
-      indexChatThread(newThreadId).catch(captureError);
+      indexChatThread(newThreadId).catch(
+        createErrorCapture(
+          handlerErrorContext("createForkThread.indexChatThread"),
+        ),
+      );
 
       return Result.ok({ threadId: newThreadId, title: source.title });
     },

@@ -1,9 +1,12 @@
+// parser-output-unchanged: registers publisher rejection reasons for telemetry; page validation and rejection decisions are unchanged.
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import {
   isExcludedHtmlTag,
@@ -19,6 +22,10 @@ type PublisherPageReason =
   | "invalid-shape";
 
 export class PublisherPageError extends AdapterFetchError {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+
   override readonly name = "PublisherPageError";
   readonly reason: PublisherPageReason;
 

@@ -8,7 +8,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -22,6 +22,7 @@ import {
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 
 const moveEntityBodySchema = t.Object({
@@ -213,7 +214,11 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  syncSearchActivity(workspaceId).catch(captureError);
+  syncSearchActivity(workspaceId).catch(
+    createErrorCapture(
+      handlerErrorContext("moveEntityHandler.syncSearchActivity"),
+    ),
+  );
 
   return Result.ok({});
 };

@@ -68,14 +68,12 @@ const createSettingsDb = (
       }),
     }),
   });
-  const safeDb: SafeDb = async <T>(
-    operation: (tx: Transaction) => Promise<T>,
-  ) => {
-    operations += 1;
-    return operations === 1
-      ? Result.ok(asTestRaw<T>(row))
-      : Result.ok(await operation(tx));
-  };
+  const safeDb = asTestRaw<SafeDb>(
+    async (operation: (tx: Transaction) => Promise<unknown>) => {
+      operations += 1;
+      return operations === 1 ? Result.ok(row) : Result.ok(await operation(tx));
+    },
+  );
   return { safeDb, written: () => written, operations: () => operations };
 };
 

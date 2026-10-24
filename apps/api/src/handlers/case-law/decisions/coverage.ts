@@ -56,7 +56,10 @@ import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
-import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
+import {
+  createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
+} from "@/api/lib/legal-search/source-registry-membership";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -409,8 +412,9 @@ export const loadCaseLawCoverage = async ({
     });
   }
 
-  const reportUnrecognizedSource =
-    createUnrecognizedSourceReporter("case_law.coverage");
+  const reportUnrecognizedSource = createUnrecognizedSourceReporter(
+    SOURCE_REPORT_FEATURE.coverage,
+  );
   const byCountry = new Map<
     CaseLawJurisdiction,
     {

@@ -16,7 +16,8 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-client"
   },
   "dependencies": {
-    "@elysia/eden": "^1.4.10"
+    "@elysia/eden": "^1.4.10",
+    "@stll/errors": "workspace:*"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

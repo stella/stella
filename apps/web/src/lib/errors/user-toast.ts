@@ -14,6 +14,7 @@ import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { BoundedSet } from "@/lib/bounded-set";
+import type { DetachedOperationId } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -108,9 +109,13 @@ export const reportUserVisibleError = (
     reportedApiErrorsWithoutNotice.add(apiOccurrence);
   }
   getAnalytics().captureError(reportable, {
-    type: "user-visible",
-    routeTemplate: template,
-    feature: feature ?? featureFromRoute(template),
+    fingerprintKey: "reportUserVisibleError:failure",
+    scope: { type: "request", method: "GET", routeTemplate: template },
+    context: {
+      type: "user-visible",
+      routeTemplate: template,
+      feature: feature ?? featureFromRoute(template),
+    },
   });
 };
 
@@ -209,7 +214,7 @@ export const notifyAuthClientError = (
 
 type DetachedUserActionOptions = {
   /** A fixed label for telemetry, as `detached` takes. */
-  context: string;
+  context: DetachedOperationId;
   /** What the person is told when the action fails. */
   failureMessage: string;
 };

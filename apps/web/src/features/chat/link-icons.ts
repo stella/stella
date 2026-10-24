@@ -53,6 +53,14 @@ function iconOptions(target: IconTarget) {
             message: "Link icon unavailable",
             cause: Result.isError(result) ? result.error : result.value.error,
           }),
+          {
+            fingerprintKey: "linkIconOptions:request",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/v1/chat/link-icons/:hostname",
+            },
+          },
         );
         return temporary;
       }
@@ -77,6 +85,14 @@ function iconOptions(target: IconTarget) {
             action: "readLinkIcon",
             message: "Unexpected link icon response",
           }),
+          {
+            fingerprintKey: "linkIconOptions:response",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/v1/chat/link-icons/:hostname",
+            },
+          },
         );
         return temporary;
       }

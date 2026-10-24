@@ -114,6 +114,10 @@ const MatterNumberingCardBody = ({
   const preview = previewData?.preview ?? null;
 
   const numberingToggle = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.numberingToggle.useSettingsMutation",
+    },
     mutationFn: async (enabled: boolean) =>
       unwrapEden(
         await api["organization-settings"].post({
@@ -126,6 +130,10 @@ const MatterNumberingCardBody = ({
   });
 
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.updateMutation.useSettingsMutation",
+    },
     mutationFn: async () =>
       unwrapEden(
         await api["organization-settings"].post({

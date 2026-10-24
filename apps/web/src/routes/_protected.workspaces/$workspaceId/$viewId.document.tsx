@@ -175,7 +175,16 @@ export const Route = createFileRoute(
     const entityPromise = loadDocumentEntityWithChatPrefetch({
       activeOrganizationId: context.user.activeOrganizationId,
       captureError: (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey:
+            "workspaces.workspaceId.viewId.document.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate:
+              "/_protected/workspaces/$workspaceId/$viewId/document",
+          },
+        });
       },
       loadEntity: async () =>
         await ensureRouteQueryData(
@@ -197,7 +206,16 @@ export const Route = createFileRoute(
           entityId: deps.entity,
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-2",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
+          });
         },
       ),
       "document.prefetch",
@@ -217,7 +235,16 @@ export const Route = createFileRoute(
           entityIds: [deps.entity],
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-3",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
+          });
         },
       ),
       "document.prefetch",
@@ -250,7 +277,16 @@ export const Route = createFileRoute(
             entityId: deps.entity,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-4",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -270,7 +306,16 @@ export const Route = createFileRoute(
             "cached",
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-5",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -290,7 +335,16 @@ export const Route = createFileRoute(
             fieldId: deps.field,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-6",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -311,7 +365,16 @@ export const Route = createFileRoute(
             purpose: "native-display",
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-7",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -331,7 +394,16 @@ export const Route = createFileRoute(
           context.queryClient,
           fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-8",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -637,7 +709,10 @@ function RouteComponentInner({
     const leaveResult = await Result.tryPromise(actions.leave);
     isLeavingDocxRef.current = false;
     if (Result.isError(leaveResult)) {
-      getAnalytics().captureError(leaveResult.error);
+      getAnalytics().captureError(leaveResult.error, {
+        fingerprintKey: "RouteComponentInner:failure",
+        scope: { type: "handler", handlerId: "RouteComponentInner:failure" },
+      });
       return true;
     }
     return !leaveResult.value;
@@ -1217,7 +1292,13 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
                 });
                 await openEntityInInspector(entityId, "", workspaceId);
               } catch (openError) {
-                getAnalytics().captureError(openError);
+                getAnalytics().captureError(openError, {
+                  fingerprintKey: "DocumentDisplayUnavailable:openError",
+                  scope: {
+                    type: "handler",
+                    handlerId: "DocumentDisplayUnavailable:openError",
+                  },
+                });
                 notifyUserError(openError, t("errors.actionFailed"));
               }
             })(),

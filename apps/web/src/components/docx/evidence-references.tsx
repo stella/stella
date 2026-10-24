@@ -243,7 +243,13 @@ const EvidenceFilePicker = ({
     if (controller.current?.signal.aborted !== false) {
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "EvidenceFilePicker.reportInsertError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "EvidenceFilePicker.reportInsertError:failure",
+      },
+    });
     notifyUserError(error, t("folio.evidenceUnavailable"));
   };
   const insert = useMutation({

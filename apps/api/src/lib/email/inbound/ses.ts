@@ -8,6 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { Readable } from "node:stream";
 import * as v from "valibot";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
@@ -86,7 +87,11 @@ export class SesInboundError extends TaggedError("SesInboundError")<{
     | "object-unavailable"
     | "object-missing"
     | "object-delete-failed";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type ReadSesObjectOptions = { key: string; signal: AbortSignal };
 type SesObjectReader = (

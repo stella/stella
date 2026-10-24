@@ -68,7 +68,7 @@ function AgentClaimPage() {
   const organizationsView = useQueryView(
     useQuery(organizationListOptions(userId)),
   );
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "AgentClaimPage:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
 

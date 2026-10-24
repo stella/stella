@@ -9,7 +9,7 @@ import {
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -17,6 +17,7 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 export const revisionParams = t.Object({
@@ -140,7 +141,13 @@ const acceptMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch(captureError);
+      upsertChatThreadSearchDocument(threadId).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "acceptMessageRevision.upsertChatThreadSearchDocument",
+          ),
+        ),
+      );
     }
     return revisionResult(result);
   },

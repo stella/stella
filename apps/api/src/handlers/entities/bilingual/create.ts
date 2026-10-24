@@ -31,6 +31,7 @@ import { createBilingualDocxFromScanned } from "@/api/lib/file-scan/document-par
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -142,7 +143,13 @@ export const createBilingualEntityHandler = (
       });
 
       if (conversion.isErr()) {
-        captureError(conversion.error, { source: "bilingual-document" });
+        captureError(
+          conversion.error,
+          handlerErrorContext(
+            "bilingual.createBilingualEntityHandler.conversion_error",
+            { source: "bilingual-document" },
+          ),
+        );
         return Result.err(
           new HandlerError({
             status: 422,
@@ -161,9 +168,12 @@ export const createBilingualEntityHandler = (
 
       const validation = await validateDocxBuffer(buffer);
       if (!validation.valid) {
-        captureError(new Error(validation.error), {
-          source: "bilingual-document",
-        });
+        captureError(
+          new Error(validation.error),
+          handlerErrorContext("bilingual.createBilingualEntityHandler", {
+            source: "bilingual-document",
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 422,
@@ -178,7 +188,13 @@ export const createBilingualEntityHandler = (
         fileName,
       });
       if (Result.isError(scanResult)) {
-        captureError(scanResult.error, { source: "bilingual-document" });
+        captureError(
+          scanResult.error,
+          handlerErrorContext(
+            "bilingual.createBilingualEntityHandler.scanResult_error",
+            { source: "bilingual-document" },
+          ),
+        );
         return Result.err(
           new HandlerError({
             status: 422,

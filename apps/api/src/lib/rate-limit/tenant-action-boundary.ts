@@ -40,10 +40,14 @@ export const createRequestRouteClassifier = ({
   const registry = new Elysia(configuration);
   const matchRoute = registry.router.dynamic.find.bind(registry.router.dynamic);
   const routeType = (route: InternalRoute) =>
-    classifyRoute(route) ? "included" : "excluded";
+    classifyRoute(route) ? ("included" as const) : ("excluded" as const);
+  const routeMetadata = (route: InternalRoute) => ({
+    type: routeType(route),
+    routeTemplate: route.path,
+  });
   const staticMetadata = new Map<
     string,
-    Record<string, ReturnType<typeof routeType>>
+    Record<string, ReturnType<typeof routeMetadata>>
   >();
   let hasDynamicWebSocket = false;
   for (const route of routes) {
@@ -62,13 +66,13 @@ export const createRequestRouteClassifier = ({
     // AOT's first static path group owns its encoded/loose aliases, including
     // method misses. Derive the same aliases with the framework's utilities.
     for (const [path, indices] of Object.entries(staticRoutes)) {
-      const methods: Record<string, ReturnType<typeof routeType>> = {};
+      const methods: Record<string, ReturnType<typeof routeMetadata>> = {};
       for (const [method, index] of Object.entries(indices)) {
         const route = routes.at(index);
         if (route === undefined) {
           panic("Static tenant route index is missing from route history");
         }
-        methods[method] = routeType(route);
+        methods[method] = routeMetadata(route);
       }
       const aliases =
         strictPath === true
@@ -88,16 +92,22 @@ export const createRequestRouteClassifier = ({
     if (match === null) {
       return undefined;
     }
-    const { handle } = match.store;
+    const { handle, route: routeTemplate } = match.store;
     if (
       !isRecord(handle) ||
       (handle["type"] !== "included" && handle["type"] !== "excluded")
     ) {
       return panic("Route classifier registry lost its derived metadata");
     }
-    return handle["type"];
+    return {
+      type:
+        handle["type"] === "included"
+          ? ("included" as const)
+          : ("excluded" as const),
+      routeTemplate,
+    };
   };
-  return (request: Request): boolean => {
+  return (request: Request) => {
     const path = new URL(request.url).pathname;
     const upgrade =
       request.method === "GET" &&
@@ -112,7 +122,7 @@ export const createRequestRouteClassifier = ({
           methods[request.method] ??
           methods["ALL"];
         if (selected !== undefined) {
-          return selected === "included";
+          return selected;
         }
       }
     }
@@ -124,7 +134,9 @@ export const createRequestRouteClassifier = ({
         ? metadata(matchRoute("WS", path))
         : undefined) ??
       metadata(matchRoute("ALL", path));
-    return selected === "included";
+    return (
+      selected ?? ({ type: "unmatched", routeTemplate: "unmatched" } as const)
+    );
   };
 };
 
@@ -135,8 +147,8 @@ type TenantActionClassifierOptions = Omit<
 
 export const createTenantActionClassifier = (
   options: TenantActionClassifierOptions,
-) =>
-  createRequestRouteClassifier({
+) => {
+  const classify = createRequestRouteClassifier({
     ...options,
     classifyRoute: (route) => {
       // Elysia exposes hooks as any; narrow its metadata at this boundary.
@@ -153,6 +165,25 @@ export const createTenantActionClassifier = (
       );
     },
   });
+  return (request: Request) => {
+    const route = classify(request);
+    switch (route.type) {
+      case "included":
+        return { type: "tenant" as const, routeTemplate: route.routeTemplate };
+      case "excluded":
+        return { type: "exempt" as const, routeTemplate: route.routeTemplate };
+      case "unmatched":
+        return {
+          type: "unmatched" as const,
+          routeTemplate: route.routeTemplate,
+        };
+      default: {
+        route satisfies never;
+        return panic("Unknown route classification");
+      }
+    }
+  };
+};
 
 type TenantHttpActionOptions = {
   handleRequest: (request: Request) => Response | Promise<Response>;

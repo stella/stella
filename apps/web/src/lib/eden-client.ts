@@ -55,7 +55,7 @@ export const webApiClientOptions = {
     await waitForSimulatedApiDelay();
   },
   headers: getApiRequestHeaders,
-  async onResponse(response) {
+  async onScopedResponse({ response, scope }) {
     await reportUnhandledMeResponse(response, reportUserVisibleError);
     await observeActionAdmissionResponse(response, {
       // Only a refusal is announced here; the caller's own handler owns every
@@ -64,7 +64,10 @@ export const webApiClientOptions = {
         actionAdmissionOutcome(error) !== undefined &&
         notifyUserError(error, getTranslator()("errors.actionFailed")),
       captureError: (error) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "onResponse:failure",
+          scope,
+        });
       },
     });
   },
@@ -79,7 +82,6 @@ const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   {
     ...webApiClientOptions,
     async onResponse(response) {
-      await webApiClientOptions.onResponse(response);
       const mime = response.headers.get("content-type")?.split(";").at(0);
       if (response.ok && (mime === "image/png" || mime === "image/x-icon")) {
         return await response.blob();

@@ -88,6 +88,10 @@ const NumberSeriesCardBody = ({
     { type: "closed" } | { type: "open"; id: string }
   >({ type: "closed" });
   const mutation = useSettingsMutation({
+    exceptionScope: (command) => ({
+      type: "handler",
+      handlerId: `settings.number-series.${command.type}`,
+    }),
     mutationFn: sendNumberSeriesCommand,
     invalidate: numberSeriesKeys.all(organizationId),
   });

@@ -41,7 +41,13 @@ export const AnswerFormatProposal = ({
           catch: (error) => error,
         });
         if (Result.isError(refreshed)) {
-          getAnalytics().captureError(refreshed.error);
+          getAnalytics().captureError(refreshed.error, {
+            fingerprintKey: "AnswerFormatProposal.refresh:failure",
+            scope: {
+              type: "handler",
+              handlerId: "AnswerFormatProposal.refresh:failure",
+            },
+          });
           setRefreshError(true);
           return;
         }
@@ -113,7 +119,7 @@ export const AnswerFormatProposal = ({
     retry: false,
   });
   const view = useQueryView(query);
-  useQueryViewError(view);
+  useQueryViewError(view, "AnswerFormatProposal:snapshot");
   if (refreshError) {
     return (
       <div

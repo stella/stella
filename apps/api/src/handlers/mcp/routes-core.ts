@@ -267,10 +267,13 @@ const mcpRouteRegistry = createMcpRoute({
   handleMcpHttpRequest: () => new Response(null),
 });
 
-export const isMcpTransportRequest = createRequestRouteClassifier({
+const classifyMcpTransportRequest = createRequestRouteClassifier({
   routes: mcpRouteRegistry.routes,
   staticRoutes: mcpRouteRegistry.router.static,
   strictPath: mcpRouteRegistry.config.strictPath,
   aot: mcpRouteRegistry.config.aot,
   classifyRoute: (route) => route.method === "ALL",
 });
+
+export const isMcpTransportRequest = (request: Request) =>
+  classifyMcpTransportRequest(request).type === "included";

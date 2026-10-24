@@ -13,6 +13,7 @@ import {
   playbookRunStartOutcome,
 } from "@/api/lib/document-review/playbook-run-start";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import type { DocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
@@ -312,11 +313,14 @@ export const routeClassifiedDocuments = async ({
         // Fire-and-forget background path with no other feedback channel:
         // capture the reason so a per-playbook materialization failure (e.g.
         // hitting the properties cap) is not silently invisible.
-        captureError(new Error(result.message), {
-          workspaceId,
-          playbookId: definition.id,
-          status: String(result.status),
-        });
+        captureError(
+          new Error(result.message),
+          handlerErrorContext("workflow.materializedPropertyIds", {
+            workspaceId,
+            playbookId: definition.id,
+            status: String(result.status),
+          }),
+        );
         continue;
       }
       if (result.materializedPropertyIds.length === 0) {
@@ -346,9 +350,12 @@ export const routeClassifiedDocuments = async ({
     playbookRunStartOutcome(started.status) !==
     PLAYBOOK_RUN_START_OUTCOME.QUEUED
   ) {
-    captureError(new Error("routeClassifiedDocuments.workflow_not_started"), {
-      workspaceId,
-      status: started.status,
-    });
+    captureError(
+      new Error("routeClassifiedDocuments.workflow_not_started"),
+      handlerErrorContext("workflow.routeClassifiedDocuments", {
+        workspaceId,
+        status: started.status,
+      }),
+    );
   }
 };

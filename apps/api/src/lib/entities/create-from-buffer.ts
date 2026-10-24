@@ -9,7 +9,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -17,6 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   abandonBufferIntent,
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
+  BUFFER_INTENT_TELEMETRY,
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockObjectCleanupIntentsForWriter,
   objectWriterSettlementAfterCleanup,
@@ -56,6 +57,7 @@ import type { OrganizationFileUsageError } from "@/api/lib/files/organization-fi
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -68,12 +70,6 @@ import {
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { withTimeout } from "@/api/lib/with-timeout";
-
-const ENTITY_BUFFER_INTENT_TELEMETRY = {
-  abandon: "buffer-entity-intent-abandon",
-  heartbeat: "buffer-entity-intent-heartbeat",
-  heartbeatUnhandled: "buffer-entity-intent-heartbeat-unhandled",
-};
 
 const cleanupSettlementFailure = failureSink({
   event: "entities.buffer_cleanup_settlement_failed",
@@ -275,7 +271,7 @@ export const createEntityFromBuffer = async ({
     const stopHeartbeat = startBufferIntentHeartbeat({
       safeDb,
       intent,
-      telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
+      telemetry: BUFFER_INTENT_TELEMETRY.entity_create,
     });
     return { type: "user" as const, intent, stopHeartbeat };
   })();
@@ -298,7 +294,13 @@ export const createEntityFromBuffer = async ({
         }),
       );
       if (Result.isError(cleanup)) {
-        captureError(cleanup.error, { entityId, objectKey: s3Key });
+        captureError(
+          cleanup.error,
+          handlerErrorContext("entities.cleanupObject.cleanup_error", {
+            entityId,
+            objectKey: s3Key,
+          }),
+        );
         return false;
       }
       return true;
@@ -587,7 +589,7 @@ export const createEntityFromBuffer = async ({
             safeDb,
             intent: publication.intent,
             reason: "Server-generated entity transaction failed",
-            telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
+            telemetry: BUFFER_INTENT_TELEMETRY.entity_create,
           });
         }
       }
@@ -613,8 +615,22 @@ export const createEntityFromBuffer = async ({
   // must NOT invoke `maybeStartUploadTriggeredFlows` — only genuine USER uploads
   // fire the file-upload trigger, so a flow-created document can never spawn
   // another flow run. Keep the upload trigger out of this call site.
-  dependencies.processExtraction(entityId).catch(captureError);
-  dependencies.flushEntitySearchRepairs([entityId]).catch(captureError);
+  dependencies
+    .processExtraction(entityId)
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "createEntityFromBuffer.dependencies_processExtraction",
+        ),
+      ),
+    );
+  dependencies
+    .flushEntitySearchRepairs([entityId])
+    .catch(
+      createErrorCapture(
+        handlerErrorContext("createEntityFromBuffer.flushEntitySearchRepairs"),
+      ),
+    );
 
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
@@ -626,7 +642,11 @@ export const createEntityFromBuffer = async ({
       userId,
       workspaceId,
     })
-    .catch(captureError);
+    .catch(
+      createErrorCapture(
+        handlerErrorContext("entityBuffer.enqueuePdfDerivative"),
+      ),
+    );
 
   dependencies
     .enqueueImageThumbnailOrMarkFailed({
@@ -638,7 +658,9 @@ export const createEntityFromBuffer = async ({
       userId,
       workspaceId,
     })
-    .catch(captureError);
+    .catch(
+      createErrorCapture(handlerErrorContext("entityBuffer.enqueueThumbnail")),
+    );
 
   dependencies.broadcastWorkspaceResourceUpdated(
     workspaceId,

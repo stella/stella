@@ -1,276 +1,485 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
-import { fingerprintExceptionEvent as fingerprintExceptionEventWithOrigin } from "@/lib/analytics/exception-fingerprint";
+import { declareFingerprintFields } from "@stll/errors";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
+import { assertProperty } from "@stll/property-testing";
 
-const FIRST_PARTY_ORIGIN = "https://my.stll.app";
-const fingerprintExceptionEvent = (
-  input: Omit<
-    Parameters<typeof fingerprintExceptionEventWithOrigin>[0],
-    "firstPartyOrigin"
-  >,
-) =>
-  fingerprintExceptionEventWithOrigin({
-    ...input,
-    firstPartyOrigin: FIRST_PARTY_ORIGIN,
-  });
+import {
+  automaticExceptionKey,
+  capturedExceptionIdentity,
+  fingerprintExceptionEvent,
+  fingerprintExceptionScope,
+  isExceptionFingerprintKey,
+  routeExceptionFingerprintKey,
+  sanitizeFingerprintFields,
+} from "@/lib/analytics/exception-fingerprint";
 
-// Production-shaped frames: bundled asset URLs as posthog-js reports them,
-// crash frame last (caller-first ordering).
-const matterViewFrames = [
-  {
-    filename: "https://my.stll.app/assets/root-BOq2mF3k.js",
-    function: "dispatchEvent",
-    in_app: true,
-    lineno: 1,
-    colno: 51_204,
-  },
-  {
-    filename: "https://my.stll.app/assets/matter-view-D3kfQx9a.js",
-    function: "renderMatter",
-    in_app: true,
-    lineno: 4,
-    colno: 18_733,
-  },
-] as const;
+const fixture = {
+  entries: [{ type: "TypeError" }],
+  key: "chatRuntime:send" as const,
+  scopeIdentity: fingerprintExceptionScope({
+    type: "handler",
+    handlerId: "chatRuntime:send",
+  }),
+};
 
-const documentPanelFrames = [
-  {
-    filename: "https://my.stll.app/assets/root-BOq2mF3k.js",
-    function: "dispatchEvent",
-    in_app: true,
-    lineno: 1,
-    colno: 51_204,
-  },
-  {
-    filename: "https://my.stll.app/assets/document-panel-Ck2pW7dm.js",
-    function: "openDocument",
-    in_app: true,
-    lineno: 2,
-    colno: 9812,
-  },
-] as const;
-
-describe("fingerprintExceptionEvent", () => {
-  test("distinct defects in distinct components produce distinct fingerprints", () => {
-    const matterView = fingerprintExceptionEvent({
-      entries: [
-        { type: "TypeError", stacktrace: { frames: matterViewFrames } },
-      ],
-    });
-    const documentPanel = fingerprintExceptionEvent({
-      entries: [
-        { type: "TypeError", stacktrace: { frames: documentPanelFrames } },
-      ],
-    });
-    expect(matterView).not.toBe(documentPanel);
-  });
-
-  test("the same error fingerprints identically on every occurrence", () => {
-    const entry = {
-      type: "RangeError",
-      stacktrace: { frames: matterViewFrames },
-    };
-    expect(
-      fingerprintExceptionEvent({ area: "pdf-viewer", entries: [entry] }),
-    ).toBe(fingerprintExceptionEvent({ area: "pdf-viewer", entries: [entry] }));
-  });
-
-  test("keeps only the asset basename from each frame", () => {
-    expect(
-      fingerprintExceptionEvent({
-        entries: [
-          { type: "TypeError", stacktrace: { frames: matterViewFrames } },
-        ],
-      }),
-    ).toBe("TypeError||root.js;matter-view.js|");
-  });
-
-  test("the area slug and cause-chain classes separate otherwise identical errors", () => {
-    const wrapper = {
-      type: "ClientTelemetryError",
-      stacktrace: { frames: matterViewFrames },
-    };
-    const entries = [wrapper, { type: "RangeError" }];
-    const fingerprint = fingerprintExceptionEvent({
-      area: "pdf-viewer",
-      entries,
-    });
-    expect(fingerprint).toBe(
-      "ClientTelemetryError|pdf-viewer|root.js;matter-view.js|RangeError",
-    );
-    expect(fingerprint).not.toBe(fingerprintExceptionEvent({ entries }));
-    expect(fingerprint).not.toBe(
-      fingerprintExceptionEvent({
-        area: "pdf-viewer",
-        entries: [wrapper, { type: "AbortError" }],
-      }),
-    );
-  });
-
-  test("strips query strings and fragments before taking the basename", () => {
-    const fingerprint = fingerprintExceptionEvent({
-      entries: [
-        {
-          type: "TypeError",
-          stacktrace: {
-            frames: [
+describe("stable exception identity", () => {
+  test("fingerprints survive line insertion and arbitrary chunk renames", () => {
+    assertProperty(
+      "fingerprints survive line insertion and arbitrary chunk renames",
+      fc.property(
+        fc.nat(),
+        fc.nat().map((value) => value + 1),
+        fc.string(),
+        (line, insertedLines, chunk) => {
+          const before = {
+            ...fixture,
+            entries: [
               {
-                filename:
-                  "https://my.stll.app/assets/matter-view-D3kfQx9a.js?token=phx_9f3b2c&email=jana.novakova@example.com#L4",
-                in_app: true,
+                type: "TypeError",
+                stacktrace: {
+                  frames: [
+                    {
+                      filename: "https://my.stll.app/assets/chat-a.js",
+                      lineno: line,
+                      colno: 51,
+                    },
+                  ],
+                },
               },
             ],
-          },
+          };
+          const after = {
+            ...fixture,
+            entries: [
+              {
+                type: "TypeError",
+                stacktrace: {
+                  frames: [
+                    {
+                      filename: `https://my.stll.app/assets/chat-runtime-registry-${chunk}.js`,
+                      lineno: line + insertedLines,
+                      colno: 7,
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          expect(before.entries).not.toEqual(after.entries);
+          expect(fingerprintExceptionEvent(before)).toBe(
+            fingerprintExceptionEvent(after),
+          );
         },
-      ],
-    });
-    expect(fingerprint).toBe("TypeError||matter-view.js|");
-    expect(fingerprint).not.toContain("?");
-    expect(fingerprint).not.toContain("@");
+      ),
+    );
   });
 
-  test("caps the frame identities at the crash-site end of the stack", () => {
-    const deepStack = [
-      ...Array.from({ length: 8 }, (_, index) => ({
-        filename: "https://my.stll.app/assets/root-BOq2mF3k.js",
-        function: `frame${index}`,
-        in_app: true,
-      })),
-      ...matterViewFrames,
+  test("reporter wrappers preserve the full causal class sequence", () => {
+    expect(
+      fingerprintExceptionEvent({
+        ...fixture,
+        entries: [{ type: "ClientTelemetryError" }, ...fixture.entries],
+      }),
+    ).not.toBe(fingerprintExceptionEvent(fixture));
+  });
+
+  test("distinct owners, paths and typed response outcomes remain distinct", () => {
+    const identities = [
+      fingerprintExceptionEvent(fixture),
+      fingerprintExceptionEvent({ ...fixture, key: "chatRuntime:reconnect" }),
+      fingerprintExceptionEvent({ ...fixture, key: "documentRuntime:send" }),
+      fingerprintExceptionEvent({
+        ...fixture,
+        http: { status: 402, code: "usage_limit_exceeded" },
+      }),
+      fingerprintExceptionEvent({
+        ...fixture,
+        http: { status: 402, code: "billing_unavailable" },
+      }),
     ];
-    expect(
-      fingerprintExceptionEvent({
-        entries: [{ type: "TypeError", stacktrace: { frames: deepStack } }],
-      }),
-    ).toBe("TypeError||root.js;root.js;matter-view.js|");
+    expect(new Set(identities).size).toBe(identities.length);
   });
 
-  test("frameless and entryless events still yield a stable class-level identity", () => {
-    expect(fingerprintExceptionEvent({ entries: [] })).toBe("UnknownError|||");
+  test("frameless failures retain their declared path", () => {
     expect(
       fingerprintExceptionEvent({
-        entries: [{ type: "UnhandledRejection" }],
+        entries: [],
+        key: "worker:decode",
+        scopeIdentity: fingerprintExceptionScope({
+          type: "handler",
+          handlerId: "worker.decode",
+        }),
       }),
-    ).toBe("UnhandledRejection|||");
+    ).not.toBe(
+      fingerprintExceptionEvent({
+        entries: [],
+        key: "worker:encode",
+        scopeIdentity: fingerprintExceptionScope({
+          type: "handler",
+          handlerId: "worker.encode",
+        }),
+      }),
+    );
+  });
+
+  test("only bounded source owner/path slugs enter sanitized events", () => {
+    expect(isExceptionFingerprintKey("chatRuntime:send")).toBe(true);
+    for (const key of [
+      undefined,
+      "",
+      "chatRuntime",
+      "owner:jana@example.com",
+      "owner:private text",
+      `owner:${"a".repeat(512)}`,
+    ]) {
+      expect(isExceptionFingerprintKey(key)).toBe(false);
+    }
   });
 });
 
-test("fingerprint is stable across content-hashed chunk renames", () => {
-  const input = (filename: string) => ({
+class ClassifiedError extends Error {
+  readonly reason: "decode" | "encode";
+  constructor(reason: "decode" | "encode") {
+    super("Private text");
+    this.name = "ClassifiedError";
+    this.reason = reason;
+  }
+}
+declareFingerprintFields(ClassifiedError, ["reason"]);
+
+test("registered finite reasons split identities through reporter wrappers", () => {
+  const decode = new ClassifiedError("decode");
+  const encode = new ClassifiedError("encode");
+  const wrapped = new Error("Private wrapper", { cause: decode });
+  expect(capturedExceptionIdentity(wrapped).types).toEqual([
+    "Error",
+    "ClassifiedError",
+  ]);
+  const identify = (error: unknown) => {
+    const { types, fields } = capturedExceptionIdentity(error);
+    return fingerprintExceptionEvent({
+      ...fixture,
+      entries: types.map((type) => ({ type })),
+      fields,
+    });
+  };
+  expect(identify(decode)).not.toBe(identify(encode));
+  expect(identify(wrapped)).not.toBe(identify(decode));
+});
+
+test("throwing error accessors cannot interrupt capture identity", () => {
+  const error = new Error("Private text");
+  Object.defineProperty(error, "cause", {
+    get: () => {
+      throw new TypeError("unreadable cause");
+    },
+  });
+  expect(capturedExceptionIdentity(error)).toEqual({
+    types: ["Error"],
+    fields: {},
+    status: "read_failed",
+  });
+});
+
+test("route owner keys preserve distinct templates without resolved identifiers", () => {
+  const keys = [
+    "/law/$country/cases/$slug",
+    "/law-country/cases/$slug",
+    "/law/$country/cases/slug",
+  ].map(routeExceptionFingerprintKey);
+  expect(new Set(keys).size).toBe(keys.length);
+  expect(keys.every(isExceptionFingerprintKey)).toBe(true);
+});
+
+const automaticKey = ({
+  owner,
+  hash,
+  line,
+  message,
+}: {
+  owner: string;
+  hash: string;
+  line: number;
+  message: string;
+}) => {
+  const input = {
+    firstPartyOrigin: "https://app.example",
+    message,
     entries: [
       {
-        type: "TypeError",
         stacktrace: {
-          frames: [{ filename, function: "renderMatter", in_app: true }],
+          frames: [
+            {
+              in_app: true,
+              filename: `https://app.example/assets/${owner}-${hash}.js?token=private`,
+              lineno: line,
+              colno: line,
+            },
+          ],
         },
       },
     ],
-  });
-  const a = fingerprintExceptionEvent(
-    input("https://my.stll.app/assets/matter-view-D3kfQx9a.js"),
-  );
-  const b = fingerprintExceptionEvent(
-    input("https://my.stll.app/assets/matter-view-Bx91kQwe.js"),
-  );
-  // Different content hashes must not split the issue; the fixture differs
-  // before the equivalence is asserted.
-  expect("matter-view-D3kfQx9a.js").not.toBe("matter-view-Bx91kQwe.js");
-  expect(a).toBe(b);
-  const c = fingerprintExceptionEvent(
-    input("https://my.stll.app/assets/other-view-D3kfQx9a.js"),
-  );
-  expect(a).not.toBe(c);
-});
+  };
+  return automaticExceptionKey(input);
+};
 
-test("an API error carries its response identity as a trailing component", () => {
-  const entries = [
-    {
-      type: "ApiError",
-      stacktrace: { frames: [matterViewFrames[1]] },
-    },
-  ];
-  const withoutHttp = fingerprintExceptionEvent({ entries });
-  expect(withoutHttp).toBe("ApiError||matter-view.js|");
-  expect(fingerprintExceptionEvent({ entries, http: { status: 404 } })).toBe(
-    `${withoutHttp}|404`,
-  );
-  expect(
-    fingerprintExceptionEvent({
-      entries,
-      http: { status: 402, code: "usage_limit_exceeded" },
+test("automatic exception paths survive rebuilds and data substitutions", () => {
+  assertProperty(
+    "automatic exception paths survive rebuilds and data substitutions",
+    fc.property(fc.uuid(), fc.uuid(), fc.nat(), (beforeId, afterId, shift) => {
+      const before = {
+        owner: "chat-runtime",
+        hash: "D3kfQx9a",
+        line: 10,
+        message: `Failed to decode "private before" for ${beforeId} at 42`,
+      };
+      const after = {
+        ...before,
+        hash: "Ck2pW7dm",
+        line: 11 + shift,
+        message: `Failed to decode "private after" for ${afterId} at 765`,
+      };
+      expect(before).not.toEqual(after);
+      expect(automaticKey(before)).toBe(automaticKey(after));
+      expect(automaticKey(before)).not.toContain("private");
+      expect(automaticKey(before)).not.toContain(beforeId);
     }),
-  ).toBe(`${withoutHttp}|402:usage_limit_exceeded`);
-  // Outcomes group separately; the same outcome groups together.
-  expect(
-    fingerprintExceptionEvent({ entries, http: { status: 503 } }),
-  ).not.toBe(fingerprintExceptionEvent({ entries, http: { status: 404 } }));
-});
-
-test("hash-shaped suffixes outside first-party assets remain identity", () => {
-  const fingerprint = (filename: string) =>
-    fingerprintExceptionEvent({
-      entries: [
-        {
-          type: "TypeError",
-          stacktrace: {
-            frames: [
-              {
-                filename,
-                // PostHog's parser reports ordinary external URLs as true,
-                // so this flag cannot grant the first-party build contract.
-                in_app: true,
-              },
-            ],
-          },
-        },
-      ],
-    });
-
-  expect(fingerprint("https://cdn.example/document-12345678.js")).toBe(
-    "TypeError||document-12345678.js|",
-  );
-  expect(fingerprint("https://my.stll.app/vendor/document-12345678.js")).toBe(
-    "TypeError||document-12345678.js|",
   );
 });
 
-test("data-derived symbols and deployed positions never enter identity", () => {
-  const fingerprint = ({
-    colno,
-    lineno,
-    symbol,
-  }: {
-    colno: number;
-    lineno: number;
-    symbol: string;
-  }) => {
-    const frame = {
-      filename: "https://my.stll.app/assets/matter-view-A1b2C3d4.js",
-      function: symbol,
-      in_app: true,
-      lineno,
-      colno,
-    };
+test("automatic exceptions distinguish crash owners and stable message shapes", () => {
+  const input = {
+    owner: "chat-runtime",
+    hash: "D3kfQx9a",
+    line: 10,
+    message: "Cannot read property of undefined",
+  };
+  expect(automaticKey(input)).not.toBe(
+    automaticKey({ ...input, owner: "document-panel" }),
+  );
+  expect(automaticKey(input)).not.toBe(
+    automaticKey({ ...input, message: "Cannot convert object to primitive" }),
+  );
+});
+
+test("distinct declared scopes split the same cause and owner", () => {
+  const scopes = [
+    { type: "request", method: "GET", routeTemplate: "/v1/views/:viewId" },
+    { type: "request", method: "PATCH", routeTemplate: "/v1/views/:viewId" },
+    { type: "request", method: "GET", routeTemplate: "/v1/entities/:entityId" },
+    { type: "handler", handlerId: "settings.members.invite" },
+    { type: "handler", handlerId: "settings.members.remove" },
+  ] as const;
+  assertProperty(
+    "distinct declared scopes split the same cause and owner",
+    fc.property(
+      fc
+        .tuple(fc.constantFrom(...scopes), fc.constantFrom(...scopes))
+        .filter(
+          ([left, right]) => JSON.stringify(left) !== JSON.stringify(right),
+        ),
+      ([left, right]) => {
+        const leftIdentity = fingerprintExceptionEvent({
+          ...fixture,
+          scopeIdentity: fingerprintExceptionScope(left),
+        });
+        const rightIdentity = fingerprintExceptionEvent({
+          ...fixture,
+          scopeIdentity: fingerprintExceptionScope(right),
+        });
+        expect(leftIdentity).not.toBe(rightIdentity);
+      },
+    ),
+  );
+});
+
+test("every bounded causal class position participates in identity", () => {
+  const chain = Array.from(
+    { length: MAX_EXCEPTION_CAUSE_DEPTH },
+    () => "Error",
+  );
+  assertProperty(
+    "every bounded causal class position participates in identity",
+    fc.property(
+      fc.constantFrom(...chain.keys()),
+      fc.boolean(),
+      (position, changeScope) => {
+        const changed = chain.map((type, index) => ({
+          type: index === position && !changeScope ? "TypeError" : type,
+        }));
+        expect(
+          fingerprintExceptionEvent({
+            ...fixture,
+            entries: chain.map((type) => ({ type })),
+          }),
+        ).not.toBe(
+          fingerprintExceptionEvent({
+            ...fixture,
+            entries: changed,
+            scopeIdentity: changeScope
+              ? fingerprintExceptionScope({
+                  type: "handler",
+                  handlerId: "different.owner",
+                })
+              : fixture.scopeIdentity,
+          }),
+        );
+      },
+    ),
+  );
+});
+
+test("wrapped native cause classes remain distinct without messages or positions", () => {
+  const identify = (error: Error) => {
+    const { types, fields } = capturedExceptionIdentity(error);
     return fingerprintExceptionEvent({
-      entries: [
-        {
-          type: "TypeError",
-          stacktrace: { frames: [frame] },
-        },
-      ],
+      ...fixture,
+      entries: types.map((type) => ({ type })),
+      fields,
     });
   };
+  expect(
+    identify(
+      new Error("private wrapper", { cause: new TypeError("private detail") }),
+    ),
+  ).not.toBe(
+    identify(
+      new Error("private wrapper", {
+        cause: new ReferenceError("private detail"),
+      }),
+    ),
+  );
+});
 
-  const dataDerived = fingerprint({
-    colno: 7,
-    lineno: 1,
-    symbol: "jana_novakova",
+test("captured causal class sequences terminate at repeated error objects", () => {
+  const outer = new TypeError("private outer");
+  const inner = new ReferenceError("private inner", { cause: outer });
+  outer.cause = inner;
+  expect(capturedExceptionIdentity(outer).types).toEqual([
+    "TypeError",
+    "ReferenceError",
+  ]);
+});
+
+test("declared reasons remain distinct at every repeated causal class position", () => {
+  assertProperty(
+    "declared reasons remain distinct at every repeated causal class position",
+    fc.property(fc.boolean(), (changeOuter) => {
+      const identity = (
+        outerReason: "decode" | "encode",
+        innerReason: "decode" | "encode",
+      ) => {
+        const outer = new ClassifiedError(outerReason);
+        outer.cause = new ClassifiedError(innerReason);
+        const { types, fields } = capturedExceptionIdentity(outer);
+        return fingerprintExceptionEvent({
+          ...fixture,
+          entries: types.map((type) => ({ type })),
+          fields: sanitizeFingerprintFields(fields),
+        });
+      };
+      expect(identity("decode", "decode")).not.toBe(
+        identity(
+          changeOuter ? "encode" : "decode",
+          changeOuter ? "decode" : "encode",
+        ),
+      );
+    }),
+  );
+});
+
+// Keep the previous normalization as a bounded parity oracle for message shapes.
+const originalAutomaticMessageHash = (message: string): string => {
+  const normalized = message
+    .slice(0, 8192)
+    .replace(
+      /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|“[^”]*”|‘[^’]*’|«[^»]*»/gu,
+      "<value>",
+    )
+    .replace(/https?:\/\/\S+|[^\s@]+@[^\s@]+\.[^\s@]+/gu, "<value>")
+    .replace(/\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/giu, "<id>")
+    .replace(/\b[0-9a-f]{16,}\b|\b[0-9A-HJKMNP-TV-Z]{26}\b/giu, "<id>")
+    .replace(/\b[A-Za-z_-]*\d[A-Za-z0-9_-]*\b/gu, "<id>")
+    .replace(/\d+(?:\.\d+)?/gu, "<number>")
+    .replace(/\s+/gu, " ")
+    .trim();
+  let hash = 14_695_981_039_346_656_037n;
+  for (const character of normalized) {
+    hash = BigInt.asUintN(
+      64,
+      hash * 1_099_511_628_211n + BigInt(character.codePointAt(0) ?? 0),
+    );
+  }
+  return hash.toString(16);
+};
+
+test("linear message redaction preserves existing quote and email fingerprints", () => {
+  const fragments = Array.from(
+    "\"'`“”‘’«»\\\n\r\u2028\u2029a@a.bhttps://x.test/_- ",
+  );
+  const messages = fc.oneof(
+    fc.string(),
+    fc.array(fc.constantFrom(...fragments)).map((parts) => parts.join("")),
+    fc.constantFrom(
+      'unmatched "before\\"after',
+      '"escaped\\"value" and “unicode\nvalue”',
+      '"backslash\\\nline" and ‘other’ «more»',
+      "prefix+name@example.test@next.invalid end",
+      "a@b@c.example xhttps://host.test p@https://host.test",
+    ),
+  );
+  assertProperty(
+    "linear message redaction preserves existing quote and email fingerprints",
+    fc.property(messages, (message) => {
+      expect(
+        automaticExceptionKey({
+          entries: [],
+          message,
+          firstPartyOrigin: "https://app.example",
+        }),
+      ).toBe(`browser:frameless.${originalAutomaticMessageHash(message)}`);
+    }),
+  );
+});
+
+test("unreadable fingerprint metadata preserves browser cause identity", () => {
+  const { proxy, revoke } = Proxy.revocable(["reason"], {});
+  revoke();
+  class MetadataError extends Error {
+    override readonly name = "MetadataError";
+    static readonly stellaExceptionFingerprintFields = proxy;
+  }
+  const error = new ClassifiedError("decode");
+  error.cause = new MetadataError("private metadata sentinel");
+  const identity = capturedExceptionIdentity(error);
+  expect(identity.status).toBe("read_failed");
+  expect(identity.types).toEqual(["ClassifiedError", "MetadataError"]);
+  expect(identity.fields).toEqual({
+    "cause0.ClassifiedError.reason": "decode",
   });
-  const renamedAndShifted = fingerprint({
-    colno: 18_733,
-    lineno: 42,
-    symbol: "renderMatter2",
+  expect(JSON.stringify(identity)).not.toContain("private metadata sentinel");
+});
+
+test("fresh hostile prototype chains cannot consume unbounded browser identity work", () => {
+  let reads = 0;
+  const handler: ProxyHandler<object> = {
+    getPrototypeOf: () => {
+      reads += 1;
+      // Bound the known-bad instanceof traversal so the regression fails promptly.
+      if (reads > 64) {
+        throw new TypeError("prototype traversal exceeded the regression fuse");
+      }
+      return new Proxy({}, handler);
+    },
+  };
+  const outer = new ClassifiedError("decode");
+  outer.cause = new Proxy({}, handler);
+  expect(capturedExceptionIdentity(outer)).toEqual({
+    types: ["ClassifiedError"],
+    fields: { "cause0.ClassifiedError.reason": "decode" },
+    status: "read_failed",
   });
-  expect(dataDerived).toBe(renamedAndShifted);
-  expect(dataDerived).toBe("TypeError||matter-view.js|");
+  expect(reads).toBeLessThanOrEqual(17);
 });

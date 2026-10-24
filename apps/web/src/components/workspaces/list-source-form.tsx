@@ -47,7 +47,7 @@ export const ListSourceForm = ({
   const format = useFormatter();
   const queryClient = useQueryClient();
   const filesView = useQueryView(useQuery(workspaceFilesOptions(workspaceId)));
-  useQueryViewError(filesView);
+  useQueryViewError(filesView, "ListSourceForm:query");
   const files = filesView.type === "items" ? filesView.items : [];
   const schema = v.object({
     sourceEntityId: v.pipe(
@@ -113,7 +113,10 @@ export const ListSourceForm = ({
       onClose();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ListSourceForm:failure",
+        scope: { type: "handler", handlerId: "ListSourceForm:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

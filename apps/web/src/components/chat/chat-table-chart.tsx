@@ -108,7 +108,10 @@ const ChartableTable = ({
       });
     });
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ChartableTable:showChart",
+        scope: { type: "handler", handlerId: "chat.table-chart.show-chart" },
+      });
       setPresentation({ status: "unavailable" });
       return;
     }

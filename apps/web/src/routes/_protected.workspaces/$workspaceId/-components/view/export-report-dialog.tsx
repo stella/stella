@@ -60,6 +60,62 @@ import {
 } from "./report-export-tracking";
 import type { ReportExportDeliveryMode } from "./report-export-tracking";
 
+const ERROR_CAPTURE = {
+  submit: {
+    fingerprintKey: "ExportReportDialogBody.submitRequest:failure",
+    scope: {
+      type: "handler",
+      handlerId: "ExportReportDialogBody.submitRequest:failure",
+    },
+  },
+  submitted: {
+    fingerprintKey: "ExportReportDialogBody.submitRequest:failure-2",
+    scope: {
+      type: "handler",
+      handlerId: "ExportReportDialogBody.submitRequest:failure-2",
+    },
+  },
+  customize: {
+    fingerprintKey: "ExportReportDialogBody.handleCustomize:failure",
+    scope: {
+      type: "handler",
+      handlerId: "ExportReportDialogBody.handleCustomize:failure",
+    },
+  },
+  customizeResponse: {
+    fingerprintKey: "ExportReportDialogBody.handleCustomize:failure-2",
+    scope: {
+      type: "handler",
+      handlerId: "ExportReportDialogBody.handleCustomize:failure-2",
+    },
+  },
+  navigate: {
+    fingerprintKey: "ExportReportDialogBody.handleCustomize:failure-3",
+    scope: {
+      type: "handler",
+      handlerId: "ExportReportDialogBody.handleCustomize:failure-3",
+    },
+  },
+} as const;
+
+const reportExportCaptureOptions = (request: ReportExportRequest) =>
+  ({
+    submit: {
+      ...ERROR_CAPTURE.submit,
+      scope: {
+        type: "handler",
+        handlerId: `report-export.submit.${request.mode}.${request.format ?? "docx"}`,
+      },
+    },
+    started: {
+      ...ERROR_CAPTURE.submitted,
+      scope: {
+        type: "handler",
+        handlerId: `report-export.started.${request.mode}.${request.format ?? "docx"}`,
+      },
+    },
+  }) as const;
+
 /**
  * "Export report…" for a table view. The toolbar button opens a small dialog
  * (report template + delivery choice). On submit the export is enqueued and the
@@ -107,7 +163,12 @@ export const ExportReportControl = ({
       .track({ exportId, mode, requestedBy, workspaceId });
     queryClient
       .invalidateQueries({ queryKey: reportExportsKeys.all(workspaceId) })
-      .catch((error: unknown) => analytics.captureError(error));
+      .catch((error: unknown) =>
+        analytics.captureError(error, {
+          fingerprintKey: "ExportReportControl.handleStarted:failure",
+          scope: { type: "handler", handlerId: `report-export.track.${mode}` },
+        }),
+      );
     onOpenChange(false);
   };
 
@@ -251,6 +312,7 @@ const ExportReportDialogBody = ({
   })();
 
   const submitRequest = async (request: ReportExportRequest) => {
+    const capture = reportExportCaptureOptions(request);
     const owner = storageOwner();
     setSubmission({ type: "submitting" });
     const result = await Result.tryPromise(async () => {
@@ -268,7 +330,7 @@ const ExportReportDialogBody = ({
     setSubmission({ type: "ready" });
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, capture.submit);
       notifyUserError(result.error, t("workspaces.views.reportExport.failed"), {
         description: t("common.unexpectedError"),
       });
@@ -276,7 +338,7 @@ const ExportReportDialogBody = ({
     }
     if (result.value.status === "error") {
       const error = toAPIError(result.value.error);
-      analytics.captureError(error);
+      analytics.captureError(error, capture.started);
       if (actionAdmissionOutcome(error)) {
         // Keep the refused request: fallback must change only its AI option.
         setSubmission({ type: "refused", request, error });
@@ -351,12 +413,15 @@ const ExportReportDialogBody = ({
     setCustomizing(false);
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, ERROR_CAPTURE.customize);
       notifyUserError(result.error, t("common.unexpectedError"));
       return;
     }
     if (result.value.status === "error") {
-      analytics.captureError(toAPIError(result.value.error));
+      analytics.captureError(
+        toAPIError(result.value.error),
+        ERROR_CAPTURE.customizeResponse,
+      );
       notifyUserError(
         toAPIError(result.value.error),
         t("common.unexpectedError"),
@@ -388,7 +453,7 @@ const ExportReportDialogBody = ({
       async () => await navigate({ to: "/knowledge/templates" }),
     );
     if (Result.isError(navigation)) {
-      analytics.captureError(navigation.error);
+      analytics.captureError(navigation.error, ERROR_CAPTURE.navigate);
     }
   };
 

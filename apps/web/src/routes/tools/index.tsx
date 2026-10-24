@@ -44,7 +44,13 @@ function PublicToolsIndexRoute() {
 
   const onKindChange = (nextKind: ToolsKindFilter) => {
     navigate({ search: { kind: nextKind } }).catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "PublicToolsIndexRoute.onKindChange:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PublicToolsIndexRoute.onKindChange:failure",
+        },
+      });
     });
   };
 

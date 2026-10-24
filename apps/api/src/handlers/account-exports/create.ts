@@ -12,6 +12,7 @@ import {
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 
 const ACCOUNT_EXPORT_ENQUEUE_FAILED = failureSink({
   event: "account_export.enqueue_failed",
@@ -35,6 +36,7 @@ const requestPersonalDataExport = createSafeSessionHandler(
     if (Result.isError(queued)) {
       observeFailure(queued.error, {
         sink: ACCOUNT_EXPORT_ENQUEUE_FAILED,
+        scope: requireRequestExceptionScope(request),
         ctx: { jobId: row.id },
         request,
       });

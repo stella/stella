@@ -47,6 +47,7 @@ const context = (
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   request: new Request("https://example.test/lists"),
+  route: "/lists",
   set: { headers: {} },
 });
 

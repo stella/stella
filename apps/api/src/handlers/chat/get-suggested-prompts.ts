@@ -23,6 +23,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -317,10 +318,13 @@ const getSuggestedPrompts = createSafeRootHandler(
           } catch (error) {
             aiAnalytics.captureError(error);
             if (isUnanticipatedAIFailure(error)) {
-              captureError(error, {
-                threadId: checked.threadId,
-                feature: "chat.suggested_prompts",
-              });
+              captureError(
+                error,
+                handlerErrorContext("chat.suggestPrompts", {
+                  threadId: checked.threadId,
+                  feature: "chat.suggested_prompts",
+                }),
+              );
             }
             return Result.ok<SuggestedPromptsResult>({ prompts: [] });
           }

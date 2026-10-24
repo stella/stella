@@ -10,7 +10,7 @@ import { Temporal } from "@stll/time";
 import { contactExtractionUploads } from "@/api/db/schema";
 import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
 import { resolveCaching } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -21,6 +21,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import {
   headObject,
@@ -404,7 +405,11 @@ const extractProcuracao = createSafeRootHandler(
       );
     }
 
-    getS3().delete(key).catch(captureError);
+    getS3()
+      .delete(key)
+      .catch(
+        createErrorCapture(handlerErrorContext("extractProcuracao.rejection")),
+      );
 
     return extractionResult;
   },

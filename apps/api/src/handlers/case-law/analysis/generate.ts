@@ -65,6 +65,7 @@ import {
   redactedProviderDiagnostic,
 } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   createDetachedModelActionStarter,
   createModelActionAdmitter,
@@ -436,10 +437,13 @@ const handleGenerationFailure = async ({
   // are recorded by the analytics callbacks and told to the reader; only
   // an unanticipated shape is an exception worth capturing.
   if (isUnanticipatedAIFailure(error)) {
-    captureError(error, {
-      source: "case-law-analysis",
-      decisionId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("analysis.handleGenerationFailure", {
+        source: "case-law-analysis",
+        decisionId,
+      }),
+    );
   }
   aiAnalytics.captureError(error);
   const failure = analysisFailureRecord({
@@ -498,7 +502,10 @@ const recordFailedRun = async ({
           [recorded.error, released.error],
           "The failed run's record could not be written nor its sentinel released",
         ),
-    { source: "case-law-analysis-failure-record", decisionId },
+    handlerErrorContext("analysis.recordFailedRun", {
+      source: "case-law-analysis-failure-record",
+      decisionId,
+    }),
   );
 };
 

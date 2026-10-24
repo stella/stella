@@ -21,6 +21,25 @@ const limits = { requestBytes: 8, responseBytes: 512, pageSize: 3 };
 const bytes = new TextEncoder();
 
 describe("tenant route classification", () => {
+  test("returns registered templates without retaining resolved path values", () => {
+    const app = new Elysia().get("/items/:id", () => "ok", tenantHooks);
+    const classify = createTenantActionClassifier({
+      routes: app.routes,
+      staticRoutes: app.router.static,
+      strictPath: app.config.strictPath,
+      aot: app.config.aot,
+    });
+    expect(
+      classify(new Request("https://example.test/items/private-first")),
+    ).toEqual({ type: "tenant", routeTemplate: "/items/:id" });
+    expect(
+      classify(new Request("https://example.test/items/private-second")),
+    ).toEqual({ type: "tenant", routeTemplate: "/items/:id" });
+    expect(
+      classify(new Request("https://example.test/private-missing")),
+    ).toEqual({ type: "unmatched", routeTemplate: "unmatched" });
+  });
+
   for (const aot of [true, false]) {
     for (const strictPath of [true, false]) {
       test(`matches framework dispatch without running handlers (aot=${aot}, strict=${strictPath})`, async () => {
@@ -72,7 +91,7 @@ describe("tenant route classification", () => {
         for (const [method, path] of cases) {
           const request = new Request(`http://localhost${path}`, { method });
           const before = dispatched;
-          const decision = classify(request);
+          const decision = classify(request).type === "tenant";
           expect(dispatched).toBe(before);
           const response = await app.handle(request);
           expect(decision).toBe(
@@ -80,13 +99,15 @@ describe("tenant route classification", () => {
           );
         }
         // AOT's static ALL route precedes dynamic GET; dynamic dispatch reverses it.
-        expect(classify(new Request("http://localhost/fixed"))).toBe(!aot);
+        expect(
+          classify(new Request("http://localhost/fixed")).type === "tenant",
+        ).toBe(!aot);
         for (const upgrade of ["websocket", "WebSocket"]) {
           const request = new Request("http://localhost/value", {
             headers: { upgrade },
           });
           const response = await app.handle(request);
-          expect(classify(request)).toBe(
+          expect(classify(request).type === "tenant").toBe(
             response.status === 200 && (await response.text()) === "tenant",
           );
         }
@@ -115,7 +136,7 @@ describe("tenant route classification", () => {
           }
           const request = new Request(`http://localhost${path}`, { headers });
           const response = await app.handle(request);
-          expect(classify(request)).toBe(
+          expect(classify(request).type === "tenant").toBe(
             response.status === 200 && (await response.text()) === "tenant",
           );
         }
@@ -149,7 +170,7 @@ describe("tenant route classification", () => {
             reverse,
             path,
             method,
-            classified: classify(request),
+            classified: classify(request).type === "tenant",
           }).toEqual({
             reverse,
             path,

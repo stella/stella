@@ -12,7 +12,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -32,6 +32,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -694,7 +695,9 @@ const entityCreateTree = createSafeHandler(
     }
 
     flushEntitySearchRepairs(writeResult.indexedDirectoryIds).catch(
-      captureError,
+      createErrorCapture(
+        handlerErrorContext("entityCreateTree.flushEntitySearchRepairs"),
+      ),
     );
 
     return Result.ok({

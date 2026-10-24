@@ -739,7 +739,7 @@ const PlaybookEditorForm = ({
   );
   const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
   const documentTypesDataView = useQueryView(documentTypesDataQuery);
-  useQueryViewError(documentTypesDataView);
+  useQueryViewError(documentTypesDataView, "PlaybookEditorForm:query");
   const documentTypesData =
     documentTypesDataView.type === "items"
       ? documentTypesDataView.items

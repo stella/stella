@@ -347,6 +347,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
   ]),
+  fixtureRuleOverride("require-fingerprint-fields.fixture.ts", [
+    "require-fingerprint-fields/require-fingerprint-fields",
+  ]),
   fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
     "no-raw-mcp-error-result/no-raw-mcp-error-result",
   ]),
@@ -1532,6 +1535,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-error-output.ts",
     "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
+    "./.oxlint-plugins/require-fingerprint-fields.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
@@ -4896,6 +4900,7 @@ const config = defineConfig({
       ],
       rules: {
         "failure-sink-handle/failure-sink-handle": "error",
+        "require-fingerprint-fields/require-fingerprint-fields": "error",
       },
     },
     {

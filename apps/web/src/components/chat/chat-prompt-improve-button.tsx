@@ -103,7 +103,13 @@ export const ChatPromptImproveButton = ({
     setIsPending(false);
 
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ChatPromptImproveButton.improvePrompt:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ChatPromptImproveButton.improvePrompt:failure",
+        },
+      });
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
     }

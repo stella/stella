@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { declareFingerprintFields } from "@stll/errors";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
@@ -63,7 +64,11 @@ export const currentActionCostIdentity = (
 class ActionCallObserverError extends TaggedError("ActionCallObserverError")<{
   message: string;
   reason: "organization_mismatch";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export type ActionCallObserver = (kind: string) => void;
 

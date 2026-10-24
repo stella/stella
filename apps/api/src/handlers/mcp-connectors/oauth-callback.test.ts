@@ -98,6 +98,8 @@ const callbackContext = (
   },
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    request: scopedRequest(),
+    route: "/v1/mcp/oauth/callback",
     query: { code: "auth-code", state: "state-token" },
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(
       async (operation: (tx: unknown) => unknown) => {
@@ -364,6 +366,7 @@ const failingLookupContext = (
   request: Request = scopedRequest(),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    route: "/v1/mcp/oauth/callback",
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () => Result.err(error)),

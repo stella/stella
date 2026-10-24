@@ -86,7 +86,7 @@ export const AnswerRevisionHistoryContent = ({
     enabled,
   });
   const view = useQueryView(query);
-  useQueryViewError(view);
+  useQueryViewError(view, "AnswerRevisionHistory:query");
   const writeBlocked = !(
     writeState.status === "idle" ||
     (writeState.status === "awaiting-revision" &&
@@ -113,7 +113,13 @@ export const AnswerRevisionHistoryContent = ({
       await refreshAfterRestore(saved.value.revision);
       return;
     }
-    getAnalytics().captureError(saved.error);
+    getAnalytics().captureError(saved.error, {
+      fingerprintKey: "AnswerRevisionHistory.restore:failure",
+      scope: {
+        type: "handler",
+        handlerId: "AnswerRevisionHistory.restore:failure",
+      },
+    });
     if (APIError.is(saved.error) && saved.error.status === 409) {
       setWriteState({ status: "stale" });
       const refresh = await Result.tryPromise({
@@ -121,7 +127,13 @@ export const AnswerRevisionHistoryContent = ({
         catch: (error) => error,
       });
       if (Result.isError(refresh)) {
-        getAnalytics().captureError(refresh.error);
+        getAnalytics().captureError(refresh.error, {
+          fingerprintKey: "AnswerRevisionHistory.refreshStale:failure",
+          scope: {
+            type: "handler",
+            handlerId: "AnswerRevisionHistory.refreshStale:failure",
+          },
+        });
       }
       return;
     }
@@ -140,7 +152,13 @@ export const AnswerRevisionHistoryContent = ({
       history.isError ? Result.err(history.error) : Result.ok(history),
     );
     if (Result.isError(refreshed)) {
-      getAnalytics().captureError(refreshed.error);
+      getAnalytics().captureError(refreshed.error, {
+        fingerprintKey: "AnswerRevisionHistory.refreshAfterRestore:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnswerRevisionHistory.refreshAfterRestore:failure",
+        },
+      });
       setWriteState({ status: "refresh-error", revision: restoredRevision });
       return;
     }

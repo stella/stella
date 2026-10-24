@@ -63,7 +63,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
   const entityCountView = useQueryView(entityCountQuery);
-  useQueryViewError(entityCountView);
+  useQueryViewError(entityCountView, "useCommandActions:query");
   const entityCount =
     entityCountView.type === "items" ? entityCountView.items : undefined;
   const workflowQuery = useQuery({
@@ -71,7 +71,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
   const workflowView = useQueryView(workflowQuery);
-  useQueryViewError(workflowView);
+  useQueryViewError(workflowView, "useCommandActions:query-2");
   const workflow =
     workflowView.type === "items" ? workflowView.items : undefined;
   const canCreateTask =

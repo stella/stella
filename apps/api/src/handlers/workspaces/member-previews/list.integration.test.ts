@@ -93,6 +93,8 @@ const listPreviewsAs = async ({
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
       query: { workspaceIds },
+      request: new Request("https://api.test/v1/workspaces/member-previews"),
+      route: "/v1/workspaces/member-previews",
     }),
   );
   return asTestRaw<WorkspaceMemberPreviewResponse>(result).previews;

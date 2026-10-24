@@ -900,7 +900,7 @@ const CreateContactDialog = ({
   const schema = createContactSchema(t("common.required"));
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
   const mcpCatalogView = useQueryView(mcpCatalogQuery);
-  useQueryViewError(mcpCatalogView);
+  useQueryViewError(mcpCatalogView, "CreateContactDialog:query");
   const mcpCatalog =
     mcpCatalogView.type === "items" && mcpCatalogView.refetchError === undefined
       ? mcpCatalogView.items
@@ -1011,7 +1011,13 @@ const CreateContactDialog = ({
         type: "success",
       });
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "CreateContactDialog.handleAresLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "CreateContactDialog.handleAresLookup:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsAresLoading(false);

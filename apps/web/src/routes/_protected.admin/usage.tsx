@@ -37,7 +37,14 @@ export const Route = createFileRoute("/_protected/admin/usage")({
         context.queryClient,
         usagePoliciesOptions,
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "admin.usage.loader:failure",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/_protected/admin/usage",
+            },
+          });
         },
       );
     }

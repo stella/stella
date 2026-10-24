@@ -208,7 +208,7 @@ const usePropertyFacetCounts = ({
     enabled,
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "usePropertyFacetCounts:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   return data;

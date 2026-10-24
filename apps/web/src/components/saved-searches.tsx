@@ -122,8 +122,14 @@ export const SavedSearches = ({
     setDialog({ type: "closed" });
     await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
   };
-  const onMutationError = (error: Error) => {
-    analytics.captureError(error);
+  const onMutationError = (
+    error: Error,
+    operation: "create" | "rename" | "delete",
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey: "SavedSearches.onMutationError:failure",
+      scope: { type: "handler", handlerId: `saved-search.${operation}` },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
@@ -145,7 +151,7 @@ export const SavedSearches = ({
       );
     },
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "create"),
   });
 
   const renameMutation = useMutation({
@@ -160,14 +166,14 @@ export const SavedSearches = ({
         await api["saved-searches"]({ savedSearchId }).patch({ name }),
       ),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "rename"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (savedSearchId: SavedSearch["id"]) =>
       unwrapEden(await api["saved-searches"]({ savedSearchId }).delete()),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "delete"),
   });
 
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
@@ -184,7 +190,10 @@ export const SavedSearches = ({
     if (!showList || !savedSearchesError) {
       return;
     }
-    analytics.captureError(savedSearchesError);
+    analytics.captureError(savedSearchesError, {
+      fingerprintKey: "SavedSearches:savedSearchesError",
+      scope: { type: "handler", handlerId: "SavedSearches:savedSearchesError" },
+    });
   }, [analytics, savedSearchesError, showList]);
   const isSaving = createMutation.isPending || renameMutation.isPending;
   const isMutatingSavedSearch = isSaving || deleteMutation.isPending;

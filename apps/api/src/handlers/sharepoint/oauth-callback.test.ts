@@ -62,6 +62,7 @@ const failingLookupContext = (
   request: Request = scopedRequest(),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    route: "/v1/sharepoint/oauth/callback",
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: queuedSafeDb([error]),

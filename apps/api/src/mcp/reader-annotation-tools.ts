@@ -145,7 +145,13 @@ const resolveTargetForAgent = async ({
     async () => await resolve({ targetId, targetType }),
   );
   if (Result.isError(access)) {
-    return { status: "refused", result: internalFailureResult(access.error) };
+    return {
+      status: "refused",
+      result: internalFailureResult(
+        access.error,
+        "mcp.resolveTargetForAgent.access_error",
+      ),
+    };
   }
   switch (access.value.status) {
     case "available":
@@ -279,7 +285,10 @@ const handleListTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListTool.listed_error",
+    );
   }
 
   // One entry per mark, as the reader shows it: the rows of a passage over
@@ -436,7 +445,10 @@ const handleCreateTool: TypedMcpToolHandler<
   }
   const blocks = await Result.tryPromise(target.readBlocks);
   if (Result.isError(blocks)) {
-    return internalFailureResult(blocks.error);
+    return internalFailureResult(
+      blocks.error,
+      "mcp.handleCreateTool.blocks_error",
+    );
   }
   if (blocks.value.length === 0) {
     return structuredErrorResult({
@@ -499,7 +511,10 @@ const handleCreateTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.handleCreateTool.created_error",
+    );
   }
 
   return toolDataResult(
@@ -584,7 +599,10 @@ const handleUpdateTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleUpdateTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(UPDATE_READER_ANNOTATION_PROJECTION, {
@@ -636,7 +654,10 @@ const handleDeleteTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {

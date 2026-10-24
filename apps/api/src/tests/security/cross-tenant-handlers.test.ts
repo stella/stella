@@ -169,6 +169,7 @@ import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -3333,7 +3334,7 @@ const runHandler = async <TContext>(
 
   try {
     return await handler(
-      asTestRaw<TContext>({
+      asTestRaw<TContext & SafeHandlerLogContext>({
         ...context,
         ...requestShape,
       }),

@@ -473,7 +473,10 @@ export const useI18nStore = create<State & Actions>()(
           });
           // The UI stays in the previous language; tell the user the switch
           // did not happen. The toast renders in that previous language.
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "loadMessages:failure",
+            scope: { type: "handler", handlerId: "loadMessages:failure" },
+          });
           notifyUserError(error, getTranslator()("common.languageLoadFailed"));
           return;
         }

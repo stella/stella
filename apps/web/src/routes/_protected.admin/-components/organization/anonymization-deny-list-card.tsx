@@ -292,6 +292,10 @@ export const AnonymizationDenyListCard = () => {
   // rows are upserted (keyed on lowercased canonical). Callers
   // therefore submit the full target list, not a delta.
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "AnonymizationDenyListCard.updateMutation.useSettingsMutation",
+    },
     mutationFn: async ({ entries }: UpdateBlacklistVars) =>
       unwrapEden(
         await api["organization-settings"]["anonymization-blacklist"].put({
@@ -334,7 +338,13 @@ export const AnonymizationDenyListCard = () => {
       catch: (error) => error,
     });
     if (Result.isError(saved)) {
-      getAnalytics().captureError(saved.error);
+      getAnalytics().captureError(saved.error, {
+        fingerprintKey: "AnonymizationDenyListCard.submitTerm:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationDenyListCard.submitTerm:failure",
+        },
+      });
       notifyUserError(saved.error, t("errors.actionFailed"));
       return;
     }

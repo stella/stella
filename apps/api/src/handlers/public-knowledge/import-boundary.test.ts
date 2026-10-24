@@ -82,6 +82,8 @@ const allowedExternal = new Set([
   "@stll/api-contract",
   "@stll/collation",
   "@stll/docx-utils",
+  // Pure error classifications do not expose storage or data access.
+  "@stll/errors/fingerprint-fields",
   "@stll/folio-core",
   "@stll/folio-core/server",
   "@stll/template-conditions",

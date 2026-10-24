@@ -117,3 +117,62 @@ describe("createStellaEdenClient", () => {
     expect(String(response.data?.createdAt)).toBe(timestamp);
   });
 });
+
+test("scoped observers retain declared methods and parameter names across concurrent requests", async () => {
+  const app = new Elysia()
+    .get("/files/:fileId", () => "read")
+    .post("/files/:fileId", () => "write");
+  const seen: unknown[] = [];
+  const transportSymbols: symbol[][] = [];
+  const client = createStellaEdenClient<typeof app>("https://api.example", {
+    fetcher: testFetcher(async (_input, init) => {
+      transportSymbols.push(Object.getOwnPropertySymbols(init ?? {}));
+      await Promise.resolve();
+      return jsonResponse();
+    }),
+    onScopedResponse: async ({ response, scope }) => {
+      seen.push(scope);
+      expect(response.status).toBe(200);
+      await Promise.resolve();
+    },
+  });
+  await Promise.all([
+    client.files({ fileId: "first-private-id" }).get(),
+    client.files({ fileId: "second-private-id" }).post(),
+  ]);
+  expect(seen).toContainEqual({
+    type: "request",
+    method: "GET",
+    routeTemplate: "/files/:fileId",
+  });
+  expect(seen).toContainEqual({
+    type: "request",
+    method: "POST",
+    routeTemplate: "/files/:fileId",
+  });
+  expect(seen).toHaveLength(2);
+  expect(JSON.stringify(seen)).not.toContain("private-id");
+  expect(transportSymbols).toEqual([[], []]);
+});
+
+test("scoped clients resolve the current default fetch at request time", async () => {
+  const previousFetch = globalThis.fetch;
+  const observed: string[] = [];
+  const client = createStellaEdenClient<typeof testApi>("https://api.example", {
+    onScopedResponse: ({ scope }) => {
+      observed.push(scope.routeTemplate);
+    },
+  });
+  let calls = 0;
+  globalThis.fetch = testFetcher(async () => {
+    calls += 1;
+    return jsonResponse();
+  });
+  try {
+    await client.v1.health.get();
+    expect(calls).toBe(1);
+    expect(observed).toEqual(["/v1/health"]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});

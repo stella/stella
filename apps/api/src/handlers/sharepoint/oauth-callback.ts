@@ -22,6 +22,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -122,6 +123,7 @@ export const createSharepointOAuthCallback = (
           redirect({
             status: "error",
             reason: oauthCallbackFailureReason(error, {
+              scope: requireRequestExceptionScope(request),
               operation: "sharepoint_oauth_callback",
               organizationId: session.activeOrganizationId,
               request,

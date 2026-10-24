@@ -25,7 +25,7 @@ import {
 } from "@/api/handlers/contacts/contact-import-schema";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { dateOfBirthToColumns } from "@/api/handlers/contacts/person-details";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -35,6 +35,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -373,7 +374,11 @@ const importContacts = createSafeRootHandler(
       result.status === "created" ? [result.contactId] : [],
     );
     if (createdContactIds.length > 0) {
-      flushContactSearchRepairs(createdContactIds).catch(captureError);
+      flushContactSearchRepairs(createdContactIds).catch(
+        createErrorCapture(
+          handlerErrorContext("importContacts.flushContactSearchRepairs"),
+        ),
+      );
     }
 
     return Result.ok({

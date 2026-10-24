@@ -54,6 +54,10 @@ export const OrganizationTimeZoneCard = () => {
   );
 
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "OrganizationTimeZoneCard.mutation.useSettingsMutation",
+    },
     mutationFn: async (timeZone: string | null) =>
       unwrapEden(await api["organization-settings"].post({ timeZone })),
     invalidate: organizationSettingsKeys.all,

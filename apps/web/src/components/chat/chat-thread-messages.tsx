@@ -913,7 +913,10 @@ const downloadDataAttachment = ({
 }: DownloadDataAttachmentOptions): void => {
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
-    getAnalytics().captureError(decoded.error);
+    getAnalytics().captureError(decoded.error, {
+      fingerprintKey: "downloadDataAttachment:failure",
+      scope: { type: "handler", handlerId: "downloadDataAttachment:failure" },
+    });
     notifyUserError(decoded.error, errorTitle);
     return;
   }
@@ -1623,6 +1626,13 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
         area: "chat-unknown-activity",
         message: "A chat activity has no registered renderer",
       }),
+      {
+        fingerprintKey: "UnknownChatActivity:ClientTelemetryError",
+        scope: {
+          type: "handler",
+          handlerId: "UnknownChatActivity:ClientTelemetryError",
+        },
+      },
     );
   }, [activitySession, activityType, analytics]);
   return null;

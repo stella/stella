@@ -48,6 +48,7 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
 import { loadFolioCollabSnapshot } from "@/api/lib/folio-collab-rooms";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -405,7 +406,13 @@ const checkpointFolioCollabRoomHandler = async function* (
       }),
     );
     if (Result.isError(cleanup)) {
-      captureError(cleanup.error, { roomId, storageKey: checkpointKey });
+      captureError(
+        cleanup.error,
+        handlerErrorContext("entities.discardCheckpoint.cleanup_error", {
+          roomId,
+          storageKey: checkpointKey,
+        }),
+      );
     }
     const settlement = await settleObjectCleanupIntentsAfterWriter({
       intentIds: [cleanupIntentId],
@@ -416,10 +423,13 @@ const checkpointFolioCollabRoomHandler = async function* (
       safeDb,
     });
     if (Result.isError(settlement)) {
-      captureError(settlement.error, {
-        roomId,
-        storageKey: checkpointKey,
-      });
+      captureError(
+        settlement.error,
+        handlerErrorContext("entities.discardCheckpoint.settlement_error", {
+          roomId,
+          storageKey: checkpointKey,
+        }),
+      );
     }
   };
   const written = await writeFolioCollabCheckpointObject({

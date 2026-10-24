@@ -1,3 +1,4 @@
+// parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
 // parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
@@ -28,7 +29,11 @@ import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
-import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
+import {
+  declareFailureClass,
+  declareFingerprintFields,
+  FetchBoundaryError,
+} from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 import {
@@ -277,7 +282,11 @@ export class UsageLimitExceededError extends TaggedError(
   required: number;
   available: number;
   reason: UsageLimitExceededReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export class HealthCheckError extends TaggedError("HealthCheckError")<{
   message: string;
@@ -532,7 +541,11 @@ export class SandboxError extends TaggedError("SandboxError")<{
    */
   logs?: readonly string[];
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** Integration-layer errors: AI failures, parse failures, external I/O. */
 export class WorkflowIntegrationError extends TaggedError(
@@ -723,7 +736,11 @@ export class SubprocessError extends TaggedError("SubprocessError")<{
   exitCode: number | null;
   termination: SubprocessTermination | null;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 export type ExtractionWorkerTermination = {
   reason: SubprocessTerminationReason;
@@ -772,7 +789,11 @@ export class ExtractionWorkerError extends TaggedError(
   termination: ExtractionWorkerTermination | null;
   /** Parser error class recovered from worker stderr; null for termination. */
   workerErrorClass: string | null;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 /**
  * A scheduler job exceeded its per-job execution ceiling. The task promise

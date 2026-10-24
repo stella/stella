@@ -38,6 +38,7 @@ import {
   getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
@@ -215,7 +216,15 @@ export const answerRequestError = ({
   // violation shares the VALIDATION code but is the handler's own fault, so
   // it stays captured along with every other code.
   if (captured) {
+    const scope = {
+      type: "request",
+      method: request.method,
+      routeTemplate: getRouteName(route),
+    } as const;
+    recordRequestExceptionScope(request, scope);
     captureObservedError(error, {
+      scope,
+      fingerprintKey: "observability.answerRequestError",
       request,
       context: {
         route: getRouteName(route),

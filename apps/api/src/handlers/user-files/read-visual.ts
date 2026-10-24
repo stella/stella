@@ -18,6 +18,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { storedUserFileKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -111,7 +112,12 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
         catch: (cause) => cause,
       });
       if (read.isErr()) {
-        captureError(read.error, { source: "read-user-file-visual" });
+        captureError(
+          read.error,
+          handlerErrorContext("userfiles.createReadUserFileVisual.read_error", {
+            source: "read-user-file-visual",
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 503,

@@ -17,6 +17,7 @@ import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -85,11 +86,11 @@ const createOrgContext = (
 
 // The exported `.handler` returns the *unwrapped* success payload on ok, or an
 // Elysia status response ({ code, ... }) on error — not a raw Result.
-type TestEndpoint<TContext> = {
+type TestEndpoint<TContext extends SafeHandlerLogContext> = {
   handler: (context: TContext) => Promise<unknown>;
 };
 
-const runHandler = async <TContext>(
+const runHandler = async <TContext extends SafeHandlerLogContext>(
   endpoint: TestEndpoint<TContext>,
   context: OrgContext,
   requestShape: Record<string, unknown>,

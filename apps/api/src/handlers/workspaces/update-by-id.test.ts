@@ -25,6 +25,7 @@ const createContext = ({
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     request: new Request("https://api.example.test/v1/workspaces/ws_test123"),
+    route: "/v1/workspaces/:workspaceId",
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
     },

@@ -188,7 +188,10 @@ const FeedbackReport = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "FeedbackReport:failure",
+        scope: { type: "handler", handlerId: "FeedbackReport:failure" },
+      });
       const rateLimited =
         APIError.is(error) && error.status === RATE_LIMITED_STATUS;
       notifyUserError(

@@ -27,6 +27,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -101,7 +102,7 @@ afterEach(async () => {
   setSystemTime();
 });
 
-const context = <TContext>(
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (input: TContext) => unknown,
   request: {
     body?: unknown;

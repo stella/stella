@@ -494,7 +494,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const [panelWidth, setPanelWidth] = useState(220);
   // The same per-browser size the inspector's readers step, so a size chosen
   // in either place holds in both.
-  const textScale = useWebReaderTextScale();
+  const textScale = useWebReaderTextScale("decision");
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.

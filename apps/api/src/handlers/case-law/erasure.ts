@@ -50,6 +50,7 @@ import {
   deleteRawKeys,
   RAW_KEY_OWNERSHIP,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 /** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
 const RAW_ERASE_TIMEOUT_MS = 60_000;
@@ -588,10 +589,16 @@ const eraseFencedDecision = async ({
       deleteCorpus,
     });
     if (corpusErasure.type === "incomplete") {
-      captureError(corpusErasure.error, {
-        decisionId,
-        step: "redactCaseLawDecision.deleteCorpusDocument",
-      });
+      captureError(
+        corpusErasure.error,
+        handlerErrorContext(
+          "caselaw.redactCaseLawDecision.corpusErasure_error",
+          {
+            decisionId,
+            step: "redactCaseLawDecision.deleteCorpusDocument",
+          },
+        ),
+      );
       await recordFailedRedactionAudit({
         decisionId,
         error: corpusErasure.error,
@@ -614,10 +621,13 @@ const eraseFencedDecision = async ({
     deleteCorpus,
   });
   for (const { error } of incomplete) {
-    captureError(error, {
-      decisionId,
-      step: "redactCaseLawDecision.deleteReservedCorpusUpload",
-    });
+    captureError(
+      error,
+      handlerErrorContext("caselaw.redactCaseLawDecision", {
+        decisionId,
+        step: "redactCaseLawDecision.deleteReservedCorpusUpload",
+      }),
+    );
   }
   const intentCleanup = await Result.tryPromise({
     try: async () =>
@@ -628,10 +638,13 @@ const eraseFencedDecision = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(intentCleanup)) {
-    captureError(intentCleanup.error, {
-      decisionId,
-      step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
-    });
+    captureError(
+      intentCleanup.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.intentCleanup_error", {
+        decisionId,
+        step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
+      }),
+    );
   }
 
   // The publisher's own payloads and files carry the same text as the
@@ -674,10 +687,13 @@ const eraseFencedDecision = async ({
     return { type: "swept", legacyRaw: rawSwept.value.legacy };
   })();
   if (rawErasure.type === "incomplete") {
-    captureError(rawErasure.error, {
-      decisionId,
-      step: "redactCaseLawDecision.sweepSourceRaw",
-    });
+    captureError(
+      rawErasure.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.rawErasure_error", {
+        decisionId,
+        step: "redactCaseLawDecision.sweepSourceRaw",
+      }),
+    );
     await recordFailedRedactionAudit({
       decisionId,
       error: rawErasure.error,

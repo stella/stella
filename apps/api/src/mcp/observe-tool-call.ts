@@ -5,6 +5,7 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -58,21 +59,26 @@ export const observeMcpToolCall = async ({
   ) {
     return await run();
   }
-  return await activeCall.run({ context, mode, toolName }, async () => {
-    const startedAt = performance.now();
-    let outcome: McpToolCallOutcome = "internal_error";
-    try {
-      const result = await run();
-      outcome = getMcpToolCallOutcome(result);
-      return result;
-    } finally {
-      logger.info("mcp.tool_call.completed", {
-        event: "mcp_tool_call",
-        tool: classifyMcpMetricToolName(toolName, mode),
-        mode,
-        outcome,
-        duration_ms: performance.now() - startedAt,
-      });
-    }
-  });
+  const tool = classifyMcpMetricToolName(toolName, mode);
+  return await withExceptionScope(
+    { type: "handler", handlerId: `mcp.tool.${mode}.${tool}` },
+    async () =>
+      await activeCall.run({ context, mode, toolName }, async () => {
+        const startedAt = performance.now();
+        let outcome: McpToolCallOutcome = "internal_error";
+        try {
+          const result = await run();
+          outcome = getMcpToolCallOutcome(result);
+          return result;
+        } finally {
+          logger.info("mcp.tool_call.completed", {
+            event: "mcp_tool_call",
+            tool,
+            mode,
+            outcome,
+            duration_ms: performance.now() - startedAt,
+          });
+        }
+      }),
+  );
 };

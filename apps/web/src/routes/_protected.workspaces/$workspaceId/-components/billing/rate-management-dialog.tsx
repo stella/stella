@@ -130,7 +130,10 @@ const RateTablesView = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure",
+        scope: { type: "handler", handlerId: "RateTablesView:failure" },
+      });
     },
   });
   const deleteTable = useMutation({
@@ -150,7 +153,10 @@ const RateTablesView = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure-2",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-2" },
+      });
     },
   });
   type UpdateRateTableVars = {
@@ -174,7 +180,10 @@ const RateTablesView = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure-3",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-3" },
+      });
     },
   });
 
@@ -483,7 +492,10 @@ const RateEntriesView = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateEntriesView:failure",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure" },
+      });
     },
   });
   const deleteEntry = useMutation({
@@ -507,7 +519,10 @@ const RateEntriesView = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateEntriesView:failure-2",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure-2" },
+      });
     },
   });
 
