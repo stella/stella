@@ -117,7 +117,7 @@ const KEY_REGRESSIONS = {
       }),
     ).not.toBe(original);
   },
-  skillSourceRateLimitBinding: async () => {
+  skillSourceBudget: async () => {
     const readKey = async (userId: string) =>
       await createSkillSourceRateLimitGenerator(async () =>
         toSafeId<"user">(userId),
@@ -154,7 +154,7 @@ const MCP_WIRING_FILES = [
   "server.ts",
   "handlers/mcp/routes.ts",
   "mcp/capability-tools.ts",
-  "handlers/skills/source-rate-limit.ts",
+  "handlers/skills/routes.ts",
   "mcp/gateway/external-tools.ts",
 ] as const;
 
@@ -162,7 +162,7 @@ const limiterCensus = (sources: readonly string[]) => {
   const actual = new Set<string>();
   for (const source of sources) {
     for (const match of source.matchAll(
-      /\b(createMcp\w*(?:RateLimitOptions|Limiter)|consume\w*RateLimit|skillSourceRateLimitBinding)\b/gu,
+      /\b(createMcp\w*(?:RateLimitOptions|Limiter)|consume\w*RateLimit|skillSourceBudget)\b/gu,
     )) {
       actual.add(v.parse(v.string(), match.at(1)));
     }
@@ -432,11 +432,11 @@ describe("application throttle keying census", () => {
       missing: [],
       uncovered: [],
     });
-    const server = readSource("server.ts");
-    expect(server).toMatch(
-      /\.use\(rateLimit\(createMcpTransportRateLimitOptions\(\)\)\)\s*\.use\(mcpRoute\)/u,
+    const mcpRoutes = readSource("handlers/mcp/routes.ts");
+    expect(mcpRoutes).toMatch(
+      /transportMiddleware: \[rateLimit\(createMcpTransportRateLimitOptions\(\)\)\]/u,
     );
-    expect(readSource("handlers/mcp/routes.ts")).toMatch(
+    expect(mcpRoutes).toMatch(
       /limitAuthenticationFailure:\s*createMcpAuthenticationFailureLimiter\(\)/u,
     );
     const transport = readSource("handlers/mcp/routes-core.ts");
