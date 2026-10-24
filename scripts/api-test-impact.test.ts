@@ -303,6 +303,7 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
     const cases = {
       star: 'new Bun.Glob("apps/*/src/**/*.ts").scanSync();',
       brace: 'new Bun.Glob("apps/{web,api}/src/**/*.ts").scanSync();',
+      starstar: 'new Bun.Glob("apps/**").scanSync();',
       root: 'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(import.meta.dir, "..", "..", ".."));',
       failed:
         'import "./missing"; import { readFileSync } from "node:fs"; readFileSync(target);',
@@ -317,6 +318,7 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       "src/failed.test.ts",
       "src/root.test.ts",
       "src/star.test.ts",
+      "src/starstar.test.ts",
     ]);
   });
 });

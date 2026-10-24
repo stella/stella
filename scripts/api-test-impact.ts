@@ -183,7 +183,7 @@ const textReach = (
       code,
     ) ||
     /process\s*\.\s*cwd\s*\(/u.test(code) ||
-    /apps\/(?:\*|\*\*|\{[^}/]+\})(?:\/|$)/u.test(code) ||
+    /apps\/(?:\*|\*\*|\{[^}/]+\})(?=\/|["'`]|$)/u.test(code) ||
     // A path assembled from segments (`path.join("apps", name)`) can name
     // any app.
     /["'`]apps["'`]/u.test(code)
