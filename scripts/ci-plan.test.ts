@@ -3085,8 +3085,8 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
         results: {},
         metadataCodeRun: state,
         outcomeScript: resultStep.run.replace(
-          "local poll_seconds=30 max_wait_seconds=5400",
-          "local poll_seconds=0 max_wait_seconds=5400",
+          "local poll_seconds=30 max_wait_seconds=2700",
+          "local poll_seconds=0 max_wait_seconds=2700",
         ),
       })),
     );
@@ -3102,14 +3102,14 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
       results: {},
       metadataCodeRun: "running",
       outcomeScript: resultStep.run.replace(
-        "local poll_seconds=30 max_wait_seconds=5400",
+        "local poll_seconds=30 max_wait_seconds=2700",
         "local poll_seconds=0 max_wait_seconds=0",
       ),
     })),
   );
   expect(timedOut.exitCode).toBe(1);
   expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
-    "code run still running after 90 min",
+    "timed out after 45 min waiting for a code run",
   );
 }, 20_000);
 

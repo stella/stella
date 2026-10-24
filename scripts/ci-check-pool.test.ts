@@ -10,6 +10,7 @@ import {
   blockingFailures,
   checkLogText,
   type CheckResult,
+  conditionHolds,
   continueOnErrorHolds,
   failedCheckAnnotation,
   type Launched,
@@ -586,6 +587,21 @@ test("every real pooled continue-on-error is decidable in both events", () => {
         ),
         pooled.name,
       ).toBe(false);
+    }
+  }
+});
+
+test("every real pooled condition is decidable in both events", () => {
+  // The pool decides `cancelled()` but no other status function, so a
+  // condition such as `success()` would fail the pool step at run time.
+  for (const job of CHECK_POOL_JOBS) {
+    for (const pooled of readCheckPool(job)) {
+      for (const event of ["pull_request", "merge_group"]) {
+        expect(
+          () => conditionHolds(pooled.condition, context(event, "")),
+          `${job}: ${pooled.name}`,
+        ).not.toThrow();
+      }
     }
   }
 });
