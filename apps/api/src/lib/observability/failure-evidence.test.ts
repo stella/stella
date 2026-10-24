@@ -121,6 +121,40 @@ describe("failure evidence walks the chain once", () => {
 });
 
 describe("failure evidence survives hostile values", () => {
+  test("constructor descriptor failures preserve the readable cause prefix", () => {
+    const hostile = Object.create(
+      new Proxy(Error.prototype, {
+        getOwnPropertyDescriptor: () => {
+          throw new TypeError("unreadable descriptor");
+        },
+      }),
+    );
+    const evidence = readEvidence(new Error("outer", { cause: hostile }));
+    expect(evidence.truncation).toBe("read_failed");
+    expect(evidence.nodes).toHaveLength(2);
+    expect(evidence.nodes[0]).toMatchObject({ kind: "error", tag: "Error" });
+  });
+
+  test("unreadable metadata indices preserve readable finite dimensions", () => {
+    class MetadataError extends Error {
+      readonly reason = "decode";
+      static readonly stellaExceptionFingerprintFields = new Proxy(
+        ["reason", "stage"],
+        {
+          get: (target, key, receiver): unknown => {
+            if (key === "1") {
+              throw new TypeError("unreadable metadata");
+            }
+            return Reflect.get(target, key, receiver);
+          },
+        },
+      );
+    }
+    const evidence = readEvidence(new MetadataError("private message"));
+    expect(evidence.truncation).toBe("read_failed");
+    expect(evidence.nodes[0]?.discriminators).toEqual({ reason: "decode" });
+  });
+
   test("a revoked Proxy reads as a failed read, not a throw", () => {
     const { proxy, revoke } = Proxy.revocable(new Error("x"), {});
     revoke();
@@ -439,6 +473,7 @@ describe("failure evidence snapshots typed fingerprint dimensions", () => {
     const error = new ExtractionWorkerError({
       message: "private",
       code: "worker_timeout",
+      workerErrorClass: null,
       exitCode: null,
       mimeType: "text/plain",
       sizeBytes: 10,

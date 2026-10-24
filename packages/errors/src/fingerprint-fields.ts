@@ -1,16 +1,23 @@
+import { Result } from "better-result";
+
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "./exception-cause-chain";
+
 // parser-output-unchanged: reads typed error dimensions for telemetry only; parsed values and rejection outcomes are unchanged.
+const FINGERPRINT_KEYS = ["reason", "phase", "stage", "termination"] as const;
+type FingerprintKey = (typeof FINGERPRINT_KEYS)[number];
+
 /** Fingerprint dimensions are finite domain values vouched for by their error owner. */
 type FingerprintField<TValue> = {
-  [
-    TKey in keyof TValue & ("reason" | "phase" | "stage" | "termination")
-  ]: NonNullable<TValue[TKey]> extends string
+  [TKey in keyof TValue & FingerprintKey]: NonNullable<
+    TValue[TKey]
+  > extends string
     ? string extends NonNullable<TValue[TKey]>
       ? never
       : TKey
     : NonNullable<TValue[TKey]> extends object
       ? `${TKey}.${FingerprintField<NonNullable<TValue[TKey]>>}`
       : never;
-}[keyof TValue & ("reason" | "phase" | "stage" | "termination")];
+}[keyof TValue & FingerprintKey];
 
 export type FingerprintFields<TInstance> =
   readonly FingerprintField<TInstance>[];
@@ -38,40 +45,110 @@ type ReadFingerprintFieldsOptions = {
   read: (value: object, key: string) => unknown;
 };
 
-/** The caller supplies its guarded, memoized reader so each property is read once. */
+// Match the bounded prototype readers; declared dimensions currently use at most
+// three fields and two path components. Cause depth also bounds nested dimensions.
+const MAX_FINGERPRINT_FIELDS = 16;
+const MAX_PROTOTYPE_DEPTH = 16;
+const MAX_FIELD_PATH_CHARS =
+  MAX_EXCEPTION_CAUSE_DEPTH * ("termination".length + 1) - 1;
+
+type FingerprintFieldsResult = {
+  fields: Readonly<Record<string, string>> | undefined;
+  status: "complete" | "read_failed";
+};
+
+/** Every structural read is guarded; property reads retain the caller's memoization. */
 export const readFingerprintFields = ({
   value,
   prototypes,
   read,
-}: ReadFingerprintFieldsOptions):
-  Readonly<Record<string, string>> | undefined => {
-  const fields = prototypes.flatMap((prototype) => {
-    const registered = declarations.get(prototype) ?? [];
-    if (!Object.hasOwn(prototype, "constructor")) {
-      return registered;
+}: ReadFingerprintFieldsOptions): FingerprintFieldsResult => {
+  let status: FingerprintFieldsResult["status"] = "complete";
+  const attempt = <T>(operation: () => T): T | undefined => {
+    const result = Result.try(() => ({ read: operation() }));
+    if (Result.isError(result)) {
+      status = "read_failed";
+      return undefined;
     }
-    const constructor = read(prototype, "constructor");
+    return result.value.read;
+  };
+  const fields = new Set<string>();
+  const collect = (metadata: unknown): void => {
+    if (!attempt(() => Array.isArray(metadata))) {
+      return;
+    }
+    // Array.isArray does not narrow through the guarded operation.
+    if (typeof metadata !== "object" || metadata === null) {
+      return;
+    }
+    const length = attempt(() => read(metadata, "length"));
+    if (
+      typeof length !== "number" ||
+      !Number.isSafeInteger(length) ||
+      length < 0
+    ) {
+      status = "read_failed";
+      return;
+    }
+    if (length > MAX_FINGERPRINT_FIELDS) {
+      status = "read_failed";
+    }
+    for (
+      let index = 0;
+      index < Math.min(length, MAX_FINGERPRINT_FIELDS);
+      index += 1
+    ) {
+      const field = attempt(() => read(metadata, String(index)));
+      if (typeof field !== "string") {
+        continue;
+      }
+      if (field.length > MAX_FIELD_PATH_CHARS) {
+        status = "read_failed";
+        continue;
+      }
+      const path = field.split(".");
+      if (path.length > MAX_EXCEPTION_CAUSE_DEPTH) {
+        status = "read_failed";
+        continue;
+      }
+      if (
+        path.every((key) =>
+          FINGERPRINT_KEYS.some((dimension) => dimension === key),
+        )
+      ) {
+        fields.add(field);
+      }
+    }
+  };
+  const prototypeCount = attempt(() => prototypes.length);
+  if (prototypeCount === undefined || prototypeCount > MAX_PROTOTYPE_DEPTH) {
+    status = "read_failed";
+  }
+  for (
+    let index = 0;
+    index < Math.min(prototypeCount ?? 0, MAX_PROTOTYPE_DEPTH);
+    index += 1
+  ) {
+    const prototype = attempt(() => prototypes[index]);
+    if (prototype === undefined) {
+      continue;
+    }
+    collect(declarations.get(prototype));
+    if (!attempt(() => Object.hasOwn(prototype, "constructor"))) {
+      continue;
+    }
+    const constructor = attempt(() => read(prototype, "constructor"));
     if (
       typeof constructor !== "function" ||
-      !Object.hasOwn(constructor, "stellaExceptionFingerprintFields")
+      !attempt(() =>
+        Object.hasOwn(constructor, "stellaExceptionFingerprintFields"),
+      )
     ) {
-      return registered;
+      continue;
     }
-    const metadata = read(constructor, "stellaExceptionFingerprintFields");
-    if (!Array.isArray(metadata)) {
-      return registered;
-    }
-    const staticFields = metadata.filter(
-      (field): field is string =>
-        typeof field === "string" &&
-        /^(?:reason|phase|stage|termination)(?:\.(?:reason|phase|stage|termination))*$/u.test(
-          field,
-        ),
+    collect(
+      attempt(() => read(constructor, "stellaExceptionFingerprintFields")),
     );
-    return [...registered, ...staticFields];
-  });
-  if (fields.length === 0) {
-    return undefined;
   }
   const result = new Map<string, string>();
   for (const field of fields) {
@@ -81,11 +158,15 @@ export const readFingerprintFields = ({
         current = undefined;
         break;
       }
-      current = read(current, key);
+      const object = current;
+      current = attempt(() => read(object, key));
     }
     if (typeof current === "string") {
       result.set(field, current);
     }
   }
-  return Object.fromEntries(result);
+  return {
+    fields: fields.size === 0 ? undefined : Object.fromEntries(result),
+    status,
+  };
 };

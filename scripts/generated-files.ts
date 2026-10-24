@@ -461,6 +461,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/build-visual-sandbox.ts",
       "apps/api/scripts/visual-sandbox-build-options.ts",
       "packages/api-contract/**",
+      "packages/errors/**",
       "bun.lock",
     ],
     write: ["bun", "--cwd=apps/api", "run", "build:visual-sandbox"],

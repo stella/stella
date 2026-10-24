@@ -666,3 +666,28 @@ describe("captureError owned fields", () => {
     });
   });
 });
+
+test("capture preserves finite dimensions when fingerprint metadata is unreadable", () => {
+  class MetadataError extends Error {
+    readonly reason = "decode";
+    static readonly stellaExceptionFingerprintFields = new Proxy(
+      ["reason", "stage"],
+      {
+        get: (target, key, receiver): unknown => {
+          if (key === "1") {
+            throw new TypeError("unreadable metadata");
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      },
+    );
+  }
+  const error = new MetadataError("private metadata sentinel");
+  captureError(error, handlerErrorContext("analytics.metadata"));
+  expect(captured).toHaveLength(1);
+  expect(readEvidence(error).truncation).toBe("read_failed");
+  expect(captured[0]?.properties["$exception_fingerprint"]).toContain("decode");
+  expect(JSON.stringify(captured[0]?.properties)).not.toContain(
+    "private metadata sentinel",
+  );
+});

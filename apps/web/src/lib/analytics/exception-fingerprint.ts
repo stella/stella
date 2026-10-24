@@ -9,7 +9,7 @@ import type { ExceptionScope } from "@stll/errors/exception-scope";
 import { exceptionScopeIdentity } from "@stll/errors/exception-scope";
 import { readFingerprintFields } from "@stll/errors/fingerprint-fields";
 
-import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
+import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 
 // Capture owners declare these keys in source. Engine-inferred symbols can
@@ -124,58 +124,85 @@ export const fingerprintExceptionEvent = ({
 /** Read classifications before stack redaction removes error objects and causes. */
 const MAX_PROTOTYPE_DEPTH = 16;
 
-export const capturedExceptionIdentity = (error: unknown) =>
-  Result.try(() => {
-    let current = error;
-    const seen = new Set<Error>();
-    const nodes: Parameters<typeof exceptionCauseFieldsIdentity>[0][number][] =
-      [];
-    const reads = new WeakMap<object, Map<string, unknown>>();
-    const read = (value: object, key: string): unknown => {
-      let cached = reads.get(value);
-      if (cached === undefined) {
-        cached = new Map();
-        reads.set(value, cached);
-      }
-      if (cached.has(key)) {
-        return cached.get(key);
-      }
-      const result: unknown = Reflect.get(value, key);
-      cached.set(key, result);
-      return result;
-    };
-    const types: string[] = [];
-    while (
-      current instanceof Error &&
-      !seen.has(current) &&
-      seen.size < MAX_EXCEPTION_CAUSE_DEPTH
-    ) {
-      seen.add(current);
-      const type = telemetryErrorType(current);
-      types.push(type);
-      const prototypes: object[] = [];
-      let prototype: unknown = Object.getPrototypeOf(current);
-      while (
-        typeof prototype === "object" &&
-        prototype !== null &&
-        prototypes.length < MAX_PROTOTYPE_DEPTH
-      ) {
-        prototypes.push(prototype);
-        prototype = Object.getPrototypeOf(prototype);
-      }
-      const declared = readFingerprintFields({
-        value: current,
-        prototypes,
-        read,
-      });
-      nodes.push({ type, fields: declared });
-      current = current.cause;
+export const capturedExceptionIdentity = (error: unknown) => {
+  let status: "complete" | "read_failed" = "complete";
+  const attempt = <T>(operation: () => T, fallback: T): T => {
+    const result = Result.try(() => ({ read: operation() }));
+    if (Result.isError(result)) {
+      status = "read_failed";
+      return fallback;
     }
-    return {
-      types: types.length > 0 ? types : [telemetryErrorType(error)],
-      fields: exceptionCauseFieldsIdentity(nodes),
-    };
-  }).unwrapOr({ types: ["UnknownError"], fields: {} });
+    return result.value.read;
+  };
+  let current = error;
+  const seen = new Set<object>();
+  const nodes: Parameters<typeof exceptionCauseFieldsIdentity>[0][number][] =
+    [];
+  const reads = new WeakMap<object, Map<string, unknown>>();
+  const read = (value: object, key: string): unknown => {
+    let cached = reads.get(value);
+    if (cached === undefined) {
+      cached = new Map();
+      reads.set(value, cached);
+    }
+    if (cached.has(key)) {
+      return cached.get(key);
+    }
+    const result: unknown = attempt(() => Reflect.get(value, key), undefined);
+    cached.set(key, result);
+    return result;
+  };
+  const types: string[] = [];
+  while (
+    typeof current === "object" &&
+    current !== null &&
+    !seen.has(current) &&
+    seen.size < MAX_EXCEPTION_CAUSE_DEPTH
+  ) {
+    const object = current;
+    seen.add(object);
+    const prototypes: object[] = [];
+    let prototype: unknown = attempt(() => Object.getPrototypeOf(object), null);
+    while (
+      typeof prototype === "object" &&
+      prototype !== null &&
+      prototypes.length < MAX_PROTOTYPE_DEPTH
+    ) {
+      const parent = prototype;
+      prototypes.push(parent);
+      prototype = attempt(() => Object.getPrototypeOf(parent), null);
+    }
+    if (prototype !== null) {
+      status = "read_failed";
+    }
+    if (!prototypes.includes(Error.prototype)) {
+      break;
+    }
+    const name = read(object, "name");
+    const type = normalizeTelemetryErrorTypeName(
+      typeof name === "string" ? name : "",
+    );
+    types.push(type);
+    const declared = readFingerprintFields({ value: object, prototypes, read });
+    if (declared.status === "read_failed") {
+      status = "read_failed";
+    }
+    nodes.push({ type, fields: declared.fields });
+    current = read(object, "cause");
+  }
+  return {
+    types:
+      types.length > 0
+        ? types
+        : [
+            status === "read_failed"
+              ? "UnknownError"
+              : normalizeTelemetryErrorTypeName(typeof error),
+          ],
+    fields: exceptionCauseFieldsIdentity(nodes),
+    status,
+  };
+};
 
 export const sanitizeFingerprintFields = (
   value: unknown,

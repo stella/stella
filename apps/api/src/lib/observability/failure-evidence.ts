@@ -570,11 +570,15 @@ const nodeKind = (isError: boolean, isTagged: boolean): EvidenceNodeKind => {
 
 const readNode = (state: ReadState, value: object): ReadNodeResult => {
   const prototypes = prototypeChain(state, value);
-  const fields = readFingerprintFields({
+  const declared = readFingerprintFields({
     value,
     prototypes,
     read: (object, key) => readKey(state, object, key),
   });
+  const { fields } = declared;
+  if (declared.status === "read_failed") {
+    state.failed = true;
+  }
   // Only declared application errors use a cached receiver. Native accessors
   // (DOMException, for example) require their original branded instance.
   if (fields !== undefined) {

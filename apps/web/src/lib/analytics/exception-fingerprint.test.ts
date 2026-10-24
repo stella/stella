@@ -177,8 +177,9 @@ test("throwing error accessors cannot interrupt capture identity", () => {
     },
   });
   expect(capturedExceptionIdentity(error)).toEqual({
-    types: ["UnknownError"],
+    types: ["Error"],
     fields: {},
+    status: "read_failed",
   });
 });
 
@@ -441,4 +442,44 @@ test("linear message redaction preserves existing quote and email fingerprints",
       ).toBe(`browser:frameless.${originalAutomaticMessageHash(message)}`);
     }),
   );
+});
+
+test("unreadable fingerprint metadata preserves browser cause identity", () => {
+  const { proxy, revoke } = Proxy.revocable(["reason"], {});
+  revoke();
+  class MetadataError extends Error {
+    override readonly name = "MetadataError";
+    static readonly stellaExceptionFingerprintFields = proxy;
+  }
+  const error = new ClassifiedError("decode");
+  error.cause = new MetadataError("private metadata sentinel");
+  const identity = capturedExceptionIdentity(error);
+  expect(identity.status).toBe("read_failed");
+  expect(identity.types).toEqual(["ClassifiedError", "MetadataError"]);
+  expect(identity.fields).toEqual({
+    "cause0.ClassifiedError.reason": "decode",
+  });
+  expect(JSON.stringify(identity)).not.toContain("private metadata sentinel");
+});
+
+test("fresh hostile prototype chains cannot consume unbounded browser identity work", () => {
+  let reads = 0;
+  const handler: ProxyHandler<object> = {
+    getPrototypeOf: () => {
+      reads += 1;
+      // Bound the known-bad instanceof traversal so the regression fails promptly.
+      if (reads > 64) {
+        throw new TypeError("prototype traversal exceeded the regression fuse");
+      }
+      return new Proxy({}, handler);
+    },
+  };
+  const outer = new ClassifiedError("decode");
+  outer.cause = new Proxy({}, handler);
+  expect(capturedExceptionIdentity(outer)).toEqual({
+    types: ["ClassifiedError"],
+    fields: { "cause0.ClassifiedError.reason": "decode" },
+    status: "read_failed",
+  });
+  expect(reads).toBeLessThanOrEqual(17);
 });

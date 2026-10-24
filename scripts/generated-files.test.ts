@@ -578,6 +578,20 @@ test("the route generator guard rejects missing script and direct pin", async ()
   }
 });
 
+test("visual sandbox regeneration follows its shared error metadata owner", () => {
+  for (const file of [
+    "packages/errors/src/fingerprint-fields.ts",
+    "packages/errors/src/exception-cause-chain.ts",
+    "apps/api/src/handlers/visual-sandbox/prepare.ts",
+    "apps/api/src/handlers/visual-sandbox/sanitize.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("visual-sandbox-bundle");
+  }
+});
+
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
   const requiredIds = [
     "capability-catalog",

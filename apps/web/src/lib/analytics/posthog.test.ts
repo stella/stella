@@ -1282,6 +1282,38 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
+  test("capture and sanitizer retain only the explicit failed-read diagnostic", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    class MetadataError extends Error {
+      override readonly name = "MetadataError";
+      static readonly stellaExceptionFingerprintFields = new Proxy(["reason"], {
+        get: () => {
+          throw new TypeError("unreadable metadata");
+        },
+      });
+    }
+    analytics.captureError(new MetadataError("private metadata sentinel"), {
+      fingerprintKey: "posthog:metadata",
+      scope: { type: "handler", handlerId: "posthog:metadata" },
+    });
+    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toMatchObject({
+      exception_error_types: ["MetadataError"],
+      exception_identity_status: "read_failed",
+    });
+    for (const status of ["read_failed", "private metadata sentinel"]) {
+      const sanitized = initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: { exception_identity_status: status },
+      });
+      expect(sanitized?.properties?.["exception_identity_status"]).toBe(
+        status === "read_failed" ? status : undefined,
+      );
+    }
+  });
+
   test("sanitizer keeps only slug-shaped area properties", () => {
     createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 

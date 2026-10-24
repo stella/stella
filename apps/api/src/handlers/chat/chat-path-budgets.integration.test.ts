@@ -410,6 +410,7 @@ const loadThreadPage = async (threadId: SafeId<"chatThread">) => {
       await getMessages.handler(
         asTestRaw<Parameters<typeof getMessages.handler>[0]>({
           ...readerContext(threadId),
+          route: "/v1/chat/threads/:threadId/messages",
           params: { threadId },
           query: {},
         }),
@@ -435,6 +436,7 @@ const loadOlderPage = async (
       await getOlderMessages.handler(
         asTestRaw<Parameters<typeof getOlderMessages.handler>[0]>({
           ...readerContext(threadId),
+          route: "/v1/chat/threads/:threadId/messages/older",
           params: { threadId },
           query: { before },
         }),

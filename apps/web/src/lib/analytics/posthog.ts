@@ -491,6 +491,9 @@ export const sanitizeExceptionEvent = (
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
+      ...(properties["exception_identity_status"] === "read_failed"
+        ? { exception_identity_status: "read_failed" }
+        : {}),
       ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
       ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
       ...(safeArea === undefined ? {} : { area: safeArea }),
@@ -813,6 +816,9 @@ const captureError: Analytics["captureError"] = (
       exception_scope: fingerprintExceptionScope(scope),
       exception_error_types: identity.types,
       exception_fields: identity.fields,
+      ...(identity.status === "read_failed"
+        ? { exception_identity_status: identity.status }
+        : {}),
       ...errorContextProperties(context),
       ...telemetryAreaProperty(error),
       ...apiErrorTelemetryProperties(error),
