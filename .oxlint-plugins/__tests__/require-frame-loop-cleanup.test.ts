@@ -368,13 +368,13 @@ test("effect ownership follows invoked cleanup helpers, not dormant closures", a
     "function stop() { clearInterval(id); } stop();",
   ];
   const results = await Promise.all([
-    ...dormant.map((body) =>
+    ...dormant.map(async (body) =>
       lintSingleRule(
         RULE,
         `useEffect(() => { const id = setInterval(tick, 10); return () => { ${body} }; }, []);`,
       ),
     ),
-    ...invoked.map((body) =>
+    ...invoked.map(async (body) =>
       lintSingleRule(
         RULE,
         `useEffect(() => { const id = setInterval(tick, 10); return () => { ${body} }; }, []);`,
