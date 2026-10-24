@@ -388,6 +388,7 @@
         "reading": "Olvasási nézet"
       },
       "notLocated": "{count, plural, one {# állítás nem található az eredetiben} other {# állítás nem található az eredetiben}}",
+      "pdfTextFailed": "A PDF szövegét nem sikerült beolvasni, ezért az állítások nincsenek megjelölve az oldalakon.",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 importtábla (XLSX)",
         "exporting": "Export előkészítése…",
         "isdoc": "ISDOC e-számla (ABRA Gen és mások)",
+        "ksefFa3": "KSeF e-számla FA(3) (XML)",
         "spreadsheets": "Táblázatok",
         "xlsx": "Számlák (XLSX)",
         "xlsxLines": "Számlatételek (XLSX)"
