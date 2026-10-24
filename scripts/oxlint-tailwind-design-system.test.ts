@@ -95,9 +95,27 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
   }
 });
 
-type WorkerHook = "slow-heartbeat" | "stop-heartbeat" | "throw-outside-main";
+type WorkerHook =
+  | "busy-load"
+  | "busy-request"
+  | "slow-heartbeat"
+  | "stop-heartbeat"
+  | "throw-outside-main";
 
-const runWorkerHook = async (hook: WorkerHook, heartbeatLimitMs: number) => {
+type WorkerHookOptions = {
+  delayMs?: number;
+  heartbeatLimitMs: number;
+  loadHeartbeatLimitMs?: number;
+};
+
+const runWorkerHook = async (
+  hook: WorkerHook,
+  {
+    delayMs = 11_000,
+    heartbeatLimitMs,
+    loadHeartbeatLimitMs = heartbeatLimitMs,
+  }: WorkerHookOptions,
+) => {
   const fixtureRoot = path.join(repositoryRoot, "node_modules/.cache");
   await mkdir(fixtureRoot, { recursive: true });
   const directory = await mkdtemp(
@@ -143,7 +161,9 @@ const runWorkerHook = async (hook: WorkerHook, heartbeatLimitMs: number) => {
           ...process.env,
           OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS:
             String(heartbeatLimitMs),
-          OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS: "11000",
+          OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS:
+            String(loadHeartbeatLimitMs),
+          OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS: String(delayMs),
           OXLINT_TAILWINDCSS_WORKER_TEST_HOOK: hook,
         },
       },
@@ -165,7 +185,9 @@ const runWorkerHook = async (hook: WorkerHook, heartbeatLimitMs: number) => {
 };
 
 test("a slow worker with a live heartbeat is allowed past the liveness bound", async () => {
-  const result = await runWorkerHook("slow-heartbeat", 6000);
+  const result = await runWorkerHook("slow-heartbeat", {
+    heartbeatLimitMs: 6000,
+  });
   expect(result.stderr).not.toContain("stopped answering");
   expect(result.elapsedMs).toBeGreaterThan(10_000);
   expect(result.exitCode).toBe(1);
@@ -175,7 +197,9 @@ test("a slow worker with a live heartbeat is allowed past the liveness bound", a
 }, 120_000);
 
 test("a worker with a stopped heartbeat fails promptly with its phase", async () => {
-  const result = await runWorkerHook("stop-heartbeat", 1000);
+  const result = await runWorkerHook("stop-heartbeat", {
+    heartbeatLimitMs: 1000,
+  });
   expect(result.elapsedMs).toBeLessThan(10_000);
   expect(result.exitCode).toBe(1);
   expect(result.diagnostics.map(({ message }) => message)).toEqual([
@@ -185,8 +209,54 @@ test("a worker with a stopped heartbeat fails promptly with its phase", async ()
   ]);
 }, 120_000);
 
+test("a synchronous design-system load uses the longer load heartbeat bound", async () => {
+  const result = await runWorkerHook("busy-load", {
+    delayMs: 4000,
+    heartbeatLimitMs: 1000,
+    loadHeartbeatLimitMs: 8000,
+  });
+  expect(result.stderr).not.toContain("stopped answering");
+  expect(result.elapsedMs).toBeGreaterThan(3000);
+  expect(result.exitCode).toBe(1);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    expect.stringContaining('"bg-red-5000" is not a valid Tailwind class'),
+  ]);
+}, 120_000);
+
+test("a synchronous design-system load fails at its load heartbeat bound", async () => {
+  const result = await runWorkerHook("busy-load", {
+    delayMs: 6000,
+    heartbeatLimitMs: 1000,
+    loadHeartbeatLimitMs: 2000,
+  });
+  expect(result.elapsedMs).toBeLessThan(5000);
+  expect(result.exitCode).toBe(1);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    expect.stringContaining(
+      "declarations worker stopped answering while compiling the design system",
+    ),
+  ]);
+  expect(result.diagnostics[0]?.message).toContain("app.css");
+}, 120_000);
+
+test("a synchronous request loop keeps its own heartbeat alive", async () => {
+  const result = await runWorkerHook("busy-request", {
+    delayMs: 4000,
+    heartbeatLimitMs: 1000,
+    loadHeartbeatLimitMs: 8000,
+  });
+  expect(result.stderr).not.toContain("stopped answering");
+  expect(result.elapsedMs).toBeGreaterThan(3000);
+  expect(result.exitCode).toBe(1);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    expect.stringContaining('"bg-red-5000" is not a valid Tailwind class'),
+  ]);
+}, 120_000);
+
 test("an exception outside worker main reports its cause immediately", async () => {
-  const result = await runWorkerHook("throw-outside-main", 10_000);
+  const result = await runWorkerHook("throw-outside-main", {
+    heartbeatLimitMs: 10_000,
+  });
   expect(result.elapsedMs).toBeLessThan(10_000);
   expect(result.exitCode).toBe(1);
   expect(result.diagnostics.map(({ message }) => message)).toEqual([
