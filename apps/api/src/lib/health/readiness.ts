@@ -218,3 +218,19 @@ export const runReadinessProbes = async (
 
 export const probeApiReadiness = async (): Promise<ReadinessOutcome> =>
   await runReadinessProbes(runtimeReadinessProbes);
+
+export const probeApiStartupReadiness = async ({
+  probeReadiness = probeApiReadiness,
+  probeSanctions,
+}: {
+  probeReadiness?: () => Promise<ReadinessOutcome>;
+  probeSanctions: () => "warming" | "terminal";
+}): Promise<ReadinessOutcome> => {
+  const readiness = await probeReadiness();
+  if (readiness.status === "not-ready") {
+    return readiness;
+  }
+  return probeSanctions() === "terminal"
+    ? { status: "ready" }
+    : { status: "not-ready", failed: [] };
+};

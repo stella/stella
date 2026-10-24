@@ -76,9 +76,25 @@ describe("startup probe", () => {
     expect(await response.json()).toMatchObject({ status: "starting" });
   });
 
+  test("stays closed while sanctions warm and opens after every list is terminal", async () => {
+    let sanctions: "warming" | "terminal" = "warming";
+    const route = createHealthRoute({
+      probeReadiness: async () => ({ status: "ready" }),
+      probeSanctionsStartup: () => sanctions,
+    });
+
+    expect((await route.handle(startedRequest())).status).toBe(503);
+    expect(
+      (await route.handle(new Request("http://localhost/live"))).status,
+    ).toBe(200);
+    sanctions = "terminal";
+    expect((await route.handle(startedRequest())).status).toBe(200);
+  });
+
   test("opens after one readiness success and reports build metadata", async () => {
     const route = createHealthRoute({
       probeReadiness: async () => ({ status: "ready" }),
+      probeSanctionsStartup: () => "terminal",
     });
 
     const response = await route.handle(startedRequest());
@@ -92,7 +108,10 @@ describe("startup probe", () => {
 
   test("stays open after a later readiness failure", async () => {
     let readiness: ReadinessOutcome = { status: "ready" };
-    const route = createHealthRoute({ probeReadiness: async () => readiness });
+    const route = createHealthRoute({
+      probeReadiness: async () => readiness,
+      probeSanctionsStartup: () => "terminal",
+    });
 
     expect((await route.handle(startedRequest())).status).toBe(200);
     readiness = { status: "not-ready", failed: ["redis"] };
@@ -109,12 +128,28 @@ describe("startup probe", () => {
         readinessCalls++;
         return { status: "ready" };
       },
+      probeSanctionsStartup: () => "terminal",
     });
 
     await route.handle(startedRequest());
     expect(readinessCalls).toBe(1);
     await route.handle(startedRequest());
     await route.handle(startedRequest());
+    expect(readinessCalls).toBe(1);
+  });
+
+  test("caches dependency probes while sanctions are still warming", async () => {
+    let readinessCalls = 0;
+    const route = createHealthRoute({
+      probeReadiness: async () => {
+        readinessCalls++;
+        return { status: "ready" };
+      },
+      probeSanctionsStartup: () => "warming",
+    });
+
+    expect((await route.handle(startedRequest())).status).toBe(503);
+    expect((await route.handle(startedRequest())).status).toBe(503);
     expect(readinessCalls).toBe(1);
   });
 });

@@ -15,6 +15,7 @@ import {
   createStartupGate,
   STARTUP_STATE,
 } from "@/api/lib/health/startup-gate";
+import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const BUILD_METADATA = {
@@ -27,6 +28,7 @@ const PROBE_CACHE_TTL_MS = 5000;
 
 type HealthRouteOptions = {
   probeReadiness?: () => Promise<ReadinessOutcome>;
+  probeSanctionsStartup?: () => "warming" | "terminal";
 };
 
 const readinessOutcome = async (
@@ -57,19 +59,14 @@ const readinessOutcome = async (
 
 export const createHealthRoute = ({
   probeReadiness = probeApiReadiness,
+  probeSanctionsStartup = () => sanctionsStartupWarmup.status().status,
 }: HealthRouteOptions = {}) => {
   const probeCache = createProbeCache(
     async () => await readinessOutcome(probeReadiness),
     { ttlMs: PROBE_CACHE_TTL_MS },
   );
   const startupGate = createStartupGate();
-  const readinessResponse = async () => {
-    const outcome = await probeCache.run();
-    if (outcome.ok) {
-      startupGate.markStarted();
-    }
-    return outcome;
-  };
+  const readinessResponse = async () => await probeCache.run();
   const livenessHandler = () => ({
     status: "ok" as const,
     ...BUILD_METADATA,
@@ -92,10 +89,11 @@ export const createHealthRoute = ({
       return { status: STARTUP_STATE.started, ...BUILD_METADATA };
     }
     const outcome = await readinessResponse();
-    if (!outcome.ok) {
+    if (!outcome.ok || probeSanctionsStartup() !== "terminal") {
       set.status = 503;
       return { status: STARTUP_STATE.starting, ...BUILD_METADATA };
     }
+    startupGate.markStarted();
     return { status: STARTUP_STATE.started, ...BUILD_METADATA };
   };
 

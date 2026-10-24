@@ -70,12 +70,32 @@ type WarmTarget = {
   edition: SanctionsActiveEdition;
   failures: number;
   retryAt: number;
+  terminal: boolean;
 };
+
+type SanctionsEditionWarmupState = "warming" | "retrying" | "terminal";
 
 type WarmFailure = {
   reason: SanctionsScreeningFailureCause;
   cause?: unknown;
 };
+
+type EditionWarmerState = {
+  db: SanctionsReadDb | null;
+  /** A pass will look at the targets again before it ends. */
+  active: boolean;
+  running: Promise<void> | null;
+  holdsMatcher: boolean;
+  terminalized: boolean;
+};
+
+const initialEditionWarmerState = (): EditionWarmerState => ({
+  db: null,
+  active: false,
+  running: null,
+  holdsMatcher: false,
+  terminalized: false,
+});
 
 const warmFailure = (
   outcome: MatcherWorkOutcome<Result<void, WarmFailure>>,
@@ -176,18 +196,11 @@ const createEditionWarmer = ({
 }: Required<PublicScreeningOptions>) => {
   const { now } = clock;
   const targets = new Map<SanctionsSource, WarmTarget>();
-  const state: {
-    db: SanctionsReadDb | null;
-    /** A pass will look at the targets again before it ends. */
-    active: boolean;
-    running: Promise<void> | null;
-    holdsMatcher: boolean;
-  } = { db: null, active: false, running: null, holdsMatcher: false };
+  const state = initialEditionWarmerState();
   const detached = createDetached((error) => {
     reportFailure({ stage: "public-warmup", reason: "operation", error });
   });
   const readEdition = createEditionReads({ loadEntries, clock });
-
   // The read runs outside any lease: loaded lists keep screening meanwhile.
   // Only the transfer and index hold the matcher.
   const warm = async (
@@ -257,7 +270,7 @@ const createEditionWarmer = ({
     outcome: MatcherWorkOutcome<Result<void, WarmFailure>>,
   ) => {
     // A newer edition replaced this one while it loaded; the next pass loads it.
-    if (targets.get(source) !== target) {
+    if (targets.get(source) !== target || target.terminal) {
       return;
     }
     const failure = warmFailure(outcome);
@@ -285,7 +298,9 @@ const createEditionWarmer = ({
   const pass = async () => {
     for (;;) {
       const instant = now();
-      const due = [...targets].find(([, target]) => target.retryAt <= instant);
+      const due = [...targets].find(
+        ([, target]) => !target.terminal && target.retryAt <= instant,
+      );
       if (due === undefined || state.db === null) {
         // In the same step as the last look: any later request starts a pass.
         state.active = false;
@@ -319,10 +334,28 @@ const createEditionWarmer = ({
       edition: SanctionsActiveEdition,
     ): "warming" | "load-failed" => {
       const target = targets.get(source);
-      return target?.edition.id === edition.id && target.retryAt > now()
+      return target?.edition.id === edition.id &&
+        (target.terminal || target.retryAt > now())
         ? "load-failed"
         : "warming";
     },
+    startupState: (source: SanctionsSource): SanctionsEditionWarmupState => {
+      const target = targets.get(source);
+      if (target === undefined) {
+        return "warming";
+      }
+      if (target.terminal) {
+        return "terminal";
+      }
+      return target.retryAt > now() ? "retrying" : "warming";
+    },
+    terminalize: () => {
+      state.terminalized = true;
+      for (const target of targets.values()) {
+        target.terminal = true;
+      }
+    },
+    terminalized: () => state.terminalized,
     /** Every pass started so far, including any that start as one ends. */
     settled: async () => {
       while (state.running !== null) {
@@ -342,8 +375,16 @@ const createEditionWarmer = ({
       const instant = now();
       let target = targets.get(source);
       if (target?.edition.id !== edition.id) {
-        target = { edition, failures: 0, retryAt: instant };
+        target = {
+          edition,
+          failures: 0,
+          retryAt: instant,
+          terminal: state.terminalized,
+        };
         targets.set(source, target);
+      }
+      if (target.terminal) {
+        return "load-failed";
       }
       if (target.retryAt > instant) {
         return "load-failed";
@@ -396,10 +437,10 @@ export const createPublicSanctionsScreening = ({
     // the build, including lists already loaded. Freshness still comes from
     // what is on file.
     if (warmer.holdsMatcher()) {
-      const warming = () =>
+      const unavailable = () =>
         Result.ok(
           unavailableSanctionsScreening({
-            reason: "warming",
+            reason: warmer.terminalized() ? "load-failed" : "warming",
             practiceJurisdictions: props.practiceJurisdictions,
             now: props.now,
           }),
@@ -407,7 +448,7 @@ export const createPublicSanctionsScreening = ({
       // A read the deadline gave up on still runs until it settles; at most
       // this many may, beyond that the answer comes without reading.
       if (bypassReads.count >= SANCTIONS_MATCHER_CONFIG.poolSizeMax) {
-        return warming();
+        return unavailable();
       }
       bypassReads.count += 1;
       const read = screenSanctionsSubject({
@@ -431,7 +472,7 @@ export const createPublicSanctionsScreening = ({
       const answered = await Promise.race([read, expired.promise]).finally(
         cancelDeadline,
       );
-      return answered === "expired" ? warming() : answered;
+      return answered === "expired" ? unavailable() : answered;
     }
     const result = await pool.run(
       async (session) =>
@@ -511,6 +552,8 @@ export const createPublicSanctionsScreening = ({
   };
   return Object.assign(screenPublic, {
     warmupSettled: warmer.settled,
+    warmupStartupState: warmer.startupState,
+    warmupTerminalize: warmer.terminalize,
     /** Test seam: ask for an edition the way a request does, synchronously. */
     warmupWant: warmer.want,
   });

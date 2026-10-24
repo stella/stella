@@ -169,6 +169,7 @@ import {
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import {
   clientTooOldError,
@@ -885,6 +886,9 @@ const startServer = async (): Promise<void> => {
     // well inside this window.
     idleTimeout: HTTP_IDLE_TIMEOUT_S,
   });
+
+  // The listener stays available for liveness while /started holds traffic.
+  sanctionsStartupWarmup.start();
 
   // From here the loop serves requests; boot work before this point delays
   // none, so it stays out of the stall signal.
