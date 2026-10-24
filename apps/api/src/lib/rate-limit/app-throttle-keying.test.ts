@@ -154,7 +154,7 @@ const MCP_WIRING_FILES = [
   "server.ts",
   "handlers/mcp/routes.ts",
   "mcp/capability-tools.ts",
-  "handlers/skills/routes.ts",
+  "handlers/skills/source-rate-limit.ts",
   "mcp/gateway/external-tools.ts",
 ] as const;
 
@@ -309,13 +309,11 @@ describe("application throttle keying census", () => {
 
   test("every direct API middleware policy labels its configured budget", () => {
     const sources = [
-      "server.ts",
+      "api-routes.ts",
+      "lib/rate-limit/dedicated-budgets.ts",
       "handlers/me/routes.ts",
       "handlers/hosted-usage-webhook/routes.ts",
-      "handlers/document-translations/routes.ts",
       "handlers/uploads/routes.ts",
-      "handlers/entities/routes.ts",
-      "handlers/style-sets/routes.ts",
       "lib/rate-limit/standard-api.ts",
       "lib/rate-limit/public-corpus-rate-limit-composition.ts",
       "lib/rate-limit/public-corpus-rate-limits.ts",
@@ -332,7 +330,7 @@ describe("application throttle keying census", () => {
         );
       }
     }
-    expect(policies).toBe(14);
+    expect(policies).toBe(13);
   });
 
   test("every owned auth path replaces the framework IP rule and matches the provider hook", () => {
@@ -462,8 +460,11 @@ describe("application throttle keying census", () => {
     expect(readSource("lib/auth.ts")).toMatch(
       /disableCookieCache: true, disableRefresh: true/u,
     );
-    expect(readSource("handlers/skills/routes.ts")).toMatch(
+    expect(readSource("handlers/skills/source-rate-limit.ts")).toMatch(
       /\.\.\.skillSourceRateLimitBinding,/u,
+    );
+    expect(readSource("handlers/skills/routes.ts")).toMatch(
+      /middleware: \[skillSourceBudget\]/u,
     );
     expect(readSource("mcp/gateway/external-tools.ts")).toMatch(
       /consumeMcpGatewayRateLimit\(\{\s*connectorSlug: resolved\.connectorSlug,\s*userId: context\.userId,/u,

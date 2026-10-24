@@ -131,9 +131,10 @@ describe("handler contexts require explicit collaborators", () => {
     expect(events).toEqual([event]);
   });
 
-  test("a workspace handler takes its recorder from the factory", async () => {
-    const direct = auditRecorderDouble();
-    const scoped = auditRecorderDouble();
+  test("a workspace handler records through its workspace caller's recorder", async () => {
+    // The workspace caller is built bound to the proven matter, so the
+    // handler uses that recorder as given and never rebuilds one.
+    const bound = auditRecorderDouble();
     const workspaceIds: (SafeId<"workspace"> | null | undefined)[] = [];
     const endpoint = createSafeHandler(
       {
@@ -143,23 +144,23 @@ describe("handler contexts require explicit collaborators", () => {
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* ({ recordAuditEvent }) {
-        expect(recordAuditEvent).toBe(scoped);
+        expect(recordAuditEvent).toBe(bound);
         return Result.ok({ recorded: true });
       },
     );
     const context = createTestHandlerContext<
       Parameters<typeof endpoint.handler>[0]
     >({
-      audit: direct,
+      audit: bound,
       createAuditRecorder: (opts) => {
         workspaceIds.push(opts?.workspaceId);
-        return scoped;
+        return auditRecorderDouble();
       },
       safeDb: NO_DB,
       scopedDb: NO_DB,
     });
     expect(await endpoint.handler(context)).toEqual({ recorded: true });
-    expect(workspaceIds).toHaveLength(1);
+    expect(workspaceIds).toEqual([]);
   });
 
   test("an explicit scoped factory receives its own events", async () => {

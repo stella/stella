@@ -194,6 +194,19 @@ const authorizeAgainstTestDb: SubmitPdfSigningSignatureDependencies["authorize"]
     });
   };
 
+/** The caller the route's token verification hands the handler. */
+const verifiedCaller = async (
+  credentials: Parameters<
+    SubmitPdfSigningSignatureDependencies["authorize"]
+  >[0],
+) => {
+  const verdict = await authorizeAgainstTestDb(credentials);
+  if (Result.isError(verdict)) {
+    throw verdict.error;
+  }
+  return verdict.value;
+};
+
 const readSession = async (sessionId: string) =>
   (
     await testDb
@@ -252,6 +265,7 @@ describe("finalizing a PDF signature", () => {
           audit: auditRecorderDouble(),
           body: { sessionToken, signature },
           params: { sessionId },
+          caller: await verifiedCaller({ sessionId, sessionToken }),
         }),
       );
 
@@ -304,6 +318,7 @@ describe("finalizing a PDF signature", () => {
           signature: Buffer.alloc(256, 7).toString("base64"),
         },
         params: { sessionId },
+        caller: await verifiedCaller({ sessionId, sessionToken }),
       }),
     );
 

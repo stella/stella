@@ -126,7 +126,11 @@ test("every public case-law response family bounds serialized multibyte response
 });
 
 test("coverage responses accept more than 100 recorded years", () => {
-  const response = stressResponse(coverageResponseSchema, "coverage", 0);
+  const response = stressResponse(
+    toRouteJsonSchema(coverageResponseSchema),
+    "coverage",
+    0,
+  );
   if (!isRecord(response) || !Array.isArray(response["countries"])) {
     throw new TypeError("Coverage response fixture must contain countries");
   }

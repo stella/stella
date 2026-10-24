@@ -117,10 +117,6 @@ const gatedDocx = async () => {
   return file;
 };
 
-const recordNothing: AuditRecorder = async () => {
-  await Promise.resolve();
-};
-
 describe("fill to workspace records the completion decision", () => {
   test("an undecided AI condition saves the document but records the fill as partial", async () => {
     const templateId = createSafeId<"template">();
@@ -160,9 +156,8 @@ describe("fill to workspace records the completion decision", () => {
           user: { id: ids.userA1 },
           safeDb: toSafeDbMock(scopedDb),
           scopedDb,
-          audit: recordNothing,
-          // The handler rebinds its recorder to the validated workspace.
-          createAuditRecorder: () => recordTemplateEvents,
+          // The workspace caller's recorder, bound to the validated workspace.
+          audit: recordTemplateEvents,
           orgAIConfig: null,
           params: { workspaceId: ids.wsA1, templateId },
           body: { values: {}, name: "Consumer NDA" },
