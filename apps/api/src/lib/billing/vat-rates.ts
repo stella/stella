@@ -105,27 +105,27 @@ export const overlappingVatRatePeriods = async (
   if (periods.length === 0) {
     return new Set();
   }
-  const rows = await tx.execute<{ position: number }>(sql`
-    SELECT candidate.position
-      FROM (VALUES ${sql.join(
+  const rows = await tx
+    .select({ position: sql<number>`candidate.position` })
+    .from(
+      sql`(VALUES ${sql.join(
         periods.map(
           (period, position) =>
             sql`(${position}::int, ${period.code}::text, ${period.validFrom}::date, ${period.validTo}::date)`,
         ),
         sql.raw(","),
-      )}) AS candidate(position, code, valid_from, valid_to)
-     WHERE EXISTS (
-       SELECT 1 FROM ${vatRates}
-        WHERE ${and(
-          eq(vatRates.organizationId, organizationId),
-          overlapsLiveVatRate({
-            code: sql.raw("candidate.code"),
-            startDate: sql.raw("candidate.valid_from"),
-            endDate: sql.raw("candidate.valid_to"),
-          }),
-        )}
-     )
-  `);
+      )}) AS candidate(position, code, valid_from, valid_to)`,
+    )
+    .where(
+      sql`EXISTS (SELECT 1 FROM ${vatRates} WHERE ${and(
+        eq(vatRates.organizationId, organizationId),
+        overlapsLiveVatRate({
+          code: sql.raw("candidate.code"),
+          startDate: sql.raw("candidate.valid_from"),
+          endDate: sql.raw("candidate.valid_to"),
+        }),
+      )})`,
+    );
   return new Set(rows.map(({ position }) => position));
 };
 

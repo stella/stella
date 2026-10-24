@@ -12,6 +12,7 @@ import {
   lockVatRateOrganization,
   overlappingVatRatePeriods,
 } from "@/api/lib/billing/vat-rates";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
@@ -26,7 +27,7 @@ const config = {
   body: applyVatRatePresetBody,
 } satisfies HandlerConfig;
 
-export default createSafeRootHandler(
+const applyVatRatePreset = createSafeRootHandler(
   config,
   async function* ({ body, safeDb, session, recordAuditEvent }) {
     const result = yield* Result.await(
@@ -74,3 +75,11 @@ export default createSafeRootHandler(
     return Result.ok(result);
   },
 );
+
+declareAggregateMutation(applyVatRatePreset.handler, {
+  type: "independent",
+  reason:
+    "Adds one organization's statutory VAT rate periods under that organization's VAT rate advisory lock; no aggregate state spans organizations.",
+});
+
+export default applyVatRatePreset;
