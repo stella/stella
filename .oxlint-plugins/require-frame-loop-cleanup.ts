@@ -630,6 +630,12 @@ const cleanupExpressionPaths = (
   if (expression === null) {
     return new Set(["continues"]);
   }
+  if (
+    proof.setup !== undefined &&
+    expression.range[1] < proof.setup.start.range[0]
+  ) {
+    return new Set(["continues"]);
+  }
   if (expression.type === "CallExpression") {
     let paths = new Set<UncancelledPath>(["continues"]);
     for (const argument of callArguments(expression)) {
@@ -642,10 +648,18 @@ const cleanupExpressionPaths = (
         return new Set();
       }
       const called = functionFor(proof.context, expression.callee);
+      // A call after creation executes its helper now, regardless of where
+      // that helper was declared. Cleanup bodies use the ordinary proof too.
+      const { setup: _setup, ...activeProof } = proof;
+      const calledProof =
+        proof.setup !== undefined &&
+        expression.range[0] > proof.setup.start.range[1]
+          ? activeProof
+          : proof;
       return called === null
         ? new Set(["continues"])
         : new Set(
-            [...cleanupFunctionPaths(proof, called)].map((path) =>
+            [...cleanupFunctionPaths(calledProof, called)].map((path) =>
               path === "returns" ||
               (called.async === true &&
                 (path === "suspends" || path === "throws"))

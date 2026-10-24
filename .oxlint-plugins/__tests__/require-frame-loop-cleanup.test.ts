@@ -551,6 +551,41 @@ test("member handles retain one stable root and an unambiguous pending timer", a
   );
 });
 
+test("cancellation must execute after creation, independent of helper declaration order", async () => {
+  const cases = [
+    ["let id; clearInterval(id); id = setInterval(tick, 10);", false],
+    ["let id; id = setInterval(tick, 10); clearInterval(id);", true],
+    [
+      "let id; stop(); id = setInterval(tick, 10); function stop() { clearInterval(id); }",
+      false,
+    ],
+    [
+      "let id; id = setInterval(tick, 10); stop(); function stop() { clearInterval(id); }",
+      true,
+    ],
+    [
+      "let id; function stop() { clearInterval(id); } stop(); id = setInterval(tick, 10);",
+      false,
+    ],
+    [
+      "let id; function stop() { clearInterval(id); } id = setInterval(tick, 10); stop();",
+      true,
+    ],
+    [
+      "let id; function stop() { clearInterval(id); } id = setInterval(tick, 10); return stop;",
+      true,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([body]) =>
+      lintSingleRule(RULE, `const owner = () => { ${body} };`),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
 test("external shared-ref helpers keep the same resolved cancellation owner", async () => {
   expect(
     await lintSingleRule(
