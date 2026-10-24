@@ -10,7 +10,8 @@
 // and versions it. The Version packages workflow runs two steps from here:
 //
 //   plan    which release, and whether main added a `@stll/cli` entry since
-//           the release branched from it (read-only)
+//           the release branched from it or one still pends on the release
+//           head after an unfinished refresh (read-only)
 //   update  merge main into the release branch through GitHub, guarded by
 //           its head, so the merge commit is signed
 //
@@ -110,6 +111,25 @@ const changesetNames = async (
   );
 };
 
+const cliEntries = async (
+  request: GitHubRequest,
+  repo: string,
+  ref: string,
+  names: Iterable<string>,
+): Promise<string[]> => {
+  const cli: string[] = [];
+  for (const name of [...names].toSorted()) {
+    const entry = await request([
+      `repos/${repo}/contents/${CHANGESET_DIRECTORY}/${name}?ref=${ref}`,
+    ]);
+    const content = text(field(entry, "content", "changeset"), "content");
+    if (changesetNamesCli(Buffer.from(content, "base64").toString("utf-8"))) {
+      cli.push(name);
+    }
+  }
+  return cli;
+};
+
 export type RefreshPlan =
   | { refresh: false; reason: string }
   | {
@@ -117,14 +137,18 @@ export type RefreshPlan =
       number: number;
       branch: string;
       head: string;
+      /** Main added a `@stll/cli` entry the release branch does not hold yet. */
+      merge: boolean;
       changesets: readonly string[];
     };
 
 /**
- * Decides from repository state, not from the push that ran it: the release
- * needs a refresh exactly when main holds a `@stll/cli` entry its branch point
- * did not. After a refresh merges main the branch point moves, so a second run
- * finds nothing to do.
+ * Decides from repository state, not from the push that ran it. The release
+ * needs main when main holds a `@stll/cli` entry the release branch point did
+ * not, and needs versioning while its own head still holds a pending
+ * `@stll/cli` entry: the cut consumed everything pending, so such an entry is
+ * a refresh whose merge landed and whose versioning did not, which the next run
+ * resumes. Once both are done a run finds nothing to do.
  */
 export const planReleaseRefresh = async ({
   request,
@@ -170,26 +194,34 @@ export const planReleaseRefresh = async ({
     "merge base",
   );
   const before = await changesetNames(request, repo, mergeBase);
-  const added = [...(await changesetNames(request, repo, mainSha))]
-    .filter((name) => !before.has(name))
-    .toSorted();
-  const cli: string[] = [];
-  for (const name of added) {
-    const entry = await request([
-      `repos/${repo}/contents/${CHANGESET_DIRECTORY}/${name}?ref=${mainSha}`,
-    ]);
-    const content = text(field(entry, "content", "changeset"), "content");
-    if (changesetNamesCli(Buffer.from(content, "base64").toString("utf-8"))) {
-      cli.push(name);
-    }
-  }
-  if (cli.length === 0) {
+  const added = await cliEntries(
+    request,
+    repo,
+    mainSha,
+    [...(await changesetNames(request, repo, mainSha))].filter(
+      (name) => !before.has(name),
+    ),
+  );
+  const pending = await cliEntries(
+    request,
+    repo,
+    head,
+    await changesetNames(request, repo, head),
+  );
+  if (added.length === 0 && pending.length === 0) {
     return {
       refresh: false,
-      reason: `main added no @stll/cli changeset since release #${String(number)} branched`,
+      reason: `release #${String(number)} holds every @stll/cli changeset on main, versioned`,
     };
   }
-  return { refresh: true, number, branch, head, changesets: cli };
+  return {
+    refresh: true,
+    number,
+    branch,
+    head,
+    merge: added.length > 0,
+    changesets: [...new Set([...pending, ...added])].toSorted(),
+  };
 };
 
 /**
@@ -276,6 +308,7 @@ const main = async () => {
         number: String(plan.number),
         branch: plan.branch,
         head: plan.head,
+        merge: String(plan.merge),
       });
       process.stdout.write(
         `::notice::Release #${String(plan.number)} takes main for ${plan.changesets.join(", ")}\n`,

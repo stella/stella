@@ -130,6 +130,7 @@ jobs:
       number: ${{ steps.plan.outputs.number }}
       branch: ${{ steps.plan.outputs.branch }}
       head: ${{ steps.plan.outputs.head }}
+      merge: ${{ steps.plan.outputs.merge }}
     steps:
       - name: Check out the refresh planner
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -166,7 +167,7 @@ jobs:
   # No install runs in this job: the token exists only beside GitHub's merge.
   refresh-release-merge:
     needs: refresh-release-plan
-    if: needs.refresh-release-plan.outputs.refresh == 'true'
+    if: needs.refresh-release-plan.outputs.refresh == 'true' && needs.refresh-release-plan.outputs.merge == 'true'
     name: Merge main into the release pull request
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -216,8 +217,13 @@ jobs:
           HEAD_SHA: ${{ needs.refresh-release-plan.outputs.head }}
         run: bun scripts/release-pull-request-refresh.ts update
 
+  # Also resumes a refresh whose merge landed and whose versioning did not:
+  # the plan then reports pending entries on the release head and no merge.
   refresh-release-version:
     needs: [refresh-release-plan, refresh-release-merge]
+    if: >-
+      !cancelled() && needs.refresh-release-plan.outputs.refresh == 'true' &&
+      contains(fromJSON('["success", "skipped"]'), needs.refresh-release-merge.result)
     name: Version the changesets main added to the release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -227,7 +233,7 @@ jobs:
       - name: Check out the merged release branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.refresh-release-merge.outputs.head }}
+          ref: ${{ needs.refresh-release-merge.outputs.head || needs.refresh-release-plan.outputs.head }}
           persist-credentials: false
 
       - name: Set up Bun

@@ -37,7 +37,14 @@ const encoded = (text: string) => ({
   content: Buffer.from(text).toString("base64"),
 });
 
-const releaseRoutes = (mainEntries: Record<string, string>) => ({
+const MARKER = "---\n---\n";
+
+const releaseRoutes = (
+  mainEntries: Record<string, string>,
+  // After the cut the release head holds only its marker entry; anything else
+  // is a refresh that merged and did not version.
+  headEntries: Record<string, string> = {},
+) => ({
   [`repos/${REPO}/pulls/6777`]: {
     head: { sha: HEAD, ref: "release/v0.9.64" },
   },
@@ -54,9 +61,22 @@ const releaseRoutes = (mainEntries: Record<string, string>) => ({
     "older.md",
     ...Object.keys(mainEntries),
   ),
+  [`repos/${REPO}/contents/.changeset?ref=${HEAD}`]: listing(
+    "README.md",
+    "release-v0.9.64.md",
+    ...Object.keys(headEntries),
+  ),
+  [`repos/${REPO}/contents/.changeset/release-v0.9.64.md?ref=${HEAD}`]:
+    encoded(MARKER),
   ...Object.fromEntries(
     Object.entries(mainEntries).map(([name, text]) => [
       `repos/${REPO}/contents/.changeset/${name}?ref=${MAIN}`,
+      encoded(text),
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(headEntries).map(([name, text]) => [
+      `repos/${REPO}/contents/.changeset/${name}?ref=${HEAD}`,
       encoded(text),
     ]),
   ),
@@ -80,6 +100,7 @@ describe("which release pull request takes main", () => {
       number: 6777,
       branch: "release/v0.9.64",
       head: HEAD,
+      merge: true,
       changesets: ["cli.md"],
     });
     // Only entries main added are read; older pending entries are the cut's.
@@ -102,7 +123,32 @@ describe("which release pull request takes main", () => {
       }),
     ).toEqual({
       refresh: false,
-      reason: "main added no @stll/cli changeset since release #6777 branched",
+      reason:
+        "release #6777 holds every @stll/cli changeset on main, versioned",
+    });
+  });
+
+  test("resumes a refresh whose merge landed and whose versioning did not", async () => {
+    // The merge moved the branch point past the CLI entry, so main adds
+    // nothing new; the entry still pends on the release head itself.
+    const { request } = fakeGitHub(
+      releaseRoutes({}, { "cli.md": CLI_ENTRY, "ui.md": UI_ENTRY }),
+    );
+
+    expect(
+      await planReleaseRefresh({
+        request,
+        repo: REPO,
+        mainSha: MAIN,
+        releaseNumbers: "6777",
+      }),
+    ).toEqual({
+      refresh: true,
+      number: 6777,
+      branch: "release/v0.9.64",
+      head: HEAD,
+      merge: false,
+      changesets: ["cli.md"],
     });
   });
 
