@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -337,6 +337,7 @@ const GenericExternalReferencePanel = ({
     provider !== undefined ||
     connectorSlug !== undefined ||
     sourceToolName !== undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: inlining this conditional pushes the component past the eslint complexity limit
   const activeExternal = useMemo(
     () =>
       canPreview
@@ -391,27 +392,24 @@ const GenericExternalReferencePanel = ({
           connectorSlug,
           connectors: availableConnectors,
         }));
-  const requestOpenExternal = useCallback(
-    (href: string) => {
-      setConfirmHref(href);
-    },
-    [setConfirmHref],
-  );
-  const requestSafeExternalOpen = useCallback(() => {
+  const requestOpenExternal = (href: string) => {
+    setConfirmHref(href);
+  };
+  const requestSafeExternalOpen = () => {
     if (safeHref === undefined) {
       return;
     }
 
     requestOpenExternal(safeHref);
-  }, [requestOpenExternal, safeHref]);
-  const openConfirmedExternal = useCallback(() => {
+  };
+  const openConfirmedExternal = () => {
     if (confirmHref === undefined) {
       return;
     }
 
     openIsolatedWindow(confirmHref);
     setConfirmHref(undefined);
-  }, [confirmHref, setConfirmHref]);
+  };
 
   return (
     <div

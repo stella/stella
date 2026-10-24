@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
+
 import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
@@ -68,6 +70,11 @@ Bun.plugin({
     }));
   },
 });
+// The panel renders as it ships: compiled by the React Compiler, as the Vite
+// build compiles it. Without it the render budget below would measure manual
+// memoization the compiler replaces. Registered after the engine stubs, so
+// those modules keep their stand-ins.
+Bun.plugin(reactCompilerBunPlugin);
 
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");

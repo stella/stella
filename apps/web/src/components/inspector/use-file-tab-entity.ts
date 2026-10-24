@@ -117,6 +117,7 @@ export const useFileTabEntity = ({
         isEmailViewerActive: queryInput.isEmailViewerActive,
       }),
   });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const entityState = useMemo(
     () =>
       getFileTabEntityState({
@@ -127,31 +128,21 @@ export const useFileTabEntity = ({
       }),
     [query.data, query.isError, queryInput.needsPropertyResolution, tab],
   );
-  const downloadRenditions = useMemo(
-    () =>
-      getEntityFileDownloadRenditions({
-        entityData: query.data,
-        fieldId: tab.id,
-      }),
-    [query.data, tab.id],
-  );
-  const queryState = useMemo(
-    () => ({
-      data: query.data,
-      isError: query.isError,
-      refetch: query.refetch,
-    }),
-    [query.data, query.isError, query.refetch],
-  );
+  const downloadRenditions = getEntityFileDownloadRenditions({
+    entityData: query.data,
+    fieldId: tab.id,
+  });
+  const queryState = {
+    data: query.data,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 
-  return useMemo(
-    () => ({
-      ...entityState,
-      downloadRenditions,
-      query: queryState,
-    }),
-    [downloadRenditions, entityState, queryState],
-  );
+  return {
+    ...entityState,
+    downloadRenditions,
+    query: queryState,
+  };
 };
 
 export type FileTabEntity = ReturnType<typeof useFileTabEntity>;
