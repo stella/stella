@@ -25,21 +25,22 @@ afterEach(() => {
   }
 });
 
-const GIT_ENV = Object.fromEntries(
-  Object.entries({
-    ...process.env,
-    GIT_AUTHOR_NAME: "Test",
-    GIT_AUTHOR_EMAIL: "test@example.invalid",
-    GIT_COMMITTER_NAME: "Test",
-    GIT_COMMITTER_EMAIL: "test@example.invalid",
-  }).filter(
-    (entry): entry is [string, string] =>
-      entry[1] !== undefined &&
-      (!entry[0].startsWith("GIT_") ||
-        entry[0].startsWith("GIT_AUTHOR_") ||
-        entry[0].startsWith("GIT_COMMITTER_")),
+// Hooks export repository selectors such as GIT_DIR, and a developer's own
+// configuration may sign or annotate tags; the fixture inherits neither.
+const GIT_ENV: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === "string" && !entry[0].startsWith("GIT_"),
+    ),
   ),
-);
+  GIT_AUTHOR_NAME: "Test",
+  GIT_AUTHOR_EMAIL: "test@example.invalid",
+  GIT_COMMITTER_NAME: "Test",
+  GIT_COMMITTER_EMAIL: "test@example.invalid",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+};
 
 type Statuses = Record<
   string,
@@ -121,52 +122,71 @@ jq --arg sha "$sha" '[(.[$sha] // [])[] | {context, state, creator: {login: (.cr
   };
 };
 
+// Each case builds a repository and runs the real script.
+const CASE_TIMEOUT_MS = 30_000;
+
 const passed = (context: string) => ({ context, state: "success" });
 
-test("the history starts at the newest earlier commit with both full gates green", () => {
-  const run = fixture(([first, second]) => ({
-    [first ?? ""]: [passed("main/heavy"), passed("main/pr-depth")],
-    [second ?? ""]: [passed("main/heavy"), passed("main/pr-depth")],
-  }));
-  expect(run.exitCode, run.stderr).toBe(0);
-  expect(run.from).toBe(run.main[1]);
-  expect(run.stderr).toContain(`validated queue history since ${run.main[1]}`);
-});
-
-test("without a fully proven earlier commit the history starts at the previous tag", () => {
-  for (const statuses of [
-    // Heavy alone is not a full proof.
-    (commits: string[]) => ({ [commits[2] ?? ""]: [passed("main/heavy")] }),
-    // The newest status decides.
-    (commits: string[]) => ({
-      [commits[2] ?? ""]: [
-        { context: "main/heavy", state: "failure" },
-        passed("main/heavy"),
-        passed("main/pr-depth"),
-      ],
-    }),
-    // Only the workflow's own statuses count.
-    (commits: string[]) => ({
-      [commits[2] ?? ""]: [
-        { ...passed("main/heavy"), creator: "someone" },
-        { ...passed("main/pr-depth"), creator: "someone" },
-      ],
-    }),
-    () => ({}),
-  ]) {
-    const run = fixture(statuses);
-    expect(run.exitCode, run.stderr).toBe(0);
-    expect(run.from).toBe("v1.0.0");
-  }
-});
-
-test("an unvalidated history after the anchor keeps the full gates required", () => {
-  const run = fixture(
-    ([first]) => ({
+test(
+  "the history starts at the newest earlier commit with both full gates green",
+  () => {
+    const run = fixture(([first, second]) => ({
       [first ?? ""]: [passed("main/heavy"), passed("main/pr-depth")],
-    }),
-    false,
-  );
-  expect(run.exitCode).toBe(2);
-  expect(run.stderr).toContain(`history since ${run.main[0]} is not validated`);
-});
+      [second ?? ""]: [passed("main/heavy"), passed("main/pr-depth")],
+    }));
+    expect(run.exitCode, run.stderr).toBe(0);
+    expect(run.from).toBe(run.main[1]);
+    expect(run.stderr).toContain(
+      `validated queue history since ${run.main[1] ?? "missing"}`,
+    );
+  },
+  CASE_TIMEOUT_MS,
+);
+
+test(
+  "without a fully proven earlier commit the history starts at the previous tag",
+  () => {
+    for (const statuses of [
+      // Heavy alone is not a full proof.
+      (commits: string[]) => ({ [commits[2] ?? ""]: [passed("main/heavy")] }),
+      // The newest status decides.
+      (commits: string[]) => ({
+        [commits[2] ?? ""]: [
+          { context: "main/heavy", state: "failure" },
+          passed("main/heavy"),
+          passed("main/pr-depth"),
+        ],
+      }),
+      // Only the workflow's own statuses count.
+      (commits: string[]) => ({
+        [commits[2] ?? ""]: [
+          { ...passed("main/heavy"), creator: "someone" },
+          { ...passed("main/pr-depth"), creator: "someone" },
+        ],
+      }),
+      () => ({}),
+    ]) {
+      const run = fixture(statuses);
+      expect(run.exitCode, run.stderr).toBe(0);
+      expect(run.from).toBe("v1.0.0");
+    }
+  },
+  CASE_TIMEOUT_MS,
+);
+
+test(
+  "an unvalidated history after the anchor keeps the full gates required",
+  () => {
+    const run = fixture(
+      ([first]) => ({
+        [first ?? ""]: [passed("main/heavy"), passed("main/pr-depth")],
+      }),
+      false,
+    );
+    expect(run.exitCode).toBe(2);
+    expect(run.stderr).toContain(
+      `history since ${run.main[0] ?? "missing"} is not validated`,
+    );
+  },
+  CASE_TIMEOUT_MS,
+);
