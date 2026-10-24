@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createInvoiceBodySchema } from "@/api/handlers/invoices/create-contract";
+import { createInvoiceBodySchema } from "@/api/lib/billing/invoice-create-contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 

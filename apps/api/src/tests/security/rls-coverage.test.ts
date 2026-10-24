@@ -209,7 +209,8 @@ const isStoredEntityFeatureFence = (policy: RestrictivePolicy): boolean => {
 // This owner predicate pins both scopes inside its SECURITY DEFINER function.
 const isInvoiceAccessPredicate = (expression: string | null): boolean =>
   expression
-    ?.replaceAll(/["()\s]/gu, "")
+    ?.replaceAll(/::text\b/gu, "")
+    .replaceAll(/["()\s]/gu, "")
     .replaceAll("public.", "")
     .replaceAll("invoices.", "") ===
   "stella_invoice_accessid,organization_id,workspace_id";
@@ -300,7 +301,17 @@ describe("policy coverage", () => {
     ).toBe(true);
     expect(
       isInvoiceAccessPredicate(
+        'public.stella_invoice_access("invoices"."id", ("invoices"."organization_id")::text, "invoices"."workspace_id")',
+      ),
+    ).toBe(true);
+    expect(
+      isInvoiceAccessPredicate(
         "stella_invoice_access(id, organization_id, NULL)",
+      ),
+    ).toBe(false);
+    expect(
+      isInvoiceAccessPredicate(
+        "stella_invoice_access(id, NULL::text, workspace_id)",
       ),
     ).toBe(false);
 

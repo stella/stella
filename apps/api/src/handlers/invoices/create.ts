@@ -3,13 +3,12 @@ import { Result } from "better-result";
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-
-import { createInvoiceBodySchema } from "./create-contract";
+import { createInvoiceBodySchema } from "@/api/lib/billing/invoice-create-contract";
 import {
   createDraftInvoice,
   createInvoiceInput,
   invoiceCreationError,
-} from "./create-operation";
+} from "@/api/lib/billing/invoice-create-operation";
 
 const createInvoice = createSafeHandler(
   {

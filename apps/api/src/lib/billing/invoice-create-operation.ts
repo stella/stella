@@ -16,7 +16,16 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import { claimInvoiceExpenses } from "@/api/handlers/invoices/entries/add";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
+import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "@/api/lib/billing/invoice-concurrent-modification";
+import type { createInvoiceBodySchema } from "@/api/lib/billing/invoice-create-contract";
+import {
+  type tInvoiceDocumentType,
+  validateInvoiceDocument,
+} from "@/api/lib/billing/invoice-document-type";
+import { claimInvoiceExpenses } from "@/api/lib/billing/invoice-expenses";
 import {
   ATTACHED_ENTRY_LINE_VAT,
   attachedEntryLineDrafts,
@@ -25,10 +34,7 @@ import {
   type LineVat,
   manualLineDraft,
   recalculateInvoiceTotals,
-} from "@/api/handlers/invoices/invoice-lines";
-import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
+} from "@/api/lib/billing/invoice-lines";
 import { resolveInvoicePrefill } from "@/api/lib/billing/invoice-prefill";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
@@ -40,13 +46,6 @@ import { LIMITS } from "@/api/lib/limits";
 import type { CentsAmount } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
-
-import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "./concurrent-modification";
-import type { createInvoiceBodySchema } from "./create-contract";
-import {
-  type tInvoiceDocumentType,
-  validateInvoiceDocument,
-} from "./document-type";
 
 type InvoiceDocumentType = Static<typeof tInvoiceDocumentType>;
 

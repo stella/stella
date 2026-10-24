@@ -20,6 +20,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+import {
+  tInvoiceDocumentType,
+  validateInvoiceDocument,
+} from "@/api/lib/billing/invoice-document-type";
+import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -30,9 +35,6 @@ import {
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
-
-import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
-import { recalculateInvoiceTotals } from "./invoice-lines";
 
 const updateInvoiceBodySchema = t.Object({
   invoiceNumber: t.Optional(

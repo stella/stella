@@ -39,10 +39,17 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+  SHORT_DATE,
+} from "@/components/billing/format-plain-date";
+import { InvoicePdfDownloadButton } from "@/components/billing/invoice-pdf-download-button";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -57,12 +64,6 @@ import type {
   InvoicePrefill,
 } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import {
-  MEDIUM_DATE,
-  plainDateEpoch,
-  SHORT_DATE,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
-import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 
 import {
   composeTotals,
@@ -394,52 +395,73 @@ const useComposerSubmit = ({
         issue,
         create: async () => {
           if (client === undefined) {
-            return unwrapEden(await invoices.put(body));
+            return unwrapEden(
+              await invokeCapability("invoices.create", (request) =>
+                invoices.put(body, request),
+              ),
+            );
           }
           return unwrapEden(
-            await api["client-invoices"]({
-              clientId: toSafeId<"contact">(client.clientId),
-            }).put({
-              invoiceDate: body.invoiceDate,
-              ...(body.dueDate === undefined ? {} : { dueDate: body.dueDate }),
-              ...(body.taxableSupplyDate === undefined
-                ? {}
-                : { taxableSupplyDate: body.taxableSupplyDate }),
-              currency: body.currency,
-              ...(body.sellerProfileId === undefined
-                ? {}
-                : { sellerProfileId: body.sellerProfileId }),
-              ...(body.expectedTotalAmount === undefined
-                ? {}
-                : { expectedTotalAmount: body.expectedTotalAmount }),
-              matters: client.matters.flatMap((matter) => {
-                const timeEntryIds = matter.prefill.timeEntries
-                  .filter((entry) =>
-                    body.timeEntryIds.includes(toSafeId<"timeEntry">(entry.id)),
-                  )
-                  .map((entry) => toSafeId<"timeEntry">(entry.id));
-                const expenseIds = matter.prefill.expenses
-                  .filter((expense) =>
-                    body.expenseIds?.includes(toSafeId<"expense">(expense.id)),
-                  )
-                  .map((expense) => toSafeId<"expense">(expense.id));
-                return timeEntryIds.length + expenseIds.length === 0
-                  ? []
-                  : [
-                      {
-                        workspaceId: toSafeId<"workspace">(matter.workspaceId),
-                        timeEntryIds,
-                        expenseIds,
-                      },
-                    ];
-              }),
-            }),
+            await invokeCapability("client-invoices.create", (request) =>
+              api["client-invoices"]({
+                clientId: toSafeId<"contact">(client.clientId),
+              }).put(
+                {
+                  invoiceDate: body.invoiceDate,
+                  ...(body.dueDate === undefined
+                    ? {}
+                    : { dueDate: body.dueDate }),
+                  ...(body.taxableSupplyDate === undefined
+                    ? {}
+                    : { taxableSupplyDate: body.taxableSupplyDate }),
+                  currency: body.currency,
+                  ...(body.sellerProfileId === undefined
+                    ? {}
+                    : { sellerProfileId: body.sellerProfileId }),
+                  ...(body.expectedTotalAmount === undefined
+                    ? {}
+                    : { expectedTotalAmount: body.expectedTotalAmount }),
+                  matters: client.matters.flatMap((matter) => {
+                    const timeEntryIds = matter.prefill.timeEntries
+                      .filter((entry) =>
+                        body.timeEntryIds.includes(
+                          toSafeId<"timeEntry">(entry.id),
+                        ),
+                      )
+                      .map((entry) => toSafeId<"timeEntry">(entry.id));
+                    const expenseIds = matter.prefill.expenses
+                      .filter((expense) =>
+                        body.expenseIds?.includes(
+                          toSafeId<"expense">(expense.id),
+                        ),
+                      )
+                      .map((expense) => toSafeId<"expense">(expense.id));
+                    return timeEntryIds.length + expenseIds.length === 0
+                      ? []
+                      : [
+                          {
+                            workspaceId: toSafeId<"workspace">(
+                              matter.workspaceId,
+                            ),
+                            timeEntryIds,
+                            expenseIds,
+                          },
+                        ];
+                  }),
+                },
+                request,
+              ),
+            ),
           );
         },
         finalize: async (id) => {
-          const finalized = await invoices({
-            invoiceId: toSafeId<"invoice">(id),
-          }).transition.post({ action: "finalize" });
+          const finalized = await invokeCapability(
+            "invoices.transition",
+            (request) =>
+              invoices({
+                invoiceId: toSafeId<"invoice">(id),
+              }).transition.post({ action: "finalize" }, request),
+          );
           if (finalized.error) {
             notifyUserError(
               finalized.error,

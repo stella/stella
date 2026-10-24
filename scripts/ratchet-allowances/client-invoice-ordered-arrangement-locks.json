@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/db/aggregate-lock.ts",
+  "delta": 1,
+  "reason": "Creation supplies at most 50 requested matters; existing-invoice mutations supply at most LIMITS.invoiceLinesPerInvoice (1000) distinct line matters plus the current matter. Sequential arrangement row acquisition follows canonical identifier order after batched advisory locks and is necessary to preserve deterministic transaction lock order."
+}

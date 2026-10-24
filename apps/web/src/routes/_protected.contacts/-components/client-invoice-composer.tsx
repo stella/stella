@@ -15,10 +15,10 @@ import {
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { InvoiceComposer } from "@/components/billing/invoice-composer";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
 import { clientInvoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
-import { InvoiceComposer } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-composer";
 
 type ClientInvoiceComposerProps = {
   clientId: string;
@@ -58,15 +58,14 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
   const query = useQuery(
     clientInvoicePrefillOptions(clientId, { periodStart, periodEnd }),
   );
-  const matters =
-    query.data?.matters.filter(
-      (matter) => matter.prefill.billingMode !== "flat_fee",
-    ) ?? [];
+  const matters = query.data?.matters.filter(
+    (matter) => matter.prefill.billingMode !== "flat_fee",
+  );
   const hasFlatFeeMatters =
     query.data?.matters.some(
       (matter) => matter.prefill.billingMode === "flat_fee",
     ) ?? false;
-  const first = matters.find(
+  const first = matters?.find(
     (matter) =>
       matter.prefill.currency !== null &&
       matter.prefill.timeEntries.length + matter.prefill.expenses.length > 0,
@@ -103,7 +102,7 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
         </Button>
       </div>
     );
-  } else if (first === undefined) {
+  } else if (first === undefined || matters === undefined) {
     content = (
       <p className="text-muted-foreground p-6 text-sm">
         {t("billing.invoiceComposer.nothingToBill")}

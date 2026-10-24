@@ -3,8 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { cents } from "@stll/money";
 
 import { INVOICE_ATTACHMENT } from "@/api/db/schema";
-import { createSafeId, toSafeId } from "@/api/lib/branded-types";
-
 import {
   ATTACHED_ENTRY_LINE_VAT,
   attachedEntryLineDrafts,
@@ -12,7 +10,8 @@ import {
   readInvoiceDocumentLines,
   readInvoiceTotals,
   timeEntryLineDraft,
-} from "./invoice-lines";
+} from "@/api/lib/billing/invoice-lines";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 
 describe("hoursQuantity", () => {
   test.each([

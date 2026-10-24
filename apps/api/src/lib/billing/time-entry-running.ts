@@ -26,7 +26,7 @@ export const timeEntryIsRunning = () => sql<boolean>`COALESCE((
 type InvoiceRunningSelection = {
   type: "invoice";
   invoiceId: SafeId<"invoice">;
-  additionalIds?: SafeId<"timeEntry">[];
+  additionalIds?: SafeId<"timeEntry">[] | undefined;
   runningCheck?: "all" | "additional";
 };
 
@@ -59,9 +59,14 @@ export const guardRunningTimeEntries = async (
       case "approval_batch":
       case "entries":
         return inArray(timeEntries.id, selection.ids);
-      case "invoice":
+      case "invoice": {
+        const additional =
+          selection.additionalIds === undefined
+            ? sql`false`
+            : inArray(timeEntries.id, selection.additionalIds);
         // sql-perf-allow: bounded by invoice ID and the time_entries_invoice_idx source index.
-        return sql`((${timeEntries.invoiceId} = ${selection.invoiceId} AND EXISTS (SELECT 1 FROM ${invoices} visible_invoice WHERE visible_invoice.id = ${selection.invoiceId})) OR ${inArray(timeEntries.id, selection.additionalIds ?? [])})`;
+        return sql`((${timeEntries.invoiceId} = ${selection.invoiceId} AND EXISTS (SELECT 1 FROM ${invoices} visible_invoice WHERE visible_invoice.id = ${selection.invoiceId})) OR ${additional})`;
+      }
       case "none":
         return sql`false`;
       default:
@@ -106,7 +111,10 @@ export const guardRunningTimeEntries = async (
       selection.type === "invoice"
         ? sql`UNION SELECT hashtext(${invoiceLines.workspaceId}::text) AS lock_key FROM ${invoiceLines} WHERE ${invoiceLines.invoiceId}=${selection.invoiceId}`
         : sql``;
-    const selectedMatters = sql`UNION SELECT hashtext(${workspaces.id}::text) AS lock_key FROM ${workspaces} WHERE ${inArray(workspaces.id, [...(options.additionalWorkspaceIds ?? [])])} AND ${workspaces.organizationId}=${options.organizationId}`;
+    const selectedMatters =
+      options.additionalWorkspaceIds === undefined
+        ? sql``
+        : sql`UNION SELECT hashtext(${workspaces.id}::text) AS lock_key FROM ${workspaces} WHERE ${inArray(workspaces.id, [...options.additionalWorkspaceIds])} AND ${workspaces.organizationId}=${options.organizationId}`;
     await withBillingMatterAdvisoryLocks(
       tx,
       sql`SELECT DISTINCT hashtext(${timeEntries.workspaceId}::text) AS lock_key FROM ${timeEntries} WHERE ${condition} AND ${timeEntries.workspaceId} IS NOT NULL ${invoiceMatters} ${selectedMatters}`,
@@ -140,7 +148,7 @@ export const guardRunningTimeEntries = async (
   }
   const runningIds =
     selection.type === "invoice" && selection.runningCheck === "additional"
-      ? (selection.additionalIds ?? [])
+      ? ids.filter((id) => selection.additionalIds?.includes(id) === true)
       : ids;
   const [blocked] = await tx
     .select({ id: timeEntries.id })

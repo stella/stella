@@ -30,7 +30,6 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import { validateInvoiceDocument } from "@/api/handlers/invoices/document-type";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -39,6 +38,7 @@ import {
 } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { checkInvoiceBillingArrangement } from "@/api/lib/billing/invoice-arrangements";
+import { validateInvoiceDocument } from "@/api/lib/billing/invoice-document-type";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";

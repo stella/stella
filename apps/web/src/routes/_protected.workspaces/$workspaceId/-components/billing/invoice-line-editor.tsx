@@ -22,6 +22,7 @@ import { Input } from "@stll/ui/input";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -69,12 +70,21 @@ export const InvoiceLineEditor = ({
     .lines({ lineId: line.id });
   const reset = useMutation({
     mutationFn: async () =>
-      unwrapEden(await endpoint.patch({ resetToRecorded: true })),
+      unwrapEden(
+        await invokeCapability("invoices.lines.update", (request) =>
+          endpoint.patch({ resetToRecorded: true }, request),
+        ),
+      ),
     onSuccess: invalidate,
     onError: (error) => notifyUserError(error, t("billing.failedToSave")),
   });
   const remove = useMutation({
-    mutationFn: async () => unwrapEden(await endpoint.delete({})),
+    mutationFn: async () =>
+      unwrapEden(
+        await invokeCapability("invoices.lines.delete", (request) =>
+          endpoint.delete({}, request),
+        ),
+      ),
     onSuccess: invalidate,
     onError: (error) => notifyUserError(error, t("billing.failedToSave")),
   });
@@ -103,23 +113,30 @@ export const InvoiceLineEditor = ({
       },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
-        const result = await endpoint.patch({
-          description: value.description,
-          ...(billingMode !== "flat_fee" &&
-          quantityText(value.quantity) !== quantityText(line.quantity)
-            ? { quantity: value.quantity }
-            : {}),
-          ...(billingMode !== "flat_fee" &&
-          value.unitPrice !==
-            toMajorUnits({ amountCents: line.unitPrice, currency })
-            ? {
-                unitPriceMinor: toMinorUnits({
-                  amount: value.unitPrice,
-                  currency,
-                }),
-              }
-            : {}),
-        });
+        const result = await invokeCapability(
+          "invoices.lines.update",
+          (request) =>
+            endpoint.patch(
+              {
+                description: value.description,
+                ...(billingMode !== "flat_fee" &&
+                quantityText(value.quantity) !== quantityText(line.quantity)
+                  ? { quantity: value.quantity }
+                  : {}),
+                ...(billingMode !== "flat_fee" &&
+                value.unitPrice !==
+                  toMajorUnits({ amountCents: line.unitPrice, currency })
+                  ? {
+                      unitPriceMinor: toMinorUnits({
+                        amount: value.unitPrice,
+                        currency,
+                      }),
+                    }
+                  : {}),
+              },
+              request,
+            ),
+        );
         if (result.error) {
           notifyUserError(result.error, t("billing.failedToSave"));
           return;

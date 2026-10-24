@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
-import { billCreatedDraft } from "@/api/handlers/invoices/create-operation";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
+import { billCreatedDraft } from "@/api/lib/billing/invoice-create-operation";
 import { resolveInvoicePrefill } from "@/api/lib/billing/invoice-prefill";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

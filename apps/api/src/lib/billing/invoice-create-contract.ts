@@ -1,9 +1,8 @@
 import { t } from "elysia";
 
+import { tInvoiceDocumentType } from "@/api/lib/billing/invoice-document-type";
 import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-
-import { tInvoiceDocumentType } from "./document-type";
 
 export const createInvoiceBodySchema = t.Object({
   invoiceNumber: t.Optional(t.String({ minLength: 1, maxLength: 64 })),

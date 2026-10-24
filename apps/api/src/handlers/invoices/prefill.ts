@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { readMatterInvoicePrefill } from "@/api/lib/billing/invoice-prefill-operation";
 import { tSafeId } from "@/api/lib/custom-schema";
-
-import { readMatterInvoicePrefill } from "./prefill-operation";
 
 const prefillInvoice = createSafeHandler(
   {

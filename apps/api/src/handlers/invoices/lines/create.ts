@@ -9,6 +9,12 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import {
   checkInvoiceLineCapacity,
   expenseLineDraft,
@@ -23,13 +29,7 @@ import {
   tLineUnit,
   tVatRateBps,
   tVatTreatment,
-} from "@/api/handlers/invoices/invoice-lines";
-import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditEvent } from "@/api/lib/audit-log";
-import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+} from "@/api/lib/billing/invoice-lines";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

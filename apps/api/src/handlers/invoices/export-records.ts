@@ -14,7 +14,7 @@ import { Temporal, todayFor } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
+import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
 import {
   invoiceInMatter,
   invoiceTouchesMatter,

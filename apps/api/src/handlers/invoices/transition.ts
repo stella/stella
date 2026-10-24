@@ -14,15 +14,15 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
-import {
-  lockDraftInvoiceForLines,
-  recalculateInvoiceTotals,
-} from "@/api/handlers/invoices/invoice-lines";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import {
+  lockDraftInvoiceForLines,
+  recalculateInvoiceTotals,
+} from "@/api/lib/billing/invoice-lines";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import {
   allocateNumber,

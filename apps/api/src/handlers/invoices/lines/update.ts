@@ -6,6 +6,10 @@ import { type InvoiceTotals, quantityText } from "@stll/invoicing";
 
 import { resultTx } from "@/api/db/safe-db";
 import { invoiceLines } from "@/api/db/schema";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import {
   type InvoiceLineDraft,
   lockDraftInvoiceForLines,
@@ -17,11 +21,7 @@ import {
   tLineUnit,
   tVatRateBps,
   tVatTreatment,
-} from "@/api/handlers/invoices/invoice-lines";
-import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+} from "@/api/lib/billing/invoice-lines";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tMinorUnitAmount,

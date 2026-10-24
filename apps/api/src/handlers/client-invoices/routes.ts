@@ -23,9 +23,11 @@ export const clientInvoicesRoute = new Elysia({
     params: prefillClientInvoice.config.params,
     query: prefillClientInvoice.config.query,
     permissions: prefillClientInvoice.config.permissions,
+    accountAccess: prefillClientInvoice.config.accountAccess,
   })
   .put("/", createClientInvoice.handler, {
     params: createClientInvoice.config.params,
     body: createClientInvoice.config.body,
     permissions: createClientInvoice.config.permissions,
+    accountAccess: createClientInvoice.config.accountAccess,
   });

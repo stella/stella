@@ -3,8 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaces } from "@/api/db/schema";
-import { readMatterInvoicePrefill } from "@/api/handlers/invoices/prefill-operation";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { readMatterInvoicePrefill } from "@/api/lib/billing/invoice-prefill-operation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

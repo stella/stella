@@ -261,7 +261,7 @@ if (!databaseUrl || !runPostgres) {
       // deletion removes both in one statement, regardless of cascade order.
       await expectSqlState(
         db.delete(contacts).where(eq(contacts.id, scenario.clientId)),
-        "23503",
+        "23001",
       );
       const deleted = await db
         .delete(organization)

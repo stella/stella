@@ -4,15 +4,16 @@ import { t } from "elysia";
 
 import { resultTx } from "@/api/db/safe-db";
 import { expenses, invoices, timeEntries, workspaces } from "@/api/db/schema";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
 import {
   createDraftInvoice,
   createInvoiceInput,
   invoiceCreationError,
-} from "@/api/handlers/invoices/create-operation";
-import { recalculateInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
-import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
+} from "@/api/lib/billing/invoice-create-operation";
+import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -177,7 +178,6 @@ const createClientInvoice = createSafeRootHandler(
         if (made.isErr()) {
           return Result.err(made.error);
         }
-        // audit: skip - the creation event was recorded by createDraftInvoice in this transaction
         await tx
           .update(invoices)
           .set({ workspaceId: null })
@@ -188,6 +188,15 @@ const createClientInvoice = createSafeRootHandler(
               eq(invoices.clientId, params.clientId),
             ),
           );
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+          resourceId: made.value.id,
+          workspaceId: null,
+          changes: {
+            workspaceId: { old: first.workspaceId, new: null },
+          },
+        });
         let entryCount = made.value.entryCount;
         let expenseCount = made.value.expenseCount;
         for (const matter of matters.slice(1)) {
