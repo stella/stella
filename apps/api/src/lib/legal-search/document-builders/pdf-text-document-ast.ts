@@ -11,8 +11,8 @@
  *   furniture, not text.
  * - Footnotes sit at a page's foot after an empty line, each a lone mark line
  *   followed by an indented first line. Further notes need a body reference
- *   and either a blank separator or one unambiguous indented start for their
- *   label. Ambiguous numbers stay text. The marks ascend through the document.
+ *   and a blank separator. Ambiguous numbers stay text. The marks ascend
+ *   through the document.
  * - A footnote reference is the next mark the document has not referenced
  *   yet: a lone line of marks (the superscript printed above the line it
  *   belongs to) or the mark glued to the word or punctuation before it.
@@ -191,13 +191,6 @@ const readNotes = ({
   after,
   bodyEnd,
 }: ReadNotesOptions): Footnote[] | null => {
-  const starts = new Map<number, number>();
-  for (let index = start; index < lines.length; index += 1) {
-    if (FOOTNOTE_MARK_LINE.test(lines[index] ?? "")) {
-      const label = Number(lines[index]);
-      starts.set(label, (starts.get(label) ?? 0) + 1);
-    }
-  }
   const labels = new Set(
     lines
       .slice(start)
@@ -215,17 +208,14 @@ const readNotes = ({
   for (let index = start; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
     const label = Number(line);
-    // A body reference cannot disambiguate repeated note-shaped numbers.
-    // Without a separator, preserve all competing starts as literal text.
+    // A body reference cannot distinguish a numeric fact from a new note.
+    // Every later note needs a separator; unseparated numbers stay literal.
     if (
       FOOTNOTE_MARK_LINE.test(line) &&
       (index === start ||
         (referenced.has(label) &&
-          ((isBlank(lines[index - 1]) &&
-            (isNoteStart(lines, index) || label === previous + 1)) ||
-            (label > previous &&
-              isNoteStart(lines, index) &&
-              starts.get(label) === 1))))
+          isBlank(lines[index - 1]) &&
+          (isNoteStart(lines, index) || label === previous + 1)))
     ) {
       if (label <= previous) {
         return null;

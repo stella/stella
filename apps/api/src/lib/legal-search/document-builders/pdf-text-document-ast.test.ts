@@ -186,6 +186,17 @@ describe("the PDF text builder", () => {
     ]);
   });
 
+  test("preserves an unseparated numeric fact even when the body references its value", () => {
+    const ast = build("Body.1 Body.2\n\n1\n Controllers:\n2\n in total.");
+    expect(
+      ast.blocks
+        .filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        )
+        .map(({ id, plainText }) => ({ id, plainText })),
+    ).toEqual([{ id: "fn-1", plainText: "Controllers: 2 in total." }]);
+  });
+
   test("keeps ambiguous contiguous note-shaped lines and their numeric facts literal", () => {
     const ast = build(
       "Body.1 Body.2\n\n1\n First note.\n2\n Second note controllers:\n2\n in total.",
@@ -293,6 +304,7 @@ describe("the PDF text builder", () => {
           " ",
           "2",
           " Regulation (EU) 2016/679 of the European Parliament.",
+          "",
           "3",
           " Second note,",
           "continued.",
@@ -564,7 +576,7 @@ describe("PDF text builder output", () => {
             indented ? " controllers." : "controllers.",
           ]);
           const ast = build(
-            ["Body.1", "", "1", " Count:", ...lines].join("\n"),
+            ["Body.1 Body.2", "", "1", " Count:", ...lines].join("\n"),
           );
           const notes = ast.blocks.filter(
             (block) => block.type === "paragraph" && block.note !== undefined,
