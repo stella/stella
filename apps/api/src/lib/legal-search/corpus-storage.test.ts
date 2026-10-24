@@ -22,11 +22,11 @@ import {
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
 import {
+  CORPUS_TRANSFER_MAX_BYTES,
   corpusContentHash,
   corpusKeys,
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  CORPUS_TRANSFER_MAX_BYTES,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,

@@ -16,15 +16,15 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
+  featureEnrolments,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
   TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
-  workspaces,
   workspaceMembers,
-  featureEnrolments,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";

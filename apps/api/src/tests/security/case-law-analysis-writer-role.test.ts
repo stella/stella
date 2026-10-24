@@ -277,13 +277,19 @@ describe("case-law analysis writer role", () => {
           decisionId,
           contentHash: null,
           analysis: {
-            version: 3,
+            version: 4,
             generatedAt: "2026-09-01T12:00:00.000Z",
             model: "test-model",
             inputFingerprint: fingerprint,
             tree: [],
-            holding: { text: "A holding.", language: "cs", anchors: [] },
-            abstract: { text: "An abstract.", language: "cs" },
+            holding: {
+              spans: [{ text: "A holding.", anchors: [] }],
+              language: "cs",
+            },
+            abstract: {
+              spans: [{ text: "An abstract.", anchors: [] }],
+              language: "cs",
+            },
             topics: [],
           },
         });

@@ -16,8 +16,8 @@ import {
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import {
-  corpusPackMemberWeight,
   CORPUS_PACK_MAX_BYTES,
+  corpusPackMemberWeight,
   planCorpusPacks,
   putCorpusPacks,
 } from "@/api/lib/legal-search/corpus-pack-writer";

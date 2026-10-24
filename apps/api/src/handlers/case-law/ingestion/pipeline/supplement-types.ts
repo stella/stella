@@ -6,8 +6,8 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type {
-  PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
+  PROCESS_DECISION_STATUS,
   SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";

@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
 
 import type {
-  ScanPageRotation,
+  CleanScanResult,
   PhysicalPageSize,
   RasterizedScanPage,
   ScanEngine,
   ScanEngineError,
   ScanOptions,
-  CleanScanResult,
+  ScanPageRotation,
 } from "./scan-engine";
 
 type CleanedScan = Extract<CleanScanResult, { type: "cleaned" }>;

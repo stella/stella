@@ -74,9 +74,7 @@ export type Analytics = {
 };
 
 export type FollowupSurface =
-  | "chat-thread"
-  | "document-chat"
-  | "inspector-chat";
+  "chat-thread" | "document-chat" | "inspector-chat";
 
 // Click-through needs where and how a suggestion was used, never which
 // conversation it came from.
@@ -153,7 +151,12 @@ type FeedbackDialogSubmittedProperties = {
 
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }
-  | { type: "recovery"; reference: ErrorReference };
+  | { type: "recovery"; reference: ErrorReference }
+  | {
+      type: "user-visible";
+      feature: string;
+      routeTemplate: string;
+    };
 
 // Stored citations a decision reader could not place: one event per decision,
 // reader surface and reason, counting the rows. A placement gap is a data

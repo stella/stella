@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { abortTransaction, abortableTx } from "@/api/db/safe-db";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   correspondence,

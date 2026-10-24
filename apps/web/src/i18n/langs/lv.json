@@ -9,13 +9,12 @@
       "noOtherSessions": "Nav citu aktīvu sesiju",
       "revokeOtherSessions": "Izrakstīties no citām ierīcēm",
       "revokeOtherSessionsConfirm": "Tiks beigtas visas sesijas, izņemot pašreizējo.",
+      "signedInFrom": "Pierakstīšanās no {clientName}",
       "unknownDevice": "Nezināma ierīce"
     }
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Atpakaļ uz lietotni",
-    "billingAndUsage": "Norēķini un lietojums",
     "billingProfiles": "Norēķinu profili",
     "deleteDescription": "Neatgriezeniski dzēsiet šo organizāciju un tās datus. Šo darbību nevar atsaukt.",
     "deleteOrganization": "Dzēst organizāciju",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Pamest organizāciju",
     "leaveRefusedOnlyOwner": "Jūs esat vienīgais īpašnieks. Pirms aiziešanas padariet par īpašnieku citu dalībnieku.",
     "modelsAndProviders": "Modeļi un pakalpojumu sniedzēji",
-    "noPlan": "Nav aktīva plāna",
     "organizationDeleted": "Organizācija ir dzēsta.",
     "organizationId": "Organizācijas ID",
     "organizationLeft": "Jūs pametāt organizāciju.",
-    "overviewDescription": "Pārvaldiet organizāciju, cilvēkus un rīkus.",
-    "people": "Cilvēki",
     "planAndUsage": "Plāns un lietojums",
     "title": "Organizācijas administrēšana",
     "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistents prasīs šo adresi",
-    "copiedToast": "Norādījumi nokopēti. Ielīmējiet tos tērzēšanā ar asistentu.",
     "copy": "Nokopējiet tam norādījumus",
     "description": "Jautājiet Claude vai ChatGPT par savām lietām un dokumentiem. Izvēlieties asistentu, lai atvērtu īsu ceļvedi; tas aizņem apmēram minūti.",
     "instructions": "Pievieno mani stella, manai juridiskajai darbvietai. Izpildi sadaļu “Instructions for AI agents” vietnē {guideUrl} un izmanto šo servera adresi: {mcpUrl}",
     "openGuide": "Atvērt ceļvedi: {assistant}",
+    "pasteHint": "Ielīmējiet tos tērzēšanā ar asistentu.",
     "selfSetupHint": "Izmantojat Claude Code vai Codex?",
     "title": "Izmantojiet stella savā AI asistentā"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
+      "accountRestricted": "AI pakalpojumu sniedzēja iestatījumi šim kontam nav pieejami.",
+      "configUnreadable": "AI pakalpojumu sniedzēja konfigurāciju nevar nolasīt. Lūdziet organizācijas administratoram to savienot atkārtoti.",
       "cta": "Atvērt AI iestatījumus",
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
+      "permissionRequired": "AI pakalpojumu sniedzēju var pievienot tikai organizācijas administrators.",
+      "seatRequired": "Lūdziet organizācijas administratoram piešķirt jums vietu.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
     },
     "refinePlaceholder": "Kā AI jāpielāgo formulējums?",
@@ -142,6 +142,8 @@
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
       "title": "Neizdevās jūs pieslēgt"
     },
+    "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",
+    "handoffTitle": "Turpināt uz stella",
     "headline": "Skaidrība ikvienā lietā.",
     "invitation": {
       "declined": "Uzaicinājums noraidīts",
@@ -157,11 +159,11 @@
     "organizationNamePlaceholder": "Mana organizācija",
     "password": "Parole",
     "professionalUse": {
-      "description": "Veidojot jūsu kontu, šis paziņojums jums netika parādīts. Lai turpinātu, pieņemiet to.",
       "title": "Apstipriniet profesionālu lietošanu"
     },
     "professionalUseStatement": "Izveidojot kontu, jūs apliecināt, ka izmantojat stella profesionāliem mērķiem, un saprotat, ka stella ir rīks juridiskajiem speciālistiem un neaizstāj juridisku konsultāciju.",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
+    "reauthenticationRequired": "Lai turpinātu šo darbību, pierakstieties vēlreiz.",
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
@@ -931,13 +933,10 @@
     },
     "coverage": {
       "completeness": "Pilnīgums",
-      "countedOn": "Saskaitīts {date}",
       "courtsHeading": "Pēc tiesas",
       "courtsUnavailable": "Sadalījums pēc tiesām pašlaik nav pieejams.",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
-      "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
-      "gapStatusUnknown": "Iztrūkumu statuss nav zināms",
       "generatedAt": "Dati uz {date}",
       "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
@@ -958,7 +957,8 @@
       "searchable": "Meklējami",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
+      "unreadListingPeriods": "Nenolasītie saraksta periodi"
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "decisionTypes": {
@@ -3529,6 +3529,12 @@
       "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
+      "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",
+      "unsupportedField": "Šajā dokumentā ir lauks {fieldType}, ko nevar konvertēt.",
+      "unsupportedReference": "Šajā dokumentā {element} {attribute} atsaucas uz ārēju resursu, tāpēc to nevar konvertēt."
+    },
     "external": {
       "confirmDescription": "Jūs tūlīt apmeklēsiet ārēju tīmekļa vietni.",
       "confirmTitle": "Atvērt ārēju saiti?",
@@ -4199,7 +4205,9 @@
     "prompt": "Ko jūs meklējat?",
     "recent": "Nesenie",
     "recentCasesFilter": "Nolēmumi",
+    "recentLoadFailed": "Neizdevās ielādēt nesenās darbības.",
     "recentSearchFilter": "Meklējumi",
+    "recentUpdateFailed": "Neizdevās atjaunināt nesenās darbības.",
     "recentlyInForce": "Nesen stājās spēkā",
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
@@ -4226,6 +4234,22 @@
       "guestStorageUnavailable": "Izcēlumus un piezīmes šajā cilnē neizdevās saglabāt.",
       "highlight": "Izcelt",
       "highlightedPassage": "Izceltais fragments",
+      "history": {
+        "colorRestored": "Krāsa atjaunota",
+        "commentRemoved": "Komentārs noņemts",
+        "commentRestored": "Komentārs atjaunots",
+        "highlightRemoved": "Izcēlums noņemts",
+        "highlightRestored": "Izcēlums atjaunots",
+        "markChanged": "Šis izcēlums vai komentārs pa to laiku tika mainīts citur, tāpēc tas atstāts nemainīts.",
+        "markGone": "Šis izcēlums vai komentārs vairs nepastāv.",
+        "nothingToRedo": "Nav ko atkārtot",
+        "nothingToUndo": "Nav ko atsaukt",
+        "redoShortcut": "Atkārtot izcēluma vai komentāra izmaiņu",
+        "styleRestored": "Stils atjaunots",
+        "textRestored": "Komentāra teksts atjaunots",
+        "undoShortcut": "Atsaukt izcēluma vai komentāra izmaiņu",
+        "visibilityRestored": "Kopīgošana atjaunota"
+      },
       "removeHighlight": "Noņemt izcēlumu",
       "sharedBadge": "Kopīgots",
       "styleHighlight": "Izcēlums",
@@ -4943,7 +4967,7 @@
       "description": "Izmantojiet stella no sava AI asistenta un redziet, kam ir piekļuve jūsu kontam.",
       "developerDescription": "Servera adreses un komandrindas rīks tehniskiem iestatījumiem.",
       "developerTitle": "Izstrādātāju piekļuve",
-      "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā.",
+      "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā. Tiks izbeigtas arī pārlūkprogrammas sesijas, kas izveidotas, izmantojot šo savienojumu.",
       "disconnectConfirmTitle": "Atvienot {clientName}?",
       "disconnectSuccess": "{clientName} atvienots",
       "integrationsDescription": "Ārējie pakalpojumi, ko AI var izmantot jūsu vietā, piemēram, dokumentu krātuve.",
@@ -5996,6 +6020,7 @@
       "downloadFailed": "Lejupielāde neizdevās",
       "downloadPdf": "Lejupielādēt kā PDF",
       "downloadSearchablePdf": "Meklējams PDF",
+      "emptyFile": "Fails ir tukšs.",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",

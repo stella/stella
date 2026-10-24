@@ -22,8 +22,8 @@ import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-sear
 import { caseLawCountryScope } from "@/features/case-law/case-law-jurisdiction";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
-  decisionsPageOptions,
   type DecisionListFilters,
+  decisionsPageOptions,
 } from "@/features/case-law/queries/decisions";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { ensureRouteQueryData } from "@/lib/react-query";

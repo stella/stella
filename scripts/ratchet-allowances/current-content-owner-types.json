@@ -1,0 +1,6 @@
+{
+  "metric": "root-connection-type-imports",
+  "file": "apps/api/src/lib/document-content-provenance.ts",
+  "delta": 1,
+  "reason": "The current-content owner types its two reader families apart: request reads accept only the RLS-scoped transaction, and the named system-sweep readers (search indexing, deadline scout) accept the owner connection. Both types come from the root module; keeping them in the owner is what lets every other module reach extracted text only through it."
+}
