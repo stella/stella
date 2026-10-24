@@ -67,7 +67,11 @@ on:
 # runs remain isolated. Main calls coalesce under a child group distinct from
 # the caller's group.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '') || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  # Metadata events of one head share a group, so a burst of them collapses
+  # into one pending run. A re-run attempt of a metadata run (ci-result
+  # refreshing its copy of a re-run code run) gets its own group: several are
+  # re-run at once, and a pending one must never replace another.
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta{2}', github.event.pull_request.number, github.event.pull_request.head.sha, github.run_attempt != '1' && format('-rerun-{0}', github.run_id) || '') || github.event_name == 'pull_request' && format('pr-{0}{1}', github.event.pull_request.number || github.ref, github.event.pull_request.draft && '-draft' || '') || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}
 
 permissions: {}
@@ -466,8 +470,9 @@ jobs:
             // A metadata run mirrors the code run of its head. When no earlier
             // code run of this head exists (a token push starts no workflow,
             // or the event was lost), it runs the head's suites itself. A run
-            // still in flight is a code run: metadata runs of one head share a
-            // concurrency group. A failed lookup runs the suites too.
+            // still in flight is a code run, or a metadata run re-run to mirror
+            // one: other metadata runs of one head share a concurrency group.
+            // A failed lookup runs the suites too.
             let mirrorsCodeRun = false;
             if (metadataAction) {
               const pull = context.payload.pull_request;
