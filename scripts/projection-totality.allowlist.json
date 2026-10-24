@@ -128,10 +128,6 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/entities/filesystem-tree/get.ts",
-    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
-  },
-  {
     "file": "apps/api/src/handlers/entities/read-group-counts.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

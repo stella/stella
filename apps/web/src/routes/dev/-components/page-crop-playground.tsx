@@ -71,6 +71,7 @@ export const PageCropPlayground = () => {
           const loaded = (
             await loadPDF({
               fileId: "page-crop-fixture",
+              pageSource: "portfolio",
               buffer: new Uint8Array(bytes).buffer,
             })
           ).unwrap("The generated crop fixture PDF must load");

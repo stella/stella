@@ -388,6 +388,7 @@
         "reading": "Widok do czytania"
       },
       "notLocated": "{count, plural, one {Nie znaleziono # twierdzenia w oryginale} few {Nie znaleziono # twierdzeń w oryginale} many {Nie znaleziono # twierdzeń w oryginale} other {Nie znaleziono # twierdzenia w oryginale}}",
+      "pdfTextFailed": "Nie udało się odczytać tekstu pliku PDF, dlatego twierdzenia nie są zaznaczone na stronach.",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Arkusz importu ESO9 (XLSX)",
         "exporting": "Przygotowywanie eksportu…",
         "isdoc": "E-faktura ISDOC (ABRA Gen i inne)",
+        "ksefFa3": "E-faktura KSeF FA(3) (XML)",
         "spreadsheets": "Arkusze",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Pozycje faktur (XLSX)"
@@ -1027,7 +1029,10 @@
       "pageOfCount": "Strona {page} z {pageCount}",
       "pageOfEstimatedCount": "Strona {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Strona {page} z około {pageCount}",
+      "pageWithEstimatedMatchCounts": "Strona {page} · około {exactCount, plural, one {# dokładne dopasowanie} few {# dokładne dopasowania} many {# dokładnych dopasowań} other {# dokładnego dopasowania}} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
       "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "pageWithMatchCounts": "Strona {page} · {exactCount, plural, one {# dokładne dopasowanie} few {# dokładne dopasowania} many {# dokładnych dopasowań} other {# dokładnego dopasowania}} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
+      "pageWithPartialMatchCount": "Strona {page} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "perPage": "Na stronę",
       "refineForMore": "Zawęź wyszukiwanie, aby zobaczyć więcej wyników"
