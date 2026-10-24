@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
@@ -27,7 +28,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { LockKeyholeIcon } from "@stll/ui/icons";
+import { AiActionIcon, LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
@@ -37,9 +38,14 @@ import { Textarea } from "@stll/ui/textarea";
 import type { DesktopMessages } from "../i18n/index";
 import { calendarDate, timedSegments } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
+import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
+import { absorbedGroupIds, reviewItems } from "./billing-draft-logic";
+import type { EntryEdit, ReviewItem } from "./billing-draft-logic";
+import { useBillingDraftSession } from "./billing-draft-session";
+import type { DraftStatus, ReviewBarDrafts } from "./billing-draft-session";
 import "./day-review.css";
 import { canAssign, matchDay } from "./day-review-logic";
 import type {
@@ -66,7 +72,6 @@ type CandidateState =
   | { type: "loading" }
   | { type: "failed" }
   | { type: "ready"; matters: DesktopTimeEntryMatterCandidate[] };
-type EntryEdit = { selected: boolean; billable: boolean; narrative: string };
 type BatchItem = {
   entry: DesktopTimeEntryBatch["entries"][number];
   ranges: { start: string; end: string }[];
@@ -98,6 +103,44 @@ const canDiscardPending = (
   !snapshot.unreadable &&
   submission.type === "retry" &&
   snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey;
+
+/** Each group's edits, defaulting to a narrative from what was recorded. */
+const useReviewEdits = () => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  const [edits, setEdits] = useState<ReadonlyMap<string, EntryEdit>>(new Map());
+  const narrative = (group: DayReviewGroup) =>
+    group.evidence.length
+      ? t("narrativeEvidence", {
+          evidence: format.list(group.evidence, { type: "conjunction" }),
+        })
+      : t("narrativeApps", {
+          apps: format.list(
+            group.apps.map(({ name }) => name),
+            { type: "conjunction" },
+          ),
+        });
+  const initial = (group: DayReviewGroup): EntryEdit => ({
+    selected: true,
+    billable: true,
+    narrative: narrative(group),
+    classification: null,
+    structure: null,
+  });
+  return {
+    editFor: (group: DayReviewGroup) =>
+      edits.get(group.matter?.id ?? "unmatched") ?? initial(group),
+    update: (group: DayReviewGroup, change: Partial<EntryEdit>) => {
+      const key = group.matter?.id ?? "unmatched";
+      setEdits((current) =>
+        new Map(current).set(key, {
+          ...(current.get(key) ?? initial(group)),
+          ...change,
+        }),
+      );
+    },
+  };
+};
 
 const useMatterCandidates = (enabled: boolean) => {
   const [candidates, setCandidates] = useState<CandidateState>({
@@ -186,11 +229,13 @@ const useReviewSubmission = ({
 export const ActivityDayReview = ({
   snapshot,
   header,
+  billingDrafts,
   onCopy,
   onReviewStatusChange,
 }: {
   header: ReactNode;
   snapshot: ActivityDaySnapshot;
+  billingDrafts: BillingDraftSettingsControl;
   onCopy: (text: string, onSettled: (copied: boolean) => void) => void;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 }) => {
@@ -199,7 +244,6 @@ export const ActivityDayReview = ({
   const { candidates, refreshCandidates } = useMatterCandidates(
     snapshot.timeBillingEnabled,
   );
-  const [edits, setEdits] = useState<Record<string, EntryEdit>>({});
   const { submission, updateSubmission } = useReviewSubmission({
     pendingBatch: snapshot.pendingBatch,
     onReviewStatusChange,
@@ -219,30 +263,8 @@ export const ActivityDayReview = ({
     manualAssignments: snapshot.manualAssignments,
     draftedEntries: [...snapshot.draftedEntries, ...localDrafts],
   });
-  const narrative = (group: DayReviewGroup) =>
-    group.evidence.length
-      ? t("narrativeEvidence", {
-          evidence: format.list(group.evidence, { type: "conjunction" }),
-        })
-      : t("narrativeApps", {
-          apps: format.list(
-            group.apps.map(({ name }) => name),
-            { type: "conjunction" },
-          ),
-        });
-  const editFor = (group: DayReviewGroup) =>
-    edits[group.matter?.id ?? "unmatched"] ?? {
-      selected: true,
-      billable: true,
-      narrative: narrative(group),
-    };
+  const { editFor, update } = useReviewEdits();
   const editable = submission.type === "editing" || submission.type === "saved";
-  const update = (group: DayReviewGroup, change: Partial<EntryEdit>) => {
-    setEdits({
-      ...edits,
-      [group.matter?.id ?? "unmatched"]: { ...editFor(group), ...change },
-    });
-  };
   const eligible = day.groups.filter(
     (
       group,
@@ -250,11 +272,25 @@ export const ActivityDayReview = ({
       group.matter !== null,
   );
   const selected = eligible.filter((group) => editFor(group).selected);
-  const selectionExceedsLimit = selected.length > DESKTOP_ACTIVITY_REVIEW_LIMIT;
+  const rows = selected.map((group) => ({ group, ...editFor(group) }));
+  const items = reviewItems(rows);
+  const absorbed = absorbedGroupIds(rows);
+  const selectionExceedsLimit = items.length > DESKTOP_ACTIVITY_REVIEW_LIMIT;
   const selectedTenths = selected.reduce(
     (sum, group) => sum + group.roundedTenths,
     0,
   );
+  const session = useBillingDraftSession({
+    snapshot,
+    billingDrafts,
+    eligible,
+    selected,
+    matters,
+    editable,
+    editFor,
+    update,
+    onError: setError,
+  });
   const hours = (value: number) =>
     format.number(value, {
       minimumFractionDigits: 1,
@@ -296,17 +332,7 @@ export const ActivityDayReview = ({
         ? submission
         : {
             idempotencyKey: crypto.randomUUID(),
-            items: selected.map((group) => ({
-              entry: {
-                matterId: group.matter.id,
-                dateWorked: snapshot.date,
-                timezoneId: Temporal.Now.timeZoneId(),
-                durationMinutes: group.roundedTenths * 6,
-                narrative: editFor(group).narrative,
-                billable: editFor(group).billable,
-              },
-              ranges: group.ranges,
-            })),
+            items: items.map((item) => batchItem(item, snapshot.date)),
           };
     if (pending.items.length === 0) {
       return;
@@ -425,6 +451,7 @@ export const ActivityDayReview = ({
           </Button>
         </div>
       ) : null}
+      {session.steerBar}
       <ReviewEntries
         groups={day.groups}
         editFor={editFor}
@@ -436,7 +463,11 @@ export const ActivityDayReview = ({
         leaveOut={leaveOut}
         onLeaveOut={() => setLeaveOut(true)}
         assign={assign}
+        absorbed={absorbed}
+        draftReview={session.draftReview}
       />
+      {session.guidelines}
+      {session.consentDialog}
       <ReviewSubmissionFeedback
         snapshot={snapshot}
         submission={submission}
@@ -448,19 +479,21 @@ export const ActivityDayReview = ({
       />
       <ReviewBar
         selected={selected}
+        itemCount={items.length}
         eligibleCount={eligible.length}
         hours={hours(selectedTenths / 10)}
         snapshot={snapshot}
         submission={submission}
+        drafts={session.bar}
         onCopy={async () =>
           // Resolves once the copy settles; a failed copy is reported by the
           // command runner and resolves false, leaving the button unconfirmed.
           new Promise<boolean>((resolve) => {
             onCopy(
-              selected
+              items
                 .map(
-                  (group) =>
-                    `${group.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
+                  (item) =>
+                    `${item.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(item.durationMinutes / 60) })}: ${item.narrative}`,
                 )
                 .join("\n"),
               resolve,
@@ -470,12 +503,30 @@ export const ActivityDayReview = ({
         onSubmit={submit}
         valid={
           !selectionExceedsLimit &&
-          selected.every((group) => editFor(group).narrative.trim().length > 0)
+          !session.busy &&
+          items.every((item) => item.narrative.trim().length > 0)
         }
       />
     </div>
   );
 };
+
+function batchItem(item: ReviewItem, date: string): BatchItem {
+  return {
+    entry: {
+      matterId: item.matter.id,
+      dateWorked: date,
+      timezoneId: Temporal.Now.timeZoneId(),
+      durationMinutes: item.durationMinutes,
+      narrative: item.narrative,
+      billable: item.billable,
+      ...(item.classification === null
+        ? {}
+        : { classification: item.classification }),
+    },
+    ranges: item.ranges,
+  };
+}
 
 type DayReviewMetricsProps = {
   header: ReactNode;
@@ -641,26 +692,39 @@ const withAwaySegments = (
   return timelineSegments;
 };
 
+const DRAFT_BUTTON_LABELS = {
+  draft: "aiDraft",
+  drafting: "aiDrafting",
+  drafted: "aiDrafted",
+  tooMany: "aiDraft",
+} as const satisfies Record<DraftStatus, keyof DesktopMessages["activity"]>;
+
 const ReviewBar = ({
   selected,
+  itemCount,
   eligibleCount,
   hours,
   snapshot,
   submission,
+  drafts,
   onCopy,
   onSubmit,
   valid,
 }: {
   selected: readonly DayReviewGroup[];
+  itemCount: number;
   eligibleCount: number;
   hours: string;
   snapshot: ActivityDaySnapshot;
   submission: Submission;
+  drafts: ReviewBarDrafts | null;
   onCopy: () => Promise<boolean>;
   onSubmit: () => void;
   valid: boolean;
 }) => {
   const t = useTranslations("activity");
+  const draftEditable =
+    submission.type === "editing" || submission.type === "saved";
   const disabled =
     !snapshot.timeBillingEnabled ||
     submission.type === "submitting" ||
@@ -688,10 +752,38 @@ const ReviewBar = ({
         size="sm"
         variant="outline"
       />
+      {drafts?.undoable ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!draftEditable}
+          onClick={drafts.onUndoAll}
+        >
+          {t("aiUndoAll")}
+        </Button>
+      ) : null}
+      {drafts ? (
+        <Button
+          size="sm"
+          variant="outline"
+          title={
+            drafts.status === "tooMany"
+              ? t("aiDraftLimit", {
+                  limit: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+                })
+              : undefined
+          }
+          disabled={!draftEditable || drafts.status !== "draft"}
+          onClick={drafts.onDraft}
+        >
+          <AiActionIcon aria-hidden="true" />
+          {t(DRAFT_BUTTON_LABELS[drafts.status])}
+        </Button>
+      ) : null}
       <Button size="sm" disabled={disabled} onClick={onSubmit}>
         {submission.type === "retry"
           ? t("pendingRetry")
-          : t("createDrafts", { count: selected.length })}
+          : t("createDrafts", { count: itemCount })}
       </Button>
     </footer>
   );
@@ -724,6 +816,8 @@ const ReviewEntries = ({
   leaveOut,
   onLeaveOut,
   assign,
+  absorbed,
+  draftReview,
 }: {
   groups: readonly DayReviewGroup[];
   editFor: (group: DayReviewGroup) => EntryEdit;
@@ -735,6 +829,10 @@ const ReviewEntries = ({
   leaveOut: boolean;
   onLeaveOut: () => void;
   assign: (ranges: readonly Range[], matter: DesktopMatter) => void;
+  absorbed: ReadonlySet<string>;
+  draftReview: (
+    group: DayReviewGroup & { matter: DesktopTimeEntryMatterCandidate },
+  ) => ReactNode;
 }) => {
   const t = useTranslations("activity");
   const format = useFormatter();
@@ -866,18 +964,27 @@ const ReviewEntries = ({
                   }
                 </div>
                 <Evidence group={group} snapshot={snapshot} />
-                <Textarea
-                  className="hover:border-input focus-visible:border-ring mt-2 min-h-9 resize-none border-transparent bg-transparent px-2 py-1.5 text-sm"
-                  rows={1}
-                  aria-label={t("entryNarrative")}
-                  aria-describedby={`review-matter-${matter.id}`}
-                  value={edit.narrative}
-                  maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
-                  disabled={!editable}
-                  onChange={(event) =>
-                    update(group, { narrative: event.target.value })
-                  }
-                />
+                {absorbed.has(group.id) ? (
+                  <p className="text-muted-foreground mt-2 px-2 text-xs">
+                    {t("aiMergedIntoAnother")}
+                  </p>
+                ) : (
+                  <>
+                    <Textarea
+                      className="hover:border-input focus-visible:border-ring mt-2 min-h-9 resize-none border-transparent bg-transparent px-2 py-1.5 text-sm"
+                      rows={1}
+                      aria-label={t("entryNarrative")}
+                      aria-describedby={`review-matter-${matter.id}`}
+                      value={edit.narrative}
+                      maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
+                      disabled={!editable}
+                      onChange={(event) =>
+                        update(group, { narrative: event.target.value })
+                      }
+                    />
+                    {draftReview({ ...group, matter })}
+                  </>
+                )}
               </div>
               <div className="col-start-2 flex items-center justify-between gap-2 sm:col-start-3 sm:flex-col sm:items-end">
                 <div className="text-base font-semibold tabular-nums">

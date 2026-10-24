@@ -21,6 +21,10 @@ import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import {
+  BILLING_DRAFTS_CONSTRAINT_VALIDATIONS,
+  BILLING_DRAFTS_CONSTRAINTS,
+} from "./billing-drafts-constraint-validation";
+import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
@@ -255,6 +259,16 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_decisions_republished_ruling_idx",
     tableName: "case_law_decisions",
+  },
+  // Billing guideline file search over knowledge-file paths.
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skill_resources_path_billing_trgm_idx" ON public."agent_skill_resources" USING gin ("path" gin_trgm_ops)',
+    definitionBody:
+      "ON public.agent_skill_resources USING gin (path gin_trgm_ops)",
+    isUnique: false,
+    name: "agent_skill_resources_path_billing_trgm_idx",
+    tableName: "agent_skill_resources",
   },
   {
     createSql:
@@ -777,6 +791,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ...BILLING_DRAFTS_CONSTRAINT_VALIDATIONS,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
@@ -799,6 +814,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
+    ...BILLING_DRAFTS_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 

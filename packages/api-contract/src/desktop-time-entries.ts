@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
+
 export const desktopMatterSchema = v.strictObject({
   id: v.pipe(v.string(), v.maxLength(200)),
   name: v.pipe(v.string(), v.maxLength(1024)),
@@ -19,6 +21,30 @@ export type DesktopMattersResponse = v.InferOutput<
 
 export const DESKTOP_ACTIVITY_REVIEW_LIMIT = 100;
 export const DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH = 10_000;
+export const DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH = 20;
+
+const codeSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH),
+);
+
+/** UTBMS task and activity codes for clients billed electronically (LEDES),
+ * otherwise the firm's activity group. */
+export const desktopTimeEntryClassificationSchema = v.union([
+  v.strictObject({
+    type: v.literal("ledes"),
+    taskCode: codeSchema,
+    activityCode: codeSchema,
+  }),
+  v.strictObject({
+    type: v.literal("activity_group"),
+    activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
+  }),
+]);
+export type DesktopTimeEntryClassification = v.InferOutput<
+  typeof desktopTimeEntryClassificationSchema
+>;
 export const desktopMatterCandidateSchema = v.strictObject({
   ...desktopMatterSchema.entries,
   clientName: v.nullable(v.pipe(v.string(), v.maxLength(1024))),
@@ -56,6 +82,7 @@ export const desktopTimeEntryBatchItemSchema = v.strictObject({
     v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH),
   ),
   billable: v.boolean(),
+  classification: v.optional(desktopTimeEntryClassificationSchema),
 });
 export const desktopTimeEntryBatchSchema = v.strictObject({
   idempotencyKey: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),

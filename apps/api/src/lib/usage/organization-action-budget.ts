@@ -113,6 +113,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   "skills.generate-draft": "counts",
   "skills.propose-from-comments": "counts",
   "time-entries.polish-narrative": "counts",
+  "billing.activity-drafts": "counts",
   "entities.suggest-placements": "off",
   "versions.summarize": "counts",
   "properties.suggest-prompt": "off",

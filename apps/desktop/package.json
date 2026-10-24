@@ -33,10 +33,12 @@
     "better-result": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
-    "use-intl": "catalog:"
+    "use-intl": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tauri-apps/cli": "^2.12.2",
@@ -44,6 +46,7 @@
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "tailwindcss": "catalog:",
     "vite": "catalog:"
   },

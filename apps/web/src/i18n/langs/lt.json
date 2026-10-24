@@ -91,6 +91,7 @@
     "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "DI apmokestinimo juodraščiai yra pasiūlymai, kuriuos stella sugeneruoja iš pasirinktų įrašų, jūsų ankstesnių bylos įrašų ir apmokestinimo taisyklių. Prieš kurdami peržiūrėkite kiekvieną įrašą.",
     "caseLaw": "DI parengtas teismų sprendimų santraukas, pastabas ir analizes generuoja stella; teismai jų nėra patvirtinę ir jos neatspindi pačių teismų argumentacijos. Tai pagalbinės priemonės teisės specialistams, o oficialiu ir lemiamu šaltiniu išlieka sprendimo tekstas."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Data iki",
       "auditLogsUserId": "Naudotojo ID",
       "auditLogsUserIdPlaceholder": "Filtruoti pagal naudotojo ID",
+      "billingDrafts": {
+        "description": "Kurkite darbo aprašymus iš pasirinktų veiklų ir kontoros arba kliento žinių failų. Kiekvienas naudotojas taip pat duoda savo sutikimą. Prieš įjungdami juodraščius pridėkite kontoros gaires.",
+        "firm": "Kontoros gairės",
+        "ledes": "Elektroninis sąskaitų išrašymas (LEDES)",
+        "title": "DI atsiskaitymo juodraščiai"
+      },
       "documentProcessing": {
         "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",
         "title": "Dokumentų teksto atpažinimas",

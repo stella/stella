@@ -91,6 +91,7 @@
     "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Os rascunhos de faturamento com IA são sugestões que a stella gera a partir dos lançamentos selecionados, dos seus lançamentos anteriores no caso e das diretrizes de faturamento. Revise cada lançamento antes de criá-lo.",
     "caseLaw": "Os resumos, notas e análises de decisões judiciais feitos por IA são gerados pelo stella, não são endossados pelos tribunais e não representam a fundamentação dos próprios tribunais; são ferramentas de apoio para profissionais do direito, e o texto da decisão continua sendo a fonte oficial."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Data final",
       "auditLogsUserId": "ID do usuário",
       "auditLogsUserIdPlaceholder": "Filtrar por ID do usuário",
+      "billingDrafts": {
+        "description": "Redija descrições com base nas atividades selecionadas e nos arquivos de conhecimento do escritório ou do cliente. Cada usuário também dá seu consentimento. Anexe as diretrizes do escritório antes de ativar os rascunhos.",
+        "firm": "Diretrizes do escritório",
+        "ledes": "Faturamento eletrônico (LEDES)",
+        "title": "Rascunhos de faturamento com IA"
+      },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
         "title": "Reconhecimento de texto de documentos",

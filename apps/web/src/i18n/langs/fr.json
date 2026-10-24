@@ -91,6 +91,7 @@
     "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Les brouillons de facturation par IA sont des propositions que stella génère à partir des entrées sélectionnées, de vos entrées antérieures sur le dossier et des règles de facturation. Relisez chaque entrée avant de la créer.",
     "caseLaw": "Les résumés, notes et analyses de décisions de justice produits par l’IA sont générés par stella ; ils ne sont pas approuvés par les juridictions et ne reflètent pas leur propre raisonnement. Ce sont des outils d’aide destinés aux professionnels du droit ; seul le texte de la décision fait foi."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Date de fin",
       "auditLogsUserId": "ID utilisateur",
       "auditLogsUserIdPlaceholder": "Filtrer par ID utilisateur",
+      "billingDrafts": {
+        "description": "Rédigez les descriptions à partir des activités sélectionnées et des fichiers de connaissances du cabinet ou du client. Chaque utilisateur donne aussi son consentement. Joignez les directives du cabinet avant d’activer les brouillons.",
+        "firm": "Directives du cabinet",
+        "ledes": "Facturation électronique (LEDES)",
+        "title": "Brouillons de facturation par IA"
+      },
       "documentProcessing": {
         "description": "Reconnaissez automatiquement le texte des PDF numérisés afin de pouvoir rechercher leur contenu.",
         "title": "Reconnaissance de texte des documents",

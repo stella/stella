@@ -91,6 +91,7 @@
     "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "AI arveldusmustandid on soovitused, mille stella koostab valitud kannete, sinu varasemate toimikukannete ja arveldusjuhiste põhjal. Vaata iga kanne enne loomist üle.",
     "caseLaw": "Kohtulahendite AI-kokkuvõtted, -märkmed ja -analüüsid koostab stella; kohtud ei ole neid heaks kiitnud ja need ei kajasta kohtute endi arutluskäiku. Need on abivahendid õigusala spetsialistidele ning määravaks allikaks jääb lahendi tekst."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Kuni",
       "auditLogsUserId": "Kasutaja ID",
       "auditLogsUserIdPlaceholder": "Filtreeri kasutaja ID järgi",
+      "billingDrafts": {
+        "description": "Koostage töö kirjeldused valitud tegevustest ning büroo või kliendi teadmiste failidest. Iga kasutaja annab ka oma nõusoleku. Enne mustandite lubamist lisage büroo juhised.",
+        "firm": "Büroo juhised",
+        "ledes": "Elektrooniline arveldamine (LEDES)",
+        "title": "Tehisintellekti arveldusmustandid"
+      },
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",

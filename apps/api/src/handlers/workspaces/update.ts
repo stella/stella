@@ -19,8 +19,10 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -31,6 +33,7 @@ const updateWorkspaceBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   clientId: t.Optional(tSafeId("contact")),
   reference: t.Optional(t.String({ maxLength: 64, minLength: 1 })),
+  billingNarrativeLanguage: t.Optional(narrativeLanguageSchema),
   billingReference: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
   color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   // Pinned-first avatar on the matters list. Must be an existing
@@ -41,8 +44,9 @@ const updateWorkspaceBodySchema = t.Object({
 const config = {
   contract: "patch",
   description:
-    "Change a matter: its name, client, reference, billing reference, colour, " +
-    "or lead (who must already be a member of it). Only the fields you pass " +
+    "Change a matter: its name, client, reference, billing reference, the " +
+    "language its billing narratives are written in, colour, or lead (who " +
+    "must already be a member of it). Only the fields you pass " +
     "are written. clientId attaches a client to a personal matter or replaces " +
     "the client of a client matter; members are managed separately.",
   permissions: { workspace: ["update"] },
@@ -163,6 +167,12 @@ export const updateWorkspaceHandler = async function* ({
   body,
 }: UpdateWorkspaceHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    await withAggregateLock({
+      aggregate: "workspace",
+      id: { id: workspaceId, organizationId },
+      tx,
+      mode: "update",
+    });
     const workspaceRows = await tx
       .select({
         id: workspaces.id,
@@ -170,12 +180,17 @@ export const updateWorkspaceHandler = async function* ({
         clientId: workspaces.clientId,
         reference: workspaces.reference,
         billingReference: workspaces.billingReference,
+        billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
         color: workspaces.color,
         leadUserId: workspaces.leadUserId,
       })
       .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .for("update");
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      );
     const workspace = workspaceRows.at(0);
 
     if (!workspace) {
@@ -243,6 +258,7 @@ export const updateWorkspaceHandler = async function* ({
           "clientId",
           "reference",
           "billingReference",
+          "billingNarrativeLanguage",
           "color",
           "leadUserId",
         ]),
@@ -264,6 +280,17 @@ export const updateWorkspaceHandler = async function* ({
         old: workspace.reference,
         new: body.reference,
       };
+    }
+    if (
+      body.billingNarrativeLanguage !== undefined &&
+      body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
+    ) {
+      Object.assign(changes, {
+        billingNarrativeLanguage: {
+          old: workspace.billingNarrativeLanguage,
+          new: body.billingNarrativeLanguage,
+        },
+      });
     }
     if (
       body.billingReference !== undefined &&

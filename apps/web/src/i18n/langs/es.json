@@ -91,6 +91,7 @@
     "selectedRun": "Ejecutar columnas de IA para {count, plural, one {# fila} other {# filas}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Los borradores de facturación con IA son sugerencias que stella genera a partir de las entradas seleccionadas, sus entradas anteriores del asunto y las directrices de facturación. Revise cada entrada antes de crearla.",
     "caseLaw": "Los resúmenes, notas y análisis de resoluciones judiciales elaborados con IA los genera stella; no están avalados por los tribunales ni reflejan su propio razonamiento. Son herramientas de apoyo para profesionales del derecho, y solo el texto de la resolución tiene valor fehaciente."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Hasta",
       "auditLogsUserId": "ID de usuario",
       "auditLogsUserIdPlaceholder": "Filtrar por ID de usuario",
+      "billingDrafts": {
+        "description": "Redacte descripciones a partir de las actividades seleccionadas y los archivos de conocimiento del despacho o del cliente. Cada usuario también da su consentimiento. Adjunte las directrices del despacho antes de activar los borradores.",
+        "firm": "Directrices del despacho",
+        "ledes": "Facturación electrónica (LEDES)",
+        "title": "Borradores de facturación con IA"
+      },
       "documentProcessing": {
         "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",
         "title": "Reconocimiento de texto de documentos",

@@ -2023,12 +2023,6 @@
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",
-    "fingerprint": "79386eeb06ec6ca911b7fe3ec8ae6c0d676cb45a269766db5cbec65b4e171a39",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/update.ts",
     "fingerprint": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
     "count": 1,
     "reason": "The same client contact lock, now keyed on clientId alone after the separate attach-client body field was removed."

@@ -47,6 +47,7 @@ import {
   legalReaderAnswers,
   notifications,
   numberSeries,
+  organizationSettings,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
@@ -115,6 +116,11 @@ import {
   desktopBatchFingerprint,
 } from "@/api/handlers/desktop-time-entries/batch";
 import { createDesktopTimeEntryBatchStatusEndpoint } from "@/api/handlers/desktop-time-entries/batch-status";
+import {
+  createDesktopBillingDraftSettingsReadEndpoint,
+  createDesktopBillingDraftSettingsUpdateEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-draft-settings";
+import { createDesktopBillingDraftEndpoint } from "@/api/handlers/desktop-time-entries/billing-drafts";
 import { createDesktopMatterCandidatesEndpoint } from "@/api/handlers/desktop-time-entries/candidates";
 import { createDesktopTimeEntryEndpoint } from "@/api/handlers/desktop-time-entries/create";
 import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entries/matters";
@@ -716,6 +722,27 @@ const expectDesktopEntryOwnedByB = async (entryId: string) => {
   ]);
 };
 
+const DESKTOP_DRAFT_PREFERENCE_B = "Organization B drafting preference";
+
+const putDraftSettings = async (
+  caller: (request: Request) => Promise<Response>,
+  body: { consent: "granted" } | { preference: string },
+) => {
+  const response = await caller(desktopRequest("/draft-settings", body));
+  expect(response.status).toBe(200);
+};
+
+const grantDraftConsent = async (
+  caller: (request: Request) => Promise<Response>,
+) => await putDraftSettings(caller, { consent: "granted" });
+
+const saveOrganizationBDraftSettings = async (
+  desktopB: (request: Request) => Promise<Response>,
+) => {
+  await grantDraftConsent(desktopB);
+  await putDraftSettings(desktopB, { preference: DESKTOP_DRAFT_PREFERENCE_B });
+};
+
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
   {
     name: "desktop registry saved format",
@@ -849,6 +876,63 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
         type: "committed",
         entries: [{ id: testIds.timeEntryB1, matterId: testIds.wsB1 }],
       }),
+  },
+  {
+    // Consent and preference are kept per organization: the same user's
+    // settings in B never answer a request bound to A.
+    name: "desktop billing draft settings",
+    runAAgainstB: async ({ desktopA, desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopA(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopB(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) =>
+      expect(result).toEqual({
+        organizationMode: "enabled",
+        consent: "revoked",
+        preference: null,
+      }),
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        organizationMode: "enabled",
+        consent: "granted",
+        preference: DESKTOP_DRAFT_PREFERENCE_B,
+      }),
+  },
+  {
+    // Drafting reads the selected matter before guidelines or the model, so
+    // B's matter is refused to A while B's own request passes that check and
+    // stops at the missing firm guideline file.
+    name: "desktop billing drafts",
+    runAAgainstB: async ({ desktopA, ids: testIds }) => {
+      await grantDraftConsent(desktopA);
+      const response = await desktopA(desktopDraftRequest(testIds.wsB1));
+      return { status: response.status, body: await response.json() };
+    },
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      await grantDraftConsent(desktopB);
+      const response = await desktopB(desktopDraftRequest(testIds.wsB1));
+      return { status: response.status, body: await response.json() };
+    },
+    expectDenied: (result) => {
+      expect(result).toMatchObject({ status: 403 });
+      expect(JSON.stringify(result)).toContain(
+        "Selected matter is unavailable",
+      );
+    },
+    expectPositive: (result) => {
+      expect(result).toMatchObject({ status: 409 });
+      expect(JSON.stringify(result)).toContain(
+        "A firm billing guideline file is required",
+      );
+    },
   },
   {
     name: "desktop single create",
@@ -2693,6 +2777,10 @@ testState.beforeAll(async () => {
     name: "Matrix format B",
     format: "[company name]",
   });
+  await testDb
+    .update(organizationSettings)
+    .set({ aiBillingDraftsMode: "enabled" })
+    .where(inArray(organizationSettings.organizationId, [ids.orgA, ids.orgB]));
   desktopCredentials = await createRlsDesktopCredentials(testDb, ids);
   await testDb.insert(desktopTimeEntryBatches).values({
     organizationId: ids.orgB,
@@ -3577,6 +3665,13 @@ const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
   const batch = createDesktopTimeEntryBatchEndpoint(authorize);
   const status = createDesktopTimeEntryBatchStatusEndpoint(authorize);
   const single = createDesktopTimeEntryEndpoint(authorize);
+  const readDraftSettings =
+    createDesktopBillingDraftSettingsReadEndpoint(authorize);
+  const updateDraftSettings =
+    createDesktopBillingDraftSettingsUpdateEndpoint(authorize);
+  const drafts = createDesktopBillingDraftEndpoint({
+    authorizeAccount: authorize,
+  });
   const app = new Elysia()
     .put("/registry", registry.handler, { body: registry.config.body })
     .get("/features", feature.handler, { response: feature.config.response })
@@ -3599,11 +3694,39 @@ const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
       params: single.config.params,
       body: single.config.body,
       response: single.config.response,
+    })
+    .get("/draft-settings", readDraftSettings.handler, {
+      response: readDraftSettings.config.response,
+    })
+    .put("/draft-settings", updateDraftSettings.handler, {
+      body: updateDraftSettings.config.body,
+      response: updateDraftSettings.config.response,
+    })
+    .post("/drafts", drafts.handler, {
+      body: drafts.config.body,
+      response: drafts.config.response,
     });
   const credential =
     tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
   return await app.handle(await credential.signRequest(request));
 };
+
+const desktopDraftRequest = (matterId: string) =>
+  new Request("http://localhost/drafts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      entries: [
+        {
+          matterId,
+          date: DESKTOP_ENTRY.dateWorked,
+          timezone: DESKTOP_ENTRY.timezoneId,
+          durationMinutes: DESKTOP_ENTRY.durationMinutes,
+          appNames: ["Editor"],
+        },
+      ],
+    }),
+  });
 
 const desktopRequest = (path: string, body?: unknown) =>
   new Request(

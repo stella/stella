@@ -91,6 +91,7 @@
     "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Propozycje rozliczeń AI to sugestie, które stella tworzy na podstawie wybranych wpisów, Twoich wcześniejszych wpisów w sprawie i zasad rozliczeń. Sprawdź każdy wpis przed jego utworzeniem.",
     "caseLaw": "Podsumowania, notatki i analizy orzeczeń sądowych przygotowane przez AI generuje stella; nie są one zatwierdzone przez sądy i nie odzwierciedlają własnego rozumowania sądów. Stanowią pomoc dla prawników, a rozstrzygającym źródłem pozostaje tekst orzeczenia."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Data do",
       "auditLogsUserId": "Identyfikator użytkownika",
       "auditLogsUserIdPlaceholder": "Filtruj według identyfikatora użytkownika",
+      "billingDrafts": {
+        "description": "Twórz opisy pracy na podstawie wybranych aktywności i plików wiedzy kancelarii lub klienta. Każdy użytkownik wyraża również zgodę. Przed włączeniem projektów dołącz wytyczne kancelarii.",
+        "firm": "Wytyczne kancelarii",
+        "ledes": "Fakturowanie elektroniczne (LEDES)",
+        "title": "Projekty rozliczeń z AI"
+      },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
         "title": "Rozpoznawanie tekstu dokumentów",

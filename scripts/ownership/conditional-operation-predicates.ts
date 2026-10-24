@@ -4,6 +4,7 @@ export default {
   id: "conditional-operation-predicates",
   capability: "Checking conditional operation prerequisites",
   owner: [
+    "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
     "apps/api/src/handlers/chat/get-suggested-prompts.ts",
     "apps/api/src/handlers/chat/send-message.ts",
     "apps/api/src/handlers/chat/suggest-thread-title.ts",

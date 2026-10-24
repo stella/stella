@@ -91,6 +91,7 @@
     "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "KI-Abrechnungsentwürfe sind Vorschläge, die stella aus den ausgewählten Einträgen, Ihren früheren Einträgen zum Mandat und den Abrechnungsrichtlinien erstellt. Prüfen Sie jeden Eintrag, bevor Sie ihn erstellen.",
     "caseLaw": "KI-Zusammenfassungen, -Notizen und -Analysen von Gerichtsentscheidungen erstellt stella; sie sind von den Gerichten nicht gebilligt und geben nicht deren eigene Erwägungen wieder. Sie dienen juristischen Fachleuten als Hilfsmittel; maßgeblich bleibt der Text der Entscheidung."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Bis",
       "auditLogsUserId": "Benutzer-ID",
       "auditLogsUserIdPlaceholder": "Nach Benutzer-ID filtern",
+      "billingDrafts": {
+        "description": "Abrechnungstexte aus ausgewählten Aktivitäten und Wissensdateien der Kanzlei oder des Mandanten entwerfen. Jeder Nutzer erteilt zusätzlich seine Zustimmung. Fügen Sie vor dem Aktivieren Kanzleirichtlinien hinzu.",
+        "firm": "Kanzleirichtlinien",
+        "ledes": "Elektronische Abrechnung (LEDES)",
+        "title": "KI-Abrechnungsentwürfe"
+      },
       "documentProcessing": {
         "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",
         "title": "Dokumenttexterkennung",

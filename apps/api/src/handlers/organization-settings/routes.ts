@@ -36,6 +36,13 @@ import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-ke
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
+import {
+  listBillingKnowledgeFiles,
+  readBillingDraftConfiguration,
+  readBillingKnowledgeFile,
+  updateBillingDraftConfiguration,
+} from "./billing-drafts";
+
 export const organizationSettingsRoute = new Elysia({
   prefix: "/organization-settings",
 })
@@ -150,6 +157,30 @@ export const organizationSettingsRoute = new Elysia({
     body: previewOrganizationSettings.config.body,
     permissions: previewOrganizationSettings.config.permissions,
     accountAccess: previewOrganizationSettings.config.accountAccess,
+  })
+  .get(
+    "/billing-drafts/knowledge-files/:resourceId",
+    readBillingKnowledgeFile.handler,
+    {
+      permissions: readBillingKnowledgeFile.config.permissions,
+      accountAccess: readBillingKnowledgeFile.config.accountAccess,
+      params: readBillingKnowledgeFile.config.params,
+    },
+  )
+  .get("/billing-drafts/knowledge-files", listBillingKnowledgeFiles.handler, {
+    permissions: listBillingKnowledgeFiles.config.permissions,
+    accountAccess: listBillingKnowledgeFiles.config.accountAccess,
+    query: listBillingKnowledgeFiles.config.query,
+  })
+  .get("/billing-drafts", readBillingDraftConfiguration.handler, {
+    permissions: readBillingDraftConfiguration.config.permissions,
+    accountAccess: readBillingDraftConfiguration.config.accountAccess,
+    query: readBillingDraftConfiguration.config.query,
+  })
+  .post("/billing-drafts", updateBillingDraftConfiguration.handler, {
+    permissions: updateBillingDraftConfiguration.config.permissions,
+    accountAccess: updateBillingDraftConfiguration.config.accountAccess,
+    body: updateBillingDraftConfiguration.config.body,
   })
   .get("/ai-availability", readAIAvailability.handler, {
     permissions: readAIAvailability.config.permissions,

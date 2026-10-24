@@ -91,6 +91,7 @@
     "selectedRun": "AI-oszlopok futtatása {count, plural, one {# sorra} other {# sorra}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Az AI-alapú számlázási piszkozatok olyan javaslatok, amelyeket a stella a kijelölt tételekből, az ügyben korábban rögzített tételekből és a számlázási szabályokból állít elő. Létrehozás előtt ellenőrizzen minden tételt.",
     "caseLaw": "A bírósági határozatokról készült AI-összefoglalókat, -jegyzeteket és -elemzéseket a stella állítja elő; ezeket a bíróságok nem hagyták jóvá, és nem a bíróságok saját érvelését tükrözik. A jogi szakemberek munkáját segítő eszközök; a hiteles forrás továbbra is a határozat szövege."
   },
   "appearance": {
@@ -5044,6 +5045,12 @@
       "auditLogsTo": "Záró dátum",
       "auditLogsUserId": "Felhasználói azonosító",
       "auditLogsUserIdPlaceholder": "Szűrés felhasználói azonosító alapján",
+      "billingDrafts": {
+        "description": "Készítsen munkaleírásokat a kiválasztott tevékenységekből és az iroda vagy az ügyfél tudásfájljaiból. Minden felhasználó külön hozzájárulást ad. A vázlatok engedélyezése előtt csatolja az iroda irányelveit.",
+        "firm": "Irodai irányelvek",
+        "ledes": "Elektronikus számlázás (LEDES)",
+        "title": "AI számlázási vázlatok"
+      },
       "documentProcessing": {
         "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",
         "title": "Dokumentumszöveg-felismerés",

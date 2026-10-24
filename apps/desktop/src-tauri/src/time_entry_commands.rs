@@ -88,7 +88,7 @@ fn validate_confirmation(
   Ok(())
 }
 
-fn require_account(
+pub(crate) fn require_account(
   caller: &ActivityCaller,
   gates: &FeatureGates,
   account: &LinkedAccount,
@@ -120,7 +120,7 @@ fn require_local_discard(
   Ok(())
 }
 
-async fn linked_account(
+pub(crate) async fn linked_account(
   caller: &ActivityCaller,
   gates: &FeatureGates,
   state: &AccountState,
@@ -312,6 +312,7 @@ mod tests {
           duration_minutes: 6,
           narrative: "Reviewed agreement".into(),
           billable: false,
+          classification: None,
         })
         .collect(),
     };

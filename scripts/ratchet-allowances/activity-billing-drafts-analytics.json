@@ -1,0 +1,5 @@
+{
+  "metric": "ai-analytics-callback-seams",
+  "delta": 2,
+  "reason": "The stateless billing draft boundary reports provider failures and rejected structured proposals through the existing customer-data AI analytics callback. Both sites retain generation failure bookkeeping and its redaction policy; a terminal telemetry sink alone would omit that bookkeeping."
+}
