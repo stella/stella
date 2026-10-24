@@ -392,8 +392,14 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
     "no-banned-glyph/no-banned-glyph",
   ]),
+  fixtureRuleOverride("no-decorative-heading-accent.fixture.tsx", [
+    "no-decorative-heading-accent/no-decorative-heading-accent",
+  ]),
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
+  ]),
+  fixtureRuleOverride("no-placeholder-stella-mark.fixture.tsx", [
+    "no-placeholder-stella-mark/no-placeholder-stella-mark",
   ]),
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
@@ -1187,6 +1193,7 @@ const config = defineConfig({
       "error",
     "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
+    "no-domain-enum/no-domain-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
@@ -1446,6 +1453,7 @@ const config = defineConfig({
   ignorePatterns: [
     ...libraryIgnorePatterns,
     "**/routeTree.gen.ts",
+    "apps/web/src/route-templates.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
@@ -1527,6 +1535,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
@@ -1652,6 +1661,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-domain-enum.ts",
     "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/provider-call-error-message.ts",
@@ -1694,6 +1704,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
@@ -1702,6 +1713,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-safe-outbound-target.ts",
     "./.oxlint-plugins/require-polite-publisher-fetch.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
+    "./.oxlint-plugins/require-frame-loop-cleanup.ts",
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
@@ -2666,6 +2678,23 @@ const config = defineConfig({
       },
     },
     {
+      // Interval timers and self-scheduling frame loops in the web app and
+      // the React packages stop when their owner goes away, and frame loops
+      // reschedule only while there is work to draw.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/mcp-apps/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-frame-loop-cleanup.fixture.ts",
+      ],
+      rules: {
+        "require-frame-loop-cleanup/require-frame-loop-cleanup": "error",
+      },
+    },
+    {
       // Repository-relative strings are portable identifiers, whose separator
       // must not vary with the operating system running the code.
       files: [
@@ -3290,6 +3319,16 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/**/*.{jsx,tsx}",
+        "packages/**/*.{jsx,tsx}",
+        ".oxlint-plugins/__fixtures__/no-placeholder-stella-mark.fixture.tsx",
+      ],
+      rules: {
+        "no-placeholder-stella-mark/no-placeholder-stella-mark": "error",
+      },
+    },
+    {
       // Glyphs this design system never draws: scales of justice and gavels
       // (legal cliché; a court is a Landmark, a decision a FileText) and
       // robots (the AI is not a character; its actions use AiActionIcon).
@@ -3402,6 +3441,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-decorated-search-input/no-decorated-search-input": "error",
+      },
+    },
+    {
+      // A heading is one typographic statement. A differently styled fragment
+      // must communicate interaction or independently documented meaning.
+      files: [
+        "apps/landing/src/**/*.tsx",
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-decorative-heading-accent.fixture.tsx",
+      ],
+      rules: {
+        "no-decorative-heading-accent/no-decorative-heading-accent": "error",
       },
     },
     {

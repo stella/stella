@@ -111,6 +111,32 @@ pub fn target_work_area(app: &AppHandle) -> Option<WorkArea> {
   })
 }
 
+/// The work area of the screen containing `point` (Tauri logical
+/// coordinates), for a window that docks beside another app's window.
+#[cfg(target_os = "macos")]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "this is the owner of screen selection; the ban keeps a second rule from appearing elsewhere"
+)]
+pub fn work_area_at(app: &AppHandle, point: LogicalPosition<f64>) -> Option<WorkArea> {
+  use objc2::MainThreadMarker;
+  use objc2_app_kit::NSScreen;
+
+  on_main_thread(app, None, move || {
+    let main_thread = MainThreadMarker::new()?;
+    let screens = NSScreen::screens(main_thread);
+    let primary_height = screens.iter().next()?.frame().size.height;
+    screens.iter().find_map(|screen| {
+      let frame = logical_work_area(primary_height, screen.frame());
+      let contains = point.x >= frame.x
+        && point.x < frame.x + frame.width
+        && point.y >= frame.y
+        && point.y < frame.y + frame.height;
+      contains.then(|| logical_work_area(primary_height, screen.visibleFrame()))
+    })
+  })
+}
+
 /// Cocoa work area (origin bottom-left of the primary screen, y up) as a Tauri
 /// logical work area (origin top-left, y down).
 #[cfg(target_os = "macos")]

@@ -16,6 +16,7 @@ export const PROVISION_LINK_CAPABILITIES = {
   AUT: { type: "notSupportedYet", reason: "no_profile" },
   CZE: { type: "supported", languages: ["cs"] },
   EU: { type: "notSupportedYet", reason: "no_multilingual_profile" },
+  GBR: { type: "notSupportedYet", reason: "no_profile" },
   HUN: { type: "notSupportedYet", reason: "no_profile" },
   POL: { type: "notSupportedYet", reason: "no_profile" },
   SVK: { type: "supported", languages: ["sk"] },

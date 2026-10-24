@@ -513,6 +513,7 @@ jobs:
       - name: Build and publish web image publicly
         if: steps.existing.outputs.reused != 'true'
         id: publish
+        timeout-minutes: 45
         uses: ./.workflow-source/.github/actions/build-web-image
         with:
           release-ref: ${{ needs.resolve.outputs.release_ref }}
