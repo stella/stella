@@ -1881,12 +1881,12 @@ export const executeRegistryLookup = async ({
       return { type: "lookup", registry: handler.slug, hit };
     }
     if (!searchFn && handler.webCandidateNameSearch) {
-      const availability = await loadWebSearch?.();
-      if (availability?.isErr()) {
+      const availability = (await loadWebSearch?.()) ?? Result.ok(null);
+      if (availability.isErr()) {
         return availability.error;
       }
-      const webSearch = availability?.value;
-      if (webSearch === undefined || webSearch === null) {
+      const webSearch = availability.value;
+      if (webSearch === null) {
         return {
           type: "name-search-unavailable",
           registry: handler.slug,
