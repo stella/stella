@@ -4,6 +4,8 @@ import type {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LegislationExpressionKind,
 } from "@stll/api-contract/legislation-expression";
+import type { LegislationPublisherEvidence } from "@stll/api-contract/legislation-publisher-evidence";
+import type { LegislationDocumentStatus } from "@stll/api-contract/legislation-status";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -34,9 +36,6 @@ import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
  * `LegislationDocumentInput` stands apart from `IngestionResult` instead of
  * being generalised into it.
  */
-
-/** Lifecycle of a legislative text at a given point in time. */
-type LegislationStatus = "current" | "historical" | "repealed" | "draft";
 
 /**
  * How the publisher states the close of a consolidation window.
@@ -123,9 +122,50 @@ type LegislationExpressionIdentity = {
  * earlier) show what it listed then.
  */
 type LegislationObservationOrigin =
-  | "live"
-  | "bulk-snapshot"
-  | "stored-raw-replay";
+  "live" | "bulk-snapshot" | "stored-raw-replay";
+
+export const LEGISLATION_AMENDMENT_CHANGE_KINDS = [
+  "changed",
+  "inserted",
+  "repealed",
+] as const;
+export const LEGISLATION_AMENDMENT_EFFECTIVE_TYPES = [
+  "date",
+  "not-stated",
+] as const;
+
+/** One publisher-identified amendment instruction affecting one provision. */
+export type LegislationAmendmentRelation = {
+  publisherId: string;
+  amendingEli: string;
+  /** Null when the fetched publisher data states no title. */
+  amendingTitle: string | null;
+  /** Exact publisher fragment IRI, not an inferred reader anchor. */
+  amendingAnchor: string | null;
+  affectedAnchor: string;
+  changeKind: (typeof LEGISLATION_AMENDMENT_CHANGE_KINDS)[number];
+  effective:
+    { type: "date"; on: string } | { type: "not-stated"; text: string | null };
+  /** Original instruction code, retained alongside its normalized kind. */
+  publisherInstruction: string | null;
+};
+
+export type LegislationAmendmentCoverage =
+  | { type: "complete" }
+  | { type: "partial"; unlocatedRelations: number; reason: string }
+  | { type: "not-stated"; reason: string };
+
+/**
+ * Complete observation of incoming relations for this target Work. Missing
+ * `amendments` leaves the stored snapshot alone. An empty observation clears
+ * it. `observedAt` is the publisher retrieval start, preserved through raw
+ * replay; it must never be replaced with the replay's current time.
+ */
+export type LegislationAmendmentSnapshot = {
+  observedAt: string;
+  relations: LegislationAmendmentRelation[];
+  coverage: LegislationAmendmentCoverage;
+};
 
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {
@@ -141,7 +181,7 @@ export type LegislationDocumentInput = {
   country: string;
   language: string;
   documentType?: string | null;
-  status?: LegislationStatus;
+  status?: LegislationDocumentStatus;
   effectiveDate?: string | null;
   /**
    * The consolidation this row holds. Required: a connector that reads no
@@ -172,7 +212,11 @@ export type LegislationDocumentInput = {
   ast?: DocumentAst | EmptyAst | null;
   sourceUrl?: string | null;
   documentUrl?: string | null;
-  metadata?: Record<string, unknown>;
+  /** Exact work aliases for publisher-identity sources; language/edition identifiers are not work aliases. */
+  identifiers?: readonly string[] | undefined;
+  metadata?: Record<string, unknown> & {
+    publisherEvidence?: LegislationPublisherEvidence;
+  };
   /**
    * The publisher's response as received (HTML, a JSON string, a structured
    * envelope over several responses), after the pipeline's
@@ -204,6 +248,7 @@ export type LegislationDocumentInput = {
    * never be refreshed once the parser learns to read it.
    */
   rawHash: string;
+  amendments?: LegislationAmendmentSnapshot | undefined;
 };
 
 /**
@@ -334,6 +379,5 @@ export type LegislationSourceAdapter = {
    * its reason.
    */
   reconciliation:
-    | LegislationSourceReconciliation
-    | LegislationReconciliationUnsupported;
+    LegislationSourceReconciliation | LegislationReconciliationUnsupported;
 };

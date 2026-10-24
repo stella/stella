@@ -9,6 +9,7 @@ import {
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import type { Plugin } from "@tiptap/pm/state";
 import { useTranslations } from "use-intl";
 
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
@@ -61,8 +62,8 @@ import type { DocumentSearchResult } from "@/lib/document-search";
 import { fileOptions } from "@/lib/files/queries";
 import {
   PDF_COLOR_MODES,
-  resolvePDFInvertColors,
   type PDFColorMode,
+  resolvePDFInvertColors,
 } from "@/lib/pdf/pdf-color-mode";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -124,8 +125,7 @@ type PeekPdfViewerProps = {
   searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
-    | ((summary: SearchMatchSummary) => void)
-    | undefined;
+    ((summary: SearchMatchSummary) => void) | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
   onPeekNavigate?: (() => void) | undefined;
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
@@ -137,6 +137,12 @@ type PeekPdfViewerProps = {
    * page inside the panel so narrow previews never scroll horizontally.
    */
   docxFitMode?: "text-area" | "page" | undefined;
+  /**
+   * Host ProseMirror plugins for a DOCX, handed to Folio as they are. Folio
+   * keeps them across document replacement, so the array must keep its
+   * identity for as long as the viewer is mounted.
+   */
+  docxPlugins?: readonly Plugin[] | undefined;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
   colorMode?: PDFColorMode | undefined;
@@ -185,6 +191,7 @@ const PeekPdfViewerContent = ({
   onDocxScrollTopChange,
   onWheelZoom,
   docxFitMode = "text-area",
+  docxPlugins,
   colorMode = "system",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
@@ -230,6 +237,7 @@ const PeekPdfViewerContent = ({
           activeSearchMatchIndex={activeSearchMatchIndex}
           fieldId={fieldId}
           fitMode={docxFitMode}
+          plugins={docxPlugins}
           printActionsRef={docxPrintActionsRef}
           onScrollTopChange={onDocxScrollTopChange}
           onSearchMatchSummaryChange={onSearchMatchSummaryChange}
@@ -434,6 +442,7 @@ const PeekDocxViewer = ({
   fitMode,
   onScrollTopChange,
   onSearchMatchSummaryChange,
+  plugins,
   printActionsRef,
   scaleOffset,
   searchText,
@@ -443,10 +452,10 @@ const PeekDocxViewer = ({
   buffer: ArrayBuffer;
   fieldId: string;
   fitMode: "text-area" | "page";
+  plugins: readonly Plugin[] | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   onSearchMatchSummaryChange?:
-    | ((summary: SearchMatchSummary) => void)
-    | undefined;
+    ((summary: SearchMatchSummary) => void) | undefined;
   printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
   searchText: SearchTextQuery | undefined;
@@ -561,8 +570,13 @@ const PeekDocxViewer = ({
 
   const handleDocumentReady = useCallback(() => {
     searchResultCacheRef.current = null;
+    // Folio paints a read-only document before it builds the editor view, and
+    // host plugins only see the document through that view.
+    if (plugins !== undefined) {
+      editorRef.current?.ensureEditorView({ focus: false });
+    }
     scheduleSearchHighlight();
-  }, [scheduleSearchHighlight]);
+  }, [plugins, scheduleSearchHighlight]);
 
   const handleEditorViewReady = useCallback(() => {
     searchResultCacheRef.current = null;
@@ -611,6 +625,7 @@ const PeekDocxViewer = ({
         loadingIndicator={null}
         onCompatibilityChange={handleDocumentReady}
         onEditorViewReady={handleEditorViewReady}
+        plugins={plugins}
         readOnly
         showToolbar={false}
         showZoomControl={false}

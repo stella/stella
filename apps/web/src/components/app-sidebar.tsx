@@ -62,8 +62,8 @@ import {
   chatActivityByWorkspace,
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
-  resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
+  resolveEntityActivityDestination,
   resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
@@ -737,17 +737,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       })()}
                     </SidebarMenuItem>
                   </NavContextMenu>
-                  {item.id === "matters" && canCreateMatter ? (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        onClick={handleCreateWorkspace}
-                        tooltip={t("common.newMatter")}
-                      >
-                        <PlusIcon />
-                        <span>{t("common.newMatter")}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ) : null}
                 </Fragment>
               );
             })}
@@ -890,8 +879,7 @@ const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
 type MatterExpansion =
-  | { type: "automatic" }
-  | { type: "selected"; workspaceId: string | null };
+  { type: "automatic" } | { type: "selected"; workspaceId: string | null };
 
 // Pinned workspaces are local UI state until backend user preferences or a
 // workspace-member `pinned` flag exists.

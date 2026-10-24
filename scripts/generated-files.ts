@@ -1,7 +1,7 @@
 import {
+  CAPABILITY_RUNTIME_INPUTS,
   CI_GENERATED_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
-  CAPABILITY_RUNTIME_INPUTS,
 } from "../packages/scripts/src/generated-files";
 
 export {
@@ -11,9 +11,23 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
-  | { check: null; checkedBy: string; unchecked?: never }
-  | { check: null; checkedBy?: never; unchecked: string };
+  | {
+      check: readonly string[];
+      checkedBy?: string;
+      checkedWith?: never;
+      unchecked?: never;
+    }
+  | {
+      check: null;
+      checkedBy: string;
+      /**
+       * The command the `checkedBy` step runs when it is neither `write` nor
+       * its `--check` form.
+       */
+      checkedWith?: readonly string[];
+      unchecked?: never;
+    }
+  | { check: null; checkedBy?: never; checkedWith?: never; unchecked: string };
 
 export type Generator = {
   id: string;
@@ -218,7 +232,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/lib/**",
       "packages/cli/src/**",
       "packages/**",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "apps/api/scripts/export-capability-catalog.ts"],
     check: null,
@@ -272,7 +286,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       "packages/api-contract/src/mcp-capability-executors.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "packages/cli/src/**",
       "packages/cli/package.json",
       "packages/cli/capabilities/**",
@@ -320,7 +334,7 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
       "apps/api/src/mcp/app-contracts.ts",
       "apps/api/src/mcp/decision-reader-contract.ts",
@@ -388,7 +402,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/api/src/lib/chat/legislation-result-projections.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "packages/api-contract/src/case-law-court-year.ts",
@@ -483,13 +497,42 @@ const GENERATOR_DECLARATIONS = [
       "scripts/ownership-loader.ts",
       "scripts/ownership-types.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "apps/**",
       "packages/**",
     ],
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
     checkedBy: "Module ownership",
+    autofix: true,
+    after: [],
+  },
+  {
+    // Refreshes only the reviewed digests of jobs whose kind, qualifier and
+    // privilege are unchanged since the merge base; new, reclassified and
+    // privileged jobs keep failing the check until a human reviews them.
+    // This file loads without imports in reduced checkouts, so the paths are
+    // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
+    id: "ci-job-classification-digests",
+    outputKind: "committed",
+    outputs: [".github/ci-job-classification-decisions.json"],
+    inputs: [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-sources.json",
+      "scripts/check-ci-job-classification.ts",
+      "scripts/ci-job-classification/**",
+      "packages/collation/src/collation.ts",
+      "packages/sha256/src/node.ts",
+      "packages/sha256/src/types.ts",
+    ],
+    write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
+    check: null,
+    checkedBy: "Check workflow job classifications",
+    // The check reads git history, so it cannot load the offline network
+    // preload every `--check` command must use; it runs as the default mode.
+    checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     autofix: true,
     after: [],
   },
@@ -513,7 +556,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/ui/src/styles/theme.css",
       "scripts/design-tokens-doc.ts",
       "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "scripts/design-tokens-doc.ts", "--write"],
     check: null,
@@ -630,24 +673,18 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "i18n-messages-web",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
     inputs: [
       "apps/web/src/i18n/langs/*.json",
       "packages/scripts/src/i18n-typegen.ts",
+      "apps/web/package.json",
     ],
-    write: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-    ],
-    check: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-      "--check",
-    ],
-    autofix: true,
+    write: ["bun", "--filter", "@stll/web", "generate:messages"],
+    check: null,
+    unchecked:
+      "derived on demand; the web i18n check validates the source catalogs",
+    autofix: false,
     after: [],
   },
   {
@@ -718,7 +755,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/scripts/src/glossary-gen.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "packages/text-normalize/src/**",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [
@@ -810,7 +847,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "apps/api/src/db/role-names.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
       "apps/api/src/env*.ts",

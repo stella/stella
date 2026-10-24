@@ -1,3 +1,4 @@
+import "@/api/register-schema-formats";
 import { KindGuard, type TSchema } from "@sinclair/typebox";
 import { ValueErrorType } from "@sinclair/typebox/errors";
 import { Value, type ValueError } from "@sinclair/typebox/value";
@@ -36,9 +37,9 @@ import {
 } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
-  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
-  isServiceClassification,
   type CatalogServiceClassification,
+  isServiceClassification,
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "@/api/lib/rate-limit/service-classification";
 import {
   HANDLER_KINDS,
@@ -103,14 +104,15 @@ import {
   getWorkspaceStatus,
   invalidCursorResult,
   MAX_LIST_LIMIT,
+  MAX_TOOL_NAME_CHARS,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
   nullAsAbsent,
   oauthScopeRecoveryHint,
   quoteToolName,
   searchIndexUnavailableResult,
-  structuredErrorResult,
   structuredEgressPlan,
+  structuredErrorResult,
   untypedStructuredEgressPlan,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -1068,6 +1070,7 @@ const describeCapabilityArgsSchema = nullAsAbsent(
     capability: v.pipe(
       v.string(),
       v.minLength(1),
+      v.maxLength(MAX_TOOL_NAME_CHARS),
       v.description(
         'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
       ),
@@ -1314,6 +1317,7 @@ const CAPABILITY_ARGUMENTS = {
   capability: v.pipe(
     v.string(),
     v.nonEmpty(),
+    v.maxLength(MAX_TOOL_NAME_CHARS),
     v.description(
       "Capability id to invoke. Use an id list_capabilities returned.",
     ),
@@ -1382,8 +1386,7 @@ const CAPABILITY_ARGUMENT_SCHEMAS = {
  * Both directions come from `INTERNAL_FIELD_NAME`'s one table.
  */
 type FieldProjection =
-  | { ok: true; value: unknown }
-  | { ok: false; issues: McpValidationIssue[] };
+  { ok: true; value: unknown } | { ok: false; issues: McpValidationIssue[] };
 
 const internalNameRefusal = (
   path: string,

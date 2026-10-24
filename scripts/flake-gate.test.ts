@@ -1,11 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -17,21 +11,26 @@ import webManifest from "../apps/web/package.json" with { type: "json" };
 import { planTestRuns } from "../apps/web/scripts/test-run-plan";
 import { allApiTests, type selectApiTestImpact } from "./api-test-impact";
 import {
-  BUDGET_MS,
-  MAX_CHANGED_TEST_FILES,
-  REPEATS,
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  scopeOutputLines,
+} from "./ci-plan-scope";
+import {
   annotationData,
   annotationProperty,
+  BUDGET_MS,
   executeGate,
   failureAnnotation,
+  MAX_CHANGED_TEST_FILES,
   planRepeats,
   renderReport,
+  REPEATS,
+  type Report,
   reportExitCode,
   runOnce,
   selectTargets,
-  trialCommand,
-  type Report,
   type Target,
+  trialCommand,
 } from "./flake-gate";
 
 // Markdown reads consume temporary CLI output only.
@@ -44,11 +43,15 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
   expect(source).toContain("github.event_name == 'pull_request'");
   expect(source).toContain("matrix.shard == 'rest-web'");
   expect(source).toContain(
-    ["CHANGED_FILES_JSON: $", "{{ needs.ci-plan.outputs.changed_files }}"].join(
-      "",
-    ),
+    [
+      `cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'\n`,
+      "          $",
+      "{{ needs.ci-plan.outputs.changed_files }}\n",
+      "          CHANGED_FILES_JSON\n",
+      `          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
+    ].join(""),
   );
-  expect(source).toContain("bun scripts/flake-gate.ts --blocking");
+  expect(source).not.toContain("CHANGED_FILES_JSON: $");
   expect(MAX_CHANGED_TEST_FILES).toBeGreaterThan(0);
   expect(REPEATS).toBe(5);
 });
@@ -524,12 +527,78 @@ test("actual elapsed budget includes probes and stops repeat execution", async (
     run: async ({ timeoutMs }) => {
       timeouts.push(timeoutMs);
       elapsed += Math.min(60, timeoutMs);
-      return { type: "executed", passed: true, status: 0, ranTests: true };
+      return {
+        type: "executed",
+        passed: true,
+        status: 0,
+        ranTests: true,
+        failedTests: [],
+      };
     },
   });
   expect(timeouts).toEqual([100, 40]);
   expect(report.elapsedMs).toBe(100);
   expect(report.results.map(({ runs }) => runs)).toEqual([1, 1]);
+});
+
+test("each test's failing trials are counted for the flaky-test history", async () => {
+  const failing = [["math > adds"], [], ["math > adds", "math > divides"]];
+  let trial = 0;
+  const report = await executeGate({
+    targets: [targetFor("/fixture", "a.test.ts")],
+    skipped: [],
+    run: async () => {
+      const failedTests = failing[trial % failing.length] ?? [];
+      trial += 1;
+      return {
+        type: "executed",
+        passed: failedTests.length === 0,
+        status: failedTests.length === 0 ? 0 : 1,
+        ranTests: true,
+        failedTests,
+      };
+    },
+  });
+  const [result] = report.results;
+  expect(result?.runs).toBe(REPEATS);
+  const expected: Record<string, number> = {};
+  for (let index = 0; index < REPEATS; index += 1) {
+    for (const name of failing[index % failing.length] ?? []) {
+      expected[name] = (expected[name] ?? 0) + 1;
+    }
+  }
+  expect(result?.failedTests).toEqual(expected);
+});
+
+test("a Bun trial reports the names of the tests that failed in it", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "flake-gate-names-"));
+  try {
+    mkdirSync(path.join(root, "packages/unit"), { recursive: true });
+    writeFileSync(
+      path.join(root, "packages/unit/package.json"),
+      JSON.stringify({ name: "unit", scripts: { test: "bun test" } }),
+    );
+    writeFileSync(
+      path.join(root, "packages/unit/unit.test.ts"),
+      'import { describe, expect, test } from "bun:test";\ndescribe("math", () => {\n  test("adds", () => expect(1 + 1).toBe(3));\n  test("subtracts", () => expect(1 - 1).toBe(0));\n});\n',
+    );
+    const target = selectTargets({
+      root,
+      changed: ["packages/unit/unit.test.ts"],
+      hasDb: false,
+    }).targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected selected fixture");
+    }
+    expect(await runOnce({ target, seed: 3, timeoutMs: 10_000 })).toMatchObject(
+      {
+        passed: false,
+        failedTests: ["math > adds"],
+      },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("reports preserve reduced coverage and failures and only blocking mode fails", () => {
@@ -545,6 +614,7 @@ test("reports preserve reduced coverage and failures and only blocking mode fail
         runs: 3,
         failures: 1,
         failedIterations: [2],
+        failedTests: { adds: 1 },
         durationMs: 10,
         planned: 3,
       },
@@ -583,7 +653,13 @@ test("repeat runs never overlap across files", async () => {
       peak = Math.max(peak, active);
       await Bun.sleep(1);
       active -= 1;
-      return { type: "executed", passed: true, status: 0, ranTests: true };
+      return {
+        type: "executed",
+        passed: true,
+        status: 0,
+        ranTests: true,
+        failedTests: [],
+      };
     },
   });
   expect(report.results.map(({ runs }) => runs)).toEqual([REPEATS, REPEATS]);
@@ -599,6 +675,7 @@ test("five shuffled iterations name the failing iteration", async () => {
       passed: seed !== 3,
       status: seed === 3 ? 1 : 0,
       ranTests: true,
+      failedTests: seed === 3 ? ["fails on the third shuffle"] : [],
     }),
   });
   const result = report.results.at(0);
@@ -738,10 +815,49 @@ test("pending", async () => await new Promise(() => {}));
   });
 });
 
+test("the CLI reads a changed-file list larger than one environment variable from its file", async () => {
+  const { CHANGED_FILES_PATH: _suppliedChanged, ...inherited } = process.env;
+  await withFixture(async (root) => {
+    const changed = Array.from(
+      { length: 5000 },
+      (_, index) =>
+        `apps/web/src/features/generated/area-${String(index)}/module.ts`,
+    );
+    const list = path.join(root, "changed-files.json");
+    await Bun.write(list, `${JSON.stringify(changed)}\n`);
+    // Linux refuses a single environment string above 128 KiB.
+    expect((await Bun.file(list).text()).length).toBeGreaterThan(128 * 1024);
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "flake-gate.ts"),
+        "--blocking",
+      ],
+      {
+        cwd: root,
+        env: {
+          ...inherited,
+          // Reading the diff instead of the file would fail on this base.
+          BASE_SHA: "refs/heads/missing-flake-gate-fixture-base",
+          CHANGED_FILES_PATH: list,
+          GITHUB_STEP_SUMMARY: path.join(root, "summary.md"),
+        },
+        stdout: "ignore",
+        stderr: "ignore",
+      },
+    );
+    expect(await child.exited).toBe(0);
+    const report: unknown = await Bun.file(
+      path.join(root, "flake-gate-report.json"),
+    ).json();
+    expect(report).toMatchObject({ results: [], errors: [] });
+  });
+}, 30_000);
+
 test("the CLI emits a JSON error report and report/blocking exit codes on an unreadable diff", async () => {
   // The CI step that repeats this file supplies its own changed-file list,
   // which the CLI prefers over the diff; drop it so the diff is read.
-  const { CHANGED_FILES_JSON: _suppliedChanged, ...inherited } = process.env;
+  const { CHANGED_FILES_PATH: _suppliedChanged, ...inherited } = process.env;
   await withFixture(async (root) => {
     for (const blocking of [false, true]) {
       const child = Bun.spawn(
@@ -777,45 +893,33 @@ test("the CLI emits a JSON error report and report/blocking exit codes on an unr
 }, 30_000);
 
 test("the CI changed-files output round-trips a path list as one compact JSON line", () => {
-  const source = readFileSync(
-    path.join(import.meta.dir, "../.github/workflows/ci.yml"),
-    "utf-8",
+  const files = ["apps/web/src/a b.test.ts", "scripts/x.test.ts"];
+  const scope = computeChangedFileScope(
+    {
+      changedFiles: files,
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: "pull_request",
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
   );
-  const start = source.indexOf(
-    `printf '%s\\0' "\${changed_files[@]}" | jq -Rsc`,
+  const lines = scopeOutputLines(scope).filter((line) =>
+    line.startsWith("changed_files="),
   );
-  expect(start).toBeGreaterThan(-1);
-  // The pipeline alone: the step writes it inside a grouped redirect.
-  const tail = "sed 's/^/changed_files=/'";
-  const end = source.indexOf(tail, start);
-  expect(end).toBeGreaterThan(start);
-  const command = `${source.slice(start, end + tail.length)} >> "$GITHUB_OUTPUT"`;
-  const directory = mkdtempSync(
-    path.join(os.tmpdir(), "changed-files-output-"),
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).not.toContain("\n");
+  expect(JSON.parse(lines[0]?.replace(/^changed_files=/u, "") ?? "")).toEqual(
+    files,
   );
-  try {
-    const output = path.join(directory, "github-output");
-    writeFileSync(output, "");
-    const files = ["apps/web/src/a b.test.ts", "scripts/x.test.ts"];
-    const result = Bun.spawnSync(
-      [
-        "bash",
-        "-c",
-        `set -euo pipefail; changed_files=("$@"); ${command}`,
-        "bash",
-        ...files,
-      ],
-      { env: { ...process.env, GITHUB_OUTPUT: output } },
-    );
-    expect(result.exitCode).toBe(0);
-    const lines = readFileSync(output, "utf-8").split("\n").filter(Boolean);
-    expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0]?.replace(/^changed_files=/u, "") ?? "")).toEqual(
-      files,
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 });
 
 test("a failed file annotation cannot inject workflow commands through its name", () => {

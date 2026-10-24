@@ -14,6 +14,7 @@ import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatSendRequest,
+  IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
@@ -53,8 +54,8 @@ import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type {
-  ChatHarnessProfile,
   ChatHarnessPhase,
+  ChatHarnessProfile,
 } from "@/api/tests/helpers/chat-harness-profile";
 import {
   findLiveViewViolations,
@@ -205,6 +206,11 @@ const CUT_SHORT_REASONS: ReadonlySet<string> = new Set([
   "user-stop",
 ]);
 
+/** The approval-gated tool's run failing (`failingApprovalNames`). */
+class ApprovalToolFailure extends TaggedError("ApprovalToolFailure")<{
+  message: string;
+}> {}
+
 /** The page's connection dropping because the process serving it died. */
 class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
   message: string;
@@ -249,6 +255,7 @@ export type HarnessModel = Pick<
 export const createApprovalHarness = ({
   beforeTurnSettles,
   boundaryAnonymizer,
+  failingApprovalNames = [],
   ids,
   model,
   organizationAIConfig = orgAIConfig,
@@ -277,6 +284,12 @@ export const createApprovalHarness = ({
         threadId: SafeId<"chatThread">;
       }) => Promise<void>)
     | undefined;
+  /**
+   * Names the approval-gated tool fails on once approved: its run throws,
+   * as a write that the far side rejects does. It still counts in
+   * `executions`. None by default.
+   */
+  failingApprovalNames?: readonly string[] | undefined;
   ids: TestIds;
   /**
    * Who sends, and the profile their page sends with each message
@@ -353,6 +366,11 @@ export const createApprovalHarness = ({
     needsApproval: true,
   }).server(async ({ name }) => {
     executions.push(name);
+    if (failingApprovalNames.includes(name)) {
+      throw new ApprovalToolFailure({
+        message: `The external service could not delete ${name}`,
+      });
+    }
     return await Promise.resolve({ deleted: name });
   });
   const refLedger = createRefStabilityLedger();
@@ -597,11 +615,13 @@ export const createApprovalHarness = ({
 
   /** A request built by hand rather than by a web client. */
   const sendContext = ({
+    activeFile,
     message,
     resume,
     runId,
     threadId,
   }: {
+    activeFile?: IncomingActiveFile | undefined;
     message: ChatSendRequest["message"];
     /** A continuation names the interrupted run it resumes. */
     resume?: { interruptedRunId: string; items: InterruptResume } | undefined;
@@ -613,6 +633,7 @@ export const createApprovalHarness = ({
         ? {}
         : { parentRunId: resume.interruptedRunId, resume: resume.items };
     const forwardedProps = {
+      activeFile,
       contextMatterIds: [],
       message,
       runId,
@@ -622,6 +643,7 @@ export const createApprovalHarness = ({
     };
     return contextFromBody(
       asTestRaw<SendBody>({
+        activeFile,
         threadId,
         runId: forwardedProps.runId,
         state: {},
@@ -1625,6 +1647,8 @@ export const createApprovalHarness = ({
 
   return {
     approveContext,
+    /** Resolves once no turn on the thread is still accepted or running. */
+    awaitSettledTurns,
     checkWebClient,
     /**
      * Makes `threadId`'s next web request die mid-run: the process serving
@@ -1722,6 +1746,14 @@ export const createApprovalHarness = ({
     },
     send,
     sendContext,
+    /**
+     * The send route's answer to `ctx`, with nothing read around it: no
+     * oracle, no barrier. What a measurement of the route's own work drives;
+     * the caller reads the response and waits for its turn to settle.
+     */
+    sendUnchecked: handle,
+    /** The Stop route, as a web client's Stop button reaches it. */
+    stopTurn: postCancelTurn,
   };
 };
 

@@ -14,10 +14,10 @@ import { AT_RIS_APPLICATIONS } from "@/api/handlers/case-law/ingestion/adapters/
  * publisher identifier stored as the publisher spells it.
  */
 import {
-  metadataUrlKeys,
+  META_URL_DIAGNOSTICS,
   metadataUrlChildSchema,
   metadataUrlItemSchema,
-  META_URL_DIAGNOSTICS,
+  metadataUrlKeys,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -151,6 +151,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   decisionDate: INSPECTED,
   decisionDateAsListed: INSPECTED,
   decisionDateAsPrinted: INSPECTED,
+  decisionDateAvailability: INSPECTED,
   decisionDateSource: INSPECTED,
   decisionFiles: INSPECTED,
   decisionForm: INSPECTED,
@@ -164,6 +165,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   decisionType: INSPECTED,
   decisionTypeKey: INSPECTED,
   decisionTypeRaw: INSPECTED,
+  decisionTypes: INSPECTED,
   decisionYear: INSPECTED,
   defendant: INSPECTED,
   defendantProceedingFileNumber: INSPECTED,
@@ -197,6 +199,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   documentName: INSPECTED,
   documentNumberKind: INSPECTED,
   documentParts: INSPECTED,
+  documents: INSPECTED,
   documentSupplements: INSPECTED,
   documentSize: INSPECTED,
   documentStatus: INSPECTED,
@@ -215,6 +218,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   filedDate: INSPECTED,
   filedOn: INSPECTED,
   filedStkDate: INSPECTED,
+  fileNumber: INSPECTED,
   fileReference: INSPECTED,
   finality: INSPECTED,
   findokGid: excluded(PUBLISHER_ID),
@@ -240,6 +244,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   industries: INSPECTED,
   inFindokSince: INSPECTED,
   ingestion: INSPECTED,
+  instance: INSPECTED,
   instanceChainLines: INSPECTED,
   interprets: INSPECTED,
   issuedBy: INSPECTED,
@@ -317,6 +322,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   parentDecisionKind: INSPECTED,
   parentHeadnote: INSPECTED,
   parentHeadnoteDocument: excluded(PUBLISHER_ID),
+  participants: INSPECTED,
   parties: INSPECTED,
   parts: INSPECTED,
   penalty: INSPECTED,
@@ -340,6 +346,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   procedureType: INSPECTED,
   proceedingSubject: INSPECTED,
   proceedingType: INSPECTED,
+  proceedingTypes: INSPECTED,
   province: INSPECTED,
   provisionIds: excluded(PUBLISHER_ID),
   provisions: INSPECTED,
@@ -368,10 +375,12 @@ export const METADATA_TEXT_DISPOSITIONS = {
   recordCard: INSPECTED,
   recordClass: INSPECTED,
   recorder: INSPECTED,
+  recordTypes: INSPECTED,
   recordVersion: INSPECTED,
   referencedCourtCases: INSPECTED,
   referencedLegislation: INSPECTED,
   referencedRegulations: INSPECTED,
+  referenceNumber: INSPECTED,
   references: INSPECTED,
   referringCountry: INSPECTED,
   regions: INSPECTED,
@@ -462,8 +471,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
 export const isClassifiedMetadataKey = (
   key: string,
 ): key is
-  | keyof typeof METADATA_TEXT_DISPOSITIONS
-  | typeof META_URL_DIAGNOSTICS =>
+  keyof typeof METADATA_TEXT_DISPOSITIONS | typeof META_URL_DIAGNOSTICS =>
   key === META_URL_DIAGNOSTICS ||
   Object.hasOwn(METADATA_TEXT_DISPOSITIONS, key);
 

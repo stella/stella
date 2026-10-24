@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import {
   lstatSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   utimesSync,
@@ -184,7 +184,7 @@ export const withGeneratedOutputCache = async ({
         const now = new Date();
         utimesSync(manifestPath, now, now);
         prune(identity);
-        console.log(`${name}: cached`);
+        console.error(`${name}: cached`);
         return;
       }
       const started = performance.now();
@@ -217,7 +217,7 @@ export const withGeneratedOutputCache = async ({
         ),
       );
       prune(identity);
-      console.log(
+      console.error(
         `${name}: generated in ${Math.round(performance.now() - started)} ms`,
       );
     },

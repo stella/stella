@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import Elysia from "elysia";
 
 import {
   createMcpRoute,
   handleMcpPreflightRequest,
 } from "@/api/handlers/mcp/routes-core";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
@@ -16,7 +18,7 @@ import {
   MCP_STATELESS_ALLOW_HEADER,
   ROOT_MCP_DISCOVERY_PATH,
   STELLA_API_CONTRACT,
-  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
@@ -38,6 +40,9 @@ describe("MCP protected resource discovery routes", () => {
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",
     );
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=300, stale-while-revalidate=3600",
+    );
     expect(await response.json()).toEqual(getMcpProtectedResourceMetadata());
   };
 
@@ -58,7 +63,7 @@ describe("MCP protected resource discovery routes", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -116,6 +121,29 @@ describe("MCP protected resource discovery routes", () => {
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",
     );
+    expect(response.headers.get("Access-Control-Max-Age")).toBe(
+      String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+    );
+  });
+
+  test("serves discovery the same to every origin, so a shared cache keeps one copy", async () => {
+    // The global CORS layer's defaults, as they reach the route.
+    const route = new Elysia()
+      .onRequest(({ set }) => {
+        set.headers["access-control-allow-credentials"] = "true";
+        set.headers.vary = "Origin";
+      })
+      .use(mcpRoute);
+    const response = await route.handle(
+      new Request(`http://localhost${MCP_DISCOVERY_PATH}`, {
+        headers: { origin: "https://client.example.test" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response.headers.get("Vary")).toBeNull();
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
   });
 
   test("forwards default MCP HTTP methods to the transport handler", async () => {
@@ -266,6 +294,9 @@ describe("MCP protected resource discovery routes", () => {
       MCP_STATELESS_ALLOW_HEADER,
     );
     expect(discoveryPreflight?.headers.get("Allow")).toBe("GET, OPTIONS");
+    expect(discoveryPreflight?.headers.get("Access-Control-Max-Age")).toBe(
+      String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+    );
   });
 
   test("drops the global credentialed CORS default on MCP responses", () => {

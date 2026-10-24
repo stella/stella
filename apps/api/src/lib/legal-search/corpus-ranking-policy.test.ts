@@ -13,8 +13,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
-  corpusRankingCursorTarget,
   corpusQueryRankingMode,
+  corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
@@ -23,7 +23,11 @@ import {
   courtTierSignal,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
+import {
+  testAppliedProjectionsFor,
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -45,15 +49,21 @@ const rankingTestOptions = {
     typeof hit["document_id"] === "string" ? hit["document_id"] : null,
   extractSnippet: () => null,
   unseenScoreUpperBound: stableBlendUpperBound,
-  rankCandidates: async (candidates) => ({
-    context: null,
-    groups: [],
-    ranked: blendStableCitationAuthority({
-      candidates,
-      authorityById: new Map(),
-    }),
-    revisionById: testRevisionsFor(candidates),
-  }),
+  rankCandidates: async (probes, { selectAppliedCandidates }) => {
+    const revisionById = testRevisionsFor(probes);
+    const candidates = selectAppliedCandidates(
+      testAppliedProjectionsFor(probes),
+    );
+    return {
+      context: null,
+      groups: [],
+      ranked: blendStableCitationAuthority({
+        candidates,
+        authorityById: new Map(),
+      }),
+      revisionById,
+    };
+  },
 } satisfies Parameters<typeof readCorpusIndexSearchPage>[0];
 
 const stubRankingScores = (
@@ -73,6 +83,9 @@ const stubRankingScores = (
       const hits = scores.map((score, rank) => ({
         _source: {
           document_id: `doc-${Math.floor(rank / passagesPerDocument)}`,
+          projection_revision: testRevisionOf(
+            `doc-${Math.floor(rank / passagesPerDocument)}`,
+          ),
           chunk_id: `passage-${rank}`,
           anchor_id: `anchor-${rank}`,
         },
@@ -287,6 +300,9 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       const hits = Array.from({ length: 7100 }, (_, rank) => ({
         _source: {
           document_id: rank < 2 ? "first" : `doc-${rank}`,
+          projection_revision: testRevisionOf(
+            rank < 2 ? "first" : `doc-${rank}`,
+          ),
           chunk_id: `passage-${rank}`,
           anchor_id: `anchor-${rank}`,
         },
@@ -325,7 +341,11 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       // The old position bound would stop immediately; it cannot truncate
       // the experiment's fixed BM25 universe.
       unseenScoreUpperBound: () => 0,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const revisionById = testRevisionsFor(probes);
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         hydrationRounds += 1;
         hydratedIds = candidates.map(({ id }) => id);
         const ranked = blendStableCitationAuthority({
@@ -343,7 +363,7 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
           groups: [...groupTokenById]
             .filter(([id]) => id === "doc-9" || id === "doc-10")
             .map(([, token]) => token),
-          revisionById: testRevisionsFor(candidates),
+          revisionById,
         };
       },
     });
@@ -401,7 +421,11 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
       rankingMode: "bm25-ratio",
       limit: 1,
       parsedCursor,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const revisionById = testRevisionsFor(probes);
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
         const { representatives, groupTokenById } = collapseByLanguageGroup(
           blendStableCitationAuthority({
             candidates,
@@ -421,7 +445,7 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
           groups: [...groupTokenById]
             .filter(([id]) => groupKeyOf(id) !== null)
             .map(([, token]) => token),
-          revisionById: testRevisionsFor(candidates),
+          revisionById,
         };
       },
     });
@@ -565,6 +589,9 @@ test("ties below the cutoff page deterministically despite engine tie order", as
               ["p0", "p1"].map((anchor_id) => ({
                 _source: {
                   document_id: `doc-${String(index).padStart(3, "0")}`,
+                  projection_revision: testRevisionOf(
+                    `doc-${String(index).padStart(3, "0")}`,
+                  ),
                   anchor_id,
                 },
                 _score: 1,

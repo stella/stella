@@ -1,15 +1,25 @@
 import { panic } from "better-result";
 import path from "node:path";
 
-import { parseCaseLawLaunchReadiness } from "@stll/api-contract/case-law-launch-readiness";
 import {
-  publicCountriesFor,
+  CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES,
+  parseCaseLawLaunchReadiness,
+} from "@stll/api-contract/case-law-launch-readiness";
+import {
   PUBLIC_COUNTRY_CAPABILITIES,
+  publicCountriesFor,
 } from "@stll/api-contract/public-country-capability";
 
+// An explicitly launched country carries no serving receipt: the app refuses
+// a country that has both.
 const countries = [
   ...new Set([...publicCountriesFor("caseLaw", "search"), "SVK"]),
-].toSorted();
+]
+  .filter(
+    (country) =>
+      !CASE_LAW_EXPLICIT_LAUNCH_COUNTRIES.some((launch) => launch === country),
+  )
+  .toSorted();
 const readiness = countries.map((country) => ({
   country,
   evalSetExists: true,

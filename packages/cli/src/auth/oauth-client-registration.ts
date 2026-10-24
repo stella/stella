@@ -9,6 +9,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { apiFetch } from "../api-fetch.js";
 import {
   AUTH_FETCH_TIMEOUT_MS,
   CLIENT_NAME,
@@ -56,7 +57,7 @@ export const registerLoopbackClient = async (
             message: "Failed to register the stella CLI as an OAuth client",
           }),
     try: async () => {
-      const response = await fetch(metadata.registration_endpoint ?? "", {
+      const response = await apiFetch(metadata.registration_endpoint ?? "", {
         body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
         method: "POST",

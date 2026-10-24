@@ -8,12 +8,16 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=""
 sha=""
 proof=""
+candidate_only=false
 tree_proof_verifier="${RELEASE_TREE_PROOF_VERIFIER:-$script_dir/verify-release-tree-proof.sh}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo) repo="${2:?--repo needs a value}"; shift 2 ;;
     --sha) sha="${2-}"; shift 2 ;;
     --proof-sha) proof="${2-}"; shift 2 ;;
+    # Resolve the candidate only; the release evidence then runs as its own
+    # gate, so the tag workflow evaluates every other gate even when it fails.
+    --candidate-only) candidate_only=true; shift ;;
     *) echo "::error::Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -58,24 +62,17 @@ all_success() {
 }
 
 if [[ -z "$sha" ]]; then
-  candidates=$(git rev-list --first-parent origin/main)
-  while IFS= read -r candidate; do
-    selected_proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$candidate")
-    selected_proof="${selected_proof:-$candidate}"
-    states=$(release_states "$selected_proof" "$candidate")
-    if all_success "$states"; then
-      sha="$candidate"
-      proof="$selected_proof"
-      break
-    fi
-  done <<< "$candidates"
-  [[ -n "$sha" ]] || { echo "::error::No commit on main carries $gates_message" >&2; exit 1; }
+  sha=$(bash "$script_dir/check-release-candidate.sh" --version-commit)
 fi
 
-candidate=$(bash "$script_dir/check-release-candidate.sh" "$sha")
+candidate=$(RELEASE_PROOF_REPOSITORY= bash "$script_dir/check-release-candidate.sh" "$sha")
 while IFS='=' read -r key value; do
   case "$key" in sha) sha="$value" ;; esac
 done <<< "$candidate"
+if [[ "$candidate_only" == true ]]; then
+  printf '%s\n' "$candidate"
+  exit 0
+fi
 if [[ -z "$proof" ]]; then
   proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$sha")
   proof="${proof:-$sha}"

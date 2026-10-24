@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { isPlausibleLocale } from "@stll/agent-input";
+import { isPlausibleLocale } from "@stll/agent-input/locale";
 import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 

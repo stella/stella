@@ -2,6 +2,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import { isMcpTransportRequest } from "@/api/handlers/mcp/routes-core";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
@@ -10,24 +11,9 @@ import type {
   RateLimitOptions,
 } from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
-import {
-  MCP_ADVANCED_HTTP_PATH,
-  MCP_ANONYMIZED_HTTP_PATH,
-  MCP_DOCUMENTS_HTTP_PATH,
-  MCP_HTTP_PATH,
-  MCP_LAW_HTTP_PATH,
-} from "@/api/mcp/constants";
 
 const MCP_TRANSPORT_RATE_LIMIT_SCOPE = "mcp-transport";
 const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE = "mcp-transport-address";
-
-const MCP_TRANSPORT_PATHS: ReadonlySet<string> = new Set([
-  MCP_ADVANCED_HTTP_PATH,
-  MCP_ANONYMIZED_HTTP_PATH,
-  MCP_DOCUMENTS_HTTP_PATH,
-  MCP_HTTP_PATH,
-  MCP_LAW_HTTP_PATH,
-]);
 
 /**
  * Only the JSON-RPC transport paths carry a budget. Protected-resource
@@ -36,8 +22,7 @@ const MCP_TRANSPORT_PATHS: ReadonlySet<string> = new Set([
  * rather than bound any cost.
  */
 export const isMcpTransportRateLimitedRequest = (request: Request): boolean =>
-  request.method !== "OPTIONS" &&
-  MCP_TRANSPORT_PATHS.has(new URL(request.url).pathname);
+  request.method !== "OPTIONS" && isMcpTransportRequest(request);
 
 const BEARER_SCHEME = "bearer ";
 

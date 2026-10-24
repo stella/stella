@@ -21,8 +21,8 @@ import { cn } from "@stll/ui/utils";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
-  getChatToolTitleKey,
   getApprovalToolName,
+  getChatToolTitleKey,
   isApprovalOnceChatToolName,
   isExternalInputChatToolName,
   isExternalMcpToolName,
@@ -48,8 +48,8 @@ import {
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
   formatReadableInputValue,
-  getReaderAnnotationEditTargetId,
   getReadableInputRows,
+  getReaderAnnotationEditTargetId,
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
@@ -60,6 +60,7 @@ import {
 } from "@/components/chat/tool-call-card";
 import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,
@@ -67,8 +68,8 @@ import {
   useBrowserCommandAutoApproved,
 } from "@/features/chat/browser-control/browser-approval-mode";
 import {
-  getBrowserApprovalDetails,
   type BrowserApprovalDetail,
+  getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
@@ -498,6 +499,7 @@ export const ToolApprovalCard = ({
     activeOrganizationId,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     blockedApprovalTools,
     handleAllowInConversation: onAllowInConversation,
     handleAlwaysAllow: onAlwaysAllow,
@@ -508,6 +510,10 @@ export const ToolApprovalCard = ({
   const name = getApprovalToolName(part);
   const submittedApprovalIdRef = useRef<string | null>(null);
   const [responded, setResponded] = useState(false);
+  // The approval a stored grant could not be confirmed for: that card asks.
+  const [unconfirmedGrantApprovalId, setUnconfirmedGrantApprovalId] = useState<
+    string | null
+  >(null);
 
   const {
     canAllowInConversation,
@@ -547,16 +553,23 @@ export const ToolApprovalCard = ({
       : null;
   const isBrowserCommandAutoApproved =
     useBrowserCommandAutoApproved(browserCommand);
-  const shouldAutoApprove =
-    !isBlocked &&
-    !requiresPerCallChatApproval(name) &&
-    (hasAutomaticApproval({
+  // A stored grant answers a card only once the API confirms it still holds;
+  // public-registry lookups and opted-in browser page reads need no grant.
+  const isGrantAutoApproval =
+    !isPublicOfficialApproval &&
+    approvalId !== unconfirmedGrantApprovalId &&
+    hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
       isPublicOfficialApproval,
       name,
-    }) ||
+    });
+  const shouldAutoApprove =
+    !isBlocked &&
+    !requiresPerCallChatApproval(name) &&
+    (isGrantAutoApproval ||
+      isPublicOfficialApproval ||
       isBrowserCommandAutoApproved);
   const automaticResponse =
     approvalId === null
@@ -567,6 +580,19 @@ export const ToolApprovalCard = ({
             setResponded(true);
             if (isBlocked) {
               onDeny(approvalId);
+            } else if (isGrantAutoApproval && !isBrowserCommandAutoApproved) {
+              const answerIfGrantHeld = async () => {
+                if (await confirmStoredApprovalGrant(name)) {
+                  await onApprove(approvalId, name);
+                  return;
+                }
+                setUnconfirmedGrantApprovalId(approvalId);
+                setResponded(false);
+              };
+              detached(
+                answerIfGrantHeld(),
+                "tool-approval-card.confirm-stored-grant",
+              );
             } else if (shouldAutoApprove) {
               onApprove(approvalId, name);
             }
@@ -1275,14 +1301,15 @@ const ToolApprovalLeadingIcon = ({
   iconHref?: string | undefined;
   toolName?: ApprovalToolName | undefined;
 }) => {
-  if (iconHref) {
+  const proxiedIconSrc = useProxiedIconSrc(iconHref);
+  if (proxiedIconSrc) {
     return (
       <span className="bg-background flex size-4 shrink-0 items-center justify-center rounded-sm border">
         <img
           alt=""
           className="size-3 rounded-xs object-contain"
           height={12}
-          src={iconHref}
+          src={proxiedIconSrc}
           width={12}
         />
       </span>

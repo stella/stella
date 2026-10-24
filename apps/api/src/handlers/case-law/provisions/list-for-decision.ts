@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
@@ -11,11 +12,11 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
 
 import {
-  publishedCaseLawDecisions,
   caseLawProvisionCitations,
-  caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
   caseLawProvisionExtractionRevisionsRegistry,
+  caseLawProvisionExtractions,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -36,8 +37,8 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 import { provisionStatusForCapability } from "./status-for-capability";
 import {
-  PROVISION_VERSION_COLUMNS,
   projectProvisionVersion,
+  PROVISION_VERSION_COLUMNS,
 } from "./version-response";
 
 export const listDecisionProvisionsQuerySchema = t.Object({
@@ -66,7 +67,9 @@ type ProvisionCursor = {
   anchor: string;
 };
 
-const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
+export const decodeProvisionCursor = (
+  cursor: string,
+): ProvisionCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts?.length !== 3) {
     return null;
@@ -88,12 +91,21 @@ const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
   return { generation, spanStart, anchor };
 };
 
+export const encodeProvisionCursor = (cursor: ProvisionCursor): string =>
+  encodePaginationCursor([cursor.generation, cursor.spanStart, cursor.anchor]);
+
 const LEGACY_CITATION_FIELDS = {
   // Drizzle detects absent left-join rows from the first column; keep it non-null.
   jurisdiction: caseLawProvisionCitations.jurisdiction,
   workIdentifier: caseLawProvisionCitations.workIdentifier,
-  workNumber: caseLawProvisionCitations.workNumber,
-  workYear: caseLawProvisionCitations.workYear,
+  workNumber: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkNumber} ELSE ${caseLawProvisionCitations.workNumber} END`,
+  workYear: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkYear} ELSE ${caseLawProvisionCitations.workYear} END`,
   workCollection: caseLawProvisionCitations.workCollection,
   workEli: caseLawProvisionCitations.workEli,
   workSource: caseLawProvisionCitations.workSource,
@@ -146,9 +158,8 @@ const UNAVAILABLE_SPAN_FIELDS = {
   targetStatus: null,
 } satisfies Record<keyof typeof SPAN_CITATION_FIELDS, null>;
 
-type ProvisionRow = Pick<
-  typeof caseLawProvisionCitations.$inferSelect,
-  keyof typeof LEGACY_CITATION_FIELDS | keyof typeof SPAN_CITATION_FIELDS
+type ProvisionRow = SelectResultFields<
+  typeof LEGACY_CITATION_FIELDS & typeof SPAN_CITATION_FIELDS
 >;
 
 type ProvisionPageOptions = {

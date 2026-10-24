@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 5,
+  "reason": "The isolated render-probe DOM test needs explicit React, DOM runtime, and type dependencies; the package reuses the repository's existing versions."
+}

@@ -1,8 +1,7 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
-import { lintSingleRule } from "./lint-single-rule.ts";
+import { lintRuleAcrossFiles, lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(30_000);
 
@@ -50,19 +49,28 @@ describe.serial("audit detail read ownership", () => {
       "const safeId = table.id;",
       "const { resourceId } = table;",
     ];
-    for (const source of sources) {
-      expect(
-        await lintSingleRule(
-          "confine-owner",
-          [
-            source,
-            'import { alias } from "drizzle-orm/pg-core"; import { getTableColumns } from "drizzle-orm";',
-            ...reads,
-          ].join("\n"),
-          options,
-        ),
-      ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
-    }
+    const results = await Promise.all(
+      sources.map(async (lintCase, index) => {
+        const source = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule(
+            "confine-owner",
+            [
+              source,
+              'import { alias } from "drizzle-orm/pg-core"; import { getTableColumns } from "drizzle-orm";',
+              ...reads,
+            ].join("\n"),
+            options,
+          ),
+          expected: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("rejects implicit complete rows and admits selections of other columns", async () => {
@@ -261,17 +269,21 @@ describe.serial("confine-owner literal patterns", () => {
     if (entry?.enforcement.kind !== "literal-pattern") {
       throw new TypeError("Missing citation graph transaction ownership");
     }
-    for (const sourcePath of [
+    const sourcePaths = [
       ...entry.owner,
       ...entry.enforcement.allowed.map(({ path: allowedPath }) => allowedPath),
-    ]) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
-          ruleOptions: { entries: [entry] },
-          sourcePath,
-        }),
-      ).toEqual([]);
-    }
+    ];
+    expect(
+      await lintRuleAcrossFiles(
+        "confine-owner",
+        Object.fromEntries(
+          sourcePaths.map((sourcePath) => [sourcePath, source]),
+        ),
+        { ruleOptions: { entries: [entry] } },
+      ),
+    ).toEqual(
+      Object.fromEntries(sourcePaths.map((sourcePath) => [sourcePath, []])),
+    );
   });
 
   test("per-file admission does not carry over to another writer", async () => {
@@ -300,19 +312,23 @@ test("every admission-store consumer must use the checked facade", async () => {
   }
   const consumers = admission.enforcement.allowed;
   expect(consumers.length).toBeGreaterThan(0);
-  for (const { path: sourcePath } of consumers) {
-    const source = [
-      'import { createRedisClient } from "@/api/lib/redis-client";',
-      'const unchecked = await import("@/api/lib/redis-client");',
-      'import { createAdmissionRedis } from "@/api/lib/admission-redis";',
-    ].join("\n");
-    expect(
-      await lintSingleRule("confine-owner", source, {
-        ruleOptions: { entries: OWNERSHIP },
-        sourcePath,
-      }),
-    ).toEqual([1, 2]);
-  }
+  const source = [
+    'import { createRedisClient } from "@/api/lib/redis-client";',
+    'const unchecked = await import("@/api/lib/redis-client");',
+    'import { createAdmissionRedis } from "@/api/lib/admission-redis";',
+  ].join("\n");
+  const files = Object.fromEntries(
+    consumers.map(({ path: sourcePath }) => [sourcePath, source]),
+  );
+  expect(
+    await lintRuleAcrossFiles("confine-owner", files, {
+      ruleOptions: { entries: OWNERSHIP },
+    }),
+  ).toEqual(
+    Object.fromEntries(
+      consumers.map(({ path: sourcePath }) => [sourcePath, [1, 2]]),
+    ),
+  );
 });
 
 // `member-call` rows are scoped by path, which the passive fixture under
@@ -449,17 +465,23 @@ describe.serial("corpus hit ownership rows", () => {
   const ruleOptions = { entries: OWNERSHIP };
 
   test("rejects direct extraction and raw candidate readers outside their owners", async () => {
-    for (const sourcePath of [
+    const sourcePaths = [
       "apps/api/src/lib/legal-search/new-scan.ts",
       "apps/api/src/handlers/new-search.ts",
-    ]) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
-          ruleOptions,
-          sourcePath,
-        }),
-      ).toEqual([1, 2, 3, 4]);
-    }
+    ];
+    expect(
+      await lintRuleAcrossFiles(
+        "confine-owner",
+        Object.fromEntries(
+          sourcePaths.map((sourcePath) => [sourcePath, source]),
+        ),
+        { ruleOptions },
+      ),
+    ).toEqual(
+      Object.fromEntries(
+        sourcePaths.map((sourcePath) => [sourcePath, [1, 2, 3, 4]]),
+      ),
+    );
   });
 
   test("accepts the hit classifier and the candidate query owners", async () => {
@@ -469,23 +491,24 @@ describe.serial("corpus hit ownership rows", () => {
         sourcePath: "apps/api/src/lib/legal-search/corpus-hit-disposition.ts",
       }),
     ).toEqual([]);
-    for (const sourcePath of [
+    const sourcePaths = [
       "apps/api/src/handlers/case-law/decisions/search.ts",
       "apps/api/src/lib/legal-search/corpus-index-provider.ts",
       "apps/api/src/lib/legal-search/corpus-rehydration-disposition.ts",
       "apps/api/src/handlers/case-law/decisions/search-hydration.db.test.ts",
-    ]) {
-      expect(
-        await lintSingleRule(
-          "confine-owner",
-          source.split("\n").slice(1).join("\n"),
-          {
-            ruleOptions,
-            sourcePath,
-          },
+    ];
+    const ownerSource = source.split("\n").slice(1).join("\n");
+    expect(
+      await lintRuleAcrossFiles(
+        "confine-owner",
+        Object.fromEntries(
+          sourcePaths.map((sourcePath) => [sourcePath, ownerSource]),
         ),
-      ).toEqual([]);
-    }
+        { ruleOptions },
+      ),
+    ).toEqual(
+      Object.fromEntries(sourcePaths.map((sourcePath) => [sourcePath, []])),
+    );
   });
 });
 
@@ -641,25 +664,29 @@ describe.serial("confine-owner stored content rows", () => {
 test("translation availability is consumed by the dialog owner", async () => {
   const source =
     'import { deepLAvailabilityOptions, deepLConfigOptions } from "@/lib/deepl/queries";';
-  for (const sourcePath of [
+  const sourcePaths = [
     "apps/web/src/components/translate-document-dialog.tsx",
     "apps/web/src/components/workspaces/row-actions.tsx",
     "apps/web/src/components/other-dialog.tsx",
-  ]) {
-    expect(
-      await lintSingleRule("confine-owner", source, {
-        ruleOptionsForRoot: (root) => ({
-          entries: OWNERSHIP.filter(
-            ({ id }) => id === "deepl-availability",
-          ).map((entry) => ({
-            ...entry,
-            owner: entry.owner.map((owner) => path.join(root, owner)),
-          })),
-        }),
+  ];
+  expect(
+    await lintRuleAcrossFiles(
+      "confine-owner",
+      Object.fromEntries(sourcePaths.map((sourcePath) => [sourcePath, source])),
+      {
+        ruleOptions: {
+          entries: OWNERSHIP.filter(({ id }) => id === "deepl-availability"),
+        },
+      },
+    ),
+  ).toEqual(
+    Object.fromEntries(
+      sourcePaths.map((sourcePath) => [
         sourcePath,
-      }),
-    ).toEqual(sourcePath.endsWith("/translate-document-dialog.tsx") ? [] : [1]);
-  }
+        sourcePath.endsWith("/translate-document-dialog.tsx") ? [] : [1],
+      ]),
+    ),
+  );
 });
 
 test("desktop observations are confined to service and membership cleanup", async () => {
@@ -670,23 +697,25 @@ test("desktop observations are confined to service and membership cleanup", asyn
     throw new TypeError("Missing desktop presence ownership");
   }
   const source = 'import { desktopPresence } from "@/api/db/schema";';
-  expect(
-    await lintSingleRule("confine-owner", source, {
-      ruleOptions: { entries: [entry] },
-      sourcePath: "apps/api/src/handlers/desktop-presence/other.ts",
-    }),
-  ).toEqual([1]);
-  for (const sourcePath of [
+  const sourcePaths = [
+    "apps/api/src/handlers/desktop-presence/other.ts",
     ...entry.owner,
     ...entry.enforcement.allowed.map(({ path: allowedPath }) => allowedPath),
-  ]) {
-    expect(
-      await lintSingleRule("confine-owner", source, {
-        ruleOptions: { entries: [entry] },
+  ];
+  expect(
+    await lintRuleAcrossFiles(
+      "confine-owner",
+      Object.fromEntries(sourcePaths.map((sourcePath) => [sourcePath, source])),
+      { ruleOptions: { entries: [entry] } },
+    ),
+  ).toEqual(
+    Object.fromEntries(
+      sourcePaths.map((sourcePath, index) => [
         sourcePath,
-      }),
-    ).toEqual([]);
-  }
+        index === 0 ? [1] : [],
+      ]),
+    ),
+  );
 });
 
 describe.serial("transaction proof ownership", () => {
@@ -705,26 +734,28 @@ describe.serial("transaction proof ownership", () => {
       'const { defineProof } = await import("@gdp-ts/core");',
       'import { name, type Named, type Proof } from "@gdp-ts/core";',
     ].join("\n");
-    for (const sourcePath of [
+    const rejectedPaths = [
       "apps/api/src/lib/signals/proofs/second-mint.ts",
       "apps/api/src/lib/proofs/second-mint.ts",
       "apps/api/src/handlers/signals/unchecked.ts",
-    ]) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
+    ];
+    const sourcePaths = [...rejectedPaths, ...entry.owner];
+    expect(
+      await lintRuleAcrossFiles(
+        "confine-owner",
+        Object.fromEntries(
+          sourcePaths.map((sourcePath) => [sourcePath, source]),
+        ),
+        { ruleOptions: { entries: [entry] } },
+      ),
+    ).toEqual(
+      Object.fromEntries(
+        sourcePaths.map((sourcePath) => [
           sourcePath,
-          ruleOptions: { entries: [entry] },
-        }),
-      ).toEqual([1, 2, 3, 4, 5]);
-    }
-    for (const sourcePath of entry.owner) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
-          sourcePath,
-          ruleOptions: { entries: [entry] },
-        }),
-      ).toEqual([]);
-    }
+          rejectedPaths.includes(sourcePath) ? [1, 2, 3, 4, 5] : [],
+        ]),
+      ),
+    );
   });
 
   test("only predicate owners can invoke the checking boundary", async () => {
@@ -739,20 +770,24 @@ describe.serial("transaction proof ownership", () => {
       'export { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";',
       'import type { TransactionProof } from "@/api/lib/proofs/checked-transaction";',
     ].join("\n");
+    const rejectedPath = "apps/api/src/handlers/signals/unchecked.ts";
+    const sourcePaths = [rejectedPath, ...entry.owner];
     expect(
-      await lintSingleRule("confine-owner", source, {
-        sourcePath: "apps/api/src/handlers/signals/unchecked.ts",
-        ruleOptions: { entries: [entry] },
-      }),
-    ).toEqual([1, 2]);
-    for (const sourcePath of entry.owner) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
+      await lintRuleAcrossFiles(
+        "confine-owner",
+        Object.fromEntries(
+          sourcePaths.map((sourcePath) => [sourcePath, source]),
+        ),
+        { ruleOptions: { entries: [entry] } },
+      ),
+    ).toEqual(
+      Object.fromEntries(
+        sourcePaths.map((sourcePath) => [
           sourcePath,
-          ruleOptions: { entries: [entry] },
-        }),
-      ).toEqual([]);
-    }
+          sourcePath === rejectedPath ? [1, 2] : [],
+        ]),
+      ),
+    );
   });
 });
 
@@ -787,20 +822,21 @@ describe.serial("checked operation ownership", () => {
         "apps/api/src/lib/scheduler/tasks/unchecked.ts",
         ...entry.owner,
       ];
-      const linesBySource = await Promise.all(
-        sourcePaths.map(async (sourcePath) =>
-          lintSingleRule("confine-owner", source, {
+      const linesBySource = await lintRuleAcrossFiles(
+        "confine-owner",
+        Object.fromEntries(
+          sourcePaths.map((sourcePath) => [sourcePath, source]),
+        ),
+        { ruleOptions: { entries: [entry] } },
+      );
+      expect(linesBySource).toEqual(
+        Object.fromEntries(
+          sourcePaths.map((sourcePath, index) => [
             sourcePath,
-            ruleOptions: { entries: [entry] },
-          }),
+            index < 3 ? [1, 2, 3, 4] : [],
+          ]),
         ),
       );
-      for (const lines of linesBySource.slice(0, 3)) {
-        expect(lines).toEqual([1, 2, 3, 4]);
-      }
-      for (const lines of linesBySource.slice(3)) {
-        expect(lines).toEqual([]);
-      }
     });
   }
 });
@@ -827,30 +863,42 @@ test("the AI label is reached only through a typed disclosure context", async ()
   const entry = OWNERSHIP.find(({ id }) => id === "ai-disclosure-label");
   expect(entry).toBeDefined();
   const options = { ruleOptions: { entries: [entry] } };
-  for (const source of [
-    'import { AiLabel } from "@stll/ui/ai-label";',
-    'import { AiLabel } from "@stll/ui/components/ai-label";',
-  ]) {
-    for (const sourcePath of [
-      "apps/web/src/features/chat/components/answer-mark.tsx",
-      "apps/web/src/components/ai-disclosure-label.tsx",
-      "packages/decision-reader/src/headnote-block.tsx",
-      "apps/desktop/src/renderer/ai-mark.tsx",
-    ]) {
-      expect(
-        await lintSingleRule("confine-owner", source, {
-          ...options,
-          sourcePath,
-        }),
-      ).toEqual([1]);
-    }
-    expect(
-      await lintSingleRule("confine-owner", source, {
-        ...options,
-        sourcePath: "packages/decision-reader/src/reader-ai-label.tsx",
-      }),
-    ).toEqual([]);
-  }
+  const results = await Promise.all(
+    [
+      'import { AiLabel } from "@stll/ui/ai-label";',
+      'import { AiLabel } from "@stll/ui/components/ai-label";',
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+      const rejectedPaths = [
+        "apps/web/src/features/chat/components/answer-mark.tsx",
+        "apps/web/src/components/ai-disclosure-label.tsx",
+        "packages/decision-reader/src/headnote-block.tsx",
+        "apps/desktop/src/renderer/ai-mark.tsx",
+      ];
+      const ownerPath = "packages/decision-reader/src/reader-ai-label.tsx";
+      const sourcePaths = [...rejectedPaths, ownerPath];
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintRuleAcrossFiles(
+          "confine-owner",
+          Object.fromEntries(
+            sourcePaths.map((sourcePath) => [sourcePath, source]),
+          ),
+          options,
+        ),
+        expected: Object.fromEntries(
+          sourcePaths.map((sourcePath) => [
+            sourcePath,
+            sourcePath === ownerPath ? [] : [1],
+          ]),
+        ),
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 describe.serial("verification run evidence reads", () => {
@@ -893,6 +941,58 @@ describe.serial("verification run evidence reads", () => {
         ...options,
         sourcePath: "apps/api/src/lib/lists/verification/read-run.ts",
       }),
+    ).toEqual([]);
+  });
+});
+
+describe("matter proof minting ownership", () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "transaction-proof-predicates",
+  );
+  const sourcePath = "apps/api/src/lib/workspaces/consumer.ts";
+
+  test("rejects minting imports and re-exports outside trusted predicates", async () => {
+    const sources = [
+      'import { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction";',
+      'import * as mint from "../proofs/checked-transaction.ts";',
+      'export { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction";',
+      'export * from "../proofs/checked-transaction";',
+      'const mint = await import("@/api/lib/proofs/checked-transaction");',
+    ];
+    const results = await Promise.all(
+      sources.map(async (lintCase, index) => {
+        const source = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintSingleRule("confine-owner", source, {
+            ruleOptions: { entries: [entry] },
+            sourcePath,
+            cwd: "scratch",
+          }),
+          expected: [1],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
+  });
+
+  test("admits the matter predicate through the production ownership declaration", async () => {
+    expect(entry?.owner).toContain(
+      "apps/api/src/lib/workspaces/matter-access-proof.ts",
+    );
+    expect(
+      await lintSingleRule(
+        "confine-owner",
+        'import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";',
+        {
+          ruleOptions: { entries: [entry] },
+          sourcePath: "apps/api/src/lib/workspaces/matter-access-proof.ts",
+          cwd: "scratch",
+        },
+      ),
     ).toEqual([]);
   });
 });

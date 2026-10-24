@@ -14,19 +14,20 @@ import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { isDbTest } from "../apps/api/scripts/test-batch-plan";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
 import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
+import { testFailures } from "./ci-failure-digest";
 import { parseBunTestScript } from "./flake-gate-command";
 import {
   cleanupCapability,
-  runFlakeProcess,
-  type FlakeProcessOutcome,
   type FlakeCleanup,
+  type FlakeProcessOutcome,
+  runFlakeProcess,
 } from "./flake-gate-process";
 import {
   createRustTestListing,
   rustExactCommand,
   rustListCommand,
-  selectRustTargets,
   type RustTarget,
+  selectRustTargets,
 } from "./flake-gate-rust";
 
 export const REPEATS = 5;
@@ -236,6 +237,10 @@ export type Measurement = {
   runs: number;
   failures: number;
   failedIterations: number[];
+  // Trials each Bun test failed in, by full test name: a test that failed in
+  // some trials and passed in others is a same-head flake for the quarantine
+  // history (scripts/flaky-test-history.ts).
+  failedTests: Record<string, number>;
   durationMs: number;
   planned: number;
 };
@@ -308,7 +313,13 @@ export const failureAnnotation = ({
 
 type RunOptions = { target: Target; seed: number; timeoutMs: number };
 export type RunOutcome =
-  | { type: "executed"; passed: boolean; status: number; ranTests: boolean }
+  | {
+      type: "executed";
+      passed: boolean;
+      status: number;
+      ranTests: boolean;
+      failedTests: readonly string[];
+    }
   | { type: "no-tests"; reason: string };
 
 type BunTarget = Extract<Target, { runner: "bun" | "api" | "web" }>;
@@ -325,18 +336,29 @@ const executionOutcome = (
   outcome: FlakeProcessOutcome,
 ): Extract<RunOutcome, { type: "executed" }> => {
   if (outcome.type === "timeout") {
-    return { type: "executed", passed: false, status: 124, ranTests: false };
+    return {
+      type: "executed",
+      passed: false,
+      status: 124,
+      ranTests: false,
+      failedTests: [],
+    };
   }
   const output = `${outcome.stdout}\n${outcome.stderr}`;
   let ranTests: boolean;
+  let failedTests: readonly string[];
   switch (runner) {
     case "bun":
     case "api":
     case "web":
       ranTests = /\b[1-9]\d* (?:pass|fail)\b/u.test(output);
+      failedTests = [
+        ...new Set(testFailures(output.split("\n")).map(({ name }) => name)),
+      ];
       break;
     case "rust":
       ranTests = /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
+      failedTests = [];
       break;
     default:
       runner satisfies never;
@@ -347,6 +369,7 @@ const executionOutcome = (
     passed: outcome.status === 0 && ranTests,
     status: outcome.status,
     ranTests,
+    failedTests,
   };
 };
 
@@ -415,7 +438,13 @@ export const runOnce = async ({
         ranTests = true;
       }
       return ranTests
-        ? { type: "executed", passed: true, status: 0, ranTests: true }
+        ? {
+            type: "executed",
+            passed: true,
+            status: 0,
+            ranTests: true,
+            failedTests: [],
+          }
         : {
             type: "no-tests",
             reason: `not gated (all tests in module ${target.module || "<crate>"} are ignored)`,
@@ -457,7 +486,13 @@ export const executeGate = async ({
       return outcome.value;
     }
     report.errors.push(`${options.target.file}: ${outcome.error.message}`);
-    return { type: "executed", passed: false, status: 1, ranTests: false };
+    return {
+      type: "executed",
+      passed: false,
+      status: 1,
+      ranTests: false,
+      failedTests: [],
+    };
   };
   for (const target of targets) {
     if (remaining() <= 0) {
@@ -483,6 +518,9 @@ export const executeGate = async ({
       runs: 1,
       failures: Number(!outcome.passed),
       failedIterations: outcome.passed ? [] : [1],
+      failedTests: Object.fromEntries(
+        outcome.failedTests.map((name) => [name, 1]),
+      ),
       durationMs,
       planned: 1,
     });
@@ -517,6 +555,11 @@ export const executeGate = async ({
         result.failures += 1;
         result.failedIterations.push(index + 1);
       }
+      for (const name of outcome.type === "executed"
+        ? outcome.failedTests
+        : []) {
+        result.failedTests[name] = (result.failedTests[name] ?? 0) + 1;
+      }
     }
   }
   report.elapsedMs = now() - start;
@@ -534,7 +577,12 @@ if (import.meta.main) {
   const outcome = await Result.tryPromise(async () => {
     const base = process.env["BASE_SHA"] || "origin/main";
     // Match ci-plan: NUL-delimited paths, no rename inference, merge-base diff.
-    const suppliedChanged = process.env["CHANGED_FILES_JSON"];
+    // CI hands ci-plan's list over as a file: a large diff exceeds the size
+    // limit of a single environment variable.
+    const suppliedPath = process.env["CHANGED_FILES_PATH"];
+    const suppliedChanged = suppliedPath
+      ? (await Bun.file(suppliedPath).text()).trim()
+      : "";
     let changed: string[];
     if (suppliedChanged) {
       changed = v.parse(v.array(v.string()), JSON.parse(suppliedChanged));

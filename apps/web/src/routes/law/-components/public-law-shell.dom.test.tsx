@@ -13,8 +13,8 @@ import en from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
-  statuteLawCrumbTrailOf,
   decisionLawCrumbTrailOf,
+  statuteLawCrumbTrailOf,
 } from "../-law-crumb-trail.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });

@@ -12,9 +12,10 @@ import {
   fields,
   matterCounters,
   properties,
+  propertyDependencies,
   workspaceMembers,
-  workspaceViews,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
@@ -452,6 +453,17 @@ describe("duplicateWorkspace", () => {
         properties: {
           findMany: async () => [
             {
+              id: "prop_file",
+              workspaceId: "ws_source123",
+              name: "Documents",
+              status: "active",
+              content: { type: "file", version: 1 },
+              tool: { type: "manual-input", version: 1 },
+              system: true,
+              kinds: ["document"],
+              role: null,
+            },
+            {
               id: "prop_document_type",
               workspaceId: "ws_source123",
               name: "Type de document",
@@ -527,7 +539,11 @@ describe("duplicateWorkspace", () => {
             return undefined;
           }
 
-          if (table === auditLogs || table === workspaces) {
+          if (
+            table === auditLogs ||
+            table === workspaces ||
+            table === propertyDependencies
+          ) {
             return undefined;
           }
 
@@ -546,17 +562,17 @@ describe("duplicateWorkspace", () => {
     );
 
     expect(result).toEqual({ workspaceId: expect.any(String) });
-    expect(insertedProperties).toEqual([
-      [
+    expect(insertedProperties.at(0)).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           name: "Type de document",
           role: "document-type-classifier",
         }),
-      ],
-    ]);
+      ]),
+    );
   });
 
-  test("copies and remaps image thumbnail refs when duplicating content", async () => {
+  test("copies and remaps image thumbnail refs with a tool-less property", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     enqueueWorkspaceSearchRepairsMock.mockClear();
@@ -793,7 +809,7 @@ describe("duplicateWorkspace", () => {
     expect(requestKeys("GET")).toEqual([]);
   });
 
-  test("marks the copies extraction will not index, inside the transaction", async () => {
+  test("marks every copy for name indexing inside the transaction", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
@@ -992,12 +1008,12 @@ describe("duplicateWorkspace", () => {
       throw new Error("Expected both copies to be inserted");
     }
 
-    // The task has no extraction run to index it, so its mark is written
-    // with the copies themselves; the document's projection arrives with the
-    // extraction that owns it, and marking it too would index it twice.
+    // Both names are indexed immediately; native extraction independently
+    // adds the document content to the same source-fenced projection.
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
       copiedTaskId,
+      copiedDocumentId,
     ]);
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([

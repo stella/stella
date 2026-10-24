@@ -22,9 +22,9 @@ import {
   plan,
   push,
 } from "./generated-conflicts";
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 
-const MESSAGES = "apps/web/src/i18n/langs/messages.gen.ts";
+const MESSAGES = "apps/landing/src/i18n/messages/messages.gen.ts";
 
 // Every file this test reads is a temporary fixture or request, never
 // Markdown in the repository.
@@ -51,10 +51,10 @@ describe("classification", () => {
     if (!result.eligible) {
       return;
     }
-    expect(result.ids).toContain("i18n-messages-web");
+    expect(result.ids).toContain("i18n-messages-landing");
     expect(isAllowedResolution(MESSAGES, result)).toBe(true);
     for (const refused of [
-      "apps/web/src/i18n/langs/cs.json",
+      "apps/landing/src/i18n/messages/cs.json",
       ".github/workflows/ci.yml",
       "apps/web/../../etc/passwd",
       "/etc/passwd",
@@ -625,7 +625,7 @@ describe("resolution across runs", () => {
       // An ordinary file the merge resolved cleanly.
       NOTES,
       // Another generator's output: only owners of a conflict may write.
-      "apps/landing/src/i18n/messages/messages.gen.ts",
+      "packages/transactional/i18n/langs/messages.gen.ts",
     ]) {
       editManifest(out, (manifest) => {
         manifest.files.push({ path: target, deleted: true, mode: "100644" });
@@ -727,6 +727,7 @@ describe("branch update", () => {
   const main = "2".repeat(40);
   const tree = "3".repeat(40);
   const commit = "4".repeat(40);
+  const blob = "5".repeat(40);
 
   const requests = () => {
     const directory = mkdtempSync(path.join(tmpdir(), "generated-push-"));
@@ -740,7 +741,10 @@ describe("branch update", () => {
     return directory;
   };
 
-  const github = (updateRefsErrors: unknown[] | null) => {
+  const github = (
+    updateRefsErrors: unknown[] | null,
+    blobStatuses: number[] = [],
+  ) => {
     const calls: { route: string; body: unknown }[] = [];
     const fetch = async (url: string, init: RequestInit) => {
       const route = url.replace("https://api.example", "");
@@ -750,6 +754,12 @@ describe("branch update", () => {
       calls.push({ route, body });
       const json = (value: unknown) =>
         new Response(JSON.stringify(value), { status: 200 });
+      if (route.endsWith("/git/blobs")) {
+        const status = blobStatuses.shift();
+        return status === undefined
+          ? json({ sha: blob })
+          : new Response("unavailable", { status });
+      }
       if (route.endsWith("/git/trees")) {
         return json({ sha: tree });
       }
@@ -828,5 +838,60 @@ describe("branch update", () => {
       rmSync(directory, { recursive: true, force: true });
     }
     expect(String(refusal)).toContain("GraphQL refused");
+  });
+
+  const withBlob = () => {
+    const directory = requests();
+    writeFileSync(
+      path.join(directory, "blobs", `${blob}.json`),
+      JSON.stringify({ content: "", encoding: "base64" }),
+    );
+    return directory;
+  };
+
+  test("a server error on an object write is repeated", async () => {
+    const { calls, fetch } = github(null, [500, 502]);
+    const directory = withBlob();
+    try {
+      expect(
+        await push({
+          requests: directory,
+          repository: "stella/stella",
+          branch: "feat/x",
+          token: "token",
+          api: "https://api.example",
+          fetch,
+          retryDelayMs: 0,
+        }),
+      ).toBe(commit);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+    expect(
+      calls.filter(({ route }) => route.endsWith("/git/blobs")),
+    ).toHaveLength(3);
+  });
+
+  test("a refused object write is not repeated", async () => {
+    const { calls, fetch } = github(null, [422]);
+    const directory = withBlob();
+    let refusal: unknown;
+    try {
+      await push({
+        requests: directory,
+        repository: "stella/stella",
+        branch: "feat/x",
+        token: "token",
+        api: "https://api.example",
+        fetch,
+        retryDelayMs: 0,
+      });
+    } catch (error) {
+      refusal = error;
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+    expect(String(refusal)).toContain("git/blobs answered 422");
+    expect(calls).toHaveLength(1);
   });
 });

@@ -11,22 +11,23 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowRightIcon,
-  CaseLawIcon,
   Building2Icon,
+  CaseLawIcon,
   CircleHelpIcon,
   FileOutputIcon,
   FileSearchIcon,
+  type LucideIcon,
   PlusIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
   XIcon,
-  type LucideIcon,
 } from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "@stll/ui/input-group";
+import { Prose } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -190,9 +191,9 @@ export function PublicToolsIndex({
             <h1 className="text-foreground max-w-2xl text-3xl leading-tight font-semibold tracking-tight text-balance">
               {t("publicTools.discovery.heroTitle")}
             </h1>
-            <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6 text-pretty sm:text-base">
+            <Prose tone="muted" size="lede" className="mt-2">
               {t("publicTools.discovery.heroBody")}
-            </p>
+            </Prose>
           </div>
 
           <InputGroup className="mt-6 min-h-12 max-w-3xl shadow-xs">
@@ -238,9 +239,9 @@ export function PublicToolsIndex({
                 >
                   {t("publicTools.discovery.allTitle")}
                 </h2>
-                <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-6">
+                <Prose tone="muted" size="sm" className="mt-1">
                   {t("publicTools.discovery.allBody")}
-                </p>
+                </Prose>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div
@@ -350,7 +351,7 @@ export function PublicToolsIndex({
 
           {entries.length === 0 && (
             <div className="bg-muted/35 mt-8 rounded-xl px-6 py-12 text-center">
-              <p className="text-foreground text-sm font-medium">
+              <p className="text-foreground text-sm font-medium" role="status">
                 {t("publicTools.discovery.noResults")}
               </p>
               <Button
@@ -423,9 +424,9 @@ function FeaturedTools() {
             >
               {contractReview.displayName}
             </BidiText>
-            <p className="text-muted-foreground mt-2 text-sm leading-6 text-pretty">
+            <Prose tone="muted" size="sm" className="mt-2">
               {t("publicTools.discovery.contractReviewBody")}
-            </p>
+            </Prose>
             <p className="text-muted-foreground mt-4 text-xs">
               {t("catalogue.by", { author: contractReview.author })}
             </p>
@@ -693,9 +694,9 @@ function CatalogueGroup({
         >
           {t(GROUP_LABEL_KEY[group])}
         </h3>
-        <p className="text-muted-foreground mt-1 text-sm leading-6">
+        <Prose tone="muted" size="sm" className="mt-1">
           {t(GROUP_BODY_KEY[group])}
-        </p>
+        </Prose>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {entries.map((entry) => (

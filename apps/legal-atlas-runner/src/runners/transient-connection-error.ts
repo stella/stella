@@ -9,12 +9,10 @@
  * a backfill failure, the line an operator is expected to read.
  */
 
-import { AhoCorasick } from "@stll/aho-corasick";
-
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
-  PG_DRIVER_ERROR,
   isTransientPgConnectionError,
+  PG_DRIVER_ERROR,
 } from "@/api/lib/pg-error";
 
 /**
@@ -24,10 +22,10 @@ import {
  * predicate also decides whether an unhandled rejection ends the process, so
  * it must never match less than it used to.
  */
-const connectionClosedText = new AhoCorasick([
+const CONNECTION_CLOSED_TEXT = [
   "Connection closed",
   PG_DRIVER_ERROR.CONNECTION_CLOSED,
-]);
+] as const;
 
 /**
  * Bun's native Postgres pool emits unhandled errors when the server closes a
@@ -45,8 +43,6 @@ export const isTransientConnectionError = (error: unknown): boolean => {
   if (error instanceof TimeoutError || isTransientPgConnectionError(error)) {
     return true;
   }
-  const message = (
-    error instanceof Error ? error.message : String(error)
-  ).toWellFormed();
-  return connectionClosedText.isMatch(message);
+  const message = error instanceof Error ? error.message : String(error);
+  return CONNECTION_CLOSED_TEXT.some((text) => message.includes(text));
 };

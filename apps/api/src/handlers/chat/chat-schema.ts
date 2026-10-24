@@ -10,23 +10,23 @@ import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
-  CHAT_EDIT_APPLY_MODE,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserClientCapability,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_EDIT_APPLY_MODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
-  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type ChatEditApplyMode,
+  type ChatRunMode,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   DOCX_EDIT_REPRESENTATION,
+  type DocxEditRepresentation,
   isSafeIdValue,
   parseResourceRef,
-  resourceRef,
   RESOURCE_TYPE,
-  type BrowserClientCapability,
-  type ChatEditApplyMode,
-  type ChatRunMode,
-  type DocxEditRepresentation,
+  resourceRef,
 } from "@stll/api-contract";
 import {
   isChatPastedTextPart,
@@ -44,9 +44,10 @@ import {
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
+  isApprovedClientCallAwaitingResult,
   isChatPart,
-  isIncomingChatPart,
   isChatTextPart,
+  isIncomingChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
@@ -64,9 +65,9 @@ import type {
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  registeredChatTool,
   type ChatTool,
   type ChatToolMap,
+  registeredChatTool,
 } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -518,6 +519,7 @@ const CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION = {
   metadata: "state-independent",
   name: "state-independent",
   output: "state-specific",
+  providerMetadata: "state-independent",
   state: "state-specific",
   type: "state-independent",
 } as const satisfies Record<
@@ -1189,7 +1191,27 @@ const validateContinuationToolCallTransition = ({
       }
       return Result.ok({ type: "transitioned", call: candidate });
     }
-    case "approval-responded":
+    case "approval-responded": {
+      // The approved call the engine handed to the client: its result.
+      if (
+        !isApprovedClientCallAwaitingResult(canonicalCall) ||
+        !("approval" in canonicalCall) ||
+        (incomingCall.state !== "complete" && incomingCall.state !== "error")
+      ) {
+        return invalidContinuationToolCall();
+      }
+      const output: unknown = incomingCall.output;
+      const candidate: unknown = {
+        ...canonicalBase,
+        approval: canonicalCall.approval,
+        output,
+        state: incomingCall.state,
+      };
+      if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+        panic("Validated chat tool call violates the tool-call contract");
+      }
+      return Result.ok({ type: "transitioned", call: candidate });
+    }
     case "awaiting-input":
     case "complete":
     case "error":

@@ -43,8 +43,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
@@ -210,6 +210,44 @@ export const expenseLineDraft = (
     expenseId: expense.id,
   };
 };
+
+// Plain dates (YYYY-MM-DD) and lowercase UUIDs both sort by code unit, the
+// order the `(date, id)` ORDER BY clauses elsewhere in this module produce.
+const compareCodeUnits = (left: string, right: string) =>
+  Number(left > right) - Number(left < right);
+
+export type AttachedEntryLineDraftsOptions = {
+  timeEntryRows: readonly (TimeEntryForLine & { dateWorked: string })[];
+  expenseRows: readonly (ExpenseForLine & { dateIncurred: string })[];
+  vat: LineVat;
+};
+
+/**
+ * Lines for entries just attached to an invoice: time entries by date worked,
+ * then expenses by date incurred, each tie broken by id. Line positions follow
+ * this order, so the invoice document lists work chronologically whatever
+ * order the claiming `UPDATE ... RETURNING` produced.
+ */
+export const attachedEntryLineDrafts = ({
+  timeEntryRows,
+  expenseRows,
+  vat,
+}: AttachedEntryLineDraftsOptions) => [
+  ...timeEntryRows
+    .toSorted(
+      (left, right) =>
+        compareCodeUnits(left.dateWorked, right.dateWorked) ||
+        compareCodeUnits(left.id, right.id),
+    )
+    .map((entry) => timeEntryLineDraft(entry, vat)),
+  ...expenseRows
+    .toSorted(
+      (left, right) =>
+        compareCodeUnits(left.dateIncurred, right.dateIncurred) ||
+        compareCodeUnits(left.id, right.id),
+    )
+    .map((expense) => expenseLineDraft(expense, vat)),
+];
 
 export const manualLineDraft = (
   input: LineVat & {

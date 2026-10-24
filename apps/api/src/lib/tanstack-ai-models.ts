@@ -13,19 +13,19 @@ import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  getModelReasoningCapabilities,
   BYOK_MODEL_OPTIONS,
-  MODEL_TASK_OVERRIDE_GROUP,
-  resolveDefaultModel,
   getModelRate,
+  getModelReasoningCapabilities,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
+  MODEL_TASK_OVERRIDE_GROUP,
+  resolveDefaultModel,
   resolveReasoningEffort,
   shouldEmitTemperature,
   supportsStreamingToolUse,
@@ -34,24 +34,25 @@ import {
 import type {
   AIProvider,
   BYOKProvider,
-  ModelTask,
   ModelOverrideGroup,
+  ModelTask,
   ReasoningEffort,
   ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
-  resolveOrgAIModelForTask,
-  normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
+  normalizeProviderRegion,
   type OrgAIConfig,
   type OrgAIProviderConfig,
+  resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
@@ -102,8 +103,7 @@ type StellaOpenRouterTextModelOptions = Omit<
   // The request-level prompt-cache marker OpenRouter forwards to Anthropic
   // models; the adapter spreads it into the SDK request, whose type has it.
   cacheControl?:
-    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
-    | undefined;
+    { ttl?: "5m" | "1h" | undefined; type: "ephemeral" } | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.
@@ -206,8 +206,7 @@ type StellaOpenAITextProviderOptions = Omit<
 };
 
 export type TanStackAIProviderUnsupportedReason =
-  | "provider-not-implemented"
-  | "regional-routing-not-implemented";
+  "provider-not-implemented" | "regional-routing-not-implemented";
 
 export type TanStackAIProviderSupport =
   | { supported: true }
@@ -471,8 +470,7 @@ export const registerTanStackMockTextAdapterFactory = (
  * with the flag still set.
  */
 const activeMockTextAdapterFactory = ():
-  | TanStackTextAdapterFactory
-  | undefined =>
+  TanStackTextAdapterFactory | undefined =>
   env.USE_MOCK_AI === false ? undefined : mockTextAdapterFactory;
 
 /**
@@ -1225,6 +1223,7 @@ const byokProviderTaskUnsupportedError = (
   task: ModelTask,
 ): HandlerError<400> =>
   new HandlerError({
+    code: AI_FAILURE_CODES.provider_task_unsupported,
     status: 400,
     message:
       `${provider} is not available for the "${task}" AI task. ` +
@@ -1945,6 +1944,7 @@ export function tanStackModelOptionsForTask(
 
 const byokRoleNotConfiguredError = (task: ModelTask): HandlerError =>
   new HandlerError({
+    code: AI_FAILURE_CODES.role_not_configured,
     status: 403,
     message:
       `AI is not available for the "${task}" task on this deployment. ` +

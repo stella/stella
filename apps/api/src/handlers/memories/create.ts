@@ -4,6 +4,7 @@ import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import {
   memoryWriteRefusalHandlerError,
@@ -13,6 +14,7 @@ import {
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
   description:
     "Save an assistant memory that future chats will read. scope user is " +

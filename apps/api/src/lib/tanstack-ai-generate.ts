@@ -3,20 +3,20 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec";
 import {
-  EventType,
   convertSchemaToJsonSchema,
+  EventType,
   parsePartialJSON,
 } from "@tanstack/ai";
 import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
-  TokenUsage,
   StructuredOutputPart,
   SystemPrompt,
+  TokenUsage,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -39,8 +39,8 @@ import type {
   OrgAIConfig,
 } from "@/api/lib/ai-config";
 import {
-  classifyAIError,
   type AIErrorKind,
+  classifyAIError,
   providerErrorBody,
   providerStatusCode,
 } from "@/api/lib/ai-error";
@@ -63,8 +63,8 @@ import {
 } from "@/api/lib/chat/openrouter-credential";
 import { OUTPUT_CEILING_OPTION } from "@/api/lib/chat/output-ceiling";
 import {
-  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   checkManagedProviderAvailable,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";
@@ -200,9 +200,7 @@ type TanStackTextForTaskOptions = GenerateTanStackBaseOptions &
  * run. `allow-incomplete` returns whatever text arrived.
  */
 export type TanStackTextFinishPolicy =
-  | "allow-incomplete"
-  | "allow-output-ceiling"
-  | "require-complete";
+  "allow-incomplete" | "allow-output-ceiling" | "require-complete";
 
 /**
  * A bound on one awaited model call, owned by the call rather than threaded in
@@ -652,30 +650,39 @@ export type TanStackTextRun = {
 type AdmittedChatRunOptions = StreamChatChunksOptions & {
   model: ResolvedTanStackTextModel;
   admission: ModelDispatchScope["admission"];
+  userId: ModelDispatchScope["userId"];
 };
 
 const admittedChatRunOptions = ({
   admission,
+  userId,
   abortController,
   ...options
 }: AdmittedChatRunOptions): StreamChatChunksOptions & {
   model: ResolvedTanStackTextModel;
 } => {
-  const controller = admittedAbortController(admission, abortController);
+  const controller = admittedAbortController({
+    admission,
+    userId,
+    abortController,
+  });
   return controller === undefined
     ? options
     : { ...options, abortController: controller };
 };
 
-const admittedAbortController = (
-  admission: ModelDispatchScope["admission"],
-  abortController: AbortController | undefined,
-): AbortController | undefined => {
+const admittedAbortController = ({
+  admission,
+  userId,
+  abortController,
+}: Pick<AdmittedChatRunOptions, "admission" | "userId" | "abortController">):
+  AbortController | undefined => {
   switch (admission.type) {
     case "organization": {
       // Checks the proof still admits work, then joins its signal.
       const signal = admittedDispatchSignal({
         organizationId: admission.organizationId,
+        userId,
         admission,
         abortSignal: abortController?.signal,
       });
@@ -684,6 +691,7 @@ const admittedAbortController = (
         : abortControllerFromSignal(signal);
     }
     case "no-organization":
+      assertModelDispatchScope({ organizationId: null, userId, admission });
       return abortController;
     default:
       admission satisfies never;

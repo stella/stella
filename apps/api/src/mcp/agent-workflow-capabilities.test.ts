@@ -6,7 +6,14 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -21,6 +28,8 @@ import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-def
  */
 
 const disabledFeatures = new Set<string>();
+const MEMORY_FEATURE_FLAG =
+  FEATURE_REGISTRY[AI_MEMORY_FEATURE_ID].deploymentFeature;
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
 const { readCapabilityCatalog } =
@@ -59,19 +68,19 @@ const EXPOSED = {
     access: "write",
     scope: "stella:chat",
     handlerKind: "root",
-    feature: "FEATURE_AI_MEMORY",
+    feature: MEMORY_FEATURE_FLAG,
   },
   "memories.list": {
     access: "read",
     scope: "stella:chat",
     handlerKind: "root",
-    feature: "FEATURE_AI_MEMORY",
+    feature: MEMORY_FEATURE_FLAG,
   },
   "memories.update": {
     access: "write",
     scope: "stella:chat",
     handlerKind: "root",
-    feature: "FEATURE_AI_MEMORY",
+    feature: MEMORY_FEATURE_FLAG,
   },
   "notifications.list": {
     access: "read",
@@ -229,7 +238,25 @@ const createContext = ({
     featureAccessSnapshot: createFeatureAccessSnapshot({
       organizationId: "org_1",
       userId: "user_1",
-      decisions: new Map(),
+      decisions: new Map([
+        [
+          AI_MEMORY_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: AI_MEMORY_FEATURE_ID,
+            grants: {
+              [AI_MEMORY_FEATURE_ID]: [
+                { type: "organization", organizationId: "org_1" },
+              ],
+            },
+            organizationId: "org_1",
+            userId: "user_1",
+            user: { email: "member@example.test", emailVerified: true },
+            membership: true,
+            deploymentEnabled: !disabledFeatures.has(MEMORY_FEATURE_FLAG),
+          }),
+        ],
+      ]),
     }),
     accessibleWorkspaceIds: workspaces.map(({ id }) => id),
     accessibleWorkspaceIdSet: workspaceIds,
@@ -514,7 +541,7 @@ describe("agent workflow capability refusals", () => {
   test.each(["memories.list", "memories.create", "memories.update"] as const)(
     "%s is unavailable while assistant memory is switched off",
     async (id) => {
-      disabledFeatures.add("FEATURE_AI_MEMORY");
+      disabledFeatures.add(MEMORY_FEATURE_FLAG);
       const error = errorOf(
         await invoke({ capability: id, input: VALID_INPUT[id] }),
       );

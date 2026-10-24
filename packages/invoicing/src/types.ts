@@ -28,6 +28,8 @@ export type BankPaymentDetails = {
   accountNumber?: string;
   bankCode?: string;
   variableSymbol?: string;
+  constantSymbol?: string;
+  specificSymbol?: string;
   dueDate?: string;
   message?: string;
 };
