@@ -1,5 +1,24 @@
 import { panic } from "better-result";
 
+import {
+  applyAll,
+  applyOne,
+  type CleanScanPageReview,
+  type CleanScanReview,
+  createCleanScanReview,
+  rejectOne,
+  setPageReview,
+  undoCleanScanReview,
+} from "@stll/scan-engine/review";
+import type { ScanOptions } from "@stll/scan-engine/types";
+
+import type { PageCleanScan } from "@/lib/pdf/page-editor/clean-scan-placement";
+import type {
+  CleanScanFailure,
+  CleanScanGeometry,
+} from "@/lib/pdf/page-editor/clean-scan-run";
+import type { PagePlanEntry } from "@/lib/pdf/page-editor/page-editor-protocol";
+
 export type PageRotation = 0 | 90 | 180 | 270;
 
 export type PageDropEdge = "before" | "after";
@@ -17,6 +36,8 @@ export type OrganizerPage = {
   sourcePageIndex: number;
   rotation: PageRotation;
   crop?: NormalizedCrop;
+  /** Key into `PageOrganizerState.cleanScans`; the page shows that cleaned scan. */
+  cleanScanId?: string;
 };
 
 export type PageOrganizerPlan = {
@@ -35,9 +56,36 @@ type PageOrganizerHistory = {
   future: readonly PageOrganizerPlan[];
 };
 
+export const DEFAULT_CLEAN_SCAN_OPTIONS = {
+  output: "grayscale",
+  contentCrop: "on",
+  deskew: "on",
+} as const satisfies ScanOptions;
+
+/**
+ * One clean-scan review: the pages it covers, what the engine returned for
+ * each, and the user's apply and reject decisions. Nothing reaches the plan
+ * until the review is committed.
+ */
+export type CleanScanSession = {
+  /** Identifies this run, so results from an abandoned run are ignored. */
+  runId: string;
+  options: ScanOptions;
+  review: CleanScanReview;
+  /** Source geometry per previewed page, needed to place its cleaned image. */
+  geometry: ReadonlyMap<string, CleanScanGeometry>;
+  failures: readonly CleanScanFailure[];
+};
+
 export type PageOrganizerState = {
   history: PageOrganizerHistory;
   ui: PageOrganizerUI;
+  /**
+   * Committed cleaned scans by id. Entries are never removed, so undo and
+   * redo can restore a page that refers to one.
+   */
+  cleanScans: ReadonlyMap<string, PageCleanScan>;
+  cleanScan: CleanScanSession | null;
 };
 
 export type PageOrganizerAction =
@@ -56,8 +104,30 @@ export type PageOrganizerAction =
   | { type: "deleteSelected" }
   | { type: "appendSourcePages"; pages: readonly OrganizerPage[] }
   | { type: "setPageCrops"; crops: ReadonlyMap<string, NormalizedCrop | null> }
+  | CleanScanAction
   | { type: "undo" }
   | { type: "redo" };
+
+type CleanScanAction =
+  | {
+      type: "startCleanScan";
+      runId: string;
+      pageIds: readonly string[];
+      options: ScanOptions;
+    }
+  | {
+      type: "cleanScanPageReviewed";
+      runId: string;
+      review: CleanScanPageReview;
+      geometry: CleanScanGeometry;
+    }
+  | { type: "cleanScanPageFailed"; runId: string; failure: CleanScanFailure }
+  | { type: "applyCleanScanPage"; pageId: string }
+  | { type: "applyAllCleanScanPages" }
+  | { type: "rejectCleanScanPage"; pageId: string }
+  | { type: "undoCleanScanReview" }
+  | { type: "commitCleanScan" }
+  | { type: "cancelCleanScan" };
 
 const MAX_HISTORY_ENTRIES = 100;
 const DEFAULT_UI: PageOrganizerUI = {
@@ -125,6 +195,8 @@ export const createPageOrganizerState = (
   return {
     history: { initial: present, past: [], present, future: [] },
     ui: normalizeUI(ui ?? DEFAULT_UI, present),
+    cleanScans: new Map(),
+    cleanScan: null,
   };
 };
 
@@ -136,6 +208,30 @@ const samePlan = (a: PageOrganizerPlan, b: PageOrganizerPlan): boolean =>
 
 export const isPageOrganizerDirty = (state: PageOrganizerState): boolean =>
   !samePlan(state.history.initial, state.history.present);
+
+/** The page's committed cleaned scan, if it shows one. */
+export const pageCleanScan = (
+  state: PageOrganizerState,
+  page: OrganizerPage,
+): PageCleanScan | undefined => {
+  if (page.cleanScanId === undefined) {
+    return undefined;
+  }
+  return (
+    state.cleanScans.get(page.cleanScanId) ??
+    panic(`Unknown clean scan: ${page.cleanScanId}`)
+  );
+};
+
+/** The current plan as the page transform reads it: cleaned pages carry their scan. */
+export const transformPagePlanEntries = (
+  state: PageOrganizerState,
+): PagePlanEntry[] =>
+  currentPlan(state).pages.map((page) => {
+    const { cleanScanId: _cleanScanId, ...entry } = page;
+    const scan = pageCleanScan(state, page);
+    return scan === undefined ? entry : { ...entry, scan };
+  });
 
 const commit = (
   state: PageOrganizerState,
@@ -156,6 +252,8 @@ const commit = (
       future: [],
     },
     ui: normalizeUI(nextUI, present),
+    cleanScans: state.cleanScans,
+    cleanScan: state.cleanScan,
   };
 };
 
@@ -259,10 +357,189 @@ const moveOneStep = (
   return result;
 };
 
+/**
+ * An engine result is a fact about the page, not a user decision, so it is
+ * written into every undo snapshot as well: undoing an apply or reject made
+ * while the run was still going never returns a finished page to pending.
+ */
+const recordEngineResult = (
+  review: CleanScanReview,
+  result: CleanScanPageReview,
+): CleanScanReview => {
+  const reviewed = setPageReview(review, result);
+  if (reviewed === review) {
+    return review;
+  }
+  return {
+    pages: reviewed.pages,
+    past: review.past.map((pages) =>
+      pages.map((page) => (page.pageId === result.pageId ? result : page)),
+    ),
+  };
+};
+
+type UpdateCleanScanSessionOptions = {
+  runId?: string | undefined;
+  state: PageOrganizerState;
+  update: (session: CleanScanSession) => CleanScanSession;
+};
+
+/** Apply `update` to the open session; a stale run id changes nothing. */
+const updateCleanScanSession = ({
+  runId,
+  state,
+  update,
+}: UpdateCleanScanSessionOptions): PageOrganizerState => {
+  const session = state.cleanScan;
+  if (session === null || (runId !== undefined && runId !== session.runId)) {
+    return state;
+  }
+  return { ...state, cleanScan: update(session) };
+};
+
+/** Move the applied previews into the plan as one undoable edit. */
+const commitCleanScan = (
+  state: PageOrganizerState,
+  session: CleanScanSession,
+): PageOrganizerState => {
+  const cleanScans = new Map(state.cleanScans);
+  const scanIdByPage = new Map<string, string>();
+  for (const page of session.review.pages) {
+    if (page.type !== "applied") {
+      continue;
+    }
+    const geometry = session.geometry.get(page.pageId);
+    if (!geometry) {
+      return panic(`Applied clean scan has no page geometry: ${page.pageId}`);
+    }
+    const scanId = `${session.runId}:${page.pageId}`;
+    cleanScans.set(scanId, { ...geometry, image: page.scan.image });
+    scanIdByPage.set(page.pageId, scanId);
+  }
+  const plan = currentPlan(state);
+  const pages = plan.pages.map((page) => {
+    const cleanScanId = scanIdByPage.get(page.id);
+    return cleanScanId === undefined ? page : { ...page, cleanScanId };
+  });
+  return commit({ ...state, cleanScans, cleanScan: null }, { ...plan, pages });
+};
+
+const reduceCleanScan = (
+  state: PageOrganizerState,
+  action: CleanScanAction,
+): PageOrganizerState => {
+  switch (action.type) {
+    case "startCleanScan": {
+      const ids = pageIds(currentPlan(state).pages);
+      if (
+        action.pageIds.length === 0 ||
+        action.pageIds.some((id) => !ids.has(id))
+      ) {
+        return panic("A clean scan reviews one or more pages of the plan");
+      }
+      return {
+        ...state,
+        cleanScan: {
+          runId: action.runId,
+          options: action.options,
+          review: createCleanScanReview(action.pageIds),
+          geometry: new Map(),
+          failures: [],
+        },
+      };
+    }
+    case "cleanScanPageReviewed":
+      return updateCleanScanSession({
+        runId: action.runId,
+        state,
+        update: (session) => {
+          const geometry = new Map(session.geometry);
+          geometry.set(action.review.pageId, action.geometry);
+          return {
+            ...session,
+            review: recordEngineResult(session.review, action.review),
+            geometry,
+          };
+        },
+      });
+    case "cleanScanPageFailed":
+      return updateCleanScanSession({
+        runId: action.runId,
+        state,
+        update: (session) => ({
+          ...session,
+          failures: [...session.failures, action.failure],
+        }),
+      });
+    case "applyCleanScanPage":
+      return updateCleanScanSession({
+        state,
+        update: (session) => ({
+          ...session,
+          review: applyOne(session.review, action.pageId),
+        }),
+      });
+    case "applyAllCleanScanPages":
+      return updateCleanScanSession({
+        state,
+        update: (session) => ({
+          ...session,
+          review: applyAll(session.review),
+        }),
+      });
+    case "rejectCleanScanPage":
+      return updateCleanScanSession({
+        state,
+        update: (session) => ({
+          ...session,
+          review: rejectOne(session.review, action.pageId),
+        }),
+      });
+    case "undoCleanScanReview":
+      return updateCleanScanSession({
+        state,
+        update: (session) => ({
+          ...session,
+          review: undoCleanScanReview(session.review),
+        }),
+      });
+    case "commitCleanScan":
+      return state.cleanScan === null
+        ? state
+        : commitCleanScan(state, state.cleanScan);
+    case "cancelCleanScan":
+      return { ...state, cleanScan: null };
+    default: {
+      action satisfies never;
+      return panic(`Unhandled clean scan action: ${String(action)}`);
+    }
+  }
+};
+
+const CLEAN_SCAN_ACTION_TYPES = {
+  startCleanScan: true,
+  cleanScanPageReviewed: true,
+  cleanScanPageFailed: true,
+  applyCleanScanPage: true,
+  applyAllCleanScanPages: true,
+  rejectCleanScanPage: true,
+  undoCleanScanReview: true,
+  commitCleanScan: true,
+  cancelCleanScan: true,
+} as const satisfies Record<CleanScanAction["type"], true>;
+
+const isCleanScanAction = (
+  action: PageOrganizerAction,
+): action is CleanScanAction =>
+  Object.hasOwn(CLEAN_SCAN_ACTION_TYPES, action.type);
+
 export const reducePageOrganizer = (
   state: PageOrganizerState,
   action: PageOrganizerAction,
 ): PageOrganizerState => {
+  if (isCleanScanAction(action)) {
+    return reduceCleanScan(state, action);
+  }
   const plan = currentPlan(state);
   switch (action.type) {
     case "replaceSelection":
@@ -425,6 +702,8 @@ export const reducePageOrganizer = (
           future: [currentPlan(state), ...state.history.future],
         },
         ui: normalizeUI(state.ui, previous),
+        cleanScans: state.cleanScans,
+        cleanScan: state.cleanScan,
       };
     }
     case "redo": {
@@ -442,6 +721,8 @@ export const reducePageOrganizer = (
           future: state.history.future.slice(1),
         },
         ui: normalizeUI(state.ui, next),
+        cleanScans: state.cleanScans,
+        cleanScan: state.cleanScan,
       };
     }
     default: {

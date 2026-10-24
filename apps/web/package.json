@@ -96,6 +96,7 @@
     "@stll/portable-path": "workspace:*",
     "@stll/regex-set": "catalog:",
     "@stll/regex-set-wasm": "catalog:",
+    "@stll/scan-engine": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/ssr-kit": "workspace:^",

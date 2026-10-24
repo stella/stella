@@ -10,7 +10,9 @@ import {
   type PdfSigningSessionSnapshot,
   pdfSigningStartErrorCode,
   resolvePdfSignTarget,
+  resolveSavedPdfSignTarget,
 } from "@/components/inspector/pdf-signing.logic";
+import { PDF_MIME } from "@/lib/consts";
 
 const NOW = Date.UTC(2026, 8, 21, 12, 0, 0);
 
@@ -318,5 +320,41 @@ describe("resolvePdfSignTarget", () => {
     ],
   ])("offers no signing %s", (_label, override) => {
     expect(resolvePdfSignTarget({ ...signable, ...override })).toBeNull();
+  });
+});
+
+describe("resolveSavedPdfSignTarget", () => {
+  const target = {
+    entityId: "entity-1",
+    propertyId: "property-1",
+    workspaceId: "workspace-1",
+  };
+  const fileField = (id: string, propertyId: string, mimeType: string) => ({
+    id,
+    propertyId,
+    content: { type: "file", mimeType },
+  });
+
+  test("signs the property's newest file, which the save just made current", () => {
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField("field-old", "property-1", PDF_MIME),
+          fileField("field-other", "property-2", PDF_MIME),
+          fileField("field-saved", "property-1", PDF_MIME),
+        ],
+        target,
+      }),
+    ).toEqual({ ...target, fieldId: "field-saved" });
+  });
+
+  test("signs nothing when the property no longer holds a PDF", () => {
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [fileField("field-saved", "property-1", "image/png")],
+        target,
+      }),
+    ).toBeNull();
+    expect(resolveSavedPdfSignTarget({ fields: [], target })).toBeNull();
   });
 });
