@@ -217,15 +217,17 @@ export const createBusinessRegistryTools = ({
         query,
         detail,
         loadWebSearch: () =>
-          webSearchProvider === null
-            ? null
-            : {
-                provider: webSearchProvider,
-                observer: actionRequestObserver(
-                  organizationId,
-                  ACTION_COST_CALL_KIND.webSearchRequest,
-                ).onRequest,
-              },
+          Result.ok(
+            webSearchProvider === null
+              ? null
+              : {
+                  provider: webSearchProvider,
+                  observer: actionRequestObserver(
+                    organizationId,
+                    ACTION_COST_CALL_KIND.webSearchRequest,
+                  ).onRequest,
+                },
+          ),
         ...(limit === undefined ? {} : { limit }),
       });
       // executeRegistryLookup returns a HandlerError instance for

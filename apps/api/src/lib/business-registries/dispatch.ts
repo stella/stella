@@ -1823,8 +1823,10 @@ type RegistryWebSearch = {
   abortSignal?: AbortSignal | undefined;
 };
 
+type RegistryWebSearchResult = Result<RegistryWebSearch | null, HandlerError>;
+
 export type LoadRegistryWebSearch = () =>
-  RegistryWebSearch | null | Promise<RegistryWebSearch | null>;
+  RegistryWebSearchResult | Promise<RegistryWebSearchResult>;
 
 /**
  * Run the dispatch flow for a registry handler: detect lookup vs.
@@ -1879,7 +1881,11 @@ export const executeRegistryLookup = async ({
       return { type: "lookup", registry: handler.slug, hit };
     }
     if (!searchFn && handler.webCandidateNameSearch) {
-      const webSearch = await loadWebSearch?.();
+      const availability = await loadWebSearch?.();
+      if (availability?.isErr()) {
+        return availability.error;
+      }
+      const webSearch = availability?.value;
       if (webSearch === undefined || webSearch === null) {
         return {
           type: "name-search-unavailable",

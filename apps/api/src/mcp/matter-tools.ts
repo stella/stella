@@ -1042,25 +1042,31 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     loadWebSearch: async () => {
       const webSearch = await context.loadWebSearchProvider?.();
       if (webSearch === undefined) {
-        return null;
+        return Result.ok(null);
       }
       if (webSearch.isErr()) {
         captureError(webSearch.error, {
           source: "mcp-web-search-settings-read",
         });
-        throw webSearch.error;
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Could not load registry web-search settings",
+            cause: webSearch.error,
+          }),
+        );
       }
       const provider = providerFromMcpWebSearchAvailability(webSearch.value);
       if (provider === null) {
-        return null;
+        return Result.ok(null);
       }
-      return {
+      return Result.ok({
         provider,
         observer: actionRequestObserver(
           context.organizationId,
           ACTION_COST_CALL_KIND.webSearchRequest,
         ).onRequest,
-      };
+      });
     },
   });
   if (Result.isError(result)) {

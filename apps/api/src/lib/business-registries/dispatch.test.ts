@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -592,7 +593,7 @@ describe("executeRegistryLookup — verified web candidates", () => {
       query: "Zolc spółka z ograniczoną odpowiedzialnością",
       loadWebSearch: () => {
         providerLoads += 1;
-        return {
+        return Result.ok({
           provider: webProviderWith([
             { title: "Noise KRS 0000999999" },
             { title: "Żółć", snippet: "Numer KRS: 0000123456" },
@@ -600,7 +601,7 @@ describe("executeRegistryLookup — verified web candidates", () => {
           observer: () => {
             metered += 1;
           },
-        };
+        });
       },
     });
 
@@ -627,10 +628,11 @@ describe("executeRegistryLookup — verified web candidates", () => {
       permit,
       handler: krsWebHandler(async (id) => krsHit(id, "Inna Firma S.A.")),
       query: "Szukana Firma sp. z o.o.",
-      loadWebSearch: () => ({
-        provider: webProviderWith([{ title: "KRS 0000123456" }]),
-        observer: () => undefined,
-      }),
+      loadWebSearch: () =>
+        Result.ok({
+          provider: webProviderWith([{ title: "KRS 0000123456" }]),
+          observer: () => undefined,
+        }),
     });
 
     expect(result).toEqual({
@@ -657,10 +659,11 @@ describe("executeRegistryLookup — verified web candidates", () => {
         permit,
         handler: krsWebHandler(async (id) => krsHit(id, officialName)),
         query,
-        loadWebSearch: () => ({
-          provider: webProviderWith([{ title: "KRS 0000123456" }]),
-          observer: () => undefined,
-        }),
+        loadWebSearch: () =>
+          Result.ok({
+            provider: webProviderWith([{ title: "KRS 0000123456" }]),
+            observer: () => undefined,
+          }),
       });
 
       expect(result).toMatchObject({
@@ -672,19 +675,28 @@ describe("executeRegistryLookup — verified web candidates", () => {
 
   test("preserves a failed configuration load as a lookup failure", async () => {
     const cause = new Error("configuration read unavailable");
+    let candidateLookups = 0;
+    const failure = new HandlerError({
+      status: 500,
+      message: "Could not load registry web-search settings",
+      cause,
+    });
     const result = await executeRegistryLookup({
       observer: "unobserved",
       permit,
-      handler: krsWebHandler(async () => null),
+      handler: krsWebHandler(async () => {
+        candidateLookups += 1;
+        return null;
+      }),
       query: "Company name",
-      loadWebSearch: async () => {
-        throw cause;
-      },
+      loadWebSearch: async () => Result.err(failure),
     });
     expect(result).toBeInstanceOf(HandlerError);
     if (!(result instanceof HandlerError)) {
       throw new TypeError("Expected a lookup failure");
     }
+    expect(candidateLookups).toBe(0);
+    expect(result).toBe(failure);
     expect(result.status).toBe(500);
     expect(result.cause).toBe(cause);
   });
@@ -696,15 +708,16 @@ describe("executeRegistryLookup — verified web candidates", () => {
       permit,
       handler: krsWebHandler(async () => null),
       query: "Fikcyjna Firma",
-      loadWebSearch: () => ({
-        provider: {
-          name: "tavily",
-          search: async () => {
-            throw cause;
+      loadWebSearch: () =>
+        Result.ok({
+          provider: {
+            name: "tavily",
+            search: async () => {
+              throw cause;
+            },
           },
-        },
-        observer: () => undefined,
-      }),
+          observer: () => undefined,
+        }),
     });
 
     expect(result).toBeInstanceOf(HandlerError);
@@ -731,13 +744,14 @@ describe("executeRegistryLookup — verified web candidates", () => {
         return null;
       }),
       query: "Missing Company",
-      loadWebSearch: () => ({
-        provider: webProviderWith([
-          { title: `${String(ids[0])} ${String(ids[0])} ${String(ids[1])}` },
-          { title: ids.slice(2).join(" ") },
-        ]),
-        observer: () => undefined,
-      }),
+      loadWebSearch: () =>
+        Result.ok({
+          provider: webProviderWith([
+            { title: `${String(ids[0])} ${String(ids[0])} ${String(ids[1])}` },
+            { title: ids.slice(2).join(" ") },
+          ]),
+          observer: () => undefined,
+        }),
     });
 
     expect(lookedUp).toEqual(ids.slice(0, 5));
@@ -750,19 +764,23 @@ describe("executeRegistryLookup — verified web candidates", () => {
     });
   });
 
-  test("returns typed unavailability without a provider", async () => {
-    const result = await executeRegistryLookup({
-      observer: "unobserved",
-      permit,
-      handler: krsWebHandler(async () => null),
-      query: "Missing Company",
-    });
-    expect(result).toEqual({
-      type: "name-search-unavailable",
-      registry: "krs",
-      reason: "web-search-unavailable",
-    });
-  });
+  test.each([undefined, () => Result.ok(null)])(
+    "returns typed unavailability without a provider (%s)",
+    async (loadWebSearch) => {
+      const result = await executeRegistryLookup({
+        observer: "unobserved",
+        permit,
+        handler: krsWebHandler(async () => null),
+        query: "Missing Company",
+        loadWebSearch,
+      });
+      expect(result).toEqual({
+        type: "name-search-unavailable",
+        registry: "krs",
+        reason: "web-search-unavailable",
+      });
+    },
+  );
 
   test("native name search does not load web search configuration", async () => {
     let providerLoads = 0;
@@ -773,7 +791,7 @@ describe("executeRegistryLookup — verified web candidates", () => {
       query: "Native company search",
       loadWebSearch: () => {
         providerLoads += 1;
-        return null;
+        return Result.ok(null);
       },
     });
     expect(result).toEqual({ type: "search", registry: "brreg", hits: [] });
@@ -790,12 +808,12 @@ describe("executeRegistryLookup — verified web candidates", () => {
       query: "0000123456",
       loadWebSearch: () => {
         providerLoads += 1;
-        return {
+        return Result.ok({
           provider: webProviderWith([]),
           observer: () => {
             webCalls += 1;
           },
-        };
+        });
       },
     });
     expect(result).toEqual({
