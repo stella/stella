@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { runLedgerMembershipGuard } from "./ledger-membership";
+import { ledgerGitEnv, runLedgerMembershipGuard } from "./ledger-membership";
 
 // The shared shrink-only guard, run against a real repository: an older
 // commit that the base already contains adds nothing, even after the base
@@ -16,8 +16,9 @@ afterEach(() => {
   }
 });
 
+// Without the caller's repository selectors (hooks export GIT_DIR).
 const GIT_ENV = {
-  ...process.env,
+  ...ledgerGitEnv(),
   GIT_AUTHOR_NAME: "Test",
   GIT_AUTHOR_EMAIL: "test@example.invalid",
   GIT_COMMITTER_NAME: "Test",
@@ -98,4 +99,36 @@ test("a commit the base does not contain is compared with the base tip", () => {
   expect(errors.filter((line) => line.trim().startsWith("a::"))).toEqual([
     "  a::z",
   ]);
+});
+
+test("an exported GIT_DIR never redirects the guard away from its repository", () => {
+  const other = fixture();
+  other.commit(["b::q"], "other");
+  const otherGitDir = path.join(
+    other.git("rev-parse", "--show-toplevel"),
+    ".git",
+  );
+  const { git, commit } = fixture();
+  const older = commit(["a::x", "a::y"], "older");
+  const shrunk = commit(["a::x"], "shrink");
+  git("checkout", "--quiet", "--detach", older);
+  const repoRoot = git("rev-parse", "--show-toplevel");
+  // A hook's environment reaches the guard when its process starts.
+  const guard = Bun.spawnSync(
+    [
+      process.execPath,
+      "-e",
+      `import { runLedgerMembershipGuard } from ${JSON.stringify(path.join(import.meta.dir, "ledger-membership.ts"))};
+process.exit(runLedgerMembershipGuard({
+  repoRoot: ${JSON.stringify(repoRoot)},
+  ledgerRel: "ledger.json",
+  parseLedger: (text) => JSON.parse(text).map(({ id }) => id),
+  label: "fixture",
+  remediation: "remove the site",
+  args: ["--base", ${JSON.stringify(shrunk)}],
+}));`,
+    ],
+    { env: { ...GIT_ENV, GIT_DIR: otherGitDir }, stderr: "pipe" },
+  );
+  expect(guard.exitCode, guard.stderr.toString()).toBe(0);
 });

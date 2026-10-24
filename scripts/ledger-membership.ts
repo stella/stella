@@ -2,6 +2,16 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+// Every Git read targets repoRoot: hooks export repository selectors such as
+// GIT_DIR, which would otherwise redirect it to the caller's repository.
+export const ledgerGitEnv = (): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        !entry[0].startsWith("GIT_") && entry[1] !== undefined,
+    ),
+  );
+
 type ReadBaseLedgerOptions = {
   baseRef: string;
   ledgerRel: string;
@@ -35,7 +45,7 @@ const compareLedgerMembership = ({
       "--end-of-options",
       `${baseRef}^{commit}`,
     ],
-    { cwd: repoRoot, stderr: "pipe" },
+    { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
   );
   if (resolved.exitCode !== 0) {
     return { type: "unresolved-base" };
@@ -52,7 +62,7 @@ const compareLedgerMembership = ({
         "HEAD",
         resolved.stdout.toString().trim(),
       ],
-      { cwd: repoRoot, stderr: "pipe" },
+      { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
     ).exitCode === 0;
   const commit = contained ? "HEAD" : resolved.stdout.toString().trim();
   const base = readBaseLedger({
@@ -78,6 +88,7 @@ const readBaseLedger = ({
 }: ReadBaseLedgerOptions): string[] | null => {
   const result = Bun.spawnSync(["git", "show", `${baseRef}:${ledgerRel}`], {
     cwd: repoRoot,
+    env: ledgerGitEnv(),
     stderr: "pipe",
   });
   if (result.exitCode !== 0) {
