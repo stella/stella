@@ -136,6 +136,24 @@ describe("the PDF text builder", () => {
     );
   });
 
+  test.each(["DPIA.", "GDPR.", "DSA.", "CJEU,"])(
+    "recognizes a footnote after punctuation on %s",
+    (acronym) => {
+      const ast = build(
+        [`The body cites ${acronym}154 here.`, " ", "154", " A note."].join(
+          "\n",
+        ),
+      );
+      const body = ast.blocks.filter(({ id }) => id !== "fn-154");
+      expect(body.flatMap((block) => marksOf(inlinesOf(block)))).toEqual([
+        "154",
+      ]);
+      expect(
+        body.map((block) => textWithoutMarks(inlinesOf(block))).join(" "),
+      ).toContain(acronym);
+    },
+  );
+
   test.each(["WP29", "G7", "EU27"])(
     "does not read digits in the acronym %s as a footnote mark",
     (acronym) => {

@@ -65,7 +65,7 @@ const trimEnd = (inlines: readonly Inline[]): Inline[] => {
   }
   const head = inlines.slice(0, -1);
   if (last.type === "text") {
-    const text = last.text.trimEnd();
+    const text = last.text.endsWith(" ") ? last.text.slice(0, -1) : last.text;
     return text === "" ? trimEnd(head) : [...head, { ...last, text }];
   }
   if (last.type === "line-break" || last.type === "page-anchor") {

@@ -165,6 +165,19 @@ describe("the HTML builder", () => {
     });
   });
 
+  test("removes backlinks to every marker that references one note", () => {
+    const ast = build(
+      `<p>First<a href="#fn1" id="r1">1</a>.</p><p>Second<a href="#fn1" id="r2">1</a>.</p><aside id="fn1">Explanation. <a href="#r1">Back to first</a> <a href="#r2">Back to second</a></aside>`,
+    );
+    const note = ast.blocks.at(-1);
+    expect(note?.plainText).toBe("Explanation.");
+    expect(note?.type === "paragraph" ? note.note : undefined).toEqual({
+      type: "footnote",
+      label: "1",
+      noteId: "note-1",
+    });
+  });
+
   test("keeps descriptive note links while converting marker links", () => {
     const ast = build(`
       <p>Body<a href="#fn1">1</a>. See <a href="#fn1">the explanation</a>.</p>

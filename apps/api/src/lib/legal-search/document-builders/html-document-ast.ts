@@ -229,13 +229,14 @@ const findFootnotes = (
       target === undefined ||
       isHeadingTag(target.tagName.toLowerCase()) ||
       !isNoteTarget($, fragmentTarget.element) ||
-      labels.has(target) ||
       $(link).closest(target).length > 0 ||
       [...labels.keys()].some((note) => $(link).closest(note).length > 0)
     ) {
       return;
     }
-    labels.set(target, mark);
+    if (!labels.has(target)) {
+      labels.set(target, mark);
+    }
     notes.set(fragment, { mark, target });
     for (const reference of [link.attribs["id"], link.attribs["name"]]) {
       if (reference !== undefined) {
@@ -421,7 +422,9 @@ const prepareFragmentLinks = (
       state.fragmentEvidence.set(token, {
         href,
         note: context.noteTarget,
-        explicitBacklink: roles.some((role) => BACKLINK_ROLES.has(role)),
+        explicitBacklink: roles.some((linkRole) =>
+          BACKLINK_ROLES.has(linkRole),
+        ),
       });
       link.attribs["href"] = token;
     });

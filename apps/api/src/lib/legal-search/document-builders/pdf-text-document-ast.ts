@@ -56,14 +56,15 @@ const MARK_RUN_LINE = /^\d{1,3}(?: \d{1,3})*$/u;
 const INDENTED = /^ \S/u;
 
 /**
- * A mark glued to what precedes it: a lowercase letter or a closing bracket or quote,
+ * A mark glued to a lowercase letter, a closing bracket or quote, or
+ * punctuation after an uppercase acronym,
  * optionally through one clause punctuation, or a year through punctuation
  * or act number through punctuation (`November 2022.4`, `2016/679.2`).
  * Never another number directly, so `6(1)` and the
  * section numbers `1.1` and `2.2` stay text.
  */
 const GLUED_MARK =
-  /(?<=[\p{Ll})\]”’"][.,;:]?|(?<![\d/])\d{4}(?:\/\d{1,4})?[.,;:])(\d{1,3})(?=[\s.,;:)]|$)/gu;
+  /(?<=[\p{Ll})\]”’"][.,;:]?|\p{Lu}[.,;:]|(?<![\d/])\d{4}(?:\/\d{1,4})?[.,;:])(\d{1,3})(?=[\s.,;:)]|$)/gu;
 
 /**
  * An EU act number with a mark glued to its last digit (`2022/20652`): EU
@@ -104,8 +105,17 @@ type Line = { text: string; marks: Mark[] };
 
 // Only isolated page numbers (optionally before a running-label separator)
 // vary within furniture. Numbers in substantive sentences remain part of the key.
-const furnitureKey = (line: string): string =>
-  line.trim().replace(/^\d{1,4}(?=\s*(?:$|\|\s*[\p{L}\s]+$))/u, "#");
+const furnitureKey = (line: string): string => {
+  const text = line.trim();
+  const page = /^\d{1,4}/u.exec(text)?.at(0);
+  if (page === undefined) {
+    return text;
+  }
+  const suffix = text.slice(page.length).trim();
+  const pageLabel =
+    suffix.startsWith("|") && /^\p{L}[\p{L}\s]*$/u.test(suffix.slice(1).trim());
+  return suffix === "" || pageLabel ? `#${text.slice(page.length)}` : text;
+};
 
 const edgeLines = (lines: readonly string[]): string[] => {
   const content = lines.filter((line) => line.trim() !== "");
