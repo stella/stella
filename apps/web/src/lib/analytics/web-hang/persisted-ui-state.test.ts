@@ -64,7 +64,6 @@ describe("persisted layout recovery", () => {
     ]);
     const fingerprint = persistedUiStateFingerprint(storage);
     expect(fingerprint).toEqual([
-      { key: "sidebar_state", bytes: 4 },
       { key: "stella:inspector-state:v1:", bytes: 7 },
     ]);
     const serialized = JSON.stringify(fingerprint);
@@ -75,6 +74,7 @@ describe("persisted layout recovery", () => {
       "other-org",
       "other-user",
       "confidential",
+      "sidebar_state",
     ]) {
       expect(serialized).not.toContain(secret);
     }
@@ -98,18 +98,20 @@ describe("persisted layout recovery", () => {
 
   test("one failed removal does not prevent resetting the rest", () => {
     const storage = memoryStorage([
-      ["sidebar_state", "true"],
+      ["stella:inspector-state", "saved layout"],
       ["stella:inspector-width", "620"],
+      ["sidebar_state", "true"],
     ]);
     const remove = storage.removeItem;
     storage.removeItem = (key) => {
-      if (key === "sidebar_state") {
+      if (key === "stella:inspector-state") {
         throw new DOMException("Storage blocked", "SecurityError");
       }
       remove(key);
     };
     resetPersistedUiState(storage);
     expect(storage.getItem("stella:inspector-width")).toBeNull();
+    expect(storage.getItem("stella:inspector-state")).toBe("saved layout");
     expect(storage.getItem("sidebar_state")).toBe("true");
   });
 });
