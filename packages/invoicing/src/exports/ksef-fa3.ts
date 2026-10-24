@@ -234,6 +234,59 @@ const decimalText = (amountMinor: number, digits: number): string => {
   return `${amountMinor < 0 ? "-" : ""}${whole}${fraction}`;
 };
 
+/** FA(3) unit amounts carry up to eight decimals (TKwotowy2). */
+const UNIT_PRICE_DIGITS = 8;
+
+/** A decimal scaled by 10^scale, keeping at least `minimum` decimals. */
+const scaledDecimalText = (
+  scaled: bigint,
+  { scale, minimum }: { scale: number; minimum: number },
+): string => {
+  const negative = scaled < 0n;
+  const magnitude = (negative ? -scaled : scaled)
+    .toString()
+    .padStart(scale + 1, "0");
+  let fraction = magnitude.slice(-scale);
+  while (fraction.length > minimum && fraction.endsWith("0")) {
+    fraction = fraction.slice(0, -1);
+  }
+  return `${negative ? "-" : ""}${magnitude.slice(0, -scale)}${fraction === "" ? "" : `.${fraction}`}`;
+};
+
+/**
+ * The net unit price every line of an ordinary invoice states (art. 106e
+ * ust. 1 pkt 9 of the VAT Act): the stored one, else the net amount divided by
+ * the quantity when that division is exact to eight decimals; null otherwise.
+ */
+const unitPriceTextOf = (
+  line: InvoiceExportLine,
+  digits: number,
+): string | null => {
+  if (line.unitPriceMinor !== null) {
+    return decimalText(line.unitPriceMinor, digits);
+  }
+  const match = /^(-?\d+)(?:\.(\d+))?$/u.exec(line.quantity ?? "1");
+  if (!match) {
+    return null;
+  }
+  const fraction = match[2] ?? "";
+  const quantityUnits = BigInt(`${match[1] ?? ""}${fraction}`);
+  if (quantityUnits === 0n) {
+    return null;
+  }
+  const numerator =
+    BigInt(line.netAmountMinor) *
+    10n ** BigInt(fraction.length + UNIT_PRICE_DIGITS);
+  const denominator = quantityUnits * 10n ** BigInt(digits);
+  if (numerator % denominator !== 0n) {
+    return null;
+  }
+  return scaledDecimalText(numerator / denominator, {
+    scale: UNIT_PRICE_DIGITS,
+    minimum: digits,
+  });
+};
+
 /** A Polish NIP without prefix or separators, or null when invalid. */
 const polishNipOf = (value: string | undefined): string | null => {
   if (!value?.trim()) {
@@ -370,7 +423,7 @@ const buyerIdentification = (
 const accountNumberOf = (iban: string): string =>
   iban.startsWith("PL") ? iban.slice(2) : iban;
 
-type Classified = { line: InvoiceExportLine; tax: LineTax };
+type Classified = { line: InvoiceExportLine; tax: LineTax; unitPrice: string };
 
 const document = (
   record: InvoiceExportRecord,
@@ -426,17 +479,13 @@ const document = (
         ])
       : "",
   ]);
-  // P_9A is optional; without a stored unit price the line states only its
-  // quantity and net amount rather than a price that need not fit them.
-  const unitPrice = (line: InvoiceExportLine) =>
-    line.unitPriceMinor === null ? null : amount(line.unitPriceMinor);
-  const invoiceLines = lines.map(({ line, tax }, index) =>
+  const invoiceLines = lines.map(({ line, tax, unitPrice }, index) =>
     el("FaWiersz", [
       text("NrWierszaFa", String(index + 1)),
       text("P_7", clip(line.description.trim(), 512)),
       text("P_8A", line.unit === null ? null : clip(line.unit.trim(), 256)),
       text("P_8B", quantityText(line.quantity)),
-      text("P_9A", unitPrice(line)),
+      text("P_9A", unitPrice),
       text("P_11", amount(line.netAmountMinor)),
       // stella rounds VAT per line (art. 106e ust. 10 of the VAT Act).
       line.vatTreatment === "domestic_vat"
@@ -561,7 +610,13 @@ const prepare = (
     if (typeof tax === "string") {
       return refuse(`line ${line.position}: ${tax}`);
     }
-    lines.push({ line, tax });
+    const unitPrice = unitPriceTextOf(line, digits);
+    if (unitPrice === null) {
+      return refuse(
+        `line ${line.position}: an invoice line states its net unit price (art. 106e ust. 1 pkt 9); stella stores none and the net amount does not divide exactly by the quantity`,
+      );
+    }
+    lines.push({ line, tax, unitPrice });
   }
   if (
     record.currency !== "PLN" &&

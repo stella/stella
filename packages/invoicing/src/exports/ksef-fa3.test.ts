@@ -784,25 +784,35 @@ describe("KSeF FA(3) amounts", () => {
     expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("states no unit price when none is stored", async () => {
-    const xml = fa3(
+  test("derives the net unit price when none is stored (art. 106e ust. 1 pkt 9)", async () => {
+    const withoutPrice = (quantity: string, netAmountMinor: number) =>
       polish({
         number: "21a/2026",
         lines: [
           {
             description: "Obsługa prawna",
-            quantity: "2.0000",
+            quantity,
             unitPriceMinor: null,
-            netAmountMinor: cents(10_000),
+            netAmountMinor: cents(netAmountMinor),
             vatRateBps: 2300,
           },
         ],
-      }),
-    );
+      });
+    const xml = fa3(withoutPrice("2.0000", 100_000));
     expect(between(xml, "P_8B")).toEqual(["2"]);
-    expect(between(xml, "P_9A")).toEqual([]);
-    expect(between(xml, "P_11")).toEqual(["100.00"]);
+    expect(between(xml, "P_9A")).toEqual(["500.00"]);
+    expect(between(xml, "P_11")).toEqual(["1000.00"]);
     expect(await schemaErrors(xml)).toBe("");
+    expect(between(fa3(withoutPrice("0.1250", 100_000)), "P_9A")).toEqual([
+      "8000.00",
+    ]);
+    // 1000.00 over 1.5 hours is 666.67 only after rounding: no exact price.
+    expect(refusal(withoutPrice("1.5000", 100_000))).toContain(
+      "net unit price",
+    );
+    expect(refusal(withoutPrice("0.0000", 100_000))).toContain(
+      "net unit price",
+    );
   });
 
   test("writes a currency without minor units as whole numbers", async () => {
