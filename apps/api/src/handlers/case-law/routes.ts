@@ -26,14 +26,17 @@ const authenticatedCaseLawRoute = new Elysia({
     params: generateDecisionAnalysis.config.params,
     query: generateDecisionAnalysis.config.query,
     permissions: generateDecisionAnalysis.config.permissions,
+    accountAccess: generateDecisionAnalysis.config.accountAccess,
   })
   .post("/decisions/search/refine", refineCaseLawSearch.handler, {
     body: refineCaseLawSearch.config.body,
     permissions: refineCaseLawSearch.config.permissions,
+    accountAccess: refineCaseLawSearch.config.accountAccess,
   })
   .post("/decisions/search/expand", expandCaseLawSearch.handler, {
     body: expandCaseLawSearch.config.body,
     permissions: expandCaseLawSearch.config.permissions,
+    accountAccess: expandCaseLawSearch.config.accountAccess,
   });
 
 /**
@@ -48,18 +51,22 @@ const caseLawMatterLinksRoute = new Elysia({
   .guard({ validateWorkspaceAccess: true })
   .get("/", listMatterLinks.handler, {
     permissions: listMatterLinks.config.permissions,
+    accountAccess: listMatterLinks.config.accountAccess,
   })
   .post("/", createMatterLink.handler, {
     body: createMatterLink.config.body,
     permissions: createMatterLink.config.permissions,
+    accountAccess: createMatterLink.config.accountAccess,
   })
   .post("/batch", createMatterLinksBatch.handler, {
     body: createMatterLinksBatch.config.body,
     permissions: createMatterLinksBatch.config.permissions,
+    accountAccess: createMatterLinksBatch.config.accountAccess,
   })
   .delete("/:linkId", deleteMatterLink.handler, {
     params: deleteMatterLink.config.params,
     permissions: deleteMatterLink.config.permissions,
+    accountAccess: deleteMatterLink.config.accountAccess,
   });
 
 /**
@@ -76,6 +83,7 @@ const caseLawAdminRoute = new Elysia({
   .guard({ validateAuth: true })
   .get("/ingestion/status", getCaseLawIngestionStatus.handler, {
     permissions: getCaseLawIngestionStatus.config.permissions,
+    accountAccess: getCaseLawIngestionStatus.config.accountAccess,
   });
 
 export const caseLawRoute = new Elysia()

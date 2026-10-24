@@ -9,13 +9,13 @@ import {
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
   resourceDeletedRealtimeEvent,
+  resourcesChangedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
-  resourcesChangedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "./realtime-events";
-import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
+import { RESOURCE_TYPE, resourceRef } from "./resource-ref";
 import { toSafeId } from "./safe-id";
 
 const ENTITY_RESOURCE = resourceRef({

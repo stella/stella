@@ -35,13 +35,13 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
-  taskAssignees,
   fields,
   flowDefinitions,
   flowRunSteps,
   notifications,
   organizationSettings,
   properties,
+  taskAssignees,
   WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   workObligations,
@@ -62,8 +62,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import {
-  ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
+  ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
@@ -78,6 +78,7 @@ import type { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-co
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -167,6 +168,8 @@ const createEntityDependencies = {
   enqueueImageThumbnailOrMarkFailed: async () => undefined,
   enqueuePdfDerivativeOrMarkFailed: async () => undefined,
   processExtraction: async () => undefined,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: async () => null,
 } satisfies CreateEntityFromBufferDependencies;
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { getEntityLinkResource } from "@/components/workspaces/tasks/task-links.logic";
 import { toSafeId } from "@/lib/safe-id";
