@@ -72,11 +72,7 @@ type InstallNativeBoundaryOptions = {
   batchValidation?: "accept" | "reject-first" | "hold-first";
   batchReceipt?: "save" | "fail-first" | "keep-pending";
   historyDeletion?:
-    | "available"
-    | "keyMissing"
-    | "unreadable"
-    | "mixed"
-    | "incompatible";
+    "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
 };
 
 const installNativeBoundary = async ({
@@ -212,6 +208,14 @@ const installNativeBoundary = async ({
               captureDetails: enabled,
               detailsAccess,
             };
+            emitActivityChanged();
+          }
+          if (command === "activity_set_detect_calls") {
+            const enabled = args["enabled"];
+            if (typeof enabled !== "boolean") {
+              throw new TypeError("Call choice must be explicit");
+            }
+            activitySnapshot = { ...activitySnapshot, detectCalls: enabled };
             emitActivityChanged();
           }
           if (command === "activity_set_app_detail_capture") {
@@ -2444,4 +2448,78 @@ test("invalid range endpoints remain editable until their order is repaired", as
   await expect(
     page.getByRole("button", { name: enMessages.activity.assignRange }),
   ).toBeEnabled();
+});
+
+test("a call segment reads as a call in the timeline and its tooltip", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [
+        ...SNAPSHOT.segments,
+        {
+          appIdentifier: "com.microsoft.teams2",
+          appName: "Microsoft Teams",
+          call: true,
+          start: "2026-10-07T09:30:00Z",
+          end: "2026-10-07T10:00:00Z",
+        },
+      ],
+    },
+  });
+  const callLabel = enMessages.activity.callIn.replace(
+    "{app}",
+    "Microsoft Teams",
+  );
+  const call = page
+    .getByRole("button", { name: new RegExp(`${callLabel}$`, "u") })
+    .first();
+  const editor = page.getByRole("button", { name: /Example Editor$/u }).first();
+  await expect(call).toBeVisible();
+  await expect(call.locator("svg.lucide-phone")).toHaveCount(1);
+  await expect(editor.locator("svg.lucide-phone")).toHaveCount(0);
+  await call.hover();
+  const tooltip = page.locator('[data-slot="tooltip-popup"]');
+  await expect(tooltip).toContainText(callLabel);
+  await editor.hover();
+  await expect(tooltip).toContainText("Example Editor");
+  await expect(tooltip).not.toContainText(callLabel);
+});
+
+test("call recording is on by default and changes only on explicit choice", async ({
+  page,
+}) => {
+  // The boundary opens settings for a recording day.
+  await installNativeBoundary({ page });
+  const calls = page.getByRole("checkbox", {
+    name: enMessages.activity.detectCalls,
+  });
+  await expect(calls).toBeChecked();
+  await expect(
+    page.getByText(enMessages.activity.detectCallsDescription),
+  ).toBeVisible();
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_set_detect_calls" }),
+  );
+  await calls.uncheck();
+  await expect(calls).not.toBeChecked();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: false },
+  });
+  expect(await invocations(page)).not.toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: true },
+  });
+  await calls.check();
+  await expect(calls).toBeChecked();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: true },
+  });
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_set_capture_details" }),
+  );
 });

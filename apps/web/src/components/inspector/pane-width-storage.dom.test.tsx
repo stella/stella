@@ -14,17 +14,24 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 
+const { StrictMode } = await import("react");
 const { cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
 const { INSPECTOR_PANE_DEFAULT_WIDTH, INSPECTOR_PANE_KEYBOARD_STEP } =
   await import("@stll/ui/inspector");
-const { INSPECTOR_PANE_WIDTH_STORAGE_KEY, useSharedInspectorPaneWidth } =
-  await import("@/components/inspector/pane-width-storage");
+const {
+  INSPECTOR_PANE_WIDTH_STORAGE_KEY,
+  migrateInspectorPaneWidth,
+  useSharedInspectorPaneWidth,
+} = await import("@/components/inspector/pane-width-storage");
 const { deviceStorage } = await import("@/lib/account/browser-storage");
 
 const storage = deviceStorage("local");
 
-type Surface = "matter" | "public-law";
+type Surface = Parameters<typeof migrateInspectorPaneWidth>[0];
+
+const LEGACY_MATTER_KEY = "stella:inspector-pane-width:v1:matter";
+const LEGACY_PUBLIC_LAW_KEY = "stella:inspector-pane-width:v1:public-law";
 
 // A dock as each section mounts it: the matter shell and the public law
 // reader render this same hook, and nothing else.
@@ -42,7 +49,14 @@ const Dock = ({ openedFrom }: { openedFrom: Surface }) => {
 };
 
 beforeEach(() => {
-  storage.removeItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY);
+  globalThis.history.replaceState(null, "", "/workspaces");
+  for (const key of [
+    INSPECTOR_PANE_WIDTH_STORAGE_KEY,
+    LEGACY_MATTER_KEY,
+    LEGACY_PUBLIC_LAW_KEY,
+  ]) {
+    storage.removeItem(key);
+  }
 });
 
 afterEach(() => {
@@ -80,6 +94,47 @@ describe("one inspector width across sections", () => {
   });
 });
 
+describe("migrateInspectorPaneWidth", () => {
+  test("the section opened first keeps its earlier width and the old keys go", () => {
+    storage.setItem(LEGACY_MATTER_KEY, "520");
+    storage.setItem(LEGACY_PUBLIC_LAW_KEY, "610");
+
+    migrateInspectorPaneWidth("public-law");
+
+    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("610");
+    expect(storage.getItem(LEGACY_MATTER_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_PUBLIC_LAW_KEY)).toBeNull();
+  });
+
+  test("falls back to the other section's earlier width", () => {
+    storage.setItem(LEGACY_PUBLIC_LAW_KEY, "610");
+
+    migrateInspectorPaneWidth("matter");
+
+    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("610");
+  });
+
+  test("a shared width already stored is never overwritten", () => {
+    storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "480");
+    storage.setItem(LEGACY_MATTER_KEY, "520");
+
+    migrateInspectorPaneWidth("matter");
+
+    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("480");
+    expect(storage.getItem(LEGACY_MATTER_KEY)).toBeNull();
+  });
+
+  test("a dock mounted on migrated storage opens at the migrated width", () => {
+    storage.setItem(LEGACY_MATTER_KEY, "520");
+
+    render(<Dock openedFrom="matter" />);
+
+    expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
+      "520",
+    );
+  });
+});
+
 // A second key, or a dock calling the width hook with its own key, would bring
 // back a width per section. Only the owner module may do either.
 test("no source outside the owner keeps an inspector width of its own", async () => {
@@ -104,4 +159,40 @@ test("no source outside the owner keeps an inspector width of its own", async ()
   }
 
   expect(offenders).toEqual([]);
+});
+
+test("released shared width migrates into the registry envelope without changing the preference", () => {
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "640");
+  render(<Dock openedFrom="matter" />);
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
+    "640",
+  );
+  expect(
+    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
+  ).toEqual({ version: 1, value: 640 });
+});
+
+test("safe-mode StrictMode mounting preserves the saved width until a user resize", () => {
+  const savedWidth = 640;
+  const saved = JSON.stringify({ version: 1, value: savedWidth });
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, saved);
+  globalThis.history.replaceState(null, "", "/workspaces?safe=1");
+
+  render(
+    <StrictMode>
+      <Dock openedFrom="matter" />
+    </StrictMode>,
+  );
+
+  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
+    String(INSPECTOR_PANE_DEFAULT_WIDTH),
+  );
+  expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe(saved);
+  fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowLeft" });
+  expect(
+    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
+  ).toEqual({
+    version: 1,
+    value: INSPECTOR_PANE_DEFAULT_WIDTH + INSPECTOR_PANE_KEYBOARD_STEP,
+  });
 });

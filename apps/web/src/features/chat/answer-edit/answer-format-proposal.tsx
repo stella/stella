@@ -16,7 +16,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import type { AnswerEditProposal } from "./answer-edit-api";
-import { AnswerEditPanel, AnswerEditNotice } from "./answer-edit-panel";
+import { AnswerEditNotice, AnswerEditPanel } from "./answer-edit-panel";
 import type { AnswerFormatPanelProps } from "./answer-format-panel";
 import { formatAnswerSpan } from "./markdown-format.logic";
 import type { AnswerFormatAction } from "./markdown-format.logic";

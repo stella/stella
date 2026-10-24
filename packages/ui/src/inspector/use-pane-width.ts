@@ -136,16 +136,25 @@ export const useInspectorPaneWidth = ({
   persistence,
   viewportWidth,
 }: UseInspectorPaneWidthOptions): UseInspectorPaneWidthResult => {
-  const [desiredWidth, setDesiredWidth] = useState(
-    () => persistence?.read() ?? INSPECTOR_PANE_DEFAULT_WIDTH,
-  );
+  const [desiredWidth, setDesiredWidth] = useState(() => {
+    const saved = persistence?.read();
+    return saved === undefined || !Number.isFinite(saved)
+      ? INSPECTOR_PANE_DEFAULT_WIDTH
+      : clampInspectorPaneWidth(saved);
+  });
   const isDragging = useRef(false);
+  const lastPersisted = useRef({ persistence, desiredWidth });
 
   useEffect(() => {
-    if (persistence === undefined) {
+    if (
+      persistence === undefined ||
+      (lastPersisted.current.persistence === persistence &&
+        lastPersisted.current.desiredWidth === desiredWidth)
+    ) {
       return;
     }
     persistence.write(desiredWidth);
+    lastPersisted.current = { persistence, desiredWidth };
   }, [desiredWidth, persistence]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {

@@ -11,8 +11,7 @@ type PersistedStateScope = {
 };
 
 type PersistedStateKey<TScope extends object> =
-  | string
-  | ((scope: TScope) => string);
+  string | ((scope: TScope) => string);
 
 type PersistedStateEntry<
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
@@ -30,6 +29,11 @@ type PersistedStateEntry<
     scope: TScope,
   ) => ScopeDecision<v.InferOutput<TSchema>>;
   restoredUi: boolean;
+  /** Released pre-envelope formats are validated and rewritten on their first read. */
+  legacy?: {
+    encoding: "json" | "text";
+    schema: v.BaseSchema<unknown, v.InferOutput<TSchema>, v.BaseIssue<unknown>>;
+  };
 };
 
 /**
@@ -90,42 +94,6 @@ export const isRestoredStateSafeMode = (): boolean => {
   ).unwrapOr(false);
 };
 
-export const readPersistedState = <
-  TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends object,
->(
-  entry: PersistedStateEntry<TSchema, TScope>,
-  scope: TScope,
-): v.InferOutput<TSchema> => {
-  const fallback = entry.defaultValue();
-  if (entry.restoredUi && isRestoredStateSafeMode()) {
-    return fallback;
-  }
-  const key = entryKey(entry, scope);
-  const rawResult = requireBrowserStorage(entry.area).andThen((storage) =>
-    Result.try(() => storage.getItem(key)),
-  );
-  if (Result.isError(rawResult) || rawResult.value === null) {
-    return fallback;
-  }
-  const raw = rawResult.value;
-  if (new TextEncoder().encode(raw).byteLength > entry.maxBytes) {
-    removeInvalid(entry.area, key);
-    return fallback;
-  }
-  const parsed = readStoredJson(raw, envelopeSchema(entry.schema));
-  if (parsed === null || parsed.version !== entry.version) {
-    removeInvalid(entry.area, key);
-    return fallback;
-  }
-  const decision = entry.scopeCheck(parsed.value, scope);
-  if (!decision.keep) {
-    removeInvalid(entry.area, key);
-    return fallback;
-  }
-  return decision.value;
-};
-
 class PersistedStateWriteError extends TaggedError("PersistedStateWriteError")<{
   message: string;
   area: StorageArea;
@@ -173,6 +141,55 @@ export const writePersistedState = <
         cause,
       }),
   });
+};
+
+export const readPersistedState = <
+  TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  TScope extends object,
+>(
+  entry: PersistedStateEntry<TSchema, TScope>,
+  scope: TScope,
+): v.InferOutput<TSchema> => {
+  const fallback = entry.defaultValue();
+  if (entry.restoredUi && isRestoredStateSafeMode()) {
+    return fallback;
+  }
+  const key = entryKey(entry, scope);
+  const rawResult = requireBrowserStorage(entry.area).andThen((storage) =>
+    Result.try(() => storage.getItem(key)),
+  );
+  if (Result.isError(rawResult) || rawResult.value === null) {
+    return fallback;
+  }
+  const raw = rawResult.value;
+  if (new TextEncoder().encode(raw).byteLength > entry.maxBytes) {
+    removeInvalid(entry.area, key);
+    return fallback;
+  }
+  let parsed = readStoredJson(raw, envelopeSchema(entry.schema));
+  if (parsed === null && entry.legacy !== undefined) {
+    const input =
+      entry.legacy.encoding === "json"
+        ? Result.try((): unknown => JSON.parse(raw))
+        : Result.ok(raw);
+    if (Result.isOk(input)) {
+      const migrated = v.safeParse(entry.legacy.schema, input.value);
+      if (migrated.success) {
+        parsed = { version: entry.version, value: migrated.output };
+        writePersistedState(entry, scope, migrated.output).unwrapOr(undefined);
+      }
+    }
+  }
+  if (parsed === null || parsed.version !== entry.version) {
+    removeInvalid(entry.area, key);
+    return fallback;
+  }
+  const decision = entry.scopeCheck(parsed.value, scope);
+  if (!decision.keep) {
+    removeInvalid(entry.area, key);
+    return fallback;
+  }
+  return decision.value;
 };
 
 export const removePersistedState = <

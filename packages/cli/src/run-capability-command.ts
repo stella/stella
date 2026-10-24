@@ -15,10 +15,10 @@ import type { CapabilityLeafSpec } from "./route-types.js";
 import {
   composeInputFromFlags,
   confirmDestructive,
-  renderClientError,
   maybeConfirmAndRetry,
   parseInputObject,
   readOutputFormat,
+  renderClientError,
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,

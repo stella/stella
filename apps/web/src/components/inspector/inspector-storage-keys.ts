@@ -10,7 +10,6 @@ import {
 export type InspectorStorageScope = {
   userId: string;
   organizationId: string;
-  workspaceId?: string | undefined;
 };
 
 const scopedKey = (
@@ -34,29 +33,10 @@ export const inspectorStateEntry = definePersistedState({
   area: "local",
   version: 1,
   schema: inspectorStateSchema,
+  legacy: { encoding: "json", schema: inspectorStateSchema },
   maxBytes: 512_000,
   defaultValue: () => null,
-  scopeCheck: (value, scope) =>
-    value === null
-      ? keepInAnyScope(value)
-      : keepInAnyScope({
-          ...value,
-          tabs: value.tabs.filter((tab) => {
-            if (
-              typeof tab !== "object" ||
-              tab === null ||
-              !("workspaceId" in tab)
-            ) {
-              return true;
-            }
-            const workspaceId = tab.workspaceId;
-            return (
-              typeof workspaceId !== "string" ||
-              scope.workspaceId === undefined ||
-              workspaceId === scope.workspaceId
-            );
-          }),
-        }),
+  scopeCheck: keepInAnyScope,
   restoredUi: true,
 });
 
@@ -66,6 +46,13 @@ export const inspectorMinimizedEntry = definePersistedState({
   area: "local",
   version: 1,
   schema: v.boolean(),
+  legacy: {
+    encoding: "text",
+    schema: v.pipe(
+      v.picklist(["0", "1"]),
+      v.transform((value) => value === "1"),
+    ),
+  },
   maxBytes: 128,
   defaultValue: () => false,
   scopeCheck: keepInAnyScope,
@@ -78,6 +65,7 @@ export const inspectorRestorePendingEntry = definePersistedState({
   area: "session",
   version: 1,
   schema: v.string(),
+  legacy: { encoding: "text", schema: v.pipe(v.string(), v.uuid()) },
   maxBytes: 256,
   defaultValue: () => "",
   scopeCheck: keepInAnyScope,

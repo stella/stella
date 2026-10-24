@@ -28,10 +28,12 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/playwright-tools/src/**/*.ts",
+  "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
   "apps/visual-preview/src/**/*.ts",
+  "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
@@ -145,6 +147,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/components/references/**/*.{ts,tsx}",
   "apps/web/src/components/route-provider-scope/**/*.{ts,tsx}",
+  "apps/web/src/components/settings-shell/**/*.{ts,tsx}",
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",

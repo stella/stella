@@ -76,6 +76,7 @@ describe("root route registrations", () => {
       "agentAuthConfirmRoute",
       "agentAuthRoute",
       "aiAutocompleteRoute",
+      "authMetadataPreflightRoute",
       "authMetadataRoute",
       "authUiRoute",
       "feedbackPublicRoute",

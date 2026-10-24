@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { evaluate, type Context } from "./github-expression";
+import { type Context, evaluate } from "./github-expression";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const configured = v.parse(

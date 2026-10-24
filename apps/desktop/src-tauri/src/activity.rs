@@ -32,6 +32,7 @@ use crate::{
   keychain::{self, LocalDataKey, LocalDataKeyLookup},
   local_store::{self, StoreKey},
   local_window::ActivityCaller,
+  logging::with_cause_logged,
 };
 
 pub const CHANGED_EVENT: &str = "activity-timeline-changed";
@@ -528,7 +529,7 @@ fn store_root() -> Option<PathBuf> {
 
 pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
   NaiveDate::parse_from_str(raw, DATE_FORMAT)
-    .map_err(|_| "activity date is invalid".to_string())
+    .map_err(with_cause_logged("activity date is invalid"))
 }
 
 pub fn format_date(date: NaiveDate) -> String {
@@ -545,10 +546,10 @@ fn validate_draftable_range<T: TimeZone>(
   drafted: &[ActivityInterval],
 ) -> Result<ActivityInterval, String> {
   let start = DateTime::parse_from_rfc3339(start)
-    .map_err(|_| "invalid activity range".to_string())?
+    .map_err(with_cause_logged("invalid activity range"))?
     .with_timezone(&Utc);
   let end = DateTime::parse_from_rfc3339(end)
-    .map_err(|_| "invalid activity range".to_string())?
+    .map_err(with_cause_logged("invalid activity range"))?
     .with_timezone(&Utc);
   if start >= end
     || start.with_timezone(zone).date_naive() != date
@@ -1819,7 +1820,10 @@ impl ActivityManager {
     for range in pending.ranges.iter().flatten() {
       intervals.push(
         validate_draftable_range(zone, date, &range.start, &range.end, &drafted)
-          .map_err(|_| BatchReservationError::InvalidRange)?,
+          .map_err(crate::logging::replaced_logged(
+            "activity range cannot be drafted",
+            BatchReservationError::InvalidRange,
+          ))?,
       );
     }
     intervals.sort_by_key(|(start, _)| *start);
@@ -1959,10 +1963,10 @@ impl ActivityManager {
       .iter()
       .map(|marker| {
         let start = DateTime::parse_from_rfc3339(&marker.start)
-          .map_err(|_| "invalid drafted activity range".to_string())?
+          .map_err(with_cause_logged("invalid drafted activity range"))?
           .with_timezone(&Utc);
         let end = DateTime::parse_from_rfc3339(&marker.end)
-          .map_err(|_| "invalid drafted activity range".to_string())?
+          .map_err(with_cause_logged("invalid drafted activity range"))?
           .with_timezone(&Utc);
         Ok((start, end))
       })
@@ -2035,7 +2039,7 @@ impl ActivityManager {
       &self.other_account_store_root()?,
       namespace,
     )
-    .map_err(|_| "activity history could not be listed".to_string())
+    .map_err(with_cause_logged("activity history could not be listed"))
   }
 
   pub fn delete_other_account_history(
@@ -2447,7 +2451,7 @@ pub fn set_recording_from_tray(
     .ok_or_else(|| "activity timeline is unavailable".to_string())?;
   let mut manager = state
     .lock()
-    .map_err(|_| "activity timeline is unavailable".to_string())?;
+    .map_err(with_cause_logged("activity timeline is unavailable"))?;
   manager.require_account_binding(&binding)?;
   if gates
     .account_binding(DesktopFeature::ActivityTimeline)
@@ -2552,7 +2556,7 @@ pub fn unload_account(app: &AppHandle) {
 fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), String> {
   state
     .lock()
-    .map_err(|_| "activity timeline is unavailable".to_string())?
+    .map_err(with_cause_logged("activity timeline is unavailable"))?
     .stop(now)
 }
 
@@ -5838,5 +5842,56 @@ mod tests {
       recorded[0].window_title.as_deref(),
       Some("Novák v. ABC | Microsoft Teams")
     );
+  }
+
+  #[test]
+  fn files_written_before_calls_read_as_no_call_and_detection_on() {
+    let segment: ActivitySegment = serde_json::from_value(serde_json::json!({
+      "appIdentifier": "word",
+      "appName": "Word",
+      "start": "2026-03-10T12:00:00Z",
+      "end": "2026-03-10T12:30:00Z",
+    }))
+    .unwrap();
+    assert!(!segment.call);
+    // Only call segments carry the field, so other segments stay unchanged.
+    assert!(
+      serde_json::to_value(&segment)
+        .unwrap()
+        .get("call")
+        .is_none()
+    );
+    let call = ActivitySegment {
+      call: true,
+      ..segment
+    };
+    let written = serde_json::to_value(&call).unwrap();
+    assert_eq!(written["call"], true);
+    assert!(
+      serde_json::from_value::<ActivitySegment>(written)
+        .unwrap()
+        .call
+    );
+
+    let settings: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+    }))
+    .unwrap();
+    assert!(!settings.ignore_calls);
+  }
+
+  #[test]
+  fn turning_call_detection_off_ends_an_ongoing_call_and_persists() {
+    let mut manager = recording_manager();
+    observe_span(&mut manager, 0, 60, |_| call("teams", None));
+    manager.set_detect_calls(false, at(65)).unwrap();
+    assert!(manager.settings.ignore_calls);
+    assert_eq!(segments(&manager), [("teams".to_string(), 0, 60)]);
+    // Repeating the choice changes nothing; turning it back on restores it.
+    manager.set_detect_calls(false, at(70)).unwrap();
+    assert!(manager.settings.ignore_calls);
+    manager.set_detect_calls(true, at(75)).unwrap();
+    assert!(!manager.settings.ignore_calls);
   }
 }

@@ -1,13 +1,12 @@
 import type { MouseEventHandler, ReactElement, ReactNode } from "react";
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
-import { ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -41,35 +40,9 @@ type LegalCitationLinkProps = {
   fullTrayLabel?: boolean | undefined;
 };
 
-type LegalCitationLabelProps = Pick<
-  LegalCitationLinkProps,
-  "appearance" | "children"
-> & {
-  icon: ReactNode;
-};
-
-const LegalCitationLabel = ({
-  appearance,
-  children,
-  icon,
-}: LegalCitationLabelProps) => {
-  if (appearance === "tray") {
-    return (
-      <>
-        <span>{icon}</span>
-        <BidiText as="span" className="max-w-[20ch] truncate">
-          {children}
-        </BidiText>
-      </>
-    );
-  }
-  return (
-    <InlinePill leadingIcon={icon} truncate>
-      {children}
-    </InlinePill>
-  );
-};
-
+// One chip per citation and no glyph: the citation's own text names the
+// provision, so the chip only has to read as clickable. The reader opens the
+// publisher source, so the chip never trails a second link.
 const LegalCitationView = ({
   appearance,
   children,
@@ -78,38 +51,28 @@ const LegalCitationView = ({
 }: LegalCitationLinkProps & {
   citation: StatuteCitationLinks;
   onClick?: MouseEventHandler<HTMLAnchorElement> | undefined;
-}) => {
-  const t = useTranslations();
-  const icon = <ScrollTextIcon className="size-3 shrink-0" />;
-  const label = (
-    <LegalCitationLabel appearance={appearance} icon={icon}>
-      {children}
-    </LegalCitationLabel>
-  );
-  return (
-    <span className="inline-flex max-w-full shrink-0 items-center gap-1 align-middle">
-      <a
-        className={cn(
-          "cursor-pointer",
-          appearance === "tray" &&
-            "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs",
-        )}
-        href={sanitizeHref(citation.url)}
-        onClick={onClick}
-      >
-        {label}
-      </a>
-      {citation.source_url !== undefined && (
-        <ProxyChatLink
-          href={citation.source_url}
-          newTabLabel={t("common.openInNewTab")}
-        >
-          {t("common.source")}
-        </ProxyChatLink>
-      )}
-    </span>
-  );
-};
+}) => (
+  <a
+    className={cn(
+      "focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",
+      appearance === "tray"
+        ? "bg-muted/50 hover:bg-muted inline-flex max-w-full shrink-0 items-center rounded-md border px-1.5 py-0.5 text-xs"
+        : "group rounded",
+    )}
+    href={sanitizeHref(citation.url)}
+    onClick={onClick}
+  >
+    {appearance === "tray" ? (
+      <BidiText as="span" className="max-w-[20ch] truncate">
+        {children}
+      </BidiText>
+    ) : (
+      <InlinePill className="group-hover:bg-accent/80" truncate>
+        {children}
+      </InlinePill>
+    )}
+  </a>
+);
 
 const InteractiveLegalCitation = ({
   citation,

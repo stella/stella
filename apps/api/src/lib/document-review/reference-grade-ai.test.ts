@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import { gradeReferencePositions } from "@/api/lib/document-review/reference-grade";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";

@@ -14,9 +14,9 @@ import { SANCTIONS_WARMING_RETRY_AFTER_SECONDS } from "@/api/lib/lists/sanctions
 import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import {
-  screenSanctionsSubject,
   type SanctionsScreening,
   SanctionsSubjectError,
+  screenSanctionsSubject,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { answerRequestError } from "@/api/lib/observability/request-lifecycle";

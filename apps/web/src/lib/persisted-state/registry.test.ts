@@ -2,8 +2,16 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { inspectorStateEntry } from "@/components/inspector/inspector-storage-keys";
-import { browserStorage, deviceStorage } from "@/lib/account/browser-storage";
+import {
+  inspectorMinimizedEntry,
+  inspectorRestorePendingEntry,
+  inspectorStateEntry,
+} from "@/components/inspector/inspector-storage-keys";
+import {
+  browserStateStorage,
+  browserStorage,
+  deviceStorage,
+} from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -143,11 +151,10 @@ describe("persisted state registry", () => {
     expect(readPersistedState(entry, {})).toEqual({ width: 512 });
   });
 
-  test("keeps a docx tab with no PDF and drops a task from another workspace", () => {
+  test("restores inspector tabs from different matters in the same organization", () => {
     const scope = {
       userId: "user-1",
       organizationId: "org-1",
-      workspaceId: "workspace-1",
     };
     const docx = {
       id: "docx-1",
@@ -158,14 +165,14 @@ describe("persisted state registry", () => {
       workspaceId: "workspace-1",
       pdfFileId: null,
     };
-    const foreignTask = {
+    const otherMatterTask = {
       id: "task-1",
       type: "task",
       label: "Foreign task",
       workspaceId: "workspace-2",
     };
     writePersistedState(inspectorStateEntry, scope, {
-      tabs: [docx, foreignTask],
+      tabs: [docx, otherMatterTask],
       groups: [],
       groupAssignments: {},
       activeId: "docx-1",
@@ -174,6 +181,7 @@ describe("persisted state registry", () => {
 
     expect(readPersistedState(inspectorStateEntry, scope)?.tabs).toEqual([
       docx,
+      otherMatterTask,
     ]);
     const rawStorage = browserStorage("local");
     expect(
@@ -185,4 +193,45 @@ describe("persisted state registry", () => {
       ),
     ).not.toBeNull();
   });
+});
+
+test("released inspector formats migrate once without losing tabs or crash-recovery state", () => {
+  const scope = { userId: "released-user", organizationId: "released-org" };
+  const stateKey = inspectorStateEntry.key(scope);
+  const minimizedKey = inspectorMinimizedEntry.key(scope);
+  const pendingKey = inspectorRestorePendingEntry.key(scope);
+  const tabs = [
+    { id: "saved-chat", type: "chat", label: "Saved conversation" },
+  ];
+  const state = {
+    tabs,
+    groups: [],
+    groupAssignments: {},
+    activeId: "saved-chat",
+    collapsedGroupIds: [],
+  };
+  const pending = "c9fa55ca-26eb-4c79-92b2-bcc417e63a20";
+  const accountStorage = browserStateStorage("local");
+  const tabStorage = browserStateStorage("session");
+  accountStorage.setItem(stateKey, JSON.stringify(state));
+  accountStorage.setItem(minimizedKey, "1");
+  tabStorage.setItem(pendingKey, pending);
+
+  expect(readPersistedState(inspectorStateEntry, scope)).toEqual(state);
+  expect(readPersistedState(inspectorMinimizedEntry, scope)).toBe(true);
+  expect(readPersistedState(inspectorRestorePendingEntry, scope)).toBe(pending);
+  expect(accountStorage.getItem(stateKey)).toBe(
+    JSON.stringify({ version: 1, value: state }),
+  );
+  expect(accountStorage.getItem(minimizedKey)).toBe(
+    JSON.stringify({ version: 1, value: true }),
+  );
+  expect(tabStorage.getItem(pendingKey)).toBe(
+    JSON.stringify({ version: 1, value: pending }),
+  );
+  expect(readPersistedState(inspectorStateEntry, scope)).toEqual(state);
+
+  accountStorage.removeItem(stateKey);
+  accountStorage.removeItem(minimizedKey);
+  tabStorage.removeItem(pendingKey);
 });

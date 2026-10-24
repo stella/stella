@@ -55,7 +55,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
+import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -101,8 +101,7 @@ type SkillResource = {
 };
 
 type SelectedFile =
-  | { type: "body" }
-  | { type: "resource"; resourceId: string; path: string };
+  { type: "body" } | { type: "resource"; resourceId: string; path: string };
 
 type SkillEditorProps = {
   skillId: string;

@@ -5,9 +5,9 @@ import type { OfficeCitationLocator } from "@stll/api-contract";
 import { shouldRetryAPIRequest } from "@/lib/errors/api";
 import {
   isVerifiedOfficeCitationTarget,
-  parseOfficeCitationHref,
   type OfficeCitationSource,
   type OfficeCitationTarget,
+  parseOfficeCitationHref,
 } from "@/lib/files/office-citations";
 import { officeCitationOptions } from "@/lib/files/queries";
 
