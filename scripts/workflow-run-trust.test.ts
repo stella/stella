@@ -653,6 +653,7 @@ const APP_TOKEN = /^\$\{\{\s*steps\.[\w-]+\.outputs\.token\s*\}\}$/u;
 const ALERTING_WORKFLOW = "scheduled-run-alerts.yml";
 const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
   "main-heavy.yml#Dispatch release PR-depth checks": ["main-pr-depth.yml"],
+  "main-heavy.yml#Dispatch version commit staging": ["deploy-staging.yml"],
   "network-baseline-request.yml#Request main recording": [
     "network-baseline-record.yml",
   ],
