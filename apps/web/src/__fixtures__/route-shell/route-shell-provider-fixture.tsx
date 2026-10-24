@@ -1285,7 +1285,7 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
         FIXTURE_AUDIENCE.anonymous,
         status,
       );
-      const serverEnvironment = import.meta.env.SSR;
+      const serverEnvironment = Object.getOwnPropertyDescriptor(import.meta.env, "SSR");
       const requestsBeforeSsr = fixture.requests.length;
       try {
         Object.assign(import.meta.env, { SSR: true });
@@ -1306,9 +1306,10 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
             ),
         ).toEqual([]);
 
-        Object.assign(import.meta.env, { SSR: false });
+        // Bun aliases import.meta.env to process.env, where false becomes "false".
+        expect(Reflect.deleteProperty(import.meta.env, "SSR")).toBe(true);
         fixture.state.audience = audience;
-        await fixture.act(() => {
+        fixture.act(() => {
           fixture.render(<fixture.RouterProvider router={router} />, {
             container: document,
           });
@@ -1343,7 +1344,11 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
         expect(caughtErrors).toEqual([]);
         expect(fixture.unexpectedRequests).toEqual([]);
       } finally {
-        Object.assign(import.meta.env, { SSR: serverEnvironment });
+        if (serverEnvironment === undefined) {
+          Reflect.deleteProperty(import.meta.env, "SSR");
+        } else {
+          Object.defineProperty(import.meta.env, "SSR", serverEnvironment);
+        }
         await fixture.act(async () => {
           await queryClient.cancelQueries();
           queryClient.clear();
