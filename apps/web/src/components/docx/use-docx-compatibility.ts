@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
 
@@ -9,7 +9,8 @@ type UseDocxCompatibilityOptions = {
   editTargetKey: string;
   isPreviewPlaceholderData: boolean;
   onCompatibilityChange:
-    ((compatibility: DocxCompatibility) => void) | undefined;
+    | ((compatibility: DocxCompatibility) => void)
+    | undefined;
 };
 
 /** Folio's verdict on whether it can safely rewrite the loaded document. */
@@ -41,9 +42,9 @@ export const useDocxCompatibility = ({
     },
   );
 
-  const resetCompatibility = useCallback(() => {
+  const resetCompatibility = () => {
     setCompatibilityState({ targetKey: editTargetKey, value: null });
-  }, [editTargetKey]);
+  };
 
   return { compatibility, handleCompatibilityChange, resetCompatibility };
 };

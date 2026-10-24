@@ -65,6 +65,7 @@ export const useDocxEditOpening = ({
   const didOpenRef = useRef(false);
   const errorToastShownRef = useRef(false);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const abandonUnsafeEditAttempt = useCallback(() => {
     // Editing is blocked because Folio can't safely rewrite this DOCX. The
     // block is surfaced quietly on the composer's edit-mode control (a "View
@@ -73,6 +74,7 @@ export const useDocxEditOpening = ({
     onClose();
   }, [onClose]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const requestEditMode = useCallback(async (): Promise<DocxEditModeResult> => {
     if (isCollaborativeEditing) {
       // A joined session can still be read-only, and `isUnlocked` is false
@@ -140,11 +142,11 @@ export const useDocxEditOpening = ({
 
   // Taking the session back from the tab that took it: the same open call,
   // which rotates the session token away from that tab in turn.
-  const reopenReleasedSession = useCallback(() => {
+  const reopenReleasedSession = () => {
     didOpenRef.current = true;
     errorToastShownRef.current = false;
     detached(open(), "docx-browser-editor.reopen-released-session");
-  }, [open]);
+  };
 
   useExternalSyncEffect(() => {
     if (!pendingEditRequestRef.current) {
@@ -210,7 +212,7 @@ export const useDocxEditOpening = ({
 
   const isUnlocked = isDocxEditorUnlocked({ canEditCollaboratively, state });
 
-  const handleUnlock = useCallback(() => {
+  const handleUnlock = () => {
     if (!canUnlock) {
       onBlockedUnlock?.();
       return;
@@ -243,19 +245,7 @@ export const useDocxEditOpening = ({
       errorToastShownRef.current = false;
       detached(open(), "docx-browser-editor.open");
     }
-  }, [
-    canUnlock,
-    compatibility?.canSafelyEdit,
-    collaborationEnabled,
-    fieldId,
-    onBlockedUnlock,
-    open,
-    pendingEditRequestRef,
-    previewFile,
-    requestCollaboration,
-    abandonUnsafeEditAttempt,
-    state.status,
-  ]);
+  };
 
   const { handleLockedEditAttempt, handleReadonlySurfaceMouseDown } =
     useDocxUnlockGestures({ canUnlock, handleUnlock, isUnlocked });
@@ -282,6 +272,7 @@ const useDocxUnlockGestures = ({
   handleUnlock,
   isUnlocked,
 }: UseDocxUnlockGesturesOptions) => {
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const handleLockedEditAttempt = useCallback(() => {
     if (isUnlocked) {
       return;
@@ -289,26 +280,24 @@ const useDocxUnlockGestures = ({
     handleUnlock();
   }, [handleUnlock, isUnlocked]);
 
-  const handleReadonlySurfaceMouseDown = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      const target = event.target;
-      const isToolbarTarget =
-        target instanceof Element &&
-        target.closest('[role="toolbar"]') !== null;
-      if (
-        !shouldRequestEditFromMouseDown({
-          canUnlock,
-          isEditing: isUnlocked,
-          isToolbarTarget,
-        })
-      ) {
-        return;
-      }
+  const handleReadonlySurfaceMouseDown = (
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    const target = event.target;
+    const isToolbarTarget =
+      target instanceof Element && target.closest('[role="toolbar"]') !== null;
+    if (
+      !shouldRequestEditFromMouseDown({
+        canUnlock,
+        isEditing: isUnlocked,
+        isToolbarTarget,
+      })
+    ) {
+      return;
+    }
 
-      handleLockedEditAttempt();
-    },
-    [canUnlock, handleLockedEditAttempt, isUnlocked],
-  );
+    handleLockedEditAttempt();
+  };
 
   return { handleLockedEditAttempt, handleReadonlySurfaceMouseDown };
 };
