@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 

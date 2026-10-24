@@ -34,11 +34,11 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   isAstNode,
   isImportedFrom,
   NAMESPACE_IMPORT,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 const UNION_BUILDERS = new Set(["Union", "UnionEnum"]);

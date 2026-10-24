@@ -20,12 +20,12 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { CopyButton } from "@stll/ui/copy-button";
 import {
   Dialog,
-  DialogPopup,
-  DialogHeader,
-  DialogTitle,
+  DialogClose,
   DialogDescription,
   DialogFooter,
-  DialogClose,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
 } from "@stll/ui/dialog";
 import { LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";

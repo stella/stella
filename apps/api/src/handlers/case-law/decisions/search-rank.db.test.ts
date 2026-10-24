@@ -5,11 +5,11 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
   caseLawDecisions,
-  publishedCaseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
@@ -29,9 +29,9 @@ import {
   type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
-  corpusSearchGroupToken,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";

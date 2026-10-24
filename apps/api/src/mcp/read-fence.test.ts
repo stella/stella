@@ -10,6 +10,7 @@ import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import { handoffLinkResult } from "@/api/mcp/web-handoff-links-core";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">("read_org");
@@ -23,14 +24,17 @@ type BoundaryOptions = {
   chargeReadBytes: typeof chargeMcpReadBytes;
   result?: CallToolResult;
   maximum?: number;
+  decorateToolResult?: (result: CallToolResult) => Promise<CallToolResult>;
 };
 const boundary = ({
   chargeReadBytes,
   result = output,
   maximum,
+  decorateToolResult,
 }: BoundaryOptions) =>
   createMcpHttpRequestHandler({
     chargeReadBytes,
+    ...(decorateToolResult === undefined ? {} : { decorateToolResult }),
     actionSizePolicy: () =>
       Result.ok(
         maximum === undefined
@@ -127,6 +131,84 @@ describe("MCP emitted read bytes", () => {
       expect(
         Buffer.byteLength(JSON.stringify(result), "utf-8"),
       ).toBeGreaterThan(JSON.stringify(result).length);
+    }));
+
+  test("fences and charges the decorated result with repeated handoff URLs", async () =>
+    withFence(async () => {
+      const url = "https://stella.example/workspaces/matter";
+      const handoffResult = {
+        content: [],
+        structuredContent: { url, repeatedUrl: url },
+      } satisfies CallToolResult;
+      const decorated = await handoffLinkResult({
+        result: handoffResult,
+        appBaseUrl: "https://stella.example",
+        mint: async (paths) => {
+          expect(paths).toEqual(["/workspaces/matter"]);
+          return "sh1_test";
+        },
+      });
+      const expectedEnvelope = {
+        jsonrpc: "2.0",
+        id: 17,
+        result: decorated,
+      };
+      const decoratedBytes = Buffer.byteLength(
+        JSON.stringify(expectedEnvelope),
+        "utf-8",
+      );
+      const undecoratedBytes = Buffer.byteLength(
+        JSON.stringify({ ...expectedEnvelope, result: handoffResult }),
+        "utf-8",
+      );
+      expect(decoratedBytes).toBeGreaterThan(undecoratedBytes);
+
+      const charges: Parameters<typeof chargeMcpReadBytes>[0][] = [];
+      const decorateToolResult = async (result: CallToolResult) =>
+        await handoffLinkResult({
+          result,
+          appBaseUrl: "https://stella.example",
+          mint: async (paths) => {
+            expect(paths).toEqual(["/workspaces/matter"]);
+            return "sh1_test";
+          },
+        });
+      const accepted = await call(
+        boundary({
+          chargeReadBytes: async (options) => {
+            charges.push(options);
+            return Result.ok(undefined);
+          },
+          decorateToolResult,
+          result: handoffResult,
+        }),
+        "list_matters",
+      );
+      expect(accepted.result).toEqual(decorated);
+      expect(charges).toHaveLength(1);
+      expect(charges.at(0)?.bytes).toBe(decoratedBytes);
+
+      charges.length = 0;
+      const refused = await call(
+        boundary({
+          chargeReadBytes: async (options) => {
+            charges.push(options);
+            return Result.ok(undefined);
+          },
+          decorateToolResult,
+          maximum: undecoratedBytes,
+          result: handoffResult,
+        }),
+        "list_matters",
+      );
+      expect(refused.result.isError).toBe(true);
+      expect(refused.result.content).toEqual([
+        {
+          type: "text",
+          text: expect.stringContaining('"code":"result_too_large"'),
+        },
+      ]);
+      expect(charges).toHaveLength(0);
     }));
 
   test("public and mixed results use their canonical classes across cursor rounds", async () =>

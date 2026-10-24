@@ -5,12 +5,12 @@ import {
   type ChatSourceCitationTarget,
   isSafeIdValue,
   parseCanonicalChatSourceCitationHref,
-  replaceCanonicalChatSourceCitationHrefs,
   replaceCanonicalChatResourceHrefs,
-  resourceRef,
+  replaceCanonicalChatSourceCitationHrefs,
   RESOURCE_TYPE,
-  toChatSourceCitationHref,
+  resourceRef,
   toChatResourceHref,
+  toChatSourceCitationHref,
 } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 

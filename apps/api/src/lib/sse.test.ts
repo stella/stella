@@ -1,13 +1,15 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
+  RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
-  RESOURCE_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+import type { SseSessionLivenessReader } from "@/api/lib/sse";
 
 type MessageHandler = (message: string) => void;
 
@@ -193,9 +195,12 @@ const authorizeAllUserConnections = async ({
 }: {
   sessionIds: readonly string[];
 }) => new Set(sessionIds);
+const holdAllSessions: SseSessionLivenessReader = async (sessions) =>
+  await Promise.resolve(new Set(sessions.map((session) => session.sessionId)));
 const startTestSse = (): void => {
   startSse(
     {
+      sessions: holdAllSessions,
       user: authorizeAllUserConnections,
       workspace: authorizeAllWorkspaceConnections,
     },
@@ -258,14 +263,27 @@ describe("sse module import", () => {
   });
 });
 
+/** The intervals `startSse` runs: the registry keep-alive and the sweep that
+ *  ends streams whose credential no longer holds. */
+const ascending = (a: number, b: number): number => a - b;
+
+const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
+  ascending,
+);
+
+/** The delays of the intervals started since the spy was cleared, ascending.
+ *  An omitted delay is 0, as the timer itself reads it. */
+const startedIntervals = () =>
+  setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
+
 describe("startSse / stopSse lifecycle", () => {
-  test("startSse starts the keep-alive timer and connects the Redis subscriber", async () => {
+  test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
     startTestSse();
 
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 
@@ -276,7 +294,7 @@ describe("startSse / stopSse lifecycle", () => {
     await settlePendingWork();
   });
 
-  test("startSse is idempotent: repeated calls create only one timer and one subscriber", async () => {
+  test("startSse is idempotent: repeated calls create its timers and one subscriber once", async () => {
     setIntervalSpy.mockClear();
     createdClients.length = 0;
 
@@ -284,7 +302,7 @@ describe("startSse / stopSse lifecycle", () => {
     startTestSse();
     startTestSse();
 
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(startedIntervals()).toEqual(LIFECYCLE_INTERVALS_MS);
 
     await settlePendingWork();
 
@@ -294,7 +312,7 @@ describe("startSse / stopSse lifecycle", () => {
     await settlePendingWork();
   });
 
-  test("stopSse clears the interval and closes the subscriber", async () => {
+  test("stopSse clears both intervals and closes the subscriber", async () => {
     clearIntervalSpy.mockClear();
     createdClients.length = 0;
 
@@ -306,7 +324,9 @@ describe("startSse / stopSse lifecycle", () => {
 
     stopSse();
 
-    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(
+      LIFECYCLE_INTERVALS_MS.length,
+    );
     expect(client?.close).toHaveBeenCalledTimes(1);
 
     await settlePendingWork();
@@ -474,6 +494,7 @@ describe("workspace access revocation", () => {
     const retainedUserId = toSafeId<"user">("user_2");
     startSse(
       {
+        sessions: holdAllSessions,
         user: authorizeAllUserConnections,
         workspace: async ({ sessionIds }) =>
           new Set(
@@ -610,6 +631,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     let authorizationCalls = 0;
     startSse(
       {
+        sessions: holdAllSessions,
         user: authorizeAllUserConnections,
         workspace: async ({ sessionIds }) => {
           authorizationCalls += 1;

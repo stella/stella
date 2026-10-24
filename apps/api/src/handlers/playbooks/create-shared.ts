@@ -46,8 +46,7 @@ export type CreatePlaybookDefinitionResult = {
 };
 
 export type CreatePlaybookDefinitionOrigin =
-  | { type: "authored" }
-  | { type: "starter"; starterId: StarterPlaybookId };
+  { type: "authored" } | { type: "starter"; starterId: StarterPlaybookId };
 
 type CreatePlaybookDefinitionArgs = {
   /** Admits the save's ask derivations; see `deriveAutoAsks`. */

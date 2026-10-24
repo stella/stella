@@ -14,7 +14,11 @@ import {
   MCP_INSTRUCTIONS_LAW_MAX_CHARS,
 } from "@/api/mcp/instructions";
 import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
-import { LAW_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  LAW_MCP_TOOL_DEFINITIONS,
+  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
+} from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
@@ -141,13 +145,20 @@ describe("MCP server instructions", () => {
     // infer it from tools/list.
     // App-only tools serve the host's UI and are hidden from the model, so
     // the connect text names exactly the model-visible ones.
-    for (const tool of LAW_MCP_TOOL_DEFINITIONS) {
-      if (isMcpToolVisibleTo(tool, "model")) {
-        expect(
-          MCP_INSTRUCTIONS.law,
-          `${tool.name} is served but never named`,
-        ).toContain(tool.name);
-      } else {
+    const lawToolNames = new Set(
+      LAW_MCP_TOOL_DEFINITIONS.map(({ name }) => name),
+    );
+    for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
+      if (!lawToolNames.has(tool.name)) {
+        continue;
+      }
+      expect(
+        MCP_INSTRUCTIONS.law,
+        `${tool.name} is served but never named`,
+      ).toContain(tool.name);
+    }
+    for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+      if (lawToolNames.has(tool.name) && !isMcpToolVisibleTo(tool, "model")) {
         expect(
           MCP_INSTRUCTIONS.law,
           `${tool.name} is app-only but named to the model`,
