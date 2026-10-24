@@ -5,7 +5,7 @@ import { BLOB_HASH_CHUNK_BYTES, sha256Hex } from "@stll/sha256/browser";
 
 import {
   hasActiveUpload,
-  hashUploadFile,
+  hashActiveUploadFile,
   resetActiveUploadsForTests,
   retainActiveUpload,
   withActiveUpload,
@@ -61,7 +61,7 @@ test("an upload hash keeps the reload guard on until its last chunk is read", as
   }
   const file = new GatedFile([bytes]);
 
-  const hashed = hashUploadFile(file);
+  const hashed = hashActiveUploadFile(file);
   await firstChunkRead.promise;
   expect(hasActiveUpload()).toBe(true);
 
@@ -75,8 +75,8 @@ test("a failed standalone hash releases only its own reload guard", async () => 
   const releaseUpload = retainActiveUpload();
   const readFailure = new DOMException("File read failed", "NotReadableError");
   class UnreadableChunk extends Blob {
-    override arrayBuffer(): Promise<ArrayBuffer> {
-      return Promise.reject(readFailure);
+    override async arrayBuffer(): Promise<ArrayBuffer> {
+      return await Promise.reject(readFailure);
     }
   }
   class UnreadableFile extends Blob {
@@ -85,9 +85,9 @@ test("a failed standalone hash releases only its own reload guard", async () => 
     }
   }
 
-  expect(await rejectionOf(hashUploadFile(new UnreadableFile(["bytes"])))).toBe(
-    readFailure,
-  );
+  expect(
+    await rejectionOf(hashActiveUploadFile(new UnreadableFile(["bytes"]))),
+  ).toBe(readFailure);
   expect(hasActiveUpload()).toBe(true);
   releaseUpload();
   expect(hasActiveUpload()).toBe(false);

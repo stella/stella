@@ -50,7 +50,7 @@ export const withActiveUpload = async <T>(
 };
 
 /** Hash one file in bounded chunks while the reload guard counts the read. */
-export const hashUploadFile = async (file: Blob): Promise<string> =>
+export const hashActiveUploadFile = async (file: Blob): Promise<string> =>
   await withActiveUpload(async () => await sha256Hex(file));
 
 /** Test seam. Production batches release themselves. */

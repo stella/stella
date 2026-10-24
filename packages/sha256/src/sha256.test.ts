@@ -155,7 +155,7 @@ const countingBlob = (bytes: Uint8Array, ledger: BlobReadLedger): Blob => {
       );
     }
   }
-  return new CountingBlob([bytes]);
+  return new CountingBlob([Uint8Array.from(bytes)]);
 };
 
 test("a Blob is hashed in one front-to-back pass of bounded chunks at any size", async () => {

@@ -20,7 +20,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
-import { hashUploadFile, withActiveUpload } from "@/lib/files/active-uploads";
+import {
+  hashActiveUploadFile,
+  withActiveUpload,
+} from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -84,7 +87,7 @@ const prepareFolderTreeUpload = async ({
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
       size: placement.file.size,
-      sha256Hex: await hashUploadFile(placement.file),
+      sha256Hex: await hashActiveUploadFile(placement.file),
     });
   }
 
@@ -218,7 +221,7 @@ const prepareSingleFileEntityUpload = async ({
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
-  const sha256Hex = await hashUploadFile(file);
+  const sha256Hex = await hashActiveUploadFile(file);
 
   signal.throwIfAborted();
 
