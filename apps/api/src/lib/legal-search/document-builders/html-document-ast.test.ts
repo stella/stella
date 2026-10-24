@@ -122,6 +122,32 @@ describe("the HTML builder", () => {
     ]);
   });
 
+  test.each(["span", "em", "strong", "a", "abbr"])(
+    "an inline %s fragment moves its whole note paragraph after the body",
+    (tag) => {
+      const ast = build(
+        `<p>Body<a href="#fn1">1</a>. See <a href="#fn1">the note</a>.</p><p><${tag} id="fn1">1</${tag}> Note text.</p><p>After note.</p>`,
+      );
+      expect(outline(ast)).toEqual([
+        { id: "front_1", type: "paragraph", text: "Body1. See the note." },
+        { id: "front_2", type: "paragraph", text: "After note." },
+        { id: "fn-1", type: "paragraph", text: "1 Note text.", note: "1" },
+      ]);
+      const note = ast.blocks.at(-1);
+      expect(note?.type === "paragraph" ? note.note : undefined).toEqual({
+        type: "footnote",
+        label: "1",
+        noteId: "note-1",
+      });
+      const body = ast.blocks.at(0);
+      expect(body?.type === "paragraph" ? body.inlines : []).toContainEqual({
+        type: "link",
+        href: "#fn-1",
+        children: [{ type: "text", text: "the note" }],
+      });
+    },
+  );
+
   test("sets footnotes after the body under the mark the body printed", () => {
     const ast = build(`
       <p>Body<sup><a href="#fn1" id="r1">1</a></sup> and Word style<a href="#_ftn2" name="_ftnref2">[2]</a>.</p>
@@ -378,7 +404,11 @@ const render = (blocks: readonly GeneratedBlock[]): string => {
     })
     .join("\n");
   const noteList = notes
-    .map((text, index) => `<p id="fn${index + 1}">${text}</p>`)
+    .map((text, index) =>
+      index % 2 === 0
+        ? `<p><span id="fn${index + 1}"></span>${text}</p>`
+        : `<p id="fn${index + 1}">${text}</p>`,
+    )
     .join("");
   return `${body}<div>${noteList}</div>`;
 };
@@ -395,6 +425,13 @@ describe("HTML builder output", () => {
       fc.property(document, (blocks) => {
         const ast = build(render(blocks));
         expect(v.is(documentAstSchema, ast)).toBe(true);
+        const expectedNotes = blocks.filter(
+          (block) => block.type === "paragraph" && block.note,
+        ).length;
+        const notes = ast.blocks.filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        );
+        expect(notes).toHaveLength(expectedNotes);
         expect(parseDocumentAst(omitDerivablePlainText(ast))).toEqual(ast);
         expect(parseDocumentAst(JSON.stringify(ast))).toEqual(ast);
       }),

@@ -138,29 +138,29 @@ const fragmentOf = (href: string): string => {
   return decoded.status === "ok" ? decoded.value : raw;
 };
 
-/** Every element an in-page fragment can name, by `id` and legacy `<a name>`. */
+type FragmentTarget = {
+  element: Element;
+  block: Element;
+};
+
+/** Keep publisher evidence on the target and emit its owning content block. */
 const fragmentTargets = (
   $: cheerio.CheerioAPI,
   root: cheerio.Cheerio<Element>,
-): Map<string, Element> => {
-  const targets = new Map<string, Element>();
-  root.find("a[name]").each((_, anchor) => {
-    const name = anchor.attribs["name"];
-    // A named anchor marks a position; the note is the block around it.
-    const block = $(anchor).closest("p, li, div, aside").get(0);
-    if (name !== undefined && block !== undefined && isTag(block)) {
-      targets.set(name, block);
+): Map<string, FragmentTarget> => {
+  const targets = new Map<string, FragmentTarget>();
+  const selector = [...BLOCK_TAGS].join(",");
+  const register = (fragment: string | undefined, element: Element): void => {
+    const block = $(element).closest(selector).get(0);
+    if (fragment !== undefined && block !== undefined && isTag(block)) {
+      targets.set(fragment, { element, block });
     }
+  };
+  root.find("a[name]").each((_, anchor) => {
+    register(anchor.attribs["name"], anchor);
   });
   root.find("[id]").each((_, element) => {
-    const id = element.attribs["id"];
-    const block =
-      tagOf(element) === "a"
-        ? $(element).closest("p, li, div, aside").get(0)
-        : element;
-    if (id !== undefined && block !== undefined && isTag(block)) {
-      targets.set(id, block);
-    }
+    register(element.attribs["id"], element);
   });
   return targets;
 };
@@ -185,6 +185,7 @@ const isNoteTarget = ($: cheerio.CheerioAPI, target: Element): boolean => {
     const classNames = element.attribs["class"];
     const names = [
       element.attribs["id"],
+      element.attribs["name"],
       ...(classNames === undefined ? [] : classNames.split(/\s+/u)),
     ];
     if (
@@ -220,11 +221,14 @@ const findFootnotes = (
   root.find("a[href^='#']").each((_, link) => {
     const fragment = fragmentOf(link.attribs["href"] ?? "");
     const mark = markOf($(link).text());
-    const target = targets.get(fragment);
+    const fragmentTarget = targets.get(fragment);
+    const target = fragmentTarget?.block;
     if (
       mark === null ||
+      fragmentTarget === undefined ||
       target === undefined ||
-      !isNoteTarget($, target) ||
+      isHeadingTag(target.tagName.toLowerCase()) ||
+      !isNoteTarget($, fragmentTarget.element) ||
       labels.has(target) ||
       $(link).closest(target).length > 0 ||
       [...labels.keys()].some((note) => $(link).closest(note).length > 0)
