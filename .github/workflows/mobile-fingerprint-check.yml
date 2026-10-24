@@ -9,6 +9,16 @@ defaults:
 # TestFlight build must ship before over-the-air updates reach phones again.
 # Advisory: the job summary carries the result and the job never fails over
 # it. Both fingerprints are computed in this one job, so they compare.
+#
+# A native change also gets the "📱 native change" label, so such pull
+# requests can be held and merged together right before a store build: once
+# one merges, every later merge inherits the new fingerprint, and updates stop
+# reaching phones until that build ships. The label job only calls the API;
+# the job that installs and runs pull request code has no write token.
+#
+# The TestFlight build stamps its fingerprint on macOS and updates are
+# published on Linux. A macOS job checks that both agree on iOS: if they did
+# not, no update would ever reach a build.
 on:
   pull_request:
     paths:
@@ -30,6 +40,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    outputs:
+      changed: ${{ steps.report.outputs.changed }}
+      ios: ${{ steps.report.outputs.ios }}
     env:
       APP_VARIANT: production
     steps:
@@ -82,8 +95,10 @@ jobs:
             fi
           done
 
-      - name: Report
+      - id: report
+        name: Report
         run: |
+          changed=""
           {
             echo "## Mobile native fingerprint"
             echo
@@ -93,7 +108,107 @@ jobs:
               if [ "$head" = "$base" ]; then
                 echo "- **$platform**: unchanged (\`$head\`). Over-the-air updates keep reaching current builds."
               else
+                changed="$changed $platform"
                 echo "- **$platform**: \`$base\` → \`$head\`. After merging, a new TestFlight build must ship before updates reach phones."
               fi
             done
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "changed=${changed# }" >> "$GITHUB_OUTPUT"
+          echo "ios=$(cat "$RUNNER_TEMP/fingerprint/head-ios")" >> "$GITHUB_OUTPUT"
+
+  fingerprint-macos:
+    name: Native fingerprint on macOS
+    needs: fingerprint
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      APP_VARIANT: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Install the merge result's mobile dependencies
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+
+      - name: Compare with the Linux fingerprint
+        working-directory: apps/mobile
+        env:
+          LINUX_IOS: ${{ needs.fingerprint.outputs.ios }}
+        run: |
+          macos="$(bun scripts/fingerprint.ts ios)"
+          if [ "$macos" = "$LINUX_IOS" ]; then
+            echo "- **ios**: macOS and Linux agree (\`$macos\`)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "- **ios**: macOS \`$macos\`, Linux \`$LINUX_IOS\`. Updates published on Linux would never reach a build stamped on macOS." >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::The iOS fingerprint differs between macOS ($macos) and Linux ($LINUX_IOS)."
+          exit 1
+
+  label:
+    name: Native change label
+    needs: fingerprint
+    # A fork's pull request gets a read-only token; its summary still reports.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Sync the native change label
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CHANGED_PLATFORMS: ${{ needs.fingerprint.outputs.changed }}
+        with:
+          script: |
+            const label = {
+              name: "📱 native change",
+              color: "d93f0b",
+              description:
+                "Changes the native fingerprint; updates stop reaching phones until a new store build ships.",
+            };
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const nativeChanged = (process.env.CHANGED_PLATFORMS ?? "").trim() !== "";
+
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: label.name });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              try {
+                await github.rest.issues.createLabel({ owner, repo, ...label });
+              } catch (createError) {
+                // Another run created it first.
+                if (createError.status !== 422) throw createError;
+              }
+            }
+
+            const { data: current } = await github.rest.issues.listLabelsOnIssue({
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const hasLabel = current.some(({ name }) => name === label.name);
+            if (nativeChanged && !hasLabel) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [label.name] });
+            } else if (!nativeChanged && hasLabel) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label.name });
+              } catch (removeError) {
+                if (removeError.status !== 404) throw removeError;
+              }
+            }
