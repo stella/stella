@@ -63,6 +63,7 @@ export const ChatAttachmentChip = ({
   const actions: AttachmentChipAction[] = [];
   if (item.type === "pasted_text") {
     actions.push({
+      type: "expand",
       label: expandLabel,
       icon: ({ className }) => (
         <DirectionalIcon
@@ -86,6 +87,7 @@ export const ChatAttachmentChip = ({
   }
   if (behavior.type === "draft") {
     actions.push({
+      type: "remove",
       label: t("common.remove"),
       icon: ({ className }) => (
         <XIcon aria-hidden="true" className={className} />

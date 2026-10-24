@@ -7,7 +7,10 @@ import type {
 
 import { cn } from "@stll/ui/utils";
 
-import { CHIP_HEIGHT_CLASS } from "@/components/chip-scale";
+import {
+  CHIP_HEIGHT_CLASS,
+  CHIP_TOUCH_TARGET_CLASS,
+} from "@/components/chip-scale";
 import Tooltip from "@/components/tooltip";
 
 /**
@@ -83,7 +86,7 @@ const TONE_FOCUS_RING: Record<InlinePillTone, string> = {
 // A chip takes its height from the chip scale it shares with every
 // attachment chip; an inherit pill follows the line it sits in.
 const SIZE: Record<InlinePillSize, string> = {
-  chip: cn("text-xs font-medium", CHIP_HEIGHT_CLASS),
+  chip: cn("text-xs font-medium", CHIP_HEIGHT_CLASS, CHIP_TOUCH_TARGET_CLASS),
   inherit: "font-[inherit] text-[inherit] leading-[inherit] py-0.5",
 };
 

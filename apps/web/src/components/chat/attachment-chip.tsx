@@ -10,11 +10,13 @@ import {
   CHIP_ACTION_CLASS,
   CHIP_HEIGHT_CLASS,
   CHIP_ICON_CLASS,
+  CHIP_TOUCH_TARGET_CLASS,
 } from "@/components/chip-scale";
 
 export type AttachmentChipKind = "command" | "file" | "image" | "pasted_text";
 
 export type AttachmentChipAction = {
+  type: "expand" | "remove";
   label: string;
   icon: (props: { className: string }) => ReactNode;
   onClick: () => void;
@@ -36,8 +38,10 @@ type AttachmentChipProps = {
   actions?: readonly AttachmentChipAction[] | undefined;
 };
 
-const TITLE_CLASS =
-  "focus-visible:outline-ring max-w-40 min-w-0 truncate rounded-sm text-start focus-visible:outline-2";
+const TITLE_CLASS = cn(
+  "focus-visible:outline-ring max-w-40 min-w-0 truncate rounded-sm text-start focus-visible:outline-2",
+  CHIP_TOUCH_TARGET_CLASS,
+);
 
 const OPEN_NONE: AttachmentChipOpen = { type: "none" };
 const NO_ACTIONS: readonly AttachmentChipAction[] = [];
@@ -118,7 +122,7 @@ export const AttachmentChip = ({
         aria-expanded={action.disclosure?.expanded}
         aria-label={action.label}
         className={CHIP_ACTION_CLASS}
-        key={action.label}
+        key={action.type}
         onClick={action.onClick}
         title={action.label}
         type="button"

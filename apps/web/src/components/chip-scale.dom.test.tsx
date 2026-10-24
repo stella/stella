@@ -15,8 +15,12 @@ const { AttachmentChip } = await import("@/components/chat/attachment-chip");
 const { ChatAttachmentChip, ChatCommandChip } =
   await import("@/components/chat/chat-draft-attachment-chips");
 const { InlinePill } = await import("@/components/inline-pill");
-const { CHIP_HEIGHT_CLASS, CHIP_ICON_CLASS } =
-  await import("@/components/chip-scale");
+const {
+  CHIP_ACTION_CLASS,
+  CHIP_HEIGHT_CLASS,
+  CHIP_ICON_CLASS,
+  CHIP_TOUCH_TARGET_CLASS,
+} = await import("@/components/chip-scale");
 const en = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
@@ -92,7 +96,11 @@ const CHIP_KINDS = {
 // scale alone; anything else inside it would let one kind outgrow another.
 const SIZING_CLASS =
   /^(?:[a-z-]+:)*(?:(?:h|min-h|size|py|pt|pb|p|leading)-|text-(?:sm|base|lg|[2-9]?xl)$)/u;
-const SCALE_CLASSES = new Set([CHIP_HEIGHT_CLASS, "size-3", "size-4"]);
+const SCALE_CLASSES = new Set([
+  ...CHIP_HEIGHT_CLASS.split(" "),
+  ...CHIP_ACTION_CLASS.split(" "),
+  "size-3",
+]);
 
 const renderChip = (chip: ReactNode) =>
   render(
@@ -109,7 +117,17 @@ for (const [kind, chip] of Object.entries(CHIP_KINDS)) {
     if (shell === null) {
       return;
     }
-    expect(shell.classList.contains(CHIP_HEIGHT_CLASS)).toBe(true);
+    for (const heightClass of CHIP_HEIGHT_CLASS.split(" ")) {
+      expect(shell.classList.contains(heightClass)).toBe(true);
+    }
+    for (const control of [shell, ...shell.querySelectorAll("button, a")]) {
+      if (!control.matches("button, a")) {
+        continue;
+      }
+      for (const targetClass of CHIP_TOUCH_TARGET_CLASS.split(" ")) {
+        expect(control.classList.contains(targetClass)).toBe(true);
+      }
+    }
     const offending = [shell, ...shell.querySelectorAll("*")].flatMap(
       (element) =>
         [...element.classList].filter(
