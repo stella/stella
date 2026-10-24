@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -10,6 +10,10 @@ const {
   SIDEBAR_STATE_ATTRIBUTE,
   writePersistedSidebarOpen,
 } = await import("./sidebar-state");
+
+beforeEach(() => {
+  document.documentElement.removeAttribute(SIDEBAR_STATE_ATTRIBUTE);
+});
 
 afterAll(async () => {
   await unregisterDomEnvironment();
