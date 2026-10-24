@@ -24,7 +24,7 @@ export const VIEWER_OVERLAY_BAR_BAND_PX = 48;
 export const ViewerOverlayBar = ({
   children,
   className,
-}: PropsWithChildren<{ className?: string }>) => (
+}: PropsWithChildren<{ className?: string | undefined }>) => (
   <div
     className={cn(
       "bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur",

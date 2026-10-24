@@ -152,6 +152,7 @@ export const ReaderBreadcrumb = ({
       </PopoverTrigger>
       <PopoverPopup
         align="end"
+        aria-label={t("statutes.outline")}
         className="w-80 max-w-[calc(100vw-2rem)]"
         padding="sm"
       >
@@ -250,6 +251,7 @@ export const ReaderBreadcrumb = ({
                       </PopoverTrigger>
                       <PopoverPopup
                         align="start"
+                        aria-label={t("common.showMore")}
                         className="w-80 max-w-[calc(100vw-2rem)]"
                         padding="sm"
                       >

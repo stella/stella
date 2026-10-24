@@ -19,7 +19,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 import {
   createSiblingNamePlan,
@@ -31,7 +31,7 @@ import {
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
-import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { LIMITS } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -43,9 +43,12 @@ import {
   entityCreateWriteErrorMessage,
   type EntityCreateWriteFailureStatus,
 } from "@/api/lib/uploads/entity-create";
+import { documentUploadFileFields } from "@/api/lib/uploads/file-metadata-schema";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
+  type UploadTimeline,
+  uploadTimeline,
 } from "@/api/lib/uploads/runtime";
 
 const TREE_KEY_MAX_LENGTH = 512;
@@ -63,13 +66,7 @@ const treeFileSchema = t.Object({
   parentKey: t.Optional(
     t.Nullable(t.String({ minLength: 1, maxLength: TREE_KEY_MAX_LENGTH })),
   ),
-  name: tDefaultVarchar,
-  mimeType: t.String({ minLength: 1, maxLength: 255 }),
-  size: t.Integer({
-    minimum: 0,
-    maximum: FILE_SIZE_LIMIT_BYTES.document,
-  }),
-  sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+  ...documentUploadFileFields,
 });
 
 const bodySchema = t.Object({
@@ -105,7 +102,7 @@ type NormalizedTreeFile = {
 type SignedTreeFile = NormalizedTreeFile & {
   uploadId: SafeId<"pendingUpload">;
   resolvedMime: string;
-  expiresAt: Date;
+  timeline: UploadTimeline;
   url: string;
   headers: Record<string, string>;
 };
@@ -296,7 +293,7 @@ type PrepareSignedFilesProps = {
   files: NormalizedTreeFile[];
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  expiresAt: Date;
+  timeline: UploadTimeline;
 };
 
 const prepareSignedFiles = async ({
@@ -304,7 +301,7 @@ const prepareSignedFiles = async ({
   files,
   organizationId,
   workspaceId,
-  expiresAt,
+  timeline,
 }: PrepareSignedFilesProps): Promise<
   Result<SignedTreeFile[], HandlerError>
 > => {
@@ -350,7 +347,7 @@ const prepareSignedFiles = async ({
       name: sanitizedName,
       uploadId,
       resolvedMime,
-      expiresAt,
+      timeline,
       url: presign.value.url,
       headers: presign.value.headers,
     });
@@ -517,7 +514,7 @@ const createPendingRows = async ({
       declaredSize: file.size,
       declaredSha256: file.sha256Hex,
       status: "pending",
-      expiresAt: file.expiresAt,
+      expiresAt: file.timeline.finalizeDeadline,
       createdAt: now,
     });
 
@@ -526,7 +523,7 @@ const createPendingRows = async ({
       uploadId: file.uploadId,
       parentId,
       url: file.url,
-      expiresAt: file.expiresAt.toISOString(),
+      expiresAt: file.timeline.urlExpiresAt.toISOString(),
       headers: file.headers,
     });
   }
@@ -575,15 +572,12 @@ const entityCreateTree = createSafeHandler(
     }
 
     const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
-    );
     const signedFiles = await prepareSignedFiles({
       userId: user.id,
       files: normalizedTree.value.files,
       organizationId: session.activeOrganizationId,
       workspaceId,
-      expiresAt,
+      timeline: uploadTimeline(now),
     });
     if (Result.isError(signedFiles)) {
       return Result.err(signedFiles.error);

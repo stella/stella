@@ -136,4 +136,121 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
   });
+
+  test("tax ID, VAT ID, VAT-payer status and invoice language persist and clear", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const organizationId = mintAuthProviderId<"organization">();
+      const userId = mintAuthProviderId<"user">();
+      const contactId = createSafeId<"contact">();
+      let userInserted = false;
+      let organizationInserted = false;
+      try {
+        await db.insert(user).values({
+          id: userId,
+          name: "Billing",
+          email: `${userId}@billing.test`,
+        });
+        userInserted = true;
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Billing",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        organizationInserted = true;
+        await db.insert(member).values({
+          id: mintAuthProviderIdValue(),
+          organizationId,
+          userId,
+          role: "owner",
+          createdAt: new Date(),
+        });
+        await db.insert(contacts).values({
+          id: contactId,
+          organizationId,
+          type: "organization",
+          displayName: "Šťastný a Ďuriš s. r. o.",
+        });
+        const update = async (
+          body: Parameters<typeof updateContact.handler>[0]["body"],
+        ) =>
+          await updateContact.handler(
+            createTestHandlerContext<
+              Parameters<typeof updateContact.handler>[0]
+            >({
+              scopedDb: NO_DB,
+              audit: auditRecorderDouble(),
+              memberRole: sessionMemberRole("owner"),
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              params: { contactId },
+              safeDb: createSafeDb(
+                markRlsDatabase(db),
+                [],
+                organizationId,
+                userId,
+              ),
+              body,
+            }),
+          );
+        const read = async () =>
+          (
+            await db
+              .select({
+                taxId: contacts.taxId,
+                vatId: contacts.vatId,
+                vatPayer: contacts.vatPayer,
+                invoiceLanguage: contacts.invoiceLanguage,
+              })
+              .from(contacts)
+              .where(eq(contacts.id, contactId))
+          ).at(0);
+        expect(
+          await update({
+            taxId: "2020123456",
+            vatId: "SK2020123456",
+            vatPayer: true,
+            invoiceLanguage: "sk",
+          }),
+        ).toEqual({ id: contactId });
+        expect(await read()).toEqual({
+          taxId: "2020123456",
+          vatId: "SK2020123456",
+          vatPayer: true,
+          invoiceLanguage: "sk",
+        });
+        expect(await update({ vatPayer: false })).toEqual({ id: contactId });
+        expect(await read()).toEqual({
+          taxId: "2020123456",
+          vatId: "SK2020123456",
+          vatPayer: false,
+          invoiceLanguage: "sk",
+        });
+        expect(
+          await update({
+            taxId: null,
+            vatId: null,
+            vatPayer: null,
+            invoiceLanguage: null,
+          }),
+        ).toEqual({ id: contactId });
+        expect(await read()).toEqual({
+          taxId: null,
+          vatId: null,
+          vatPayer: null,
+          invoiceLanguage: null,
+        });
+      } finally {
+        if (organizationInserted) {
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+        }
+        if (userInserted) {
+          await db.delete(user).where(eq(user.id, userId));
+        }
+      }
+    });
+  });
 }

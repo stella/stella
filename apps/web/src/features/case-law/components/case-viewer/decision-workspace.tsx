@@ -43,6 +43,12 @@ import {
   LEGAL_READER_LAYOUT_CLASS_NAME,
   LegalReaderControls,
 } from "@/components/legal-reader/legal-reader-controls";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type {
+  AnalysisMarginItem,
+  AnswerMarginItem,
+  ProvisionMarginItem,
+} from "@/components/legal-reader/margin-notes";
 import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
@@ -61,12 +67,6 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type {
-  AnalysisMarginItem,
-  AnswerMarginItem,
-  ProvisionMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
@@ -698,7 +698,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       id: heading.id,
       heading: heading.label,
       text: first?.summary ?? "",
-      category: heading.category,
+      accentVar: getCategoryVar(heading.category),
       depth: heading.depth,
       startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
     });
@@ -708,7 +708,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         kind: "annotation",
         id: annotation.id,
         text: annotation.summary,
-        category: heading.category,
+        accentVar: getCategoryVar(heading.category),
         depth: heading.depth + 1,
         startAnchorId: annotation.startAnchorId,
       });
@@ -741,7 +741,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   kind: "example",
                   id: `example:${note.category}`,
                   heading: t(`caseLaw.analysis.categories.${note.category}`),
-                  category: note.category,
+                  accentVar: getCategoryVar(note.category),
                   depth: 0,
                   lines: note.lines,
                   startAnchorId,

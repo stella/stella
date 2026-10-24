@@ -15,6 +15,7 @@ import { TooltipProvider } from "@stll/ui/tooltip";
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
+import { WebHangRecoveryNotice } from "@/components/web-hang-recovery-notice";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -184,6 +185,7 @@ export const AppProviders = ({
           <ThemeProvider>
             <TooltipProvider>
               <ToastProvider>
+                <WebHangRecoveryNotice />
                 <WebReaderPresentationProvider>
                   {children}
                 </WebReaderPresentationProvider>

@@ -63,7 +63,9 @@ test("Contents stays attached to its trigger as the visible heading path changes
     const current = screen.getByRole("button", { name: /^Contents/u });
     expect(current.getAttribute("aria-expanded")).toBe("true");
     expect(current === trigger).toBe(true);
-    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(
+      screen.getByRole("dialog", { name: messages.statutes.outline }),
+    ).toBeTruthy();
   }
 });
 
@@ -151,6 +153,9 @@ test("reader breadcrumb shows three heading levels and exposes hidden jump desti
   await act(async () =>
     fireEvent.click(screen.getByRole("button", { name: "Show more" })),
   );
+  expect(
+    screen.getByRole("dialog", { name: messages.common.showMore }),
+  ).toBeTruthy();
   await act(async () =>
     fireEvent.click(screen.getByRole("button", { name: "Hlava I" })),
   );
@@ -727,9 +732,30 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
   const more = screen.getByRole("button", { name: arabic.common.showMore });
   await act(async () => fireEvent.click(more));
   expect(
+    screen.getByRole("dialog", { name: arabic.common.showMore }),
+  ).toBeTruthy();
+  expect(
     screen.getByRole("button", { name: "Hlava I" }).querySelector("bdi")
       ?.textContent,
   ).toBe("Hlava I");
+  await act(async () =>
+    fireEvent.keyDown(
+      screen.getByRole("dialog", {
+        name: arabic.common.showMore,
+      }),
+      { key: "Escape" },
+    ),
+  );
+  await act(async () =>
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `${arabic.statutes.outline}: ${path.at(-1)?.title}`,
+      }),
+    ),
+  );
+  expect(
+    screen.getByRole("dialog", { name: arabic.statutes.outline }),
+  ).toBeTruthy();
 });
 
 test("reader breadcrumb allocates narrow width to the current number before outer titles", async () => {

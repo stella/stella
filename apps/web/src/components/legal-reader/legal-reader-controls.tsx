@@ -1,7 +1,6 @@
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 
 import { LegalReaderBreadcrumb } from "./legal-reader-breadcrumb";
 import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
@@ -27,19 +26,19 @@ export const LegalReaderControls = ({
   viewport,
   textScale,
 }: LegalReaderControlsProps) => (
-  <ViewerOverlayBar className="reader-chrome start-2 top-(--reader-controls-inset) h-(--reader-controls-height) min-w-0 gap-0 text-xs">
+  <FloatingZoomControls
+    atMax={textScale.atMax}
+    atMin={textScale.atMin}
+    className="reader-chrome start-2 top-(--reader-controls-inset) h-(--reader-controls-height) min-w-0 gap-0 text-xs"
+    level={textScale.level}
+    onReset={textScale.reset}
+    onZoom={textScale.zoom}
+  >
     <LegalReaderBreadcrumb
       blocks={blocks}
       content={content}
       fallback={fallbackBreadcrumb}
       viewport={viewport}
     />
-    <ZoomControls
-      atMax={textScale.atMax}
-      atMin={textScale.atMin}
-      level={textScale.level}
-      onReset={textScale.reset}
-      onZoom={textScale.zoom}
-    />
-  </ViewerOverlayBar>
+  </FloatingZoomControls>
 );

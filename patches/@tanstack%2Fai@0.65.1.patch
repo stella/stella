@@ -1,3 +1,4 @@
+Approval interrupts update the actual tool owner without rebuilding unrelated messages.
 Canonical TOOL_CALL_END input updates completed calls without resetting their state.
 Snapshot sibling results do not enrich terminal calls with absent output.
 Sequential calls wait behind the first pending approval; plain client requests proceed.
@@ -47,6 +48,15 @@ index c21d483b5ed97eb9b4f64f4d6783ec3ba148a8f0..d8ae7d353e94e6634962124d15422d5e
  					input,
  					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
  				});
+@@ -1538,7 +1542,7 @@
+ 					});
+ 					continue;
+ 				}
+-				const resolvedMessageId = this.getActiveAssistantMessageId() ?? this.toolCallToMessage.get(toolCallId) ?? this.messages.find((m) => m.role === "assistant" && m.parts.some((p) => p.type === "tool-call" && p.id === toolCallId))?.id;
++				const resolvedMessageId = this.messages.find((m) => m.role === "assistant" && m.parts.some((p) => p.type === "tool-call" && p.id === toolCallId))?.id;
+ 				if (resolvedMessageId) {
+ 					this.messages = updateToolCallApproval(this.messages, resolvedMessageId, toolCallId, interrupt.id);
+ 					this.emitMessagesChange();
 diff --git a/dist/esm/activities/chat/tools/tool-calls.js b/dist/esm/activities/chat/tools/tool-calls.js
 --- a/dist/esm/activities/chat/tools/tool-calls.js
 +++ b/dist/esm/activities/chat/tools/tool-calls.js
@@ -193,3 +203,18 @@ diff --git a/dist/esm/utilities/ag-ui-wire.js b/dist/esm/utilities/ag-ui-wire.js
  				wire.push(reasoning);
  			}
  			const text = collectText(segment.parts);
+diff --git a/dist/esm/activities/chat/stream/message-updaters.js b/dist/esm/activities/chat/stream/message-updaters.js
+--- a/dist/esm/activities/chat/stream/message-updaters.js
++++ b/dist/esm/activities/chat/stream/message-updaters.js
+@@ -91,8 +91,9 @@
+ function updateToolCallApproval(messages, messageId, toolCallId, approvalId) {
+ 	return messages.map((msg) => {
+ 		if (msg.id !== messageId) return msg;
+-		const parts = [...msg.parts];
+-		const toolCallPart = parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
++		const toolCallPart = msg.parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
++		if (!toolCallPart) return msg;
++		const parts = [...msg.parts];
+ 		if (toolCallPart) {
+ 			const index = parts.indexOf(toolCallPart);
+ 			parts[index] = {

@@ -334,6 +334,72 @@ test.each(["api", "web"] as const)(
   },
 );
 
+test("a failed Bun trial exposes its captured failure without changing its verdict", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "fixture.test.ts",
+      'import {expect,test} from "bun:test"; test("visible trial reason",()=>expect("actual").toBe("expected"));',
+    );
+    const diagnostics: string[] = [];
+    const outcome = await runOnce({
+      target: targetFor(root),
+      seed: 11,
+      timeoutMs: 10_000,
+      onFailureOutput: (output) => {
+        diagnostics.push(output);
+      },
+    });
+    expect(outcome).toMatchObject({ passed: false, status: 1, ranTests: true });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain("visible trial reason");
+    expect(diagnostics[0]).toContain('"expected"');
+  });
+});
+
+test("the gate reports bounded output only for the first failed trial of each file", async () => {
+  let elapsed = 0;
+  const diagnostics: string[] = [];
+  const report = await executeGate({
+    targets: [
+      targetFor(".", "first.test.ts"),
+      targetFor(".", "second.test.ts"),
+    ],
+    skipped: [],
+    now: () => elapsed,
+    reportFailureOutput: (output) => {
+      diagnostics.push(output);
+    },
+    run: ({ seed, onFailureOutput }) => {
+      elapsed += 1;
+      if (seed > 1) {
+        onFailureOutput?.(`${"x".repeat(32_768)}failure seed ${seed}`);
+      }
+      return Promise.resolve({
+        type: "executed",
+        passed: seed === 1,
+        status: seed === 1 ? 0 : 1,
+        ranTests: true,
+        failedTests: seed === 1 ? [] : ["fixture"],
+      });
+    },
+  });
+  expect(diagnostics).toHaveLength(2);
+  for (const [index, output] of diagnostics.entries()) {
+    expect(output).toContain(index === 0 ? "first.test.ts" : "second.test.ts");
+    expect(output).toContain("seed 2");
+    expect(output).toEndWith("failure seed 2\n");
+    expect(output.length).toBeLessThan(16_512);
+  }
+  expect(
+    report.results.map(({ runs, failures }) => ({ runs, failures })),
+  ).toEqual([
+    { runs: REPEATS, failures: REPEATS - 1 },
+    { runs: REPEATS, failures: REPEATS - 1 },
+  ]);
+  expect(reportExitCode(report, true)).toBe(1);
+});
+
 test("fixture strings and comments do not classify a Bun test as Playwright", async () => {
   await withFixture((root) => {
     write(

@@ -1,15 +1,16 @@
 import * as v from "valibot";
 
+import {
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+  ownerStorageKey,
+} from "@stll/api-contract/browser-storage";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { decisionTitle } from "@stll/decision-reader/decision-title";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import {
-  inspectorMinimizedStorageKey,
-  inspectorStateStorageKey,
-} from "../../src/components/inspector/inspector-storage-keys";
 import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/reader-breadcrumb-scroll";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -286,23 +287,49 @@ for (const view of views) {
       payload: view.tab.payload,
     };
     await page.addInitScript(
-      ({ restoredTab, stateKey, minimizedKey }) => {
+      ({
+        restoredTab,
+        stateKey,
+        minimizedKey,
+        stateVersion,
+        minimizedVersion,
+      }) => {
         localStorage.setItem(
           stateKey,
           JSON.stringify({
-            tabs: [restoredTab],
-            groups: [],
-            groupAssignments: {},
-            activeId: restoredTab.id,
-            collapsedGroupIds: [],
+            version: stateVersion,
+            value: {
+              tabs: [restoredTab],
+              groups: [],
+              groupAssignments: {},
+              activeId: restoredTab.id,
+              collapsedGroupIds: [],
+            },
           }),
         );
-        localStorage.setItem(minimizedKey, "0");
+        localStorage.setItem(
+          minimizedKey,
+          JSON.stringify({ version: minimizedVersion, value: false }),
+        );
       },
       {
         restoredTab: tab,
-        stateKey: inspectorStateStorageKey(scope),
-        minimizedKey: inspectorMinimizedStorageKey(scope),
+        stateKey: ownerStorageKey(
+          inspectorStorageBaseKey(
+            INSPECTOR_STORAGE.state,
+            scope.organizationId,
+          ),
+          { kind: "user", userId: scope.userId },
+        ),
+        minimizedKey: ownerStorageKey(
+          inspectorStorageBaseKey(
+            INSPECTOR_STORAGE.minimized,
+            scope.organizationId,
+          ),
+          { kind: "user", userId: scope.userId },
+        ),
+        stateVersion: INSPECTOR_STORAGE.state.version,
+        minimizedVersion: INSPECTOR_STORAGE.minimized.version,
       },
     );
     await page.goto("/chat", { waitUntil: "domcontentloaded" });
