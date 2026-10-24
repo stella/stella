@@ -1,10 +1,9 @@
 import { expect, expectTypeOf, test } from "bun:test";
 
+import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
+
 import { validateSoftLawAuthorityMetadata } from "@/api/lib/legal-search/soft-law-authority-policy";
-import {
-  SOFT_LAW_KINDS,
-  type SoftLawMetadata,
-} from "@/api/lib/legal-search/soft-law-types";
+import type { SoftLawMetadata } from "@/api/lib/legal-search/soft-law-types";
 
 import {
   type RegisteredSoftLawAuthority,
@@ -27,7 +26,7 @@ test("every registered adapter belongs to its authority; pending kinds are refus
     expect(disposition).not.toHaveProperty("adapter");
   }
   for (const authority of ["eu-edps", "de-bfdi"] as const) {
-    for (const kind of SOFT_LAW_KINDS) {
+    for (const kind of GUIDANCE_KINDS) {
       const metadata = {
         title: "Guidance",
         kind,

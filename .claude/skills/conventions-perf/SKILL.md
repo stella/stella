@@ -1,17 +1,17 @@
 ---
 name: conventions-perf
-description: "Apply when a performance-guard check (network baseline, bundle baseline, DB query count, loader-prefetch lint, RC bailouts) fails or when touching a hot route/endpoint."
+description: "Apply when adding or changing a route, screen, endpoint, MCP tool, mutation, live event, background job or polling loop, or when a performance guard fails."
 ---
 
 # Performance Guard Conventions
 
-Apply when a performance-guard check fails in CI, or when touching a route or
-endpoint flagged by the live `bun scripts/perf-hotspots.ts` report.
+Apply when adding or changing a route, screen, endpoint, MCP tool, mutation,
+live event, background job or polling loop, and when a performance guard fails.
 
 ## Overview
 
 Stella guards performance with recorded budgets, diffed on every run. A regression either fails CI outright or shows
-up as a reviewable diff in the PR. Seven guards exist today:
+up as a reviewable diff in the PR. The guards include:
 
 - **Network baseline** (`apps/web/e2e/network-baseline.json`, checked by
   `apps/web/e2e/helpers/network.ts` from `apps/web/e2e/specs/route-smoke.spec.ts`):
@@ -57,6 +57,44 @@ up as a reviewable diff in the PR. Seven guards exist today:
   the fix is concrete: batch the calls, or record in the suppression reason
   why the sequence is required. There is no generic await-in-loop rule; a
   sequential await with no I/O behind it costs nothing to guard.
+
+## Measured by construction
+
+Every new or changed surface ships with a measurement at N and 10N using
+representative seeded data and a fixed response page size. Measure deterministic
+counts: statements, transactions, bytes, requests, refetches and reads. Never use
+wall time as the scaling assertion. Cost must not grow with data the response
+does not return; batch related work and bound result sizes at the owning boundary.
+The API read harness uses N=10 and N=200, a larger comparison than 10N: statement
+and transaction counts stay equal, and response bytes per returned row stay within
+1.2x at a fixed page size.
+
+Censuses walk the real mounted route or curated tool registry, or the owning file
+inventory for file-based surfaces. A new surface without a measurement fails the
+census. Do not infer API coverage from source regexes or MCP coverage from name
+prefixes. Every exemption carries a concrete reason in a shrink-only ledger;
+entries can be removed as coverage lands, never added to silence a new failure.
+`pendingWriteHarness` records the current mutating surfaces until their harness
+lands and obeys the same shrink-only rule.
+
+Mutation-check each guard: introduce the excess work or remove a coverage case,
+confirm that the relevant assertion fails, then restore the implementation. Record
+the deterministic before/after values and the rejected mutation in the PR.
+
+The performance coverage inventories are:
+
+| Census                                              | Test or check                                                                                         | Ledger or coverage inventory                                                               |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Mounted API v1 routes                               | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/api-scaling-ledger.json`                                  |
+| Curated MCP tools                                   | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/mcp-scaling-ledger.json`                                  |
+| Repeated SQL fingerprints per request and call site | `apps/api/src/lib/db-query-counter.test.ts`; `scripts/check-repeated-sql-fingerprints-ledger.test.ts` | `apps/api/src/lib/observability/repeated-sql-fingerprints.json`                            |
+| Web route smoke list                                | `apps/web/e2e/specs/route-smoke.spec.ts` (`assertSmokeRouteCoverage`)                                 | `apps/web/e2e/helpers/smoke-route-defs.ts` (`INTENTIONALLY_NOT_SMOKED`)                    |
+| Query performance registry                          | `apps/api/src/tests/query-perf/query-perf.test.ts`; `scripts/query-perf-baseline.test.ts`             | `apps/api/src/tests/query-perf/registry.ts`; `apps/api/src/tests/query-perf/baseline.json` |
+| Create-form single-flight coverage                  | `apps/web/src/hooks/single-flight-census.test.ts`                                                     | Same file (`UNGUARDED_CREATE_FORMS`)                                                       |
+
+The existing web route inventory and query baseline retain their recorded-budget
+policies below; they do not replace the two-size scaling measurement. The query
+plan gate measures shared blocks; its execution-time limit remains a hang guard.
 
 ## The Core Norm
 
