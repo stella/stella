@@ -4881,6 +4881,14 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      # The dev server imports every generated module the registry owns; the
+      # Vite plugins write only some of them, and only after startup. This job
+      # also runs in heavy-only runs, where no generated-sources job exists.
+      - name: Prepare generated sources
+        env:
+          STELLA_VERIFY: prepare
+        run: bun scripts/ci-generated-sources.ts prepare
+
       - name: Start docker stack and API server
         id: e2e-stack
         # Secrets stay scoped to the action's credential check and login
@@ -5975,12 +5983,12 @@ jobs:
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen --no-run
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests --target ${{ matrix.target }} --frozen --no-run
 
       # The signer crates link no Tauri, so their tests do run here: against
       # throwaway certificates in the runner's own current-user store, one
