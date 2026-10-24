@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
-import { eq, getColumns, getTableName, inArray, SQL, sql } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { eq, getTableName, inArray, SQL, sql } from "drizzle-orm";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -38,7 +38,7 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) => {
     extractedContent,
     documentProcessingRuns,
   ]) {
-    const columns = Object.values(getColumns(table)).map((column) => {
+    const columns = getTableConfig(table).columns.map((column) => {
       let fallback = "";
       if (column.default instanceof SQL) {
         fallback = ` DEFAULT ${dialect.sqlToQuery(column.default).sql}`;
@@ -52,7 +52,7 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) => {
             : String(column.default);
         fallback = ` DEFAULT '${value.replaceAll("'", "''")}'`;
       }
-      return `"${column.name}" ${column.getSQLType()}${"[]".repeat(column.dimensions)}${fallback}`;
+      return `"${column.name}" ${column.getSQLType()}${fallback}`;
     });
     await db.execute(
       sql.raw(

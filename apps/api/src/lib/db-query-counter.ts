@@ -85,10 +85,13 @@ export const runWithMeasuredQueryCounter = <TResult>(
         )
         .map(([fingerprint]) => fingerprint);
       if (fingerprints.length > 0) {
-        throw new RepeatedQueryFingerprintError({
-          message: `Repeated SQL callsites detected: ${fingerprints.join("; ")}`,
-          fingerprints,
-        });
+        panic(
+          "Measured request exceeded its repeated SQL callsite budget",
+          new RepeatedQueryFingerprintError({
+            message: `Repeated SQL callsites detected: ${fingerprints.join("; ")}`,
+            fingerprints,
+          }),
+        );
       }
       return result;
     },

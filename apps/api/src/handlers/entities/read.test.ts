@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { ElysiaCustomStatusResponse } from "elysia";
 
 import { createReadFilesystemTreeHandler } from "@/api/handlers/entities/filesystem-tree/get";
 import { createReadEntitiesHandler } from "@/api/handlers/entities/list";
@@ -156,6 +157,9 @@ describe("entity read handler search", () => {
       const response = await readFilesystemTree.handler(
         createContext({ limit: 10 }),
       );
+      if (response instanceof ElysiaCustomStatusResponse) {
+        panic("Filesystem page scaling requires a successful response");
+      }
       expect(response.items).toHaveLength(10);
       expect(response.limit).toBe(10);
       measurements.push({

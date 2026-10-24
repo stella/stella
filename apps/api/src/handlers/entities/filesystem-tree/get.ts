@@ -6,13 +6,14 @@ import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { toSafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
-  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
   encodeEntitiesWindowCursor,
+  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
 } from "@/api/lib/entities/window-cursor";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -165,7 +166,10 @@ export const createReadFilesystemTreeHandler = (
       const presentIds = new Set(page.items.map((item) => item.entityId));
       const ancestorLinks = ancestors
         .filter((ancestor) => !presentIds.has(ancestor.entityId))
-        .map(({ entityId, parentId }) => ({ entityId, parentId }));
+        .map(({ entityId, parentId }) => ({
+          entityId: toSafeId<"entity">(entityId),
+          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+        }));
       return Result.ok({ ...page, ancestorLinks });
     },
   );

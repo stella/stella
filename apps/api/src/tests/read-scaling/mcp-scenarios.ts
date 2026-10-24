@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import type { McpToolName } from "@/api/mcp/static-tool-names";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -30,7 +31,12 @@ export const mcpScalingScenarios = [
             scopedDb,
           }),
         });
-        if (!("egress" in response)) {
+        if (
+          !("egress" in response) ||
+          response.egress !== "structured" ||
+          !isRecord(response.payload) ||
+          !isUnknownArray(response.payload["documents"])
+        ) {
           return panic(
             "list_documents scaling requires a successful egress payload",
           );
@@ -39,7 +45,7 @@ export const mcpScalingScenarios = [
           statements: counter.count,
           transactionRoundTrips: counter.transactions,
           responseBytes: Buffer.byteLength(JSON.stringify(response.payload)),
-          rows: response.payload.documents.length,
+          rows: response.payload["documents"].length,
         };
       }),
   },

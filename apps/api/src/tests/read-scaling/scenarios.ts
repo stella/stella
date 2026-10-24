@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+import { ElysiaCustomStatusResponse } from "elysia";
+
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -28,6 +31,9 @@ export const readScalingScenarios = [
             route: "/v1/entities/:workspaceId/query",
           }),
         );
+        if (response instanceof ElysiaCustomStatusResponse) {
+          panic("Entity list scaling requires a successful handler response");
+        }
         return {
           statements: counter.count,
           transactionRoundTrips: counter.transactions,
@@ -59,6 +65,9 @@ export const readScalingScenarios = [
             route: "/v1/entities/:workspaceId/entity/:entityId/versions",
           }),
         );
+        if (response instanceof ElysiaCustomStatusResponse) {
+          panic("Version scaling requires a successful handler response");
+        }
         return {
           statements: counter.count,
           transactionRoundTrips: counter.transactions,

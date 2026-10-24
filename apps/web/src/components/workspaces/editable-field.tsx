@@ -44,7 +44,7 @@ import type {
   WorkspaceFieldContent,
   WorkspaceProperty,
 } from "@/lib/types";
-import { entityOptions, entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 
 type EditableFieldProps = {
   workspaceId: string;
@@ -226,7 +226,7 @@ const InlineEditor = ({
       <InlineTextEditor
         displayVariant={displayVariant}
         loadValue={async () => {
-          const entity = await queryClient.fetchQuery(
+          const entity = await queryClient.query(
             entityOptions(workspaceId, entityId),
           );
           const field = entity.fields.find(
@@ -234,9 +234,9 @@ const InlineEditor = ({
           );
           return field?.content.type === "text" ? field.content.value : "";
         }}
-        onLoadError={(error) =>
-          notifyUserError(error, t("errors.actionFailed"))
-        }
+        onLoadError={(error) => {
+          notifyUserError(error, t("errors.actionFailed"));
+        }}
         onSave={(value) => save({ type: "text", version: 1, value })}
         property={property}
         stopPropagation={stopPropagation}

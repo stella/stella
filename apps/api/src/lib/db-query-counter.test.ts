@@ -9,12 +9,12 @@ import {
   currentRepeatedQueryFingerprints,
   currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
-  queryCountLogger,
   DB_TRANSACTION_COUNT_HEADER,
-  runWithQueryCounter,
-  runWithMeasuredQueryCounter,
+  queryCountLogger,
   RepeatedQueryFingerprintError,
   runCountedTransaction,
+  runWithMeasuredQueryCounter,
+  runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import {
   runWithHttpRequestScope,
@@ -54,7 +54,7 @@ describe("db query counter logger", () => {
           runSameCallsite();
         }),
       ),
-    ).toBeInstanceOf(RepeatedQueryFingerprintError);
+    ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
   });
 
   test("does nothing and reports no count without an active store", () => {
@@ -185,7 +185,14 @@ describe("db query counter HTTP header", () => {
     const app = new Elysia()
       .wrap(
         (handleRequest) => (request: Request) =>
-          runWithHttpRequestScope(() => handleRequest(request)),
+          runWithHttpRequestScope(async () => {
+            const response: unknown = await Promise.resolve(
+              handleRequest(request),
+            );
+            return response instanceof Response
+              ? response
+              : panic("The HTTP framework returned an invalid response");
+          }),
       )
       .get("/queries/:count", ({ params }) => {
         for (let index = 0; index < Number(params.count); index += 1) {
@@ -201,7 +208,7 @@ describe("db query counter HTTP header", () => {
     expect(await single.text()).toBe("ok");
     expect(
       await rejectionOf(app.handle(new Request("http://localhost/queries/2"))),
-    ).toBeInstanceOf(RepeatedQueryFingerprintError);
+    ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
   });
 
   test("a request counts its own queries and no others", async () => {

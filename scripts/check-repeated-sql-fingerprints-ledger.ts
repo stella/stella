@@ -34,7 +34,7 @@ export const parseRepeatedSqlFingerprintLedger = (
   return parsed.flatMap((entry) =>
     Array.from(
       { length: entry.count },
-      (_, index) => `${entry.id}::${index + 1}`,
+      (_, index) => `${String(entry.id)}::${index + 1}`,
     ),
   );
 };
