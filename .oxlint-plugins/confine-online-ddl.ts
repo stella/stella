@@ -223,6 +223,15 @@ export default eslintCompatPlugin({
               context.report({ node, messageId: "gateOpener" });
             }
           },
+          ExportSpecifier(node) {
+            const local =
+              node.local.type === "Identifier"
+                ? node.local.name
+                : node.local.value;
+            if (GATE_OPENERS.has(local)) {
+              context.report({ node, messageId: "gateOpener" });
+            }
+          },
         };
       },
     },
