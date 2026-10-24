@@ -1,9 +1,14 @@
 # Dated waivers
 
-`scripts/dated-waivers.ts` derives the dated inventory from each owning registry.
-CI validates dates and rejects expired entries for every merge candidate,
-including changes that do not select package checks. Dates never advance
-automatically.
+`scripts/dated-waivers.ts` derives the dated inventory from each owning registry
+and is the only check that compares an expiry with the clock. Owning checks
+validate the shape of their dates, never their expiry. CI validates dates for
+every merge candidate, including changes that do not select package checks. An
+expired entry fails a pull request or merge group only when the change touches
+the file that declares it; time alone never fails an unrelated change. The
+daily `dated-waiver-healing.yml` run checks every entry on the default branch,
+so an expiry nobody touches still fails there and alerts its owner. Dates
+never advance automatically.
 
 The daily `dated-waiver-healing.yml` workflow checks entries during the five days
 before expiry. Each kind declares its probe and stress count alongside its owner.
@@ -83,8 +88,12 @@ An unresolved fix task at one day before expiry receives the distinct label
 for the external watcher. The workflow sends no mail; the watcher routes this
 signal to its designated recipient. Repeated runs reuse the task and label.
 
-At expiry the waiver lapses and the owning check blocks again. Healing does not
-extend dates or grant a grace period after expiry.
+At expiry the waiver lapses. Kinds that fail the gate (`EXPIRY_AT_CHANGE_GATE`)
+fail the default-branch check and every change that touches their owner file
+until the entry is removed or renewed. An elapsed temporary release-age
+exclusion only annotates; `quarantine-prune.yml` proposes its removal, and the
+lockfile release-age guard stops exempting new pins of its package. Healing
+does not extend dates or grant a grace period after expiry.
 
 An adjacent `test-quarantine-expires: <exact UTC timestamp>` comment owns a
 literal `test.skip` or `it.skip` declaration. Its probe unmasks that declaration

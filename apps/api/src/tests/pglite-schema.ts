@@ -730,14 +730,15 @@ export const installPgliteStatuteCitationCounts = async (
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
-  for (const statement of readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261010212100_case_law_publication_filter",
-      "migration.sql",
-    ),
-  ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
-    await db.execute(sql.raw(statement));
+  for (const migration of [
+    "20261010212100_case_law_publication_filter",
+    "20261022230000_provision_citation_anchor_lineage",
+  ]) {
+    for (const statement of readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+    ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
+      await db.execute(sql.raw(statement));
+    }
   }
 };
 
