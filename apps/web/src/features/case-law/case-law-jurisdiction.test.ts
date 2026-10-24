@@ -38,7 +38,7 @@ describe("case-law launch readiness", () => {
   });
 
   test("launched EU decisions open search and public pages", () => {
-    expect(publicCaseLawCountryFromParam("eu")).toBe("EU");
-    expect(publicCaseLawPageCountryFromParam("eu")).toBe("EU");
+    expect(publicCaseLawCountryFromParam("eu") === "EU").toBe(true);
+    expect(publicCaseLawPageCountryFromParam("eu") === "EU").toBe(true);
   });
 });
