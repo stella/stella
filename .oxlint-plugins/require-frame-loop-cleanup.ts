@@ -1965,7 +1965,7 @@ const hasUncancelledRepeatedInvocation = ({
       const divergence = left.findIndex(
         (call, position) => call !== right[position],
       );
-      if (divergence < 0) {
+      if (divergence === -1) {
         return true;
       }
       // Only divergence before entering the allocation owner creates two instances.
