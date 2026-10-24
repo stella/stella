@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import fc from "fast-check";
 
 import { PropertyTestConfigError } from "./property-test-config-error";
@@ -66,14 +67,16 @@ export const responseOrderProperty = <Scenario>({
       };
       await run(order, input);
       if (scheduler.count() > 0) {
-        throw new PropertyTestConfigError(
+        const error = new PropertyTestConfigError(
           `Response-order scenario asserted with ${scheduler.count()} response(s) still held; call settle() first`,
         );
+        panic(error.message, error);
       }
       if (maxInFlight < 2) {
-        throw new PropertyTestConfigError(
+        const error = new PropertyTestConfigError(
           "Response-order scenario never had two responses in flight, so no order was explored",
         );
+        panic(error.message, error);
       }
     },
   );

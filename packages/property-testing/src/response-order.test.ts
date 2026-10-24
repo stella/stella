@@ -1,3 +1,4 @@
+import { Panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -68,7 +69,7 @@ describe("response-order property", () => {
       propertyConfig({ numRuns: 100 }),
     );
     expect(details.failed).toBe(true);
-    expect(details.errorInstance).not.toBeInstanceOf(PropertyTestConfigError);
+    expect(details.errorInstance).not.toBeInstanceOf(Panic);
   });
 
   test("a store that applies only its latest request shows the newest reply in every order", async () => {
@@ -94,7 +95,11 @@ describe("response-order property", () => {
       }),
       propertyConfig({ numRuns: 1 }),
     );
-    expect(details.errorInstance).toBeInstanceOf(PropertyTestConfigError);
+    expect(details.errorInstance).toBeInstanceOf(Panic);
+    expect(details.errorInstance).toHaveProperty(
+      "cause",
+      expect.any(PropertyTestConfigError),
+    );
     expect(String(details.errorInstance)).toContain(
       "never had two responses in flight",
     );
@@ -114,7 +119,11 @@ describe("response-order property", () => {
       }),
       propertyConfig({ numRuns: 1 }),
     );
-    expect(details.errorInstance).toBeInstanceOf(PropertyTestConfigError);
+    expect(details.errorInstance).toBeInstanceOf(Panic);
+    expect(details.errorInstance).toHaveProperty(
+      "cause",
+      expect.any(PropertyTestConfigError),
+    );
     expect(String(details.errorInstance)).toContain("still held");
   });
 });
