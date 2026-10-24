@@ -23,26 +23,35 @@ const headnoteTextSchema = v.pipe(
 );
 
 const DECISION_HEADNOTE_SCHEMAS = {
-  [TEXT_FIELD_TYPE.ABSENT]: v.object({
-    type: v.literal(TEXT_FIELD_TYPE.ABSENT),
-    reason: v.picklist(TEXT_ABSENCE_REASONS),
-  }),
-  [TEXT_FIELD_TYPE.PRESENT]: v.object({
-    type: v.literal(TEXT_FIELD_TYPE.PRESENT),
-    text: headnoteTextSchema,
-    truncated: v.boolean(),
-  }),
-  [DECISION_HEADNOTE_KEYWORDS]: v.object({
-    type: v.literal(DECISION_HEADNOTE_KEYWORDS),
-    // The terms share the prose budget: a row is one row either way.
-    items: v.pipe(
-      v.array(headnoteTextSchema),
-      v.minLength(1),
-      v.maxLength(LIMITS.caseLawHeadnoteKeywords),
-      v.readonly(),
-    ),
-    omitted: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  }),
+  [TEXT_FIELD_TYPE.ABSENT]: v.pipe(
+    v.object({
+      type: v.literal(TEXT_FIELD_TYPE.ABSENT),
+      reason: v.picklist(TEXT_ABSENCE_REASONS),
+    }),
+    v.readonly(),
+  ),
+  [TEXT_FIELD_TYPE.PRESENT]: v.pipe(
+    v.object({
+      type: v.literal(TEXT_FIELD_TYPE.PRESENT),
+      text: headnoteTextSchema,
+      truncated: v.boolean(),
+    }),
+    v.readonly(),
+  ),
+  [DECISION_HEADNOTE_KEYWORDS]: v.pipe(
+    v.object({
+      type: v.literal(DECISION_HEADNOTE_KEYWORDS),
+      // The terms share the prose budget: a row is one row either way.
+      items: v.pipe(
+        v.array(headnoteTextSchema),
+        v.minLength(1),
+        v.maxLength(LIMITS.caseLawHeadnoteKeywords),
+        v.readonly(),
+      ),
+      omitted: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
+    v.readonly(),
+  ),
 } as const satisfies DecisionHeadnoteSchemaByType;
 
 // The branches are closed and exhaustively keyed by the shared discriminator,

@@ -11,15 +11,18 @@ type CountedSearchTotalType = Extract<
 const countedSearchTotalSchema = <TotalType extends CountedSearchTotalType>(
   type: TotalType,
 ) =>
-  v.object({
-    type: v.literal(type),
-    count: v.pipe(
-      v.number(),
-      v.minValue(0),
-      v.maxValue(Number.MAX_SAFE_INTEGER),
-      v.multipleOf(1),
-    ),
-  });
+  v.pipe(
+    v.object({
+      type: v.literal(type),
+      count: v.pipe(
+        v.number(),
+        v.minValue(0),
+        v.maxValue(Number.MAX_SAFE_INTEGER),
+        v.multipleOf(1),
+      ),
+    }),
+    v.readonly(),
+  );
 
 type SearchTotalSchemaByType = {
   readonly [Type in SearchTotal["type"]]: v.GenericSchema<
@@ -33,9 +36,10 @@ const SEARCH_TOTAL_SCHEMAS = {
   [SEARCH_TOTAL_TYPE.ESTIMATE]: countedSearchTotalSchema(
     SEARCH_TOTAL_TYPE.ESTIMATE,
   ),
-  [SEARCH_TOTAL_TYPE.NOT_COUNTED]: v.object({
-    type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED),
-  }),
+  [SEARCH_TOTAL_TYPE.NOT_COUNTED]: v.pipe(
+    v.object({ type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED) }),
+    v.readonly(),
+  ),
 } as const satisfies SearchTotalSchemaByType;
 
 // The branches are closed and exhaustively keyed by the shared discriminator,
