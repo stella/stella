@@ -79,6 +79,27 @@ describe("online DDL lock census", () => {
     );
   });
 
+  test.each([
+    ", ADD COLUMN added text",
+    ", ADD CONSTRAINT extra_check CHECK (true) NOT VALID",
+  ])("spliced ALTER actions stay unresolved: %s", (extra) => {
+    const source = `${ownerSource}\nconst extra = ${JSON.stringify(extra)};\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "beside_writers", text: \`ALTER TABLE probe VALIDATE CONSTRAINT probe_check \${spliced(extra)}\` });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /lockTaking SQL argument .* unresolved SQL variant/iu,
+    );
+  });
+
+  test("policy expression placeholders require the owner's enclosing expression structure", () => {
+    const source = ownerSource.replace(
+      ` USING (\${spliced(using)})`,
+      ` \${spliced(using)}`,
+    );
+    expect(source).not.toBe(ownerSource);
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unresolved SQL variant/iu,
+    );
+  });
+
   test("the quoted-identifier interpolation allowance resolves", () => {
     const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`ANALYZE public.\${quoteIdentifier(tableName)}\` });`;
     expect(censusOnlineDdlSource(source)).toEqual([]);

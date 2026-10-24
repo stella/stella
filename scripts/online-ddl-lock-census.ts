@@ -239,6 +239,32 @@ const finiteUppercaseValues = (
   return values;
 };
 
+// Policy DDL already uses ACCESS EXCLUSIVE. Its expression placeholders must
+// never turn into an exception for unresolved ALTER TABLE actions elsewhere.
+const isPolicyExpressionSplice = (
+  node: ts.CallExpression,
+  context: SourceContext,
+): boolean => {
+  const helper = ownerArrow(context, "policyExpressions");
+  if (
+    helper === undefined ||
+    !sameSyntax(
+      helper.body,
+      `[
+    using === undefined ? "" : \` USING (\${spliced(using)})\`,
+    withCheck === undefined ? "" : \` WITH CHECK (\${spliced(withCheck)})\`,
+  ].join("")`,
+    )
+  ) {
+    return false;
+  }
+  let owner: ts.Node = node;
+  while (!ts.isArrowFunction(owner) && !ts.isSourceFile(owner)) {
+    owner = owner.parent;
+  }
+  return owner === helper;
+};
+
 const expandTemplateInterpolation = (
   node: ts.Expression,
   context: SourceContext,
@@ -265,7 +291,8 @@ const expandTemplateInterpolation = (
     if (
       name === "spliced" &&
       expression.arguments.length === 1 &&
-      provesSpliced(context)
+      provesSpliced(context) &&
+      isPolicyExpressionSplice(expression, context)
     ) {
       return [{ text: "TRUE", resolved: true }];
     }
