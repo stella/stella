@@ -11,8 +11,8 @@ import {
 import {
   abortableSleep,
   createPublisherRequestSlot,
-  publisherGateKeys,
   type PublisherGateClient,
+  publisherGateKeys,
   type PublisherRequestGateDependencies,
 } from "./publisher-request-gate";
 import { PublisherRateLimitRefusalError, retryPublisherRequest } from "./retry";

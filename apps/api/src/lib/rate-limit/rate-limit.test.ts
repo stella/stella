@@ -20,9 +20,9 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import {
   InMemoryRateLimitContext,
+  rateLimit,
   scopedGenerator,
   scopedRateLimitKey,
-  rateLimit,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,
@@ -557,37 +557,175 @@ describe("RedisRateLimitContext", () => {
     context.kill();
   });
 
-  test("connects the client at construction and reports a failed connect", async () => {
-    const operations: string[] = [];
+  test("creates and connects the client only on first use", async () => {
+    let clientCreations = 0;
     let connectCalls = 0;
-    let rejectConnect: (error: Error) => void = () => undefined;
     const context = new RedisRateLimitContext({
-      createRedis: () => ({
-        connect: async () => {
-          connectCalls += 1;
-          await new Promise<void>((_resolve, reject) => {
-            rejectConnect = reject;
-          });
-        },
-        send: async () => [1, WINDOW_MS],
-      }),
-      failurePolicy: "fail_open_local",
-      onRedisError: (_error, operation) => {
-        operations.push(operation);
+      createRedis: () => {
+        clientCreations += 1;
+        return {
+          connect: async () => {
+            connectCalls += 1;
+          },
+          send: async () => [1, WINDOW_MS],
+        };
       },
+      failurePolicy: "fail_open_local",
     });
-    // The connect starts before any request, so the first increment finds a
-    // client that is already connecting rather than one it has to create.
-    expect(connectCalls).toBe(1);
+    expect(clientCreations).toBe(0);
+    expect(connectCalls).toBe(0);
+
     context.init(RATE_LIMIT_OPTIONS);
     expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
       1,
     );
+    expect(clientCreations).toBe(1);
     expect(connectCalls).toBe(1);
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      1,
+    );
+    expect(clientCreations).toBe(1);
+    expect(connectCalls).toBe(1);
+    context.kill();
+  });
 
-    rejectConnect(new Error("connect ECONNREFUSED"));
-    await Bun.sleep(0);
-    expect(operations).toEqual(["connect"]);
+  for (const failurePolicy of ["fail_open_local", "fail_closed"] as const) {
+    test(`awaits the first connection before sending with ${failurePolicy}`, async () => {
+      let connected = false;
+      let sendCalls = 0;
+      let finishConnect: () => void = () => undefined;
+      const context = new RedisRateLimitContext({
+        createRedis: () => ({
+          connect: async () => {
+            await new Promise<void>((resolve) => {
+              finishConnect = resolve;
+            });
+            connected = true;
+          },
+          send: async () => {
+            sendCalls += 1;
+            if (!connected) {
+              throw new TypeError("Redis is not connected");
+            }
+            return [7, WINDOW_MS];
+          },
+        }),
+        failurePolicy,
+      });
+      context.init(RATE_LIMIT_OPTIONS);
+
+      const increment = context.increment("api:client", WINDOW_MS, 1000);
+      await Bun.sleep(0);
+      expect(sendCalls).toBe(0);
+      finishConnect();
+
+      expect((await increment).count).toBe(7);
+      expect(sendCalls).toBe(1);
+      context.kill();
+    });
+  }
+
+  for (const failurePolicy of ["fail_open_local", "fail_closed"] as const) {
+    test(`applies ${failurePolicy} when the first connection times out`, async () => {
+      const operations: string[] = [];
+      let clientCreations = 0;
+      let sendCalls = 0;
+      const context = new RedisRateLimitContext({
+        createRedis: () => {
+          clientCreations += 1;
+          return {
+            connect: async () =>
+              await new Promise<void>(() => {
+                // Intentionally left pending.
+              }),
+            send: async () => {
+              sendCalls += 1;
+              throw new TypeError("Redis is not connected");
+            },
+          };
+        },
+        failurePolicy,
+        onRedisError: (_error, operation) => {
+          operations.push(operation);
+        },
+        scheduleTimeout: (callback) => {
+          queueMicrotask(callback);
+          return () => undefined;
+        },
+      });
+      context.init(RATE_LIMIT_OPTIONS);
+
+      const counter = await context.increment("api:client", WINDOW_MS, 1000);
+
+      expect(counter.count).toBe(
+        failurePolicy === "fail_open_local" ? 1 : Number.MAX_SAFE_INTEGER,
+      );
+      expect(operations).toEqual(["increment"]);
+      expect(clientCreations).toBe(1);
+      await context.increment("api:client", WINDOW_MS, 1000);
+      expect(clientCreations).toBe(1);
+      expect(sendCalls).toBe(1);
+      expect(operations).toEqual(["increment", "increment"]);
+
+      context.kill();
+    });
+  }
+
+  test("reuses a client after its first connection fails", async () => {
+    const operations: string[] = [];
+    let clientCreations = 0;
+    let connected = false;
+    let sendCalls = 0;
+    let timeoutCalls = 0;
+    const context = new RedisRateLimitContext({
+      createRedis: () => {
+        clientCreations += 1;
+        return {
+          connect: async () => {
+            throw new Error("connect ECONNREFUSED");
+          },
+          send: async () => {
+            sendCalls += 1;
+            if (!connected) {
+              throw new TypeError("Redis is not connected");
+            }
+            return [7, WINDOW_MS];
+          },
+        };
+      },
+      failurePolicy: "fail_open_local",
+      onRedisError: (_error, operation) => {
+        operations.push(operation);
+      },
+      scheduleTimeout: () => {
+        timeoutCalls += 1;
+        return () => undefined;
+      },
+    });
+    context.init(RATE_LIMIT_OPTIONS);
+
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      1,
+    );
+    expect(clientCreations).toBe(1);
+    expect(sendCalls).toBe(0);
+    expect(timeoutCalls).toBe(1);
+    expect(operations).toEqual(["increment"]);
+
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      2,
+    );
+    expect(clientCreations).toBe(1);
+    expect(sendCalls).toBe(1);
+    expect(timeoutCalls).toBe(2);
+    expect(operations).toEqual(["increment", "increment"]);
+
+    connected = true;
+    expect((await context.increment("api:client", WINDOW_MS, 1000)).count).toBe(
+      7,
+    );
+    expect(clientCreations).toBe(1);
+    expect(sendCalls).toBe(2);
     context.kill();
   });
 

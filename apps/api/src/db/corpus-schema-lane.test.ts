@@ -177,26 +177,40 @@ test("the migration runner takes the lane before SQL and releases it in finally"
     nodePath.resolve(import.meta.dir, "migration-runner.ts"),
     "utf-8",
   );
-  const positions = [
+  const expectSourceOrder = (needles: readonly string[]) => {
+    const positions = needles.map((needle) => {
+      const at = source.indexOf(needle);
+      expect(at, needle).toBeGreaterThan(-1);
+      return at;
+    });
+    expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
+  };
+
+  expectSourceOrder([
     "CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;",
     "await connection.unsafe(liftTimeout);",
     "await connection.unsafe(takeLane);",
-    "laneHeld = true;",
+    "onLaneAcquired();",
     "await connection.unsafe(restoreTimeout);",
-    "await pgCoreMigrate(migrations, database",
-  ].map((needle) => {
-    const at = source.indexOf(needle);
-    expect(at, needle).toBeGreaterThan(-1);
-    return at;
-  });
-  expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
+  ]);
+  expectSourceOrder([
+    "onLaneAcquired: () => {",
+    "laneHeld = true;",
+    '"schema.pending",',
+    "await pgCoreMigrate(",
+  ]);
   expect(source).not.toContain("CORPUS_SCHEMA_LANE_LOCK_SQL");
 
-  const migrationAt = source.indexOf(
-    "await pgCoreMigrate(migrations, database",
-  );
-  const finallyAt = source.indexOf("} finally {");
+  const migrationAt = source.indexOf("await pgCoreMigrate(");
+  const errorRethrowAt = source.indexOf("throw error;", migrationAt);
+  const finallyAt = source.indexOf("} finally {", errorRethrowAt);
+  expect(errorRethrowAt).toBeGreaterThan(migrationAt);
+
   expect(finallyAt).toBeGreaterThan(migrationAt);
+  expect(finallyAt).toBeGreaterThan(errorRethrowAt);
+  expect(source.slice(finallyAt)).toContain(
+    "if (migrationSessionCanUnlock(laneHeld, session.state)) {",
+  );
   expect(source.slice(finallyAt)).toContain(
     "await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);",
   );

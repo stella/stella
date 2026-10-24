@@ -29,6 +29,7 @@ pub enum DesktopTelemetryWindow {
   TakeoverDialog,
   SelfHostConnectDialog,
   Activity,
+  Onboarding,
 }
 
 impl DesktopTelemetryWindow {
@@ -40,6 +41,7 @@ impl DesktopTelemetryWindow {
       Self::TakeoverDialog => "takeoverDialog",
       Self::SelfHostConnectDialog => "selfHostConnectDialog",
       Self::Activity => "activity",
+      Self::Onboarding => "onboarding",
     }
   }
 }
@@ -600,6 +602,12 @@ impl DesktopTelemetry {
         report.window = DesktopTelemetryWindow::Activity;
         report.detail = None;
       }
+      crate::onboarding::ONBOARDING_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Onboarding;
+      }
+      crate::accessibility_guide::GUIDE_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Onboarding;
+      }
       _ => {}
     }
     self.capture_event(DesktopErrorEvent {
@@ -915,7 +923,8 @@ pub fn desktop_report_timing(
       | DesktopTelemetryWindow::ClipboardEditor
       | DesktopTelemetryWindow::TakeoverDialog
       | DesktopTelemetryWindow::SelfHostConnectDialog
-      | DesktopTelemetryWindow::Activity,
+      | DesktopTelemetryWindow::Activity
+      | DesktopTelemetryWindow::Onboarding,
       _,
     ) => None,
   };

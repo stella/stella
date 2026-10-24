@@ -21,15 +21,25 @@ test("adds validated diagnostics and replays without changing failed messages", 
     ),
     "utf-8",
   );
-  const migrate = async () => {
+  const featureRefusalMigration = readFileSync(
+    nodePath.resolve(
+      import.meta.dir,
+      "../../drizzle/20261024090100_reader_answer_feature_refusal/migration.sql",
+    ),
+    "utf-8",
+  );
+  const runMigration = async (sql: string) => {
     await database.exec("BEGIN");
-    for (const statement of migration.split("--> statement-breakpoint")) {
+    for (const statement of sql.split("--> statement-breakpoint")) {
       if (statement.trim().length > 0) {
         await database.exec(statement);
       }
     }
     await database.exec("COMMIT");
   };
+  await runMigration(migration);
+  await runMigration(migration);
+  const migrate = async () => await runMigration(featureRefusalMigration);
   await migrate();
   const existing = await database.query<{
     id: number;

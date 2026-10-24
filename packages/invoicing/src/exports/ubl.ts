@@ -7,11 +7,11 @@ import {
   countryCodeOf,
   effectiveVatRateBps,
   invoiceDescriptionOf,
+  type InvoiceExportLine,
+  type InvoiceExportRecord,
   quantityText,
   variableSymbolOf,
   vatPercentText,
-  type InvoiceExportLine,
-  type InvoiceExportRecord,
 } from "./record";
 import { el, text, XML_DECLARATION } from "./xml";
 

@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.2.7
+
+### Patch Changes
+
+- [#5704](https://github.com/stella/stella/pull/5704) [`c57c0e8`](https://github.com/stella/stella/commit/c57c0e833228f6351c5f7c9a5519e4bbebcf980f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include OAuth consent references in the authentication model contract.
+
 ## 0.2.6
 
 ### Patch Changes

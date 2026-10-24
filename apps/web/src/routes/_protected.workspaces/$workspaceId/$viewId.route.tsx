@@ -40,9 +40,9 @@ import { optionalSearchStringSchema } from "@/lib/schema";
 import type { EntityKind, ViewLayout, WorkspaceView } from "@/lib/types";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import {
+  CORRESPONDENCE_PAGE_SIZE,
   correspondenceAddressOptions,
   correspondenceInfiniteOptions,
-  CORRESPONDENCE_PAGE_SIZE,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,

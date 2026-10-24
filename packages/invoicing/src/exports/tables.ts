@@ -2,9 +2,9 @@ import {
   countryCodeOf,
   czechVatBandOf,
   effectiveVatRateBps,
+  type InvoiceExportRecord,
   quantityText,
   variableSymbolOf,
-  type InvoiceExportRecord,
 } from "./record";
 
 /** A spreadsheet cell: text, a plain number, or an amount in its currency. */

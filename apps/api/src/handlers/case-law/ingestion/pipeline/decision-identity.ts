@@ -5,8 +5,8 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -16,8 +16,8 @@ import {
   DECISION_ECLI_IDENTITY_AMBIGUOUS,
   DECISION_REKEYED_BY_ECLI,
   ECLI_IDENTITY_ADOPTABLE_ROWS,
-  MAX_LOGGED_DECISION_DATE_LENGTH,
   MAX_LEGACY_DOCKET_CANDIDATES,
+  MAX_LOGGED_DECISION_DATE_LENGTH,
   MAX_LOGGED_DOCKET_LENGTH,
   MAX_SOURCE_IDENTITY_CANDIDATES,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
@@ -200,6 +200,7 @@ const IDENTITY_COLUMNS = {
   ecli: true,
   metadata: true,
   sourceHash: true,
+  sourceHashVersion: true,
   sourceObservedAt: true,
   sourceObservationHash: true,
   redactedAt: true,

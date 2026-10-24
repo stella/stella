@@ -41,7 +41,7 @@ export const responseOrderProperty = <Scenario>({
   act,
 }: ResponseOrderPropertyOptions<Scenario>) =>
   fc.asyncProperty(
-    fc.scheduler(act === undefined ? {} : { act }),
+    fc.scheduler(act === undefined ? undefined : { act }),
     scenario,
     async (scheduler, input) => {
       let inFlight = 0;

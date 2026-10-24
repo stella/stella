@@ -7,6 +7,10 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./conversion-refusal": "./src/conversion-refusal.ts",
+    "./mcp": "./src/mcp.ts",
+    "./mcp-web-handoff": "./src/mcp-web-handoff.ts",
+    "./redirect-path": "./src/redirect-path.ts",
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",
     "./public-crawl-rules": "./src/public-crawl-rules.ts",
@@ -55,6 +59,7 @@
     "./case-law-decision-types": "./src/case-law-decision-types.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",
     "./case-law-decision-route": "./src/case-law-decision-route.ts",
+    "./case-law-decision-summary": "./src/case-law-decision-summary.ts",
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
@@ -84,6 +89,7 @@
     "./legal-citation-links": "./src/legal-citation-links.ts",
     "./legal-resolve": "./src/legal-resolve.ts",
     "./statute-version": "./src/statute-version.ts",
+    "./legislation-publisher-evidence": "./src/legislation-publisher-evidence.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./hosted-checkout": "./src/hosted-checkout.ts",
     "./professional-use": "./src/professional-use.ts",
@@ -133,8 +139,7 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/api-contract",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract"
   },
   "dependencies": {
     "@stll/aho-corasick": "catalog:",

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyConfig } from "./index";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
+
 import { PropertyTestConfigError } from "./property-test-config-error";
 import { responseOrderProperty } from "./response-order";
 import type { ResponseOrder } from "./response-order";

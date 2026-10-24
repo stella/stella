@@ -11,9 +11,9 @@ import path from "node:path";
 import ts from "typescript6";
 
 import {
-  REACHABILITY_CATEGORIES,
   analyzeTestSubjectReachability,
   checkReachabilityBaselineMembership,
+  REACHABILITY_CATEGORIES,
   type ReachabilityCategory,
 } from "./test-subject-reachability";
 
