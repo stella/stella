@@ -36,6 +36,7 @@ const EXPECTED_EXITS = {
   action_concurrency_busy: EXIT_CODES.server,
   action_not_enabled: EXIT_CODES.featureDisabled,
   action_admission_unavailable: EXIT_CODES.server,
+  action_feature_disabled: EXIT_CODES.featureDisabled,
 } as const satisfies Record<ActionAdmissionCode, number>;
 
 const render = async (
