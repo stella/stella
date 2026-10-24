@@ -412,17 +412,22 @@
   "candidate:.github/workflows/deploy-staging.yml/staging-health": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "290da2e9c9706d47792db95d5cde1f97b26ec50082c076fb5684a0c6b33be10b"
+    "reviewedDigest": "1194d92c5e26753ae0612c4e65cd18d805c4e4d75673a8270825b23eacf1f0c5"
+  },
+  "candidate:.github/workflows/deploy-staging.yml/staging-wake": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions.",
+    "reviewedDigest": "d17d9ab76167eb5e7587cc3edde5fa3008f7c9c5f1a9f0008a9a504fe6213567"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-api": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "0d4bc3a4dc098b5a23b23abceb0bd2b777e7ba0e1f2fc481593c0e080b525e41"
+    "reviewedDigest": "2fcda90cf4cca8e81ec1dc4764bde60872aa37e14354146e048b022fbd6b856d"
   },
   "candidate:.github/workflows/deploy-staging.yml/build-web": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-    "reviewedDigest": "91b8f046a2658b073bd7da59dfda6b2c3c583ffabef5c52cba040ecdae9f8dae"
+    "reviewedDigest": "a5d882629a766d51792d1c2619dc13e1dbacd101641a4d6380d7402b34f4eaed"
   },
   "candidate:.github/workflows/deploy-staging.yml/promote-staging": {
     "kind": "priority",
