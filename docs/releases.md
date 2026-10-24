@@ -178,7 +178,10 @@ The steps in full:
    the identical tree again. Otherwise staging deploys and verifies the version
    commit.
    `main` stays open: later merges do not affect this release.
-6. Start the release-candidate gates at the cut, before merging:
+6. The release-candidate gates start at the cut by themselves: when the release
+   pull request opens or updates, `release-proof.yml` dispatches
+   `deploy-staging.yml` and `main-heavy.yml` once for its head with
+   `release_candidate=true`. To run them again by hand:
 
    ```bash
    gh workflow run main-heavy.yml --ref main -f sha=<release-pr-head-sha> -F release_candidate=true
@@ -189,7 +192,7 @@ The steps in full:
    trusted release-tree verifier accepts; a candidate on `main` must be the
    commit that set the pending VERSION. Ordinary pinned dispatches leave
    `release_candidate` false and skip this check. The release-candidate heavy run dispatches
-   `main-pr-depth.yml` and `deploy-staging.yml` for the same SHA. The version
+   `main-pr-depth.yml` for the same SHA. The version
    commit's staging run is started automatically after merge, reusing the
    candidate's proof when their trees match. Outside a release-candidate run, staging refuses a SHA that `main` does not contain. When staging does not answer, the
    release-candidate run starts it through the infra repository's

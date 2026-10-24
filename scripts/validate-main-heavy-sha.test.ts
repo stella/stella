@@ -49,7 +49,6 @@ const actionStep = (name: string) => {
   }
   return { condition: step.if, script };
 };
-const candidateStaging = actionStep("Dispatch release candidate staging");
 const versionStaging = actionStep("Dispatch version commit staging");
 
 const runActionScript = async (
@@ -214,7 +213,6 @@ test("only trusted main tooling is checked out before target verification", () =
     "Setup Bun",
     "Reuse completed release proof",
     "Dispatch release PR-depth checks",
-    "Dispatch release candidate staging",
     "Dispatch version commit staging",
     "Select untested heavy SHA",
     "Validate SHA format",
@@ -228,53 +226,6 @@ test("only trusted main tooling is checked out before target verification", () =
   expect(checkouts.at(0)?.with?.["ref"]).toBe("main");
   expect(checkouts.at(0)?.with?.["path"]).toBe(".release-proof");
   expect(checkouts.at(0)?.with?.["persist-credentials"]).toBe(false);
-});
-
-test("candidate staging dispatch runs only at a release cut without a current bot proof", async () => {
-  const condition = (eventName: string, releaseCandidate: boolean) =>
-    evaluate(
-      candidateStaging.condition,
-      contextFromNested({
-        github: { event_name: eventName },
-        inputs: { release_candidate: releaseCandidate, sha: "a".repeat(40) },
-        steps: { reuse: { outputs: { run: "true" } } },
-      }),
-    );
-  expect(condition("workflow_dispatch", true)).toBe(true);
-  expect(condition("schedule", true)).toBe(false);
-  expect(condition("push", false)).toBe(false);
-
-  const dispatchFor = async (statuses: unknown[]) =>
-    runActionScript(
-      candidateStaging.script,
-      { repo: { owner: "stella", repo: "stella" } },
-      {
-        rest: {
-          repos: {
-            listCommitStatusesForRef: async () => ({ data: statuses }),
-          },
-        },
-      },
-      { SHA: "a".repeat(40) },
-    );
-  const success = {
-    context: "staging/verified",
-    creator: { login: "github-actions[bot]" },
-    state: "success",
-  };
-  expect(await dispatchFor([success])).toEqual([]);
-  expect(await dispatchFor([{ ...success, state: "failure" }])).toEqual([
-    {
-      owner: "stella",
-      repo: "stella",
-      workflow_id: "deploy-staging.yml",
-      ref: "main",
-      inputs: { release_candidate: "true", sha: "a".repeat(40) },
-    },
-  ]);
-  expect(
-    await dispatchFor([{ ...success, creator: { login: "human" } }, success]),
-  ).toHaveLength(1);
 });
 
 test("version commit staging reuses only an identical head's newest bot proof", async () => {
