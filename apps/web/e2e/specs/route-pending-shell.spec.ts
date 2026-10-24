@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import "@tanstack/react-router";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
+import { seedSidebarState } from "../helpers/sidebar-state";
 import { expect, test } from "../helpers/test";
 
 const cases = [
@@ -92,10 +93,13 @@ const expectSingleShell = async (page: Page) => {
 
 for (const { path, listPath } of cases) {
   test(`${path} keeps one app shell throughout delayed parent and page loaders`, async ({
+    baseURL,
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("sidebar_state", "expanded");
+    await seedSidebarState({
+      baseURL,
+      context: page.context(),
+      state: "expanded",
     });
     await page.goto("/knowledge", { waitUntil: "commit" });
     await expect(appShellNavigationLink(page, path)).toBeVisible({
