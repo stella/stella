@@ -426,17 +426,26 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
   );
 };
 
+// One advisory identity everywhere: the same GHSA can affect several
+// packages, and an acceptance covers only the package it names.
+const advisoryKey = ({
+  id,
+  package: pkg,
+}: Pick<Advisory, "id" | "package">): string => `${id}\0${pkg}`;
+
 // Diff current advisories against the baseline. `newlyIntroduced` fails the
 // gate; `resolved` only warns (prompt to ratchet the baseline down).
 export const diffAgainstBaseline = (
   advisories: Advisory[],
   baseline: Baseline,
 ): { newlyIntroduced: Advisory[]; resolved: BaselineEntry[] } => {
-  const currentIds = new Set(advisories.map((a) => a.id));
-  const baselineIds = new Set(baseline.accepted.map((a) => a.id));
+  const currentKeys = new Set(advisories.map(advisoryKey));
+  const baselineKeys = new Set(baseline.accepted.map(advisoryKey));
   return {
-    newlyIntroduced: advisories.filter((a) => !baselineIds.has(a.id)),
-    resolved: baseline.accepted.filter((a) => !currentIds.has(a.id)),
+    newlyIntroduced: advisories.filter(
+      (a) => !baselineKeys.has(advisoryKey(a)),
+    ),
+    resolved: baseline.accepted.filter((a) => !currentKeys.has(advisoryKey(a))),
   };
 };
 
@@ -590,15 +599,17 @@ const checkResult = async (
     today,
     options.latestVersion,
   );
-  const lapsedIds = new Set(lapsed.map(({ id }) => id));
+  const lapsedKeys = new Set(lapsed.map(advisoryKey));
 
   for (const advisory of advisories) {
-    const acceptance = baseline.accepted.find(({ id }) => id === advisory.id);
+    const acceptance = baseline.accepted.find(
+      (entry) => advisoryKey(entry) === advisoryKey(advisory),
+    );
     if (acceptance === undefined) {
       console.info(`${formatAdvisory(advisory)}  NEW`);
       continue;
     }
-    if (lapsedIds.has(advisory.id)) {
+    if (lapsedKeys.has(advisoryKey(advisory))) {
       console.info(`${formatAdvisory(advisory)}  LAPSED`);
       continue;
     }
@@ -802,11 +813,6 @@ export const checkRelease = async (
   }
   return result.status;
 };
-
-const advisoryKey = ({
-  id,
-  package: pkg,
-}: Pick<Advisory, "id" | "package">): string => `${id}\0${pkg}`;
 
 export const classifyAuditDelta = <T>(
   current: T[],

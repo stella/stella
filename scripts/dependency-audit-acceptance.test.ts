@@ -752,3 +752,30 @@ describe("CLI exit codes", () => {
 const panicUnexpectedAttempt = (): never => {
   throw new Error("unexpected extra audit attempt");
 };
+
+describe("acceptance identity", () => {
+  test("an acceptance covers only the package it names, even for a shared GHSA", async () => {
+    const otherPackage = { ...currentAdvisory, package: "pkg-b" };
+    const baseline = auditBaseline("2026-11-01");
+
+    const release = await runReleaseCheck(
+      [currentAdvisory, otherPackage],
+      baseline,
+    );
+    expect(release.status).not.toBe(0);
+    expect(release.info.join("\n")).toContain("pkg-b");
+
+    const gate = await runCheck(
+      [currentAdvisory, otherPackage],
+      baseline,
+      "2026-10-02",
+    );
+    expect(gate.status).not.toBe(0);
+    expect(
+      gate.info.filter((line) => line.endsWith("NEW")).join("\n"),
+    ).toContain("pkg-b");
+
+    const accepted = await runCheck([currentAdvisory], baseline, "2026-10-02");
+    expect(accepted.status).toBe(0);
+  });
+});
