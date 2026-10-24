@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterEach, expect, spyOn, test } from "bun:test";
+import { afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 import type { HeadingBlock, HeadingLevel } from "@stll/legal-ast/document-ast";
@@ -85,23 +85,33 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
   content.append(heading);
   viewport.append(content);
   document.body.append(viewport);
-  const Controls = () => (
-    <LegalReaderControls
-      blocks={[
-        {
-          type: "heading",
-          id: "first",
-          anchorId: "first",
-          level: 1,
-          plainText: "First",
-          inlines: [],
-        },
-      ]}
-      content={content}
-      textScale={useReaderTextScale()}
-      viewport={viewport}
-    />
-  );
+  const reset = mock();
+  const Controls = () => {
+    const textScale = useReaderTextScale();
+    return (
+      <LegalReaderControls
+        blocks={[
+          {
+            type: "heading",
+            id: "first",
+            anchorId: "first",
+            level: 1,
+            plainText: "First",
+            inlines: [],
+          },
+        ]}
+        content={content}
+        textScale={{
+          ...textScale,
+          reset: () => {
+            reset();
+            textScale.reset();
+          },
+        }}
+        viewport={viewport}
+      />
+    );
+  };
   try {
     render(
       <IntlProvider locale="en" messages={messages}>
@@ -118,13 +128,18 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
       expect(row?.contains(screen.getByRole("button", { name }))).toBe(true);
     }
     const resetZoom = screen.getByRole("button", { name: "Reset zoom" });
-    expect(resetZoom.hasAttribute("disabled")).toBe(true);
+    expect(resetZoom.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => fireEvent.click(resetZoom));
+    expect(reset).not.toHaveBeenCalled();
     await act(async () =>
       fireEvent.click(screen.getByRole("button", { name: "Zoom in" })),
     );
-    expect(resetZoom.hasAttribute("disabled")).toBe(false);
+    expect(resetZoom.hasAttribute("aria-disabled")).toBe(false);
     await act(async () => fireEvent.click(resetZoom));
-    expect(resetZoom.hasAttribute("disabled")).toBe(true);
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(resetZoom.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => fireEvent.click(resetZoom));
+    expect(reset).toHaveBeenCalledTimes(1);
     await act(async () => {
       viewport.scrollTop = 200;
       viewport.dispatchEvent(new Event("scroll"));

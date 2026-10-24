@@ -3,14 +3,6 @@ import type { PropsWithChildren } from "react";
 import { cn } from "@stll/ui/utils";
 
 /**
- * Where the bar's band ends, in pixels from the top of the box it floats
- * in: its inset and height, with a gap. A hover control that shares the
- * bar's edge (the outline rail) starts below it, so a pointer reaching for
- * the zoom controls never opens that control on the way.
- */
-export const VIEWER_OVERLAY_BAR_BAND_PX = 48;
-
-/**
  * The glass bar a viewer's controls float in, pinned to the top inline-end
  * corner of the document: the PDF and DOCX preview, the search preview, and
  * the legal readers. One owner of the corner, the glass and the spacing, so
