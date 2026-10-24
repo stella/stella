@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Moja organizacja",
     "password": "Hasło",
     "professionalUse": {
-      "description": "Podczas zakładania konta nie wyświetliliśmy Ci tego oświadczenia. Zaakceptuj je, aby kontynuować.",
       "title": "Potwierdź korzystanie w celach zawodowych"
     },
     "professionalUseStatement": "Tworząc konto, potwierdzasz, że korzystasz ze stelli w celach zawodowych, i przyjmujesz do wiadomości, że stella jest narzędziem dla profesjonalistów z branży prawnej i nie zastępuje porady prawnej.",
@@ -4762,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
+    "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
     "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
     "continueInChat": "Kontynuuj na czacie",
@@ -4819,6 +4819,7 @@
     "savedSearchesEmpty": "Zapisz wyszukiwanie, aby użyć go ponownie.",
     "scopeFilter": "Zakres wyszukiwania",
     "scopePlaceholderAll": "Przeszukaj wszystkie <scope>źródła</scope>…",
+    "scopePlaceholderCaseLaw": "Przeszukaj <scope>orzecznictwo</scope>…",
     "scopePlaceholderMatters": "Przeszukaj wszystkie <scope>sprawy</scope>…",
     "scopePlaceholderRegistries": "Przeszukaj <scope>rejestry</scope>…",
     "scopeRegistries": "Rejestry",
