@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildSelectionParentLookup,
-  resolveAncestorIds,
   type CopyToMatterEntity,
+  resolveAncestorIds,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import {
   canRunManualOcr,

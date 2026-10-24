@@ -6,7 +6,6 @@ import {
 } from "../apps/api/src/lib/safe-handler-factories.ts";
 import {
   canonicalModuleId,
-  resolveImport,
   filenameForContext,
   getImportedName,
   getImportLocalName,
@@ -15,6 +14,7 @@ import {
   isIdentifier,
   isIdentifierReference,
   isStringLiteral,
+  resolveImport,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";

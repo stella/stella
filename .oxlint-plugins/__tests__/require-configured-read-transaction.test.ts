@@ -12,16 +12,29 @@ const lintSingleRule = async (
 ) => lintRule(ruleName, `${OWNER}${source}`, options);
 
 test("rejects conditional or unawaited configuration", async () => {
-  for (const source of [
-    "const publicLawReadDb = fn => database.transaction(async tx => { if (enabled) await configureReadTransaction(tx); return fn(tx); });",
-    "const publicLawReadDb = fn => database.transaction(async tx => { configureReadTransaction(tx); return fn(tx); });",
-  ]) {
-    expect(
-      await lintSingleRule("require-configured-read-transaction", source, {
-        plugin: "public-law-read-boundary",
-      }),
-    ).toEqual([1]);
-  }
+  const results = await Promise.all(
+    [
+      "const publicLawReadDb = fn => database.transaction(async tx => { if (enabled) await configureReadTransaction(tx); return fn(tx); });",
+      "const publicLawReadDb = fn => database.transaction(async tx => { configureReadTransaction(tx); return fn(tx); });",
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "require-configured-read-transaction",
+          source,
+          {
+            plugin: "public-law-read-boundary",
+          },
+        ),
+        expected: [1],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("requires awaited configuration before returning the shared callback", async () => {

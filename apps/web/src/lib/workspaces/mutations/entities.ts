@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import type { StoreApi } from "zustand";
 
@@ -13,6 +13,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -131,17 +132,26 @@ export const useCreateFolderFromSelection = () => {
       name,
       parentId,
       entityIds,
-    }: CreateFolderFromSelectionVars) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["folder-from-selection"].post({
-          name,
-          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-          entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
-        });
-
-      return unwrapEden(response);
-    },
+    }: CreateFolderFromSelectionVars) =>
+      await invokeCapability(
+        "entities.folder-from-selection.create",
+        async (request) => {
+          const response = await api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            ["folder-from-selection"].post(
+              {
+                name,
+                parentId:
+                  parentId === null ? null : toSafeId<"entity">(parentId),
+                entityIds: entityIds.map((entityId) =>
+                  toSafeId<"entity">(entityId),
+                ),
+              },
+              request,
+            );
+          return unwrapEden(response);
+        },
+      ),
     onError: (error) => {
       analytics.captureError(error);
     },

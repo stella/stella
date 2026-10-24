@@ -10,6 +10,7 @@ import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
+  chatMessageFromPersisted,
   createChatAttachmentPart,
   getAwaitingUserInteractions,
   getChatAttachmentFilename,
@@ -17,7 +18,6 @@ import {
   getChatAttachmentPlaceholder,
   getChatAttachmentUrl,
   isChatAttachmentPart,
-  chatMessageFromPersisted,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -39,18 +39,22 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { FileKey } from "@/api/lib/file-key";
+import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
   type CheckedFileCopy,
   OrganizationFileUsageError,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
-import type { S3PresignError } from "@/api/lib/s3-presign";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import {
+  copyObject,
+  headObject,
+  S3ObjectMissingError,
+  type S3PresignError,
+} from "@/api/lib/s3-presign";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
@@ -131,6 +135,7 @@ type SourceUserFileRow = {
   sha256Hex: string;
   sizeBytes: number;
   thumbnailFileId: string | null;
+  userId: string;
 };
 
 type UserFileCopy = {
@@ -254,29 +259,31 @@ type UserFileCopyOutcome =
 
 const stageUserFileCopies = (
   files: SourceUserFileRow[],
-  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
 ) =>
   files.map((file) => {
     const newFileId = createSafeId<"userFile">();
     const copiedThumbnailFileId =
       file.thumbnailFileId === null ? null : Bun.randomUUIDv7();
+    const copiedS3Key = createUserFileKey({
+      fileId: newFileId,
+      mimeType: file.mimeType,
+      organizationId,
+    });
     return {
       source: file,
       newFileId,
-      copiedS3Key: createUserFileKey({
-        fileId: newFileId,
-        mimeType: file.mimeType,
-        userId,
-      }),
+      copiedS3Key,
       copiedThumbnailFileId,
       thumbnailKey:
         copiedThumbnailFileId === null
           ? null
-          : createUserFileKey({
-              fileId: copiedThumbnailFileId,
-              mimeType: THUMBNAIL_MIME_TYPE,
-              userId,
-            }),
+          : (createUserFileThumbnailKey({
+              sourceKey: copiedS3Key,
+              thumbnailFileId: copiedThumbnailFileId,
+              organizationId,
+              uploaderUserId: brandPersistedUserId(file.userId),
+            }) ?? panic("The copied attachment key must have a valid owner")),
     };
   });
 
@@ -306,15 +313,16 @@ const prepareUserFileCopy = async (
 
 const prepareUserFileThumbnail = async (
   copy: ReturnType<typeof stageUserFileCopies>[number],
-  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
 ) => {
   const thumbnailSource =
     copy.source.thumbnailFileId === null
       ? null
-      : createUserFileKey({
-          fileId: copy.source.thumbnailFileId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId,
+      : createUserFileThumbnailKey({
+          sourceKey: copy.source.s3Key,
+          thumbnailFileId: copy.source.thumbnailFileId,
+          organizationId,
+          uploaderUserId: brandPersistedUserId(copy.source.userId),
         });
   const thumbnailHead =
     thumbnailSource !== null &&
@@ -329,15 +337,13 @@ const copyUserFiles = async ({
   files,
   fileUsageDb,
   organizationId,
-  userId,
 }: {
   copiedS3Keys: string[];
   files: SourceUserFileRow[];
   fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
 }): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
-  const staged = stageUserFileCopies(files, userId);
+  const staged = stageUserFileCopies(files, organizationId);
   const prepared: Awaited<ReturnType<typeof prepareUserFileCopy>>[] = [];
   for (const itemBatch of chunkItems(staged, FORK_COPY_CONCURRENCY)) {
     prepared.push(
@@ -370,8 +376,10 @@ const copyUserFiles = async ({
             ? Result.err(copied.error)
             : Result.ok(checked.objectKey);
         },
-        confirmedDestinationAbsentOnCopyError: (error: S3PresignError) =>
-          isMissingS3ObjectError(error.cause),
+        confirmedDestinationAbsentOnCopyError: (
+          error: S3ObjectMissingError | S3PresignError,
+        ) =>
+          S3ObjectMissingError.is(error) || isMissingS3ObjectError(error.cause),
       };
     });
     const copied = await copyOrganizationFiles({
@@ -392,7 +400,9 @@ const copyUserFiles = async ({
         ),
     );
   };
-  const copyFailure = (error: S3PresignError | OrganizationFileUsageError) =>
+  const copyFailure = (
+    error: S3ObjectMissingError | S3PresignError | OrganizationFileUsageError,
+  ) =>
     error instanceof OrganizationFileUsageError
       ? error
       : new HandlerError({
@@ -418,6 +428,13 @@ const copyUserFiles = async ({
       panic("Chat attachment copy must have a main storage result");
     }
     if (Result.isError(main)) {
+      if (S3ObjectMissingError.is(main.error)) {
+        outcomes.push({
+          kind: "source-object-missing",
+          fileId: copy.source.id,
+        });
+        continue;
+      }
       if (
         !(main.error instanceof OrganizationFileUsageError) &&
         isMissingS3ObjectError(main.error.cause)
@@ -437,7 +454,7 @@ const copyUserFiles = async ({
     inspected.push(
       ...(await Promise.all(
         itemBatch.map(
-          async (copy) => await prepareUserFileThumbnail(copy, userId),
+          async (copy) => await prepareUserFileThumbnail(copy, organizationId),
         ),
       )),
     );
@@ -450,7 +467,10 @@ const copyUserFiles = async ({
     }
     const head = copy.thumbnailHead;
     if (head !== undefined && Result.isError(head)) {
-      if (!isMissingS3ObjectError(head.error.cause)) {
+      if (
+        !S3ObjectMissingError.is(head.error) &&
+        !isMissingS3ObjectError(head.error.cause)
+      ) {
         return Result.err(copyFailure(head.error));
       }
       missingThumbnails.add(copy.thumbnailKey);
@@ -475,7 +495,8 @@ const copyUserFiles = async ({
     if (thumbnail !== undefined && Result.isError(thumbnail)) {
       if (
         thumbnail.error instanceof OrganizationFileUsageError ||
-        !isMissingS3ObjectError(thumbnail.error.cause)
+        (!S3ObjectMissingError.is(thumbnail.error) &&
+          !isMissingS3ObjectError(thumbnail.error.cause))
       ) {
         return Result.err(copyFailure(thumbnail.error));
       }
@@ -705,6 +726,7 @@ export const createForkThread = ({
                     sha256Hex: userFiles.sha256Hex,
                     sizeBytes: userFiles.sizeBytes,
                     thumbnailFileId: userFiles.thumbnailFileId,
+                    userId: userFiles.userId,
                   })
                   .from(userFiles)
                   .where(
@@ -792,7 +814,6 @@ export const createForkThread = ({
         files: sourceFiles,
         fileUsageDb,
         organizationId: session.activeOrganizationId,
-        userId: user.id,
       });
       if (Result.isError(copiedFiles)) {
         await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);

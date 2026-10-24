@@ -38,3 +38,32 @@ const b = \`flex \${other} overflow-y-auto\`;`,
     ),
   ).toEqual([2]);
 });
+
+test("rejects real hidden horizontal scrollbar patterns", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-overflow-scroll",
+      `const a = "flex min-w-0 [scrollbar-width:none] flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+const b = "flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+const c = "scrollbar-none overflow-x-auto";`,
+    ),
+  ).toEqual([1, 2, 3]);
+});
+
+test("accepts vertical-only scrolling and the primitive scrollbar", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-overflow-scroll",
+      'const a = "overflow-y-auto [scrollbar-width:none]";\nconst b = "scrollbar-subtle overflow-x-auto";',
+    ),
+  ).toEqual([1, 2]);
+});
+
+test("rejects hidden horizontal scrollbars even on otherwise exempt native content", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-overflow-scroll",
+      'const visible = "[&_pre]:overflow-x-auto";\nconst hidden = "[&_pre]:overflow-x-auto [&_pre]:[scrollbar-width:none]";',
+    ),
+  ).toEqual([2]);
+});

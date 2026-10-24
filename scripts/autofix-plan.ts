@@ -1,7 +1,7 @@
 import { planAutofix } from "./autofix-push-scope";
 import {
-  GENERATORS,
   allowedOutputs,
+  GENERATORS,
   orderGenerators,
   runGenerators,
 } from "./generated-files";

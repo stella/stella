@@ -19,13 +19,14 @@ import stllAhoCorasickWasm from "@stll/aho-corasick-wasm/vite";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import stllRegexSetWasm from "@stll/regex-set-wasm/vite";
 import {
-  REACT_COMPILER_OPTIONS,
   REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
+  REACT_COMPILER_OPTIONS,
 } from "@stll/scripts/src/react-compiler-options";
 
 import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
+import { routeTemplateManifestPlugin } from "./scripts/route-template-manifest.ts";
 
 export { REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE } from "@stll/scripts/src/react-compiler-options";
 
@@ -344,13 +345,21 @@ export default defineConfig(({ mode, command }) => {
           routesDirectory: routeOptions.routesDirectory,
           generatedRouteTree: routeOptions.generatedRouteTree,
           routeFileIgnorePattern: routeOptions.routeFileIgnorePattern,
+          plugins: [
+            routeTemplateManifestPlugin(
+              path.join(
+                APP_ROOT,
+                routeOptions.srcDirectory,
+                routeOptions.generatedRouteTree,
+              ),
+            ),
+          ],
           codeSplittingOptions: {
-            defaultBehavior: [
-              ["component"],
-              ["errorComponent"],
-              ["notFoundComponent"],
-              ["pendingComponent"],
-            ],
+            // Recovery UI must stay in the entry graph. When a deployment
+            // removes an old route chunk, a split error or pending component
+            // would fail to load from that same old graph and leave the route
+            // blank instead of presenting recovery.
+            defaultBehavior: [["component"]],
           },
         },
       }),

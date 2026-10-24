@@ -3,8 +3,8 @@ import { panic, Result } from "better-result";
 import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
 import {
-  getCopyToMatterRootEntities,
   type CopyToMatterEntity,
+  getCopyToMatterRootEntities,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { PDF_MIME_TYPE } from "@/consts";
 import type {

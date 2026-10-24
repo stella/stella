@@ -60,8 +60,7 @@ type VerifyDeviceProofOptions = {
   expectedUrl: string;
   expectedThumbprint: string;
   binding:
-    | { type: "account"; keyId: string; credential: string }
-    | LinkProofBinding;
+    { type: "account"; keyId: string; credential: string } | LinkProofBinding;
   now?: Date;
 };
 

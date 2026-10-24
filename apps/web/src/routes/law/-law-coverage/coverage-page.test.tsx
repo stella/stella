@@ -65,7 +65,8 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
-  knownGaps: { type: "unknown" },
+  storedDecisions: 996,
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 12,
   completeness: {
     state: "measured",
@@ -86,7 +87,8 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
-  knownGaps: { type: "unknown" },
+  storedDecisions: 4321,
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-measured-yet" },
 };
@@ -101,7 +103,8 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
-  knownGaps: { type: "unknown" },
+  storedDecisions: null,
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-counted-yet" },
 };
@@ -174,17 +177,56 @@ describe("the coverage page states what it counts", () => {
 
     expect(markup).toContain("4,200,000");
     // What is held but not searchable is a source's own figure, in its
-    // completeness column; neither it nor a sum of the two heads the page.
+    // decisions column; neither it nor a sum of the two heads the page.
     expect(markup).not.toContain("4,500,000");
     expect(markup).not.toContain("8,700,000");
   });
 
-  test("a stored figure states when it was counted", () => {
+  test("a source states the decisions it holds, measured against a total or not", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
-    // The count is taken on the ingestion side, so the figure is only as
-    // current as its last sweep, and the page says which day that was.
-    expect(markup).toContain("Counted Sep 17, 2026");
+    expect(markup).toContain(">996<");
+    expect(markup).toContain(">4,321<");
+    // A source nobody has counted holds no stated number, which is not zero.
+    expect(markup).toContain(">—<");
+    // The sweep's date is the page's own, stated once at the top, not per row.
+    expect(markup).not.toContain("Sep 17, 2026");
+  });
+
+  test("the legend names each country's count without a share", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          totals: { ...COVERAGE.totals, searchable: 3800 },
+        }}
+      />,
+    );
+
+    expect(markup).toContain("1,900");
+    expect(markup).not.toContain("50%");
+  });
+
+  test("a country's rim states its totals, and freshness stays with each source", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [{ ...CZECHIA, health: "stalled" }],
+        }}
+      />,
+    );
+
+    expect(markup).toContain(messages.caseLaw.corpusStatus.newLast7Days);
+    expect(markup).not.toContain(messages.caseLaw.coverage.healthStalled);
+  });
+
+  test("a source whose gaps nobody reviewed states nothing about them", () => {
+    const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+
+    expect(markup).toContain(messages.caseLaw.coverage.pendingTexts);
+    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
+    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
   });
 
   test("a corpus 99.6 % of the way there prints 99, never 100", () => {
@@ -225,19 +267,20 @@ describe("the coverage page states what it counts", () => {
                   decisionYearTo: 2011,
                   pendingTextCount: 1234,
                   knownGaps: {
-                    type: "known",
-                    gaps: [
+                    type: "reconciled",
+                    summary: { missing: 2, shortSlices: 2, unlistedSlices: 0 },
+                    years: [
                       {
-                        from: "1969-01-01",
-                        to: "1970-12-31",
-                        reason: "Publisher archive has no decisions",
-                        evidenceRef: "publisher-index",
+                        year: 1969,
+                        type: "gaps",
+                        missing: 1,
+                        shortSlices: 1,
                       },
                       {
-                        from: "1989-01-01",
-                        to: "1989-12-31",
-                        reason: "Publisher archive has no decisions",
-                        evidenceRef: "publisher-index",
+                        year: 1989,
+                        type: "gaps",
+                        missing: 1,
+                        shortSlices: 1,
                       },
                     ],
                   },
@@ -255,6 +298,45 @@ describe("the coverage page states what it counts", () => {
       `${messages.caseLaw.coverage.pendingTexts}: 1,234`,
     );
     expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
+  });
+
+  test("unread listing periods are never counted as missing decisions", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              sources: [
+                {
+                  ...NEARLY_COMPLETE,
+                  knownGaps: {
+                    type: "reconciled",
+                    summary: { missing: 0, shortSlices: 0, unlistedSlices: 3 },
+                    years: [
+                      {
+                        year: 2004,
+                        type: "unlisted",
+                        missing: 0,
+                        shortSlices: 0,
+                        unlistedSlices: 3,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(markup).toContain(
+      `${messages.caseLaw.coverage.unreadListingPeriods}: 3`,
+    );
+    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
+    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
   });
 
   test("freshness is a word, with the dot only beside it", () => {

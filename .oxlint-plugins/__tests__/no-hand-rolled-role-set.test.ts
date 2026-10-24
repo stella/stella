@@ -43,15 +43,26 @@ test("single roles, other operands and named sets are not reported", async () =>
 
 test("owning modules, tests and files outside src are out of scope", async () => {
   const source = 'export const roles = ["owner", "admin"];\n';
-  for (const sourcePath of [
-    "packages/permissions/src/index.ts",
-    "packages/auth-model/src/contract.ts",
-    "apps/api/src/lib/x.test.ts",
-    "apps/api/src/tests/security/x.ts",
-    "scripts/x.ts",
-  ]) {
-    expect(await lintSingleRule(RULE, source, { sourcePath })).toEqual([]);
-  }
+  const results = await Promise.all(
+    [
+      "packages/permissions/src/index.ts",
+      "packages/auth-model/src/contract.ts",
+      "apps/api/src/lib/x.test.ts",
+      "apps/api/src/tests/security/x.ts",
+      "scripts/x.ts",
+    ].map(async (lintCase, index) => {
+      const sourcePath = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(RULE, source, { sourcePath }),
+        expected: [],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
   expect(
     await lintSingleRule(RULE, source, { sourcePath: "packages/ui/src/x.ts" }),
   ).toEqual([1]);
