@@ -229,10 +229,15 @@ type InvoiceSellerCountryInput = {
 };
 
 /** VAT uses EL for Greece and XI for Northern Ireland, unlike ISO address codes. */
+const ADDRESS_COUNTRY_OF_VAT_PREFIX: Readonly<Record<string, string>> = {
+  EL: "GR",
+  XI: "GB",
+};
+
 export const invoiceCountryForVatPrefix = (prefix: string) => {
   const country = prefix.toUpperCase();
   const read = normalizeCountry(
-    country === "EL" ? "GR" : country === "XI" ? "GB" : country,
+    ADDRESS_COUNTRY_OF_VAT_PREFIX[country] ?? country,
     { spelling: "alpha-2" },
   );
   return read.ok ? read.value.alpha2 : null;

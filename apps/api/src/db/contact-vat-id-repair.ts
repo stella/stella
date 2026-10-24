@@ -26,13 +26,14 @@ import type {
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 
-export const CONTACT_VAT_ID_REPAIR_NAME = "contact-vat-id";
+const CONTACT_VAT_ID_REPAIR_NAME = "contact-vat-id";
 const TABLE_NAME = "contacts";
 
-/** Contacts per transaction: one indexed id range per batch, short locks. */
+/**
+ * Contacts per transaction; the runtime sizes later batches and applies its
+ * own lock and statement budgets to each one.
+ */
 const BATCH = 500;
-const BATCH_LOCK_TIMEOUT = "5s";
-const BATCH_STATEMENT_TIMEOUT = "60s";
 
 /** `$1` is `EU_VAT_ID_SQL_PATTERN`. */
 const MOVABLE = `vat_id IS NULL AND tax_id IS NOT NULL AND ${EU_VAT_ID_SQL_COMPACT("tax_id")} ~ $1`;
@@ -44,7 +45,7 @@ type Query = Pick<OnlineMigrationConnection, "query">;
  * repeats the selection: a contact a user edits concurrently is re-checked on
  * its new version after the row lock, so a VAT ID set meanwhile is kept.
  */
-export const moveContactVatIdBatch = async (
+const moveContactVatIdBatch = async (
   tx: Query,
   size: number,
 ): Promise<number> =>
@@ -120,10 +121,6 @@ const moveUntilEmpty = async (
       sleep,
       step: async () =>
         await runtime.step(async ({ tx, size, cursor }) => {
-          await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
-          await tx.execute(
-            `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-          );
           const moved = await moveContactVatIdBatch(tx, size);
           return { cursor, done: moved === 0, value: moved };
         }),
