@@ -715,6 +715,8 @@ export const AnnotationToolbar = ({
             data-copy-trigger=""
             onClick={(event) => {
               const MENU_ESTIMATED_HEIGHT_PX = 200;
+              // Room for the options and a readable preview beside them.
+              const MENU_MIN_WIDTH_PX = 416;
               const barRect = barRef.current?.getBoundingClientRect();
               const view = event.currentTarget.ownerDocument.defaultView;
               if (barRect !== undefined && view !== null) {
@@ -722,6 +724,7 @@ export const AnnotationToolbar = ({
                   readerCopyMenuBox({
                     bar: barRect,
                     menuHeight: MENU_ESTIMATED_HEIGHT_PX,
+                    menuWidth: MENU_MIN_WIDTH_PX,
                     viewport: {
                       height: view.innerHeight,
                       width: view.innerWidth,
@@ -757,9 +760,9 @@ export const AnnotationToolbar = ({
               >
                 <MenuPreviewLayout
                   preview={
-                    // The submenu paints over the pane rather than in it, so its
-                    // floor is the viewport's, not the pane's.
-                    <PreviewPane className="min-w-0 flex-1">
+                    // The menu's width is set from the toolbar, so the pane
+                    // gets what the options leave.
+                    <PreviewPane className="w-full">
                       {copyPreviewMode !== null && (
                         <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
                           {copyTextFor({
@@ -787,6 +790,7 @@ export const AnnotationToolbar = ({
                       )}
                     </PreviewPane>
                   }
+                  previewWidth="remaining"
                 >
                   {READER_COPY_MODES.map((copyMode) => (
                     <button
