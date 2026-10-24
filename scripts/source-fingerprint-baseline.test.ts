@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import path from "node:path";
 
 import { fingerprintEvolutionFailures } from "./source-fingerprint-baseline";
 
@@ -11,6 +12,27 @@ const fingerprint = (
   storedInputIdentity,
   version,
 });
+
+test("the source fingerprint baseline and evolution guard match the tree", () => {
+  const result = Bun.spawnSync(
+    [
+      process.execPath,
+      "scripts/source-fingerprint-baseline.ts",
+      "--check",
+      "--base",
+      "origin/main",
+    ],
+    {
+      cwd: path.resolve(import.meta.dir, ".."),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  expect(
+    result.exitCode,
+    `${result.stdout.toString()}${result.stderr.toString()}`,
+  ).toBe(0);
+}, 120_000);
 
 test("accepts a fingerprint change over changed stored bytes without a version bump", () => {
   expect(

@@ -95,10 +95,12 @@ export const PARSER_VERSIONS = {
  * output changes.
  */
 export const SOURCE_FINGERPRINT_VERSIONS = {
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: 0,
   [ADAPTER_KEYS.CZ_REGIONAL]: 0,
   [ADAPTER_KEYS.CZ_NS]: 0,
   [ADAPTER_KEYS.CZ_NSS]: 0,
   [ADAPTER_KEYS.CZ_US]: 0,
+  [ADAPTER_KEYS.CZ_UOHS]: 0,
   [ADAPTER_KEYS.SK_COURTS]: 0,
   [ADAPTER_KEYS.SK_US]: 0,
   [ADAPTER_KEYS.PL_COURTS]: 0,
@@ -124,7 +126,7 @@ export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.PL_KIS]: 0,
   [ADAPTER_KEYS.PL_UODO]: 0,
   [ADAPTER_KEYS.PL_UOKIK]: 0,
-} as const satisfies Record<AdapterKey, number>;
+} as const satisfies Record<AdapterKey | ImportSourceKey, number>;
 
 /**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.

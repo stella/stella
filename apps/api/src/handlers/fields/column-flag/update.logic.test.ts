@@ -7,8 +7,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildColumnFlagMutation,
   buildColumnLockMutation,
-  sortColumnFlagTargetsForLocking,
   type ColumnFlagTarget,
+  sortColumnFlagTargetsForLocking,
 } from "./update.logic";
 
 const WORKSPACE_ID = toSafeId<"workspace">("ws_mark_column_flag");

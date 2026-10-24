@@ -58,8 +58,8 @@ import {
   validateCapabilities,
 } from "./model-catalog-capabilities";
 import type {
-  CatalogEntry,
   CapabilityFailure,
+  CatalogEntry,
   UpstreamCapabilities,
 } from "./model-catalog-capabilities";
 import {

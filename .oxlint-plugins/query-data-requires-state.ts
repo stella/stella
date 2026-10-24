@@ -11,8 +11,8 @@ import {
   repoRelativeFilename,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
-  staticStringValue,
   type ScopeContext,
+  staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
 

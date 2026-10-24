@@ -63,23 +63,16 @@ test("every registration's rawHash is the fingerprint of what it stores, or a li
       : [{ key, reason: FINGERPRINT_FINDING_REASONS[finding.type] }],
   );
   if (CENSUS_OUT !== undefined) {
-    const fingerprints = rows.flatMap(
+    const fingerprints = rows.map(
       ({ key, fingerprint, storedInputIdentity }) => {
         const source = key.split("::", 1)[0];
         const version = Object.entries(SOURCE_FINGERPRINT_VERSIONS).find(
           ([candidate]) => candidate === source,
         )?.[1];
         if (version === undefined) {
-          return [];
+          panic(`No source fingerprint version configured for ${key}`);
         }
-        return [
-          {
-            key,
-            fingerprint,
-            storedInputIdentity,
-            version,
-          },
-        ];
+        return { key, fingerprint, storedInputIdentity, version };
       },
     );
     writeFileSync(CENSUS_OUT, JSON.stringify({ fingerprints, misses }));

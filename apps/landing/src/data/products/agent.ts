@@ -1,4 +1,4 @@
-import { frameAccents, productCtaLabels, type Product } from "./types";
+import { frameAccents, type Product, productCtaLabels } from "./types";
 
 // The hero reuses the same agent scene as the opening product story.
 export const agent = {

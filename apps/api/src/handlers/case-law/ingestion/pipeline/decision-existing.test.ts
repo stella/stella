@@ -13,8 +13,8 @@ import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipelin
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";

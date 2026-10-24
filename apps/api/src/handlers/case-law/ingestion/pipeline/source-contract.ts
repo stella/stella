@@ -13,8 +13,8 @@ import {
 } from "@/api/lib/legal-search/adapter-manifest";
 import {
   IMPORT_SOURCE_KEYS,
-  SOURCE_FINGERPRINT_VERSIONS,
   type ImportSourceKey,
+  SOURCE_FINGERPRINT_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sourceRegistryMembership } from "@/api/lib/legal-search/source-registry-membership";
 
@@ -53,7 +53,9 @@ export const sourceContractForAdapter = (
     sourceFingerprintVersion:
       membership.type === "registered"
         ? SOURCE_FINGERPRINT_VERSIONS[membership.adapterKey]
-        : 0,
+        : isImportSourceKey(adapterKey)
+          ? SOURCE_FINGERPRINT_VERSIONS[adapterKey]
+          : 0,
     statedEcliIdentity: statedEcliIdentityForAdapter(adapterKey),
   };
 };

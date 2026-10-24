@@ -549,15 +549,22 @@ const baselineAt = (args: readonly string[]): Baseline | null => {
   const baseIndex = args.indexOf("--base");
   const baseRef = baseIndex === -1 ? "origin/main" : args[baseIndex + 1];
   if (baseRef === undefined || baseRef === "") {
-    return null;
+    panic("--base requires a nonempty Git reference");
   }
   const result = Bun.spawnSync(["git", "show", `${baseRef}:${BASELINE}`], {
     cwd: ROOT,
     stderr: "pipe",
   });
-  return result.exitCode === 0
-    ? parseBaseline(result.stdout.toString(), `${baseRef}:${BASELINE}`)
-    : null;
+  if (result.exitCode === 0) {
+    return parseBaseline(result.stdout.toString(), `${baseRef}:${BASELINE}`);
+  }
+  if (baseIndex !== -1) {
+    panic(`Cannot read source fingerprint baseline at ${baseRef}`);
+  }
+  console.warn(
+    `Source fingerprint evolution was not checked: ${baseRef}:${BASELINE} is unavailable`,
+  );
+  return null;
 };
 
 const check = (args: readonly string[]): number => {
@@ -572,7 +579,19 @@ const check = (args: readonly string[]): number => {
       ],
     ),
   );
-  if (JSON.stringify(fingerprints) !== JSON.stringify(baseline.fingerprints)) {
+  if (
+    Object.keys(fingerprints).length !==
+      Object.keys(baseline.fingerprints).length ||
+    Object.entries(fingerprints).some(([key, current]) => {
+      const recorded = baseline.fingerprints[key];
+      return (
+        recorded === undefined ||
+        current.fingerprint !== recorded.fingerprint ||
+        current.storedInputIdentity !== recorded.storedInputIdentity ||
+        current.version !== recorded.version
+      );
+    })
+  ) {
     failures.push("Fixture fingerprints are stale (run --write)");
   }
   const base = baselineAt(args);
@@ -669,12 +688,14 @@ const selfTest = (): number => {
     ledgerKeys({
       comment: "",
       drivers: {},
+      fingerprints: {},
       files: { "a.ts": "r" },
       writers: {},
     }),
     ledgerKeys({
       comment: "",
       drivers: { "a.ts": "r" },
+      fingerprints: {},
       files: {},
       writers: {},
     }),

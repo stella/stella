@@ -421,8 +421,7 @@ type CorpusIndexDeleteSettlementsInput = {
  * metastore's whole seconds.
  */
 type CorpusIndexSplitMaturity =
-  | { type: "mature" }
-  | { type: "immature"; maturesAt: Temporal.Instant };
+  { type: "mature" } | { type: "immature"; maturesAt: Temporal.Instant };
 
 /** One split's delete progress, as the pass a settlement is judged on read it. */
 export type CorpusIndexSettlementSplit = {
@@ -469,8 +468,7 @@ export type CorpusIndexDeleteSettlementRead = Result<
 
 /** Result of checking one immutable manifest against its physical index. */
 type CorpusIndexConfigAttestation =
-  | { status: "missing" }
-  | { status: "matching"; indexUri: string };
+  { status: "missing" } | { status: "matching"; indexUri: string };
 
 export type CorpusIndexClient = {
   createIndex: (
@@ -549,8 +547,7 @@ export type CorpusIndexClient = {
 };
 
 type CorpusIndexEndpointEnv =
-  | "CORPUS_INDEX_Q09_ENDPOINT"
-  | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT";
+  "CORPUS_INDEX_Q09_ENDPOINT" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT";
 
 type CorpusIndexClusterConfig = {
   mutationEnv: CorpusIndexEndpointEnv;

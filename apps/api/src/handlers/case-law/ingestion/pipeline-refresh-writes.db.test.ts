@@ -36,8 +36,8 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
