@@ -540,6 +540,12 @@ export const BUNDLED_CONSUMERS = [
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
+    file: "apps/api/Dockerfile",
+    command:
+      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=inline --outdir /app/bundles --entry-naming file-derivative-worker.js apps/api/src/scripts/file-derivative-worker.ts",
+    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+  },
+  {
     file: "apps/api/package.json",
     command:
       "bun build --target bun --define 'process.env.NODE_ENV=\"production\"' --outdir .cache/server-build --entry-naming=server.js --metafile-md=.cache/server-metafile.md src/server.ts",

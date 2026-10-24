@@ -321,6 +321,13 @@ RUN bun build \
     --outdir /app/bundles \
     --entry-naming document-processing-worker.js \
     apps/api/src/scripts/document-processing-worker.ts
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --sourcemap=inline \
+    --outdir /app/bundles \
+    --entry-naming file-derivative-worker.js \
+    apps/api/src/scripts/file-derivative-worker.ts
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Mirror the source directory under the bundle tree
 # so its runtime `import.meta.dir`-relative migrationsFolder lookup resolves

@@ -12,6 +12,7 @@ const SRC_DIR = path.resolve(import.meta.dir, "..");
 const HOST_ENTRYPOINTS = [
   "api-background-workers.ts",
   "scripts/document-processing-worker.ts",
+  "scripts/file-derivative-worker.ts",
 ];
 
 const sourceFiles = (dir: string): string[] =>

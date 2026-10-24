@@ -136,6 +136,10 @@ const S3_CLIENT_FACTORIES: ReadonlySet<string> = new Set([
 ]);
 const ENV_MODULE = "apps/api/src/env";
 const ENV_EXPORT = "env";
+const CONVERTER_SETTINGS_MODULE = "apps/api/src/lib/files/converter-settings";
+const CONVERTER_TARGET_HELPER = "gotenbergConvertTarget";
+const CONVERTER_ENV_MODULE = "apps/api/src/env-converter";
+const CONVERTER_ENV_EXPORT = "envConverter";
 const CONFIGURED_URL_SUFFIX = "_URL";
 const CONFIGURED_TARGET_ORIGIN = "https://configured.invalid";
 const STATIC_CHOICE_ORIGIN = "https://static-choice.invalid";
@@ -619,9 +623,101 @@ export default eslintCompatPlugin({
           });
         };
 
+        const isConverterTargetCall = (call: AstNode): boolean => {
+          const helper = resolveImport(context, call.callee);
+          return (
+            call.type === "CallExpression" &&
+            Array.isArray(call.arguments) &&
+            call.arguments.length === 1 &&
+            helper?.moduleId === CONVERTER_SETTINGS_MODULE &&
+            helper.imported === CONVERTER_TARGET_HELPER
+          );
+        };
+
+        type DeepMutationOptions = {
+          visited?: Set<Variable>;
+          allowConverterRead?: boolean;
+        };
+
+        const unmutatedMemberReference = (
+          expression: AstNode,
+        ): AstNode | null => {
+          let current = expression;
+          while (true) {
+            const member = current.parent;
+            if (
+              !isAstNode(member) ||
+              member.type !== "MemberExpression" ||
+              member.object !== current
+            ) {
+              break;
+            }
+            current = member;
+            const parent = current.parent;
+            if (
+              isAstNode(parent) &&
+              ((parent.type === "AssignmentExpression" &&
+                parent.left === current) ||
+                (parent.type === "UpdateExpression" &&
+                  parent.argument === current) ||
+                (parent.type === "UnaryExpression" &&
+                  parent.operator === "delete" &&
+                  parent.argument === current))
+            ) {
+              return null;
+            }
+            if (
+              isAstNode(parent) &&
+              parent.type === "CallExpression" &&
+              parent.callee === current
+            ) {
+              const methodName = memberPropertyName(member);
+              if (
+                methodName !== null &&
+                MUTATING_COLLECTION_METHODS.has(methodName)
+              ) {
+                return null;
+              }
+            }
+          }
+          return current;
+        };
+
+        const deepReferenceEscapes = (
+          current: AstNode,
+          allowConverterRead: boolean,
+        ): boolean => {
+          const parent = current.parent;
+          if (
+            allowConverterRead &&
+            isAstNode(parent) &&
+            ((parent.type === "Property" && parent.value === current) ||
+              parent.type === "SpreadElement" ||
+              parent.type === "ReturnStatement" ||
+              (parent.type === "ArrayExpression" &&
+                Array.isArray(parent.elements) &&
+                parent.elements.includes(current)) ||
+              (parent.type === "AssignmentExpression" &&
+                parent.right === current))
+          ) {
+            return true;
+          }
+          return (
+            isAstNode(parent) &&
+            (parent.type === "CallExpression" ||
+              parent.type === "NewExpression") &&
+            Array.isArray(parent.arguments) &&
+            parent.arguments.includes(current) &&
+            !(allowConverterRead && isConverterTargetCall(parent))
+          );
+        };
+
         const variableHasDeepMutation = (
           variable: Variable,
-          visited = new Set<Variable>(),
+          {
+            visited = new Set<Variable>(),
+            allowConverterRead = false,
+          }: DeepMutationOptions = {},
         ): boolean => {
           if (visited.has(variable)) {
             return false;
@@ -633,46 +729,34 @@ export default eslintCompatPlugin({
             if (!isAstNode(identifier)) {
               return false;
             }
-            let current = outerTransparentExpression(identifier);
-            while (true) {
-              const member = current.parent;
-              if (
-                !isAstNode(member) ||
-                member.type !== "MemberExpression" ||
-                member.object !== current
-              ) {
-                break;
-              }
-              current = member;
-              const parent = current.parent;
-              if (
-                isAstNode(parent) &&
-                ((parent.type === "AssignmentExpression" &&
-                  parent.left === current) ||
-                  (parent.type === "UpdateExpression" &&
-                    parent.argument === current) ||
-                  (parent.type === "UnaryExpression" &&
-                    parent.operator === "delete" &&
-                    parent.argument === current))
-              ) {
-                return true;
-              }
-              if (
-                isAstNode(parent) &&
-                parent.type === "CallExpression" &&
-                parent.callee === current
-              ) {
-                const methodName = memberPropertyName(member);
-                if (
-                  methodName !== null &&
-                  MUTATING_COLLECTION_METHODS.has(methodName)
-                ) {
-                  return true;
-                }
-              }
+            const current = unmutatedMemberReference(
+              outerTransparentExpression(identifier),
+            );
+            if (current === null) {
+              return true;
+            }
+            if (
+              allowConverterRead &&
+              current.type === "MemberExpression" &&
+              current.object === outerTransparentExpression(identifier) &&
+              [
+                "GOTENBERG_URL",
+                "GOTENBERG_USERNAME",
+                "GOTENBERG_PASSWORD",
+              ].includes(memberPropertyName(current) ?? "")
+            ) {
+              // The validated configuration exposes scalar strings, so reading
+              // one cannot hand another function the mutable settings object.
+              return false;
             }
             const alias = aliasVariableForReference(current);
-            if (alias !== null && variableHasDeepMutation(alias, nextVisited)) {
+            if (
+              alias !== null &&
+              variableHasDeepMutation(alias, {
+                visited: nextVisited,
+                allowConverterRead,
+              })
+            ) {
               return true;
             }
             const destructuredAliases =
@@ -681,21 +765,52 @@ export default eslintCompatPlugin({
               destructuredAliases !== null &&
               (destructuredAliases.length === 0 ||
                 destructuredAliases.some((destructuredAlias) =>
-                  variableHasDeepMutation(destructuredAlias, nextVisited),
+                  variableHasDeepMutation(destructuredAlias, {
+                    visited: nextVisited,
+                    allowConverterRead,
+                  }),
                 ))
             ) {
               return true;
             }
-            const parent = current.parent;
-            return (
-              isAstNode(parent) &&
-              (parent.type === "CallExpression" ||
-                parent.type === "NewExpression") &&
-              Array.isArray(parent.arguments) &&
-              parent.arguments.includes(current)
-            );
+            return deepReferenceEscapes(current, allowConverterRead);
           });
         };
+
+        const isConfiguredConverterSettings = (
+          node: unknown,
+          visited = new Set<Variable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+          const variable = resolveVariable(context, expression);
+          if (
+            variable === null ||
+            visited.has(variable) ||
+            variableHasDeepMutation(variable, { allowConverterRead: true })
+          ) {
+            return false;
+          }
+          const initializer = constInitializer(variable);
+          if (initializer !== null) {
+            return isConfiguredConverterSettings(
+              initializer,
+              new Set([...visited, variable]),
+            );
+          }
+          const owner = resolveImport(context, expression);
+          return (
+            owner?.moduleId === CONVERTER_ENV_MODULE &&
+            owner.imported === CONVERTER_ENV_EXPORT
+          );
+        };
+
+        const isConfiguredConverterTarget = (call: AstNode): boolean =>
+          isConverterTargetCall(call) &&
+          Array.isArray(call.arguments) &&
+          isConfiguredConverterSettings(call.arguments.at(0));
 
         const trustedRestriction = (
           call: AstNode,
@@ -750,7 +865,8 @@ export default eslintCompatPlugin({
           }
           return (
             expression.type === "CallExpression" &&
-            trustedRestriction(expression) !== null
+            (trustedRestriction(expression) !== null ||
+              isConfiguredConverterTarget(expression))
           );
         };
 
@@ -782,6 +898,9 @@ export default eslintCompatPlugin({
                 new Set([...visited, variable]),
               );
             }
+          }
+          if (isConfiguredConverterTarget(expression)) {
+            return `${CONFIGURED_TARGET_ORIGIN}/${DYNAMIC_PART}`;
           }
           const restriction = trustedRestriction(expression);
           if (

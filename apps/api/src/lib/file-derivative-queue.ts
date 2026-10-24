@@ -396,7 +396,9 @@ export const initFileDerivativeWorker = () => {
   // Bound late: the controller pauses the worker that runs the processor.
   let pauseTarget: { pause: () => void; resume: () => void } | null = null;
   const pausing = createPressurePause({
-    gate: memory,
+    gate: {
+      read: () => memory.read(LIMITS.fileDerivativeSourceMaxBytes),
+    },
     pause: () => pauseTarget?.pause(),
     resume: () => pauseTarget?.resume(),
     recheckMs: LIMITS.fileDerivativeDeferDelayMs,
@@ -540,7 +542,10 @@ export const createFileDerivativeProcessor =
     processThumbnail: (data: FileDerivativeJobData) => Promise<void>;
   }) =>
   async (job: FileDerivativeProcessorJob): Promise<void> => {
-    const pressure = memory.read();
+    // Reserve the full admitted input budget before claiming converter work.
+    // Every backend enforces this same cap, so even legacy jobs without a
+    // recorded source size receive conservative byte-weighted admission.
+    const pressure = memory.read(LIMITS.fileDerivativeSourceMaxBytes);
     if (pressure.cause !== null) {
       pausing.closed(pressure);
       await job.moveToDelayed(
@@ -728,7 +733,9 @@ const buildPdfDerivative = async (
   if (source.type === "refused") {
     return source;
   }
-  const conversion = await convertToPdf(source.source, { retry: "caller" });
+  const conversion = await convertToPdf(source.source, {
+    retry: "caller",
+  });
   if (Result.isError(conversion)) {
     if (conversion.error instanceof ConversionInputError) {
       const conversionRefusal = displayableConversionRefusal(

@@ -2,13 +2,14 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
-import { env } from "@/api/env";
+import { envConverter } from "@/api/env-converter";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   checkConversionInput,
   type ConversionInputRefusal,
 } from "@/api/lib/files/conversion-input";
+import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
 import type { ImageHeader } from "@/api/lib/files/image-header";
@@ -175,7 +176,10 @@ const withConverterExtension = (fileName: string, mimeType: string): string => {
 };
 
 const gotenbergAuth = (): string =>
-  basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
+  basicAuthorizationHeader(
+    envConverter.GOTENBERG_USERNAME,
+    envConverter.GOTENBERG_PASSWORD,
+  );
 
 const GOTENBERG_RETRY = {
   times: 2,
@@ -364,19 +368,18 @@ export const convertToPdf = async (
           },
           fields: { exportNotes: "true", exportNotesInMargin: "true" },
         });
-        const response = await fetchWithTimeout(
-          `${env.GOTENBERG_URL}/forms/libreoffice/convert`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: gotenbergAuth(),
-              "Content-Type": form.contentType,
-              "Content-Length": String(form.contentLength),
-            },
-            body: form.body,
-            timeoutMs: 30_000,
+        const target = gotenbergConvertTarget(envConverter);
+        const response = await fetchWithTimeout(target, {
+          method: "POST",
+          redirect: "error",
+          headers: {
+            Authorization: gotenbergAuth(),
+            "Content-Type": form.contentType,
+            "Content-Length": String(form.contentLength),
           },
-        );
+          body: form.body,
+          timeoutMs: 30_000,
+        });
 
         if (!response.ok) {
           throw new GotenbergError({
