@@ -137,27 +137,27 @@
   "candidate:.github/workflows/ci.yml/ci-checks-generated": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "392dd9b3b810e97b8052b1e826339355fc58fdd3196c87c7afa47f805fb50a55"
+    "reviewedDigest": "f718f55d3b64a3cce49ffd4eb2183a071715fe22f48a23208ff7da3bc4730e64"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-policy": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "0d21525c54029ce217f4640f1522b7634ceea0707e0b4681b630636dc3bf6c6f"
+    "reviewedDigest": "c7c6c8f819085aaf34d6bc7d5945ce07e968b18a49b37df042e02365d05b93ec"
   },
   "candidate:.github/workflows/ci.yml/ci-checks-rest": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "b0c13018cbe366649ecdd19179611f55c5d6724e67162848e2e04483f1aaf806"
+    "reviewedDigest": "8d72df8962cc4fec186845df92db7c8beb551d88cdbfaa228774d9c8cbaba805"
   },
   "candidate:.github/workflows/ci.yml/ci-tests": {
     "kind": "support",
     "qualifier": "Runs scoped package tests and reports quarantined outcomes for the merge verdict.",
-    "reviewedDigest": "c15157fe4eab17d17135aca21f68d5a959272aa075164e1c09a041a23489ab11"
+    "reviewedDigest": "434faa211e99b0f0aa18de97e07b91f3a178c92c50aad473c734c0f91f7cef6f"
   },
   "candidate:.github/workflows/ci.yml/api-test-durations": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "e9fc20424d151e238b921d19ca254cd9e130cb424a07446e01720892c3807f8b"
+    "reviewedDigest": "fa8b71912ecf694e0bce7db7546788d688bdf3981f7ab5e6c86e5e71f70ae1c6"
   },
   "candidate:.github/workflows/ci.yml/ci-browser": {
     "kind": "support",
@@ -167,12 +167,12 @@
   "candidate:.github/workflows/ci.yml/code-quality-api": {
     "kind": "support",
     "qualifier": "Runs API code-quality checks required by the merge verdict.",
-    "reviewedDigest": "bc66d0cdc4f212183d9aaa7adfb1378f770ec75c1b9caa499fb165e90be7e3f4"
+    "reviewedDigest": "07697bfb796e7a7206f0856befc6210d2b0e2e34a29af657750a825ef7425a7c"
   },
   "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
     "kind": "support",
     "qualifier": "Runs web and remaining code-quality checks required by the merge verdict.",
-    "reviewedDigest": "3deabca819edfbea306954afb0cb702042f8d08000532d29864a26331ee3f5af"
+    "reviewedDigest": "a76104590a8471085e8f5680665d94226b1925d02ac301aabde283bf9485406c"
   },
   "candidate:.github/workflows/ci.yml/query-perf": {
     "kind": "support",
@@ -182,7 +182,7 @@
   "candidate:.github/workflows/ci.yml/postgres-service-suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "1cd872dccddd9f9c61dfc2edca75e8c8917ddcc9daceeb1f955511d3f3b1e1cf"
+    "reviewedDigest": "391adaabcac597539b9716b7d26562501d2d359a68d38146e42721fa4b09aa69"
   },
   "candidate:.github/workflows/ci.yml/service-suites": {
     "kind": "support",
@@ -232,12 +232,12 @@
   "candidate:.github/workflows/ci.yml/route-smoke": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "242802fe6c40b8fab5aaa05c7324a5659a097b980b1b01e099cacbfe35c76039"
+    "reviewedDigest": "3d722f613be93c2290a50a2a69cf6ff470a602fedd9f809b3ffbbc2bc75e4932"
   },
   "candidate:.github/workflows/ci.yml/e2e-production-shard": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "7763be9afbc40b221662971f58c0be6c8e65b3c97e960a49732385816cb3cb40"
+    "reviewedDigest": "5216167cd31192db22d7ae54e182498b32efde2bb5aeabbcf386d472d6f1d826"
   },
   "candidate:.github/workflows/ci.yml/stack-redaction-browsers": {
     "kind": "support",
@@ -257,7 +257,7 @@
   "candidate:.github/workflows/ci.yml/marketing-screenshots": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "dc06c320a1806fa0b68d44b00224a106d0ff0bfecf145091eaed7432ef40258e"
+    "reviewedDigest": "0c34cc233000677017be82b779b427c116c600fa645e6b73ce6d5f74c8fd6eb3"
   },
   "candidate:.github/workflows/ci.yml/marketing-screenshots-cancel": {
     "kind": "support",
@@ -267,7 +267,7 @@
   "candidate:.github/workflows/ci.yml/e2e-report": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "f274537ca9d7872b05a1441c7c5506a345d9f651f0fdb738d34d4a8b4e5df5a4"
+    "reviewedDigest": "b3d86aba1e440222ae995419294e8098bf69eb0c565788751c97d1b27fb07c4a"
   },
   "candidate:.github/workflows/ci.yml/api-image-smoke": {
     "kind": "support",
@@ -467,7 +467,7 @@
   "candidate:.github/workflows/main-heavy.yml/suites": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "f92b30829705cbd66f5fb839310362de8720c1540355f2dc4ac32e00fdd839c5"
+    "reviewedDigest": "13daef23a836c7439f8ccefa28aed3d5f59197ebb3c363b88f50709574d53381"
   },
   "candidate:.github/workflows/main-heavy.yml/status": {
     "kind": "support",
@@ -482,7 +482,7 @@
   "candidate:.github/workflows/main-pr-depth.yml/suites": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "daa1b6b7f15e20d07ae97c4990b574a586f797ddc8c301b97d2d2fe7a787d42b"
+    "reviewedDigest": "892334cdf89302022277856a279d6d16db48561ff257740b497eeb3d6a2eb1c7"
   },
   "candidate:.github/workflows/main-pr-depth.yml/status": {
     "kind": "ordinary",
@@ -507,7 +507,7 @@
   "candidate:.github/workflows/marketing-screenshots-capture.yml/capture": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "bee803ef89db01ab98d677ed16a58916dd0987121848029dc743ccb70a97ecc8"
+    "reviewedDigest": "3a298c57c480d9902ee607ecb204c3c82bae0e6a5b623b91c871a3cd4b281937"
   },
   "candidate:.github/workflows/marketing-screenshots-publish.yml/publish": {
     "kind": "ordinary",
@@ -522,7 +522,7 @@
   "candidate:.github/workflows/marketing-screenshots.yml/check": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions.",
-    "reviewedDigest": "6866df60b7be783834dfc173963cf6dc2e07efeff9ca285f9974328c64b81453"
+    "reviewedDigest": "64e150fae8de2cb1ec77d4625d568ddbd99fd09a7f86f72123638879c3c0b44b"
   },
   "candidate:.github/workflows/mcp-canary.yml/mcp-canary": {
     "kind": "ordinary",
@@ -557,7 +557,7 @@
   "candidate:.github/workflows/network-baseline-record.yml/record": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "2df724e705af03764f09e721942eb17f1d799d7b46c674d60da4e2a19b7e9f8e"
+    "reviewedDigest": "68104dfb0a0c8cd1c495d2d46943c44c28984db01cf32f895aa73ca3daddcd69"
   },
   "candidate:.github/workflows/network-baseline-record.yml/deliver": {
     "kind": "ordinary",
@@ -622,7 +622,7 @@
   "candidate:.github/workflows/nightly-test.yml/marketing-screenshots": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment.",
-    "reviewedDigest": "4b3599e5b9c6aa818793e3aaa7cfb59eda6e2a8646c89f3d7bde4d8e4a5807fd"
+    "reviewedDigest": "2bf2cd75c095e2918ff5f45418db072e4cf42e70dfbdf56f2afc893b51b91233"
   },
   "candidate:.github/workflows/nightly-test.yml/postgres-suites": {
     "kind": "ordinary",

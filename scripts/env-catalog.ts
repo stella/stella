@@ -1449,6 +1449,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // Run-artifact downloads: the bound of one attempt and the pause before the retry.
+  "ARTIFACT_DOWNLOAD_ATTEMPT_SECONDS",
+  "ARTIFACT_DOWNLOAD_RETRY_PAUSE_SECONDS",
   // Dated-waiver healing: the private repository its fix tasks go to, and
   // the merge hold that keeps it from arming removals.
   "DATED_WAIVER_FIX_REPO",
