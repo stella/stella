@@ -12,6 +12,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 
 import { env } from "@/env";
 import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
@@ -166,6 +167,7 @@ const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  ...Object.values(PROVIDER_SETUP_ERROR_CODE),
 ]);
 
 const hasExtensionFrame = (entry: unknown): boolean => {

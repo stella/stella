@@ -6,6 +6,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/env";
@@ -403,6 +404,7 @@ describe("PostHog browser analytics adapter", () => {
     "ai_config_provider_validation_failed",
     CHAT_CONTINUATION_REJECTED_ERROR_CODE,
     API_FILE_SECURITY_REJECTED_ERROR_CODE,
+    ...Object.values(PROVIDER_SETUP_ERROR_CODE),
   ])("drops the expected API outcome %s", (code) => {
     expect(
       isNoiseException(
