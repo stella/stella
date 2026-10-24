@@ -14,6 +14,7 @@ const stepSchema = v.looseObject({
   with: v.optional(v.record(v.string(), v.unknown())),
   env: v.optional(v.record(v.string(), v.string())),
 });
+const actionStepSchema = v.required(stepSchema, ["uses"]);
 
 const workflowSchema = v.looseObject({
   permissions: v.record(v.string(), v.string()),
@@ -51,13 +52,13 @@ const precedentSteps = Object.values(precedent.jobs).flatMap(
   ({ steps: jobSteps }) => jobSteps,
 );
 const precedentApp = v.parse(
-  stepSchema,
+  actionStepSchema,
   precedentSteps.find(({ uses }) =>
     uses?.startsWith("actions/create-github-app-token@"),
   ),
 );
 const precedentProposal = v.parse(
-  stepSchema,
+  actionStepSchema,
   precedentSteps.find(({ with: inputs }) => inputs?.["mode"] === "refresh-pr"),
 );
 const steps = Object.values(workflow.jobs).flatMap(
