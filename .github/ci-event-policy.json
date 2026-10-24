@@ -40,6 +40,7 @@
     "nightly-property-test.yml/provider-request-combinations": "main",
     "nightly-property-test.yml/turn-outcome-combinations": "main",
     "nightly-property-test.yml/chat-mutation-matrix": "main",
+    "nightly-property-test.yml/sanctions-properties": "main",
     "nightly-property-test.yml/tanstack-drift": "main",
     "dependency-malware-nightly.yml/dependency-malware-scan": "main",
     "dependency-malware-nightly.yml/report-failure": "main",
