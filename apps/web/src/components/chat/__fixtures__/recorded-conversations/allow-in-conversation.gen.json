@@ -22,12 +22,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Delete the NDA"
               }
             ],
@@ -383,36 +383,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Delete the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Delete the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -592,20 +592,11 @@
           "request": {
             "threadId": "00000000-0000-7000-8000-000000000002",
             "runId": "run-recorded-2",
-            "parentRunId": "run-recorded-1",
-            "resume": [
-              {
-                "interruptId": "approval_call-1",
-                "payload": {
-                  "approved": true
-                },
-                "status": "resolved"
-              }
-            ],
             "state": {},
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:13.000Z",
@@ -621,7 +612,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
                 "toolCalls": [
                   {
                     "id": "call-1",
@@ -634,8 +624,8 @@
                 ]
               },
               {
-                "role": "tool",
                 "id": "tool-call-1",
+                "role": "tool",
                 "toolCallId": "call-1",
                 "content": "{\"approved\":true,\"pendingExecution\":true,\"message\":\"User approved this action\"}",
                 "metadata": {
@@ -997,6 +987,9 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1014,17 +1007,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-1\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1046,23 +1028,34 @@
                     }
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-1\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:15.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "approval_call-1",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1080,17 +1073,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-1\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1112,22 +1094,40 @@
                     }
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-1\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:17.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "approval_call-1",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
-            }
+            },
+            "parentRunId": "run-recorded-1",
+            "resume": [
+              {
+                "interruptId": "approval_call-1",
+                "status": "resolved",
+                "payload": {
+                  "approved": true
+                }
+              }
+            ]
           },
           "ended": "complete",
           "response": {
@@ -1337,20 +1337,11 @@
           "request": {
             "threadId": "00000000-0000-7000-8000-000000000002",
             "runId": "run-recorded-3",
-            "parentRunId": "run-recorded-2",
-            "resume": [
-              {
-                "interruptId": "approval_call-2",
-                "payload": {
-                  "approved": true
-                },
-                "status": "resolved"
-              }
-            ],
             "state": {},
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
                 "metadata": {
                   "tanstack": {
                     "toolCallMetadata": {
@@ -1369,7 +1360,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
                 "content": "And the older copy",
                 "toolCalls": [
                   {
@@ -1391,8 +1381,8 @@
                 ]
               },
               {
-                "role": "tool",
                 "id": "tool-call-1",
+                "role": "tool",
                 "toolCallId": "call-1",
                 "content": "{\"deleted\":\"call-1\"}",
                 "metadata": {
@@ -1402,8 +1392,8 @@
                 }
               },
               {
-                "role": "tool",
                 "id": "tool-call-2",
+                "role": "tool",
                 "toolCallId": "call-2",
                 "content": "{\"approved\":true,\"pendingExecution\":true,\"message\":\"User approved this action\"}",
                 "metadata": {
@@ -1765,6 +1755,9 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-3",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1785,26 +1778,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "content": "And the older copy",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-1\"}"
-                    }
-                  },
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-2\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1857,23 +1830,43 @@
                       "approved": true
                     }
                   }
+                ],
+                "role": "assistant",
+                "content": "And the older copy",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-1\"}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-2\"}"
+                    }
+                  }
                 ]
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-3",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-2",
               "resume": [
                 {
                   "interruptId": "approval_call-2",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-3",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1894,26 +1887,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "content": "And the older copy",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-1\"}"
-                    }
-                  },
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-2\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1966,22 +1939,49 @@
                       "approved": true
                     }
                   }
+                ],
+                "role": "assistant",
+                "content": "And the older copy",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-1\"}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-2\"}"
+                    }
+                  }
                 ]
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-3",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-2",
               "resume": [
                 {
                   "interruptId": "approval_call-2",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
-            }
+            },
+            "parentRunId": "run-recorded-2",
+            "resume": [
+              {
+                "interruptId": "approval_call-2",
+                "status": "resolved",
+                "payload": {
+                  "approved": true
+                }
+              }
+            ]
           },
           "ended": "complete",
           "response": {
