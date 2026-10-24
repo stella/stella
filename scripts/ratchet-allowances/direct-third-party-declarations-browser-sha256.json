@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "@stll/sha256 declares the already locked @noble/hashes implementation for bounded incremental browser Blob hashing; WebCrypto has no incremental digest API."
+}

@@ -388,6 +388,7 @@
         "reading": "Reading view"
       },
       "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
+      "pdfTextFailed": "The PDF's text could not be read, so the claims are not marked on its pages.",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "ESO9 import sheet (XLSX)",
         "exporting": "Preparing export…",
         "isdoc": "ISDOC e-invoice (ABRA Gen and others)",
+        "ksefFa3": "KSeF e-invoice FA(3) (XML)",
         "spreadsheets": "Spreadsheets",
         "xlsx": "Invoices (XLSX)",
         "xlsxLines": "Invoice lines (XLSX)"
@@ -757,6 +759,7 @@
     "sellerProfiles": {
       "add": "Add seller profile",
       "archiveConfirm": "Archive this seller profile? It will no longer be available for new invoices.",
+      "barRegistration": "Bar registration",
       "bic": "BIC / SWIFT code",
       "default": "Default seller",
       "defaultCurrency": "Default currency",
@@ -768,11 +771,10 @@
       "invalidCurrency": "Enter a three-letter currency code.",
       "invalidIban": "Enter a valid IBAN.",
       "legalName": "Legal name",
+      "registerEntry": "Register entry",
       "registrationId": "Registration ID",
       "setDefault": "Make default",
       "title": "Seller profiles",
-      "vatId": "VAT ID",
-      "vatPayer": "VAT payer",
       "vatPayerHelp": "Invoices from this seller charge VAT. Turn off for a registered person who has a VAT ID but is not a VAT payer.",
       "vatPayerRequiresVatId": "Enter the VAT ID to issue invoices as a VAT payer."
     },
@@ -807,6 +809,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Add VAT rate",
+      "addCzechia": "Add rates for Czechia",
+      "addSlovakia": "Add rates for Slovakia",
       "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.",
       "code": "Rate code",
       "current": "Current rate",
@@ -821,6 +825,7 @@
       "overlap": "Validity periods for the same rate code cannot overlap.",
       "past": "Past rate",
       "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.",
+      "presetResult": "Added {added}; skipped {skipped}.",
       "rate": "VAT percentage",
       "title": "VAT rates",
       "validFrom": "Valid since",
@@ -1027,7 +1032,10 @@
       "pageOfCount": "Page {page} of {pageCount}",
       "pageOfEstimatedCount": "Page {page} of ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page {page} · about {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}",
+      "pageWithMatchCounts": "Page {page} · {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithPartialMatchCount": "Page {page} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}",
       "perPage": "Per page",
       "refineForMore": "Refine your search to see more results"
@@ -2121,6 +2129,7 @@
       "ZH-HANT": "Chinese (traditional)"
     },
     "lastUpdated": "Last updated",
+    "layoutResetAfterProblem": "The layout was reset after a problem.",
     "legalDatabase": "Legal database",
     "loadMore": "Load more",
     "loading": "Loading",
@@ -2219,6 +2228,7 @@
     "suggested": "Suggested",
     "summarizeChanges": "Summarize changes",
     "target": "Target",
+    "taxId": "Tax ID",
     "timeBilling": "Time & Billing",
     "today": "Today",
     "translate": "Translate",
@@ -2242,6 +2252,8 @@
     "urlIdentifierPlaceholder": "my-organization",
     "user": "User",
     "value": "Value",
+    "vatId": "VAT ID",
+    "vatPayer": "VAT payer",
     "verified": "Verified",
     "verify": "Verify",
     "version": "Version",
@@ -2432,7 +2444,9 @@
       "prefix": "Prefix",
       "registrationNumber": "Registration number",
       "suffix": "Suffix",
-      "taxId": "Tax ID",
+      "vatPayer": "VAT-payer status",
+      "vatPayerNo": "Not a VAT payer",
+      "vatPayerUnknown": "Unknown",
       "year": "Year of birth"
     },
     "filterOrganizations": "Organizations",
@@ -2472,7 +2486,6 @@
         "primary_phone": "Primary phone",
         "state": "State or region",
         "suffix": "Suffix",
-        "tax_id": "Tax ID",
         "type": "Contact type"
       },
       "fileInvalid": "Choose one CSV, TSV or TXT file.",

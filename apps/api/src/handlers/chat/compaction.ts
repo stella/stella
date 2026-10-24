@@ -40,6 +40,10 @@ import { LIMITS } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
+// Compaction serves an interactive turn; a stalled summary falls back to the
+// bounded recent history and its visible context notice.
+const COMPACTION_GENERATION_DEADLINE_MS = 30_000;
+
 export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
 
 type TanStackCompactionAIAnalytics = Pick<
@@ -489,6 +493,7 @@ export const compactModelMessages = async ({
 };
 
 type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
+  summaryDeadlineMs?: number | undefined;
   abortSignal: AbortSignal;
   aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   boundary: ChatThirdPartyBoundary;
@@ -506,6 +511,7 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
 };
 
 type CompactModelMessagesForModelOptions = {
+  summaryDeadlineMs?: number | undefined;
   abortSignal: AbortSignal;
   aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   modelId?: string | undefined;
@@ -527,6 +533,7 @@ type CompactModelMessagesForModelOptions = {
 };
 
 export const compactChatMessagesForModel = async ({
+  summaryDeadlineMs = COMPACTION_GENERATION_DEADLINE_MS,
   abortSignal,
   aiAnalytics,
   boundary,
@@ -555,6 +562,7 @@ export const compactChatMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            deadlineMs: summaryDeadlineMs,
             userId: admission.userId,
             dataClass: "customer",
             abortSignal,
@@ -599,6 +607,7 @@ export const compactChatMessagesForModel = async ({
   });
 
 export const compactModelMessagesForModel = async ({
+  summaryDeadlineMs = COMPACTION_GENERATION_DEADLINE_MS,
   abortSignal,
   aiAnalytics,
   modelId,
@@ -629,6 +638,7 @@ export const compactModelMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            deadlineMs: summaryDeadlineMs,
             userId: admission.userId,
             dataClass: "customer",
             abortSignal,

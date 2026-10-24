@@ -161,6 +161,7 @@ const LAW_RESOLVERS = {
   AUT: unavailable,
   CZE: resolveCzechLaw,
   EU: unavailable,
+  GBR: unavailable,
   HUN: unavailable,
   POL: unavailable,
   SVK: unavailable,

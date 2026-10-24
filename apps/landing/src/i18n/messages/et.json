@@ -96,6 +96,19 @@
     "changelog": "Muudatuste logi",
     "chooseLanguage": "Vali keel",
     "docxEditor": "Eraldiseisev DOCX-redaktor",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Kommentaarid"
+      },
+      "matters": {
+        "done": "Valmis",
+        "inProgress": "Töös",
+        "open": "Avatud"
+      },
+      "research": {
+        "caseLaw": "Kohtupraktika"
+      }
+    },
     "github": "stella GitHubis",
     "openMenu": "Ava navigatsioon",
     "pillars": {

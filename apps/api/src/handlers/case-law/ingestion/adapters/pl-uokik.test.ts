@@ -661,8 +661,8 @@ describe("a decision with no text to read", () => {
 
   test("the census reads exactly those reasons as complete", () => {
     const held = plUokikAdapter.reconciliation.heldWithoutDocument;
-    expect(held?.metadataKey).toBe("documentAbsence");
-    expect([...(held?.reasons ?? [])].toSorted()).toEqual(
+    expect(held.metadataKey).toBe("documentAbsence");
+    expect([...held.reasons].toSorted()).toEqual(
       Object.values(PL_UOKIK_DOCUMENT_ABSENCE).toSorted(),
     );
   });

@@ -246,6 +246,28 @@ describe("Docker source closure", () => {
     ).toEqual(["Entry is unavailable: /opt/absent.js"]);
   });
 
+  test.each(["/", "/./", "/nested/.."])(
+    "root-copied packaged artifacts retain a single separator: %s",
+    (destination) => {
+      for (const entry of ["/smoke.js", "/app/smoke.js"]) {
+        expect(
+          checkDockerSource(
+            root,
+            [
+              "FROM bun AS builder",
+              "FROM bun AS runner",
+              `COPY --from=builder /packaged/ ${destination}`,
+              "FROM runner AS smoke",
+              `RUN bun ${entry}`,
+            ].join("\n"),
+            new Map(),
+            new Map(),
+          ),
+        ).toEqual([]);
+      }
+    },
+  );
+
   test("source wrappers check their inner reads without splitting quoted arguments", () => {
     const entry = put("wrapper/entry.ts", 'import "./missing";');
     const context: SourceTree = new Map([["/entry.ts", entry]]);
@@ -1059,13 +1081,13 @@ describe("Docker source closure", () => {
         mkdirSync(path.dirname(target), { recursive: true });
         writeFileSync(target, source);
       };
-      const output = GENERATORS.find(
-        ({ id }) => id === "route-tree",
-      )?.outputs.at(0);
-      if (output === undefined) {
-        throw new Error("Route tree output is missing");
+      const outputs = GENERATORS.find(({ id }) => id === "route-tree")?.outputs;
+      if (outputs === undefined) {
+        panic("Route tree outputs are missing");
       }
-      write(output, "export const routeTree = {};");
+      for (const output of outputs) {
+        write(output, "export const generated = true;");
+      }
       const producer = "apps/web/scripts/generate-route-tree.ts";
       const manifest = "apps/web/package.json";
       const entry = "apps/web/src/entry.ts";
@@ -1086,7 +1108,15 @@ describe("Docker source closure", () => {
           },
         }),
       );
-      write(entry, 'import "./routeTree.gen";');
+      write(
+        entry,
+        outputs
+          .map(
+            (output) =>
+              `import ${JSON.stringify(`./${path.basename(output, ".ts")}`)};`,
+          )
+          .join("\n"),
+      );
       const context: SourceTree = new Map(
         [producer, manifest, entry].map((file) => [`/${file}`, file]),
       );

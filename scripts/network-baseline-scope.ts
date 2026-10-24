@@ -197,6 +197,55 @@ const touchedRoutesInTree = (
   return touched;
 };
 
+const PER_REQUEST_KEYS = [
+  "requestCounts",
+  "dbQueries",
+  "responseSizes",
+] as const;
+
+// A budget file is written once while main keeps recording the route, so the
+// budget raises main's entry instead of replacing it: a request main gained
+// after the file was written must not read as new on a PR that edits it.
+const raiseRecorded = (
+  recorded: BaselineEntry | undefined,
+  budget: BaselineEntry,
+): BaselineEntry => {
+  if (recorded === undefined) {
+    return budget;
+  }
+  // Like the main recorder (mergeNetworkBaseline), overlapping values keep the
+  // higher one, so a budget written against older main never lowers a value.
+  const perRequest = new Map<
+    (typeof PER_REQUEST_KEYS)[number],
+    Record<string, number>
+  >();
+  for (const key of PER_REQUEST_KEYS) {
+    const values = [recorded[key], budget[key]].filter(
+      (value) => value !== undefined,
+    );
+    if (values.length === 0) {
+      continue;
+    }
+    const merged = new Map<string, number>();
+    for (const source of values) {
+      for (const [request, value] of Object.entries(source)) {
+        merged.set(request, Math.max(merged.get(request) ?? 0, value));
+      }
+    }
+    perRequest.set(key, Object.fromEntries(merged));
+  }
+  return {
+    ...recorded,
+    ...budget,
+    ...Object.fromEntries(perRequest),
+    depth:
+      recorded.depthMethod === budget.depthMethod
+        ? Math.max(recorded.depth, budget.depth)
+        : budget.depth,
+    requests: [...new Set([...recorded.requests, ...budget.requests])],
+  };
+};
+
 const applyNetworkBudgetDeclarations = (
   base: Baseline,
   declarations: unknown[],
@@ -237,7 +286,10 @@ const applyNetworkBudgetDeclarations = (
         `Invalid network budget declaration: ${route} uses depth method ${budget.depthMethod}; declare depth for ${NETWORK_DEPTH_METHOD}`,
       );
     }
-    baseline[route] = { ...budget, depthMethod: NETWORK_DEPTH_METHOD };
+    baseline[route] = raiseRecorded(base[route], {
+      ...budget,
+      depthMethod: NETWORK_DEPTH_METHOD,
+    });
     notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
   return { baseline, notices };
