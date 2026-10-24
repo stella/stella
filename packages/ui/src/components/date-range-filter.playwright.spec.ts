@@ -1,15 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+import { installBrowserClock } from "../testing/browser-clock";
+
 test.use({ timezoneId: "Europe/Prague" });
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(globalThis, "Temporal", {
-      value: undefined,
-      configurable: true,
-    });
-  });
-  await page.clock.install({ time: new Date("2026-03-08T12:00:00Z") });
+  await installBrowserClock(page, new Date("2026-03-08T12:00:00Z"));
   await page.goto("/src/components/fixtures/date-picker.fixture.html");
   await expect(page.locator("html")).toHaveAttribute(
     "data-date-picker-ready",

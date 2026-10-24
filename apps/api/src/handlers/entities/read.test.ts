@@ -1,5 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { ElysiaCustomStatusResponse } from "elysia";
 
 import { createReadFilesystemTreeHandler } from "@/api/handlers/entities/filesystem-tree/get";
 import { createReadEntitiesHandler } from "@/api/handlers/entities/list";
@@ -39,6 +40,13 @@ describe("entity read handler search", () => {
         cursorValuesByEntityId: new Map(),
         entities: [],
       }),
+    );
+  });
+
+  test("hydrates only requested columns by default", async () => {
+    await readEntities.handler(createContext({}));
+    expect(queryEntitiesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ fieldMode: "visible", fieldIds: [] }),
     );
   });
 
@@ -106,7 +114,7 @@ describe("entity read handler search", () => {
     );
   });
 
-  test("loads a bounded complete filesystem tree without widening page reads", async () => {
+  test("loads a cursor page of the filesystem tree", async () => {
     await readFilesystemTree.handler(
       createContext({
         filters: [],
@@ -122,9 +130,56 @@ describe("entity read handler search", () => {
         scope: { type: "matter", workspaceId },
         currentOrganizationId: organizationId,
         search: "closing binder",
-        limit: LIMITS.entitiesCount,
+        cursor: null,
+        limit: LIMITS.entitiesPageSizeDefault + 1,
         excludedKinds: ["task"],
       }),
     );
+  });
+
+  test("filesystem pages keep their row and byte bounds as matter rows grow", async () => {
+    const measurements = [];
+    for (const rowCount of [10, 200]) {
+      const rows = Array.from({ length: rowCount }, (_, index) => ({
+        entityId: `00000000-0000-0000-0000-${String(index).padStart(12, "0")}`,
+        parentId: null,
+        name: "Synthetic document ".repeat(10),
+      }));
+      queryEntitiesMock.mockImplementation(
+        async ({ limit }: { limit: number }) =>
+          Result.ok({
+            entities: rows.slice(0, limit),
+            cursorValuesByEntityId: new Map(
+              rows.map((row) => [row.entityId, [row.entityId]]),
+            ),
+          }),
+      );
+      const response = await readFilesystemTree.handler(
+        createContext({ limit: 10 }),
+      );
+      if (response instanceof ElysiaCustomStatusResponse) {
+        panic("Filesystem page scaling requires a successful response");
+      }
+      expect(response.items).toHaveLength(10);
+      expect(response.limit).toBe(10);
+      measurements.push({
+        rowCount,
+        beforeBytes: Buffer.byteLength(
+          JSON.stringify({ entities: rows, ancestorLinks: [] }),
+        ),
+        bytes: Buffer.byteLength(JSON.stringify(response)),
+        rows: response.items.length,
+      });
+    }
+    const [small, large] = measurements;
+    expect(small).toBeDefined();
+    expect(large).toBeDefined();
+    if (!small || !large) {
+      panic("Scaling fixture must include both cardinalities");
+    }
+    expect(large.bytes / large.rows).toBeLessThanOrEqual(
+      (1.2 * small.bytes) / small.rows,
+    );
+    console.info("filesystem-page-scaling", JSON.stringify(measurements));
   });
 });

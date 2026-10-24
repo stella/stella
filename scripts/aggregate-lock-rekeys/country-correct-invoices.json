@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/src/handlers/invoices/lock-invoice.ts",
+    "from": "b35572fecd2369b2922a28db1178fd5ebeed045a6400fb0b2a2532cca03f5368",
+    "to": "0c39b43defa802eb5ffb1a72c2a14d6916c622b7b879d9cf8c00ce91a4af288f",
+    "reason": "The invoice lock also reads the stored invoice language; the lock scope and order are unchanged."
+  },
+  {
+    "file": "apps/api/src/handlers/contacts/update.ts",
+    "from": "17c7bb8ec46797fd4ecfd614aa1e73cef6a521504e9f5175c57ffcb53d83652e",
+    "to": "51ee3a03e6ec7b85d24b3924a72bc29aa0ad9f860b786a248fcaf5bb31af0280",
+    "reason": "The contact update lock also reads the stored tax and VAT IDs to resolve the pair it writes; the lock scope and order are unchanged."
+  }
+]
