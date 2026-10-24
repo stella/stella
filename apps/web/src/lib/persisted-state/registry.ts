@@ -67,7 +67,7 @@ export const definePersistedState = <
   entry: PersistedStateEntry<TSchema, TScope>,
 ) => entry;
 
-const entryKey = <
+export const getPersistedStateKey = <
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
   TScope extends object,
 >(
@@ -121,7 +121,7 @@ export const writePersistedState = <
       }),
     );
   }
-  const key = entryKey(entry, scope);
+  const key = getPersistedStateKey(entry, scope);
   const storageResult = requireBrowserStorage(entry.area);
   if (Result.isError(storageResult)) {
     return Result.err(
@@ -154,7 +154,7 @@ export const readPersistedState = <
   if (entry.restoredUi && isRestoredStateSafeMode()) {
     return fallback;
   }
-  const key = entryKey(entry, scope);
+  const key = getPersistedStateKey(entry, scope);
   const rawResult = requireBrowserStorage(entry.area).andThen((storage) =>
     Result.try(() => storage.getItem(key)),
   );
@@ -166,7 +166,7 @@ export const readPersistedState = <
     removeInvalid(entry.area, key);
     return fallback;
   }
-  let parsed = readStoredJson(raw, envelopeSchema(entry.schema));
+  const parsed = readStoredJson(raw, envelopeSchema(entry.schema));
   if (parsed === null && entry.legacy !== undefined) {
     const input =
       entry.legacy.encoding === "json"
@@ -175,8 +175,13 @@ export const readPersistedState = <
     if (Result.isOk(input)) {
       const migrated = v.safeParse(entry.legacy.schema, input.value);
       if (migrated.success) {
-        parsed = { version: entry.version, value: migrated.output };
-        writePersistedState(entry, scope, migrated.output).unwrapOr(undefined);
+        const decision = entry.scopeCheck(migrated.output, scope);
+        if (!decision.keep) {
+          removeInvalid(entry.area, key);
+          return fallback;
+        }
+        writePersistedState(entry, scope, decision.value).unwrapOr(undefined);
+        return decision.value;
       }
     }
   }
@@ -199,4 +204,4 @@ export const removePersistedState = <
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
 ): ReturnType<typeof removeStored> =>
-  removeStored(entry.area, entryKey(entry, scope));
+  removeStored(entry.area, getPersistedStateKey(entry, scope));

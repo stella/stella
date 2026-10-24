@@ -17,6 +17,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   definePersistedState,
+  getPersistedStateKey,
   isRestoredStateSafeMode,
   keepInAnyScope,
   readPersistedState,
@@ -197,9 +198,9 @@ describe("persisted state registry", () => {
 
 test("released inspector formats migrate once without losing tabs or crash-recovery state", () => {
   const scope = { userId: "released-user", organizationId: "released-org" };
-  const stateKey = inspectorStateEntry.key(scope);
-  const minimizedKey = inspectorMinimizedEntry.key(scope);
-  const pendingKey = inspectorRestorePendingEntry.key(scope);
+  const stateKey = getPersistedStateKey(inspectorStateEntry, scope);
+  const minimizedKey = getPersistedStateKey(inspectorMinimizedEntry, scope);
+  const pendingKey = getPersistedStateKey(inspectorRestorePendingEntry, scope);
   const tabs = [
     { id: "saved-chat", type: "chat", label: "Saved conversation" },
   ];
