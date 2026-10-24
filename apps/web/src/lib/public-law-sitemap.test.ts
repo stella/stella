@@ -1086,7 +1086,11 @@ describe("public law sitemap", () => {
   });
 
   test("start client orders i18n around hydration per path kind", async () => {
-    const source = await readSource("apps/web/src/client.tsx");
+    const [entry, source] = await Promise.all([
+      readSource("apps/web/src/client.tsx"),
+      readSource("apps/web/src/client-runtime.tsx"),
+    ]);
+    expect(entry).toContain('import("@/client-runtime")');
 
     // Public SSR paths hydrate first (against the server's English) and
     // load the persisted locale after first paint; app paths keep the

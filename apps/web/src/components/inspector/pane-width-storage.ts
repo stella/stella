@@ -10,6 +10,7 @@ import {
 } from "@stll/ui/inspector";
 
 import { deviceStorage } from "@/lib/account/browser-storage";
+import type { PersistedDeviceUiStateKey } from "@/lib/analytics/web-hang/persisted-ui-state";
 import {
   definePersistedState,
   isRestoredStateSafeMode,
@@ -19,7 +20,7 @@ import {
 } from "@/lib/persisted-state/registry";
 
 export const INSPECTOR_PANE_WIDTH_STORAGE_KEY =
-  "stella:inspector-pane-width:v2";
+  "stella:inspector-pane-width:v2" satisfies PersistedDeviceUiStateKey;
 
 const paneWidthSchema = v.pipe(
   v.number(),

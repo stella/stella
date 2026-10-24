@@ -3,6 +3,8 @@ import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
@@ -25,10 +27,16 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import {
+  tInvoiceLanguage,
+  tMinorUnitAmount,
+  tSafeId,
+  tUserId,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { tExternalRef } from "@/api/lib/imports/external-ref";
 import { readExternalRefIds } from "@/api/lib/imports/upsert-by-external-id";
@@ -58,13 +66,18 @@ export const createContactBodySchema = t.Object({
   metadata: t.Optional(contactMetadataSchema),
   tags: t.Optional(t.Array(t.String(), { maxItems: 50 })),
   color: t.Optional(t.String({ maxLength: 32 })),
-  registrationNumber: t.Optional(t.String({ maxLength: 64 })),
-  taxId: t.Optional(t.String({ maxLength: 64 })),
+  registrationNumber: t.Optional(
+    t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH }),
+  ),
+  taxId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  vatId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  vatPayer: t.Optional(t.Nullable(t.Boolean())),
   bankAccounts: t.Optional(t.Array(bankAccountSchema, { maxItems: 10 })),
   billingAddress: t.Optional(billingAddressSchema),
   defaultHourlyRate: t.Optional(tMinorUnitAmount(0)),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
   paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
+  invoiceLanguage: t.Optional(t.Nullable(tInvoiceLanguage)),
   originatingAttorneyId: t.Optional(tUserId),
   responsibleAttorneyId: t.Optional(tUserId),
   external: t.Optional(tExternalRef),
@@ -146,7 +159,11 @@ export const insertContactRow = async ({
       tags: body.tags,
       color: body.color,
       registrationNumber: body.registrationNumber,
-      taxId: body.taxId,
+      ...contactTaxIdentifiers({
+        taxId: body.taxId ?? null,
+        vatId: body.vatId ?? null,
+      }),
+      vatPayer: body.vatPayer,
       bankAccounts: body.bankAccounts,
       billingAddress: body.billingAddress,
       defaultHourlyRate:
@@ -155,6 +172,7 @@ export const insertContactRow = async ({
           : cents(body.defaultHourlyRate),
       currency: body.currency,
       paymentTermDays: body.paymentTermDays,
+      invoiceLanguage: body.invoiceLanguage,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
       ...(body.external === undefined
@@ -302,15 +320,10 @@ const createContact = createSafeRootHandler(
   {
     contract: "patch",
     description:
-      "Create a contact in the organization address book. type (person or " +
-      "organization), displayName, and the contact id are supplied in the " +
-      "body; names, emails, phones, addresses, tags, registration and tax " +
-      "numbers, bank and billing details, default hourly rate, payment " +
-      "terms, originating or responsible attorneys, and external (the " +
-      "contact's source system and id there) are optional. Refused once the " +
-      "organization holds its maximum number of contacts, when an attorney " +
-      "id is not a member of the organization, or when another contact " +
-      "already carries the same external source and id.",
+      "Create an organization address-book contact. Supply id, type " +
+      "(person or organization) and displayName; other fields are optional. " +
+      "Refuses the contact limit, attorney IDs outside this organization, " +
+      "and an external source/id already used by another contact.",
     permissions: { contact: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "save_contact" },

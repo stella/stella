@@ -700,6 +700,42 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261019010000_invoice_party_tax_vat_ids",
+    form: "add-column",
+    reason:
+      "The seller, contact and invoice party identifier columns are nullable and default-free, a catalog-only addition without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
+  },
+  {
+    migration: "20261019020000_invoice_language",
+    form: "add-column",
+    reason:
+      "The nullable language preferences are catalog-only; invoices.language takes a constant literal default on PostgreSQL's fast-default path without rewriting invoice rows; lock acquisition is bounded by 5s and the statement by 30s.",
+  },
+  {
+    migration: "20261019020000_invoice_language",
+    form: "add-constraint",
+    reason:
+      "The three language CHECKs are added NOT VALID without scanning existing rows, under 5s lock_timeout and 30s statement_timeout; they are validated in the online phase after the schema lock is released.",
+  },
+  {
+    migration: "20261024190200_case_law_decision_date_floor_gbr",
+    form: "add-constraint",
+    reason:
+      "The widened decision-date CHECK is added NOT VALID without scanning corpus rows; metadata-only lock acquisition retries at 2s, 10s and 30s within a 10-minute statement budget, then validation runs in the online phase.",
+  },
+  {
+    migration: "20261014130000_import_provenance",
+    form: "add-column",
+    reason:
+      "Nullable provenance columns without defaults are catalog-only additions with no row rewrite, under 1s lock_timeout and 10s statement_timeout.",
+  },
+  {
+    migration: "20261014130000_import_provenance",
+    form: "add-constraint",
+    reason:
+      "The six provenance checks are added NOT VALID without scanning existing rows, under 1s lock_timeout and 10s statement_timeout; canonical online repairs validate after the DDL transaction commits.",
+  },
+  {
     migration: "20261020013635_case_law_source_hash_version",
     form: "add-column",
     reason:

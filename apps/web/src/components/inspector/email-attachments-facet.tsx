@@ -577,6 +577,7 @@ const AttachmentPreviewContent = ({
       key={previewId}
     >
       <PDFViewport
+        pageSource="portfolio"
         buffer={previewBuffer}
         className="document-preview-surface h-full w-full"
         contentClassName="relative space-y-2 px-2 pt-2"

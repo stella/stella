@@ -388,6 +388,7 @@
         "reading": "Lugemisvaade"
       },
       "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
+      "pdfTextFailed": "PDF-i teksti ei õnnestunud lugeda, seetõttu pole väited lehekülgedel märgitud.",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {
@@ -758,6 +759,7 @@
     "sellerProfiles": {
       "add": "Lisa müüja profiil",
       "archiveConfirm": "Kas arhiveerida see müüja profiil? Seda ei saa enam uute arvete jaoks kasutada.",
+      "barRegistration": "Advokatuuri registreering",
       "bic": "BIC / SWIFT-kood",
       "default": "Vaikimisi müüja",
       "defaultCurrency": "Vaikevaluuta",
@@ -769,11 +771,10 @@
       "invalidCurrency": "Sisestage kolmetäheline valuutakood.",
       "invalidIban": "Sisestage kehtiv IBAN.",
       "legalName": "Ametlik nimi",
+      "registerEntry": "Registrikanne",
       "registrationId": "Registrikood",
       "setDefault": "Määra vaikimisi",
       "title": "Müüja profiilid",
-      "vatId": "Käibemaksukohustuslase number",
-      "vatPayer": "Käibemaksukohustuslane",
       "vatPayerHelp": "Selle müüja arved sisaldavad käibemaksu. Lülitage välja registreeritud isiku puhul, kellel on käibemaksukohustuslase number, kuid kes ei ole maksukohustuslane.",
       "vatPayerRequiresVatId": "Sisestage käibemaksukohustuslase number, et väljastada arveid käibemaksukohustuslasena."
     },
@@ -808,6 +809,8 @@
     "total": "Kokku",
     "vatRates": {
       "add": "Lisa käibemaksumäär",
+      "addCzechia": "Lisa Tšehhi määrad",
+      "addSlovakia": "Lisa Slovakkia määrad",
       "archiveConfirm": "Kas arhiveerida see käibemaksumäär? Seda ei saa enam uute dokumentide jaoks kasutada.",
       "code": "Määra kood",
       "current": "Praegune määr",
@@ -822,6 +825,7 @@
       "overlap": "Sama määra koodi kehtivusajad ei tohi kattuda.",
       "past": "Varasem määr",
       "periodHelp": "Alguskuupäev on kaasatud; lõppkuupäev ei ole kaasatud. Jätke lõppkuupäev tühjaks, kui periood on avatud.",
+      "presetResult": "Lisatud: {added}; vahele jäetud: {skipped}.",
       "rate": "Käibemaksuprotsent",
       "title": "Käibemaksumäärad",
       "validFrom": "Kehtib alates",
@@ -2125,6 +2129,7 @@
       "ZH-HANT": "Hiina (traditsiooniline)"
     },
     "lastUpdated": "Viimati uuendatud",
+    "layoutResetAfterProblem": "Pärast tõrget taastati vaikimisi paigutus.",
     "legalDatabase": "Õigusandmebaas",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
@@ -2223,6 +2228,7 @@
     "suggested": "Soovitus",
     "summarizeChanges": "Võta muudatused kokku",
     "target": "Sihtmärk",
+    "taxId": "Maksukohustuslase number",
     "timeBilling": "Aeg ja arveldus",
     "today": "Täna",
     "translate": "Tõlgi",
@@ -2246,6 +2252,8 @@
     "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
     "value": "Väärtus",
+    "vatId": "Käibemaksukohustuslase number",
+    "vatPayer": "Käibemaksukohustuslane",
     "verified": "Kinnitatud",
     "verify": "Kinnita",
     "version": "Versioon",
@@ -2436,7 +2444,9 @@
       "prefix": "Eesliide",
       "registrationNumber": "Registrikood",
       "suffix": "Järelliide",
-      "taxId": "KMKR number",
+      "vatPayer": "Käibemaksukohustuslase staatus",
+      "vatPayerNo": "Ei ole käibemaksukohustuslane",
+      "vatPayerUnknown": "Teadmata",
       "year": "Aasta"
     },
     "filterOrganizations": "Organisatsioonid",
@@ -2477,7 +2487,6 @@
         "primary_phone": "Peamine telefoninumber",
         "state": "Maakond või piirkond",
         "suffix": "Järelliide",
-        "tax_id": "KMKR number",
         "type": "Kontakti tüüp"
       },
       "fileInvalid": "Vali üks CSV-, TSV- või TXT-fail.",

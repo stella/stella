@@ -1,9 +1,11 @@
 import { cents, formatMoneyCents, timeEntryAmount } from "@stll/money";
+import type { CentsAmount } from "@stll/money";
 import { BanknoteIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 
 import { formatPreviewDate, formatPreviewHours } from "./format";
 import { PREVIEW_MATTERS } from "./mock-data";
+import type { PreviewMatter } from "./mock-data";
 import { FeaturePreviewSurface } from "./surface";
 import type { FeaturePreviewProps } from "./surface";
 
@@ -19,38 +21,59 @@ export type BillingPreviewLabels = {
   summary: string;
 };
 
+export type BillingPreviewEntry = {
+  /** `YYYY-MM-DD`; unique within the invoice. */
+  date: string;
+  description: string;
+  billedMinutes: number;
+};
+
+/** The invoice's content. Every entry bills at `hourlyRate` (minor units,
+ *  minted with `cents` from `@stll/money`) in `currency` (ISO 4217); the
+ *  amounts and total are computed. */
+export type BillingPreviewData = {
+  invoiceNumber: string;
+  client: string;
+  matter: PreviewMatter;
+  currency: string;
+  hourlyRate: CentsAmount;
+  /** In the order the invoice lists them, usually by date. */
+  entries: readonly BillingPreviewEntry[];
+};
+
 /** An invoice draft: the matter's time entries in date order with hours,
  *  rate and amount, and the total. Amounts come from the same money helpers
  *  the app bills with. */
 export const BillingPreview = ({
   labels,
   locale,
+  data = DEFAULT_DATA,
   className,
-}: FeaturePreviewProps<BillingPreviewLabels>) => {
+}: FeaturePreviewProps<BillingPreviewLabels, BillingPreviewData>) => {
   const money = (amountCents: number) =>
-    formatMoneyCents({ amountCents, currency: CURRENCY, locale });
-  const rows = ENTRIES.map((entry) => ({
+    formatMoneyCents({ amountCents, currency: data.currency, locale });
+  const rows = data.entries.map((entry) => ({
     ...entry,
     amount: timeEntryAmount({
-      billedMinutes: entry.minutes,
-      rateAtEntry: HOURLY_RATE,
+      billedMinutes: entry.billedMinutes,
+      rateAtEntry: data.hourlyRate,
       noCharge: false,
     }),
   }));
-  const totalMinutes = rows.reduce((sum, row) => sum + row.minutes, 0);
+  const totalMinutes = rows.reduce((sum, row) => sum + row.billedMinutes, 0);
   const totalCents = rows.reduce((sum, row) => sum + row.amount, 0);
 
   return (
     <FeaturePreviewSurface
       className={className}
       icon={<BanknoteIcon className="text-muted-foreground size-4 shrink-0" />}
-      meta={<span className="tabular-nums">{INVOICE.number}</span>}
-      title={INVOICE.client}
+      meta={<span className="tabular-nums">{data.invoiceNumber}</span>}
+      title={data.client}
     >
       <div className="flex h-full min-h-0 flex-col p-3">
         <div className="text-muted-foreground mb-2 flex min-w-0 items-center gap-1.5">
-          <MatterIcon className="size-3.5 shrink-0" matter={INVOICE.matter} />
-          <span className="truncate">{INVOICE.matter.name}</span>
+          <MatterIcon className="size-3.5 shrink-0" matter={data.matter} />
+          <span className="truncate">{data.matter.name}</span>
         </div>
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] gap-x-4">
           <div className="text-muted-foreground col-span-full grid grid-cols-subgrid border-b pb-1.5 font-medium">
@@ -74,10 +97,10 @@ export const BillingPreview = ({
               </span>
               <span className="truncate">{row.description}</span>
               <span className="text-end tabular-nums">
-                {formatPreviewHours(locale, row.minutes)}
+                {formatPreviewHours(locale, row.billedMinutes)}
               </span>
               <span className="text-muted-foreground text-end whitespace-nowrap tabular-nums">
-                {money(HOURLY_RATE)}
+                {money(data.hourlyRate)}
               </span>
               <span className="text-end whitespace-nowrap tabular-nums">
                 {money(row.amount)}
@@ -100,42 +123,38 @@ export const BillingPreview = ({
   );
 };
 
-// Mock content depicting user data, not interface text; deliberately
-// untranslated.
-const CURRENCY = "EUR";
-const HOURLY_RATE = cents(22_000);
-
-const INVOICE = {
-  number: "INV-2026-0187",
+// The default content; see `mock-data.ts`.
+const DEFAULT_DATA = {
+  invoiceNumber: "INV-2026-0187",
   client: "Harbour Logistics Ltd",
   matter: PREVIEW_MATTERS.cargo,
-} as const;
-
-// Chronological, as an invoice lists them.
-const ENTRIES = [
-  {
-    date: "2026-10-02",
-    description: "Conflict check and engagement letter",
-    minutes: 30,
-  },
-  {
-    date: "2026-10-06",
-    description: "Review of carriage contract and bills of lading",
-    minutes: 144,
-  },
-  {
-    date: "2026-10-09",
-    description: "Call with client on the cargo damage claim",
-    minutes: 90,
-  },
-  {
-    date: "2026-10-14",
-    description: "Draft letter before action",
-    minutes: 210,
-  },
-  {
-    date: "2026-10-16",
-    description: "Research on carrier liability limits",
-    minutes: 120,
-  },
-] as const;
+  currency: "EUR",
+  hourlyRate: cents(22_000),
+  entries: [
+    {
+      date: "2026-10-02",
+      description: "Conflict check and engagement letter",
+      billedMinutes: 30,
+    },
+    {
+      date: "2026-10-06",
+      description: "Review of carriage contract and bills of lading",
+      billedMinutes: 144,
+    },
+    {
+      date: "2026-10-09",
+      description: "Call with client on the cargo damage claim",
+      billedMinutes: 90,
+    },
+    {
+      date: "2026-10-14",
+      description: "Draft letter before action",
+      billedMinutes: 210,
+    },
+    {
+      date: "2026-10-16",
+      description: "Research on carrier liability limits",
+      billedMinutes: 120,
+    },
+  ],
+} as const satisfies BillingPreviewData;

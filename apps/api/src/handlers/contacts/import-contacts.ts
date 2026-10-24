@@ -3,7 +3,10 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { CONTACT_IMPORT_ISSUE_CODE } from "@stll/api-contract";
+import {
+  CONTACT_IMPORT_ISSUE_CODE,
+  type ContactImportTaxIdScheme,
+} from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -14,7 +17,10 @@ import {
   type ContactType,
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
-import { validateContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
+import {
+  importedTaxIdentifiers,
+  validateContactImportCandidate,
+} from "@/api/handlers/contacts/contact-import-file";
 import type {
   ContactImportCandidate,
   ContactImportIssue,
@@ -332,6 +338,7 @@ type WriteImportRowsOptions = {
   importRequestId: SafeId<"contactImportRequest">;
   recordAuditEvent: AuditRecorder;
   rowsToWrite: readonly PlannedImportRow[];
+  taxIdScheme: ContactImportTaxIdScheme;
   resultByIndex: Map<number, ImportResultRow>;
 };
 
@@ -358,6 +365,7 @@ const writeImportRows = async ({
   importRequestId,
   recordAuditEvent,
   rowsToWrite,
+  taxIdScheme,
   resultByIndex,
 }: WriteImportRowsOptions): Promise<void> => {
   const importedAt = new Date();
@@ -384,7 +392,7 @@ const writeImportRows = async ({
     addresses: contact.addresses,
     tags: contact.tags,
     registrationNumber: contact.registrationNumber,
-    taxId: contact.taxId,
+    ...importedTaxIdentifiers(contact.taxId, taxIdScheme),
     ...(contact.dateOfBirth === undefined
       ? {}
       : dateOfBirthToColumns(contact.dateOfBirth)),
@@ -438,6 +446,7 @@ const writeImportRows = async ({
               tags: excluded(contacts.tags),
               registrationNumber: excluded(contacts.registrationNumber),
               taxId: excluded(contacts.taxId),
+              vatId: excluded(contacts.vatId),
               dateOfBirthYear: excluded(contacts.dateOfBirthYear),
               dateOfBirthMonth: excluded(contacts.dateOfBirthMonth),
               dateOfBirthDay: excluded(contacts.dateOfBirthDay),
@@ -581,6 +590,7 @@ export const importContactRows = async ({
       importRequestId: body.importRequestId,
       recordAuditEvent,
       rowsToWrite,
+      taxIdScheme: body.taxIdScheme,
       resultByIndex,
     });
 

@@ -19,22 +19,19 @@ export const tExternalRef = t.Object(
       minLength: 1,
       maxLength: EXTERNAL_SOURCE_MAX_LENGTH,
       pattern: EXTERNAL_SOURCE_PATTERN.source,
-      description:
-        "Lowercase key of the system the record was exported from, such as " +
-        "a product or file-format name",
+      description: "Lowercase source-system key (product or file-format name)",
     }),
     id: t.String({
       minLength: 1,
       maxLength: EXTERNAL_ID_MAX_LENGTH,
-      description: "The record's identifier in that system",
+      description: "Source-system record ID",
     }),
   },
   {
     additionalProperties: false,
     description:
-      "Identity of the record in the system it was imported from. " +
-      "The importing operation decides whether an existing match is updated " +
-      "or refused",
+      "Source-system record identity; the importing operation updates or " +
+      "refuses an existing match",
   },
 );
 

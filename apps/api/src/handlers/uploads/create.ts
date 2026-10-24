@@ -27,7 +27,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -41,38 +41,22 @@ import {
   validateEntityCreate,
 } from "@/api/lib/uploads/entity-create";
 import {
+  documentUploadFileFields,
+  tUploadFileSize,
+} from "@/api/lib/uploads/file-metadata-schema";
+import {
   importDocumentSource,
   tImportOrigin,
 } from "@/api/lib/uploads/import-origin";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
+  uploadTimeline,
 } from "@/api/lib/uploads/runtime";
 
-const baseFileMetadataSchema = {
-  name: tDefaultVarchar,
-  mimeType: t.String({ minLength: 1, maxLength: 255 }),
-  size: t.Integer({
-    // A zero-byte document is never a legitimate upload; require at least
-    // one byte so an empty object can't be presigned and finalized.
-    minimum: 1,
-    // S3 enforces this via the signed Content-Length; finalize
-    // re-checks via S3.HEAD. Pinning it at the schema level lets
-    // the API refuse oversized requests before even minting a URL.
-    maximum: FILE_SIZE_LIMIT_BYTES.document,
-  }),
-  // Lowercase hex, exactly 64 chars. The same format the legacy
-  // entity upload stores at `fields.content.sha256Hex`, so we can
-  // round-trip without re-encoding inside the migration.
-  sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
-} as const;
-
 const skillPackFileMetadataSchema = {
-  ...baseFileMetadataSchema,
-  size: t.Integer({
-    minimum: 1,
-    maximum: FILE_SIZE_LIMIT_BYTES.skillPack,
-  }),
+  ...documentUploadFileFields,
+  size: tUploadFileSize(FILE_SIZE_LIMIT_BYTES.skillPack),
 } as const;
 
 const entityCreatePresignBodySchema = t.Object({
@@ -80,13 +64,13 @@ const entityCreatePresignBodySchema = t.Object({
   propertyId: tSafeId("property"),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
   importOrigin: t.Optional(tImportOrigin),
-  ...baseFileMetadataSchema,
+  ...documentUploadFileFields,
 });
 
 const entityVersionPresignBodySchema = t.Object({
   purpose: t.Literal("entity_version"),
   entityId: tSafeId("entity"),
-  ...baseFileMetadataSchema,
+  ...documentUploadFileFields,
 });
 
 const agentSkillPresignBodySchema = t.Object({
@@ -233,9 +217,7 @@ const presignUpload = createSafeHandler(
       workspaceId,
     });
     const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
-    );
+    const { urlExpiresAt, finalizeDeadline } = uploadTimeline(now);
     const purposeData = toPurposeData(purposeBody);
 
     const presign = await presignUploadUrl({
@@ -305,7 +287,7 @@ const presignUpload = createSafeHandler(
           declaredSize: purposeBody.size,
           declaredSha256: purposeBody.sha256Hex,
           status: "pending",
-          expiresAt,
+          expiresAt: finalizeDeadline,
           createdAt: now,
         });
 
@@ -324,7 +306,7 @@ const presignUpload = createSafeHandler(
     return Result.ok({
       uploadId,
       url: presign.value.url,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: urlExpiresAt.toISOString(),
       headers: presign.value.headers,
     });
   },

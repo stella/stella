@@ -1,11 +1,12 @@
 import { Result, TaggedError } from "better-result";
 
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
+import { scanMediaType } from "@/api/lib/file-scan/media-type";
 import { mapMatchFinding, scanner } from "@/api/lib/file-scan/pipeline";
 import type { ScanContext } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanResult } from "@/api/lib/file-scan/types";
 import { aggregateVerdict } from "@/api/lib/file-scan/verdict";
-import { hasZipMagic, ZIP_BASED_MIMES } from "@/api/lib/file-scan/zip";
+import { hasZipMagic, ZIP_BASED_MEDIA_TYPES } from "@/api/lib/file-scan/zip";
 import {
   isEncryptedOoxmlContainer,
   isExactEncryptedOoxmlLayout,
@@ -38,7 +39,7 @@ export const scanFile = async ({
       // encrypted zip, not a zip; it is accepted under its declared type and
       // recorded as encrypted, like an encrypted PDF.
       if (
-        ZIP_BASED_MIMES.includes(declaredMimeType) &&
+        ZIP_BASED_MEDIA_TYPES.has(scanMediaType(declaredMimeType)) &&
         !hasZipMagic(buffer) &&
         !isEncryptedOoxmlContainer(declaredMimeType, buffer)
       ) {

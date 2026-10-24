@@ -388,6 +388,7 @@
         "reading": "Mode lecture"
       },
       "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
+      "pdfTextFailed": "Le texte du PDF n’a pas pu être lu : les affirmations ne sont donc pas signalées sur ses pages.",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
@@ -758,6 +759,7 @@
     "sellerProfiles": {
       "add": "Ajouter un profil de vendeur",
       "archiveConfirm": "Archiver ce profil de vendeur ? Il ne sera plus disponible pour les nouvelles factures.",
+      "barRegistration": "Inscription au barreau",
       "bic": "Code BIC / SWIFT",
       "default": "Vendeur par défaut",
       "defaultCurrency": "Devise par défaut",
@@ -769,11 +771,10 @@
       "invalidCurrency": "Saisissez un code de devise à trois lettres.",
       "invalidIban": "Saisissez un IBAN valide.",
       "legalName": "Dénomination légale",
+      "registerEntry": "Inscription au registre",
       "registrationId": "Numéro d’immatriculation",
       "setDefault": "Définir par défaut",
       "title": "Profils de vendeur",
-      "vatId": "Numéro de TVA",
-      "vatPayer": "Assujetti à la TVA",
       "vatPayerHelp": "Les factures de ce vendeur facturent la TVA. Désactivez pour une personne identifiée qui a un numéro de TVA sans être assujettie.",
       "vatPayerRequiresVatId": "Saisissez le numéro de TVA pour facturer en tant qu’assujetti à la TVA."
     },
@@ -808,6 +809,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Ajouter un taux de TVA",
+      "addCzechia": "Ajouter les taux de Tchéquie",
+      "addSlovakia": "Ajouter les taux de Slovaquie",
       "archiveConfirm": "Archiver ce taux de TVA ? Il ne sera plus disponible pour les nouveaux documents.",
       "code": "Code du taux",
       "current": "Taux actuel",
@@ -822,6 +825,7 @@
       "overlap": "Les périodes de validité d’un même code de taux ne peuvent pas se chevaucher.",
       "past": "Ancien taux",
       "periodHelp": "La date de début est incluse ; la date de fin est exclue. Laissez la date de fin vide pour une période ouverte.",
+      "presetResult": "Ajoutés : {added} ; ignorés : {skipped}.",
       "rate": "Pourcentage de TVA",
       "title": "Taux de TVA",
       "validFrom": "Valide depuis",
@@ -2125,6 +2129,7 @@
       "ZH-HANT": "Chinois (traditionnel)"
     },
     "lastUpdated": "Dernière mise à jour",
+    "layoutResetAfterProblem": "La disposition a été réinitialisée à la suite d’un problème.",
     "legalDatabase": "Base de données juridique",
     "loadMore": "Charger plus",
     "loading": "Chargement",
@@ -2223,6 +2228,7 @@
     "suggested": "Suggestion",
     "summarizeChanges": "Résumer les modifications",
     "target": "Cible",
+    "taxId": "Identifiant fiscal",
     "timeBilling": "Temps et facturation",
     "today": "Aujourd'hui",
     "translate": "Traduire",
@@ -2246,6 +2252,8 @@
     "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
     "value": "Valeur",
+    "vatId": "Numéro de TVA",
+    "vatPayer": "Assujetti à la TVA",
     "verified": "Vérifié",
     "verify": "Vérifier",
     "version": "Version",
@@ -2436,7 +2444,9 @@
       "prefix": "Préfixe",
       "registrationNumber": "Numéro d'enregistrement",
       "suffix": "Suffixe",
-      "taxId": "Numéro fiscal",
+      "vatPayer": "Statut d’assujettissement à la TVA",
+      "vatPayerNo": "Non assujetti à la TVA",
+      "vatPayerUnknown": "Inconnu",
       "year": "Année"
     },
     "filterOrganizations": "Organisations",
@@ -2477,7 +2487,6 @@
         "primary_phone": "Téléphone principal",
         "state": "État ou région",
         "suffix": "Suffixe",
-        "tax_id": "Numéro fiscal",
         "type": "Type de contact"
       },
       "fileInvalid": "Choisissez un seul fichier CSV, TSV ou TXT.",

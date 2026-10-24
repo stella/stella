@@ -1,4 +1,5 @@
 import {
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
@@ -635,7 +636,10 @@ export const sellerProfiles = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     legalName: p.varchar("legal_name", { length: 512 }).notNull(),
     registrationId: p.varchar("registration_id", { length: 64 }),
+    taxId: p.varchar("tax_id", { length: 64 }),
     vatId: p.varchar("vat_id", { length: 64 }),
+    registerEntry: p.text("register_entry"),
+    barRegistration: p.text("bar_registration"),
     // Whether the issuer charges VAT. A VAT ID alone does not decide it: a
     // registered person who is not a payer has one and must not charge VAT.
     vatPayer: p.boolean("vat_payer").notNull().default(false),
@@ -984,6 +988,8 @@ export const invoices = p.pgTable(
     taxableSupplyDate: p.date("taxable_supply_date"),
     dueDate: p.date("due_date"),
     currency: p.varchar({ length: 3 }).notNull(),
+    /** Language frozen onto the invoice so every reader sees the same document. */
+    language: p.text({ enum: INVOICE_LANGUAGES }).notNull().default("en"),
     sellerProfileId: safeUuid<"sellerProfile">("seller_profile_id").references(
       () => sellerProfiles.id,
     ),
@@ -991,6 +997,7 @@ export const invoices = p.pgTable(
     // contact edit does not rewrite an invoice.
     buyerName: p.varchar("buyer_name", { length: 512 }),
     buyerRegistrationId: p.varchar("buyer_registration_id", { length: 64 }),
+    buyerTaxId: p.varchar("buyer_tax_id", { length: 64 }),
     buyerVatId: p.varchar("buyer_vat_id", { length: 64 }),
     buyerAddressLine1: p.varchar("buyer_address_line_1", { length: 512 }),
     buyerAddressLine2: p.varchar("buyer_address_line_2", { length: 512 }),
@@ -1013,6 +1020,13 @@ export const invoices = p.pgTable(
   },
   (table) => [
     ...importProvenanceConstraints("invoices", table),
+    p.check(
+      "invoices_language_check",
+      sql`${table.language} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "invoices_billing_mode_check",
       sql`${table.billingMode} IN (${sql.join(

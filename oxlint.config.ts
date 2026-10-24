@@ -398,6 +398,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
   ]),
+  fixtureRuleOverride("no-placeholder-stella-mark.fixture.tsx", [
+    "no-placeholder-stella-mark/no-placeholder-stella-mark",
+  ]),
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
@@ -1449,6 +1452,7 @@ const config = defineConfig({
   ignorePatterns: [
     ...libraryIgnorePatterns,
     "**/routeTree.gen.ts",
+    "apps/web/src/route-templates.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
@@ -1530,6 +1534,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
@@ -3309,6 +3314,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item": "error",
+      },
+    },
+    {
+      files: [
+        "apps/**/*.{jsx,tsx}",
+        "packages/**/*.{jsx,tsx}",
+        ".oxlint-plugins/__fixtures__/no-placeholder-stella-mark.fixture.tsx",
+      ],
+      rules: {
+        "no-placeholder-stella-mark/no-placeholder-stella-mark": "error",
       },
     },
     {

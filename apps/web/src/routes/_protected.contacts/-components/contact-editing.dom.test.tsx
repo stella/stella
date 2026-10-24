@@ -77,6 +77,8 @@ const { ContactNotesEditor } =
   await import("@/routes/_protected.contacts/-components/contact-notes-editor");
 const { EditableRow } =
   await import("@/routes/_protected.contacts/-components/editable-row");
+const { VatPayerSelect } =
+  await import("@/routes/_protected.contacts/-components/vat-payer-select");
 const { ContactCommunicationEditor } =
   await import("@/routes/_protected.contacts/-components/contact-communication-editor");
 const { ContactCustomFieldsEditor } =
@@ -115,6 +117,9 @@ const contact = (id: typeof A, notes: string | null) =>
     color: null,
     registrationNumber: null,
     taxId: null,
+    vatId: null,
+    vatPayer: null,
+    invoiceLanguage: null,
     bankAccounts: null,
     billingAddress: null,
     defaultHourlyRate: null,
@@ -225,6 +230,40 @@ const notesPage = () => {
   );
   return <ContactNotesEditor contact={data} />;
 };
+
+const vatPayerPage = () => {
+  const { data } = query.useSuspenseQuery(contactOptions(ORGANIZATION, A));
+  return <VatPayerSelect contact={data} />;
+};
+
+test("VAT payer selection submits the nullable contact field", async () => {
+  const client = createClient();
+  client.setQueryData(
+    contactOptions(ORGANIZATION, A).queryKey,
+    contact(A, null),
+  );
+  const { view } = await mountPage(vatPayerPage, client);
+
+  testing.fireEvent.click(
+    view.getByRole("combobox", { name: messages.contacts.fields.vatPayer }),
+  );
+  const yes = await view.findByRole("option", {
+    name: messages.common.vatPayer,
+  });
+  testing.fireEvent.pointerDown(yes);
+  testing.fireEvent.mouseDown(yes);
+  testing.fireEvent.pointerUp(yes);
+  testing.fireEvent.mouseUp(yes);
+  testing.fireEvent.click(yes);
+
+  const update = await nextPost();
+  expect(update.body).toEqual({ vatPayer: true });
+  await testing.act(async () =>
+    update.response.resolve(Response.json({ success: true })),
+  );
+  view.unmount();
+  client.clear();
+});
 
 const ratePage = () => {
   const { data } = query.useSuspenseQuery(contactOptions(ORGANIZATION, A));

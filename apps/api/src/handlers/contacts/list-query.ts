@@ -54,11 +54,14 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   // summary; contacts.get returns them.
   "registrationNumber",
   "taxId",
+  "vatId",
+  "vatPayer",
   "bankAccounts",
   "billingAddress",
   "defaultHourlyRate",
   "currency",
   "paymentTermDays",
+  "invoiceLanguage",
   // Attorney assignment surfaces on the matter (workspace) contact fields,
   // not the standalone directory row.
   "originatingAttorneyId",

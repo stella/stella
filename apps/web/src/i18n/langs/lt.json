@@ -388,6 +388,7 @@
         "reading": "Skaitymo rodinys"
       },
       "notLocated": "{count, plural, one {# teiginys originale nerastas} few {# teiginiai originale nerasti} many {# teiginio originale nerasta} other {# teiginių originale nerasta}}",
+      "pdfTextFailed": "Nepavyko perskaityti PDF teksto, todėl teiginiai puslapiuose nepažymėti.",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {
@@ -758,6 +759,7 @@
     "sellerProfiles": {
       "add": "Pridėti pardavėjo profilį",
       "archiveConfirm": "Archyvuoti šį pardavėjo profilį? Jis nebebus prieinamas naujoms sąskaitoms.",
+      "barRegistration": "Registracija advokatūroje",
       "bic": "BIC / SWIFT kodas",
       "default": "Numatytasis pardavėjas",
       "defaultCurrency": "Numatytoji valiuta",
@@ -769,11 +771,10 @@
       "invalidCurrency": "Įveskite trijų raidžių valiutos kodą.",
       "invalidIban": "Įveskite galiojantį IBAN.",
       "legalName": "Oficialus pavadinimas",
+      "registerEntry": "Registro įrašas",
       "registrationId": "Registracijos numeris",
       "setDefault": "Nustatyti kaip numatytąjį",
       "title": "Pardavėjo profiliai",
-      "vatId": "PVM mokėtojo kodas",
-      "vatPayer": "PVM mokėtojas",
       "vatPayerHelp": "Šio pardavėjo sąskaitose taikomas PVM. Išjunkite registruotam asmeniui, kuris turi PVM mokėtojo kodą, bet nėra PVM mokėtojas.",
       "vatPayerRequiresVatId": "Įveskite PVM mokėtojo kodą, kad galėtumėte išrašyti sąskaitas kaip PVM mokėtojas."
     },
@@ -808,6 +809,8 @@
     "total": "Iš viso",
     "vatRates": {
       "add": "Pridėti PVM tarifą",
+      "addCzechia": "Pridėti Čekijos tarifus",
+      "addSlovakia": "Pridėti Slovakijos tarifus",
       "archiveConfirm": "Archyvuoti šį PVM tarifą? Jis nebebus prieinamas naujiems dokumentams.",
       "code": "Tarifo kodas",
       "current": "Dabartinis tarifas",
@@ -822,6 +825,7 @@
       "overlap": "To paties tarifo kodo galiojimo laikotarpiai negali persidengti.",
       "past": "Ankstesnis tarifas",
       "periodHelp": "Pradžios data įtraukiama; pabaigos data neįtraukiama. Atviram laikotarpiui palikite pabaigos datą tuščią.",
+      "presetResult": "Pridėta: {added}; praleista: {skipped}.",
       "rate": "PVM procentas",
       "title": "PVM tarifai",
       "validFrom": "Galioja nuo",
@@ -2125,6 +2129,7 @@
       "ZH-HANT": "Kinų (tradicinė)"
     },
     "lastUpdated": "Paskutinis atnaujinimas",
+    "layoutResetAfterProblem": "Po trikties atkurtas numatytasis išdėstymas.",
     "legalDatabase": "Teisinė duomenų bazė",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
@@ -2223,6 +2228,7 @@
     "suggested": "Pasiūlymas",
     "summarizeChanges": "Apibendrinti pakeitimus",
     "target": "Taikinys",
+    "taxId": "Mokesčių mokėtojo kodas",
     "timeBilling": "Laikas ir atsiskaitymai",
     "today": "Šiandien",
     "translate": "Versti",
@@ -2246,6 +2252,8 @@
     "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
     "value": "Reikšmė",
+    "vatId": "PVM mokėtojo kodas",
+    "vatPayer": "PVM mokėtojas",
     "verified": "Patvirtinta",
     "verify": "Patvirtinti",
     "version": "Versija",
@@ -2436,7 +2444,9 @@
       "prefix": "Priešdėlis",
       "registrationNumber": "Registracijos numeris",
       "suffix": "Priesaga",
-      "taxId": "PVM mokėtojo kodas",
+      "vatPayer": "PVM mokėtojo statusas",
+      "vatPayerNo": "Ne PVM mokėtojas",
+      "vatPayerUnknown": "Nežinoma",
       "year": "Metai"
     },
     "filterOrganizations": "Organizacijos",
@@ -2477,7 +2487,6 @@
         "primary_phone": "Pagrindinis telefono numeris",
         "state": "Apskritis arba regionas",
         "suffix": "Priesaga",
-        "tax_id": "PVM mokėtojo kodas",
         "type": "Kontakto tipas"
       },
       "fileInvalid": "Pasirinkite vieną CSV, TSV arba TXT failą.",

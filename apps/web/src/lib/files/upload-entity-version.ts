@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
@@ -13,10 +14,6 @@ import {
   preflightAttachedTemplateUpload,
 } from "./attached-template-upload-preflight";
 import { completeEntityVersionUpload } from "./upload-entity-version.logic";
-
-// Stall ceiling, not a target duration: a healthy slow upload of a large file
-// can legitimately take several minutes.
-const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 type UploadEntityVersionOptions = {
   workspaceId: string;
@@ -114,7 +111,7 @@ export const uploadEntityVersion = async ({
           headers,
           body: fileToUpload,
           signal,
-          timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+          timeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
         }),
     });
     return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };

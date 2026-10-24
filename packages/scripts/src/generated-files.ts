@@ -25,7 +25,10 @@ export const CI_GENERATED_OUTPUTS = {
   ],
   webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
   prepaintLocale: ["apps/web/public/prepaint-init.js"],
-  routeTree: ["apps/web/src/routeTree.gen.ts"],
+  routeTree: [
+    "apps/web/src/routeTree.gen.ts",
+    "apps/web/src/route-templates.gen.ts",
+  ],
   apiTypes: ["apps/web/src/generated/api-routes.gen.ts"],
   apiTypecheckProjects: [
     "apps/api/.cache/typecheck-declarations/roots.json",

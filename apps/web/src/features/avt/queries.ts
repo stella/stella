@@ -1,4 +1,8 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  queryOptions,
+  skipToken,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -65,7 +69,60 @@ export const avtKeys = {
       ...avtKeys.historyAll(workspaceId),
       documentFileKey({ entityId, fileFieldId }),
     ] as const,
+  originalPdfPages: (
+    workspaceId: string,
+    fileId: string | null,
+    pageNumbers: readonly number[],
+  ) =>
+    [
+      ...avtKeys.all(workspaceId),
+      "original-pdf-pages",
+      fileId,
+      pageNumbers,
+    ] as const,
 };
+
+type OriginalPdfPagesArgs = {
+  workspaceId: string;
+  /** The downloaded PDF, once it is; a new upload is a new file id. */
+  file: { fileId: string; buffer: ArrayBuffer } | undefined;
+  pageNumbers: readonly number[];
+};
+
+/**
+ * The viewer's text and glyph boxes of the pages a run's claims sit on, read
+ * off the main thread. A file's bytes never change under its id, so the
+ * result never goes stale.
+ */
+export const originalPdfPagesOptions = ({
+  workspaceId,
+  file,
+  pageNumbers,
+}: OriginalPdfPagesArgs) =>
+  queryOptions({
+    queryKey: avtKeys.originalPdfPages(
+      workspaceId,
+      file?.fileId ?? null,
+      pageNumbers,
+    ),
+    queryFn:
+      file === undefined || pageNumbers.length === 0
+        ? skipToken
+        : async ({ signal }) => {
+            const { extractPDFPageSearchTextsInWorker } =
+              await import("@/lib/pdf/pdf-page-text-worker-client");
+            signal.throwIfAborted();
+            const pages = await extractPDFPageSearchTextsInWorker({
+              // The worker takes the bytes it is sent; the viewer keeps its
+              // own.
+              bytes: file.buffer.slice(0),
+              pageNumbers,
+              signal,
+            });
+            return new Map(pages.map((page) => [page.pageNumber, page]));
+          },
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
 /** Documents per latest-verification request, the endpoint's cap. */
 const LATEST_READ_CHUNK = 200;

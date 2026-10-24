@@ -28,6 +28,7 @@ const handle = async (
     const result = await findPDFSearchResults({
       bytes: new Uint8Array(request.bytes),
       password: request.password,
+      pageSource: request.pageSource,
       searchText: request.searchText,
       signal,
     });
