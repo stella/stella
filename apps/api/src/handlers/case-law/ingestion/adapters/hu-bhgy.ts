@@ -1007,6 +1007,7 @@ export const huBhgyRawPartsOf = (
   ...(document === undefined
     ? {}
     : {
+        // parser-output-unchanged: [hu-bhgy] toBase64() emits the same padded base64 as toString("base64").
         [RAW_PART.DOCUMENT]: Buffer.from(document.bytes).toBase64(),
         [RAW_PART.DOCUMENT_CONTENT_TYPE]: document.contentType,
       }),
