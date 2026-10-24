@@ -573,9 +573,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     setExpandedIds((prev) => new Set(prev).add(entityId));
   };
 
-  const handleSubfolderCreated = (entityId: string, parentId: string) => {
+  const handleSubfolderCreated = (
+    entityId: string,
+    parentId: string | null,
+  ) => {
     setEditingEntityId(entityId);
-    setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
+    setExpandedIds((prev) => {
+      const next = new Set(prev).add(entityId);
+      return parentId === null ? next : next.add(parentId);
+    });
   };
 
   const flattenedRows = useMemo(
@@ -1219,7 +1225,7 @@ type FilesystemRowProps = {
   ) => void;
   onClearSelection: () => void;
   onSelect: (entityId: string, mods: { meta: boolean; shift: boolean }) => void;
-  onSubfolderCreated: (entityId: string, parentId: string) => void;
+  onSubfolderCreated: (entityId: string, parentId: string | null) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
   getAncestorIds: (id: string) => string[];
