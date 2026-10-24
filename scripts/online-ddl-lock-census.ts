@@ -3,7 +3,11 @@ import path from "node:path";
 import ts from "typescript6";
 
 import { parseMigrationStatements } from "./check-migration-safety";
-import { censusSql, DDL_FORMS } from "./migration-lock-census";
+import {
+  censusSql,
+  DDL_FORMS,
+  isWriterBlockingLock,
+} from "./migration-lock-census";
 
 const OWNER_PATH = "apps/api/src/db/online-ddl.ts";
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
@@ -803,23 +807,18 @@ const checkSql = ({
         }
         if (
           lockQueue === "beside_writers" &&
-          [
-            "SHARE",
-            "SHARE ROW EXCLUSIVE",
-            "EXCLUSIVE",
-            "ACCESS EXCLUSIVE",
-          ].includes(form.lockMode)
+          isWriterBlockingLock(form.lockMode)
         ) {
           errors.push(
             `${description} at line ${line} must use blocks_writers for ${form.lockMode} ${form.form}`,
           );
         }
         if (
-          form.lockMode === "ACCESS EXCLUSIVE" &&
+          isWriterBlockingLock(form.lockMode) &&
           !isWithinLockTaking(node, context)
         ) {
           errors.push(
-            `ACCESS EXCLUSIVE ${form.form} SQL at line ${line} must be passed through lockTaking`,
+            `${form.lockMode} ${form.form} SQL at line ${line} must be passed through lockTaking`,
           );
         }
       }

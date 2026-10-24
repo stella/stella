@@ -460,7 +460,7 @@ const relationReferences = (tokens: StatementTokens) => {
   return relations;
 };
 
-const requiresRelationReview = (lockMode: LockMode) =>
+export const isWriterBlockingLock = (lockMode: LockMode) =>
   lockMode === "SHARE" ||
   lockMode === "SHARE ROW EXCLUSIVE" ||
   lockMode === "EXCLUSIVE" ||
@@ -524,7 +524,7 @@ const censusSqlSource = (source: string, topLevel: boolean) => {
       ...(target === undefined ? [] : [target]),
       ...additionalTargets,
     ];
-    if (requiresRelationReview(lockMode) && lockTargets.length === 0) {
+    if (isWriterBlockingLock(lockMode) && lockTargets.length === 0) {
       lockTargets.push(undefined);
     }
     if (/\bCASCADE$/u.test(normalized)) {
@@ -966,7 +966,7 @@ export const checkMigrationLocks = ({
         remaining.set(key, historical - 1);
         continue;
       }
-      if (!requiresRelationReview(lockMode) || !locksExistingRelation) {
+      if (!isWriterBlockingLock(lockMode) || !locksExistingRelation) {
         continue;
       }
       if (

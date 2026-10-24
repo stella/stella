@@ -51,6 +51,21 @@ describe("online DDL lock census", () => {
     );
   });
 
+  test.each([
+    ["SHARE", "CREATE INDEX probe_idx ON public.probe (id)"],
+    [
+      "SHARE ROW EXCLUSIVE",
+      "LOCK TABLE public.probe IN SHARE ROW EXCLUSIVE MODE",
+    ],
+    ["ACCESS EXCLUSIVE", "ALTER TABLE public.probe ADD COLUMN added text"],
+  ] as const)("ungated %s SQL requires the branded path", (mode, sql) => {
+    const source = `${ownerSource}\nconst fixture = ${JSON.stringify(sql)};`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(`${mode}`);
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /must be passed through lockTaking/iu,
+    );
+  });
+
   test("the dynamic create SQL exception is scoped to its checked builder", () => {
     const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: createSql });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
