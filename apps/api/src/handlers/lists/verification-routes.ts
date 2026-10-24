@@ -47,21 +47,25 @@ export const createListVerificationRoutes = (
     .get("/claim-comments", listClaimComments.handler, {
       params: listClaimComments.config.params,
       permissions: listClaimComments.config.permissions,
+      accountAccess: listClaimComments.config.accountAccess,
       query: listClaimComments.config.query,
     })
     .post("/claim-comments", createClaimComment.handler, {
       body: createClaimComment.config.body,
       params: createClaimComment.config.params,
       permissions: createClaimComment.config.permissions,
+      accountAccess: createClaimComment.config.accountAccess,
     })
     .patch("/claim-comments/:annotationId", updateClaimComment.handler, {
       body: updateClaimComment.config.body,
       params: updateClaimComment.config.params,
       permissions: updateClaimComment.config.permissions,
+      accountAccess: updateClaimComment.config.accountAccess,
     })
     .delete("/claim-comments/:annotationId", deleteClaimComment.handler, {
       params: deleteClaimComment.config.params,
       permissions: deleteClaimComment.config.permissions,
+      accountAccess: deleteClaimComment.config.accountAccess,
     })
     .post("/sample-case", createSampleCase.handler, {
       body: createSampleCase.config.body,
