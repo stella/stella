@@ -156,7 +156,9 @@ export const useDecisionAnalysis = ({
   const timingKey = `${key.decisionId}:${key.decisionUpdatedAt}`;
   useExternalSyncEffect(() => {
     if (!enabled) {
-      // No timing session to clean up while the analysis is disabled.
+      // The previous setup owns its deferred leave event; a later enable
+      // starts a new visit even when the decision identity is unchanged.
+      timingRef.current = null;
       return undefined;
     }
     const existing = timingRef.current;
