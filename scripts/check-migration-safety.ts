@@ -636,15 +636,16 @@ const executedDmlTargets = (statement: Statement): DmlTarget[] => {
       continue;
     }
 
-    // A privilege or a trigger event names UPDATE before ON, OF, a column list
-    // or the next privilege (`GRANT SELECT, UPDATE ON t`, `INSERT OR UPDATE ON
-    // t`, `UPDATE (c)`); a statement names its relation next.
+    // A privilege or a trigger event names UPDATE before ON, OF, OR, a column
+    // list or the next privilege (`GRANT SELECT, UPDATE ON t`, `UPDATE OR
+    // INSERT ON t`, `UPDATE (c)`); a statement names its relation next.
     const following = tokens[position + 1];
     if (
       verb === UPDATE_KEYWORD &&
       (following?.kind === "punctuation" ||
         isIndexKeyword(following, "on") ||
-        isIndexKeyword(following, "of"))
+        isIndexKeyword(following, "of") ||
+        isIndexKeyword(following, "or"))
     ) {
       continue;
     }

@@ -308,12 +308,14 @@ describe("check-migration-safety", () => {
   });
 
   describe("expand-only pre-deploy migrations", () => {
-    it("treats UPDATE as a privilege or trigger event, not a row update, before ON, OF or a column list", () => {
+    it("treats UPDATE as a privilege or trigger event, not a row update, before ON, OF, OR or a column list", () => {
       for (const sql of [
         `GRANT SELECT, INSERT, UPDATE ON TABLE "time_daily_targets" TO stella;`,
         `GRANT UPDATE ("status") ON "documents" TO stella;`,
         `REVOKE UPDATE ON "documents" FROM stella;`,
         `CREATE TRIGGER "documents_touch" AFTER INSERT OR UPDATE OF "status" ON "documents" FOR EACH ROW EXECUTE FUNCTION touch();`,
+        `CREATE TRIGGER "documents_touch" AFTER UPDATE OR INSERT ON "documents" FOR EACH ROW EXECUTE FUNCTION touch();`,
+        `CREATE TRIGGER "documents_guard" BEFORE INSERT OR UPDATE OR DELETE ON "documents" FOR EACH ROW EXECUTE FUNCTION guard();`,
       ]) {
         const result = runChecker(sql);
         expect(result.stdout + result.stderr, sql).not.toContain(
