@@ -31,8 +31,7 @@ type PostHogInitOptions = {
   capture_pageleave: boolean;
   capture_pageview: boolean;
   capture_performance:
-    | boolean
-    | { network_timing: boolean; web_vitals: boolean };
+    boolean | { network_timing: boolean; web_vitals: boolean };
   disable_persistence: boolean;
   disable_session_recording: boolean;
   mask_all_text: boolean;

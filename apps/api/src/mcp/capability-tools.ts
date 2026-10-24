@@ -1401,8 +1401,7 @@ const CAPABILITY_ARGUMENT_SCHEMAS = {
  * Both directions come from `INTERNAL_FIELD_NAME`'s one table.
  */
 type FieldProjection =
-  | { ok: true; value: unknown }
-  | { ok: false; issues: McpValidationIssue[] };
+  { ok: true; value: unknown } | { ok: false; issues: McpValidationIssue[] };
 
 const internalNameRefusal = (
   path: string,

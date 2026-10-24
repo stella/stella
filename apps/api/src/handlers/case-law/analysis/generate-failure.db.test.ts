@@ -123,11 +123,7 @@ const VALID_ANSWER = {
 
 /** How the faked provider answers one run. */
 type ProviderAnswer =
-  | "cut-off"
-  | "valid"
-  | "never"
-  | "refused"
-  | "rate-limited";
+  "cut-off" | "valid" | "never" | "refused" | "rate-limited";
 
 /** The retry delay the rate-limited answer names: far past the wait cap. */
 const RATE_LIMIT_DELAY_MS = 41_400_000;

@@ -1203,8 +1203,7 @@ const runPageOperation = async (
   });
 
 type ActionFrameCheck =
-  | { error: BrowserControlResult; ok: false }
-  | { ok: true; origin: string };
+  { error: BrowserControlResult; ok: false } | { ok: true; origin: string };
 
 /**
  * Reads the origin of the document an element ref points into and holds it

@@ -301,8 +301,7 @@ export const CLIPBOARD_EDITOR_SESSION_EVENT = "clipboard-editor-session";
 
 /** What the reused editor window shows: one clip per session, or nothing. */
 export type ClipboardEditorSession =
-  | { type: "open"; session: number }
-  | { type: "idle" };
+  { type: "open"; session: number } | { type: "idle" };
 
 export const isClipboardEditorSession = (
   value: unknown,

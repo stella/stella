@@ -626,8 +626,7 @@ export const QUERY_PLAN_REGISTRY = [
 ] as const satisfies readonly QueryPlanEntry[];
 
 type SharedQueryDisposition =
-  | { type: "registered"; id: string }
-  | { type: "excluded"; reason: string };
+  { type: "registered"; id: string } | { type: "excluded"; reason: string };
 
 /** Explicit disposition for every shared query id; adding one requires a choice. */
 export const PUBLIC_LAW_PLAN_DISPOSITION = {

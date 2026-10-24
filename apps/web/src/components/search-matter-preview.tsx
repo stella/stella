@@ -188,8 +188,7 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
     label: TranslationKey;
     empty: TranslationKey;
     items:
-      | { id: string; name: string; date: string; icon: ReactNode }[]
-      | undefined;
+      { id: string; name: string; date: string; icon: ReactNode }[] | undefined;
   }[];
   return (
     <div className="mb-6 space-y-5" aria-busy={!data}>

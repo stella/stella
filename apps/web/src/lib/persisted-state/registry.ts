@@ -11,8 +11,7 @@ type PersistedStateScope = {
 };
 
 type PersistedStateKey<TScope extends object> =
-  | string
-  | ((scope: TScope) => string);
+  string | ((scope: TScope) => string);
 
 type PersistedStateEntry<
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,

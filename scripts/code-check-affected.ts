@@ -809,8 +809,7 @@ type TurboOutput = {
 };
 
 type AffectedWorkspaceDiscovery =
-  | { type: "scoped"; paths: string[] }
-  | { type: "fallback"; reason: string };
+  { type: "scoped"; paths: string[] } | { type: "fallback"; reason: string };
 type DiscoverAffectedWorkspacesOptions = {
   mergeBase: string;
   command?: readonly string[];
