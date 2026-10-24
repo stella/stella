@@ -17,6 +17,7 @@ import {
   lockDraftInvoiceForLines,
   manualLineDraft,
   recalculateInvoiceTotals,
+  tExemptionReason,
   timeEntryLineDraft,
   tInvoiceLineQuantity,
   tLineDescription,
@@ -63,9 +64,7 @@ const createLineBodySchema = t.Object({
   ]),
   vatRateBps: tVatRateBps,
   vatTreatment: tVatTreatment,
-  exemptionReason: t.Optional(
-    t.Nullable(t.String({ minLength: 1, maxLength: 500 })),
-  ),
+  exemptionReason: t.Optional(tExemptionReason),
 });
 
 const prepareLineInput = ({

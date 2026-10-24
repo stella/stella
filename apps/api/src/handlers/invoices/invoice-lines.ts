@@ -76,6 +76,14 @@ export const tVatTreatment = t.Union([
   t.Literal("exempt"),
 ]);
 
+/**
+ * The statutory exemption basis a line prints; it must carry text, so a
+ * whitespace-only value cannot stand in for the basis finalize requires.
+ */
+export const tExemptionReason = t.Nullable(
+  t.String({ minLength: 1, maxLength: 500, pattern: "\\S" }),
+);
+
 true satisfies [VatTreatment] extends [Static<typeof tVatTreatment>]
   ? [Static<typeof tVatTreatment>] extends [VatTreatment]
     ? true

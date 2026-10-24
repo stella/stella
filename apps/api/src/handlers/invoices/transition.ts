@@ -141,7 +141,7 @@ const validatePolishExemptionBases = async ({
         eq(invoiceLines.invoiceId, invoiceId),
         eq(invoiceLines.workspaceId, workspaceId),
         inArray(invoiceLines.vatTreatment, ["exempt", "not_vat_payer"]),
-        // Empty strings are normalized to null by the line mutation boundary.
+        // The line schemas refuse blank bases (tExemptionReason).
         isNull(invoiceLines.exemptionReason),
       ),
     )

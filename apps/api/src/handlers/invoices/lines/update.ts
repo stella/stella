@@ -13,6 +13,7 @@ import {
   manualLineDraft,
   priceLines,
   recalculateInvoiceTotals,
+  tExemptionReason,
   tInvoiceLineQuantity,
   tLineDescription,
   tLineUnit,
@@ -40,9 +41,7 @@ const updateLineBodySchema = t.Object({
   unitPriceMinor: t.Optional(tMinorUnitAmount(0)),
   vatRateBps: t.Optional(tVatRateBps),
   vatTreatment: t.Optional(tVatTreatment),
-  exemptionReason: t.Optional(
-    t.Nullable(t.String({ minLength: 1, maxLength: 500 })),
-  ),
+  exemptionReason: t.Optional(tExemptionReason),
 });
 
 const lineParamsSchema = workspaceParams({
