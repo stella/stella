@@ -77,6 +77,7 @@ Sign in the way a person does; the flow is part of what you verify.
    ```
 
    Fill in the `otp` it returns.
+
 5. Approve the consent screen. The app returns to its tabs, signed in.
 
 A person who should see an empty account signs in with a fresh address the
