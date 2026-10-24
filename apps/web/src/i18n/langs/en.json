@@ -2283,6 +2283,7 @@
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks",
     "scopeLawRead": "Read public statutes and case law",
     "scopeMattersWrite": "Create and edit your matters and tasks",
+    "scopeMemoryWrite": "Create and update assistant memories",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
     "scopeProfile": "Access your profile information",
@@ -2310,6 +2311,7 @@
     "summaryLineRead": "<group>Read:</group> {items}",
     "summaryLineUse": "<group>Use:</group> {items}",
     "summaryMattersWrite": "matters and tasks",
+    "summaryMemoryWrite": "assistant memories",
     "summaryProfile": "profile",
     "summaryRead": "documents, matters and contacts",
     "summaryReadAnonymized": "anonymized documents and matters",
@@ -2675,6 +2677,7 @@
       "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
       "contact": "Contact us",
+      "featureDisabled": "This feature is temporarily turned off.",
       "notEnabled": "This action is not enabled for your organization.",
       "periodExhausted": "This action is paused for your organization."
     },
