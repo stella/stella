@@ -47,8 +47,16 @@ import {
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { prHeavyJobs } from "./ci-pr-jobs";
+import {
+  embedsExpression,
+  GITHUB_EXPRESSION_LIMIT,
+  renderResultInputs,
+  RESULT_INPUTS_RUN,
+  RESULT_INPUTS_STEP,
+} from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { GENERATORS } from "./generated-files";
 import {
   type Context,
@@ -58,9 +66,9 @@ import {
 } from "./github-expression";
 import {
   mainHeavyJobs,
+  MERGE_GROUP_EXCEPTIONS,
   prDepthJobs,
   queueAdmittedJobs,
-  MERGE_GROUP_EXCEPTIONS,
   thinJobs,
 } from "./main-heavy-plan";
 import { unlistedTests } from "./run-unlisted-script-tests";
@@ -570,6 +578,12 @@ const resultStep = v.parse(
   }),
   evaluationSteps.at(0),
 );
+const resultInputsSteps = resultJob.steps.filter((step) =>
+  v.is(v.object({ name: v.literal(RESULT_INPUTS_STEP) }), step),
+);
+const resultInputsStepIndex = resultJob.steps.findIndex((step) =>
+  v.is(v.object({ name: v.literal(RESULT_INPUTS_STEP) }), step),
+);
 
 const jobScopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
@@ -631,11 +645,7 @@ type EvaluateResultOptions = {
   liveDraft?: boolean;
   suiteResults?: Record<string, string>;
   cancellationEvidence?:
-    | "superseded"
-    | "timeout"
-    | "step-timeout"
-    | "missing"
-    | "wrong-group";
+    "superseded" | "timeout" | "step-timeout" | "missing" | "wrong-group";
   apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
   newerRun?:
     | "same-group"
@@ -692,7 +702,8 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
       ? []
       : [
           {
-            id: 200,
+            // Older than the mirroring run (123): a mirror never waits on a newer one.
+            id: 100,
             run_number: 99,
             head_sha: head,
             status: runStatus,
@@ -711,11 +722,23 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
     planned: [plan],
     in_progress: [
       plan,
-      { id: 2, name: "ci-result", status: "in_progress", conclusion: null },
+      {
+        id: 2,
+        name: "ci-result",
+        status: "in_progress",
+        conclusion: null,
+        run_attempt: 1,
+      },
     ],
     completed: [
       plan,
-      { id: 2, name: "ci-result", status: "completed", conclusion },
+      {
+        id: 2,
+        name: "ci-result",
+        status: "completed",
+        conclusion,
+        run_attempt: 1,
+      },
     ],
   };
   const jobs = (stage: CodeRunStage) => [{ jobs: listed[stage] }];
@@ -733,6 +756,19 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
         finalStage,
     ),
     finalJobs: jobs(finalStage),
+    // The required-jobs record the code run uploaded: the mirror's evidence.
+    record: {
+      version: 1,
+      event: "pull_request",
+      head_sha: head,
+      run_id: 100,
+      run_attempt: 1,
+      basis: "evaluated",
+      pass_through_reason: null,
+      reused_from_run_id: null,
+      required: [{ job: "ci-tests", conclusion }],
+      verdict: conclusion,
+    },
     runs,
     state: state ?? "",
   };
@@ -744,6 +780,11 @@ writeFileSync(
   nodePath.join(fakeGhDirectory, "gh"),
   `#!/usr/bin/env bash
 set -eu
+if [[ "$1" == "run" && "$2" == "download" && "$3" == "100" ]]; then
+  while (($#)) && [[ "$1" != "-D" ]]; do shift; done
+  printf '%s\n' "$FAKE_CODE_RECORD" > "$2/ci-required-summary.json"
+  exit 0
+fi
 [[ "$1" == "api" ]] || exit 2
 shift
 while [[ "$1" == "--paginate" || "$1" == "--slurp" ]]; do shift; done
@@ -768,7 +809,11 @@ case "$endpoint" in
   "repos/${PULL_REQUEST.repo}/actions/workflows/ci.yml/runs?event=pull_request&head_sha="*)
     echo "$FAKE_CODE_RUNS"
     ;;
-  "repos/${PULL_REQUEST.repo}/actions/runs/200/jobs?per_page=100")
+  "repos/${PULL_REQUEST.repo}/actions/runs/124/jobs?per_page=100")
+    # The newer run that superseded this one is a code run.
+    echo '[{"jobs":[{"name":"ci-plan"}]}]'
+    ;;
+  "repos/${PULL_REQUEST.repo}/actions/runs/100/jobs?per_page=100")
     state="${nodePath.join(fakeGhDirectory, "metadata-counter")}-$FAKE_CODE_STATE"
     if [[ ! -e "$state" ]]; then
       : > "$state"
@@ -949,7 +994,15 @@ const resultGateCase = ({
   const codeRun = metadataCodeRunFixtures(metadataCodeRun);
   return {
     flags: ["-eu"],
-    script: outcomeScript,
+    script: renderResultInputs(outcomeScript, {
+      needs: JSON.stringify(needs),
+      plan: JSON.stringify({
+        ...plan,
+        ...plannedOutputs,
+        suite_depth: suiteDepth,
+        trusted,
+      }),
+    }),
     args: [],
     env: {
       GH_RETRY_SCRIPT: nodePath.resolve(import.meta.dir, "gh-retry.sh"),
@@ -983,9 +1036,9 @@ const resultGateCase = ({
       FAKE_CODE_RUNS: JSON.stringify([{ workflow_runs: codeRun.runs }]),
       FAKE_CODE_JOBS: JSON.stringify(codeRun.finalJobs),
       FAKE_CODE_JOBS_FIRST: JSON.stringify(codeRun.firstJobs),
+      FAKE_CODE_RECORD: JSON.stringify(codeRun.record),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
-      NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       FAST_JOB_SCOPES: resultStep.env["FAST_JOB_SCOPES"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
@@ -994,12 +1047,6 @@ const resultGateCase = ({
       HEAD_SHA: "a".repeat(40),
       METADATA_ONLY: codeRun.enabled,
       RUN_REQUIRED: codeRun.runRequired,
-      PLAN: JSON.stringify({
-        ...plan,
-        ...plannedOutputs,
-        suite_depth: suiteDepth,
-        trusted,
-      }),
       PLAN_RESULT: needs["ci-plan"]?.result ?? "",
       SUITE_DEPTH: suiteDepth,
       TRUSTED: trusted,
@@ -1102,7 +1149,6 @@ test("the result gate evaluates every job in the workflow", () => {
   }
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
-  expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   for (const {
     item: { label },
     exitCode,
@@ -1459,6 +1505,7 @@ test("a run that passes as superseded records no completion evidence", () => {
           HEAD_REPO_ID: "456",
           PATCH_ID: "c".repeat(40),
           WORKFLOW_VERSION: "d".repeat(40),
+          PLAN_CONFIG: "e".repeat(64),
           PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
         },
       };
@@ -1471,6 +1518,104 @@ test("a run that passes as superseded records no completion evidence", () => {
       );
       if (item.label !== "complete") {
         expect(stdout, item.label).toContain("superseded");
+      }
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("completion evidence names every missing evidence input without changing the verdict", () => {
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "ci-result-evidence-inputs-"),
+  );
+  const evidenceInputBlock =
+    /evidence_inputs=\(\n(?<inputs>[\s\S]*?)\n\s*\)/u.exec(resultStep.run)
+      ?.groups?.["inputs"];
+  if (evidenceInputBlock === undefined) {
+    throw new TypeError("Evaluate CI outcome has no evidence input list");
+  }
+  const requiredInputs = [
+    ...evidenceInputBlock.matchAll(/"(?<name>[A-Z_]+):[^"\n]+"/gu),
+  ].map((match) => match.groups?.["name"] ?? "");
+  expect(requiredInputs).not.toContain("");
+  try {
+    const cases: {
+      label: string;
+      invalid?: string;
+      mutation?: "malformed" | "missing";
+    }[] = [
+      { label: "complete" },
+      ...requiredInputs.flatMap((invalid) => [
+        { label: `${invalid} missing`, invalid, mutation: "missing" as const },
+        {
+          label: `${invalid} malformed`,
+          invalid,
+          mutation: "malformed" as const,
+        },
+      ]),
+    ];
+    for (const { item, exitCode, stdout } of runBashBatch(cases, (entry) => {
+      let invalidation = "";
+      if (entry.invalid !== undefined) {
+        if (entry.mutation === "missing") {
+          invalidation = `unset ${entry.invalid}\n`;
+        } else {
+          const value = ["COMPLETION_MARKER", "COVERAGE_PROFILE"].includes(
+            entry.invalid,
+          )
+            ? "''"
+            : "malformed";
+          invalidation = `${entry.invalid}=${value}\n`;
+        }
+      }
+      const outcomeScript = resultStep.run.replace(
+        "# Completion evidence lets a later unchanged-head run skip every\n",
+        () =>
+          `${invalidation}# Completion evidence lets a later unchanged-head run skip every\n`,
+      );
+      expect(outcomeScript === resultStep.run, entry.label).toBe(
+        entry.invalid === undefined,
+      );
+      const base = resultGateCase({
+        event: EVENT.pullRequest,
+        results: {},
+        suiteDepth: SUITE_DEPTH.fast,
+        outcomeScript,
+      });
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          GITHUB_OUTPUT: nodePath.join(directory, entry.label),
+          RUN_REQUIRED: "true",
+          COMPLETION_MARKER: "ci-completed-v6-fixture",
+          HEAD_SHA: "a".repeat(40),
+          BASE_SHA: "b".repeat(40),
+          HEAD_REPO_ID: "456",
+          PATCH_ID: "c".repeat(40),
+          WORKFLOW_VERSION: "d".repeat(40),
+          PLAN_CONFIG: "e".repeat(64),
+          PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
+        },
+      };
+    })) {
+      expect(exitCode, item.label).toBe(0);
+      const output = nodePath.join(directory, item.label);
+      const written = existsSync(output) ? readFileSync(output, "utf-8") : "";
+      expect(written.includes("evidence="), item.label).toBe(
+        item.invalid === undefined,
+      );
+      if (item.invalid !== undefined) {
+        expect(stdout, item.label).toContain(
+          `Completion evidence was skipped because ${item.invalid} is missing or malformed.`,
+        );
+        expect(stdout, item.label).toContain(
+          `::error::Invalid or missing completion evidence input: ${item.invalid}.`,
+        );
+        expect(stdout, item.label).not.toContain(
+          "Not every planned CI job succeeded",
+        );
       }
     }
   } finally {
@@ -1593,8 +1738,8 @@ test("the required-jobs record names every workflow job once and carries the ver
       },
     },
     {
-      // A verified supersession accepts a cancelled job; the verdict still
-      // evaluated it, so the record names it with its conclusion.
+      // A verified supersession accepts a cancelled job but evaluated
+      // nothing: the record names the job and passes through as superseded.
       label: "pull-request-fast-superseded-cancel",
       options: {
         event: EVENT.pullRequest,
@@ -1709,7 +1854,11 @@ test("the required-jobs record names every workflow job once and carries the ver
   });
   expect(superseded.record.not_required).not.toContain("e2e-vite-canary");
   expect(superseded.exitCode).toBe(0);
-  expect(superseded.record.verdict).toBe("success");
+  expect(superseded.record).toMatchObject({
+    verdict: "success",
+    basis: "pass_through",
+    pass_through_reason: "superseded",
+  });
 
   // Every evaluating branch says so; an exit that evaluated nothing names
   // why, so a consumer never reads its success as evidence.
@@ -1718,7 +1867,6 @@ test("the required-jobs record names every workflow job once and carries the ver
     "merge-group-failure",
     "pull-request-fast",
     "pull-request-fast-outside-failure",
-    "pull-request-fast-superseded-cancel",
   ]) {
     expect(take(label).record, label).toMatchObject({
       basis: "evaluated",
@@ -2744,6 +2892,97 @@ test("a manual run supersedes only an older manual run on the same branch", () =
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
 });
 
+test("jobs that need ci-plan never hand its outputs over in the environment", () => {
+  // One environment or input value above Linux's 128 KiB limit stops a step
+  // before it starts, and ci-plan's change lists and test plans exceed it.
+  // Such jobs read `needs` from their script text instead.
+  const stepSchema = v.looseObject({
+    name: v.optional(v.string()),
+    env: v.optional(v.record(v.string(), v.unknown())),
+    with: v.optional(v.record(v.string(), v.unknown())),
+  });
+  const unbounded = /toJSON\(\s*needs\s*(?:\.\s*ci-plan\s*\.\s*outputs\s*)?\)/u;
+  const offenders = Object.entries(ciJobs).flatMap(([name, job]) => {
+    const parsed = v.parse(
+      v.looseObject({
+        needs: v.optional(v.union([v.string(), v.array(v.string())])),
+        env: v.optional(v.record(v.string(), v.unknown())),
+        steps: v.optional(v.array(v.unknown())),
+      }),
+      job,
+    );
+    if (![parsed.needs ?? []].flat().includes("ci-plan")) {
+      return [];
+    }
+    const steps = flattenWorkflowSteps(parsed.steps ?? []).map((step) =>
+      v.parse(stepSchema, step),
+    );
+    return [
+      ...Object.entries(parsed.env ?? {}).map(([key, value]) => ({
+        where: `${name}/env`,
+        key,
+        value,
+      })),
+      ...steps.flatMap((step) =>
+        Object.entries({ ...step.env, ...step.with }).map(([key, value]) => ({
+          where: `${name}/${step.name ?? "unnamed step"}`,
+          key,
+          value,
+        })),
+      ),
+    ]
+      .filter(({ value }) => typeof value === "string" && unbounded.test(value))
+      .map(({ where, key }) => `${where}: ${key}`);
+  });
+  expect(offenders).toEqual([]);
+});
+
+test("ci-result's outcome step reads its inputs from the step written right before it", () => {
+  // The harness runs RESULT_INPUTS_RUN before the outcome script, so the
+  // workflow must declare exactly that script, immediately before it.
+  const declared = resultInputsSteps.map((step) =>
+    v.parse(v.strictObject({ name: v.string(), run: v.string() }), step),
+  );
+  expect(declared.length).toBe(1);
+  expect(declared.at(0)?.run).toBe(RESULT_INPUTS_RUN);
+  expect(resultJob.steps.indexOf(evaluationSteps.at(0))).toBe(
+    resultInputsStepIndex + 1,
+  );
+  expect(embedsExpression(resultStep.run)).toBe(false);
+});
+
+test("no workflow string that embeds an expression exceeds GitHub's expression limit", async () => {
+  // GitHub evaluates a string embedding an expression as one expression and
+  // refuses the whole workflow file when one exceeds the limit, so no
+  // pull_request run starts at all.
+  const directory = new URL("../.github/workflows/", import.meta.url);
+  const offenders: string[] = [];
+  const visit = (value: unknown, where: string) => {
+    if (typeof value === "string") {
+      if (embedsExpression(value) && value.length > GITHUB_EXPRESSION_LIMIT) {
+        offenders.push(`${where} (${value.length} characters)`);
+      }
+    } else if (Array.isArray(value)) {
+      for (const [index, item] of value.entries()) {
+        visit(item, `${where}[${index}]`);
+      }
+    } else if (typeof value === "object" && value !== null) {
+      for (const [key, item] of Object.entries(value)) {
+        visit(item, `${where}.${key}`);
+      }
+    }
+  };
+  for (const file of new Bun.Glob("*.{yml,yaml}").scanSync(
+    directory.pathname,
+  )) {
+    visit(
+      Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
+      file,
+    );
+  }
+  expect(offenders).toEqual([]);
+});
+
 test("metadata runs report the required result while scope-changing labels still run", () => {
   const plan = v.parse(
     v.object({
@@ -2906,8 +3145,12 @@ test("a metadata run without an earlier code run of its head runs the suites", a
 
 test("metadata ci-result mirrors only a code run on the same pull request head", () => {
   const immediateCases = [
-    { state: "green", exitCode: 0, message: "succeeded for head" },
-    { state: "red", exitCode: 1, message: "completed with failure" },
+    {
+      state: "green",
+      exitCode: 0,
+      message: "evaluated every required job of head",
+    },
+    { state: "red", exitCode: 1, message: "(evaluated-failure)" },
     { state: "missing", exitCode: 1, message: "no code run exists" },
     { state: "other-head", exitCode: 1, message: "no code run exists" },
     {
@@ -2941,13 +3184,15 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
         results: {},
         metadataCodeRun: state,
         outcomeScript: resultStep.run.replace(
-          "local poll_seconds=30 max_wait_seconds=5400",
-          "local poll_seconds=0 max_wait_seconds=5400",
+          "local poll_seconds=30 max_wait_seconds=2700",
+          "local poll_seconds=0 max_wait_seconds=2700",
         ),
       })),
     );
     expect(waitedThenGreen.exitCode, state).toBe(0);
-    expect(waitedThenGreen.stdout, state).toContain("succeeded for head");
+    expect(waitedThenGreen.stdout, state).toContain(
+      "evaluated every required job of head",
+    );
   }
 
   const timedOut = onlyOutcome(
@@ -2956,14 +3201,14 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
       results: {},
       metadataCodeRun: "running",
       outcomeScript: resultStep.run.replace(
-        "local poll_seconds=30 max_wait_seconds=5400",
+        "local poll_seconds=30 max_wait_seconds=2700",
         "local poll_seconds=0 max_wait_seconds=0",
       ),
     })),
   );
   expect(timedOut.exitCode).toBe(1);
   expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
-    "code run still running after 90 min",
+    "timed out after 45 min waiting for a code run",
   );
 }, 20_000);
 
@@ -3663,7 +3908,11 @@ const runPlaywrightSelection = ({
     [
       "bash",
       "-c",
-      `bash() { printf '%s\\n' "$@"; }\n${run.replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))}`,
+      `bash() { printf '%s\\n' "$@"; }\n${run
+        .replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))
+        .replaceAll(`\${{ steps.e2e-shards.outputs.count }}`, () =>
+          String(E2E_SHARD_COUNT),
+        )}`,
     ],
     {
       env: {
@@ -3678,7 +3927,7 @@ const runPlaywrightSelection = ({
   );
 };
 
-test.each([1, 2])(
+test.each([1, 2, 3, 4])(
   "full Playwright depth shards general and geometry projects independently: %s",
   (shard) => {
     const result = runPlaywrightSelection({ mode: "full", specs: "[]", shard });
@@ -3693,7 +3942,7 @@ test.each([1, 2])(
       "--grep-invert=route-smoke",
       "--project=chromium",
       "--project=heap-growth-canary",
-      `--shard=${shard}/2`,
+      `--shard=${shard}/4`,
       `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
       "bun",
       "--filter",
@@ -3701,10 +3950,29 @@ test.each([1, 2])(
       "test:e2e",
       "--",
       "--project=docked-chat-geometry",
-      `--shard=${shard}/2`,
+      `--shard=${shard}/4`,
     ]);
   },
 );
+
+test("every production Playwright shard total comes from the matrix shard source", () => {
+  const steps = jobSteps(ciJobs["e2e-production-shard"]);
+  const countStep = steps.find(
+    ({ name }) => name === "Read production E2E shard count",
+  );
+  expect(countStep?.run).toBe(
+    'echo "count=$(bun scripts/e2e-spec-shards-core.ts count)" >> "$GITHUB_OUTPUT"',
+  );
+  const shardArgument = `--shard=\${{ matrix.shard }}/\${{ steps.e2e-shards.outputs.count }}`;
+  const invocationLines = steps.flatMap(({ run }) =>
+    (run ?? "").split("\n").filter((line) => line.includes("--shard=")),
+  );
+  expect(invocationLines).toHaveLength(3);
+  expect(invocationLines.every((line) => line.includes(shardArgument))).toBe(
+    true,
+  );
+  expect(E2E_SHARD_COUNT).toBe(4);
+});
 
 const queueOnlyJobs = Object.fromEntries(
   Object.entries(eventPolicies.jobs)
@@ -6221,7 +6489,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
       });
       return plan.type === "run" ? plan.matrix.shard : [];
     })(),
-  ).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
+  ).toEqual(["api-1", "api-2", "api-3", "api-4", "api-5", "api-6", "rest-web"]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -6231,7 +6499,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
-  expect(planner?.run).toContain("api_test_shards=3");
+  expect(planner?.run).toContain("api_test_shards=6");
   expect(planner?.env?.["COMPARISON_BASE"]).toBe(
     `\${{ steps.changed-files.outputs.comparison_base }}`,
   );
@@ -6286,9 +6554,9 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
-      'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}',
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}',
     );
-    expect(values).toContain("api_test_shards=3");
+    expect(values).toContain("api_test_shards=6");
     expect(values).toContain("api_test_files=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -6559,12 +6827,12 @@ test("API planning only loads dependencies after installation and emits install-
       expected,
     ] of [
       ["pull_request", "false", "false", "", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "", "3"],
+      ["pull_request", "true", "false", "", "", "", "6"],
       // Without package checks no API test runs, even when the API scope is
       // unknown: ci_tests_required is the one gate of ci-tests.
       ["pull_request", "false", "true", "", "", "", "0"],
-      ["merge_group", "true", "false", "", "", "", "3"],
-      ["workflow_dispatch", "true", "false", "", "", "", "3"],
+      ["merge_group", "true", "false", "", "", "", "6"],
+      ["workflow_dispatch", "true", "false", "", "", "", "6"],
       [
         "pull_request",
         "true",
@@ -6581,7 +6849,7 @@ test("API planning only loads dependencies after installation and emits install-
         "",
         '{"shard":["api-1","rest-web"]}',
         "1",
-        "3",
+        "6",
       ],
     ]) {
       writeFileSync(output, "");
@@ -6618,7 +6886,7 @@ test("API planning only loads dependencies after installation and emits install-
       } else if (selected) {
         expect(values).toContain("ci_tests_required=true\n");
         expect(values).toContain(
-          'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}\n',
+          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}\n',
         );
       }
     }

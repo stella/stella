@@ -2,9 +2,9 @@ import path from "node:path";
 import ts from "typescript6";
 
 import {
+  type Generator,
   GENERATORS,
   matchesGeneratedGlob,
-  type Generator,
 } from "./generated-files";
 
 /**

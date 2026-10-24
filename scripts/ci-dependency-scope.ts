@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 
 import {
+  type Lockfile,
   parseLockfile,
   workspaceClosure,
-  type Lockfile,
 } from "./landing-deploy-scope";
 
 export type DependencyScope =
@@ -25,8 +25,7 @@ const SHARED_BASE_FILES = new Set([
   "bunfig.toml",
   "stll-toolchain.json",
 ]);
-const DEV_TOOL =
-  /^(?:@stll\/oxlint-|@types\/|oxlint$|oxfmt$|typescript$|knip$)/u;
+const DEV_TOOL = /^(?:@stll\/oxlint-|@types\/|oxlint$|typescript$|knip$)/u;
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);

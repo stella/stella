@@ -102,11 +102,11 @@ const applyChange = (
   }
 };
 
-type OptimisticAnnotationRequests<TCreate, TChange> = {
+type OptimisticAnnotationRequests<TCreate, TCreated, TChange> = {
   /** The cached rows the changes land in at once. */
   queryKey: DataTag<QueryKey, ReaderAnnotation[], Error>;
   /** Stores a new mark on the server. */
-  create: (input: TCreate) => Promise<unknown>;
+  create: (input: TCreate) => Promise<TCreated>;
   /** The mark a create request shows in the cache until the server answers. */
   pendingInput: (input: TCreate) => CreateAnnotationInput;
   /** Changes one mark (and the rest of its group) on the server. */
@@ -115,8 +115,8 @@ type OptimisticAnnotationRequests<TCreate, TChange> = {
   remove: (id: string) => Promise<unknown>;
 };
 
-type OptimisticAnnotationMutations<TCreate, TChange> = {
-  create: (input: TCreate) => Promise<unknown>;
+type OptimisticAnnotationMutations<TCreate, TCreated, TChange> = {
+  create: (input: TCreate) => Promise<TCreated>;
   remove: (id: string) => Promise<unknown>;
   update: (change: TChange) => Promise<unknown>;
 };
@@ -142,6 +142,7 @@ export const patchAnnotationCache = async (
  */
 export const useOptimisticAnnotationMutations = <
   TCreate,
+  TCreated,
   TChange extends UpdateAnnotationInput,
 >({
   create: createRequest,
@@ -151,8 +152,9 @@ export const useOptimisticAnnotationMutations = <
   update: updateRequest,
 }: OptimisticAnnotationRequests<
   TCreate,
+  TCreated,
   TChange
->): OptimisticAnnotationMutations<TCreate, TChange> => {
+>): OptimisticAnnotationMutations<TCreate, TCreated, TChange> => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();

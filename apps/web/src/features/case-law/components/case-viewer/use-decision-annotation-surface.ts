@@ -7,8 +7,8 @@ import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotatio
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { useActiveReaderAnnotation } from "@/components/legal-reader/annotations/use-active-reader-annotation";
+import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import { useReaderAnnotations } from "@/components/legal-reader/annotations/use-reader-annotations";
-import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
 import type {
   CommentMarginItem,
   ComposerMarginItem,

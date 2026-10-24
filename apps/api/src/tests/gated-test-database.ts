@@ -10,17 +10,17 @@
  * constructing a client anywhere else.
  */
 import { panic } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 import { afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Logger } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { forceClosePool } from "@/api/db/sql-close";
 
 const openDatabase = (client: SQL, logger?: Logger) =>
-  drizzle({ client, relations: databaseRelations, logger });
+  createDatabase({ client, relations: databaseRelations, logger });
 
 export type GatedTestDb = ReturnType<typeof openDatabase>;
 
@@ -47,7 +47,7 @@ export const openGatedTestDatabase = (
   databaseUrl: string,
   { max, cleanupTimeoutMs }: { max?: number; cleanupTimeoutMs?: number } = {},
 ): GatedTestDatabase => {
-  const client = new SQL({ url: databaseUrl, max });
+  const client = createSqlClient({ url: databaseUrl, max });
   const cleanupSteps: CleanupStep[] = [];
 
   afterAll(async () => {
@@ -120,7 +120,7 @@ export const withGatedTestClients = async <T>(
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = new SQL({
+    const client = createSqlClient({
       url: clientDatabaseUrl,
       max,
       idleTimeout,

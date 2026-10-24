@@ -9,6 +9,7 @@
       "noOtherSessions": "Žiadne iné aktívne relácie",
       "revokeOtherSessions": "Odhlásiť ostatné zariadenia",
       "revokeOtherSessionsConfirm": "Týmto ukončíte všetky relácie okrem aktuálnej.",
+      "signedInFrom": "Prihlásenie cez {clientName}",
       "unknownDevice": "Neznáme zariadenie"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
+      "accountRestricted": "Nastavenia poskytovateľa AI nie sú pre tento účet dostupné.",
+      "configUnreadable": "Konfiguráciu poskytovateľa AI nemožno načítať. Požiadajte správcu organizácie o opätovné pripojenie.",
       "cta": "Otvoriť nastavenia AI",
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
+      "permissionRequired": "Poskytovateľa AI môže pripojiť iba správca organizácie.",
+      "seatRequired": "Požiadajte správcu organizácie, aby vám priradil licenciu.",
       "title": "Pripojiť poskytovateľa AI"
     },
     "refinePlaceholder": "Ako má AI upraviť znenie?",
@@ -137,6 +142,8 @@
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",
       "title": "Nepodarilo sa vás prihlásiť"
     },
+    "handoffAccount": "Pokračovať ako <account>{email}</account> v organizácii <organization>{organizationName}</organization>?",
+    "handoffTitle": "Pokračovať v aplikácii stella",
     "headline": "Jasno v každom prípade.",
     "invitation": {
       "declined": "Pozvánka odmietnutá",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Moja organizácia",
     "password": "Heslo",
     "professionalUse": {
-      "description": "Pri zakladaní vášho účtu sa vám toto vyhlásenie nezobrazilo. Ak chcete pokračovať, prijmite ho.",
       "title": "Potvrďte profesionálne použitie"
     },
     "professionalUseStatement": "Vytvorením účtu potvrdzujete, že stellu používate na profesionálne účely, a beriete na vedomie, že stella je nástroj pre právnych profesionálov a nenahrádza právne poradenstvo.",
     "rateLimitExceeded": "Príliš veľa pokusov. Skúste to znova neskôr.",
+    "reauthenticationRequired": "Ak chcete pokračovať v tejto akcii, prihláste sa znova.",
     "resendCode": "Poslať kód znova na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizáciu",
     "signIn": "Prihlásiť sa",
@@ -926,13 +933,10 @@
     },
     "coverage": {
       "completeness": "Úplnosť",
-      "countedOn": "Spočítané k {date}",
       "courtsHeading": "Podľa súdu",
       "courtsUnavailable": "Rozpis podľa súdov nie je momentálne k dispozícii.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
-      "exceedsReportedTotal": "Obsahuje viac, než vydavateľ naposledy uviedol k {date}",
-      "gapStatusUnknown": "Stav medzier nie je známy",
       "generatedAt": "Údaje k {date}",
       "globeLabel": "Štáty, ktorých judikatúru korpus obsahuje, na glóbuse",
       "healthCurrent": "Aktuálne",
@@ -953,7 +957,8 @@
       "searchable": "Dostupné na vyhľadanie",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
-      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
+      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii.",
+      "unreadListingPeriods": "Nenačítané obdobia zoznamu"
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "decisionTypes": {
@@ -1591,6 +1596,7 @@
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorConnectionFailed": "Pripojenie k chatu zlyhalo. Skontrolujte pripojenie a skúste to znova.",
+    "sendErrorContinuationRejected": "V chate sa nepodarilo pokračovať. Začnite znova odoslaním novej správy.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
     "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
     "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
@@ -2277,6 +2283,7 @@
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
     "scopeLawRead": "Čítať verejné právne predpisy a judikatúru",
     "scopeMattersWrite": "Vytvoriť a upraviť vaše spisy a úlohy",
+    "scopeMemoryWrite": "Vytváranie a úprava pamäte asistenta",
     "scopeOfflineAccess": "Udržať vás prihláseného bez opakovaného schválenia",
     "scopeOnboarding": "Nastavte jurisdikcie praxe vašej organizácie",
     "scopeProfile": "Pristupovať k informáciám o vašom profile",
@@ -2304,6 +2311,7 @@
     "summaryLineRead": "<group>Čítanie:</group> {items}",
     "summaryLineUse": "<group>Používanie:</group> {items}",
     "summaryMattersWrite": "spisy a úlohy",
+    "summaryMemoryWrite": "pamäť asistenta",
     "summaryProfile": "profil",
     "summaryRead": "dokumenty, spisy a kontakty",
     "summaryReadAnonymized": "anonymizované dokumenty a spisy",
@@ -2669,6 +2677,7 @@
       "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
       "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
       "contact": "Kontaktujte nás",
+      "featureDisabled": "Táto funkcia je dočasne vypnutá.",
       "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
       "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
     },
@@ -3524,6 +3533,12 @@
       "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
+      "unsupportedEncoding": "Tento dokument používa nepodporované kódovanie {encoding}, preto ho nemožno konvertovať.",
+      "unsupportedField": "Tento dokument obsahuje pole {fieldType}, ktoré nemožno konvertovať.",
+      "unsupportedReference": "Tento dokument odkazuje na externý prostriedok v {element} {attribute}, preto ho nemožno konvertovať."
+    },
     "external": {
       "confirmDescription": "Chystáte sa navštíviť externý web.",
       "confirmTitle": "Otvoriť externý odkaz?",
@@ -4223,6 +4238,22 @@
       "guestStorageUnavailable": "Zvýraznenia a poznámky sa na tejto karte nepodarilo uložiť.",
       "highlight": "Zvýrazniť",
       "highlightedPassage": "Zvýraznená pasáž",
+      "history": {
+        "colorRestored": "Farba obnovená",
+        "commentRemoved": "Komentár odstránený",
+        "commentRestored": "Komentár obnovený",
+        "highlightRemoved": "Zvýraznenie odstránené",
+        "highlightRestored": "Zvýraznenie obnovené",
+        "markChanged": "Zvýraznenie alebo komentár sa medzitým zmenili inde, preto zostávajú bez zmeny.",
+        "markGone": "Toto zvýraznenie alebo komentár už neexistuje.",
+        "nothingToRedo": "Nie je čo zopakovať",
+        "nothingToUndo": "Nie je čo vrátiť",
+        "redoShortcut": "Znova vykonať zmenu zvýraznenia alebo komentára",
+        "styleRestored": "Štýl obnovený",
+        "textRestored": "Text komentára obnovený",
+        "undoShortcut": "Vrátiť zmenu zvýraznenia alebo komentára",
+        "visibilityRestored": "Zdieľanie obnovené"
+      },
       "removeHighlight": "Odstrániť zvýraznenie",
       "sharedBadge": "Zdieľané",
       "styleHighlight": "Zvýraznenie",
@@ -4734,6 +4765,7 @@
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
+    "caseLawEmptyState": "Začnite písať a vyhľadajte v súdnych rozhodnutiach.",
     "caseLawMatchingDecisions": "{count, plural, one {# zodpovedajúce rozhodnutie} few {# zodpovedajúce rozhodnutia} many {# zodpovedajúceho rozhodnutia} other {# zodpovedajúcich rozhodnutí}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ zodpovedajúce rozhodnutie} few {#+ zodpovedajúce rozhodnutia} many {#+ zodpovedajúceho rozhodnutia} other {#+ zodpovedajúcich rozhodnutí}}",
     "continueInChat": "Pokračovať v chate",
@@ -4791,6 +4823,7 @@
     "savedSearchesEmpty": "Uložte vyhľadávanie, aby ste ho mohli znova použiť.",
     "scopeFilter": "Rozsah vyhľadávania",
     "scopePlaceholderAll": "Vyhľadávať vo všetkých <scope>zdrojoch</scope>…",
+    "scopePlaceholderCaseLaw": "Vyhľadávať v <scope>judikatúre</scope>…",
     "scopePlaceholderMatters": "Vyhľadávať vo všetkých <scope>spisoch</scope>…",
     "scopePlaceholderRegistries": "Vyhľadávať v <scope>registroch</scope>…",
     "scopeRegistries": "Registre",
@@ -4940,7 +4973,7 @@
       "description": "Používajte stellu zo svojho AI asistenta a majte prehľad, čo má prístup k vášmu účtu.",
       "developerDescription": "Adresy servera a nástroj pre príkazový riadok na technické nastavenia.",
       "developerTitle": "Prístup pre vývojárov",
-      "disconnectConfirmDescription": "Tým zrušíte prístup aplikácie {clientName} k vášmu účtu aj všetky tokeny, ktoré vydala. Kedykoľvek sa môžete znova pripojiť.",
+      "disconnectConfirmDescription": "Tým zrušíte prístup aplikácie {clientName} k vášmu účtu aj všetky tokeny, ktoré vydala. Kedykoľvek sa môžete znova pripojiť. Odhlásia sa aj relácie prehliadača vytvorené cez toto pripojenie.",
       "disconnectConfirmTitle": "Odpojiť aplikáciu {clientName}?",
       "disconnectSuccess": "Aplikácia {clientName} bola odpojená",
       "integrationsDescription": "Externé služby, ktoré za vás AI môže používať, napríklad úložisko dokumentov.",
@@ -5993,6 +6026,7 @@
       "downloadFailed": "Sťahovanie zlyhalo",
       "downloadPdf": "Stiahnuť ako PDF",
       "downloadSearchablePdf": "Prehľadávateľné PDF",
+      "emptyFile": "Súbor je prázdny.",
       "includeReferenceNumber": "Pridať referenčné číslo",
       "itemLimitReached": "Tento spis dosiahol limit položiek.",
       "maxEntitiesReached": "Dosiahnutý maximálny počet položiek",

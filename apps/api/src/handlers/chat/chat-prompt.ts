@@ -47,15 +47,15 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
-  legalReaderAnnotations,
   caseLawSources,
-  publishedCaseLawDecisions,
   entities,
   entityVersions,
   fields,
+  legalReaderAnnotations,
   legislationDocuments,
   legislationSources,
   properties,
+  publishedCaseLawDecisions,
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
@@ -3158,8 +3158,7 @@ const buildPromptParts = ({
   // anonymizer in anonymized mode. The tail carries no cache marker, so its
   // user and volatile sections keep the order they have always had.
   const untrustedSections: (
-    | ChatUserPromptSection
-    | ChatVolatilePromptSection
+    ChatUserPromptSection | ChatVolatilePromptSection
   )[] = [
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
     chatUserPromptSection(buildSkillCatalogSection(installedSkillMetadata)),

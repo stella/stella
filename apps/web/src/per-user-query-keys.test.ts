@@ -1,4 +1,4 @@
-import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
+import { QueryClient, type QueryKey, skipToken } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -58,8 +58,8 @@ import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
 import {
-  organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
+  organizationSettingsOptions,
 } from "@/queries/organization-settings";
 import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
@@ -509,7 +509,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "notifications/read-all.ts": { kind: "not-per-user", reason: WRITE },
-  "notifications/read.ts": { kind: "not-per-user", reason: WRITE },
+  "notifications/read-state/update.ts": { kind: "not-per-user", reason: WRITE },
   "playbooks/recent/list.ts": {
     kind: "keyed",
     calls: ["api.playbooks.recent.get"],
