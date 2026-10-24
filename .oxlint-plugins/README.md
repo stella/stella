@@ -57,6 +57,7 @@ runtime validation, or integration tests.
 - [`require-caller-feature-access`](./require-caller-feature-access.ts) (`require-caller-feature-access`): requires routes importing caller-gated features to admit their loaders through the feature-access owner before feature reads, and rejects browser feature flags and preview state.
 - [`auth-lifecycle`](./auth-lifecycle.ts) (`member-removal-revokes-artifacts`, `no-direct-auth-artifact-delete`): keeps authentication-artifact deletion behind the lifecycle that revokes all member-owned credentials; tables, root database, and helper resolve by import; member removal must await the owning operation unconditionally inside the before hook’s root transaction.
 - [`mcp-security`](./mcp-security.ts) (`redact-oauth-registration-response`, `no-direct-oauth-client-join`): redacts OAuth registration secrets and confines OAuth client joins to the authorized MCP boundary.
+- [`no-raw-mcp-error-result`](./no-raw-mcp-error-result.ts) (`no-raw-mcp-error-result`): prevents MCP tools from passing internal error message member chains to `errorResult`, including nested causes and named driver errors; public refusal values remain allowed and internal failures use `internalFailureResult`.
 - [`no-auth-token-in-web-storage`](./no-auth-token-in-web-storage.ts) (`no-auth-token-in-web-storage`): rejects credential-like keys (literal, `const`, or imported) and serialized credential fields written to browser storage, directly or through a local forwarding helper; authentication secrets belong in server-set secure cookies.
 - [`no-body-ownership-ids`](./no-body-ownership-ids.ts) (`no-body-ownership-ids`): prevents request bodies and query strings from supplying trusted workspace or organization ownership IDs.
 - [`no-hand-rolled-role-set`](./no-hand-rolled-role-set.ts) (`no-hand-rolled-role-set`): rejects organization role sets spelled outside the role contract and `@stll/permissions` (an operand compared with two or more role literals, an array literal of role names, or two quoted role names in one SQL comma list), so every query, guard and component reads the named set; tests are out of scope.
@@ -225,7 +226,7 @@ runtime validation, or integration tests.
 - [`prefer-temporal`](./prefer-temporal.ts) (`prefer-temporal`): reserves legacy `Date` construction and serialization for concrete database, protocol, and third-party boundaries; global clock APIs, calendar constructors, and provable Date calendar mutation use explicitly imported Temporal.
 - [`no-raw-foreground-opacity`](./no-raw-foreground-opacity.ts) (`no-raw-foreground-opacity`): requires named foreground attenuation tokens instead of unexplained opacity fractions.
 - [`no-raw-locale-format`](./no-raw-locale-format.ts) (`no-raw-locale-format`): requires locale-aware shared number and date formatters instead of ambient-locale calls.
-- [`no-raw-overflow-scroll`](./no-raw-overflow-scroll.ts) (`no-raw-overflow-scroll`): rejects `overflow-auto`/`overflow-scroll` and their axis forms, under any variant prefix, in `apps/web` and `packages/ui` markup; app chrome scrolls through `ScrollArea`, which owns the scrollbar's width, states, and overlay behaviour. An arbitrary variant targeting `pre`, `table`, or `.ProseMirror` is accepted, and so is every non-scrolling `overflow-*`. Every class string in a scoped file is tokenized, so a utility in a `cn()` argument is read like one on the element. Debt is carried per file in `scripts/design-lint-baseline.json`.
+- [`no-raw-overflow-scroll`](./no-raw-overflow-scroll.ts) (`no-raw-overflow-scroll`): rejects `overflow-auto`/`overflow-scroll` and their axis forms in web, desktop, UI, and workspace UI markup; app chrome scrolls through `ScrollArea`, while hidden horizontal scrollbars use `HorizontalScroller`. An arbitrary variant targeting `pre`, `table`, or `.ProseMirror` is accepted. Every class string is tokenized, so a utility in a `cn()` argument is read like one on the element. Debt is carried per file in `scripts/design-lint-baseline.json`.
 - [`no-raw-public-law-seo`](./no-raw-public-law-seo.ts) (`no-raw-public-law-seo`): centralizes public-law metadata and canonical URL formatting.
 - [`no-shadowed-user-name-helpers`](./no-shadowed-user-name-helpers.ts) (`no-shadowed-user-name-helpers`): prevents local bindings from shadowing canonical user-name helpers.
 - [`no-unformatted-number`](./no-unformatted-number.ts) (`no-unformatted-number`): requires user-visible numbers to pass through locale-aware formatting.
@@ -301,6 +302,8 @@ runtime validation, or integration tests.
 - [`confine-aggregate-lock`](./confine-aggregate-lock.ts) (`confine-aggregate-lock`): confines raw aggregate acquisitions and API transaction/savepoint boundaries to the owner and migrations, with an enumerated shrinking legacy baseline.
 
 ## Native and shared rules
+
+- [`require-stable-geometry`](./require-stable-geometry.ts) (`require-stable-geometry`): geometry specs use the shared stable-geometry helper; direct Playwright sleeps, viewport changes, and `boundingBox()` reads are rejected.
 
 Do not recreate a project plugin when an enabled native rule expresses the same
 invariant more accurately:
