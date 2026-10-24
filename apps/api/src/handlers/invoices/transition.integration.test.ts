@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -26,6 +27,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { VatRateUnavailableError } from "@/api/lib/vat-exchange-rates";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -35,7 +37,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import deleteInvoice from "./delete";
-import transitionInvoice from "./transition";
+import transitionInvoice, { createTransitionInvoice } from "./transition";
 import updateInvoice from "./update";
 
 setDefaultTimeout(120_000);
@@ -146,16 +148,259 @@ describe("invoice transition integration", () => {
       grossAmount: cents(12_300),
       source: "manual",
     });
+    await testDb
+      .update(invoices)
+      .set({ vatAmount: cents(2300) })
+      .where(eq(invoices.id, invoiceId));
 
-    expect(await runTransition(invoiceId, "finalize")).toEqual({
+    const failingHandler = createTransitionInvoice({
+      rateSource: async () =>
+        Result.err(
+          new VatRateUnavailableError({ message: "sensitive upstream detail" }),
+        ),
+    });
+    expect(
+      await failingHandler.handler(
+        asTestRaw<Parameters<typeof failingHandler.handler>[0]>(
+          createContext({ invoiceId, action: "finalize", auditEvents: [] }),
+        ),
+      ),
+    ).toEqual({
       code: 503,
       response: {
-        message: "The VAT exchange rate could not be resolved",
-        hint: "The official VAT exchange-rate service is unavailable; retry finalizing later",
+        message: "The official VAT exchange-rate service is unavailable",
+        hint: "Retry finalizing later; no changes were made to the invoice.",
       },
     });
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.DRAFT);
     await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
+  test("finalizes a zero-VAT foreign-currency invoice without requesting a rate", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Reverse charge seller",
+      vatId: "CZ12345678",
+      vatPayer: true,
+      country: "CZ",
+      defaultCurrency: "EUR",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId, currency: "EUR", vatAmount: cents(0) })
+      .where(eq(invoices.id, invoiceId));
+    let calls = 0;
+    const handler = createTransitionInvoice({
+      rateSource: async () => {
+        calls += 1;
+        throw new Error("rate source must not be called");
+      },
+    });
+    expect(
+      await handler.handler(
+        asTestRaw<Parameters<typeof handler.handler>[0]>(
+          createContext({ invoiceId, action: "finalize", auditEvents: [] }),
+        ),
+      ),
+    ).toEqual({ id: invoiceId });
+    expect(calls).toBe(0);
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { vatExchangeRate: true },
+      }),
+    ).toEqual({ vatExchangeRate: null });
+    await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
+  test.each([
+    { country: "CZ", currency: "EUR", source: "CNB", reference: null },
+    { country: "SK", currency: "USD", source: "ECB", reference: null },
+    {
+      country: "PL",
+      currency: "EUR",
+      source: "NBP",
+      reference: "001/A/NBP/2026",
+    },
+  ] as const)(
+    "stores the official $source rate for a $country VAT invoice",
+    async (sample) => {
+      const sellerProfileId = createSafeId<"sellerProfile">();
+      await testDb.insert(sellerProfiles).values({
+        id: sellerProfileId,
+        organizationId: ids.orgA,
+        legalName: `${sample.country} seller`,
+        vatId: `${sample.country}12345678`,
+        vatPayer: true,
+        country: sample.country,
+        defaultCurrency: sample.currency,
+      });
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+      await testDb
+        .update(invoices)
+        .set({
+          sellerProfileId,
+          currency: sample.currency,
+          // A stale stored total: the rate decision must read the lines.
+          vatAmount: cents(0),
+          taxableSupplyDate: "2026-06-22",
+        })
+        .where(eq(invoices.id, invoiceId));
+      await seedVatLine(invoiceId, 10_000);
+      const handler = createTransitionInvoice({
+        rateSource: async () =>
+          Result.ok({
+            rate: "24.750000000000",
+            source: sample.source,
+            effectiveDate: "2026-06-19",
+            sourceReference: sample.reference,
+          }),
+      });
+      const context = asTestRaw<Parameters<typeof handler.handler>[0]>(
+        createContext({ invoiceId, action: "finalize", auditEvents: [] }),
+      );
+      expect(await handler.handler(context)).toEqual({ id: invoiceId });
+      expect(
+        await testDb.query.invoices.findFirst({
+          where: { id: { eq: invoiceId } },
+          columns: {
+            vatExchangeRate: true,
+            vatExchangeRateSource: true,
+            vatExchangeRateDate: true,
+            vatExchangeRateReference: true,
+            vatExchangeRateTaxPoint: true,
+          },
+        }),
+      ).toEqual({
+        vatExchangeRate: "24.750000000000",
+        vatExchangeRateSource: sample.source,
+        vatExchangeRateDate: "2026-06-19",
+        vatExchangeRateReference: sample.reference,
+        vatExchangeRateTaxPoint: "2026-06-22",
+      });
+      if (sample.country === "CZ") {
+        expect(await runTransition(invoiceId, "revert_to_draft")).toEqual({
+          id: invoiceId,
+        });
+        const reverted = await testDb.query.invoices.findFirst({
+          where: { id: { eq: invoiceId } },
+          columns: { vatExchangeRate: true, vatExchangeRateSource: true },
+        });
+        expect(reverted).toEqual({
+          vatExchangeRate: null,
+          vatExchangeRateSource: null,
+        });
+      }
+      await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+      await testDb
+        .delete(sellerProfiles)
+        .where(eq(sellerProfiles.id, sellerProfileId));
+    },
+  );
+
+  test("refuses finalization when a rate input changes during resolution", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Concurrent seller",
+      vatId: "CZ12345678",
+      vatPayer: true,
+      country: "CZ",
+      defaultCurrency: "EUR",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId, currency: "EUR", vatAmount: cents(2100) })
+      .where(eq(invoices.id, invoiceId));
+    await seedVatLine(invoiceId, 10_000);
+    const handler = createTransitionInvoice({
+      rateSource: async () => {
+        await testDb
+          .update(invoices)
+          .set({ invoiceDate: "2026-06-24" })
+          .where(eq(invoices.id, invoiceId));
+        return Result.ok({
+          rate: "24.75",
+          source: "CNB",
+          effectiveDate: "2026-06-23",
+          sourceReference: null,
+        });
+      },
+    });
+    expect(
+      await handler.handler(
+        asTestRaw<Parameters<typeof handler.handler>[0]>(
+          createContext({ invoiceId, action: "finalize", auditEvents: [] }),
+        ),
+      ),
+    ).toMatchObject({ code: 409 });
+    expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.DRAFT);
+    await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
+  test("refuses a foreign-currency credit note before requesting a rate", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Credit seller",
+      vatId: "CZ12345678",
+      vatPayer: true,
+      country: "CZ",
+      defaultCurrency: "EUR",
+    });
+    const originalInvoiceId = await seedInvoice({
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({
+        documentType: "credit_note",
+        originalInvoiceId,
+        sellerProfileId,
+        currency: "EUR",
+        vatAmount: cents(2100),
+      })
+      .where(eq(invoices.id, invoiceId));
+    await seedVatLine(invoiceId, -10_000);
+    let calls = 0;
+    const handler = createTransitionInvoice({
+      rateSource: async () => {
+        calls += 1;
+        return Result.ok({
+          rate: "24.75",
+          source: "CNB",
+          effectiveDate: "2026-06-23",
+          sourceReference: null,
+        });
+      },
+    });
+    expect(
+      await handler.handler(
+        asTestRaw<Parameters<typeof handler.handler>[0]>(
+          createContext({ invoiceId, action: "finalize", auditEvents: [] }),
+        ),
+      ),
+    ).toMatchObject({ code: 409 });
+    expect(calls).toBe(0);
+    await testDb
+      .delete(invoices)
+      .where(inArray(invoices.id, [invoiceId, originalInvoiceId]));
     await testDb
       .delete(sellerProfiles)
       .where(eq(sellerProfiles.id, sellerProfileId));
@@ -388,6 +633,31 @@ const seedInvoice = async ({
     status,
   });
   return invoiceId;
+};
+
+/** One standard-rate line whose VAT the finalize recomputes from. */
+const seedVatLine = async (
+  invoiceId: SafeId<"invoice">,
+  netAmountMinor: number,
+) => {
+  const vatAmountMinor = netAmountMinor * 0.21;
+  await testDb.insert(invoiceLines).values({
+    id: createSafeId<"invoiceLine">(),
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    invoiceId,
+    position: 0,
+    description: "Legal advice",
+    quantity: "1.0000",
+    unit: "h",
+    unitPrice: cents(Math.abs(netAmountMinor)),
+    vatRateBps: 2100,
+    vatTreatment: "domestic_vat",
+    netAmount: cents(netAmountMinor),
+    vatAmount: cents(vatAmountMinor),
+    grossAmount: cents(netAmountMinor + vatAmountMinor),
+    source: "manual",
+  });
 };
 
 const runTransition = async (

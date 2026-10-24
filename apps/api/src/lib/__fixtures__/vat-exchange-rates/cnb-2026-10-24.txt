@@ -1,0 +1,3 @@
+24.10.2026 #205
+země|měna|množství|kód|kurz
+Japonsko|jen|100|JPY|14,250
