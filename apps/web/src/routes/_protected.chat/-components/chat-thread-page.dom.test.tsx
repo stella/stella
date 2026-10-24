@@ -4,6 +4,10 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import {
+  aiAvailableResponse,
+  aiUnavailableResponse,
+} from "@/__fixtures__/ai-availability";
 import type { WebApiRoutes } from "@/lib/eden-client";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -211,7 +215,9 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
         } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["suggested-prompts"]["post"]["response"][200]);
       }
       if (pathname.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: aiAvailable });
+        return Response.json(
+          aiAvailable ? aiAvailableResponse() : aiUnavailableResponse(),
+        );
       }
       if (pathname.endsWith("/skills")) {
         return Response.json({

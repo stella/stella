@@ -43,7 +43,9 @@ import {
 } from "@/api/lib/rate-limit/action-size-limits";
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import {
   isMcpSession,
   type McpAuthenticationFailure,
@@ -194,7 +196,10 @@ type McpServerDependencies = {
   decorateToolResult?: typeof withWebHandoffLinks;
   authenticateMcpRequest: (
     token: string,
-    options: { mode: McpMode },
+    options: {
+      mode: McpMode;
+      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+    },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
@@ -320,11 +325,16 @@ export const mcpOmittedToolNamesByReason = ({
   return { feature: feature.toSorted(), scope: scope.toSorted() };
 };
 
+/** An accepted MCP credential: who it resolved to, and what an event-stream
+ *  answer to it stays bound to. */
+type McpAuthenticated = { session: McpSession; stream: SseStreamBinding };
+
 const withMcpCors = async (
   response: Response,
-  session?: McpSession,
+  authenticated?: McpAuthenticated,
   mode: McpMode = "default",
 ) => {
+  const session = authenticated?.session;
   const headers = new Headers(response.headers);
   for (const [key, value] of createMcpCorsHeaders()) {
     if (!headers.has(key)) {
@@ -359,8 +369,14 @@ const withMcpCors = async (
   });
   // Both transport legs exit here, so this is where an event-stream answer —
   // the notification channel, or a tool call whose work outlasts an
-  // intermediary's idle timeout — picks up the keep-alive.
-  return isEventStreamResponse(answer) ? withSseHeartbeat(answer) : answer;
+  // intermediary's idle timeout — picks up the keep-alive and its binding to
+  // the credential that asked for it.
+  if (!isEventStreamResponse(answer)) {
+    return answer;
+  }
+  return authenticated === undefined
+    ? panic("An MCP event stream must answer an accepted credential")
+    : withSseHeartbeat(answer, authenticated.stream);
 };
 
 /** Transport-level refusal (the SDK reserves -32000..-32099 for these). */
@@ -1407,7 +1423,7 @@ export const createMcpHttpRequestHandler = ({
         const envelopeDisposition: { type: "read" | "tool" } = { type: "read" };
         const completeResponse = async (
           response: Response,
-          session?: McpSession,
+          accepted?: McpAuthenticated,
         ) => {
           const bounded =
             policy === undefined || envelopeDisposition.type === "tool"
@@ -1417,7 +1433,7 @@ export const createMcpHttpRequestHandler = ({
                   disposition: "refuse",
                   operation: "mcp",
                 });
-          return withMcpCors(bounded, session, mode);
+          return withMcpCors(bounded, accepted, mode);
         };
         let framedRequest = incomingRequest;
         if (policy !== undefined) {
@@ -1477,6 +1493,27 @@ export const createMcpHttpRequestHandler = ({
             return failureResponse(authenticated.error);
           }
           const session = authenticated.value;
+          // An event-stream answer holds while this token still authenticates:
+          // a genuine rejection ends it, a verification outage leaves it to
+          // the next sweep.
+          const accepted: McpAuthenticated = {
+            session,
+            stream: {
+              kind: "credential",
+              revalidate: async () => {
+                const again = await authenticateMcpRequest(token, {
+                  mode,
+                  resolveApiKeySession: revalidateMachineApiKeySession,
+                });
+                if (Result.isOk(again)) {
+                  return true;
+                }
+                return again.error instanceof McpAuthenticationError
+                  ? false
+                  : await Promise.reject(again.error);
+              },
+            },
+          };
 
           // Refuse session termination only after the token is accepted, so an
           // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
@@ -1484,7 +1521,7 @@ export const createMcpHttpRequestHandler = ({
           if (incomingRequest.method === "DELETE") {
             return await completeResponse(
               sessionOperationUnsupportedResponse(),
-              session,
+              accepted,
             );
           }
 
@@ -1497,7 +1534,7 @@ export const createMcpHttpRequestHandler = ({
               ? await withCappedRequestBody(incomingRequest)
               : { request: framedRequest, status: "within_limit" as const };
           if (frame.status === "too_large") {
-            return await completeResponse(payloadTooLargeResponse(), session);
+            return await completeResponse(payloadTooLargeResponse(), accepted);
           }
           const request = withTransportAcceptHeader(frame.request);
 
@@ -1531,10 +1568,13 @@ export const createMcpHttpRequestHandler = ({
           if (!legacyRequest && response.status >= 500) {
             return policy === undefined
               ? retryableServerErrorResponse()
-              : await completeResponse(retryableServerErrorResponse(), session);
+              : await completeResponse(
+                  retryableServerErrorResponse(),
+                  accepted,
+                );
           }
 
-          return await completeResponse(response, session);
+          return await completeResponse(response, accepted);
         } catch (error) {
           if (error instanceof McpOrganizationAccessError) {
             return accessDeniedResponse({

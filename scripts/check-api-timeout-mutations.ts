@@ -16,6 +16,7 @@ const MIGRATION_OWNERS = new Set([
   `${API_SOURCE}db/migration-runner.ts`,
   `${API_SOURCE}db/online-migrations.ts`,
   `${API_SOURCE}db/online-index-gate.ts`,
+  `${API_SOURCE}db/online-ddl.ts`,
   `${API_SOURCE}db/corpus-schema-lane.ts`,
   `${API_SOURCE}db/corpus-projection-delete-receipt-repair.ts`,
   `${API_SOURCE}db/better-auth-oauth-resource-repair.ts`,

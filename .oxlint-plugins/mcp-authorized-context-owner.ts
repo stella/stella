@@ -1,21 +1,21 @@
 import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
-import { filenameForContext, getImportedName } from "./utils.ts";
+import {
+  canonicalModuleId,
+  getImportedName,
+  getPropertyName,
+  repoRelativeFilename,
+  staticStringValue,
+} from "./utils.ts";
 
 const OWNER = "apps/api/src/mcp/write-tool-authority.ts";
-const AUTHORITY_MODULES = new Set([
-  "@/api/mcp/write-tool-authority",
-  "@/api/mcp/write-tool-authority.ts",
-]);
+const AUTHORITY_MODULE = OWNER.slice(0, -3);
 const INTERNAL_NAMES = new Set([
   "authorizedMcpRequestContextBrand",
   "authorizedMcpContextForTest",
   "createAuthorizedMcpRequestContext",
 ]);
-const TEST_HELPER_MODULES = new Set([
-  "@/api/tests/helpers/authorized-mcp-context",
-  "@/api/tests/helpers/authorized-mcp-context.ts",
-]);
+const TEST_HELPER_MODULE = "apps/api/src/tests/helpers/authorized-mcp-context";
 const TEST_HELPER = "authorizedMcpContextForTest";
 
 const isTestFile = (filename: string): boolean =>
@@ -37,35 +37,88 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        let filename = "";
         const report = (node: Node) =>
           context.report({ node, messageId: "owner" });
+        const checkSource = (
+          node: Node,
+          source: string,
+          names: readonly string[] | null,
+        ) => {
+          const moduleId = canonicalModuleId(source, filename);
+          if (moduleId === TEST_HELPER_MODULE) {
+            if (!isTestFile(filename)) {
+              context.report({ node, messageId: "testOnly" });
+            }
+            return;
+          }
+          if (moduleId !== AUTHORITY_MODULE) {
+            return;
+          }
+          if (
+            canonicalModuleId(filename, filename) === TEST_HELPER_MODULE &&
+            names?.every((name) => name === TEST_HELPER)
+          ) {
+            return;
+          }
+          if (
+            names === null ||
+            names.some((name) => INTERNAL_NAMES.has(name))
+          ) {
+            report(node);
+          }
+        };
         return {
           before() {
-            return !filenameForContext(context).endsWith(OWNER);
+            filename = repoRelativeFilename(context);
+            return filename !== OWNER;
           },
           ImportDeclaration(node) {
             if (typeof node.source.value !== "string") {
               return;
             }
-            if (TEST_HELPER_MODULES.has(node.source.value)) {
-              if (isTestFile(filenameForContext(context))) {
-                return;
-              }
-              for (const specifier of node.specifiers) {
-                if (getImportedName(specifier) === TEST_HELPER) {
-                  context.report({ node: specifier, messageId: "testOnly" });
-                }
-              }
-              return;
-            }
-            if (!AUTHORITY_MODULES.has(node.source.value)) {
-              return;
+            if (node.specifiers.length === 0) {
+              checkSource(node, node.source.value, []);
             }
             for (const specifier of node.specifiers) {
               const imported = getImportedName(specifier);
-              if (imported !== null && INTERNAL_NAMES.has(imported)) {
-                report(specifier);
-              }
+              checkSource(
+                specifier,
+                node.source.value,
+                imported === null ? null : [imported],
+              );
+            }
+          },
+          ExportNamedDeclaration(node) {
+            if (node.source === null) {
+              return;
+            }
+            for (const specifier of node.specifiers) {
+              const local = getPropertyName(specifier.local);
+              checkSource(
+                specifier,
+                node.source.value,
+                local === null ? null : [local],
+              );
+            }
+          },
+          ExportAllDeclaration(node) {
+            checkSource(node, node.source.value, null);
+          },
+          ImportExpression(node) {
+            const source = staticStringValue(node.source);
+            if (source !== null) {
+              checkSource(node, source, null);
+            }
+          },
+          CallExpression(node) {
+            const source = staticStringValue(node.arguments.at(0));
+            if (
+              node.callee.type === "Identifier" &&
+              node.callee.name === "require" &&
+              source !== null
+            ) {
+              checkSource(node, source, null);
             }
           },
           VariableDeclarator(node) {
