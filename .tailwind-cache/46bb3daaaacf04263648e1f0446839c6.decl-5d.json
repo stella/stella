@@ -1,7 +1,1 @@
-{
-  "md:group-focus-within:flex": {
-    "valid": true,
-    "declarations": [["@", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"md:group-focus-within:flex":{"valid":true,"declarations":[["@","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

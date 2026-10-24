@@ -1,7 +1,1 @@
-{
-  "w-[246px]": {
-    "valid": true,
-    "declarations": [["", "width", "246px"]],
-    "values": { "246px": { "p": [], "f": [], "u": false } }
-  }
-}
+{"w-[246px]":{"valid":true,"declarations":[["","width","246px"]],"values":{"246px":{"p":[],"f":[],"u":false}}}}

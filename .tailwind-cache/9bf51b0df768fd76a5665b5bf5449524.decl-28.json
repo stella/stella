@@ -1,7 +1,1 @@
-{
-  "[&_ol]:flex": {
-    "valid": true,
-    "declarations": [[">", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"[&_ol]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

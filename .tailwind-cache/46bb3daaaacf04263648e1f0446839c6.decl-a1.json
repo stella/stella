@@ -1,12 +1,1 @@
-{
-  "[&_.ProseMirror]:flex": {
-    "valid": true,
-    "declarations": [[">", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  },
-  "h-[150%]": {
-    "valid": true,
-    "declarations": [["", "height", "150%"]],
-    "values": { "150%": { "p": [], "f": [], "u": false } }
-  }
-}
+{"[&_.ProseMirror]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"h-[150%]":{"valid":true,"declarations":[["","height","150%"]],"values":{"150%":{"p":[],"f":[],"u":false}}}}

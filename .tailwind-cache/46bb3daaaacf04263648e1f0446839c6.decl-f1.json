@@ -1,7 +1,1 @@
-{
-  "[&_.line-clamp-2]:flex": {
-    "valid": true,
-    "declarations": [[">", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"[&_.line-clamp-2]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

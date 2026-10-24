@@ -1,7 +1,1 @@
-{
-  "data-checked:flex": {
-    "valid": true,
-    "declarations": [["", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"data-checked:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

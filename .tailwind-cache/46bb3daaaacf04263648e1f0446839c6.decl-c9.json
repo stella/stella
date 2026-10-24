@@ -1,12 +1,1 @@
-{
-  "group-has-[[role=log]>[data-overflow-y-end]]/chat-scroll-surface:flex": {
-    "valid": true,
-    "declarations": [["", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  },
-  "group-hover/sidebar-menu-button:flex": {
-    "valid": true,
-    "declarations": [["@", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"group-has-[[role=log]>[data-overflow-y-end]]/chat-scroll-surface:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"group-hover/sidebar-menu-button:flex":{"valid":true,"declarations":[["@","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

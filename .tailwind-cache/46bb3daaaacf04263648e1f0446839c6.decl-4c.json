@@ -1,10 +1,1 @@
-{
-  "tracking-[0.25em]": {
-    "valid": true,
-    "declarations": [
-      ["", "--tw-tracking", "0.25em"],
-      ["", "letter-spacing", "0.25em"]
-    ],
-    "values": { "0.25em": { "p": [], "f": [], "u": false } }
-  }
-}
+{"tracking-[0.25em]":{"valid":true,"declarations":[["","--tw-tracking","0.25em"],["","letter-spacing","0.25em"]],"values":{"0.25em":{"p":[],"f":[],"u":false}}}}

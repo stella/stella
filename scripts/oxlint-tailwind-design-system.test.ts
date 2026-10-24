@@ -190,6 +190,20 @@ test("all Tailwind package lint scripts use the shared read-only cache", async (
   }
 });
 
+test("committed cache keeps the generator's compact form", async () => {
+  // The generator writes compact JSON; a formatter rewriting these files on
+  // commit would make every --check report them stale.
+  const names = await readdir(generatedCache);
+  expect(names.length).toBeGreaterThan(0);
+  for (const name of names) {
+    const text = await readFile(path.join(generatedCache, name), "utf-8");
+    expect({ name, text }).toEqual({
+      name,
+      text: `${JSON.stringify(JSON.parse(text))}\n`,
+    });
+  }
+});
+
 test("read-only lint reports a missing snapshot once per design-system rule", async () => {
   const cache = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-empty-cache-"),

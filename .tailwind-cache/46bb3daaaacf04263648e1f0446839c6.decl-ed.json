@@ -1,7 +1,1 @@
-{
-  "group-data-[stuck=true]/sticky:flex": {
-    "valid": true,
-    "declarations": [["", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"group-data-[stuck=true]/sticky:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

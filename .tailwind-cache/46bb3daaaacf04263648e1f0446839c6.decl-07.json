@@ -1,7 +1,1 @@
-{
-  "grid-cols-[1.6fr_1fr]": {
-    "valid": true,
-    "declarations": [["", "grid-template-columns", "1.6fr 1fr"]],
-    "values": { "1.6fr 1fr": { "p": [], "f": [], "u": false } }
-  }
-}
+{"grid-cols-[1.6fr_1fr]":{"valid":true,"declarations":[["","grid-template-columns","1.6fr 1fr"]],"values":{"1.6fr 1fr":{"p":[],"f":[],"u":false}}}}

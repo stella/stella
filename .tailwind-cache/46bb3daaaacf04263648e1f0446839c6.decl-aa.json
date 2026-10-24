@@ -1,7 +1,1 @@
-{
-  "group-hover/act:flex": {
-    "valid": true,
-    "declarations": [["@", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"group-hover/act:flex":{"valid":true,"declarations":[["@","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

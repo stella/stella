@@ -1,12 +1,1 @@
-{
-  "@3xl:flex": {
-    "valid": true,
-    "declarations": [["@", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  },
-  "text-[2.75rem]": {
-    "valid": true,
-    "declarations": [["", "font-size", "2.75rem"]],
-    "values": { "2.75rem": { "p": [], "f": [], "u": false } }
-  }
-}
+{"@3xl:flex":{"valid":true,"declarations":[["@","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"text-[2.75rem]":{"valid":true,"declarations":[["","font-size","2.75rem"]],"values":{"2.75rem":{"p":[],"f":[],"u":false}}}}

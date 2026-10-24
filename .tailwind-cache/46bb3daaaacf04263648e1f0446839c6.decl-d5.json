@@ -1,12 +1,1 @@
-{
-  "dark:flex": {
-    "valid": true,
-    "declarations": [["", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  },
-  "group-hover/tool-step:flex": {
-    "valid": true,
-    "declarations": [["@", "display", "flex"]],
-    "values": { "flex": { "p": [], "f": [], "u": false } }
-  }
-}
+{"dark:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"group-hover/tool-step:flex":{"valid":true,"declarations":[["@","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

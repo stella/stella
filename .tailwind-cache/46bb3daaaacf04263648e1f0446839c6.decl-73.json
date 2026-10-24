@@ -1,18 +1,1 @@
-{
-  "grid-cols-[minmax(0,1fr)_18rem]": {
-    "valid": true,
-    "declarations": [["", "grid-template-columns", "minmax(0,1fr) 18rem"]],
-    "values": { "minmax(0,1fr) 18rem": { "p": [], "f": [], "u": false } }
-  },
-  "w-(--available-width)": {
-    "valid": true,
-    "declarations": [["", "width", "var(--available-width)"]],
-    "values": {
-      "var(--available-width)": {
-        "p": ["--available-width"],
-        "f": [],
-        "u": true
-      }
-    }
-  }
-}
+{"grid-cols-[minmax(0,1fr)_18rem]":{"valid":true,"declarations":[["","grid-template-columns","minmax(0,1fr) 18rem"]],"values":{"minmax(0,1fr) 18rem":{"p":[],"f":[],"u":false}}},"w-(--available-width)":{"valid":true,"declarations":[["","width","var(--available-width)"]],"values":{"var(--available-width)":{"p":["--available-width"],"f":[],"u":true}}}}

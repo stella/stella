@@ -1,8 +1,1 @@
-{
-  "group/chat-scroll-surface": {
-    "valid": false,
-    "declarations": [],
-    "values": {}
-  },
-  "group/row": { "valid": false, "declarations": [], "values": {} }
-}
+{"group/chat-scroll-surface":{"valid":false,"declarations":[],"values":{}},"group/row":{"valid":false,"declarations":[],"values":{}}}

@@ -1,7 +1,1 @@
-{
-  "opacity-64": {
-    "valid": true,
-    "declarations": [["", "opacity", "64%"]],
-    "values": { "64%": { "p": [], "f": [], "u": false } }
-  }
-}
+{"opacity-64":{"valid":true,"declarations":[["","opacity","64%"]],"values":{"64%":{"p":[],"f":[],"u":false}}}}

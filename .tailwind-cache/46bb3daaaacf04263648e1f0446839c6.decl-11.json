@@ -1,7 +1,1 @@
-{
-  "max-h-[280px]": {
-    "valid": true,
-    "declarations": [["", "max-height", "280px"]],
-    "values": { "280px": { "p": [], "f": [], "u": false } }
-  }
-}
+{"max-h-[280px]":{"valid":true,"declarations":[["","max-height","280px"]],"values":{"280px":{"p":[],"f":[],"u":false}}}}

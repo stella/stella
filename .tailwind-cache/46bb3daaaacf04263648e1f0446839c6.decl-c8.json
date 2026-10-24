@@ -1,7 +1,1 @@
-{
-  "mt-[17%]": {
-    "valid": true,
-    "declarations": [["", "margin-top", "17%"]],
-    "values": { "17%": { "p": [], "f": [], "u": false } }
-  }
-}
+{"mt-[17%]":{"valid":true,"declarations":[["","margin-top","17%"]],"values":{"17%":{"p":[],"f":[],"u":false}}}}

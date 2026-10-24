@@ -1,9 +1,1 @@
-{
-  "bottom-15": {
-    "valid": true,
-    "declarations": [["", "bottom", "calc(var(--spacing) * 15)"]],
-    "values": {
-      "calc(var(--spacing) * 15)": { "p": ["--spacing"], "f": [], "u": false }
-    }
-  }
-}
+{"bottom-15":{"valid":true,"declarations":[["","bottom","calc(var(--spacing) * 15)"]],"values":{"calc(var(--spacing) * 15)":{"p":["--spacing"],"f":[],"u":false}}}}

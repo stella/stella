@@ -1,17 +1,1 @@
-{
-  "max-h-[310px]": {
-    "valid": true,
-    "declarations": [["", "max-height", "310px"]],
-    "values": { "310px": { "p": [], "f": [], "u": false } }
-  },
-  "max-w-[min(44rem,100%)]": {
-    "valid": true,
-    "declarations": [["", "max-width", "min(44rem, 100%)"]],
-    "values": { "min(44rem, 100%)": { "p": [], "f": [], "u": false } }
-  },
-  "opacity-56": {
-    "valid": true,
-    "declarations": [["", "opacity", "56%"]],
-    "values": { "56%": { "p": [], "f": [], "u": false } }
-  }
-}
+{"max-h-[310px]":{"valid":true,"declarations":[["","max-height","310px"]],"values":{"310px":{"p":[],"f":[],"u":false}}},"max-w-[min(44rem,100%)]":{"valid":true,"declarations":[["","max-width","min(44rem, 100%)"]],"values":{"min(44rem, 100%)":{"p":[],"f":[],"u":false}}},"opacity-56":{"valid":true,"declarations":[["","opacity","56%"]],"values":{"56%":{"p":[],"f":[],"u":false}}}}
