@@ -188,7 +188,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
-  - optional: --domain, --access (all|read|write)
+  - optional: --domain, --query, --access (all|read|write)
 - `stella capability read`
   - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
@@ -418,7 +418,7 @@ that is not a curated tool, reached through `read_capability` or `write_capabili
 paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
-- **Discover**: `stella capability list [--domain <d>] [--access read|write]`
+- **Discover**: `stella capability list [--query <text>] [--domain <d>] [--access read|write]`
   enumerates them (paginated); `stella capability describe --capability <id>` prints one
   capability's full input schema, scope, and flags.
 - **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or

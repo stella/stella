@@ -8,8 +8,8 @@ import { LIMITS } from "@/api/lib/limits";
  * The agent-facing text of `search_case_law` per guidance mode
  * (`MCP_CASE_LAW_SEARCH_GUIDANCE`).
  *
- * `off` is the contract as it read before guidance existed, byte for byte, so
- * the gate can be evaluated against it. `v1` adds what a model cannot infer
+ * `off` is the contract without experimental query-writing guidance, so the
+ * gate can be evaluated against it. `v1` adds what a model cannot infer
  * from the schema: a hit is one passage holding every required word, so a
  * long phrasing finds less, not more; `limit` is shared evenly, so a weak
  * extra phrasing costs the good one slots; and the courts example names every

@@ -368,7 +368,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     `paths. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
     "multi-segment capability actions are flattened with hyphens into `<action>`.",
     "",
-    "- **Discover**: `stella capability list [--domain <d>] [--access read|write]`",
+    "- **Discover**: `stella capability list [--query <text>] [--domain <d>] [--access read|write]`",
     "  enumerates them (paginated); `stella capability describe --capability <id>` prints one",
     "  capability's full input schema, scope, and flags.",
     "- **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or",
