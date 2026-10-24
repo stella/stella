@@ -12,13 +12,20 @@ import {
 } from "@/api/lib/chat/ref-registry";
 import type { ChatRefBinding } from "@/api/lib/chat/ref-token";
 import {
+  flushFailureObservations,
+  resetFailureObservationsForTesting,
+} from "@/api/lib/observability/failure-shadow";
+import {
   brandPersistedContactId,
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
   brandPersistedFieldId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 const WORKSPACE_IDS = [
@@ -146,37 +153,69 @@ describe("chat refs across the requests of a thread", () => {
     expect(next.toEntityRef(entityTarget(0))).toBe("ent_2");
   });
 
-  test("each ref failure reports under its own error code", () => {
-    const registryA = createChatRefRegistry();
-    const registryB = createChatRefRegistry();
-    const bindingA =
-      registryA
-        .collectRefBindings({
-          values: [registryA.toEntityRef(entityTarget(0))],
-        })
-        .at(0) ?? expect.unreachable("The registry holds the ref it minted");
+  test("stored ref defects are captured while invalid model refs remain observed", () => {
+    const logs = installRecordingLogger();
+    resetFailureObservationsForTesting();
+    try {
+      const registryA = createChatRefRegistry();
+      const registryB = createChatRefRegistry();
+      const bindingA =
+        registryA
+          .collectRefBindings({
+            values: [registryA.toEntityRef(entityTarget(0))],
+          })
+          .at(0) ?? expect.unreachable("The registry holds the ref it minted");
 
-    const next = createChatRefRegistry([
-      bindingA,
-      ...registryB.collectRefBindings({
-        values: [registryB.toEntityRef(entityTarget(1))],
-      }),
-      { ...bindingA, ref: "bogus" },
-    ]);
-    next.resolveAssistantTextRefs("[Ghost](#stella-entity-ref=ent_9)");
+      const next = createChatRefRegistry([
+        bindingA,
+        ...registryB.collectRefBindings({
+          values: [registryB.toEntityRef(entityTarget(1))],
+        }),
+        { ...bindingA, ref: "bogus" },
+      ]);
+      expect(
+        next.resolveAssistantTextRefs("[Ghost](#stella-entity-ref=ent_9)"),
+      ).toBe("[Ghost](#stella-unresolved-ref)");
+      flushFailureObservations();
 
-    expect(
-      analytics
-        .exceptions()
-        .map(({ properties }) => [
-          properties["error.code"],
-          properties["kind"],
-        ]),
-    ).toEqual([
-      ["chat_ref_conflict", "entity"],
-      ["chat_ref_malformed", "entity"],
-      ["chat_ref_unminted", "entity"],
-    ]);
+      expect(
+        analytics
+          .exceptions()
+          .map(({ properties }) => [
+            properties["error.code"],
+            properties["kind"],
+            properties["failure.grade"],
+            properties["failure.reason"],
+          ]),
+      ).toEqual([
+        ["chat_ref_conflict", "entity", "defect", "tagged_failure"],
+        ["chat_ref_malformed", "entity", "defect", "tagged_failure"],
+      ]);
+
+      expect(
+        logs.records
+          .filter(({ message }) => message === "failure.observed")
+          .map(({ severityText, attributes }) => [
+            severityText,
+            attributes?.["failure.sink"],
+            attributes?.["failure.grade"],
+            attributes?.["failure.reason"],
+            attributes?.["occurrences"],
+          ]),
+      ).toEqual([
+        ["INFO", "exception.captured", "defect", "tagged_failure", 2],
+        [
+          "INFO",
+          "exception.captured",
+          "anticipated",
+          "model_output_invalid",
+          1,
+        ],
+      ]);
+    } finally {
+      resetFailureObservationsForTesting();
+      logs.restore();
+    }
   });
 
   test("only whole minted tokens are collected", () => {
@@ -335,4 +374,13 @@ describe("chat refs across the requests of a thread", () => {
     // What it cannot is neutral text.
     expect(durable.split(CHAT_UNAVAILABLE_REF_TEXT)).toHaveLength(3);
   });
+});
+
+test("handled model-authored refs become inert text without an exception", () => {
+  const registry = createChatRefRegistry();
+  const result = registry.resolveAssistantTextRefs(
+    "[unknown](#stella-entity-ref=ent_999)",
+  );
+  expect(result).toBe("[unknown](#stella-unresolved-ref)");
+  expect(analytics.exceptions()).toEqual([]);
 });

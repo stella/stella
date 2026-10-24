@@ -1,4 +1,4 @@
-// parser-output-unchanged: failure grades classify telemetry; no parser reads this vocabulary.
+// parser-output-unchanged: total failure grading changes telemetry observation policy; no parser reads this vocabulary.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -57,6 +57,7 @@ export const FAILURE_REASON_GRADE = {
   visual_preview_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
+  publisher_refused: "anticipated",
   model_unavailable: "anticipated",
   // A complete structured answer that does not match the requested schema:
   // the model's choice, which this service rejects rather than stores.
@@ -86,6 +87,7 @@ export const FAILURE_REASON_GRADE = {
   route_not_found: "client",
   request_malformed: "client",
   unclassified: "defect",
+  tagged_failure: "defect",
   // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
   // A provider answered 400 to a request this service built and nothing more
   // specific named it: the request broke the provider's contract, which is
