@@ -137,6 +137,7 @@ describe("failure evidence survives hostile values", () => {
 
   test("unreadable metadata indices preserve readable finite dimensions", () => {
     class MetadataError extends Error {
+      override readonly name = "MetadataError";
       readonly reason = "decode";
       static readonly stellaExceptionFingerprintFields = new Proxy(
         ["reason", "stage"],

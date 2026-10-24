@@ -118,6 +118,7 @@ void FreeTextStaticFailureError;
 describe("fingerprint metadata is a bounded hostile-input boundary", () => {
   const readMetadata = (metadata: unknown) => {
     class MetadataError extends Error {
+      override readonly name = "MetadataError";
       readonly reason = "decode";
       readonly stage = "read";
       static readonly stellaExceptionFingerprintFields = metadata;
@@ -132,6 +133,7 @@ describe("fingerprint metadata is a bounded hostile-input boundary", () => {
 
   test("a failing constructor descriptor preserves registered fields", () => {
     class RegisteredError extends Error {
+      override readonly name = "RegisteredError";
       readonly reason = "decode" as const;
     }
     declareFingerprintFields(RegisteredError, ["reason"]);
@@ -177,6 +179,7 @@ describe("fingerprint metadata is a bounded hostile-input boundary", () => {
       for (const suffix of ["\n", "\r", "\r\n", "\u2028", "\u2029"]) {
         const field = `${key}${suffix}`;
         class MetadataError extends Error {
+          override readonly name = "MetadataError";
           static readonly stellaExceptionFingerprintFields = [field];
         }
         const value = Object.defineProperty(

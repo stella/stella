@@ -148,7 +148,10 @@ export const capturedExceptionIdentity = (error: unknown) => {
     if (cached.has(key)) {
       return cached.get(key);
     }
-    const result: unknown = attempt(() => Reflect.get(value, key), undefined);
+    const result = attempt(() => {
+      const property: unknown = Reflect.get(value, key);
+      return property;
+    }, undefined);
     cached.set(key, result);
     return result;
   };
@@ -162,7 +165,10 @@ export const capturedExceptionIdentity = (error: unknown) => {
     const object = current;
     seen.add(object);
     const prototypes: object[] = [];
-    let prototype: unknown = attempt(() => Object.getPrototypeOf(object), null);
+    let prototype = attempt(() => {
+      const parent: unknown = Object.getPrototypeOf(object);
+      return parent;
+    }, null);
     while (
       typeof prototype === "object" &&
       prototype !== null &&
@@ -170,7 +176,10 @@ export const capturedExceptionIdentity = (error: unknown) => {
     ) {
       const parent = prototype;
       prototypes.push(parent);
-      prototype = attempt(() => Object.getPrototypeOf(parent), null);
+      prototype = attempt(() => {
+        const next: unknown = Object.getPrototypeOf(parent);
+        return next;
+      }, null);
     }
     if (prototype !== null) {
       status = "read_failed";

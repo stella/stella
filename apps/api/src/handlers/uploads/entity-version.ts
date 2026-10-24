@@ -143,6 +143,24 @@ const THUMBNAIL_KEY = "entityVersion.enqueueThumbnail";
 const PDF_KEY = "entityVersion.enqueuePdfDerivative";
 const DIFF_KEY = "entityVersion.computeVersionDiff";
 
+type DetectVersionEncryptionOptions = Pick<
+  FinalizeEntityVersionProps,
+  "declaredMime" | "declaredSize" | "scanned"
+>;
+
+const detectVersionEncryption = async ({
+  declaredMime,
+  declaredSize,
+  scanned,
+}: DetectVersionEncryptionOptions) =>
+  uploadFileEncryption(
+    await detectFileEncryption({ mimeType: declaredMime, scanned }),
+    handlerErrorContext("entityVersion.detectEncryption", {
+      mimeType: declaredMime,
+      sizeBytes: String(declaredSize),
+    }),
+  );
+
 /**
  * Promote the staged object, then join the canonical version transaction. The
  * pending-upload FSM transition is supplied as writeFileVersion's afterWrite
@@ -161,7 +179,7 @@ export const finalizeEntityVersion = async function* ({
   declaredMime,
   declaredSize,
   declaredSha256Hex,
-  purposeData,
+  purposeData: { entityId },
   scanned,
   scanWarnings,
   uploadId,
@@ -169,16 +187,13 @@ export const finalizeEntityVersion = async function* ({
   promoteTmpObject,
 }: FinalizeEntityVersionProps) {
   const fileName = sanitizeFilename(declaredName);
-  const { entityId } = purposeData;
   // The new bytes decide the attribute: a version is a different file from
   // the one it replaces, and may be encrypted when that one was not.
-  const encryption = uploadFileEncryption(
-    await detectFileEncryption({ mimeType: declaredMime, scanned }),
-    handlerErrorContext("entityVersion.detectEncryption", {
-      mimeType: declaredMime,
-      sizeBytes: String(declaredSize),
-    }),
-  );
+  const encryption = await detectVersionEncryption({
+    declaredMime,
+    declaredSize,
+    scanned,
+  });
   if (encryption === null) {
     return finalizeErr({
       status: 422,

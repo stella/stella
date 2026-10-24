@@ -669,6 +669,7 @@ describe("captureError owned fields", () => {
 
 test("capture preserves finite dimensions when fingerprint metadata is unreadable", () => {
   class MetadataError extends Error {
+    override readonly name = "MetadataError";
     readonly reason = "decode";
     static readonly stellaExceptionFingerprintFields = new Proxy(
       ["reason", "stage"],
