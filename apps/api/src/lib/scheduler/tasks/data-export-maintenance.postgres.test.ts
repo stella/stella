@@ -7,6 +7,7 @@ import {
   DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
 } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DATA_EXPORT_HEARTBEAT_STALE_MS } from "@/api/lib/data-export-queue";
 import { logger } from "@/api/lib/observability/logger";
@@ -52,18 +53,27 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               name: "Export requester",
               email: `${userId}@example.test`,
             });
-            await observer.db.insert(organizationDataExports).values({
-              id: exportId,
+            const scopedDb = createScopedDb(
+              observer.db,
+              [],
               organizationId,
-              requestedBy: userId,
-              versionScope: "all",
-              status: "running",
-              attempt: 1,
-              failures,
-              heartbeatAt: new Date(
-                now.getTime() - DATA_EXPORT_HEARTBEAT_STALE_MS - 1,
-              ),
-            });
+              userId,
+            );
+            await scopedDb(
+              async (tx) =>
+                await tx.insert(organizationDataExports).values({
+                  id: exportId,
+                  organizationId,
+                  requestedBy: userId,
+                  versionScope: "all",
+                  status: "running",
+                  attempt: 1,
+                  failures,
+                  heartbeatAt: new Date(
+                    now.getTime() - DATA_EXPORT_HEARTBEAT_STALE_MS - 1,
+                  ),
+                }),
+            );
             const [workerSession] = await worker.db.execute<{ pid: number }>(
               sql`select pg_backend_pid() as pid`,
             );

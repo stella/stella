@@ -1,10 +1,10 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia";
 
 import { organization, user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, organizationDataExports } from "@/api/db/schema";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import downloadDataExport from "@/api/handlers/data-exports/download";
 import readDataExport from "@/api/handlers/data-exports/get";
 import listDataExports from "@/api/handlers/data-exports/list";
@@ -34,8 +34,8 @@ export const seedDataExportReadScaling = async (
   );
   const exportId =
     exportIds.at(0) ?? panic("Export scaling requires an export");
-  const safeDb: SafeDb = async (work) =>
-    await Result.tryPromise(async () => await db.transaction(work));
+  const scopedDb = createScopedDb(db, [], organizationId, userId);
+  const safeDb = createSafeDb(db, [], organizationId, userId);
   const recordAuditEvent = createBackgroundAuditRecorder({
     execution: {
       performer: { id: userId, type: "user" },
@@ -61,54 +61,57 @@ export const seedDataExportReadScaling = async (
       name: "Export reader",
       email: `${userId}@example.test`,
     });
-    await db.insert(organizationDataExports).values(
-      exportIds.map((id, index) => ({
-        id,
-        organizationId,
-        requestedBy: userId,
-        versionScope: "all" as const,
-        status: "ready" as const,
-        attempt: 1,
-        partCount: 1,
-        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
-        expiresAt: new Date("2030-01-01T00:00:00Z"),
-        // Internal plan and per-part matter IDs grow with the population;
-        // neither is exposed by the fixed-page or detail projections.
-        plan: {
-          parts: [
-            {
-              index: 1,
-              matterIds: Array.from({ length: size }, () =>
-                createSafeId<"workspace">(),
-              ),
-              estimatedBytes: size,
-            },
-          ],
-          mattersTotal: size,
-          bytesTotal: size,
-        },
-        parts: [
-          {
-            index: 1,
+    await scopedDb(
+      async (tx) =>
+        await tx.insert(organizationDataExports).values(
+          exportIds.map((id, index) => ({
+            id,
+            organizationId,
+            requestedBy: userId,
+            versionScope: "all" as const,
+            status: "ready" as const,
             attempt: 1,
-            fileName: "part-0001.zip",
-            sizeBytes: 100,
-            sha256: "a".repeat(64),
-            matterIds: Array.from({ length: size }, () =>
-              createSafeId<"workspace">(),
-            ),
-            fileCount: 1,
-            totals: {
-              matters: size,
-              documents: 1,
-              versions: 1,
-              files: 1,
-              fileBytes: 100,
+            partCount: 1,
+            createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+            expiresAt: new Date("2030-01-01T00:00:00Z"),
+            // Internal plan and per-part matter IDs grow with the population;
+            // neither is exposed by the fixed-page or detail projections.
+            plan: {
+              parts: [
+                {
+                  index: 1,
+                  matterIds: Array.from({ length: size }, () =>
+                    createSafeId<"workspace">(),
+                  ),
+                  estimatedBytes: size,
+                },
+              ],
+              mattersTotal: size,
+              bytesTotal: size,
             },
-            problems: [],
-          },
-        ],
-      })),
+            parts: [
+              {
+                index: 1,
+                attempt: 1,
+                fileName: "part-0001.zip",
+                sizeBytes: 100,
+                sha256: "a".repeat(64),
+                matterIds: Array.from({ length: size }, () =>
+                  createSafeId<"workspace">(),
+                ),
+                fileCount: 1,
+                totals: {
+                  matters: size,
+                  documents: 1,
+                  versions: 1,
+                  files: 1,
+                  fileBytes: 100,
+                },
+                problems: [],
+              },
+            ],
+          })),
+        ),
     );
     return {
       organizationId,
