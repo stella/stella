@@ -19,8 +19,8 @@ import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
   corpusCountryQuotas,
-  readCompatStatute,
   rankCorpusCountries,
+  readCompatStatute,
   resolveCompatCorpusCountries,
 } from "@/api/mcp/compat-corpus";
 import { LAW_COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-law-tools";

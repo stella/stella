@@ -19,9 +19,9 @@ import {
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
+  isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_HINT,
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
-  isSearchIndexUnavailable,
   searchIndexUnavailableError,
 } from "@/api/lib/legal-search/search-index-unavailable";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";

@@ -1,4 +1,4 @@
-import { normalizeUnicode, ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
+import { ARABIC_DIGIT_FOLDS, normalizeUnicode } from "@stll/text-normalize";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";

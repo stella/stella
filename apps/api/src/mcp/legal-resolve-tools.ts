@@ -16,9 +16,9 @@ import type { TypedMcpToolHandler } from "./tool-types";
 import {
   countryInputSchema,
   countryNormalization,
+  featureDisabledHint,
   nullAsAbsent,
   structuredErrorResult,
-  featureDisabledHint,
   toolDataResult,
   validationErrorResult,
 } from "./tool-utils";

@@ -3,7 +3,7 @@ import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -93,9 +93,9 @@ import {
   S3ObjectBudgetError,
 } from "@/api/lib/s3";
 import {
+  brandNullablePersistedUserId,
   brandPersistedEntityId,
   brandPersistedFieldId,
-  brandNullablePersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";

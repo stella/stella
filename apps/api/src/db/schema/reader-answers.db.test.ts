@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { READER_ANSWER_ERROR_CODES } from "@stll/api-contract/reader-answers";
 
 import { organization, user } from "@/api/db/auth-schema";
-import { legalReaderAnswers, legalReaderAnswerMessages } from "@/api/db/schema";
+import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {

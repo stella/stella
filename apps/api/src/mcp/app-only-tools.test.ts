@@ -42,10 +42,7 @@ type CallOptions = {
   toolName: string;
   method?: "tools/call" | "tools/list";
   access:
-    | "granted"
-    | "missing-scope"
-    | "unauthenticated"
-    | "organization-denied";
+    "granted" | "missing-scope" | "unauthenticated" | "organization-denied";
 };
 const call = async ({
   toolName,

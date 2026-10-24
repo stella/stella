@@ -11,8 +11,8 @@ import type {
   McpRequestDataAccess,
 } from "@/api/mcp/context";
 import {
-  mcpMemberAuthority,
   type McpEffectiveAuthority,
+  mcpMemberAuthority,
 } from "@/api/mcp/effective-authority";
 
 /** One operation a write tool's input can select, with the grant it needs. */

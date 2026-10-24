@@ -26,8 +26,8 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 

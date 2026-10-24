@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Result, panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
@@ -24,9 +24,9 @@ import { childExitStatus } from "./child-exit-status";
 import {
   dockerCommand,
   DockerEndpointError,
-  resolveInstalledDevDockerKeeper,
   type DockerTarget,
   resolveDockerTarget,
+  resolveInstalledDevDockerKeeper,
 } from "./dev-docker";
 import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
@@ -38,9 +38,9 @@ import {
 import {
   DEFAULT_INFRA_PORTS,
   DEFAULT_PORTS,
-  MAX_PORT_OFFSET,
   type DevMode,
   type InfraOffsetSetting,
+  MAX_PORT_OFFSET,
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {

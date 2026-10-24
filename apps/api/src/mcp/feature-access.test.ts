@@ -41,8 +41,8 @@ import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
-  listMcpTools,
   handleMcpToolCall,
+  listMcpTools,
 } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

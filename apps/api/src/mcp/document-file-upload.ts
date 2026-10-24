@@ -24,8 +24,8 @@ import type {
 import {
   internalFailureResult,
   nullAsAbsent,
-  structuredErrorResult,
   structuredEgressPlan,
+  structuredErrorResult,
   uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";

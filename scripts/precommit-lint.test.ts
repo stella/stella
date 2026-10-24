@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  RECEIVER_TYPED_AUTOFIX_RULES,
   lintCommand,
   mergeScopedFiles,
+  RECEIVER_TYPED_AUTOFIX_RULES,
   runPrecommitLint,
 } from "./precommit-lint";
 

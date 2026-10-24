@@ -9,8 +9,8 @@ import { databaseRelations } from "@/api/db/database-relations";
 import {
   caseLawCitations,
   caseLawDecisions,
-  caseLawSources,
   caseLawProvisionCitations,
+  caseLawSources,
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";

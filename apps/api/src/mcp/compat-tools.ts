@@ -17,8 +17,8 @@ import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import {
   type AuthorizedWorkspaceIds,
-  type AuthorizedWorkspaceReadError,
   authorizedWorkspaceIds,
+  type AuthorizedWorkspaceReadError,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
@@ -41,12 +41,13 @@ import {
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
+  type CompatSearchPosition,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
   publicLawDisabledResult,
-  type CompatSearchPosition,
 } from "@/api/mcp/compat-shared";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -99,9 +100,9 @@ const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
  * failure envelope.
  */
 const readAuthorizedMatterContent = async <T>(
-  context: McpRequestContext,
+  context: McpRequestResources,
   read: (
-    tx: Parameters<Parameters<McpRequestContext["scopedDb"]>[0]>[0],
+    tx: Parameters<Parameters<McpRequestResources["scopedDb"]>[0]>[0],
     workspaceIds: AuthorizedWorkspaceIds,
   ) => Promise<T>,
 ): Promise<Result<T, unknown>> =>

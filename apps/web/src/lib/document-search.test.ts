@@ -7,8 +7,8 @@ import {
 } from "@stll/text-normalize";
 
 import {
-  findDocumentSearchResult,
   findDocumentSearchMatches,
+  findDocumentSearchResult,
   findSearchTextMatches,
 } from "@/lib/document-search";
 import { getSearchTextCandidates } from "@/lib/search-text";
