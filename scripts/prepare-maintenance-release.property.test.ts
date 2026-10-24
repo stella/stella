@@ -29,6 +29,7 @@ import {
   prepareMaintenanceReleaseFiles,
   readPendingChangesets,
   readPreviousRelease,
+  refreshMaintenanceReleaseFiles,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -513,6 +514,127 @@ describe("pending changesets folded into the release", () => {
     expect(
       readFileSync(nodePath.join(root, ".changeset/cli.md"), "utf-8"),
     ).toBe(CLI_ENTRY);
+    expect(
+      readFileSync(nodePath.join(root, "packages/cli/CHANGELOG.md"), "utf-8"),
+    ).toBe("# @stll/cli\n");
+  });
+
+  // A release branch after its cut: VERSION names the cut version, its note
+  // lists what the cut consumed, and the cut's empty marker entry is present.
+  const cutRelease = (root: string, entries: Record<string, string>) => {
+    releaseFixture(root, "{}\n");
+    writeFileSync(nodePath.join(root, "VERSION"), "1.2.4\n");
+    writeFileSync(
+      nodePath.join(root, "docs/changelog/v1.2.4.md"),
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n",
+    );
+    changesetFixture(root, {
+      "README.md": "# Changesets\n",
+      "release-v1.2.4.md": "---\n---\n",
+      ...entries,
+    });
+  };
+
+  test("a refresh versions entries that reached main after the cut into the same release", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, { "cli.md": CLI_ENTRY });
+    const { calls, versionPackages } = consumeChangesets();
+
+    expect(
+      refreshMaintenanceReleaseFiles({ rootDir: root, versionPackages }),
+    ).toEqual({
+      changelogPath: "docs/changelog/v1.2.4.md",
+      changesets: ["cli.md"],
+      version: "1.2.4",
+    });
+    expect(calls).toEqual([root]);
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.4\n",
+    );
+    expect(
+      readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
+    ).toBe(
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): New `case-law lookup` command: several references per call.\n",
+    );
+    // The version run consumed the marker with the new entry; the release
+    // policy still needs it beside the regenerated package files.
+    expect(readdirSync(nodePath.join(root, ".changeset")).toSorted()).toEqual([
+      "README.md",
+      "release-v1.2.4.md",
+    ]);
+    expect(
+      readFileSync(
+        nodePath.join(root, ".changeset/release-v1.2.4.md"),
+        "utf-8",
+      ),
+    ).toBe("---\n---\n");
+  });
+
+  test("a refresh leaves a release with nothing new untouched", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, {});
+    const { calls, versionPackages } = consumeChangesets();
+    const note = readFileSync(
+      nodePath.join(root, "docs/changelog/v1.2.4.md"),
+      "utf-8",
+    );
+
+    expect(
+      refreshMaintenanceReleaseFiles({ rootDir: root, versionPackages }),
+    ).toBeNull();
+    expect(calls).toEqual([]);
+    expect(
+      readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
+    ).toBe(note);
+  });
+
+  test("a refresh runs only on a branch whose release was cut", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, { "cli.md": CLI_ENTRY });
+    rmSync(nodePath.join(root, ".changeset/release-v1.2.4.md"));
+    const { calls, versionPackages } = consumeChangesets();
+
+    expect(() =>
+      refreshMaintenanceReleaseFiles({ rootDir: root, versionPackages }),
+    ).toThrow(
+      "No cut release v1.2.4 to refresh: .changeset/release-v1.2.4.md is missing",
+    );
+    expect(calls).toEqual([]);
+  });
+
+  test("a refresh restores the version run's writes when the note cannot be written", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, { "cli.md": CLI_ENTRY });
+    const { versionPackages } = consumeChangesets();
+    const notePath = nodePath.join(root, "docs/changelog/v1.2.4.md");
+    const note = readFileSync(notePath, "utf-8");
+
+    expect(() =>
+      refreshMaintenanceReleaseFiles({
+        rootDir: root,
+        versionPackages,
+        writeFile: (path, contents) => {
+          if (path === notePath) {
+            throw new Error("simulated write failure");
+          }
+          writeFileSync(path, contents);
+        },
+      }),
+    ).toThrow("simulated write failure");
+    expect(readFileSync(notePath, "utf-8")).toBe(note);
+    expect(
+      readFileSync(nodePath.join(root, ".changeset/cli.md"), "utf-8"),
+    ).toBe(CLI_ENTRY);
+    expect(
+      readFileSync(
+        nodePath.join(root, ".changeset/release-v1.2.4.md"),
+        "utf-8",
+      ),
+    ).toBe("---\n---\n");
     expect(
       readFileSync(nodePath.join(root, "packages/cli/CHANGELOG.md"), "utf-8"),
     ).toBe("# @stll/cli\n");
