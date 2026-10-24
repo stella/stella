@@ -1304,8 +1304,8 @@ describe("PostHog browser analytics adapter", () => {
     },
   );
 
-  test("server dot-segment frames retain only the basename", async () => {
-    await assertProperty(
+  test("server dot-segment frames retain only the basename", () => {
+    assertProperty(
       "server dot-segment frames retain only the basename",
       fc.property(
         fc.array(fc.constantFrom("src", "routes", "dist", "server")),
