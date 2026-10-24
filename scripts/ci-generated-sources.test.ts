@@ -876,8 +876,44 @@ test("API boot entry points prepare capability runtime sources before starting",
 
 // A web app served from source imports every generated module the registry
 // owns. A built app does not need this: its build runs the generators.
-const STARTS_WEB_FROM_SOURCE =
-  /\b(?:bun\s+--bun\s+vite|bunx\s+vite|vite\s+dev)\b/u;
+const startsWebFromSource = (run: string) =>
+  lexShell(run).some((event) => {
+    if (event.type !== "command") {
+      return false;
+    }
+    const words = programWords(event.words);
+    if (
+      words.at(0) === "bun" &&
+      words.at(1) === "run" &&
+      words.at(2) === "dev:web"
+    ) {
+      return true;
+    }
+    const args =
+      words.at(0) === "vite"
+        ? words.slice(1)
+        : words.at(0) === "bunx" && words.at(1) === "vite"
+          ? words.slice(2)
+          : words.at(0) === "bun" &&
+              words.at(1) === "--bun" &&
+              words.at(2) === "vite"
+            ? words.slice(3)
+            : null;
+    if (
+      args === null ||
+      args.includes("--help") ||
+      args.includes("--version")
+    ) {
+      return false;
+    }
+    const command = args.at(0);
+    return (
+      command === undefined ||
+      command.startsWith("-") ||
+      command === "dev" ||
+      command === "serve"
+    );
+  });
 const REGISTRY_PREPARE = "bun scripts/ci-generated-sources.ts prepare";
 const preparesGeneratedSources = (run: string) =>
   lexShell(run).some((event) => {
@@ -916,9 +952,7 @@ type LooseWorkflow = v.InferOutput<typeof looseWorkflow>;
 const unpreparedSourceStarts = (file: string, source: LooseWorkflow) =>
   Object.entries(source.jobs ?? {}).flatMap(([id, job]) => {
     const steps = job.steps ?? [];
-    const start = steps.findIndex(({ run }) =>
-      STARTS_WEB_FROM_SOURCE.test(run ?? ""),
-    );
+    const start = steps.findIndex(({ run }) => startsWebFromSource(run ?? ""));
     if (start === -1) {
       return [];
     }
@@ -942,9 +976,7 @@ test("every job that serves the web app from source runs the generated-source re
   const starters = workflows.flatMap(({ file, source }) =>
     Object.entries(source.jobs ?? {})
       .filter(([, job]) =>
-        (job.steps ?? []).some(({ run }) =>
-          STARTS_WEB_FROM_SOURCE.test(run ?? ""),
-        ),
+        (job.steps ?? []).some(({ run }) => startsWebFromSource(run ?? "")),
       )
       .map(([id]) => `${file}/${id}`),
   );
@@ -968,6 +1000,25 @@ test("every job that serves the web app from source runs the generated-source re
     "ci.yml/e2e-vite-canary/Start web dev server",
   ]);
 });
+
+test.each([
+  ["bun --bun vite --port 3000", true],
+  ["nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &", true],
+  ["CI=true bunx vite dev --host 127.0.0.1", true],
+  ["vite serve", true],
+  ["bun run dev:web", true],
+  ["echo 'bun --bun vite'", false],
+  ["# bun --bun vite", false],
+  ["cat <<'TEXT'\nbun --bun vite\nTEXT", false],
+  ["bun --bun vite build", false],
+  ["bunx vite preview", false],
+  ["vite --version", false],
+])(
+  "only executable development commands start the web app: %s",
+  (run, starts) => {
+    expect(startsWebFromSource(run)).toBe(starts);
+  },
+);
 
 test.each([
   [REGISTRY_PREPARE, true],
