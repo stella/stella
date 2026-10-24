@@ -205,13 +205,34 @@ test("every bundle resolves its file assets from its runner directory", () => {
   }
 });
 
-test("long-running API builds map frames to source", () => {
+// Error fingerprints need source positions, so long-running bundles ship a
+// linked map beside the bundle. The map's embedded source text is never read
+// at runtime, so each build strips it in the same instruction.
+const STRIP_SOURCE_MAP = "bun apps/api/scripts/strip-source-map-content.ts";
+
+test("long-running API builds map frames to source without embedded source text", () => {
+  const instructions = logicalInstructions(stage("builder"));
   for (const output of [
     "/app/server.js",
     "/app/document-processing-worker.js",
   ]) {
-    expect(buildForOutput(output), output).toContain("--sourcemap=inline");
+    const bundle = buildForOutput(output);
+    expect(bundle, output).toContain("--sourcemap=linked");
+    const map = `${buildOutput(bundle ?? "")}.map`;
+    expect(runnerOutputs(map), output).toEqual([`${output}.map`]);
+    const instruction = instructions.find((candidate) =>
+      candidate.includes(bundle ?? "\0"),
+    );
+    expect(instruction, output).toContain(`&& ${STRIP_SOURCE_MAP} ${map}`);
   }
+});
+
+test("no builder bundle embeds an inline source map", () => {
+  expect(
+    bundleBuilds(stage("builder")).filter((bundle) =>
+      /--sourcemap(?:=inline)?(?:\s|$)/u.test(bundle),
+    ),
+  ).toEqual([]);
 });
 
 // The case-law runner is the third long-running bundle that reports errors

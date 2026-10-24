@@ -214,7 +214,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --sourcemap=inline --target bun --outdir /app/bundles --public-path /app/ --entry-naming server.js apps/api/src/server.ts",
+      "bun build --define __STELLA_RELEASE__=true --sourcemap=linked --target bun --outdir /app/bundles --public-path /app/ --entry-naming server.js apps/api/src/server.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
@@ -536,7 +536,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=inline --outdir /app/bundles --public-path /app/ --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=linked --outdir /app/bundles --public-path /app/ --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {

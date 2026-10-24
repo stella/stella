@@ -204,6 +204,37 @@ await probe("model ingress script bundle", async () => {
   }
 });
 
+// Error fingerprints group by source positions, so the long-running bundles
+// must map their frames through the shipped, content-stripped source maps.
+// Started without configuration, each fails environment validation; its stack
+// must name a source file rather than a bundle offset.
+const SOURCE_FRAME = /\/apps\/api\/src\/\S+\.ts:\d+:\d+/u;
+for (const bundle of ["/app/server.js", "/app/document-processing-worker.js"]) {
+  await probe(`${bundle} frames map to source`, async () => {
+    const subprocess = Bun.spawn(["bun", "--no-env-file", bundle], {
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+      env: { PATH: process.env["PATH"] ?? "", HOME: "/tmp" },
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    const output = `${stdout}\n${stderr}`;
+    if (exitCode === 0 || !output.includes("Invalid environment variables")) {
+      panic(`${bundle} did not stop at environment validation: ${output}`);
+    }
+    if (output.includes("Could not decode sourcemap")) {
+      panic(`${bundle} could not decode its source map: ${output}`);
+    }
+    if (!SOURCE_FRAME.test(output)) {
+      panic(`${bundle} printed no source-mapped frame: ${output}`);
+    }
+  });
+}
+
 // Literal tenant identifier redaction uses Aho-Corasick; both matching and
 // replacement must execute through the native binding in the compiled image.
 await probe("text-search native binding", () => {
