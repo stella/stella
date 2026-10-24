@@ -135,6 +135,10 @@ const ADAPTER_JURISDICTIONS = {
     country: "EU",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.EU,
   },
+  GBR: {
+    country: "GBR",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.GBR,
+  },
   HUN: {
     country: "HUN",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.HUN,

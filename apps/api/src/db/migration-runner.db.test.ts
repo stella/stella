@@ -1138,13 +1138,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
       );
     });
 
-    test("a pending set that loses a lock wait reruns under the lane and records each migration once", async () => {
+    test("a split migration retries after committing this run's earlier receipt", async () => {
       await withBundle(
         [
           { name: A, sql: CREATE_PROBE },
           {
             name: B,
-            sql: `${ALTER_LOCK_PROBE}--> statement-breakpoint\nINSERT INTO migration_probe (event) VALUES (current_setting('lock_timeout'));`,
+            sql: `COMMIT;--> statement-breakpoint\n${ALTER_LOCK_PROBE}--> statement-breakpoint\nINSERT INTO migration_probe (event) VALUES (current_setting('lock_timeout'));`,
           },
         ],
         async (folder) => {
@@ -1187,7 +1187,11 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 },
               });
               expect(sleeps).toEqual([10]);
-              expect(appliedResult(result).insertedNames).toEqual([A, B]);
+              expect(result).toMatchObject({
+                status: "applied",
+                predictedNames: [A, B],
+                insertedNames: [A, B],
+              });
               expect(onlineLockTimeout).toEqual([{ lock_timeout: "0" }]);
             } finally {
               stdout.mockRestore();
