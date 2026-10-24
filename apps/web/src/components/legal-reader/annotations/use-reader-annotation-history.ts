@@ -94,8 +94,11 @@ export const useReaderAnnotationHistory = ({
     };
   }, []);
 
+  const isActive = (identity: typeof currentScope) =>
+    mounted.current && latest.current.identity === identity;
+
   const current = () => {
-    if (!mounted.current || latest.current.identity !== currentScope) {
+    if (!isActive(currentScope)) {
       return null;
     }
     if (state.current.scope !== currentScope) {
@@ -114,7 +117,7 @@ export const useReaderAnnotationHistory = ({
     session: NonNullable<ReturnType<typeof current>>,
     change: (history: ReaderAnnotationHistory) => ReaderAnnotationHistory,
   ) => {
-    if (mounted.current && latest.current.identity === session.scope) {
+    if (isActive(session.scope)) {
       session.history = change(session.history);
     }
   };
@@ -167,11 +170,11 @@ export const useReaderAnnotationHistory = ({
       return;
     }
     const run = async () => {
-      if (!mounted.current || latest.current.identity !== session.scope) {
+      if (!isActive(session.scope)) {
         return;
       }
       await Promise.allSettled([...session.inFlight]);
-      if (!mounted.current || latest.current.identity !== session.scope) {
+      if (!isActive(session.scope)) {
         return;
       }
       const taken = takeReaderAnnotationStep(session.history, direction);
@@ -190,7 +193,7 @@ export const useReaderAnnotationHistory = ({
         latest.current.writes,
         entry.inverse,
       );
-      if (!mounted.current || latest.current.identity !== session.scope) {
+      if (!isActive(session.scope)) {
         return;
       }
       setHistory(session, (history) =>
