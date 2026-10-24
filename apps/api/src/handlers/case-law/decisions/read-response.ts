@@ -58,8 +58,7 @@ const DECISION_READER_TEXT_BYTES = {
   Exclude<
     {
       [Key in keyof ReadableDecision]: ReadableDecision[Key] extends
-        | string
-        | null
+        string | null
         ? Key
         : never;
     }[keyof ReadableDecision],
