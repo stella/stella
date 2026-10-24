@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { ledgerGitEnv, runLedgerMembershipGuard } from "./ledger-membership";
+import {
+  ledgerGitEnv,
+  parseReasonedLedger,
+  runLedgerMembershipGuard,
+} from "./ledger-membership";
 
 // The shared shrink-only guard, run against a real repository: an older
 // commit that the base already contains adds nothing, even after the base
@@ -56,13 +60,14 @@ const fixture = () => {
     runLedgerMembershipGuard({
       repoRoot,
       ledgerRel: "ledger.json",
-      parseLedger: (text) =>
-        (JSON.parse(text) as { id: string }[]).map(({ id }) => id),
+      parseLedger: parseReasonedLedger,
       label: "fixture",
       remediation: "remove the site",
       args: ["--base", base],
       log: () => {},
-      error: (message) => errors.push(message),
+      error: (message) => {
+        errors.push(message);
+      },
     });
   git("init", "--quiet", "--initial-branch=main");
   return { git, writeLedger, commit, check, errors };
@@ -118,11 +123,11 @@ test("an exported GIT_DIR never redirects the guard away from its repository", (
     [
       process.execPath,
       "-e",
-      `import { runLedgerMembershipGuard } from ${JSON.stringify(path.join(import.meta.dir, "ledger-membership.ts"))};
+      `import { parseReasonedLedger, runLedgerMembershipGuard } from ${JSON.stringify(path.join(import.meta.dir, "ledger-membership.ts"))};
 process.exit(runLedgerMembershipGuard({
   repoRoot: ${JSON.stringify(repoRoot)},
   ledgerRel: "ledger.json",
-  parseLedger: (text) => JSON.parse(text).map(({ id }) => id),
+  parseLedger: parseReasonedLedger,
   label: "fixture",
   remediation: "remove the site",
   args: ["--base", ${JSON.stringify(shrunk)}],
