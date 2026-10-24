@@ -316,7 +316,7 @@ const SUPPLIER_AGREEMENT_PARAGRAPHS: readonly SupplierAgreementParagraph[] = [
       "jazyku; v prípade rozporu má prednosť slovenské znenie.",
   ),
   body("Za Severka Robotics, a.s.:"),
-  body("Ing. Tomáš Rybár, predseda predstavenstva"),
+  body("Ing. Martin Šoltés, predseda predstavenstva"),
   body("Za Meridian Precision Components GmbH:"),
   body("Katrin Vogel, konateľka"),
 ];

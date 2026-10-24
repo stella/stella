@@ -97,8 +97,10 @@ describe.each(MARKETING_LOCALES)("seed content (%s)", (locale) => {
         .flatMap(({ commentId }) =>
           commentId === undefined ? [] : [commentId],
         )
-        .toSorted(),
-    ).toEqual(comments.map(({ id }) => id).toSorted());
+        .toSorted((left, right) => left - right),
+    ).toEqual(
+      comments.map(({ id }) => id).toSorted((left, right) => left - right),
+    );
   });
 
   test("keeps the review extract's sentences on one line", () => {

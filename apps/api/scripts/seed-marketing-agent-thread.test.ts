@@ -216,7 +216,7 @@ describe.each(MARKETING_LOCALES)("marketing agent thread (%s)", (locale) => {
   });
 
   test("the final turn shows the stored generated view through a completed show_visual call", () => {
-    const { messages, visualFile } = build(locale);
+    const { messages, thread, visualFile } = build(locale);
     const lastAnswer = messages.at(-1);
     if (!lastAnswer) {
       throw new TypeError("The thread has no final answer");
@@ -248,7 +248,7 @@ describe.each(MARKETING_LOCALES)("marketing agent thread (%s)", (locale) => {
     );
     expect(visualFile.row.threadId).toBe(lastAnswer.threadId);
     expect(String(visualFile.row.s3Key)).toBe(
-      `${visualFile.row.userId}/${visualFile.row.id}.txt`,
+      `${thread.organizationId}/${visualFile.row.id}.txt`,
     );
     expect(visualFile.row.sizeBytes).toBe(visualFile.bytes.byteLength);
 

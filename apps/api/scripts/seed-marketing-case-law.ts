@@ -163,7 +163,7 @@ const seedCorpusAnalyses = async (locale: MarketingLocale) => {
         systemPrompt: systemPrompt.value,
       });
       const analysis = v.parse(decisionAnalysisSchema, {
-        version: 3,
+        version: 4,
         generatedAt: RECORDED_AT.toISOString(),
         model: "deterministic-dev-fixture",
         inputFingerprint: input.fingerprint,
@@ -198,17 +198,32 @@ const seedCorpusAnalyses = async (locale: MarketingLocale) => {
           },
         ],
         holding: {
-          text: scene.answer,
-          language,
-          anchors: [
+          spans: [
             {
-              startAnchorId: highlight.anchorId,
-              endAnchorId: highlight.anchorId,
+              text: scene.answer,
+              anchors: [
+                {
+                  startAnchorId: highlight.anchorId,
+                  endAnchorId: highlight.anchorId,
+                },
+              ],
             },
           ],
+          language,
         },
         abstract: {
-          text: `${scene.answer} ${scene.followUpAnswer}`,
+          spans: [
+            {
+              text: scene.answer,
+              anchors: [
+                {
+                  startAnchorId: highlight.anchorId,
+                  endAnchorId: highlight.anchorId,
+                },
+              ],
+            },
+            { text: ` ${scene.followUpAnswer}`, anchors: [] },
+          ],
           language,
         },
         topics: [],

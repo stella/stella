@@ -1,5 +1,5 @@
 import { PDF_MIME_TYPE } from "@/consts";
-import { EML_MIME, MSG_MIME, isEmailFile, isMarkdownFile } from "@/lib/consts";
+import { EML_MIME, isEmailFile, isMarkdownFile, MSG_MIME } from "@/lib/consts";
 
 const wordMimeTypes = Object.freeze({
   "application/msword": true,

@@ -46,8 +46,8 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import {
-  FEATURE_REGISTRY,
   AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
   GENERATED_VIEWS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import {

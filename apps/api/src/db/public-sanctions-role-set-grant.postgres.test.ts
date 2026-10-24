@@ -144,7 +144,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 } finally {
                   await connection.unsafe("RESET ROLE");
                   await connection.unsafe(`DROP ROLE IF EXISTS "${ingestion}"`);
-                  connection.release();
+                  await connection.release();
                 }
               },
             );

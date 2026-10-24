@@ -93,11 +93,7 @@ export const SK_JUDGE_TITLE_RE =
 export const SK_ROMAN_DIVIDER_RE = /^(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})\.$/u;
 
 export type SkDocumentSection =
-  | "preamble"
-  | "holding"
-  | "reasoning"
-  | "instruction"
-  | "closing";
+  "preamble" | "holding" | "reasoning" | "instruction" | "closing";
 
 /** Roman dividers are structural everywhere; titled sections belong to reasoning. */
 export const skSectionHeading = (text: string, section: SkDocumentSection) => {

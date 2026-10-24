@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/auth/mcp-web-handoff-service.ts",
+  "delta": 1,
+  "reason": "The handoff table is owner-only; this declared mcp-web-handoff door constructs the process-wide handoff service with the owner connection so the broad auth module does not hand it on. It exports only the service, and only the auth owner imports it."
+}

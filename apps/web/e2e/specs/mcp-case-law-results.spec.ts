@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import {
@@ -10,6 +11,8 @@ import {
   APP_RESOLVE_STATUS_FIXTURES,
   APP_SEARCH_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
+import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -33,6 +36,7 @@ type HostOptions = {
   queries?: string[];
   bundle?: "committed" | "country-fixture";
   theme?: "light" | "dark";
+  handoff?: "minted" | "declined";
 };
 
 let countryFixture: string | undefined;
@@ -59,6 +63,7 @@ const mountApp = async ({
   queries = ["náhrada škody"],
   bundle: bundleKind = "committed",
   theme = "dark",
+  handoff = "declined",
 }: HostOptions) => {
   const bundle =
     bundleKind === "country-fixture"
@@ -88,6 +93,8 @@ const mountApp = async ({
       payload: hostPayload,
       queries: hostQueries,
       theme: hostTheme,
+      handoff: handoffStatus,
+      handoffTool,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -173,17 +180,41 @@ const mountApp = async ({
               params: toolsResult(hostPayload),
             });
             break;
-          case "tools/call":
+          case "tools/call": {
             history.push({
               name: data.params.name,
               arguments: data.params.arguments,
             });
+            if (data.params.name === handoffTool) {
+              // The host script runs in the page, so module imports are absent.
+              const handoffUrl: unknown = data.params.arguments.url;
+              if (typeof handoffUrl !== "string") {
+                throw new TypeError("Handoff call is missing its URL");
+              }
+              reply({
+                jsonrpc: "2.0",
+                id: data.id,
+                result:
+                  handoffStatus === "minted"
+                    ? toolsResult({
+                        url: `${handoffUrl}#sh=sh1_fixture`,
+                      } satisfies v.InferInput<
+                        typeof mcpWebHandoffLinkOutputSchema
+                      >)
+                    : {
+                        isError: true,
+                        content: [{ type: "text", text: "Handoff declined." }],
+                      },
+              });
+              break;
+            }
             reply({
               jsonrpc: "2.0",
               id: data.id,
               result: toolsResult(hostPayload),
             });
             break;
+          }
           case "ui/open-link":
             links.push(data.params.url);
             reply({ jsonrpc: "2.0", id: data.id, result: {} });
@@ -221,7 +252,16 @@ const mountApp = async ({
       // safe-html: repository build-mcp-apps.ts emits this self-contained fixture bundle.
       iframe.srcdoc = appHtml;
     },
-    { html, locale, tool, payload, queries, theme },
+    {
+      html,
+      locale,
+      tool,
+      payload,
+      queries,
+      theme,
+      handoff,
+      handoffTool: MCP_WEB_HANDOFF_TOOL_NAME,
+    },
   );
   return page.frameLocator("#app");
 };
@@ -293,6 +333,10 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     .poll(async () => hostHistory(page, "appCalls"))
     .toEqual([
       {
+        name: MCP_WEB_HANDOFF_TOOL_NAME,
+        arguments: { url: APP_SEARCH_FIXTURE.results.at(0)?.url },
+      },
+      {
         name: "search_case_law",
         arguments: {
           queries: ["náhrada škody"],
@@ -335,10 +379,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
     "Case Law",
   );
   await expect(
-    app
-      .locator("td")
-      .filter({ hasText: /[٠-٩]/u })
-      .first(),
+    app.locator("td").filter({ hasText: /[٠-٩]/u }).first(),
   ).toContainText(/[٠-٩]/u);
   expect(errors).toEqual([]);
 });
@@ -539,37 +580,49 @@ test("resolve app renders every status and surfaces recoverable errors", async (
 });
 
 for (const locale of ["en-GB", "ar"]) {
-  test(`resolve ambiguity opens only the chosen decision (${locale})`, async ({
-    page,
-  }) => {
-    const ambiguous = APP_RESOLVE_STATUS_FIXTURES.find(
-      (fixture) => fixture.status === "ambiguous",
-    );
-    if (ambiguous === undefined) {
-      throw new Error("Missing ambiguity fixture");
-    }
-    const app = await mountApp({
+  for (const handoff of ["minted", "declined"] as const) {
+    test(`resolve ambiguity opens only the chosen decision (${locale}, handoff ${handoff})`, async ({
       page,
-      locale,
-      tool: "resolve_case_law_decision",
-      payload: APP_RESOLVE_FIXTURE,
+    }) => {
+      const ambiguous = APP_RESOLVE_STATUS_FIXTURES.find(
+        (fixture) => fixture.status === "ambiguous",
+      );
+      if (ambiguous === undefined) {
+        throw new Error("Missing ambiguity fixture");
+      }
+      const app = await mountApp({
+        page,
+        locale,
+        tool: "resolve_case_law_decision",
+        payload: APP_RESOLVE_FIXTURE,
+        handoff,
+      });
+      await page.evaluate(
+        (payload) => globalThis.appFixtureHost.sendAppResult(payload),
+        ambiguous,
+      );
+      const candidate = app.getByRole("button", {
+        name: "I. ÚS 123/24",
+        exact: true,
+      });
+      await expect(candidate).toBeVisible();
+      expect(await hostHistory(page, "appCalls")).toEqual([]);
+      await candidate.click();
+      await expect
+        .poll(async () => hostHistory(page, "appLinks"))
+        .toEqual([
+          handoff === "minted"
+            ? `${APP_RESOLVE_FIXTURE.document.readerUrl}#sh=sh1_fixture`
+            : APP_RESOLVE_FIXTURE.document.readerUrl,
+        ]);
+      expect(await hostHistory(page, "appCalls")).toEqual([
+        {
+          name: MCP_WEB_HANDOFF_TOOL_NAME,
+          arguments: { url: APP_RESOLVE_FIXTURE.document.readerUrl },
+        },
+      ]);
     });
-    await page.evaluate(
-      (payload) => globalThis.appFixtureHost.sendAppResult(payload),
-      ambiguous,
-    );
-    const candidate = app.getByRole("button", {
-      name: "I. ÚS 123/24",
-      exact: true,
-    });
-    await expect(candidate).toBeVisible();
-    expect(await hostHistory(page, "appCalls")).toEqual([]);
-    await candidate.click();
-    await expect
-      .poll(async () => hostHistory(page, "appLinks"))
-      .toEqual([APP_RESOLVE_FIXTURE.document.readerUrl]);
-    expect(await hostHistory(page, "appCalls")).toEqual([]);
-  });
+  }
 }
 
 test("collapsed rows stay single-line with long references and summaries", async ({

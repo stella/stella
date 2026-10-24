@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";

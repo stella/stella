@@ -4,8 +4,8 @@ import * as v from "valibot";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import {
-  READER_PAGE_CONTENT_CHARS,
   openDecisionArgs,
+  READER_PAGE_CONTENT_CHARS,
 } from "./decision-reader-contract";
 import {
   decodeReaderCursor,
