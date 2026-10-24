@@ -186,7 +186,9 @@ impl ClipboardStore {
       *self
         .checkpoint
         .lock()
-        .map_err(|_| "clipboard checkpoint lock is poisoned".to_string())? = None;
+        .map_err(crate::logging::with_cause_logged(
+          "clipboard checkpoint lock is poisoned",
+        ))? = None;
       return Ok(None);
     };
     // Convert the encrypted snapshot once at startup. The replacement manifest
@@ -269,8 +271,9 @@ impl ClipboardStore {
     *self
       .checkpoint
       .lock()
-      .map_err(|_| "clipboard checkpoint lock is poisoned".to_string())? =
-      Some(state.clone());
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))? = Some(state.clone());
     Ok(Some(state))
   }
 
@@ -753,7 +756,9 @@ impl ClipboardStore {
     if self
       .checkpoint
       .lock()
-      .map_err(|_| "clipboard checkpoint lock is poisoned".to_string())?
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))?
       .is_none()
     {
       self.load()?;
@@ -761,7 +766,9 @@ impl ClipboardStore {
     let previous = self
       .checkpoint
       .lock()
-      .map_err(|_| "clipboard checkpoint lock is poisoned".to_string())?
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))?
       .clone();
     let manifest = plan_record_transaction(state, previous.as_ref());
     self.write_record(&self.history_file(), &manifest)?;
@@ -773,8 +780,9 @@ impl ClipboardStore {
     *self
       .checkpoint
       .lock()
-      .map_err(|_| "clipboard checkpoint lock is poisoned".to_string())? =
-      Some(state.clone());
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))? = Some(state.clone());
     Ok(())
   }
 }
@@ -905,9 +913,7 @@ mod tests {
       store.written_bytes.store(0, Ordering::Relaxed);
       store.persist(&state).unwrap();
       let visual_bytes = store.written_bytes.load(Ordering::Relaxed);
-      println!(
-        "clipboard icon change at {count} items: {visual_bytes} encrypted bytes"
-      );
+      tracing::debug!(count, visual_bytes, "clipboard icon change encrypted bytes");
       assert!(
         visual_bytes < 200000,
         "capture rewrote unchanged app icons: {visual_bytes} bytes"

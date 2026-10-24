@@ -2307,7 +2307,9 @@ impl ClipboardManager {
     self
       .preview_cache
       .lock()
-      .map_err(|_| "clipboard preview cache lock is poisoned".to_string())?
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard preview cache lock is poisoned",
+      ))?
       .retain(&ids);
 
     // Rejecting the write makes `persist_or_restore` roll the mutation

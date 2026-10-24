@@ -426,9 +426,9 @@ pub fn clipboard_get_image_preview(
       std::sync::Arc::clone(&manager.preview_cache),
     )
   };
-  let mut cache = cache
-    .lock()
-    .map_err(|_| "clipboard preview cache lock is poisoned".to_string())?;
+  let mut cache = cache.lock().map_err(crate::logging::with_cause_logged(
+    "clipboard preview cache lock is poisoned",
+  ))?;
   cache.load_preview(&id, preview)
 }
 
