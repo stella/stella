@@ -69,6 +69,7 @@
         "src/routes/**",
         "vite.config.ts",
         "route-tree.config.ts",
+        "scripts/route-template-manifest.ts",
         "scripts/generate-route-tree.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
         "$TURBO_ROOT$/packages/scripts/src/generated-input-identity.ts",
@@ -77,7 +78,7 @@
         "package.json",
         "$TURBO_ROOT$/bun.lock"
       ],
-      "outputs": ["src/routeTree.gen.ts"]
+      "outputs": ["src/routeTree.gen.ts", "src/route-templates.gen.ts"]
     },
     "@stll/web#build": {
       "dependsOn": [
@@ -135,7 +136,8 @@
         "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
         "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
         "!src/generated/api-routes.gen.ts",
-        "!src/routeTree.gen.ts"
+        "!src/routeTree.gen.ts",
+        "!src/route-templates.gen.ts"
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]
     },
@@ -297,7 +299,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/VERSION",
-        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png",
+        "$TURBO_ROOT$/apps/landing/public/brand/stella-symbol.svg"
       ],
       "outputs": [".output/**"]
     },
@@ -1040,7 +1043,6 @@
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
-        "$TURBO_ROOT$/packages/analytics-config/**",
         "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
@@ -1049,7 +1051,6 @@
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
         "$TURBO_ROOT$/packages/chat-limits/**",
-        "$TURBO_ROOT$/packages/chat/**",
         "$TURBO_ROOT$/packages/cli/**",
         "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",

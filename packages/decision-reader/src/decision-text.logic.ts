@@ -557,6 +557,7 @@ const CAPTION_FORMS_BY_JURISDICTION = {
   AUT: null,
   CZE: CZ_CAPTION_FORMS,
   EU: null,
+  GBR: null,
   HUN: null,
   POL: null,
   SVK: SK_CAPTION_FORMS,
