@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { hashesExpoModules, releaseLine } from "./fingerprint";
+import { hashesExpoModules, releaseLine, sourceHashes } from "./fingerprint";
 
 describe("release line", () => {
   test("updates stay within a major version", () => {
@@ -28,5 +28,39 @@ describe("autolinking guard", () => {
     expect(hashesExpoModules("android", ios)).toBe(false);
     expect(hashesExpoModules("ios", [{ reasons: ["expoConfig"] }])).toBe(false);
     expect(hashesExpoModules("ios", [])).toBe(false);
+  });
+});
+
+describe("source hashes", () => {
+  test("each source is named by its file, or by its id when it has none", () => {
+    expect(
+      sourceHashes({
+        sources: [
+          {
+            type: "dir",
+            filePath: "ios",
+            reasons: ["bareNativeDir"],
+            hash: "a",
+          },
+          {
+            type: "contents",
+            id: "releaseLine",
+            contents: "0.1",
+            reasons: ["releaseLine"],
+            hash: "b",
+          },
+          {
+            type: "file",
+            filePath: "patches/x.patch",
+            reasons: [],
+            hash: null,
+          },
+        ],
+      }),
+    ).toEqual([
+      { source: "ios", type: "dir", hash: "a" },
+      { source: "releaseLine", type: "contents", hash: "b" },
+      { source: "patches/x.patch", type: "file", hash: null },
+    ]);
   });
 });

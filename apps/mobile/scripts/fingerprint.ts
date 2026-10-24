@@ -8,10 +8,12 @@
 // computations that disagreed would publish an update no installed build
 // accepts, or one a build cannot run.
 //
-// Usage: bun scripts/fingerprint.ts <ios|android>   (honours APP_VARIANT)
+// Usage: bun scripts/fingerprint.ts <ios|android> [--json]   (honours APP_VARIANT)
+// `--json` prints the hash with every source's own hash, so the pull request
+// check can name what moved it.
 
 import { createFingerprintAsync, SourceSkips } from "@expo/fingerprint";
-import type { HashSource } from "@expo/fingerprint";
+import type { Fingerprint, HashSource } from "@expo/fingerprint";
 import { panic } from "better-result";
 import path from "node:path";
 
@@ -70,10 +72,10 @@ export const hashesExpoModules = (
 export const isNativePlatform = (value: string): value is NativePlatform =>
   NATIVE_PLATFORMS.some((platform) => platform === value);
 
-export const nativeFingerprint = async (
+const createNativeFingerprint = async (
   platform: NativePlatform,
-  projectRoot: string = APP_ROOT,
-): Promise<string> => {
+  projectRoot: string,
+): Promise<Fingerprint> => {
   const fingerprint = await createFingerprintAsync(projectRoot, {
     platforms: [platform],
     silent: true,
@@ -92,14 +94,43 @@ export const nativeFingerprint = async (
       `the ${platform} fingerprint hashes no Expo native modules; autolinking failed`,
     );
   }
-  return fingerprint.hash;
+  return fingerprint;
 };
 
+export const nativeFingerprint = async (
+  platform: NativePlatform,
+  projectRoot: string = APP_ROOT,
+): Promise<string> =>
+  (await createNativeFingerprint(platform, projectRoot)).hash;
+
+/** A source by the name the check reports: its file, or its id. */
+export type FingerprintSourceHash = {
+  readonly source: string;
+  readonly type: HashSource["type"];
+  readonly hash: string | null;
+};
+
+export const sourceHashes = (
+  fingerprint: Pick<Fingerprint, "sources">,
+): FingerprintSourceHash[] =>
+  fingerprint.sources.map((source) => ({
+    source: source.type === "contents" ? source.id : source.filePath,
+    type: source.type,
+    hash: source.hash,
+  }));
+
 if (import.meta.main) {
-  const platform = process.argv[2] ?? "";
-  if (!isNativePlatform(platform)) {
-    process.stderr.write("usage: bun scripts/fingerprint.ts <ios|android>\n");
+  const [platform = "", format] = process.argv.slice(2);
+  if (!isNativePlatform(platform) || ![undefined, "--json"].includes(format)) {
+    process.stderr.write(
+      "usage: bun scripts/fingerprint.ts <ios|android> [--json]\n",
+    );
     process.exit(1);
   }
-  process.stdout.write(`${await nativeFingerprint(platform)}\n`);
+  const fingerprint = await createNativeFingerprint(platform, APP_ROOT);
+  process.stdout.write(
+    format === "--json"
+      ? `${JSON.stringify({ hash: fingerprint.hash, sources: sourceHashes(fingerprint) })}\n`
+      : `${fingerprint.hash}\n`,
+  );
 }
