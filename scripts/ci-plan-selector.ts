@@ -35,6 +35,8 @@ type RunPlanSelectorOptions = {
   e2eLandingRequired?: string;
   event?: string;
   title?: string;
+  /** The pull request is armed for merge: queue-only suites at merge-group scope. */
+  armed?: boolean;
 };
 
 /**
@@ -50,6 +52,7 @@ export const runPlanSelector = ({
   e2eLandingRequired,
   event = "pull_request",
   title = "",
+  armed = false,
 }: RunPlanSelectorOptions) => {
   const invalid = outputs.find((output) => !OUTPUT_NAME_PATTERN.test(output));
   if (invalid !== undefined) {
@@ -70,6 +73,7 @@ printf "%s\\n" "${VALUES_MARKER}" ${outputs.map((output) => `"$${output}"`).join
     ],
     cwd,
     env: {
+      ARMED: String(armed),
       E2E_LANDING_REQUIRED: e2eLandingRequired ?? "",
       EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",

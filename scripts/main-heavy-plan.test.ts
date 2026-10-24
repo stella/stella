@@ -144,10 +144,13 @@ const context = (
     "marketing-release": {
       outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
     },
+    // Unarmed pull requests and merge groups without armed proof.
     "completed-depth": {
       outputs: {
+        armed: plan["armed"] ?? "false",
+        armed_proof: plan["armed_proof"] ?? "",
         run_required: plan["run_required"] ?? "true",
-        pr_heavy_suites: "run",
+        pr_heavy_suites: plan["pr_heavy_suites"] ?? "run",
       },
     },
   };
@@ -329,8 +332,7 @@ test("query budgets select affected changes and explicit recordings", () => {
           },
         };
         expect(selected(condition, value), `${event}/${required}/${mode}`).toBe(
-          (event === "pull_request" || event === "merge_group") &&
-            required === "true",
+          event === "merge_group" && required === "true",
         );
         const called = {
           ...value,
@@ -661,7 +663,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           const queueJob = Object.entries(eventPolicies.jobs).some(
             ([key, policy]) =>
               key === `ci.yml/${job}` &&
-              (policy === "queue" || policy === "main"),
+              (policy === "queue" || policy === "main" || policy === "armed"),
           );
           if (event === "pull_request" && queueJob) {
             expected = false;

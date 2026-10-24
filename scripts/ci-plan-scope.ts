@@ -39,6 +39,8 @@ export type ChangedFileScopeInput = {
   suiteDepth: string;
   heavyOnly: boolean;
   prTitle: string;
+  /** An armed pull request proves the queue-only suites at merge-group scope. */
+  armed?: boolean;
   versionChangedInHead?: boolean;
   root?: string | undefined;
 };
@@ -496,6 +498,9 @@ const deriveNormalScopeFacts = (
     desktopBrowser = false;
   }
   const full = input.suiteDepth === "full";
+  // An armed pull request proves the queue-only suites at merge-group scope.
+  const heavyScope =
+    full || (input.eventName === "pull_request" && input.armed === true);
   const version = files.includes("VERSION");
   const imageInputs = anyMatches(files, [
     "*/Dockerfile",
@@ -551,21 +556,24 @@ const deriveNormalScopeFacts = (
   if (e2eCore || routeSmoke) {
     webBuild = true;
   }
+  const landingPaths = () =>
+    p([
+      "apps/landing/*",
+      "docs/changelog/*",
+      "VERSION",
+      "packages/*",
+      "patches/*",
+      "bun.lock",
+      "package.json",
+      ".github/workflows/ci.yml",
+    ]);
   let landing =
     input.eventName === "pull_request"
       ? failClosedDetector("landing build", () =>
           detectors.landingBuild({ changed: scopeFiles, root }),
-        )
-      : p([
-          "apps/landing/*",
-          "docs/changelog/*",
-          "VERSION",
-          "packages/*",
-          "patches/*",
-          "bun.lock",
-          "package.json",
-          ".github/workflows/ci.yml",
-        ]);
+        ) ||
+        (heavyScope && landingPaths())
+      : landingPaths();
   // e2e-landing runs the same landing build before it tests the preview.
   if (e2eLanding) {
     landing = false;
@@ -622,6 +630,7 @@ const deriveNormalScopeFacts = (
     services,
     desktopBrowser,
     full,
+    heavyScope,
     version,
     imageInputs,
     p,
@@ -726,8 +735,9 @@ export const OUTPUT_RULES = {
         bool((sandbox || apiDeps) && imageInputs),
     ),
   api_image_platforms: (facts) =>
-    scopeRule(facts, "api_image_platforms", ({ full, version }) =>
-      full || version ? BOTH_PLATFORMS : ARM_PLATFORM,
+    // Full depth, arming and a version change build every architecture.
+    scopeRule(facts, "api_image_platforms", ({ heavyScope, version }) =>
+      heavyScope || version ? BOTH_PLATFORMS : ARM_PLATFORM,
     ),
   api_image_smoke_required: (facts) =>
     scopeRule(facts, "api_image_smoke_required", ({ p }) =>
@@ -1127,6 +1137,7 @@ if (import.meta.main) {
     suiteDepth: Bun.env["SUITE_DEPTH"] ?? "",
     heavyOnly,
     prTitle: Bun.env["PR_TITLE"] ?? "",
+    armed: Bun.env["ARMED"] === TRUE,
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;

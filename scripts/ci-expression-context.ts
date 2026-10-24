@@ -55,6 +55,8 @@ export type ModelledRunContext = {
   };
   vars: Record<string, string> & {
     CI_POSTGRES_PR_SELECTION: string;
+    CI_PR_DEPTH_PILOT: string;
+    CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: string;
     MERGE_QUEUE_DEPTH: string;
     QUEUE_BROWSER_SUITES: string;
   };
@@ -109,6 +111,7 @@ const PLAN_BOOLEAN_OUTPUTS = [
   "service_suites_pr_required",
   "service_suites_required",
   "stack_redaction_browsers_required",
+  "web_build_pr_required",
   "web_build_required",
   "web_image_smoke_required",
   "windows_scripts_required",
@@ -117,7 +120,10 @@ const PLAN_BOOLEAN_OUTPUTS = [
 const defaultPlan = () => ({
   ...Object.fromEntries(PLAN_BOOLEAN_OUTPUTS.map((name) => [name, "false"])),
   api_test_shards: "4",
+  // The queue-only suites run (an armed run or a merge group); no armed delta.
+  armed_delta: "false",
   coverage_profile: "normal-v1",
+  heavy_proof: "true",
   pilot_fast_jobs: "[]",
   pr_depth_reused: "false",
   queue_depth: "full",
@@ -182,10 +188,14 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   cached: { input_hash: "" },
   check: { trusted: "true" },
   "completed-depth": {
+    armed: "false",
+    armed_proof: "",
+    armed_proof_source_run_id: "",
     completed_run_id: "",
     marker: "",
     metadata_only: "false",
     normal_completion: "required",
+    normal_source_run_id: "",
     pr_depth_reused: "false",
     pr_depth_source_run_id: "",
     pr_heavy_source_run_id: "",
@@ -220,6 +230,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "pr-jobs-plan": { pr_depth_jobs: "[]", pr_heavy_jobs: "[]" },
   "query-perf-scope": { query_perf_required: "false" },
   "root-checks": { root_checks: "[]" },
+  suites: { armed_delta: "false", run_required: "true" },
   "target-base": { base_sha: "" },
 };
 
@@ -314,6 +325,8 @@ export const ciExpressionContext = ({
     },
     vars: {
       CI_POSTGRES_PR_SELECTION: "",
+      CI_PR_DEPTH_PILOT: "",
+      CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: "",
       MERGE_QUEUE_DEPTH: "",
       QUEUE_BROWSER_SUITES: "",
       ...vars,

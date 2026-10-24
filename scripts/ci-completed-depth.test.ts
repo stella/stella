@@ -20,7 +20,12 @@ import { createSha256 } from "@stll/sha256/node";
 import { PILOT_ALWAYS } from "./ci-pr-pilot-plan";
 import { renderResultInputs } from "./ci-result-inputs";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
-import { prDepthJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
+import {
+  ARMED_LABEL,
+  prDepthJobs,
+  queueAdmittedJobs,
+  thinJobs,
+} from "./main-heavy-plan";
 
 // Wall-clock checks: no reused or queued plan can certify them, so they run.
 const ALWAYS_RUN: readonly string[] = PILOT_ALWAYS;
@@ -53,6 +58,8 @@ const workflow = v.parse(
 const jobs = workflow.jobs;
 const prDepth = prDepthJobs({ jobs });
 const patchId = "d".repeat(40);
+const planConfig =
+  '{"CI_POSTGRES_PR_SELECTION":"","CI_PR_DEPTH_PILOT":"","CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL":"","MERGE_QUEUE_DEPTH":""}';
 const planner = jobs["ci-plan"];
 const result = jobs["ci-result"];
 if (!planner || !result) {
@@ -86,8 +93,27 @@ const artifact = (depth: string, profile = "normal-v1") => ({
   name: marker(depth, profile),
   expired: false,
   expires_at: "2099-01-01T00:00:00Z",
+  // Uploaded by ci-result after every other job of its run finished.
+  created_at: "2026-10-17T10:30:00Z",
+  updated_at: "2026-10-17T10:30:00Z",
   workflow_run: { id: 99, head_sha: pr.head.sha, head_repository_id: 456 },
 });
+const sourceJobs = [
+  {
+    name: "ci-tests",
+    status: "completed",
+    conclusion: "success",
+    started_at: "2026-10-17T10:00:00Z",
+    completed_at: "2026-10-17T10:20:00Z",
+  },
+  {
+    name: "ci-result",
+    status: "in_progress",
+    conclusion: "success",
+    started_at: "2026-10-17T10:25:00Z",
+    completed_at: null,
+  },
+];
 const successfulRun = {
   id: 99,
   head_sha: pr.head.sha,
@@ -110,6 +136,7 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   base_sha: pr.base.sha,
   patch_id: patchId,
   workflow_version: pr.head.sha,
+  plan_config: planConfig,
   pr_depth_jobs: prDepth,
   suite_depth: depth,
   coverage_profile: profile,
@@ -175,12 +202,23 @@ type LookupOptions = {
   queueDepth?: string;
   comparison?: unknown;
   groupRef?: string;
-  pull?: typeof pr;
+  pull?: typeof pr & { auto_merge?: unknown };
+  /** The label a labeled/unlabeled event carries. */
+  label?: string;
   evidence?: unknown;
   archive?: Buffer;
   downloadFailure?: boolean;
   /** The earlier head a merge of the base sits on, as the patch-id step names it. */
   mergeParent?: string;
+  jobs?: unknown[];
+  /** The patch-id step's queue chain; defaults to the queued pull request alone. */
+  entryChain?: unknown;
+  /** Pull requests a chain names, by number; others resolve to `pull`. */
+  queuedPulls?: Record<number, unknown>;
+  /** Evidence archives by artifact id; others download `archive`. */
+  archives?: Record<number, Buffer>;
+  /** Source runs by id; others resolve to `sourceRun`. */
+  sourceRuns?: Record<number, unknown>;
 };
 const decide = async ({
   depth = "full",
@@ -196,6 +234,7 @@ const decide = async ({
   runFailure = false,
   sourceRun = successfulRun,
   pull = pr,
+  label,
   queueDepth = "full",
   comparison = { status: "ahead", merge_base_commit: { sha: pull.head.sha } },
   groupRef = `refs/heads/gh-readonly-queue/main/pr-123-${"b".repeat(40)}`,
@@ -204,14 +243,18 @@ const decide = async ({
     : evidenceFor(depth, profile),
   archive = zipEvidence(JSON.stringify(evidence)),
   downloadFailure = false,
+  jobs: runJobs = sourceJobs,
   currentPatchId = patchId,
   mergeParent = "",
+  entryChain = [{ pr: pull.number, patch_id: currentPatchId }],
+  queuedPulls = {},
+  archives = {},
+  sourceRuns = {},
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
   // Metadata events mirror the head's earlier code run; one exists here.
-  const listWorkflowRuns = () => {};
-  const listJobsForWorkflowRun = () => {};
+  const listWorkflowRuns = async (_request: unknown) => ({ data: undefined });
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
     Buffer,
     require: (name: string) => {
@@ -235,8 +278,11 @@ const decide = async ({
         QUEUE_DEPTH: queueDepth,
         GITHUB_RUN_ATTEMPT: "1",
         PATCH_ID: currentPatchId,
+        ENTRY_CHAIN:
+          event === "merge_group" ? JSON.stringify(entryChain) : "null",
         MERGE_PARENT: mergeParent,
         WORKFLOW_VERSION: pr.head.sha,
+        PLAN_CONFIG: planConfig,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
       },
     },
@@ -244,6 +290,7 @@ const decide = async ({
       eventName: event,
       payload: {
         action,
+        ...(label === undefined ? {} : { label: { name: label } }),
         pull_request: pull,
         merge_group: { head_ref: groupRef, head_sha: "c".repeat(40) },
       },
@@ -255,7 +302,10 @@ const decide = async ({
       info: () => {},
     },
     github: {
-      paginate: async (method: unknown) =>
+      paginate: async (
+        method: (request: unknown) => Promise<{ data: unknown }>,
+        request: unknown,
+      ) =>
         method === listWorkflowRuns
           ? [
               {
@@ -266,15 +316,15 @@ const decide = async ({
                 pull_requests: [{ number: pull.number }],
               },
             ]
-          : [{ name: "ci-plan" }, { name: "ci-result" }],
+          : (await method(request)).data,
       rest: {
         pulls: {
-          get: async (request: unknown) => {
+          get: async (request: { pull_number: number }) => {
             requests.push(request);
             if (failure) {
               throw new Error("Queued PR unavailable");
             }
-            return { data: pull };
+            return { data: queuedPulls[request.pull_number] ?? pull };
           },
         },
         repos: {
@@ -288,25 +338,34 @@ const decide = async ({
         },
         actions: {
           listWorkflowRuns,
-          listJobsForWorkflowRun,
-          downloadArtifact: async (request: unknown) => {
+          downloadArtifact: async (request: { artifact_id: number }) => {
             requests.push(request);
             if (downloadFailure) {
               throw new Error("Evidence archive unavailable");
             }
+            const served = archives[request.artifact_id] ?? archive;
             return {
-              data: archive.buffer.slice(
-                archive.byteOffset,
-                archive.byteOffset + archive.byteLength,
+              data: served.buffer.slice(
+                served.byteOffset,
+                served.byteOffset + served.byteLength,
               ),
             };
           },
-          getWorkflowRun: async (request: unknown) => {
+          listJobsForWorkflowRun: async (request: { run_id: number }) => {
+            // Run 50 is the head's earlier code run that metadata mirrors;
+            // only evidence lookups are recorded.
+            if (request.run_id === 50) {
+              return { data: [{ name: "ci-plan" }, { name: "ci-result" }] };
+            }
+            requests.push(request);
+            return { data: runJobs };
+          },
+          getWorkflowRun: async (request: { run_id: number }) => {
             requests.push(request);
             if (runFailure) {
               throw new Error("Source run unavailable");
             }
-            return { data: sourceRun };
+            return { data: sourceRuns[request.run_id] ?? sourceRun };
           },
           listArtifactsForRepo: async (request: {
             name: string;
@@ -348,9 +407,7 @@ test("unchanged-head events reuse only the exact completed depth", async () => {
       expect(requests).toHaveLength(3);
       const opposite = depth === "fast" ? "full" : "fast";
       // A metadata event never starts suites; the code run owns them.
-      const metadata = ["labeled", "unlabeled", "auto_merge_enabled"].includes(
-        action,
-      );
+      const metadata = ["labeled", "unlabeled"].includes(action);
       expect(
         (
           await decide({ action, depth, artifacts: [artifact(opposite)] })
@@ -441,6 +498,8 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
         "github.event.pull_request.draft": false,
         "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
+        "steps.completed-depth.outputs.run_required": "false",
+        "steps.completed-depth.outputs.armed": "false",
       },
     },
     outputs: planner.outputs,
@@ -460,6 +519,11 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
   const checkout = planner.steps.findIndex((step) => step.name === "Checkout");
   expect(checkout).toBeGreaterThan(-1);
   for (const step of planner.steps.slice(checkout)) {
+    // A one-line shell step that must always publish run_required.
+    if (step.id === "suites") {
+      expect(step.if, step.name).toBeUndefined();
+      continue;
+    }
     expect(
       evaluate(step.if ?? "true", {
         status: { failure: false },
@@ -474,7 +538,9 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
 });
 
 test("the duplicate-result gate accepts skips but rejects failed or cancelled dependencies", () => {
-  const start = aggregate.indexOf(`if [[ "\${RUN_REQUIRED:-true}" == false ]]`);
+  const start = aggregate.indexOf(
+    `if [[ "\${RUN_REQUIRED:-true}" == false && "$armed_delta" != true ]]`,
+  );
   const end = aggregate.indexOf('case "$SUITE_DEPTH" in', start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
@@ -512,7 +578,8 @@ test("only a fully successful real validation publishes a completion marker", ()
         "merge_group",
         "workflow_dispatch",
       ]) {
-        for (const runRequired of ["true", "false"]) {
+        // "delta": an armed run that reused the normal suites.
+        for (const runRequired of ["true", "false", "delta"]) {
           for (const markerName of ["", marker("full")]) {
             for (const sibling of [
               "success",
@@ -526,7 +593,11 @@ test("only a fully successful real validation publishes a completion marker", ()
                     status: { success },
                     values: {
                       "github.event_name": event,
-                      "needs.ci-plan.outputs.run_required": runRequired,
+                      "needs.ci-plan.outputs.run_required":
+                        runRequired === "delta" ? "false" : runRequired,
+                      "needs.ci-plan.outputs.armed_delta": String(
+                        runRequired === "delta",
+                      ),
                       "needs.ci-plan.outputs.completion_marker": markerName,
                       "needs.*.result": ["success", "success", sibling],
                       "steps.outcome.outputs.evidence": evidence,
@@ -536,7 +607,7 @@ test("only a fully successful real validation publishes a completion marker", ()
                 ).toBe(
                   success &&
                     event === "pull_request" &&
-                    runRequired === "true" &&
+                    runRequired !== "false" &&
                     markerName !== "" &&
                     ["success", "skipped"].includes(sibling) &&
                     evidence !== "",
@@ -569,19 +640,15 @@ const recordEvidence = (
     head = pr.head.sha,
     script = evidenceBlock,
     runRequired = "true",
+    armed = false,
+    plan = { ci_tests_required: "true", package_checks_required: "true" },
   } = {},
 ) => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-evidence-"));
   const output = nodePath.join(directory, "output");
   // The gate's prelude writes the plan outputs to PLAN_FILE; this block runs on its own.
   const planFile = nodePath.join(directory, "plan.json");
-  writeFileSync(
-    planFile,
-    JSON.stringify({
-      ci_tests_required: "true",
-      package_checks_required: "true",
-    }),
-  );
+  writeFileSync(planFile, JSON.stringify(plan));
   try {
     const child = Bun.spawnSync(["bash", "-eu", "-c", script], {
       env: {
@@ -591,7 +658,9 @@ const recordEvidence = (
         GITHUB_RUN_ATTEMPT: "1",
         EVENT: "pull_request",
         RUN_REQUIRED: runRequired,
-        COMPLETION_MARKER: marker(depth),
+        COMPLETION_MARKER: marker(armed ? `${depth}-armed` : depth),
+        HEAVY_PROOF: String(armed),
+        HEAVY_PROOF_JOBS: resultEnv["HEAVY_PROOF_JOBS"] ?? "",
         PR_NUMBER: "123",
         HEAD_REPO_ID: "456",
         HEAD_SHA: head,
@@ -600,6 +669,7 @@ const recordEvidence = (
         COVERAGE_PROFILE: "normal-v1",
         PATCH_ID: patchId,
         WORKFLOW_VERSION: pr.head.sha,
+        PLAN_CONFIG: planConfig,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
@@ -774,6 +844,10 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
     ["bad attempt", { ...valid, run_attempt: 0 }],
     ["other patch", { ...valid, patch_id: "e".repeat(40) }],
     ["other workflow", { ...valid, workflow_version: "e".repeat(40) }],
+    [
+      "other plan config",
+      { ...valid, plan_config: '{"CI_POSTGRES_PR_SELECTION":"on"}' },
+    ],
     [
       "failed PR-depth job",
       {
@@ -1021,6 +1095,8 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
         "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
         "github.event.action": "enqueued",
+        "steps.completed-depth.outputs.run_required": "false",
+        "steps.completed-depth.outputs.armed": "false",
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
       },
     },
@@ -1248,6 +1324,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
             COVERAGE_PROFILE: "normal-v1",
             PATCH_ID: patchId,
             WORKFLOW_VERSION: pr.head.sha,
+            PLAN_CONFIG: planConfig,
             PR_DEPTH_JOBS: JSON.stringify(prDepth),
             GITHUB_STEP_SUMMARY: "/dev/null",
             PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
@@ -1295,10 +1372,234 @@ test("thin groups require queued code checks regardless of normal PR completion"
 }, 70_000);
 
 test("a metadata event without completed evidence starts no suites", async () => {
-  for (const action of ["labeled", "unlabeled", "auto_merge_enabled"]) {
+  for (const action of ["labeled", "unlabeled"]) {
     const { outputs } = await decide({ action, artifacts: [] });
     expect(outputs.get("run_required"), action).toBe("false");
     expect(outputs.get("metadata_only"), action).toBe("true");
+  }
+  // An unrelated label on an armed pull request stays metadata too.
+  const { outputs } = await decide({
+    action: "labeled",
+    label: "documentation",
+    pull: { ...pr, labels: [{ name: ARMED_LABEL }] },
+    artifacts: [],
+  });
+  expect(outputs.get("run_required")).toBe("false");
+  expect(outputs.get("metadata_only")).toBe("true");
+});
+
+// Armed heavy proof: once a pull request is armed for merge (auto-merge or
+// the armed label) its run proves the queue-only suites and records evidence
+// under its own marker, which a merge group needs before it skips them.
+const armedMarker = marker("fast-armed");
+const armedArtifact = { ...artifact("fast"), name: armedMarker };
+const armedEvidence = {
+  ...evidenceFor("fast"),
+  marker: armedMarker,
+  heavy_proof: true,
+  planned: ["ci-tests", "ci-checks-generated", "mobile-build"],
+  jobs: { ...evidenceFor("fast").jobs, "mobile-build": "success" },
+};
+const armedPull = { ...pr, labels: [{ name: ARMED_LABEL }] };
+const autoMergePull = { ...pr, auto_merge: { merge_method: "squash" } };
+
+test("arming by label or auto-merge starts the armed suites when the head lacks them", async () => {
+  for (const options of [
+    { action: "labeled", label: ARMED_LABEL, pull: armedPull },
+    { action: "auto_merge_enabled", pull: autoMergePull },
+  ] satisfies LookupOptions[]) {
+    const { outputs } = await decide({
+      depth: "fast",
+      artifacts: [],
+      ...options,
+    });
+    const label = JSON.stringify(options);
+    expect(outputs.get("run_required"), label).toBe("true");
+    expect(outputs.get("metadata_only"), label).toBeUndefined();
+    expect(outputs.get("armed"), label).toBe("true");
+    expect(outputs.get("marker"), label).toBe(armedMarker);
+  }
+  // Every later push to an armed pull request proves the suites again.
+  for (const pull of [armedPull, autoMergePull]) {
+    const { outputs, requests } = await decide({
+      action: "synchronize",
+      depth: "fast",
+      pull,
+    });
+    expect(outputs.get("run_required")).toBe("true");
+    expect(outputs.get("armed")).toBe("true");
+    expect(requests).toHaveLength(0);
+  }
+  // Removing the label from a pull request without auto-merge disarms it.
+  const { outputs } = await decide({
+    action: "unlabeled",
+    label: ARMED_LABEL,
+    depth: "fast",
+    artifacts: [],
+  });
+  expect(outputs.get("run_required")).toBe("true");
+  expect(outputs.get("armed")).toBe("false");
+});
+
+test("a re-armed unchanged head reuses only armed evidence", async () => {
+  for (const options of [
+    { action: "labeled", label: ARMED_LABEL, pull: armedPull },
+    { action: "auto_merge_enabled", pull: autoMergePull },
+  ] satisfies LookupOptions[]) {
+    const reused = await decide({
+      depth: "fast",
+      artifacts: [armedArtifact],
+      evidence: armedEvidence,
+      ...options,
+    });
+    expect(reused.outputs.get("run_required")).toBe("false");
+    expect(reused.outputs.get("completed_run_id")).toBe("99");
+    // Evidence under the armed name that does not record the proof is not it.
+    const unproven = await decide({
+      depth: "fast",
+      artifacts: [armedArtifact],
+      evidence: { ...armedEvidence, heavy_proof: false },
+      ...options,
+    });
+    expect(unproven.outputs.get("run_required")).toBe("true");
+  }
+  // Armed evidence never satisfies an unarmed run's lookup either.
+  const unarmed = await decide({
+    depth: "fast",
+    artifacts: [artifact("fast")],
+    evidence: { ...evidenceFor("fast"), heavy_proof: true },
+  });
+  expect(unarmed.outputs.get("run_required")).toBe("true");
+});
+
+test("a merge group records armed proof only from exact armed evidence", async () => {
+  const group = async (options: LookupOptions) =>
+    decide({ event: "merge_group", queueDepth: "thin", ...options });
+  const proven = await group({
+    artifacts: [armedArtifact],
+    evidence: armedEvidence,
+  });
+  expect(proven.outputs.get("armed_proof")).toBe("complete");
+  expect(proven.outputs.get("armed_proof_source_run_id")).toBe("99");
+  for (const options of [
+    // Only unarmed PR-depth evidence exists.
+    { artifacts: [artifact("fast")], evidence: evidenceFor("fast") },
+    { artifacts: [] },
+    {
+      artifacts: [armedArtifact],
+      evidence: { ...armedEvidence, heavy_proof: false },
+    },
+    { artifacts: [armedArtifact], currentPatchId: "e".repeat(40) },
+    {
+      artifacts: [armedArtifact],
+      evidence: {
+        ...armedEvidence,
+        jobs: { ...armedEvidence.jobs, "mobile-build": "skipped" },
+      },
+    },
+    {
+      artifacts: [armedArtifact],
+      sourceRun: { ...successfulRun, conclusion: "failure" },
+    },
+    { artifacts: [armedArtifact], comparisonFailure: true },
+    {
+      artifacts: [armedArtifact],
+      comparison: {
+        status: "diverged",
+        merge_base_commit: { sha: "f".repeat(40) },
+      },
+    },
+  ] satisfies LookupOptions[]) {
+    const { outputs } = await group({ evidence: armedEvidence, ...options });
+    expect(outputs.get("armed_proof"), JSON.stringify(options)).toBeUndefined();
+  }
+});
+
+test("an armed run records its planned queue-only suites as armed proof", async () => {
+  const heavy = v.parse(
+    v.array(v.string()),
+    JSON.parse(resultEnv["HEAVY_PROOF_JOBS"] ?? ""),
+  );
+  const plan = {
+    ci_tests_required: "true",
+    package_checks_required: "true",
+    mobile_build_required: "true",
+  };
+  const results = {
+    ...allSucceeded,
+    ...Object.fromEntries(heavy.map((job) => [job, "skipped"])),
+    "mobile-build": "success",
+  };
+  const text = recordEvidence(results, { armed: true, plan });
+  if (text === undefined) {
+    throw new Error("No evidence recorded for a fully successful armed run");
+  }
+  const recorded = v.parse(
+    v.looseObject({ heavy_proof: v.boolean(), planned: v.array(v.string()) }),
+    JSON.parse(text),
+  );
+  expect(recorded.heavy_proof).toBe(true);
+  expect(recorded.planned).toContain("mobile-build");
+  // A planned queue-only suite that did not succeed records no proof.
+  expect(
+    recordEvidence(
+      { ...results, "mobile-build": "skipped" },
+      { armed: true, plan },
+    ),
+  ).toBeUndefined();
+  // The recorded proof is what a merge group needs before it skips them.
+  const group = await decide({
+    event: "merge_group",
+    queueDepth: "thin",
+    artifacts: [armedArtifact],
+    evidence: recorded,
+  });
+  expect(group.outputs.get("armed_proof")).toBe("complete");
+  // An unarmed run records no armed proof.
+  const unarmed = recordEvidence(allSucceeded);
+  expect(unarmed && JSON.parse(unarmed)).toMatchObject({ heavy_proof: false });
+});
+
+test("arming a head with green normal evidence runs only the queue-only delta", async () => {
+  for (const options of [
+    { action: "labeled", label: ARMED_LABEL, pull: armedPull },
+    { action: "auto_merge_enabled", pull: autoMergePull },
+  ] satisfies LookupOptions[]) {
+    const { outputs } = await decide({
+      depth: "fast",
+      artifacts: [artifact("fast")],
+      evidence: evidenceFor("fast"),
+      ...options,
+    });
+    const label = JSON.stringify(options);
+    // Planning still runs; the normal suites come from the recorded run.
+    expect(outputs.get("run_required"), label).toBe("true");
+    expect(outputs.get("normal_reused"), label).toBe("true");
+    expect(outputs.get("normal_source_run_id"), label).toBe("99");
+    expect(outputs.get("marker"), label).toBe(armedMarker);
+  }
+  for (const options of [
+    // No normal evidence at all.
+    { action: "labeled", label: ARMED_LABEL, pull: armedPull, artifacts: [] },
+    // An unarmed pull request never takes the delta.
+    { action: "reopened", artifacts: [] },
+    // Metadata on an armed pull request starts nothing.
+    {
+      action: "labeled",
+      label: "documentation",
+      pull: armedPull,
+      artifacts: [artifact("fast")],
+    },
+  ] satisfies LookupOptions[]) {
+    const { outputs } = await decide({
+      depth: "fast",
+      evidence: evidenceFor("fast"),
+      ...options,
+    });
+    expect(
+      outputs.get("normal_reused"),
+      JSON.stringify(options),
+    ).toBeUndefined();
   }
 });
 
@@ -1376,6 +1677,15 @@ test("a merge that changes the pull request side, or lacks parent evidence, runs
       "other CI version",
       { evidence: { ...parentEvidence, workflow_version: "f".repeat(40) } },
     ],
+    [
+      "other plan config",
+      {
+        evidence: {
+          ...parentEvidence,
+          plan_config: '{"CI_POSTGRES_PR_SELECTION":"on"}',
+        },
+      },
+    ],
     ["other depth", { depth: "full" }],
     ["changed scope", { pull: { ...pr, title: "fix: another scope" } }],
     ["parent is the head", { mergeParent: pr.head.sha }],
@@ -1400,6 +1710,7 @@ type PatchIdStepOptions = {
   event?: string;
   base: string;
   head: string;
+  groupRef?: string;
 };
 const patchIdStep = planner.steps.find((step) => step.id === "patch-id")?.run;
 const runPatchIdStep = ({
@@ -1407,6 +1718,7 @@ const runPatchIdStep = ({
   event = "pull_request",
   base,
   head,
+  groupRef = "",
 }: PatchIdStepOptions) => {
   const output = nodePath.join(repository, ".git", "step-output");
   writeFileSync(output, "");
@@ -1421,6 +1733,7 @@ const runPatchIdStep = ({
         PR_HEAD_SHA: head,
         GROUP_BASE_SHA: base,
         GROUP_HEAD_SHA: head,
+        GROUP_HEAD_REF: groupRef,
         WORKFLOW_SHA: head,
         GITHUB_OUTPUT: output,
       },
@@ -1491,6 +1804,20 @@ test("the patch-id step names the parent only of a merge of the base, with the p
     expect(after["patch_id"]).toMatch(/^[0-9a-f]{40}$/u);
     expect(after["patch_id"]).toBe(before["patch_id"]);
 
+    // Reusing the same parents is insufficient when a manual resolution
+    // changes the automatic merge tree.
+    write("resolution.txt", ["manual resolution"]);
+    git("add", "resolution.txt");
+    git("commit", "--quiet", "--amend", "--no-edit");
+    expect(
+      runPatchIdStep({
+        repository,
+        base: far,
+        head: git("rev-parse", "HEAD"),
+      })["merge_parent"],
+    ).toBe("");
+    git("reset", "--quiet", "--hard", merged);
+
     // A merge-queue run never names a parent.
     expect(
       runPatchIdStep({
@@ -1540,5 +1867,180 @@ test("the patch-id step names the parent only of a merge of the base, with the p
     ).toBe("");
   } finally {
     rmSync(repository, { recursive: true, force: true });
+  }
+});
+
+test("a batched group skips the queue-only suites only when every entry carries armed proof", async () => {
+  // #124 was queued before #123; the group merges both.
+  const earlier = {
+    ...pr,
+    number: 124,
+    head: { sha: "e".repeat(40), repo: { id: 456 } },
+  };
+  const earlierPatch = "f".repeat(40);
+  const earlierMarker = `ci-completed-v6-normal-v1-124-456-${earlier.head.sha}-fast-armed-${scope}`;
+  const earlierArtifact = {
+    ...armedArtifact,
+    id: 8,
+    name: earlierMarker,
+    workflow_run: {
+      id: 98,
+      head_sha: earlier.head.sha,
+      head_repository_id: 456,
+    },
+  };
+  const earlierEvidence = {
+    ...armedEvidence,
+    marker: earlierMarker,
+    run_id: 98,
+    pr_number: 124,
+    head_sha: earlier.head.sha,
+    patch_id: earlierPatch,
+  };
+  const chain = [
+    { pr: 123, patch_id: patchId },
+    { pr: 124, patch_id: earlierPatch },
+  ];
+  const group = async (options: LookupOptions) =>
+    decide({
+      event: "merge_group",
+      queueDepth: "thin",
+      evidence: armedEvidence,
+      entryChain: chain,
+      queuedPulls: { 124: earlier },
+      archives: { 8: zipEvidence(JSON.stringify(earlierEvidence)) },
+      sourceRuns: {
+        98: { ...successfulRun, id: 98, head_sha: earlier.head.sha },
+      },
+      ...options,
+    });
+  // The queued pull request is proven; the earlier entry is not.
+  const partial = await group({ artifacts: [armedArtifact] });
+  expect(partial.outputs.get("armed_proof")).toBeUndefined();
+  const proven = await group({ artifacts: [armedArtifact, earlierArtifact] });
+  expect(proven.outputs.get("armed_proof")).toBe("complete");
+  expect(proven.outputs.get("armed_proof_source_run_id")).toBe("99");
+  // Proof for another patch of the earlier pull request is not proof.
+  const otherPatch = await group({
+    artifacts: [armedArtifact, earlierArtifact],
+    entryChain: [chain[0], { pr: 124, patch_id: "0".repeat(40) }],
+  });
+  expect(otherPatch.outputs.get("armed_proof")).toBeUndefined();
+  // An unresolved chain, or one not led by the queued pull request, proves nothing.
+  for (const entryChain of [null, [], chain.toReversed()]) {
+    const { outputs } = await group({
+      artifacts: [armedArtifact, earlierArtifact],
+      entryChain,
+    });
+    expect(
+      outputs.get("armed_proof"),
+      JSON.stringify(entryChain),
+    ).toBeUndefined();
+  }
+});
+
+test("the patch-id step lists every queue entry's own patch down to the group base", () => {
+  const repository = mkdtempSync(nodePath.join(tmpdir(), "ci-entry-chain-"));
+  const git = (...args: string[]) => {
+    const command = Bun.spawnSync(["git", ...args], {
+      cwd: repository,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        GIT_AUTHOR_NAME: "CI",
+        GIT_AUTHOR_EMAIL: "ci@example.test",
+        GIT_COMMITTER_NAME: "CI",
+        GIT_COMMITTER_EMAIL: "ci@example.test",
+      },
+    });
+    expect(command.exitCode, command.stderr.toString()).toBe(0);
+    return command.stdout.toString().trim();
+  };
+  const commit = (file: string, message: string) => {
+    writeFileSync(nodePath.join(repository, file), `${message}\n`);
+    git("add", "--all");
+    git("commit", "--quiet", "--message", message);
+    return git("rev-parse", "HEAD");
+  };
+  const patchOf = (from: string, to: string) =>
+    Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        `git diff --binary ${from}..${to} | git patch-id --stable | awk 'NR == 1 { print $1 }'`,
+      ],
+      {
+        cwd: repository,
+      },
+    )
+      .stdout.toString()
+      .trim();
+  try {
+    git("init", "--quiet", "--template=", "--initial-branch=main");
+    // The repository is its own origin, so ls-remote reads its queue refs.
+    git("remote", "add", "origin", repository);
+    // The step identifies the workflow version from the head's own ci.yml.
+    mkdirSync(nodePath.join(repository, ".github", "workflows"), {
+      recursive: true,
+    });
+    const base = commit(".github/workflows/ci.yml", "workflow");
+    const first = commit("first.txt", "first entry");
+    const second = commit("second.txt", "second entry");
+    const firstRef = `refs/heads/gh-readonly-queue/main/pr-11-${base}`;
+    const secondRef = `refs/heads/gh-readonly-queue/main/pr-12-${first}`;
+    git("update-ref", firstRef, first);
+    git("update-ref", secondRef, second);
+    const chain = (head: string, groupRef: string) =>
+      runPatchIdStep({
+        repository,
+        event: "merge_group",
+        base,
+        head,
+        groupRef,
+      })["entry_chain"];
+    expect(JSON.parse(chain(second, secondRef) ?? "")).toEqual([
+      { pr: 12, patch_id: patchOf(first, second) },
+      { pr: 11, patch_id: patchOf(base, first) },
+    ]);
+    expect(JSON.parse(chain(first, firstRef) ?? "")).toEqual([
+      { pr: 11, patch_id: patchOf(base, first) },
+    ]);
+    // An entry whose queue ref is gone breaks the chain: nothing is proven.
+    git("update-ref", "-d", firstRef);
+    expect(chain(second, secondRef)).toBe("null");
+    // A pull request run has no chain.
+    expect(
+      runPatchIdStep({ repository, base, head: second })["entry_chain"],
+    ).toBe("null");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});
+
+test("armed proof counts only when ci-result uploaded it after every other job", async () => {
+  const group = async (groupJobs: unknown[]) =>
+    decide({
+      event: "merge_group",
+      queueDepth: "thin",
+      artifacts: [armedArtifact],
+      evidence: armedEvidence,
+      jobs: groupJobs,
+    });
+  expect((await group(sourceJobs)).outputs.get("armed_proof")).toBe("complete");
+  const [tests, ciResult] = sourceJobs;
+  for (const candidate of [
+    // A pull request job still running when the artifact appeared.
+    [{ ...tests, status: "in_progress", completed_at: null }, ciResult],
+    // A job that finished after the upload uploaded nothing ci-result vouches for.
+    [{ ...tests, completed_at: "2026-10-17T10:40:00Z" }, ciResult],
+    // Uploaded before ci-result started.
+    [tests, { ...ciResult, started_at: "2026-10-17T10:35:00Z" }],
+    // No successful ci-result.
+    [tests, { ...ciResult, conclusion: "failure" }],
+    [tests],
+  ]) {
+    expect(
+      (await group(candidate)).outputs.get("armed_proof"),
+      JSON.stringify(candidate),
+    ).toBeUndefined();
   }
 });

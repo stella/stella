@@ -182,6 +182,8 @@ const context = ({
     event: modelledEvent(event),
     plan: {
       ...plan,
+      heavy_proof: String(event !== "pull_request" || proveFix),
+      armed_delta: "false",
       queue_depth: queueDepth,
       ...(event === "pull_request"
         ? { fix_tests_on_base_required: "true" }
@@ -190,6 +192,7 @@ const context = ({
     vars: {
       MERGE_QUEUE_DEPTH: variable,
       QUEUE_BROWSER_SUITES: queueBrowserSuites,
+      CI_POSTGRES_PR_SELECTION: "",
     },
     needsResults: Object.fromEntries(needs.map((job) => [job, "success"])),
   });
@@ -201,8 +204,10 @@ const context = ({
     "completed-depth": {
       outputs: {
         normal_completion: "required",
-        pr_heavy_suites: "run",
         run_required: value.needs["ci-plan"]?.outputs["run_required"] ?? "true",
+        pr_heavy_suites: "run",
+        armed: String(proveFix),
+        armed_proof: "",
       },
     },
     "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
@@ -281,7 +286,7 @@ test("computed browser planning retains trust and suite scopes across queue dept
                 runRequired === "true" &&
                 (trusted === "true" || event.event === "workflow_dispatch") &&
                 (event.event === "pull_request"
-                  ? desktopRequired === "true"
+                  ? false
                   : suiteDepth === "full");
               expect(
                 selected(ci.jobs["ci-browser"]?.if, value),
@@ -364,6 +369,12 @@ const expectedPrSelection = ({
   if (disposition === undefined) {
     panic(`Missing CI event disposition: ${job}`);
   }
+  if (disposition === "armed") {
+    return (
+      value.needs["ci-plan"]?.outputs["heavy_proof"] === "true" &&
+      (job === "e2e-report" ? baseline : true)
+    );
+  }
   if (job === "ci-browser") {
     expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
@@ -409,6 +420,8 @@ const expectedPrSelection = ({
     );
   }
   switch (disposition) {
+    // These contexts model unarmed pull requests.
+    case "armed":
     case "queue":
     case "main":
       return false;
@@ -434,6 +447,7 @@ const expectedServiceSelection = (value: ReturnType<typeof context>) => {
   const event = value.github.event_name;
   return (
     outputs["run_required"] !== "false" &&
+    (event !== "pull_request" || outputs["heavy_proof"] === "true") &&
     (outputs["package_checks_required"] === "true" ||
       outputs["collab_redis_required"] === "true") &&
     (outputs["trusted"] === "true" || event === "workflow_dispatch") &&
@@ -453,6 +467,8 @@ const expectedPostgresSelection = (value: ReturnType<typeof context>) => {
   }
   return (
     outputs["run_required"] !== "false" &&
+    (value.github.event_name !== "pull_request" ||
+      outputs["heavy_proof"] === "true") &&
     (outputs["trusted"] === "true" ||
       value.github.event_name === "workflow_dispatch") &&
     outputs["postgres_suites_required"] === "true" &&
@@ -822,8 +838,8 @@ test("failure-only cancellation jobs resolve both successful and failed dependen
   }
 });
 
-test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
-  expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
+test("route smoke certifies planned queue and heavy builds while skipping unarmed PRs", () => {
+  expect(eventPolicy["ci.yml/route-smoke"]).toBe("armed");
   const cases = events
     .flatMap((event) =>
       ["full", "thin"].map((queueDepth) => ({ event, queueDepth })),
@@ -966,7 +982,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           expected = expectedServiceSelection(value);
         } else if (job === "postgres-service-suites") {
           expected = expectedPostgresSelection(value);
-        } else if (job === "route-smoke") {
+        } else if (job === "route-smoke" && event.event !== "pull_request") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({
