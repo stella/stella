@@ -4761,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
+    "caseLawEmptyState": "Začnite písať a vyhľadajte v súdnych rozhodnutiach.",
     "caseLawMatchingDecisions": "{count, plural, one {# zodpovedajúce rozhodnutie} few {# zodpovedajúce rozhodnutia} many {# zodpovedajúceho rozhodnutia} other {# zodpovedajúcich rozhodnutí}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ zodpovedajúce rozhodnutie} few {#+ zodpovedajúce rozhodnutia} many {#+ zodpovedajúceho rozhodnutia} other {#+ zodpovedajúcich rozhodnutí}}",
     "continueInChat": "Pokračovať v chate",
@@ -4818,6 +4819,7 @@
     "savedSearchesEmpty": "Uložte vyhľadávanie, aby ste ho mohli znova použiť.",
     "scopeFilter": "Rozsah vyhľadávania",
     "scopePlaceholderAll": "Vyhľadávať vo všetkých <scope>zdrojoch</scope>…",
+    "scopePlaceholderCaseLaw": "Vyhľadávať v <scope>judikatúre</scope>…",
     "scopePlaceholderMatters": "Vyhľadávať vo všetkých <scope>spisoch</scope>…",
     "scopePlaceholderRegistries": "Vyhľadávať v <scope>registroch</scope>…",
     "scopeRegistries": "Registre",
