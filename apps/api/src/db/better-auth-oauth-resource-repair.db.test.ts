@@ -2,9 +2,8 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL, SQLChunk } from "drizzle-orm";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   oauthClient,

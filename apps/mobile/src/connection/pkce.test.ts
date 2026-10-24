@@ -4,10 +4,10 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  type AuthorizationCrypto,
   createPkcePair,
   deriveCodeChallenge,
   encodeBase64Url,
-  type AuthorizationCrypto,
 } from "./pkce";
 import { webCrypto } from "./test-support/web-crypto";
 
