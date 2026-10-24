@@ -1,6 +1,19 @@
 import { expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { checkParserVersions, comparisonBase } from "./check-parser-versions";
+import {
+  checkParserVersions,
+  comparisonBase,
+  readGitTree,
+} from "./check-parser-versions";
 
 const INGESTION = "apps/api/src/handlers/case-law/ingestion/";
 const ADAPTERS = `${INGESTION}adapters/`;
@@ -981,4 +994,81 @@ test("published packages are external while unresolved workspace exports fail cl
       ),
     ]),
   );
+});
+
+test("a blobless clone fetches every missing source blob in one round trip", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "parser-guard-blobless-"));
+  try {
+    const run = (cwd: string, ...args: string[]) => {
+      const result = Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=guard",
+          "-c",
+          "user.email=guard@example.com",
+          ...args,
+        ],
+        { cwd, stdout: "pipe", stderr: "pipe" },
+      );
+      // The stderr is in the comparison so a failing step names its cause.
+      expect({ args, exitCode: result.exitCode }).toEqual({
+        args,
+        exitCode: result.exitCode === 0 ? 0 : result.stderr.toString(),
+      });
+      return result.stdout.toString().trim();
+    };
+    const source = path.join(root, "source");
+    const clone = path.join(root, "clone");
+    const files = Array.from(
+      { length: 20 },
+      (_, index) => `apps/api/src/module-${String(index)}.ts`,
+    );
+    run(root, "init", "-q", "-b", "main", source);
+    run(source, "config", "uploadpack.allowFilter", "true");
+    run(source, "config", "uploadpack.allowAnySHA1InWant", "true");
+    mkdirSync(path.join(source, "apps/api/src"), { recursive: true });
+    const commit = (label: string) => {
+      for (const file of files) {
+        writeFileSync(
+          path.join(source, file),
+          `export const value = "${label}:${file}";\n`,
+        );
+      }
+      run(source, "add", "-A");
+      run(source, "commit", "-q", "-m", label);
+      return run(source, "rev-parse", "HEAD");
+    };
+    const base = commit("base");
+    commit("head");
+    run(root, "clone", "-q", "--filter=blob:none", `file://${source}`, clone);
+
+    // Count the server round trips the clone makes from here on.
+    const log = path.join(root, "upload-pack.log");
+    const wrapper = path.join(root, "upload-pack.sh");
+    writeFileSync(
+      wrapper,
+      `#!/bin/sh\necho fetch >> "${log}"\nexec git upload-pack "$@"\n`,
+      { mode: 0o755 },
+    );
+    writeFileSync(log, "");
+    run(clone, "config", "remote.origin.uploadpack", wrapper);
+    const baseBlob = run(clone, "rev-parse", `${base}:${files.at(0) ?? ""}`);
+    expect(
+      Bun.spawnSync(["git", "--no-lazy-fetch", "cat-file", "-e", baseBlob], {
+        cwd: clone,
+      }).exitCode,
+    ).not.toBe(0);
+
+    const tree = readGitTree(base, clone);
+
+    expect(tree.type).toBe("ok");
+    const read = tree.type === "ok" ? tree.files : new Map<string, string>();
+    for (const file of files) {
+      expect(read.get(file)).toBe(`export const value = "base:${file}";\n`);
+    }
+    expect(readFileSync(log, "utf-8").trim().split("\n")).toEqual(["fetch"]);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
 });
