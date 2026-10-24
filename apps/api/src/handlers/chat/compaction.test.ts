@@ -16,6 +16,7 @@ import {
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
+import { ModelDeadlineExceededError } from "@/api/lib/errors/provider-call-error";
 import { LIMITS } from "@/api/lib/limits";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
@@ -25,6 +26,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   chatThreadNeedsCompaction,
   compactChatMessages,
+  compactChatMessagesForModel,
   compactModelMessages,
   compactModelMessagesForModel,
   computeThreadContextUsage,
@@ -387,8 +389,8 @@ describe("chat history compaction", () => {
           summarizeTranscript,
         });
 
-        expect(Result.isOk(compacted)).toBe(true);
-        if (Result.isError(compacted)) {
+        expect(compacted.status).toBe("ok");
+        if (compacted.status === "error") {
           return;
         }
         const preservedTail = planChatCompaction({
@@ -573,6 +575,107 @@ Continue drafting the termination analysis.
         "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
     });
   });
+
+  for (const history of ["chat", "model"] as const) {
+    for (const stalledAt of ["resolution", "stream"] as const) {
+      test(`${history} compaction reports a stalled ${stalledAt} and returns bounded history`, async () => {
+        const pendingModel = Promise.withResolvers<ResolvedTanStackTextModel>();
+        const pendingStream = Promise.withResolvers<undefined>();
+        const summaryErrors: unknown[] = [];
+        const capturedErrors: unknown[] = [];
+        let reachedStall = false;
+        const adapter = asTestRaw<AnyTextAdapter>({
+          async *chatStream(): AsyncIterable<StreamChunk> {
+            reachedStall = true;
+            yield {
+              type: EventType.RUN_STARTED,
+              runId: "stalled-compaction",
+              threadId: "compaction-thread",
+            };
+            // This boundary ignores cancellation, as a broken provider can.
+            await pendingStream.promise;
+          },
+        });
+        const model = asTestRaw<ResolvedTanStackTextModel>({
+          adapter,
+          keySource: "instance",
+          modelId: "compaction-model",
+          modelOptions: {},
+          provider: "openai",
+        });
+        const forModel = () => ({ captureError, forModel, middleware });
+        const captureError = (error: unknown) => capturedErrors.push(error);
+        const middleware = { name: "compaction-deadline-test" };
+        const options = {
+          abortSignal: new AbortController().signal,
+          aiAnalytics: { captureError, forModel, middleware },
+          summaryDeadlineMs: 40,
+          organizationId: toSafeId<"organization">("org_compaction"),
+          admission: testModelAdmission(
+            toSafeId<"organization">("org_compaction"),
+          ),
+          orgAIConfig: null,
+          managedAIResidency: "eu",
+          preserveTokens: 20,
+          resolveTextModel: async () => {
+            if (stalledAt === "resolution") {
+              reachedStall = true;
+              return await pendingModel.promise;
+            }
+            return model;
+          },
+          tenantWorkspaceIds: [],
+          triggerTokens: 50,
+          onSummaryError: (error: unknown) => summaryErrors.push(error),
+        } as const;
+        const oldText = "old request ".repeat(80);
+        const compacted =
+          history === "chat"
+            ? await compactChatMessagesForModel({
+                ...options,
+                boundary: { type: "raw" },
+                messages: [
+                  textMessage({ id: "old", role: "user", text: oldText }),
+                  textMessage({
+                    id: "latest",
+                    role: "user",
+                    text: "latest request",
+                  }),
+                ],
+              })
+            : await compactModelMessagesForModel({
+                ...options,
+                task: "chat",
+                messages: [
+                  { role: "user", content: oldText },
+                  { role: "user", content: "latest request" },
+                ],
+              });
+        expect(reachedStall).toBe(true);
+        expect(capturedErrors).toHaveLength(1);
+        expect(capturedErrors.at(0)).toBeInstanceOf(ModelDeadlineExceededError);
+        expect(capturedErrors.at(0)).toMatchObject({
+          deadlineMs: 40,
+        });
+        expect(summaryErrors).toHaveLength(1);
+        expect(summaryErrors.at(0)).toMatchObject({
+          cause: capturedErrors.at(0),
+        });
+        expect(compacted.status).toBe("ok");
+        if (compacted.status === "error") {
+          return;
+        }
+        expect(compacted.value.messages).toHaveLength(1);
+        expect(JSON.stringify(compacted.value.messages)).toContain(
+          "latest request",
+        );
+        expect(JSON.stringify(compacted.value.messages)).not.toContain(oldText);
+        expect(compacted.value.notice).toMatchObject({
+          type: "history-trimmed",
+        });
+      });
+    }
+  }
 
   test("meters model compaction against the fallback model that answers", async () => {
     const requestedModelId = "requested-model";

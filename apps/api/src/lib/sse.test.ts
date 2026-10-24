@@ -12,6 +12,7 @@ import { LIMITS } from "@/api/lib/limits";
 import type { SseSessionLivenessReader } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
+  SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
 
@@ -608,6 +609,53 @@ describe("workspace access revocation", () => {
 describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
   const decode = (value: Uint8Array | undefined): string =>
     new TextDecoder().decode(value);
+
+  test("a pending publish never blocks the caller and its rejection delivers locally", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+    startTestSse();
+    await settlePendingWork();
+
+    const controller = new AbortController();
+    const stream = subscribeToWorkspace(controller.signal);
+    const pendingPublish = Promise.withResolvers<undefined>();
+    const publish = mock(
+      async (
+        _workspaceId: SafeId<"workspace">,
+        _event: WorkspaceRealtimeEvent,
+        _options: Parameters<SseBroadcastPublisher["publishWorkspaceEvent"]>[2],
+      ) => await pendingPublish.promise,
+    );
+
+    try {
+      broadcast(workspaceId, testEvent("publish-rejected"), {
+        publishWorkspace: publish,
+      });
+      expect(publish).toHaveBeenCalledTimes(1);
+      expect(publish.mock.calls.at(0)?.at(2)).toMatchObject({
+        deliveredInline: false,
+      });
+
+      pendingPublish.reject(
+        new SSEBroadcastError({
+          message: "publisher unavailable",
+          cause: new Error("Redis connection closed"),
+          scope: "workspace",
+        }),
+      );
+      const received = await observeStreamRead(stream);
+      expect(received).not.toBe("test-deadline");
+      if (received === "test-deadline") {
+        return;
+      }
+      expect(decode(received.value)).toContain("publish-rejected");
+    } finally {
+      controller.abort();
+      stopSse();
+      await settlePendingWork();
+    }
+  });
 
   test("delivers each event to local clients exactly once via loopback while subscribed", async () => {
     createdClients.length = 0;
