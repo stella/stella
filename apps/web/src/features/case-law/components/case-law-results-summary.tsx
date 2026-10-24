@@ -58,7 +58,17 @@ const CaseLawResultsSummaryText = ({
       </p>
     );
   }
-  if (relaxedHitCount > 0 && total.type !== SEARCH_TOTAL_TYPE.NOT_COUNTED) {
+  if (relaxedHitCount > 0) {
+    if (total.type === SEARCH_TOTAL_TYPE.NOT_COUNTED) {
+      return (
+        <p className="text-xs tabular-nums">
+          {t("caseLaw.pagination.pageWithPartialMatchCount", {
+            page: format.number(page),
+            relaxedCount: relaxedHitCount,
+          })}
+        </p>
+      );
+    }
     if (total.type === SEARCH_TOTAL_TYPE.ESTIMATE) {
       return (
         <p className="text-xs tabular-nums">

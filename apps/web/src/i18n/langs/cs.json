@@ -1030,6 +1030,7 @@
       "pageWithEstimatedMatchCounts": "Stránka {page} · přibližně {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}}",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}}",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}}",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku",
       "refineForMore": "Upřesněte hledání, abyste viděli další výsledky"

@@ -1030,6 +1030,7 @@
       "pageWithEstimatedMatchCounts": "{page}. lapa · aptuveni {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}}",
       "pageWithEstimatedResultCount": "{page}. lapa · aptuveni {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "pageWithMatchCounts": "{page}. lapa · {exactCount, plural, zero {# precīzu atbilstību} one {# precīza atbilstība} other {# precīzas atbilstības}} · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}}",
+      "pageWithPartialMatchCount": "{page}. lapa · {relaxedCount, plural, zero {# daļēju atbilstību} one {# daļēja atbilstība} other {# daļējas atbilstības}}",
       "pageWithResultCount": "{page}. lapa · {count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
       "perPage": "Vienā lapā",
       "refineForMore": "Precizējiet meklēšanu, lai redzētu vairāk rezultātu"

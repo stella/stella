@@ -1030,6 +1030,7 @@
       "pageWithEstimatedMatchCounts": "{page} psl. · apytiksliai {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}}",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "pageWithMatchCounts": "{page} psl. · {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}}",
+      "pageWithPartialMatchCount": "{page} psl. · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}}",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje",
       "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"

@@ -57,6 +57,27 @@ test("keeps the ordinary result total when no partial matches were appended", ()
   expect(view.getByText("Page 1 · 0 results")).toBeTruthy();
 });
 
+test.each([
+  [1, "Page 1 · 1 partial match"],
+  [3, "Page 1 · 3 partial matches"],
+] as const)(
+  "reports %i partial matches when the exact total is uncounted",
+  (count, text) => {
+    const view = renderHeading({
+      relaxedHitCount: count,
+      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+    });
+    expect(view.getByText(text)).toBeTruthy();
+  },
+);
+
+test("keeps the page without inventing a total when no partial matches were appended", () => {
+  const view = renderHeading({
+    total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+  });
+  expect(view.getByText("Page 1")).toBeTruthy();
+});
+
 test("keeps the displayed count busy while replacement results are pending", () => {
   const view = renderHeading({ isRefreshing: true, relaxedHitCount: 3 });
   const text = view.getByText("Page 1 · 0 exact matches · 3 partial matches");

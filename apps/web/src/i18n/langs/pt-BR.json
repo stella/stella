@@ -1030,6 +1030,7 @@
       "pageWithEstimatedMatchCounts": "Página {page} · cerca de {exactCount, plural, one {# correspondência exata} many {# correspondências exatas} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}}",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# correspondência exata} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}}",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}}",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Refine a pesquisa para ver mais resultados"
