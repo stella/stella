@@ -485,7 +485,7 @@ test("captures use a caller-scoped delta and recover a burst revision gap", asyn
     page.getByText("First new capture", { exact: true }).first(),
   ).toBeVisible();
   await expect
-    .poll(() =>
+    .poll(async () =>
       page.evaluate(() => {
         const invocations: unknown = Reflect.get(
           window,
