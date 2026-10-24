@@ -587,22 +587,34 @@ describe("property-test convention", () => {
 
   test("every workspace property selector includes both assertion APIs", async () => {
     const fixtureRoot = mkdtempSync(path.join(tmpdir(), "property-selectors-"));
-    const legacyPath = "src/legacy.test.ts";
-    const sharedPath = "src/shared.test.ts";
-    const expectedPaths = [legacyPath, sharedPath];
+    const rootsByWorkspace = new Map<string, Set<string>>();
+    for (const { relativePath } of collectPropertyTestFiles()) {
+      const workspace = workspaceOf(relativePath);
+      const roots = rootsByWorkspace.get(workspace) ?? new Set<string>();
+      roots.add(relativePath.split("/").slice(2, 3).join("/"));
+      rootsByWorkspace.set(workspace, roots);
+    }
+    const fixtureRoots = new Set(
+      [...rootsByWorkspace.values()].flatMap((roots) => [...roots]),
+    );
     try {
-      mkdirSync(path.join(fixtureRoot, "src"));
-      await Promise.all([
-        Bun.write(path.join(fixtureRoot, legacyPath), "fc.assert(property);"),
-        Bun.write(
-          path.join(fixtureRoot, sharedPath),
-          'assertProperty("shared", property);',
-        ),
-        Bun.write(
-          path.join(fixtureRoot, "src/ordinary.test.ts"),
-          'test("ordinary", () => {});',
-        ),
-      ]);
+      for (const root of fixtureRoots) {
+        mkdirSync(path.join(fixtureRoot, root));
+        await Promise.all([
+          Bun.write(
+            path.join(fixtureRoot, root, "legacy.test.ts"),
+            "fc.assert(property);",
+          ),
+          Bun.write(
+            path.join(fixtureRoot, root, "shared.test.ts"),
+            'assertProperty("shared", property);',
+          ),
+          Bun.write(
+            path.join(fixtureRoot, root, "ordinary.test.ts"),
+            'test("ordinary", () => {});',
+          ),
+        ]);
+      }
       const violations: string[] = [];
       for (const [
         workspace,
@@ -623,7 +635,18 @@ describe("property-test convention", () => {
           }
           continue;
         }
-        // Exercise the manifest's selector without starting the test runner.
+        const roots = rootsByWorkspace.get(workspace);
+        if (roots === undefined) {
+          violations.push(`${workspace}: test:property has no property files`);
+          continue;
+        }
+        const expectedPaths = [...roots]
+          .flatMap((root) => [
+            `${root}/legacy.test.ts`,
+            `${root}/shared.test.ts`,
+          ])
+          .toSorted();
+        // Exercise both assertion APIs in every actual property-test root.
         const selector = /\$\((grep\s[^)]+)\)/u.exec(command)?.at(1);
         if (selector === undefined) {
           violations.push(
