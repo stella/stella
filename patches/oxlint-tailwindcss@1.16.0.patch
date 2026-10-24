@@ -368,7 +368,8 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..cd43bf771592436d64a64e70af464fb6
 @@ -4680,11 +4763,15 @@ var DesignSystemWorker = class {
  		const state = this.ensure(cssPath);
  		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
- 		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
+-		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
++		if (requestBytes.length > state.dataArea.length) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > ${state.dataArea.length} bytes).`, "This is unexpected with typical class lists; please open an issue.");
 +		// A worker that exited after its load marks itself stopped (control[3]);
 +		// drop it so the next request starts a fresh one.
 +		if (Atomics.load(state.controlArray, 3) === 1) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker exited after loading the design system.`, "The next request starts a new worker; please open an issue if this repeats."));
@@ -752,7 +753,8 @@ index 61c624233238edcc998099f3d496c04caa7ba154..20b54235b4c0669ff8d55f62f289ca4e
 @@ -4683,11 +4766,15 @@ var DesignSystemWorker = class {
  		const state = this.ensure(cssPath);
  		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
- 		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
+-		if (requestBytes.length > 4194284) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > 4194284 bytes).`, "This is unexpected with typical class lists; please open an issue.");
++		if (requestBytes.length > state.dataArea.length) throw new SortServiceError(`${this.opts.serviceName} request payload is too large (${requestBytes.length} > ${state.dataArea.length} bytes).`, "This is unexpected with typical class lists; please open an issue.");
 +		// A worker that exited after its load marks itself stopped (control[3]);
 +		// drop it so the next request starts a fresh one.
 +		if (Atomics.load(state.controlArray, 3) === 1) throw this.failRequest(cssPath, new SortServiceError(`${this.opts.serviceName} worker exited after loading the design system.`, "The next request starts a new worker; please open an issue if this repeats."));

@@ -193,3 +193,81 @@ test("an exception outside worker main reports its cause immediately", async () 
     expect.stringContaining("injected worker failure outside main"),
   ]);
 }, 120_000);
+
+// The request area is what the shared buffer leaves after its header. A
+// request of exactly that size reaches the worker, one byte more is refused
+// with its size, never a failed copy. The plugin's own refusal names both numbers, so
+// the test derives the limit and the request overhead from it.
+const pluginPath = path.join(repositoryRoot, "node_modules/oxlint-tailwindcss");
+const TOO_LARGE = /request payload is too large \((\d+) > (\d+) bytes\)/u;
+
+const lintOneClass = async (directory: string, length: number) => {
+  const input = path.join(directory, `input-${length}.tsx`);
+  await Bun.write(
+    input,
+    `export const A = () => <span className="${"x".repeat(length)}" />;\n`,
+  );
+  const child = Bun.spawn(
+    [
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      path.join(directory, "oxlintrc.json"),
+      "--format",
+      "json",
+      input,
+    ],
+    { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
+  );
+  const [stdout, stderr] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  return `${stdout}\n${stderr}`;
+};
+
+test("a request filling the shared request area is answered and one byte more is refused", async () => {
+  const fixtureRoot = path.join(repositoryRoot, "node_modules/.cache");
+  await mkdir(fixtureRoot, { recursive: true });
+  const directory = await mkdtemp(
+    path.join(fixtureRoot, "stella-tailwind-request-bound-"),
+  );
+  try {
+    const entryPoint = path.join(directory, "app.css");
+    await Bun.write(entryPoint, '@import "tailwindcss";\n');
+    await Bun.write(
+      path.join(directory, "oxlintrc.json"),
+      JSON.stringify({
+        categories: { correctness: "off" },
+        jsPlugins: [pluginPath],
+        settings: { tailwindcss: { entryPoint } },
+        rules: { "tailwindcss/no-unknown-classes": "error" },
+      }),
+    );
+    const probeLength = 5_000_000;
+    const probe = TOO_LARGE.exec(await lintOneClass(directory, probeLength));
+    expect(probe, "an oversized request is refused with its size").not.toBe(
+      null,
+    );
+    const requestBytes = Number(probe?.[1]);
+    const limit = Number(probe?.[2]);
+    const overhead = requestBytes - probeLength;
+    // At the limit the request reaches the worker: no size refusal and no
+    // failed copy into the shared buffer (the reply has its own bound).
+    const atLimit = await lintOneClass(directory, limit - overhead);
+    expect(atLimit).not.toMatch(TOO_LARGE);
+    expect(atLimit).not.toMatch(
+      /RangeError|out of bounds|Source is too large/u,
+    );
+    expect(atLimit).toContain("tailwindcss(no-unknown-classes)");
+    const overLimit = await lintOneClass(directory, limit - overhead + 1);
+    expect(TOO_LARGE.exec(overLimit)?.slice(1)).toEqual([
+      String(limit + 1),
+      String(limit),
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 180_000);
