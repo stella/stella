@@ -167,11 +167,9 @@ const withoutModuleSpecifiers = (source: string): string =>
 const mayHaveTextReach = (source: string): boolean =>
   TEXT_REACH_PREFILTER.test(withoutModuleSpecifiers(source));
 
-const textReach = (
-  file: string,
-  source: string,
-  appNames: ReadonlySet<string>,
-): ModuleReach => {
+// App names are recorded as written; selection compares them with the apps a
+// change touches, so a name that is not an app never selects anything.
+const textReach = (file: string, source: string): ModuleReach => {
   if (!mayHaveTextReach(source)) {
     return new Set();
   }
@@ -237,22 +235,11 @@ const textReach = (
     /(?:apps\/|\.\.\/)([^/'"`$}\s]+)(?=\/|["'`]|$)/gu,
   )) {
     const app = match[1];
-    if (app !== undefined && appNames.has(app)) {
+    if (app !== undefined && app !== "api" && app !== "..") {
       apps.add(app);
     }
   }
   return apps;
-};
-
-// The app directories besides apps/api, read once per process.
-let appNamesCache: ReadonlySet<string> | undefined;
-const repositoryAppNames = (): ReadonlySet<string> => {
-  appNamesCache ??= new Set(
-    readdirSync(path.join(REPOSITORY_ROOT, "apps"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name !== "api")
-      .map((entry) => entry.name),
-  );
-  return appNamesCache;
 };
 
 /**
@@ -264,11 +251,7 @@ const repositoryAppNames = (): ReadonlySet<string> => {
  * runs, and one unscannable module widens every failure-strict plan to the
  * full suite, so strip it first.
  */
-export const analyzeModule = (
-  file: string,
-  source: string,
-  appNames = repositoryAppNames(),
-) => {
+export const analyzeModule = (file: string, source: string) => {
   let transpiler = transpilers.js;
   if (file.endsWith(".tsx")) {
     transpiler = transpilers.tsx;
@@ -304,18 +287,13 @@ export const analyzeModule = (
     computedImports,
     imports,
     reads: mentionsReads && READER_PATTERN.test(code),
-    reach: reachCandidate ? textReach(file, code, appNames) : new Set<string>(),
+    reach: reachCandidate ? textReach(file, code) : new Set<string>(),
     scans: mentionsScans && SCANNER_PATTERN.test(code),
   };
 };
 
 export const buildImportGraph = (root: string, starts: readonly string[]) => {
   const packages = workspaceExports(root);
-  const appNames = new Set(
-    readdirSync(path.join(root, "apps"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name !== "api")
-      .map((entry) => entry.name),
-  );
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();
   const scanners = new Set<string>();
@@ -370,11 +348,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
       continue;
     }
     const scanned = Result.try(() => {
-      const analysis = analyzeModule(
-        file,
-        readFileSync(absolute, "utf-8"),
-        appNames,
-      );
+      const analysis = analyzeModule(file, readFileSync(absolute, "utf-8"));
       const { imports, reach, reads, scans } = analysis;
       if (analysis.computedImports) {
         computedImports.add(file);
