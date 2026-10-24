@@ -104,7 +104,9 @@ export const parityGoldenUrl = (entry: ParserParityEntry): URL =>
   );
 
 const stableReplayValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(stableReplayValue);
+  if (Array.isArray(value)) {
+    return value.map(stableReplayValue);
+  }
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value)
