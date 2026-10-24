@@ -379,6 +379,12 @@
       }
     },
     {
+      "id": "inception/mercury-3",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "meta/muse-glimmer-30b",
       "reasoning": {
         "default_effort": "medium"
@@ -427,6 +433,12 @@
       }
     },
     {
+      "id": "minimax/minimax-m3.1-flash",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
       "id": "mistralai/mistral-large-4-0",
       "reasoning": {
         "default_effort": "high"
@@ -458,6 +470,12 @@
     },
     {
       "id": "moonshotai/kimi-k3",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "moonshotai/kimi-k3.1-pro",
       "reasoning": {
         "default_effort": "max"
       }

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import {
   appShellNavigationLink,
@@ -6,6 +6,7 @@ import {
 } from "../helpers/app-shell";
 import { setFixedBrowserTime } from "../helpers/clock";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
+import { seedSidebarState } from "../helpers/sidebar-state";
 import { STAGING_CHECKS } from "../helpers/staging-state";
 
 const MACOS_USER_AGENT =
@@ -112,7 +113,7 @@ test.describe("public hydration", () => {
   test(
     "server-rendered public law decisions stay stable after hydration",
     { tag: STAGING_CHECKS["public-law-hydration"].tag },
-    async ({ page }) => {
+    async ({ baseURL, page }) => {
       const fixedBrowserDate = new Date();
       fixedBrowserDate.setUTCHours(2, 0, 0, 0);
       const expectedToday = new Date(fixedBrowserDate.getTime() - 86_400_000)
@@ -126,9 +127,15 @@ test.describe("public hydration", () => {
       // reproduced with a non-default locale.
       // String form: the e2e tsconfig has no DOM lib, so a function body
       // referencing browser globals would not typecheck in this context.
+      // The server renders the sidebar from its cookie, so a non-default
+      // state is part of what hydration must agree with.
+      await seedSidebarState({
+        baseURL,
+        context: page.context(),
+        state: "collapsed",
+      });
       await page.addInitScript({
-        content: `window.localStorage.setItem("sidebar_state", "collapsed");
-      window.localStorage.setItem("stella-ui-theme", "light");
+        content: `window.localStorage.setItem("stella-ui-theme", "light");
       window.localStorage.setItem("stella-ui-palette", "flexoki");
       window.localStorage.setItem(
         "stella-i18n",

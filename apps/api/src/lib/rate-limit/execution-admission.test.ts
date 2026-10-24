@@ -149,6 +149,7 @@ describe("chat execution admission owns settlement independently of transport re
       not_enabled: "not_enabled",
       not_on_plan: "not_on_plan",
       unavailable: "unavailable",
+      feature_disabled: "feature_disabled",
     } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
     const previousContactUrl = env.ACTION_LIMIT_CONTACT_URL;
     try {

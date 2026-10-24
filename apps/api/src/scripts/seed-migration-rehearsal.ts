@@ -12,11 +12,12 @@
  */
 
 import { panic } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
+import { createSqlClient } from "@/api/db/sql-client";
 import type { RehearsalSeedStep } from "@/api/scripts/seed-migration-rehearsal-plan";
 import {
   REHEARSAL_DEFAULT_DECISIONS,
@@ -112,7 +113,7 @@ await runScriptWithErrorOutput(async () => {
     const decisions = flagInteger("decisions", REHEARSAL_DEFAULT_DECISIONS);
     // One connection: the plan's numbering table is a temporary table, which
     // lives in the session that created it.
-    const client = new SQL({ url, max: 1, connectionTimeout: 30 });
+    const client = createSqlClient({ url, max: 1, connectionTimeout: 30 });
     const startedAt = performance.now();
 
     try {

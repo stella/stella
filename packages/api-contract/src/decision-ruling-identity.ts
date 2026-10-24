@@ -27,15 +27,11 @@ export type RulingIdentityInput = {
 };
 
 export type RulingIdentityDefect =
-  | "docket_absent"
-  | "docket_without_digits"
-  | "date_absent"
-  | "court_absent";
+  "docket_absent" | "docket_without_digits" | "date_absent" | "court_absent";
 
 type StatedKey = { readonly stated: string; readonly key: string };
 type OptionalStatedKey =
-  | ({ readonly kind: "stated" } & StatedKey)
-  | { readonly kind: "absent" };
+  ({ readonly kind: "stated" } & StatedKey) | { readonly kind: "absent" };
 
 export type RulingIdentityKeys = {
   readonly version: typeof RULING_IDENTITY_VERSION;

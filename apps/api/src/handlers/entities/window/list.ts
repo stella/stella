@@ -41,6 +41,7 @@ const readEntitiesWindow = createSafeHandler(
     );
     const result = yield* Result.await(
       queryEntities({
+        textMode: "preview",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: currentUser.id,
@@ -51,7 +52,7 @@ const readEntitiesWindow = createSafeHandler(
         find: body.find,
         cursor: cursorResult.value,
         limit: limit + 1,
-        fieldMode: body.fieldMode ?? "full",
+        fieldMode: body.fieldMode ?? "visible",
         fieldIds: arrayOrEmpty(body.fieldIds),
         excludedKinds: arrayOrEmpty(body.excludedKinds),
         previewableForAi: body.previewableForAi ?? false,

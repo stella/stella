@@ -22,6 +22,7 @@ import { FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
+import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
@@ -109,11 +110,7 @@ const getInitialTab = (): PreferencesTab => {
   return isPreferencesTab(tab) ? tab : "general";
 };
 
-const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
-  if (!linkedAccount) {
-    return "S";
-  }
-
+const getAccountInitials = (linkedAccount: LinkedAccountSnapshot) => {
   if (linkedAccount.name?.trim()) {
     return linkedAccount.name
       .split(" ")
@@ -340,7 +337,13 @@ const GeneralPane = ({
       <PanelGroup>
         <div className="flex items-center gap-3 px-4 py-4">
           <Avatar className="size-10 border">
-            <AvatarFallback>{getAccountInitials(linkedAccount)}</AvatarFallback>
+            <AvatarFallback>
+              {linkedAccount ? (
+                getAccountInitials(linkedAccount)
+              ) : (
+                <StellaMark className="size-5" />
+              )}
+            </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">
@@ -465,6 +468,52 @@ const GeneralPane = ({
           </Combobox>
         </div>
       </PanelGroup>
+      <PanelGroup>
+        <SetupGuideSetting />
+      </PanelGroup>
+    </div>
+  );
+};
+
+/** Starts the setup tour again in its own window. */
+const SetupGuideSetting = () => {
+  const t = useTranslations("settings");
+  const [failed, setFailed] = useState(false);
+  const restart = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_restart"),
+    );
+    if (Result.isError(result)) {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+        window: DESKTOP_TELEMETRY_WINDOWS.main,
+      });
+    }
+    setFailed(Result.isError(result));
+  };
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{t("setupGuide")}</p>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("setupGuideDescription")}
+        </p>
+        {failed ? (
+          <p className="text-destructive-foreground mt-1 text-sm" role="alert">
+            {t("errorSetupGuide")}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        onClick={() => {
+          void restart();
+        }}
+        size="sm"
+        variant="outline"
+      >
+        {t("setupGuideAction")}
+      </Button>
     </div>
   );
 };

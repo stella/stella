@@ -6,8 +6,8 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
-  TEXT_FIELD_TYPE,
   TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
@@ -35,6 +35,7 @@ export const fakeReaderAdapters = {
     "statutes.diffRemoved": "Removed",
     "statutes.diffInserted": "Inserted",
     "common.copyLink": "Copy link",
+    "common.copied": "Copied",
     "common.back": "Back",
     "caseLaw.viewer.legalSentence": "Legal sentence",
     "caseLaw.viewer.abstract": "Abstract",
@@ -85,7 +86,7 @@ export const fakeReaderAdapters = {
     }
   },
   renderBodyUnavailable: ({ reason }) => <p>{reason}</p>,
-  copyPermalink: () => undefined,
+  copyPermalink: async () => true,
   openProvision: () => undefined,
   loadProvisionPreview: async () => ({
     documentId: "act",
@@ -686,7 +687,7 @@ for (const response of ["error", "null", "empty"] as const) {
   });
 }
 
-test("a hover preview scrolls a long provision inside a viewport-bound cap while inline cards keep growing", async () => {
+test("a hover preview scrolls a long provision inside a viewport-bound cap, inline cards keep growing and a margin card shows a note-sized glimpse", async () => {
   const provision = {
     document: {
       country: "cz",
@@ -738,6 +739,16 @@ test("a hover preview scrolls a long provision inside a viewport-bound cap while
       wordings={wordings}
     />,
   );
+  const gutterMarkup = renderReaderFixture(
+    <CitedProvisionExpansion
+      citations={[provision]}
+      full={{ isPending: false, whole: null }}
+      onToggleFull={() => undefined}
+      placement="gutter"
+      showsFull={false}
+      wordings={wordings}
+    />,
+  );
   const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
   GlobalRegistrator.register();
   try {
@@ -770,6 +781,24 @@ test("a hover preview scrolls a long provision inside a viewport-bound cap while
     expect(
       inline.querySelector('[data-slot="scroll-area-viewport"]'),
     ).toBeNull();
+    expect(inlineWording.classList).toContain("reader-body");
+
+    // The margin is shared by every note on the page, so a folded margin
+    // card holds two lines of wording, typeset like the notes beside it.
+    const gutter = new DOMParser().parseFromString(gutterMarkup, "text/html");
+    const glimpse =
+      gutter.querySelector('[data-slot="provision-card-glimpse"]') ??
+      panic("Missing folded margin glimpse");
+    expect(glimpse.classList).toContain("max-h-[2lh]");
+    expect(glimpse.classList).toContain("overflow-hidden");
+    const gutterWording =
+      glimpse.querySelector('[data-slot="provision-card-wording"]') ??
+      panic("Missing margin wording");
+    expect(gutterWording.classList).toContain("reader-chrome");
+    expect(gutterWording.classList).not.toContain("reader-body");
+    expect(gutterWording.classList).toContain(
+      "text-[calc(0.75rem*var(--reader-text-scale))]",
+    );
   } finally {
     await GlobalRegistrator.unregister();
   }

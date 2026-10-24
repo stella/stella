@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 5.2.1
+
+### Patch Changes
+
+- [#6696](https://github.com/stella/stella/pull/6696) [`87beaf6`](https://github.com/stella/stella/commit/87beaf6bb6cc7d709af9961acd3f78d841746e6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe why AI is unavailable and whether the caller may configure the organization's provider in the AI availability capability.
+
+- [#6348](https://github.com/stella/stella/pull/6348) [`0008522`](https://github.com/stella/stella/commit/0008522c9ba216c440fc08b81e6c5e7fa553ec0f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law coverage reports each source's held decision-year range and its completeness per calendar year.
+
+- [#5704](https://github.com/stella/stella/pull/5704) [`c57c0e8`](https://github.com/stella/stella/commit/c57c0e833228f6351c5f7c9a5519e4bbebcf980f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update connector tool metadata for app-only web link refresh.
+
 ## 5.2.0
 
 ### Minor Changes
