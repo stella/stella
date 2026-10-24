@@ -1,3 +1,4 @@
+// parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
 import { panic, Result } from "better-result";
@@ -465,11 +466,15 @@ const openSession = async (
   const sessionId = cookieValue(landing.setCookies, "JSESSIONID");
   if (landing.status !== 200 || sessionId === undefined) {
     return Result.err(
-      tkError(
+      new AdapterFetchError({
+        adapterKey: ADAPTER_KEYS.PL_TK,
         cursor,
-        `the portal opened no session (${landing.status})`,
-        landing.status,
-      ),
+        message: `ipo.trybunal.gov.pl: the portal opened no session (${landing.status})`,
+        httpStatus: landing.status,
+        ...(landing.status === 200
+          ? { stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR }
+          : {}),
+      }),
     );
   }
   return Result.ok({ sessionId });
