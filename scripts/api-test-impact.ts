@@ -155,51 +155,29 @@ const LOADER_CALL_PATTERN = /\b(?:import|require)\s*(?:\(|\/[*/])|\\u/u;
 type ModuleReach = "all" | ReadonlySet<string>;
 
 const TEXT_REACH_PREFILTER =
-  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/|["'`]apps["'`]|\.\.\/|["'`]\.\.["'`]/u;
+  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/(?!api\/)|["'`]apps["'`]|\.\.\/|["'`]\.\.["'`]/u;
+
+// Module specifiers are not paths a test reads; strip them cheaply before
+// the prefilter so only modules with other path text are parsed.
+const withoutModuleSpecifiers = (source: string): string =>
+  source
+    .replaceAll(/\b(?:from|import)\s*["'`][^"'`\n]*["'`]/gu, "")
+    .replaceAll(/\b(?:import|require)\s*\(\s*["'`][^"'`\n]*["'`]\s*\)/gu, "");
+
+const mayHaveTextReach = (source: string): boolean =>
+  TEXT_REACH_PREFILTER.test(withoutModuleSpecifiers(source));
 
 const textReach = (
   file: string,
   source: string,
   appNames: ReadonlySet<string>,
 ): ModuleReach => {
-  if (!TEXT_REACH_PREFILTER.test(source)) {
+  if (!mayHaveTextReach(source)) {
     return new Set();
   }
-  const sourceFile = ts.createSourceFile(
-    "module.ts",
-    source,
-    ts.ScriptTarget.Latest,
-  );
-  const ignored: [number, number][] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined
-    ) {
-      ignored.push([
-        node.moduleSpecifier.getStart(sourceFile),
-        node.moduleSpecifier.getEnd(),
-      ]);
-    }
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      const specifier = node.arguments.at(0);
-      if (specifier !== undefined && ts.isStringLiteralLike(specifier)) {
-        ignored.push([specifier.getStart(sourceFile), specifier.getEnd()]);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  const chars = source.split("");
-  for (const [start, end] of ignored) {
-    chars.fill(" ", start, end);
-  }
-  const code = chars.join("");
+  // `source` is transpiled code: comments are gone and import syntax is
+  // normalized, so module specifiers can be removed without a parse.
+  const code = withoutModuleSpecifiers(source);
   if (
     /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b/u.test(
       code,
@@ -266,6 +244,17 @@ const textReach = (
   return apps;
 };
 
+// The app directories besides apps/api, read once per process.
+let appNamesCache: ReadonlySet<string> | undefined;
+const repositoryAppNames = (): ReadonlySet<string> => {
+  appNamesCache ??= new Set(
+    readdirSync(path.join(REPOSITORY_ROOT, "apps"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== "api")
+      .map((entry) => entry.name),
+  );
+  return appNamesCache;
+};
+
 /**
  * Reads a module for the import graph: its static imports and whether its
  * code (not its comments) reads files or scans directories, so prose that
@@ -278,11 +267,7 @@ const textReach = (
 export const analyzeModule = (
   file: string,
   source: string,
-  appNames = new Set(
-    readdirSync(path.join(REPOSITORY_ROOT, "apps"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name !== "api")
-      .map((entry) => entry.name),
-  ),
+  appNames = repositoryAppNames(),
 ) => {
   let transpiler = transpilers.js;
   if (file.endsWith(".tsx")) {
@@ -294,15 +279,10 @@ export const analyzeModule = (
   const imports = transpiler.scanImports(runnable);
   const mentionsReads = READER_PATTERN.test(runnable);
   const mentionsScans = SCANNER_PATTERN.test(runnable);
-  const shouldTransform =
-    mentionsReads || mentionsScans || TEXT_REACH_PREFILTER.test(runnable);
+  const reachCandidate = mayHaveTextReach(runnable);
+  const shouldTransform = mentionsReads || mentionsScans || reachCandidate;
   const code = shouldTransform ? transpiler.transformSync(runnable) : "";
   let computedImports = false;
-  const sourceFile = ts.createSourceFile(
-    file,
-    runnable,
-    ts.ScriptTarget.Latest,
-  );
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
@@ -318,13 +298,13 @@ export const analyzeModule = (
     ts.forEachChild(node, visit);
   };
   if (LOADER_CALL_PATTERN.test(runnable) || mentionsReads || mentionsScans) {
-    visit(sourceFile);
+    visit(ts.createSourceFile(file, runnable, ts.ScriptTarget.Latest));
   }
   return {
     computedImports,
     imports,
     reads: mentionsReads && READER_PATTERN.test(code),
-    reach: textReach(file, code, appNames),
+    reach: reachCandidate ? textReach(file, code, appNames) : new Set<string>(),
     scans: mentionsScans && SCANNER_PATTERN.test(code),
   };
 };
@@ -546,6 +526,22 @@ export const selectApiTestImpact = ({
     const changedSet = new Set(changed);
     const isFileReader = (file: string) =>
       graph.readers.has(file) || graph.scanners.has(file);
+    // Readers and scanners that import each module directly, built once so
+    // the per-test check is a set lookup instead of a closure scan.
+    const importingReaders = new Map<string, string[]>();
+    if (changedApps.size > 0) {
+      for (const reader of graph.reaches.keys()) {
+        if (!isFileReader(reader)) {
+          continue;
+        }
+        for (const dependency of graph.dependencies(reader)) {
+          importingReaders.set(dependency, [
+            ...(importingReaders.get(dependency) ?? []),
+            reader,
+          ]);
+        }
+      }
+    }
     const files = tests
       .filter((test) => {
         const closure = graph.closure(test);
@@ -572,10 +568,8 @@ export const selectApiTestImpact = ({
                 return (
                   (reach === "all" &&
                     (isFileReader(file) ||
-                      [...closure].some(
-                        (reader) =>
-                          isFileReader(reader) &&
-                          graph.dependencies(reader).includes(file),
+                      (importingReaders.get(file) ?? []).some((reader) =>
+                        closure.has(reader),
                       ))) ||
                   (reach !== undefined &&
                     reach !== "all" &&
