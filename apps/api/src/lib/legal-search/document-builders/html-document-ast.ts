@@ -523,7 +523,7 @@ const pushTable = (
   state: BuildState,
   table: Element,
   context: BlockContext,
-): KeyedBlock | undefined => {
+): void => {
   const rows = ownTableRows(state.$(table))
     .toArray()
     .map((row) =>
@@ -534,9 +534,9 @@ const pushTable = (
         .map((cell) => tableCellOf(state, cell, context)),
     )
     .filter((row) => row.length > 0);
-  if (rows.every((row) => row.every((cell) => cell.plainText === ""))) {
-    return undefined;
-  }
+  const hasCells = rows.some((row) =>
+    row.some((cell) => cell.plainText !== ""),
+  );
   const block: KeyedBlock = {
     key:
       context.note === undefined
@@ -550,8 +550,25 @@ const pushTable = (
       plainText: "",
     },
   };
-  state[context.into].push(block);
-  return block;
+  // Caption markers belong to their paragraph, overriding the table's
+  // descendant mapping while retaining publisher order in the output.
+  if (hasCells) {
+    registerSource(state, [table], block);
+  }
+  for (const caption of state.$(table).children("caption").toArray()) {
+    registerSource(
+      state,
+      [caption],
+      pushParagraph(
+        state,
+        inlinesOf(state, state.$(caption), context),
+        context,
+      ),
+    );
+  }
+  if (hasCells) {
+    state[context.into].push(block);
+  }
 };
 
 const hasBlockChildren = (element: Element): boolean =>
@@ -656,7 +673,7 @@ const walkBlock = (
     return;
   }
   if (tag === "table") {
-    registerSource(state, [element], pushTable(state, element, context));
+    pushTable(state, element, context);
     return;
   }
   const inner: BlockContext = {

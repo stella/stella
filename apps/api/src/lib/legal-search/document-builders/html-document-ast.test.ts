@@ -338,6 +338,26 @@ describe("the HTML builder", () => {
     ]);
   });
 
+  test.each([`<tr><td>30 days</td></tr>`, ""])(
+    "keeps a table caption before its cells, including a caption-only table (%s)",
+    (rows) => {
+      const ast = build(
+        `<table><caption>Retention <strong>limits</strong></caption>${rows}</table>`,
+      );
+      expect(ast.blocks.at(0)).toMatchObject({
+        type: "paragraph",
+        plainText: "Retention limits",
+        inlines: [
+          { type: "text", text: "Retention " },
+          { type: "bold", children: [{ type: "text", text: "limits" }] },
+        ],
+      });
+      expect(ast.blocks.map(({ plainText }) => plainText)).toEqual(
+        rows === "" ? ["Retention limits"] : ["Retention limits", "30 days"],
+      );
+    },
+  );
+
   test("fails when the content root is missing or empty", () => {
     const failureOf = (html: string) => {
       const result = buildHtmlDocumentAst({
@@ -369,7 +389,8 @@ const words = fc.array(word, { minLength: 1, maxLength: 4 });
 type GeneratedBlock =
   | { type: "heading"; level: 1 | 2 | 3; label: string | null; words: string[] }
   | { type: "paragraph"; words: string[]; note: boolean }
-  | { type: "list"; items: string[][] };
+  | { type: "list"; items: string[][] }
+  | { type: "table"; words: string[]; items: string[][] };
 
 const generatedBlock: fc.Arbitrary<GeneratedBlock> = fc.oneof(
   fc.record({
@@ -386,6 +407,11 @@ const generatedBlock: fc.Arbitrary<GeneratedBlock> = fc.oneof(
   fc.record({
     type: fc.constant("list" as const),
     items: fc.array(words, { minLength: 1, maxLength: 3 }),
+  }),
+  fc.record({
+    type: fc.constant("table" as const),
+    words,
+    items: fc.array(words, { minLength: 0, maxLength: 3 }),
   }),
 );
 
@@ -408,6 +434,15 @@ const render = (blocks: readonly GeneratedBlock[]): string => {
         }
         case "list": {
           return `<ul>${block.items.map((item) => `<li>${item.join(" ")}</li>`).join("")}</ul>`;
+        }
+        case "table": {
+          const rows = block.items
+            .map(
+              (row) =>
+                `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`,
+            )
+            .join("");
+          return `<table><caption>${block.words.join(" ")}</caption>${rows}</table>`;
         }
         default: {
           block satisfies never;
@@ -466,7 +501,10 @@ describe("HTML builder output", () => {
         const text = textOfBlocks(ast.blocks);
         for (const block of blocks) {
           const expected =
-            block.type === "list" ? block.items.flat() : block.words;
+            block.type === "list" ? block.items.flat() : [...block.words];
+          if (block.type === "table") {
+            expected.push(...block.items.flat());
+          }
           for (const piece of expected) {
             expect(text).toContain(piece);
           }
