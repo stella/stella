@@ -1689,6 +1689,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECK_POOL_CONCURRENCY",
   // <index>/<count>: the share of the check registry one ci-checks-rest leg runs.
   "CI_CHECK_POOL_PARTITION",
+  // Test-only: the commit ci-checks-partition.test.ts compares the head with.
+  "CI_CHECKS_PARTITION_BASE",
   // Generator families another job of the same CI run checks on this commit.
   "GENERATED_CHECKS_IN_OTHER_JOBS",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
