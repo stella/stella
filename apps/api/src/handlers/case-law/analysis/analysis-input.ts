@@ -22,8 +22,8 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
-  analysisInputOf,
   type AnalysisInput,
+  analysisInputOf,
 } from "@/api/lib/case-law/analysis-prompt";
 import {
   readDecisionAnalysis,

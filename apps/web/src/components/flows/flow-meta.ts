@@ -2,21 +2,21 @@ import {
   FLOW_SCHEDULE_FREQUENCIES,
   FLOW_STEP_KINDS,
   FLOW_TRIGGER_TYPES,
-  isTerminalFlowRunStatus,
   type FlowRunStatus,
   type FlowRunStepStatus,
   type FlowScheduleFrequency,
   type FlowStepKind,
   type FlowTriggerType,
+  isTerminalFlowRunStatus,
 } from "@stll/api-contract";
 import {
+  AiActionIcon,
   ClockIcon,
   FilePlus2Icon,
+  type LucideIcon,
   UploadIcon,
   UserCheckIcon,
-  AiActionIcon,
   ZapIcon,
-  type LucideIcon,
 } from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";

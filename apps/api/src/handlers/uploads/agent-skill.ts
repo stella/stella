@@ -7,13 +7,13 @@
  * `validateAgentSkill` enforces the same team-scope admin/owner check
  * as the multipart endpoint.
  */
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  pendingUploads,
   type PendingUploadFinalizedResult,
+  pendingUploads,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

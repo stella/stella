@@ -15,8 +15,9 @@ import { readNamedLegislationWorks } from "@/api/lib/legal-search/legislation-wo
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { seedLegislation, SECTION_51_VERSION_DATE } from "./seed-legislation";
+import { SECTION_51_VERSION_DATE, seedLegislation } from "./seed-legislation";
 
+// Measured p95: 16.5 s; this must run and replay the real Postgres seed.
 test("local seeding creates searchable Czech statute versions and converges on replay", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
@@ -92,4 +93,4 @@ test("local seeding creates searchable Czech statute versions and converges on r
     resetLocalCaseLawConfigForTesting();
     await client.close();
   }
-}, 120_000);
+}, 35_000);

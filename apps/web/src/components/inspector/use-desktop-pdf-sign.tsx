@@ -23,8 +23,8 @@ import {
   type PdfSigningCloseReason,
   type PdfSigningExpiryStage,
   pdfSigningFinalizedQueryKeys,
-  pdfSigningStartErrorCode,
   type PdfSigningStartErrorCode,
+  pdfSigningStartErrorCode,
 } from "@/components/inspector/pdf-signing.logic";
 import { desktopHandoffFailureToastOptions } from "@/features/desktop/desktop-handoff-failure-toast";
 import type { TranslationKey } from "@/i18n/types";

@@ -1,3 +1,4 @@
+import "./register-schema-formats";
 import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
@@ -219,10 +220,10 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
-  finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
-  setSecurityHeaders,
   CORS_EXPOSED_HEADERS,
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
@@ -598,16 +599,24 @@ const api = new Elysia()
       .use(entitiesRoute)
       .use(docxSuggestionsRoute)
       .use(fieldsRoute)
-      .use(templatesRoute)
-      .use(styleSetsRoute)
-      .use(templateCategoriesRoute)
-      .use(templatePacksRoute)
-      .use(templateRecipesRoute)
-      .use(timeEntriesRoute)
-      .use(billingCodesRoute)
-      .use(ratesRoute)
-      .use(expensesRoute)
-      .use(invoicesRoute)
+      // Each domain slice composes in one link: every `.use` here deepens the
+      // app's type, and the chain sits at TypeScript's instantiation limit.
+      .use(
+        new Elysia()
+          .use(templatesRoute)
+          .use(styleSetsRoute)
+          .use(templateCategoriesRoute)
+          .use(templatePacksRoute)
+          .use(templateRecipesRoute),
+      )
+      .use(
+        new Elysia()
+          .use(timeEntriesRoute)
+          .use(billingCodesRoute)
+          .use(ratesRoute)
+          .use(expensesRoute)
+          .use(invoicesRoute),
+      )
       // Issuer settings share one link: every `.use` here deepens the
       // app's type, and the chain sits at TypeScript's instantiation limit.
       .use(
@@ -651,13 +660,19 @@ const api = new Elysia()
       .use(userFilesRoute)
       .use(skillsRoute)
       .use(usageRoute)
-      .use(viewTemplatesRoute)
-      .use(viewsRoute)
-      .use(entityViewsRoute)
-      .use(listsRoute)
-      .use(tasksRoute)
-      .use(workObligationsRoute)
-      .use(myWorkRoute)
+      .use(
+        new Elysia()
+          .use(viewTemplatesRoute)
+          .use(viewsRoute)
+          .use(entityViewsRoute),
+      )
+      .use(
+        new Elysia()
+          .use(listsRoute)
+          .use(tasksRoute)
+          .use(workObligationsRoute)
+          .use(myWorkRoute),
+      )
       .use(accountExportsRoute)
       .use(meRoute)
       .use(localDevVersionedRoutes)

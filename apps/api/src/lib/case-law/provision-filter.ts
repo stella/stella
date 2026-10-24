@@ -7,8 +7,8 @@ import { SECTION_UNITS } from "@stll/legal-atlas/provision-citation-profile";
 
 import {
   caseLawProvisionCitations,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";

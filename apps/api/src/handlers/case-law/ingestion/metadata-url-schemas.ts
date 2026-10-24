@@ -10,8 +10,8 @@ import { PL_UOKIK_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/
 import { SK_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/sk-courts.metadata-urls";
 import {
   ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
