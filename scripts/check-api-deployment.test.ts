@@ -427,6 +427,7 @@ describe("API deployment health receipt", () => {
       "test:e2e:staging",
       "apps/api/src/scripts/post-deploy-smoke.ts",
       "apps/api/src/scripts/post-deploy-response-policy.ts",
+      "scripts/staging-wake.sh",
     ];
     const workflowsDir = new URL("../.github/workflows/", import.meta.url);
     const consumers: { run: string; env: Record<string, unknown> }[] = [];
@@ -453,7 +454,10 @@ describe("API deployment health receipt", () => {
     }
     // One source for the staging access value, so rotating it is one change.
     for (const { run, env } of consumers) {
-      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      // A readiness probe names its URL in the run or passes it to a script.
+      const probe =
+        run.includes("$STAGING_HEALTH_URL") || "STAGING_HEALTH_URL" in env;
+      const prefix = probe ? "" : "E2E_";
       expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
       expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
         `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
@@ -535,10 +539,13 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain(
       "Start staging, then dispatch this workflow again.",
     );
-    expect(apiBuild).toContain("needs: [resolve, staging-health]");
-    expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
-    expect(webBuild).toContain("needs: [resolve, staging-health]");
-    expect(webBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
+    // A release candidate that found staging off deploys once staging-wake
+    // started it; the builds run after either job says deploy.
+    for (const build of [apiBuild, webBuild]) {
+      expect(build).toContain("needs: [resolve, staging-health, staging-wake]");
+      expect(build).toContain("needs.staging-health.outputs.deploy == 'true'");
+      expect(build).toContain("needs.staging-wake.outputs.deploy == 'true'");
+    }
     expect(apiBuild).toContain("cancel-in-progress: true");
     expect(webBuild).toContain("cancel-in-progress: true");
     expect(promoteJob).toContain("cancel-in-progress: false");

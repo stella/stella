@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.50.1",
+  "version": "0.50.2",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -102,6 +102,7 @@
     "./review-status-badge": "./src/review/review-status-badge.tsx",
     "./text-mark": "./src/review/text-mark.tsx",
     "./scroll-area": "./src/components/scroll-area.tsx",
+    "./horizontal-scroller": "./src/components/horizontal-scroller.tsx",
     "./scroll-to-top": "./src/components/scroll-to-top.tsx",
     "./search-field": "./src/components/search-field.tsx",
     "./secret-input": "./src/components/secret-input.tsx",
@@ -174,6 +175,7 @@
     "./components/preview-card": "./src/components/preview-card.tsx",
     "./components/preview-pane": "./src/components/preview-pane.tsx",
     "./components/scroll-area": "./src/components/scroll-area.tsx",
+    "./components/horizontal-scroller": "./src/components/horizontal-scroller.tsx",
     "./components/scroll-to-top": "./src/components/scroll-to-top.tsx",
     "./components/secret-input": "./src/components/secret-input.tsx",
     "./components/file-input": "./src/components/file-input.tsx",
