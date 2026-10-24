@@ -53,10 +53,12 @@ export const createStatementCeilingMonitor = (
     kind,
     key,
     counter,
+    phase = "work",
   }: {
     kind: StatementCeilingKind;
     key: string;
     counter: Readonly<QueryCounter>;
+    phase?: "work" | "cleanup";
   }) => {
     const identity = `${kind} ${key}`;
     const statements = counter.count + counter.transactions;
@@ -70,6 +72,11 @@ export const createStatementCeilingMonitor = (
     // Frameworks may translate exceptions into HTTP/MCP errors or failed jobs.
     // Retain the violation so the test-runtime finalizer still fails the spec.
     violations.add(message);
+    // Cancellation and rollback must reach PostgreSQL even after refusal.
+    // The retained violation still fails the owning finalizer.
+    if (phase === "cleanup") {
+      return;
+    }
     panic(message);
   };
   const assertSatisfied = () => {
@@ -119,7 +126,7 @@ export const runWithStatementCeiling = async <T>({
     counter.diagnostics = true;
     // Stream continuations can issue SQL after their Response is returned.
     // Keep the guard on the store for its entire async lifetime.
-    counter.onQuery = () => monitor.record({ kind, key, counter });
+    counter.onQuery = (phase) => monitor.record({ kind, key, counter, phase });
     return await scope.run({ kind, key }, async () => {
       try {
         return await fn();

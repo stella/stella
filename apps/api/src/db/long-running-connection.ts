@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import type { ReservedSQL, SQL } from "bun";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@/api/db/dedicated-connection-slots";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { terminateReserved } from "@/api/db/sql-close";
+import { instrumentDedicatedSqlCounts } from "@/api/lib/db-query-counter";
 import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -16,7 +18,11 @@ import { isRecord } from "@/api/lib/type-guards";
 // The existing transport owner opens every dedicated session, including cancellation.
 const dedicatedConnectionOwner = createDedicatedConnectionOwner({
   capacity: DEDICATED_CONNECTIONS_PER_PROCESS,
-  openClient: (options) => createSqlClient({ ...options, max: 1 }),
+  openClient: (options, purpose) =>
+    instrumentDedicatedSqlCounts(
+      createSqlClient({ ...options, max: 1 }),
+      purpose === "cancellation" ? "cleanup" : "work",
+    ),
 });
 const { openLongRunningSql } = dedicatedConnectionOwner;
 export const { openMaintenanceSql } = dedicatedConnectionOwner;
@@ -76,6 +82,7 @@ export const withDedicatedReservedSession = async <
   signal,
   work,
 }: ReservedWorkOptions<T, TSession>): Promise<T> => {
+  const runInCaller = AsyncLocalStorage.snapshot();
   const reserved = await reserve();
   const guarded = new Proxy(reserved, {
     apply(target, _thisArg, args) {
@@ -110,24 +117,25 @@ export const withDedicatedReservedSession = async <
     if (typeof pid !== "number") {
       return panic("Expected the dedicated PostgreSQL backend pid");
     }
-    onAbort = () => {
-      if (cancelling !== undefined) {
-        return;
-      }
-      cancelling = Promise.allSettled([
-        (async () => {
-          await cancelBackend(pid);
-        })(),
-      ]).then(([result]) => {
-        if (result.status === "rejected") {
-          observeFailure(result.reason, {
-            sink: CANCEL_FAILED_SINK,
-            ctx: { step: "cancel_backend" },
-          });
+    onAbort = () =>
+      runInCaller(() => {
+        if (cancelling !== undefined) {
+          return;
         }
-        return undefined;
+        cancelling = Promise.allSettled([
+          (async () => {
+            await cancelBackend(pid);
+          })(),
+        ]).then(([result]) => {
+          if (result.status === "rejected") {
+            observeFailure(result.reason, {
+              sink: CANCEL_FAILED_SINK,
+              ctx: { step: "cancel_backend" },
+            });
+          }
+          return undefined;
+        });
       });
-    };
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) {
       onAbort();
