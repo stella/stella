@@ -398,12 +398,12 @@ export const instrumentDedicatedSqlCounts = <TClient extends object>(
             if (!isSqlSession(session)) {
               return panic("Expected a SQL transaction session");
             }
-            const result: unknown = runInCaller(() =>
-              Reflect.apply(callback, undefined, [
+            return runInCaller(() => {
+              const result: unknown = Reflect.apply(callback, undefined, [
                 instrumentDedicatedSqlCounts(session, phase),
-              ]),
-            );
-            return result;
+              ]);
+              return result;
+            });
           };
           return await runCountedTransaction(async () => {
             const result: unknown = await Reflect.apply(value, target, [

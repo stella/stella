@@ -176,7 +176,7 @@ class RecordingSqlQuery extends QueryPromise<RecordedRows> {
   }
   private async start(): Promise<RecordedRows> {
     if (this.state.type === "cancelled") {
-      return Promise.reject(new TypeError("query cancelled before dispatch"));
+      throw new TypeError("query cancelled before dispatch");
     }
     if (this.state.type === "pending") {
       this.state = { type: "started", result: this.executeRows() };
