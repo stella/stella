@@ -117,7 +117,7 @@ export const createFileEntityUploader = <TResult>(
       },
       catch: (error) => error,
     });
-    return attempted.andThen((result) => result).mapErr(normalizeUploadError);
+    return attempted.andThen((result) => result).mapError(normalizeUploadError);
   };
 
   const abortStaged = async (): Promise<void> => {
