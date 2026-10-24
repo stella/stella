@@ -972,19 +972,99 @@ const resetsConsumedFrame = ({
   );
 };
 
+const mutuallyExclusiveBranches = (left: AstNode, right: AstNode): boolean => {
+  for (
+    let parent = parentOf(left);
+    parent !== null;
+    parent = parentOf(parent)
+  ) {
+    if (
+      (parent.type === "IfStatement" ||
+        parent.type === "ConditionalExpression") &&
+      isAstNode(parent.consequent) &&
+      isAstNode(parent.alternate) &&
+      ((isWithin(left, parent.consequent) &&
+        isWithin(right, parent.alternate)) ||
+        (isWithin(left, parent.alternate) &&
+          isWithin(right, parent.consequent)))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const sameHandle = (left: Handle, right: Handle | null): boolean => {
+  if (left.kind === "binding") {
+    return right?.kind === "binding" && left.variable === right.variable;
+  }
+  return (
+    left.kind === "member" &&
+    right?.kind === "member" &&
+    left.rootVariable === right.rootVariable &&
+    left.text === right.text
+  );
+};
+
+type FrameWriteOptions = {
+  proof: CleanupProof;
+  write: AstNode;
+  value: AstNode;
+  loopBody: AstNode;
+};
+
+const preservesPendingFrame = ({
+  proof,
+  write,
+  value,
+  loopBody,
+}: FrameWriteOptions): boolean => {
+  for (
+    let parent = parentOf(write);
+    parent !== null && parent !== loopBody;
+    parent = parentOf(parent)
+  ) {
+    if (
+      [
+        "ForStatement",
+        "ForInStatement",
+        "ForOfStatement",
+        "WhileStatement",
+        "DoWhileStatement",
+      ].includes(parent.type) &&
+      !cancelledBeforeWrite({ proof, write, start: value })
+    ) {
+      return false;
+    }
+  }
+  return directFunctionCalls(loopBody)
+    .filter(
+      (call) =>
+        call.range[1] < value.range[0] &&
+        startsFrameLoop({ context: proof.context, value: call, loopBody }) &&
+        sameHandle(proof.handle, handleOf(proof.context, call)),
+    )
+    .every(
+      (earlier) =>
+        mutuallyExclusiveBranches(earlier, value) ||
+        cancelledBeforeWrite({ proof, write, start: earlier }),
+    );
+};
+
 const isSafeFrameLoopWrite = ({
-  context,
+  proof,
   start,
   write,
   value,
   loopBody,
 }: {
-  context: LoopContext;
+  proof: CleanupProof;
   start: AstNode;
   write: AstNode | null;
   value: AstNode | null;
   loopBody: AstNode | null;
 }): boolean => {
+  const { context } = proof;
   if (
     write === null ||
     loopBody === null ||
@@ -994,7 +1074,9 @@ const isSafeFrameLoopWrite = ({
     return false;
   }
   return (
-    startsFrameLoop({ context, value, loopBody }) ||
+    (value !== null &&
+      startsFrameLoop({ context, value, loopBody }) &&
+      preservesPendingFrame({ proof, write, value, loopBody })) ||
     (emptyHandleValue(context, value) &&
       resetsConsumedFrame({ context, write, loop: loopBody }))
   );
@@ -1064,7 +1146,7 @@ const hasAmbiguousMemberWrites = ({
         ? node.right
         : null,
     );
-    if (value === start) {
+    if (value === start && (loopBody === null || !isWithin(node, loopBody))) {
       continue;
     }
     const empty = emptyHandleValue(context, value);
@@ -1073,9 +1155,7 @@ const hasAmbiguousMemberWrites = ({
     }
     const insideLoop = loopBody !== null && isWithin(node, loopBody);
     const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
-    if (
-      isSafeFrameLoopWrite({ context, start, write: node, value, loopBody })
-    ) {
+    if (isSafeFrameLoopWrite({ proof, start, write: node, value, loopBody })) {
       continue;
     }
     if (startsLoop && !insideLoop && ++kickOffs <= 1) {
@@ -1137,7 +1217,7 @@ const hasAmbiguousHandleWrites = ({
     const insideLoop =
       loopBody !== null && write !== null && isWithin(write, loopBody);
     const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
-    if (isSafeFrameLoopWrite({ context, start, write, value, loopBody })) {
+    if (isSafeFrameLoopWrite({ proof, start, write, value, loopBody })) {
       continue;
     }
     if (startsLoop && !insideLoop) {
@@ -1145,7 +1225,7 @@ const hasAmbiguousHandleWrites = ({
       if (frameKickOffs <= 1) {
         continue;
       }
-    } else if (value === start) {
+    } else if (value === start && !insideLoop) {
       continue;
     }
     return true;

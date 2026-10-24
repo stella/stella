@@ -768,6 +768,52 @@ test("a frame callback retains each newly scheduled handle until cancellation", 
   }
 });
 
+test("recursive frame writes cannot replace another pending frame", async () => {
+  const cases = [
+    [
+      "if (visible()) for (let i = 0; i < 2; i++) frame = requestAnimationFrame(tick);",
+      false,
+    ],
+    [
+      "if (visible()) for (let i = 0; i < 2; i++) { cancelAnimationFrame(frame); frame = requestAnimationFrame(tick); }",
+      true,
+    ],
+    [
+      "if (visible()) { frame = requestAnimationFrame(tick); frame = requestAnimationFrame(tick); }",
+      false,
+    ],
+    [
+      "if (visible()) frame = requestAnimationFrame(tick); else if (moving()) frame = requestAnimationFrame(tick);",
+      true,
+    ],
+    [
+      "if (visible()) { frame = requestAnimationFrame(tick); cancelAnimationFrame(frame); frame = requestAnimationFrame(tick); }",
+      true,
+    ],
+    [
+      "if (visible()) { cancelAnimationFrame(frame); frame = requestAnimationFrame(tick); frame = requestAnimationFrame(tick); }",
+      false,
+    ],
+    [
+      "if (visible()) { frame = requestAnimationFrame(tick); if (ready()) cancelAnimationFrame(frame); frame = requestAnimationFrame(tick); }",
+      false,
+    ],
+  ] as const;
+  for (const member of [false, true]) {
+    const results = await Promise.all(
+      cases.map(async ([body]) =>
+        lintSingleRule(
+          RULE,
+          `useMountEffect(() => { ${member ? "const ref = { current: 0 };" : "let frame = 0;"} const tick = () => { ${member ? body.replaceAll("frame", "ref.current") : body} }; ${member ? "ref.current" : "frame"} = requestAnimationFrame(tick); return () => cancelAnimationFrame(${member ? "ref.current" : "frame"}); });`,
+        ),
+      ),
+    );
+    expect(results.map((lines) => lines.length === 0)).toEqual(
+      cases.map(([, owned]) => owned),
+    );
+  }
+});
+
 test("an earlier handle handoff does not own a subsequently started timer", async () => {
   expect(
     await lintSingleRule(
