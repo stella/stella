@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -28,7 +28,6 @@ import type {
   ReaderAnnotationStepOutcome,
   ReaderAnnotationWrites,
 } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
 /** What a reader does to a mark, and the way back from it. */
@@ -70,56 +69,82 @@ export const useReaderAnnotationHistory = ({
   writes: ReaderAnnotationWrites;
 }): ReaderAnnotationController => {
   const t = useTranslations();
-  const state = useRef<{
-    history: ReaderAnnotationHistory;
-    scope: string;
-    seq: number;
-  }>({ history: EMPTY_READER_ANNOTATION_HISTORY, scope, seq: 0 });
-  const inFlight = useRef(new Set<Promise<void>>());
-  const queue = useRef<Promise<void>>(Promise.resolve());
-  const latest = useLatestCallback(() => ({ scope, writes }));
+  // A fresh identity on every scope transition also invalidates A → B → A.
+  const [currentScope, setCurrentScope] = useState(() => ({ scope }));
+  if (currentScope.scope !== scope) {
+    setCurrentScope({ scope });
+  }
+  const state = useRef({
+    history: EMPTY_READER_ANNOTATION_HISTORY,
+    scope: currentScope,
+    seq: 0,
+    inFlight: new Set<Promise<void>>(),
+    queue: Promise.resolve(),
+  });
+  const latest = useRef({ identity: currentScope, writes });
+  // Async writes must see the committed scope before passive effects run.
+  useLayoutEffect(() => {
+    latest.current = { identity: currentScope, writes };
+  });
+  const mounted = useRef(true);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
-  /** Changes the history of one document; another document's is dropped. */
+  const isActive = (identity: typeof currentScope) =>
+    mounted.current && latest.current.identity === identity;
+
+  const current = () => {
+    if (!isActive(currentScope)) {
+      return null;
+    }
+    if (state.current.scope !== currentScope) {
+      state.current = {
+        history: EMPTY_READER_ANNOTATION_HISTORY,
+        scope: currentScope,
+        seq: 0,
+        inFlight: new Set<Promise<void>>(),
+        queue: Promise.resolve(),
+      };
+    }
+    return state.current;
+  };
+
   const setHistory = (
-    current: string,
+    session: NonNullable<ReturnType<typeof current>>,
     change: (history: ReaderAnnotationHistory) => ReaderAnnotationHistory,
   ) => {
-    // A write that finishes after the reader moved to another document must
-    // not reach the history of the one now open.
-    if (latest().scope !== current) {
-      return;
+    if (isActive(session.scope)) {
+      session.history = change(session.history);
     }
-    const history =
-      state.current.scope === current
-        ? state.current.history
-        : EMPTY_READER_ANNOTATION_HISTORY;
-    state.current = {
-      history: change(history),
-      scope: current,
-      seq: state.current.seq,
-    };
   };
 
   /** A step the reader takes: written, then remembered once it holds. */
   const recorded = async (
     write: () => Promise<Result<ReaderAnnotationInverse | null, Error>>,
   ): Promise<void> => {
-    const startedIn = scope;
-    state.current = { ...state.current, seq: state.current.seq + 1 };
-    const seq = state.current.seq;
+    const session = current();
+    if (session === null) {
+      return;
+    }
+    session.seq += 1;
+    const seq = session.seq;
     const operation = (async () => {
       const written = await write();
       if (Result.isError(written) || written.value === null) {
         return;
       }
       const inverse = written.value;
-      setHistory(startedIn, (history) =>
+      setHistory(session, (history) =>
         recordReaderAnnotationStep(history, { inverse, seq }),
       );
     })();
-    inFlight.current.add(operation);
+    session.inFlight.add(operation);
     await operation.finally(() => {
-      inFlight.current.delete(operation);
+      session.inFlight.delete(operation);
     });
   };
 
@@ -140,15 +165,19 @@ export const useReaderAnnotationHistory = ({
   const step = async (
     direction: ReaderAnnotationHistoryDirection,
   ): Promise<void> => {
+    const session = current();
+    if (session === null) {
+      return;
+    }
     const run = async () => {
-      await Promise.allSettled([...inFlight.current]);
-      const { scope: current, writes: store } = latest();
-      const taken = takeReaderAnnotationStep(
-        state.current.scope === current
-          ? state.current.history
-          : EMPTY_READER_ANNOTATION_HISTORY,
-        direction,
-      );
+      if (!isActive(session.scope)) {
+        return;
+      }
+      await Promise.allSettled([...session.inFlight]);
+      if (!isActive(session.scope)) {
+        return;
+      }
+      const taken = takeReaderAnnotationStep(session.history, direction);
       if (taken === null) {
         stellaToast.add({
           title:
@@ -158,10 +187,16 @@ export const useReaderAnnotationHistory = ({
         });
         return;
       }
-      setHistory(current, () => taken.history);
+      setHistory(session, () => taken.history);
       const { entry } = taken;
-      const result = await performReaderAnnotationStep(store, entry.inverse);
-      setHistory(current, (history) =>
+      const result = await performReaderAnnotationStep(
+        latest.current.writes,
+        entry.inverse,
+      );
+      if (!isActive(session.scope)) {
+        return;
+      }
+      setHistory(session, (history) =>
         settleReaderAnnotationStep({ direction, entry, history, result }),
       );
       if (result.status === "gone" || result.status === "changed") {
@@ -193,8 +228,8 @@ export const useReaderAnnotationHistory = ({
             }),
       });
     };
-    const next = queue.current.then(run, run);
-    queue.current = next;
+    const next = session.queue.then(run, run);
+    session.queue = next;
     await next;
   };
 
