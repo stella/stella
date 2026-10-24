@@ -972,6 +972,34 @@ const resetsConsumedFrame = ({
   );
 };
 
+const isSafeFrameLoopWrite = ({
+  context,
+  start,
+  write,
+  value,
+  loopBody,
+}: {
+  context: LoopContext;
+  start: AstNode;
+  write: AstNode | null;
+  value: AstNode | null;
+  loopBody: AstNode | null;
+}): boolean => {
+  if (
+    write === null ||
+    loopBody === null ||
+    !isGlobalCall(context, start, START_NAMES.frame) ||
+    !isWithin(write, loopBody)
+  ) {
+    return false;
+  }
+  return (
+    startsFrameLoop({ context, value, loopBody }) ||
+    (emptyHandleValue(context, value) &&
+      resetsConsumedFrame({ context, write, loop: loopBody }))
+  );
+};
+
 const startsInFinally = (start: AstNode, owner: AstNode) => {
   for (
     let parent = parentOf(start);
@@ -1046,12 +1074,7 @@ const hasAmbiguousMemberWrites = ({
     const insideLoop = loopBody !== null && isWithin(node, loopBody);
     const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
     if (
-      frame &&
-      insideLoop &&
-      (startsLoop ||
-        (empty &&
-          loopBody !== null &&
-          resetsConsumedFrame({ context, write: node, loop: loopBody })))
+      isSafeFrameLoopWrite({ context, start, write: node, value, loopBody })
     ) {
       continue;
     }
@@ -1114,15 +1137,7 @@ const hasAmbiguousHandleWrites = ({
     const insideLoop =
       loopBody !== null && write !== null && isWithin(write, loopBody);
     const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
-    if (
-      frame &&
-      insideLoop &&
-      (startsLoop ||
-        (empty &&
-          write !== null &&
-          loopBody !== null &&
-          resetsConsumedFrame({ context, write, loop: loopBody })))
-    ) {
+    if (isSafeFrameLoopWrite({ context, start, write, value, loopBody })) {
       continue;
     }
     if (startsLoop && !insideLoop) {
@@ -1163,6 +1178,11 @@ const isOwned = (
   }
   const transfers =
     handle.kind === "binding" ? bindingTransfers(context, handle.variable) : [];
+  const handoffs = transfers.filter(
+    (transfer) =>
+      transfer.node.type === "CallExpression" &&
+      cancelsHandle(context, transfer, handle),
+  );
   const matching = cancels.filter(
     (cancel) =>
       cancelsHandle(context, cancel, handle) &&
@@ -1171,7 +1191,7 @@ const isOwned = (
   const proof: CleanupProof = {
     context,
     handle,
-    cancels: matching,
+    cancels: [...matching, ...handoffs],
     visiting: new Set(),
     completed: new Map(),
   };
@@ -1190,7 +1210,8 @@ const isOwned = (
     owner !== undefined &&
     matching.length > 0 &&
     handle.rootVariable.defs.every(
-      (definition) => !isWithin(definition.node, owner),
+      (definition) =>
+        isAstNode(definition.node) && !isWithin(definition.node, owner),
     )
   ) {
     return true;
@@ -1206,6 +1227,7 @@ const isOwned = (
   const startupTransfers = transfers.filter(
     (transfer) =>
       cancelsHandle(context, transfer, handle) &&
+      (effect === null || transfer.node.type === "CallExpression") &&
       transfer.node.range[0] > start.range[1] &&
       (effect === null ||
         loopBody === null ||
