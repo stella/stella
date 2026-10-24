@@ -27,6 +27,7 @@
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
     "expo-crypto": "~57.0.4",
+    "expo-dev-client": "~57.0.20",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.25",
     "expo-secure-store": "~57.0.4",

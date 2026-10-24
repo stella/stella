@@ -38,8 +38,11 @@ const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_KNOWN_SCOPES, CLI_REQUIRED_SCOPES } =
   await import("../../../../packages/cli/src/auth/constants.ts");
 const { CLI_CLIENT_METADATA_PATH, buildCliClientMetadataDocument } =
   await import("@stll/cli/client-metadata-document");
-const { MOBILE_CLIENT_METADATA_PATH, buildMobileClientMetadataDocument } =
-  await import("@stll/api-contract/mobile-client");
+const {
+  MOBILE_CLIENT_METADATA_PATH,
+  buildMobileClientMetadataDocument,
+  mobileRedirectUri,
+} = await import("@stll/api-contract/mobile-client");
 const { apiOAuthResourceUrl } =
   await import("@stll/api-contract/api-oauth-resource");
 const { readCredentialFile } =
@@ -189,6 +192,7 @@ const mobileSignIn = async (browser: Browser) => {
       expect(redirectedTo).toBe(redirectUri);
       return { type: "success", url: callback.toString() };
     },
+    redirectUri: mobileRedirectUri("production"),
     resourceFor: apiOAuthResourceUrl,
     serverUrlInput: SERVER_URL,
     // The test server answers its endpoints on its local http address.
