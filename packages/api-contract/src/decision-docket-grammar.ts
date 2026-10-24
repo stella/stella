@@ -789,6 +789,40 @@ const canonicalPolishDocketKey = (formatted: string): string =>
         .replace(/\/(?=\p{L})/gu, "")
         .replace(/^(\p{L}{1,3})\.(?=\d{1,4}\/)/u, "$1");
 
+/** EWHC numbers run across divisions within a year; the suffix is metadata. */
+const GBR_EWHC_DIVISIONS = [
+  "KB",
+  "QB",
+  "Ch",
+  "Fam",
+  "Admin",
+  "Comm",
+  "TCC",
+  "Pat",
+  "IPEC",
+  "Admlty",
+  "SCCO",
+  "Costs",
+  "Mercantile",
+] as const;
+
+const GBR_DOCKET_PATTERNS = [
+  /^\[\d{4}\] (?:UKSC|UKPC|UKHL|EAT|EWFC|EWCOP) [1-9]\d*$/iu,
+  /^\[\d{4}\] EWCA (?:Civ|Crim) [1-9]\d*$/iu,
+  new RegExp(
+    String.raw`^\[\d{4}\] EWHC [1-9]\d*(?: \(${alternation(GBR_EWHC_DIVISIONS)}\))?$`,
+    "iu",
+  ),
+  /^\[\d{4}\] (?:UKUT|UKFTT) [1-9]\d*(?: \([A-Z]{2,5}\))?$/iu,
+] as const;
+
+const canonicalBritishDocketKey = (folded: string): string =>
+  canonicalDocketKey(
+    /^\[\d{4}\] EWHC /iu.test(folded)
+      ? folded.replace(/ \([a-z]+\)$/iu, "")
+      : folded,
+  );
+
 export const DECISION_DOCKET_GRAMMARS = {
   AUT: createDecisionDocketGrammar({
     canonicalize: canonicalDocketKey,
@@ -808,6 +842,12 @@ export const DECISION_DOCKET_GRAMMARS = {
     format: formatEuDocket,
     jurisdiction: "EU",
     patterns: EU_DOCKET_PATTERNS,
+  }),
+  GBR: createDecisionDocketGrammar({
+    canonicalize: canonicalBritishDocketKey,
+    format: asWritten,
+    jurisdiction: "GBR",
+    patterns: GBR_DOCKET_PATTERNS,
   }),
   HUN: createDecisionDocketGrammar({
     canonicalize: canonicalHungarianDocketKey,

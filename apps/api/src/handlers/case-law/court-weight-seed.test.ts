@@ -33,13 +33,16 @@ const migrationPath = (directory: string) =>
  * The full seed rendered the declaration without them, and each one's own
  * migration renders its rows alone.
  */
-const SEEDED_AFTER_THE_FULL_SEED: ReadonlySet<string> = new Set(["USA"]);
+const SEEDED_AFTER_THE_FULL_SEED: ReadonlySet<string> = new Set(["USA", "GBR"]);
 
 /**
  * Jurisdictions whose enrolled courts include no constitutional court, so the
  * seed declares no constitutional rank for them.
  */
-const WITHOUT_A_CONSTITUTIONAL_COURT: ReadonlySet<string> = new Set(["USA"]);
+const WITHOUT_A_CONSTITUTIONAL_COURT: ReadonlySet<string> = new Set([
+  "USA",
+  "GBR",
+]);
 
 // The merged full seed retains the Slovak declaration it originally shipped.
 const HISTORICAL_SVK_SEED = [
@@ -87,6 +90,12 @@ describe("court weight seed", () => {
     expect(usa.trimEnd().endsWith(courtWeightJurisdictionSeedSql("USA"))).toBe(
       true,
     );
+    const gbr = await Bun.file(
+      migrationPath("20261024190100_case_law_court_weight_seed_gbr"),
+    ).text();
+    expect(gbr.trimEnd().endsWith(courtWeightJurisdictionSeedSql("GBR"))).toBe(
+      true,
+    );
     const svk = await Bun.file(
       migrationPath("20261003122700_case_law_court_weight_seed_svk"),
     ).text();
@@ -97,7 +106,7 @@ describe("court weight seed", () => {
 
   test("the flat seed keeps the jurisdiction order the migrations rendered", () => {
     // The migrations above pin row order within the full seed; this pins
-    // where each jurisdiction's block sits, USA last, as the declaration
+    // where each jurisdiction's block sits, as the declaration
     // map's entry order must keep it.
     expect([...new Set(COURT_WEIGHT_SEED.map((row) => row.country))]).toEqual([
       "CZE",
@@ -107,6 +116,7 @@ describe("court weight seed", () => {
       "HUN",
       "EU",
       "USA",
+      "GBR",
     ]);
   });
 
@@ -129,6 +139,7 @@ describe("court weight seed", () => {
       "AUT",
       "CZE",
       "EU",
+      "GBR",
       "HUN",
       "POL",
       "SVK",
@@ -157,6 +168,18 @@ describe("court weight seed", () => {
       court: string,
       label: string,
     ][] = [
+      ["GBR", "UKSC", "supreme"],
+      ["GBR", "UKPC", "supreme"],
+      ["GBR", "UKHL", "supreme"],
+      ["GBR", "EWCA Civ", "appeal"],
+      ["GBR", "EWCA Crim", "appeal"],
+      ["GBR", "Court of Appeal (Civil Division)", "appeal"],
+      ["GBR", "EWHC (KB)", "regional"],
+      ["GBR", "UKUT (IAC)", "regional"],
+      ["GBR", "EAT", "regional"],
+      ["GBR", "UKFTT (TC)", "district"],
+      ["GBR", "EWFC", "district"],
+      ["GBR", "EWCOP", "district"],
       ["CZE", "Ústavní soud", "constitutional"],
       ["CZE", "Nejvyšší soud", "supreme"],
       ["CZE", "Nejvyšší správní soud", "supreme"],

@@ -41,6 +41,7 @@ export const DECISION_DOCKETS_STORED_WITH_SHEETS = {
   AUT: false,
   CZE: true,
   EU: false,
+  GBR: false,
   HUN: false,
   POL: false,
   SVK: true,

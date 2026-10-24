@@ -116,6 +116,23 @@ export const COURT_NAME_REGISTRY = {
     { pattern: /court\s+of\s+justice/iu, shortCode: "CJEU" },
     { pattern: /general\s+court/iu, shortCode: "GC" },
   ],
+  GBR: [
+    { pattern: /^UKSC$/iu, shortCode: "UKSC" },
+    { pattern: /^UKPC$/iu, shortCode: "UKPC" },
+    { pattern: /^UKHL$/iu, shortCode: "UKHL" },
+    { pattern: /^EWCA\s+Civ$/iu, shortCode: "EWCA Civ" },
+    { pattern: /^EWCA\s+Crim$/iu, shortCode: "EWCA Crim" },
+    { pattern: /^UKUT$/iu, shortCode: "UKUT" },
+    { pattern: /^UKFTT$/iu, shortCode: "UKFTT" },
+    { pattern: /^EAT$/iu, shortCode: "EAT" },
+    { pattern: /^EWFC$/iu, shortCode: "EWFC" },
+    { pattern: /^EWCOP$/iu, shortCode: "EWCOP" },
+    {
+      pattern:
+        /^EWHC(?:\s+\((?:KB|QB|Ch|Fam|Admin|Comm|TCC|Pat|IPEC|Admlty|SCCO|Costs|Mercantile)\))?$/iu,
+      shortCode: "EWHC",
+    },
+  ],
   // Hungary issues no ECLI, so the name is the only source there is. The
   // Kúria is written out rather than abbreviated in Hungarian prose, which is
   // why its chip is the name; `LB` is the pre-2012 Legfelsőbb Bíróság, the
