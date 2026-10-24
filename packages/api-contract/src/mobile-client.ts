@@ -19,9 +19,12 @@ export const MOBILE_CLIENT_METADATA_PATH =
  */
 export const MOBILE_REDIRECT_SCHEME = "app.stll" as const;
 
+/** The path the authorization server redirects to; no screen of the app. */
+export const MOBILE_REDIRECT_PATH = "/oauth/callback" as const;
+
 /** RFC 8252 §7.1: a private-use redirect has a single slash after the scheme. */
 export const MOBILE_REDIRECT_URI =
-  `${MOBILE_REDIRECT_SCHEME}:/oauth/callback` as const;
+  `${MOBILE_REDIRECT_SCHEME}:${MOBILE_REDIRECT_PATH}` as const;
 
 export const MOBILE_CLIENT_NAME = "stella mobile" as const;
 
