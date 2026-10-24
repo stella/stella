@@ -443,7 +443,7 @@ export const renderSnippetCompareMarkdown = (
 
   for (const row of report.queries) {
     lines.push(
-      `## ${row.query.id} — ${row.query.country}: ${cell(row.query.text)}`,
+      `## ${row.query.id}, ${row.query.country}: ${cell(row.query.text)}`,
       "",
       `search ${ms(row.searchMs)}, passage read ${ms(row.passageReadMs)}`,
       "",
@@ -454,7 +454,7 @@ export const renderSnippetCompareMarkdown = (
       const rank = index + 1;
       if (hit.outcome.status === "skipped") {
         lines.push(
-          `| ${rank} | — | — | — | not compared: ${hit.outcome.reason} |`,
+          `| ${rank} | n/a | n/a | n/a | not compared: ${hit.outcome.reason} |`,
         );
         continue;
       }

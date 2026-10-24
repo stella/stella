@@ -311,8 +311,8 @@ export const parseInlineConditions = (text: string): InlineParse => {
   if (unclosed) {
     return fail(
       unclosed.kind === "if"
-        ? "Unclosed inline {% if %} — the {% endif %} must be in the same paragraph"
-        : "Unclosed inline {% for %} — the {% endfor %} must be in the same paragraph",
+        ? "Unclosed inline {% if %}: the {% endif %} must be in the same paragraph"
+        : "Unclosed inline {% for %}: the {% endfor %} must be in the same paragraph",
       unclosed.raw,
     );
   }

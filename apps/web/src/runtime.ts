@@ -45,7 +45,7 @@ const verification = await verifyServerModuleGraph({
 });
 for (const failure of verification.toleratedFailures) {
   process.stderr.write(
-    `server chunk threw on evaluation (browser-only chunk, tolerated) — ${failure}\n`,
+    `server chunk threw on evaluation (browser-only chunk, tolerated): ${failure}\n`,
   );
 }
 

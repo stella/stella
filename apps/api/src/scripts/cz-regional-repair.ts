@@ -381,7 +381,7 @@ const ingestItem = async (
       observationOrder,
     });
     if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-      console.error(`${decision.caseNumber}: retryable — ${processed.reason}`);
+      console.error(`${decision.caseNumber}: retryable: ${processed.reason}`);
       return INGEST_OUTCOMES.RETRYABLE;
     }
     return INGEST_OUTCOMES.WRITTEN;

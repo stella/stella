@@ -90,8 +90,8 @@ export const renderPrefillTargets = (
 ): string =>
   targets
     .map((target) => {
-      const label = target.label ? ` — "${target.label}"` : "";
-      const hint = target.hint ? ` — hint: ${JSON.stringify(target.hint)}` : "";
+      const label = target.label ? `, "${target.label}"` : "";
+      const hint = target.hint ? `; hint: ${JSON.stringify(target.hint)}` : "";
       return `${target.id}: ${target.path}${label} (${targetFormatHint(target)})${hint}`;
     })
     .join("\n");

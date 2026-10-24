@@ -291,7 +291,7 @@ describe("renderSnippetCompareMarkdown", () => {
 
     expect(markdown).toContain("- queries: 1");
     expect(markdown).toContain("- overlap >= 0.5: 50.0%");
-    expect(markdown).toContain("## cze-a — cze: náhrada škody");
+    expect(markdown).toContain("## cze-a, cze: náhrada škody");
     expect(markdown).toContain("| 1 | snippet |");
     expect(markdown).toContain("| 1 | passage |");
     expect(markdown).toContain("not compared: unanchored");

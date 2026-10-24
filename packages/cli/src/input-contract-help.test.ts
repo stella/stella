@@ -41,7 +41,7 @@ describe("--input contract help", () => {
     });
 
     expect(help?.fields).toEqual([
-      "values.<key>  any JSON value  required — Map of field path to value.",
+      "values.<key>  any JSON value  required: Map of field path to value.",
     ]);
     expect(completeExample(help)).toEqual({
       template_id: "xxxxx",

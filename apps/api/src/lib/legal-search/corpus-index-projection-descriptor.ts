@@ -92,7 +92,8 @@ export type LegislationV2ProjectionInput = ProjectionInputBase &
   };
 
 export type CorpusIndexProjectionInput =
-  CaseLawProjectionInput | LegislationV2ProjectionInput;
+  | CaseLawProjectionInput
+  | LegislationV2ProjectionInput;
 
 export type CorpusIndexProjectionDescriptor =
   | { action: "erase" }
@@ -127,6 +128,7 @@ export const caseLawProjectionTitle = ({
     canonicalIdentifiers.length === 0
       ? caseNumber
       : canonicalIdentifiers.map(({ value }) => value).join(" · ");
+  // oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy -- the title is persisted in search projections; changing its format re-projects the whole corpus and needs its own reviewed change.
   return `${reference} — ${court}`;
 };
 

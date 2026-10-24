@@ -543,7 +543,8 @@ export type CompareOptions = {
 };
 
 export type ParsedCompareArgs =
-  { type: "help" } | { type: "options"; options: CompareOptions };
+  | { type: "help" }
+  | { type: "options"; options: CompareOptions };
 
 export const USAGE = `Usage: bun --env-file=.env src/scripts/polarity-system-one-compare.ts [options]
 
@@ -835,7 +836,7 @@ export const renderComparisonReport = ({
       ({ label, count }) => `| read failed: ${label} | ${count} |`,
     ),
     "",
-    "## Confusion matrix — stored label × decision model",
+    "## Confusion matrix: stored label × decision model",
     "",
     `| stored | ${CLASSIFIABLE_POLARITIES.join(" | ")} | not read | total |`,
     `| --- | ${CLASSIFIABLE_POLARITIES.map(() => "---:").join(" | ")} | ---: | ---: |`,

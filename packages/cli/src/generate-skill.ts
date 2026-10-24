@@ -164,7 +164,7 @@ const requiredFlagLine = (flag: FlagSpec): string => {
     ? `${flagKindFact(flag)}, repeatable`
     : flagKindFact(flag);
   const description =
-    flag.description === undefined ? "" : ` — ${oneLine(flag.description)}`;
+    flag.description === undefined ? "" : `: ${oneLine(flag.description)}`;
   return `\`${flag.flag}\`${description} (${facts})`;
 };
 
@@ -192,7 +192,7 @@ const commandFlagsBlock = (spec: LeafCommandSpec): string => {
       spec.inputOnly.length > 0
         ? `no flags; pass \`--input\` with ${spec.inputOnly.join(", ")}`
         : "no arguments";
-    return [`- \`${command}\` — ${hint}`, ...unionHints].join("\n");
+    return [`- \`${command}\`: ${hint}`, ...unionHints].join("\n");
   }
   const required = flags.filter((flag) => flag.required);
   const optional = flags
@@ -225,7 +225,7 @@ const renderCommandFlagsSection = (
   [
     "## Command flags",
     "",
-    "Required: `--flag — description (type)`. Optional: one `optional: --a,",
+    "Required: `--flag: description (type)`. Optional: one `optional: --a,",
     "--b (enum1|enum2)` line, names only (`--help` has full descriptions).",
     "Global flags (output/cursor/limit/all/yes/input; see Conventions above)",
     "are omitted here. Input union keys are required unless marked `?`.",
@@ -450,7 +450,7 @@ const renderUploadNote = (
   return (
     `- **Uploading a file**: \`stella upload ${requiredInvocation}\` uploads ` +
     `a local file as a new document; add \`${uploadFlagName("entityId")} <id>\` ` +
-    "to upload it as a new version of an existing document instead — a " +
+    "to upload it as a new version of an existing document instead: a " +
     "CLI-native path (the CLI reads the file itself), separate from the MCP " +
     `\`${toolName}\`/\`${pickerToolName}\` tools (which take a host-supplied ` +
     "file reference and are excluded from the CLI)."

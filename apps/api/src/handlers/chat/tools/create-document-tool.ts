@@ -118,7 +118,7 @@ export const createCreateDocumentTool = () =>
     name: CREATE_DOCUMENT_TOOL_NAME,
     description:
       "Create a brand-new DOCX. The compiler numbers and paginates " +
-      "deterministically — do not write manual clause numbers. This " +
+      "deterministically; do not write manual clause numbers. This " +
       "does NOT edit, convert, clone or preserve formatting from an " +
       "existing DOCX; never use it when the user asks to edit, rewrite, " +
       "save, update, or make a new version of an already-open document. " +
@@ -133,17 +133,17 @@ export const createCreateDocumentTool = () =>
       "reply. When the success output includes `mention`, copy that field " +
       "verbatim when naming the saved document in your reply.\n\n" +
       "DIRECTIVES (one per block, on its own line):\n" +
-      "  @doc kind=<agreement|letter|memo|checklist|pleading|other> locale=<bcp47> page=<A4|Letter> — opening line; locale picks footer + signature captions for en/cs/sk/de/fr/es/it/pl/pt/nl/hu (falls back to English).\n" +
-      "  @title <text> — document title.\n" +
-      "  @clause <heading> — numbered, titled section. Heading required. Body lines follow on subsequent lines.\n" +
-      "  @subclause <heading> — one level deeper.\n" +
-      "  @paragraph — plain body paragraph(s); no heading.\n" +
-      "  @recital — italic body paragraphs (use for 'WHEREAS …' style intros).\n" +
-      "  @list — bullet list. Add `ordered` after `@list` for numbered.\n" +
-      "  @table — pipe-style table.\n" +
-      "  @schedule <heading> — schedule/annex starting on a new page.\n" +
-      "  @signatures — side-by-side party signature block; see below.\n" +
-      "  @pagebreak — force a page break.\n\n" +
+      "  @doc kind=<agreement|letter|memo|checklist|pleading|other> locale=<bcp47> page=<A4|Letter>: opening line; locale picks footer + signature captions for en/cs/sk/de/fr/es/it/pl/pt/nl/hu (falls back to English).\n" +
+      "  @title <text>: document title.\n" +
+      "  @clause <heading>: numbered, titled section. Heading required. Body lines follow on subsequent lines.\n" +
+      "  @subclause <heading>: one level deeper.\n" +
+      "  @paragraph: plain body paragraph(s); no heading.\n" +
+      "  @recital: italic body paragraphs (use for 'WHEREAS …' style intros).\n" +
+      "  @list: bullet list. Add `ordered` after `@list` for numbered.\n" +
+      "  @table: pipe-style table.\n" +
+      "  @schedule <heading>: schedule/annex starting on a new page.\n" +
+      "  @signatures: side-by-side party signature block; see below.\n" +
+      "  @pagebreak: force a page break.\n\n" +
       "INLINE MARKDOWN: body text is GFM markdown. `**bold**`, `*italic*`, and " +
       "`[text](https://…)` links compile into DOCX runs and are not shown " +
       "literally; a `- ` or `1. ` list and a `| a | b |` pipe table inside a " +
@@ -155,8 +155,8 @@ export const createCreateDocumentTool = () =>
       "and `warnings` it kept; a failed compile returns `errors` with source " +
       "lines. Read them: if a fix changed what you meant, call the tool again " +
       "with the corrected full source.\n\n" +
-      "PLACEHOLDERS: wrap unknown values in `[[ ]]` — the compiler highlights them in yellow so the user can spot and fill them. Example: `Buyer shall pay [[purchase price]] on or before [[closing date]].` Briefly tell the user in your reply which placeholders you left.\n\n" +
-      "@signatures: one block at the end, key:value lines per party. Keys: `party` (legal name), `by` (signing person, alias `name`), `title` (role). Use the document-language alias for the keys — e.g. `party / strana / partei / partie / parte / fél`. Each `party:` line opens a new party block; omit `by` and `title` to leave a blank line for hand-fill. The compiler renders one column per party (party name bolded, signing space, rule, then your `by:` / `title:` values raw) — no compiler-added captions. If you want labels like 'Datum:' or 'Podpis', write them inline in the source above the @signatures block (with @paragraph), in the document's language.",
+      "PLACEHOLDERS: wrap unknown values in `[[ ]]`; the compiler highlights them in yellow so the user can spot and fill them. Example: `Buyer shall pay [[purchase price]] on or before [[closing date]].` Briefly tell the user in your reply which placeholders you left.\n\n" +
+      "@signatures: one block at the end, key:value lines per party. Keys: `party` (legal name), `by` (signing person, alias `name`), `title` (role). Use the document-language alias for the keys, e.g. `party / strana / partei / partie / parte / fél`. Each `party:` line opens a new party block; omit `by` and `title` to leave a blank line for hand-fill. The compiler renders one column per party (party name bolded, signing space, rule, then your `by:` / `title:` values raw); no compiler-added captions. If you want labels like 'Datum:' or 'Podpis', write them inline in the source above the @signatures block (with @paragraph), in the document's language.",
     inputSchema: toTanStackToolSchema(createDocumentToolInputSchema),
     outputSchema: toTanStackToolSchema(createDocumentToolOutputSchema),
   });

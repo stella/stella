@@ -153,7 +153,8 @@ export const PRECOMPUTED_SAMPLE_MATCHES = [
 export type Matcher = typeof AhoCorasick;
 
 let cachedSegmentMatcher:
-  { key: string; Matcher: Matcher; matcher: AhoCorasick } | undefined;
+  | { key: string; Matcher: Matcher; matcher: AhoCorasick }
+  | undefined;
 
 const segmentMatcher = (Matcher: Matcher, originals: string[]): AhoCorasick => {
   const key = JSON.stringify(originals);
@@ -501,7 +502,7 @@ const describeEngineStatus = (
     }
     case "ready": {
       if (highlights.pairs.length === 0) {
-        return "No entities detected yet — try adding a name or company.";
+        return "No entities detected yet. Try adding a name or company.";
       }
       return highlights.pairs.length === 1
         ? "1 entity detected"

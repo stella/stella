@@ -435,7 +435,7 @@ const runCelexRefresh = async ({
             counts.retryable += 1;
             celexFailed = true;
             console.error(
-              `${celex} (${result.language}): retryable — ${processed.reason}`,
+              `${celex} (${result.language}): retryable: ${processed.reason}`,
             );
           } else {
             counts.complete += 1;
