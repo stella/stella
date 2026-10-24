@@ -1,7 +1,7 @@
 import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import {
   billingDraftUserSettings,

@@ -6,8 +6,8 @@ import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
-  agentSkills,
   agentSkillResources,
+  agentSkills,
   billingDraftUserSettings,
   billingGuidelineFiles,
   organizationSettings,
@@ -251,13 +251,11 @@ if (!databaseUrl || !runPostgres) {
           id: createSafeId<"organizationSettings">(),
           organizationId,
         });
-        await db
-          .insert(billingDraftUserSettings)
-          .values({
-            organizationId,
-            userId,
-            consentAt: new Date("2026-10-01T12:00:00Z"),
-          });
+        await db.insert(billingDraftUserSettings).values({
+          organizationId,
+          userId,
+          consentAt: new Date("2026-10-01T12:00:00Z"),
+        });
         const safeDb = createSafeDb(db, [], organizationId, userId);
         const disabled = await loadBillingDraftContext({
           safeDb,
@@ -348,14 +346,12 @@ if (!databaseUrl || !runPostgres) {
             createdAt: new Date(),
           },
         ]);
-        await db
-          .insert(user)
-          .values({
-            id: userId,
-            name: "Shared member",
-            email: `${userId}@example.test`,
-            emailVerified: true,
-          });
+        await db.insert(user).values({
+          id: userId,
+          name: "Shared member",
+          email: `${userId}@example.test`,
+          emailVerified: true,
+        });
         await db.insert(member).values([
           {
             id: mintAuthProviderIdValue(),

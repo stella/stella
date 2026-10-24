@@ -1,28 +1,28 @@
 import { Result } from "better-result";
 import { and, eq, gt, ilike, inArray, isNull, like, sql } from "drizzle-orm";
-import { t, type Static } from "elysia";
+import { type Static, t } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import {
   agentSkillResources,
   agentSkills,
+  AI_BILLING_DRAFTS_MODE,
   billingGuidelineFiles,
   contacts,
   organizationSettings,
-  AI_BILLING_DRAFTS_MODE,
 } from "@/api/db/schema";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  loadBillingGuidelines,
   BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  loadBillingGuidelines,
 } from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId, tPaginationCursor } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import {
   timestampCasToken,

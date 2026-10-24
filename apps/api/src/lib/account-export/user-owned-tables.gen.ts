@@ -17,6 +17,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "anonymization_blacklist_entries",
   "apikey",
   "bilingual_translation_runs",
+  "billing_draft_user_settings",
   "case_law_matter_links",
   "case_law_research_columns",
   "cell_metadata",
