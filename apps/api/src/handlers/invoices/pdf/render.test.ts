@@ -447,7 +447,6 @@ describe("country invoice wording", () => {
   test("prints a Czech exempt line's basis after the prescribed statement", async () => {
     const { text } = await textOf({
       ...options,
-      seller: { ...options.seller, vatPayer: true, vatId: "CZ12345678" },
       invoice: {
         ...options.invoice,
         lines: [
