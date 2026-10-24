@@ -11,7 +11,6 @@
 import ts from "typescript6";
 
 import {
-  API_CLIENT_CLIENT_EXPORTS,
   API_CLIENT_CLIENT_MODULES,
   API_CLIENT_WRITE_METHODS,
 } from "../.oxlint-plugins/api-client-chain.ts";
@@ -37,12 +36,18 @@ const clientImports = (source: ts.SourceFile, file: string): Set<string> => {
       continue;
     }
     const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+    if (
+      statement.importClause?.isTypeOnly === true ||
+      bindings === undefined ||
+      !ts.isNamedImports(bindings)
+    ) {
       continue;
     }
+    // Every value the client module exports is counted, not a list of client
+    // names: a client added under a new name (a per-domain client) is a client
+    // all the same, and the merge-base is measured by this same code.
     for (const element of bindings.elements) {
-      const imported = (element.propertyName ?? element.name).text;
-      if (API_CLIENT_CLIENT_EXPORTS.has(imported)) {
+      if (!element.isTypeOnly) {
         names.add(element.name.text);
       }
     }

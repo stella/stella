@@ -1,7 +1,24 @@
-import { STATUS_CODES } from "node:http";
-
 /** Statuses whose answer never carries a body, so `status(204)` sends none. */
 const BODILESS_STATUS = new Set([101, 204, 205, 304, 307, 308]);
+
+/** Reason phrases, as Node's `STATUS_CODES` spells them, for this API's statuses. */
+const REASON_PHRASES = new Map([
+  [400, "Bad Request"],
+  [401, "Unauthorized"],
+  [403, "Forbidden"],
+  [404, "Not Found"],
+  [405, "Method Not Allowed"],
+  [409, "Conflict"],
+  [410, "Gone"],
+  [413, "Payload Too Large"],
+  [415, "Unsupported Media Type"],
+  [422, "Unprocessable Entity"],
+  [429, "Too Many Requests"],
+  [500, "Internal Server Error"],
+  [502, "Bad Gateway"],
+  [503, "Service Unavailable"],
+  [504, "Gateway Timeout"],
+]);
 
 /**
  * A handler answer that carries its own status: `return status(404, { message })`.
@@ -39,7 +56,9 @@ export function status(code: number, response?: unknown) {
   }
   return new HttpStatusResponse(
     code,
-    response === undefined ? (STATUS_CODES[code] ?? String(code)) : response,
+    response === undefined
+      ? (REASON_PHRASES.get(code) ?? String(code))
+      : response,
   );
 }
 

@@ -55,7 +55,11 @@ export type RouteConfig = {
  *   `:workspaceId` path segment, in the status its config admits.
  */
 export type RouteAccess =
-  "public" | "token" | "session" | "member" | "workspace";
+  | "public"
+  | "token"
+  | "session"
+  | "member"
+  | "workspace";
 
 /**
  * One stage of the pipeline: answer the request, or pass it on. A stage may
@@ -90,8 +94,7 @@ export type RouteRequest = {
  * remainder is what lets a config that reads no input (a token or session
  * route) still be a route config; each factory keeps its own config exact.
  */
-export type RouteDefinitionConfig = RouteConfig &
-  Readonly<Record<string, unknown>>;
+type RouteDefinitionConfig = RouteConfig & Readonly<Record<string, unknown>>;
 
 export type RouteDefinition = {
   readonly config: RouteDefinitionConfig;
@@ -114,9 +117,7 @@ export type RouteEntry = {
 };
 
 /** A path's routes by method, in the shape `Bun.serve` routes take. */
-export type MethodRoutes = Readonly<
-  Partial<Record<HttpMethod, RouteDefinition>>
->;
+type MethodRoutes = Readonly<Partial<Record<HttpMethod, RouteDefinition>>>;
 
 /** Paths to their routes, as `Bun.serve({ routes })` spells them. */
 export type RouteTable = Readonly<Record<string, MethodRoutes>>;
@@ -139,7 +140,7 @@ export type RouteGroup<TRoutes = unknown> = RouteEntry[] & {
  * Stands in for routes the compiler cannot read. The web contract printer
  * refuses any printout that contains this marker.
  */
-export type UntypedRoutes<TReason extends string> = Readonly<
+type UntypedRoutes<TReason extends string> = Readonly<
   Record<`~routeTypeError: ${TReason}`, Record<never, never>>
 >;
 
@@ -148,10 +149,7 @@ type TrimTrailingSlash<TPath extends string> = TPath extends `${infer THead}/`
   : TPath;
 
 /** `joinPath` on literal types: `JoinPath<"/v1", "/files">` is `"/v1/files"`. */
-export type JoinPath<
-  TPrefix extends string,
-  TPath extends string,
-> = TPrefix extends ""
+type JoinPath<TPrefix extends string, TPath extends string> = TPrefix extends ""
   ? TPath
   : TPath extends "/" | ""
     ? TPrefix

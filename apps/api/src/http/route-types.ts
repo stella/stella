@@ -52,8 +52,9 @@ type FieldValue<TSchema> =
     ? SchemaOutput<TSchema>
     : TSchema extends { readonly wrapped: infer TWrapped }
       ? IsWireSchema<TWrapped> extends true
-        ? | Exclude<SchemaInput<TSchema>, string | readonly string[]>
-          | SchemaOutput<TWrapped>
+        ?
+            | Exclude<SchemaInput<TSchema>, string | readonly string[]>
+            | SchemaOutput<TWrapped>
         : SchemaInput<TSchema>
       : SchemaInput<TSchema>;
 
@@ -68,7 +69,7 @@ type ObjectValue<TEntries, TInput> = {
  * as strings, so the client holds the values those strings stand for and the
  * transport writes them the way `toWireInput` does.
  */
-export type ClientInput<TSchema> = TSchema extends {
+type ClientInput<TSchema> = TSchema extends {
   readonly entries: infer TEntries;
 }
   ? ObjectValue<TEntries, SchemaInput<TSchema>>
@@ -140,7 +141,7 @@ type RouteResponses<TDeclared, TAnswer> = {
 };
 
 /** What one route takes and answers, as the browser client is typed from it. */
-export type RouteIO<TDefinition> = {
+type RouteIO<TDefinition> = {
   body: Slot<ConfigOf<TDefinition>, "body">;
   params: Slot<ConfigOf<TDefinition>, "params">;
   query: Slot<ConfigOf<TDefinition>, "query">;

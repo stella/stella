@@ -45,7 +45,7 @@ export type RateLimitGenerator = (
  * serialized as JSON, so a route whose clients parse every response into a
  * protocol envelope (JSON-RPC) can answer in that envelope instead of prose.
  */
-export type RateLimitErrorResponse = string | object;
+type RateLimitErrorResponse = string | object;
 
 export type RateLimitOptions = {
   context: RateLimitContext;

@@ -76,7 +76,7 @@ const personType = v.literal("person");
  * too.
  *
  * Either case is ACCEPTED, upper case is STORED. Billing's own boundary
- * (`currencyCodeSchema` in `lib/custom-schema`) rejects lower case outright, but that column had a
+ * (`currencyCodeSchema` in `@stll/api-contract/currency-code`) rejects lower case outright, but that column had a
  * migration to bring its rows along and this one is reached by clients that
  * were always free to send either case, so rejecting now would break writes
  * that used to work. Normalizing instead leaves nothing to migrate: display

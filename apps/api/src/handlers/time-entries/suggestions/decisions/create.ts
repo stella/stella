@@ -21,6 +21,11 @@ import { readTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
+  timeEntryBillableSchema,
+  timeEntryNarrativeSchema,
+  utbmsCodeSchema,
+} from "@/api/lib/billing/time-entry-body";
+import {
   insertPreparedTimeEntry,
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
@@ -43,37 +48,11 @@ const acceptDecisionSchema = v.object({
       "Minutes to record; the suggestion's engaged minutes unless edited",
     ),
   ),
-  narrative: v.pipe(
-    v.string(),
-    v.minLength(0),
-    v.maxLength(10_000),
-    v.description("Description of the work"),
-  ),
+  narrative: timeEntryNarrativeSchema,
   narrativeLanguage: v.optional(narrativeLanguageSchema),
-  billable: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description("Whether the entry is billable to the client"),
-    ),
-  ),
-  taskCode: v.optional(
-    v.nullable(
-      v.pipe(
-        v.string(),
-        v.maxLength(20),
-        v.description("UTBMS/LEDES task code"),
-      ),
-    ),
-  ),
-  activityCode: v.optional(
-    v.nullable(
-      v.pipe(
-        v.string(),
-        v.maxLength(20),
-        v.description("UTBMS/LEDES activity code"),
-      ),
-    ),
-  ),
+  billable: v.optional(timeEntryBillableSchema),
+  taskCode: v.optional(utbmsCodeSchema("UTBMS/LEDES task code")),
+  activityCode: v.optional(utbmsCodeSchema("UTBMS/LEDES activity code")),
 });
 
 const dismissDecisionSchema = v.object({ type: v.literal("dismiss") });

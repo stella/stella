@@ -1,6 +1,8 @@
 import * as v from "valibot";
 
-import { currencyCodeSchema, resourceIdSchema } from "@/api/lib/custom-schema";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
+
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 const name = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
 const registrationId = v.pipe(v.string(), v.maxLength(64));

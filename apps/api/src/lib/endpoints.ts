@@ -29,7 +29,7 @@ import type {
 import type { HandoffAccessMetadata } from "@/api/lib/auth/handoff-step-up-policy";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
 
-export type EndpointConfig = RouteConfig & {
+type EndpointConfig = RouteConfig & {
   /** How long a successful answer may be cached; absent means not at all. */
   readonly cache?: CachePolicy;
   /** `own`: the endpoint answers CORS itself (an any-origin discovery document). */
@@ -45,7 +45,7 @@ type AccessRefusal = Extract<CallerOutcome<never>, { ok: false }>["answer"];
  * An endpoint as a route: its own config and its handler's answer stay in
  * the type, so the web contract types the endpoint like any other route.
  */
-export type EndpointDefinition<TConfig extends EndpointConfig, TAnswer> = Omit<
+type EndpointDefinition<TConfig extends EndpointConfig, TAnswer> = Omit<
   RouteDefinition,
   "config" | "run"
 > & {
@@ -56,7 +56,7 @@ export type EndpointDefinition<TConfig extends EndpointConfig, TAnswer> = Omit<
 type NoInput = Record<never, never>;
 
 /** What a member endpoint's handler sees. */
-export type MemberEndpointContext<TConfig extends EndpointConfig = NoInput> =
+type MemberEndpointContext<TConfig extends EndpointConfig = NoInput> =
   RouteContext<TConfig> & ValidateAuthValue;
 
 /** What a workspace endpoint's handler sees: the member and the proven matter. */

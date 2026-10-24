@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { toMajorUnits, tryToMinorUnits } from "@stll/money";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
@@ -13,7 +14,6 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  currencyCodeSchema,
   minorUnitAmountSchema,
   resourceIdSchema,
 } from "@/api/lib/custom-schema";

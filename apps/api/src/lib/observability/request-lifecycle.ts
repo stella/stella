@@ -98,10 +98,7 @@ const elapsedMs = (): number => {
  * tracker, which would otherwise fill with one issue per scanner probe; an
  * internal error and an answer that broke its own schema are captured.
  */
-export const answerRequestError = (
-  error: unknown,
-  ctx: RequestContext,
-): Response => {
+const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const answer = httpFailureAnswer(error);
   const statusCode = answer.status;
   const logged = shouldLogRequest(ctx.path);

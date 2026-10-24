@@ -28,7 +28,7 @@ export const toFolioCollabServiceAuthorization = (
   return Result.ok(undefined);
 };
 
-export const authorizeFolioCollabService = (
+const authorizeFolioCollabService = (
   authorizationHeader: string | null,
 ): Result<void, HandlerError<401 | 404>> => {
   const access = authorizeConfiguredBearer({

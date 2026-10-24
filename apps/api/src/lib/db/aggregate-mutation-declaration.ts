@@ -27,9 +27,6 @@ export const declareAggregateMutation = <T extends object>(
   return definition;
 };
 
-export const getAggregateMutationDeclaration = (definition: object) =>
-  declarations.get(definition);
-
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /** Run against the composed route table; every mutation must declare its ownership. */

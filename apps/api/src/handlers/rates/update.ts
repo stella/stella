@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
@@ -9,7 +10,6 @@ import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  currencyCodeSchema,
   defaultVarcharSchema,
   resourceIdSchema,
 } from "@/api/lib/custom-schema";

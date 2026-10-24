@@ -121,7 +121,7 @@ export const authorizePdfSigningFinalizeCredentials = async (
  * cannot distinguish "wrong shape" from "no such session" from "already
  * closed".
  */
-export const authorizePdfSigningCredentials = async (
+const authorizePdfSigningCredentials = async (
   rawCredentials: unknown,
 ): Promise<
   Result<AuthorizedPdfSigningSession, HandlerError<401 | 403 | 404>>

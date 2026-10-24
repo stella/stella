@@ -485,7 +485,9 @@ const requiresAccountCheck = (accountAccess: AccountAccess) =>
   accountAccess !== ACCOUNT_ACCESS.sandbox;
 
 export type HandlerConfigurationAdmission =
-  "allowed" | "permission_required" | "account_restricted";
+  | "allowed"
+  | "permission_required"
+  | "account_restricted";
 
 /**
  * Projects the permission and restricted-account checks performed by safe
@@ -774,7 +776,8 @@ type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
 type SafeHandlerPayload = NonNullable<unknown>;
 
 type SafeHandlerResult<TResult> =
-  TResult | SafeStatusResponse<HandlerErrorStatusCode>;
+  | TResult
+  | SafeStatusResponse<HandlerErrorStatusCode>;
 
 /**
  * The async-generator a safe handler runs: it may `yield*` intermediate
@@ -2253,11 +2256,6 @@ type PublicHandlerRegistration = {
 
 const safePublicHandlers = new WeakMap<object, PublicHandlerRegistration>();
 
-export const getPublicHandlerCachePolicy = (handler: unknown) =>
-  typeof handler === "function"
-    ? safePublicHandlers.get(handler)?.cache
-    : undefined;
-
 /** Whether a mounted route handler came out of a public handler factory. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
   typeof handler === "function" && safePublicHandlers.has(handler);
@@ -2341,7 +2339,8 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  HttpStatusResponse<infer _Code, infer _Body> | Response
+  | HttpStatusResponse<infer _Code, infer _Body>
+  | Response
   ? never
   : TResult;
 

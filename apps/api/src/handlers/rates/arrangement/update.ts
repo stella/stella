@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
+
 import { billingArrangements } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -11,10 +13,7 @@ import {
   readBillingUsage,
   recordBillingCapCrossings,
 } from "@/api/lib/billing/arrangements";
-import {
-  currencyCodeSchema,
-  minorUnitAmountSchema,
-} from "@/api/lib/custom-schema";
+import { minorUnitAmountSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 

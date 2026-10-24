@@ -1,9 +1,5 @@
 import * as v from "valibot";
 
-import {
-  CURRENCY_CODE_LENGTH,
-  CURRENCY_CODE_PATTERN,
-} from "@stll/api-contract/currency-code";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { safeIdSchema } from "@stll/api-contract/safe-id";
 import { UUID_PATTERN } from "@stll/uuid-codec";
@@ -32,8 +28,8 @@ export const withDescription = <TSchema extends v.GenericSchema>(
 ) => v.pipe(schema, v.description(description));
 
 /** Metadata keys `resourcesAreVisible` and the capability exporter read. */
-export const RESOURCE_KIND_METADATA_KEY = "x-stella-resource-kind";
-export const RESOURCE_USAGE_METADATA_KEY = "x-stella-resource-usage";
+const RESOURCE_KIND_METADATA_KEY = "x-stella-resource-kind";
+const RESOURCE_USAGE_METADATA_KEY = "x-stella-resource-usage";
 
 /**
  * The id of a stored resource. The metadata names its kind, so the safe
@@ -89,26 +85,6 @@ export const defaultVarcharSchema = v.pipe(
 /** A JSON object with caller-defined keys and values; scalars are rejected. */
 export const jsonObjectSchema = v.record(v.string(), v.unknown());
 
-/**
- * ISO 4217 alphabetic code, upper case, for a column that stores money.
- *
- * Three LETTERS, not three characters: a stored "A1C" satisfies a length check
- * and then makes `Intl.NumberFormat` throw the moment something formats it. An
- * unknown-but-well-formed code ("ZZZ") is accepted, because `Intl` accepts it.
- *
- * Case is part of the contract here, unlike the workspace field-currency schema
- * in `db/schema-validators.ts`, which still admits either case. `Intl` resolves
- * "jpy" and "JPY" alike, so a mixed-case column would look fine and still be
- * two currencies to anything that groups or joins on the code — including the
- * migration that rescaled these amounts to true minor units, and `MoneyTotals`,
- * which buckets by the raw string.
- */
-export const currencyCodeSchema = v.pipe(
-  v.string(),
-  v.length(CURRENCY_CODE_LENGTH),
-  v.regex(new RegExp(CURRENCY_CODE_PATTERN, "u")),
-);
-
 export const paginationLimitSchema = (maximum: number) =>
   v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(maximum));
 
@@ -148,12 +124,6 @@ export const paginationCursorSchema = ({
   description = PAGINATION_CURSOR_DESCRIPTION,
 }: PaginationCursorOptions = {}) =>
   v.pipe(v.string(), v.maxLength(maxChars), v.description(description));
-
-/** The params of a route mounted under a `:workspaceId` prefix. */
-export type WorkspaceParamsSchema = v.GenericSchema<
-  { workspaceId: string },
-  { workspaceId: SafeId<"workspace"> }
->;
 
 export const workspaceParams = <TEntries extends v.ObjectEntries>(
   extra: TEntries,

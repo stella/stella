@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/observability/request-lifecycle.ts",
+  "delta": 1,
+  "reason": "The request lifecycle now owns the failed-request log that Elysia's error hook emitted; it stays in the module that owns request failure logging."
+}

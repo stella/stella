@@ -13,11 +13,11 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 /** One rejected request answers with a bounded list of failing fields. */
 const MAX_VALIDATION_ISSUES = 20;
 
-export type QueryValue = string | string[];
+type QueryValue = string | string[];
 export type QueryRecord = Record<string, QueryValue>;
 
 type FormValue = string | File;
-export type FormRecord = Record<string, FormValue | FormValue[]>;
+type FormRecord = Record<string, FormValue | FormValue[]>;
 
 /**
  * Flat key/value pairs to a record: values pass through untouched and a key
@@ -51,7 +51,7 @@ export const parseQuery = (url: URL): QueryRecord =>
 /** A request's form, as `Request.formData()` reads it. */
 type RequestFormData = Awaited<ReturnType<Request["formData"]>>;
 
-export const parseForm = (form: RequestFormData): FormRecord =>
+const parseForm = (form: RequestFormData): FormRecord =>
   collectEntries(form.entries());
 
 /** How a route reads its body. */
@@ -164,7 +164,7 @@ const constraintOf = (
  * The failing fields of a rejected input, deduplicated, without the values
  * that failed.
  */
-export const validationIssues = (
+const validationIssues = (
   issues: readonly StandardSchemaV1.Issue[],
 ): ApiValidationIssue[] => {
   const seen = new Set<string>();

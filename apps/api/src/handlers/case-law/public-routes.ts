@@ -132,7 +132,7 @@ const listDecisions = createSafeBoundedPublicHandler(
   },
 );
 
-export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
+const readStatuteCitationCounts = createSafeBoundedPublicHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,

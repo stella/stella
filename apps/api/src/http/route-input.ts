@@ -8,7 +8,7 @@ import type { AnySchema, RouteConfig, RouteRequest } from "@/api/http/route";
 import { status } from "@/api/http/status";
 
 /** A slot's decoded type: its schema's output, or the raw value when it declares none. */
-export type SlotOutput<TSchema, TFallback> = TSchema extends AnySchema
+type SlotOutput<TSchema, TFallback> = TSchema extends AnySchema
   ? StandardSchemaV1.InferOutput<TSchema>
   : TFallback;
 

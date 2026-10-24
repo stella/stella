@@ -485,5 +485,15 @@ export function createApiClient(
   origin: string,
   options: ApiClientOptions = {},
 ): unknown {
-  return node({ origin: origin.replace(/\/+$/u, ""), options }, []);
+  return node({ origin: withoutTrailingSlashes(origin), options }, []);
+}
+
+// A scan from the end, not `/\/+$/`: that pattern retries from every slash in
+// a run that ends before the string does.
+function withoutTrailingSlashes(origin: string): string {
+  let end = origin.length;
+  while (end > 0 && origin.at(end - 1) === "/") {
+    end -= 1;
+  }
+  return origin.slice(0, end);
 }

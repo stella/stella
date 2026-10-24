@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { parsePlainDate } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -38,7 +39,7 @@ import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { currencyCodeSchema, resourceIdSchema } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { CentsAmount } from "@/api/lib/money";
