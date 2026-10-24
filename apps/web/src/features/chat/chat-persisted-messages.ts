@@ -1,9 +1,23 @@
-import type { UIMessage } from "@tanstack/ai-client";
+import type { ChatPersistedState, UIMessage } from "@tanstack/ai-client";
 
 import type {
   ChatClientTools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+
+type ChatMessagesState = Pick<ChatPersistedState<ChatClientTools>, "messages">;
+
+/** The SDK applies an async persistence read in a later microtask. Read the
+ * page's held transcript at that application boundary, not at probe completion. */
+export const withCurrentChatMessages = <State extends ChatMessagesState>(
+  state: State,
+  readMessages: () => PersistedChatMessage[],
+): Omit<State, "messages"> & ChatMessagesState => ({
+  ...state,
+  get messages() {
+    return readMessages();
+  },
+});
 
 type ClientPart = UIMessage<ChatClientTools>["parts"][number];
 
