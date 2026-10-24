@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import type { RefObject } from "react";
 
 import type {
@@ -52,7 +51,7 @@ export const useEvidenceReferenceInsertion = ({
   const evidence = useEvidenceReferences(editable);
   const canInsert = canInsertEvidenceReference(canUnlock, compatibility);
 
-  const handleEvidenceReferencesClick = useCallback(() => {
+  const handleEvidenceReferencesClick = () => {
     if (!canInsert || isUnlocked) {
       if (canInsert) {
         editorRef.current?.ensureEditorView({ focus: false });
@@ -66,14 +65,7 @@ export const useEvidenceReferenceInsertion = ({
     if (!didOpenRef.current) {
       detached(requestEditMode(), "evidence-reference.request-edit-mode");
     }
-  }, [
-    canInsert,
-    didOpenRef,
-    editorRef,
-    isUnlocked,
-    onDialogStateChange,
-    requestEditMode,
-  ]);
+  };
 
   return {
     canInsert,
