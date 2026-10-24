@@ -396,6 +396,13 @@ const namedCallTarget = (
     ? functionFor(context, node.callee)
     : null;
 
+const directFunctionCalls = (callback: AstNode): AstNode[] =>
+  everyNode(callback).filter(
+    (node) =>
+      node.type === "CallExpression" &&
+      enclosingFunctions(node).at(0) === callback,
+  );
+
 // The enclosing function a frame callback re-enters, if any.
 const frameLoopFunction = (
   context: LoopContext,
@@ -412,7 +419,7 @@ const frameLoopFunction = (
     return null;
   }
   const called = new Set(
-    everyNode(inline).map((node) => namedCallTarget(context, node)),
+    directFunctionCalls(inline).map((node) => namedCallTarget(context, node)),
   );
   return enclosing.find((candidate) => called.has(candidate)) ?? null;
 };
@@ -919,7 +926,7 @@ const startsFrameLoop = ({
   return (
     functionFor(context, callback) === loopBody ||
     (isFunctionNode(callback) &&
-      everyNode(callback).some(
+      directFunctionCalls(callback).some(
         (node) => namedCallTarget(context, node) === loopBody,
       ))
   );
@@ -1426,7 +1433,7 @@ const frameLoops = (
       named !== null && loops.has(named)
         ? named
         : isFunctionNode(inline)
-          ? (everyNode(inline)
+          ? (directFunctionCalls(inline)
               .map((candidate) => namedCallTarget(context, candidate))
               .find((target) => target !== null && loops.has(target)) ?? null)
           : null;
@@ -1434,6 +1441,24 @@ const frameLoops = (
     calls?.push(node);
   }
   return loops;
+};
+
+const hasGuardedFrameCallback = (
+  context: LoopContext,
+  call: AstNode,
+  loop: AstNode,
+): boolean => {
+  const callback = unwrapExpression(callArguments(call).at(0));
+  if (!isFunctionNode(callback)) {
+    return false;
+  }
+  const invocations = directFunctionCalls(callback).filter(
+    (node) => namedCallTarget(context, node) === loop,
+  );
+  return (
+    invocations.length > 0 &&
+    invocations.every((node) => rescheduleGuards(node, callback) !== null)
+  );
 };
 
 const frameLoopReports = (
@@ -1447,11 +1472,13 @@ const frameLoopReports = (
       const guards = rescheduleGuards(reschedule, loop);
       if (guards === null) {
         bounded = false;
-        reports.push({
-          kind: "frame",
-          messageId: "idleFrameLoop",
-          node: reschedule,
-        });
+        if (!hasGuardedFrameCallback(context, reschedule, loop)) {
+          reports.push({
+            kind: "frame",
+            messageId: "idleFrameLoop",
+            node: reschedule,
+          });
+        }
       } else if (
         !guards.some((guard) =>
           boundedGuard({ context, guard, loop, call: reschedule }),

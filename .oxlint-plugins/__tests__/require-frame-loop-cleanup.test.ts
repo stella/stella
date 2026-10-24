@@ -104,6 +104,29 @@ test("reports unbounded frame loops without an owner cancel", async () => {
   ).toEqual([4, 7, 10]);
 });
 
+test("inline frame callbacks retain guards on every recursive invocation", async () => {
+  const cases = [
+    ["if (visible()) tick();", true],
+    ["if (!visible()) return; tick();", true],
+    ["const unused = () => tick(); draw();", true],
+    ["const unused = () => tick(); if (visible()) tick();", true],
+    ["tick();", false],
+    ["if (visible()) draw(); tick();", false],
+    ["if (visible()) tick(); tick();", false],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([body]) =>
+      lintSingleRule(
+        RULE,
+        `useMountEffect(() => { let frame = 0; const tick = () => { frame = requestAnimationFrame(() => { ${body} }); }; tick(); return () => cancelAnimationFrame(frame); });`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, guarded]) => guarded),
+  );
+});
+
 test("requires an effect-started frame loop to cancel in the cleanup", async () => {
   expect(
     await lintSingleRule(
