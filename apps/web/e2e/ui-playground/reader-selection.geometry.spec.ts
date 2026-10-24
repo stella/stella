@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
+import en from "../../src/i18n/langs/en.json" with { type: "json" };
+
 type FrameSample = {
   anchorInsideReader: boolean;
   focusInsideReader: boolean;
@@ -189,14 +192,20 @@ test.skip("the selection bar keeps its place once the drag ends", async ({
   expect(settled).toEqual(shown);
 });
 
-test("the copy menu's preview stays inside the menu", async ({ page }) => {
+test("the copy menu's preview stays inside the menu", async ({
+  page,
+  locale,
+}) => {
   await openReader(page);
   const first = await paragraphBox(page, 2);
   await page.mouse.move(first.x + 4, first.y + 6);
   await page.mouse.down();
   await page.mouse.move(first.x + 260, first.y + 40, { steps: 10 });
   await page.mouse.up();
-  await selectionBar(page).getByRole("button", { name: "Copy" }).click();
+  const messages = locale === "ar" ? ar : en;
+  await selectionBar(page)
+    .getByRole("button", { name: messages.common.copy, exact: true })
+    .click();
   const layout = page.locator('[data-slot="menu-preview-layout"]');
   const options = layout.getByRole("button");
   await expect(options.first()).toBeVisible();
