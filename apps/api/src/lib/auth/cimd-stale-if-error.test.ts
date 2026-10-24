@@ -3,6 +3,7 @@ import type { ClientDiscovery } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -208,6 +209,48 @@ describe("CIMD stale-if-error", () => {
     const refused = await harness.authorize();
     expect(refused.status).toBe(400);
     expect(harness.database["oauthClient"]).toEqual([]);
+  });
+
+  test("answers from the registration a concurrent refresh stored, never the snapshot it replaced", async () => {
+    let interleave = () => {};
+    const harness = createHarness({
+      minimumFetchInterval: 0,
+      wrapInner: (discovery) => ({
+        ...discovery,
+        resolve: async (ctx, clientId, existing) => {
+          const resolution = Result.tryPromise({
+            try: async () => await discovery.resolve(ctx, clientId, existing),
+            catch: (cause) => cause,
+          });
+          // Another instance's refresh commits while this refetch is failing.
+          interleave();
+          const resolved = await resolution;
+          if (Result.isError(resolved)) {
+            throw resolved.error;
+          }
+          return resolved.value;
+        },
+      }),
+    });
+    expect(isAccepted(await harness.authorize())).toBe(true);
+
+    // This request's snapshot still lists the callback, and its validation
+    // has expired; the refresh drops the callback and stamps a fresh time.
+    harness.ageValidation(CIMD_STALE_IF_ERROR_GRACE_MS + 1000);
+    harness.state.upstream = { type: "status", status: 404 };
+    interleave = () => {
+      const row = harness.database["oauthClient"]?.at(0);
+      if (row) {
+        row["redirectUris"] = ["https://client.example.test/other-callback"];
+        row["metadataValidatedAt"] = new Date();
+      }
+    };
+    const response = await harness.authorize();
+
+    expect(isAccepted(response)).toBe(false);
+    expect(response.headers.get("location")).toContain(
+      "error=invalid_redirect",
+    );
   });
 
   test("passes through refusals that are not revalidation failures", async () => {

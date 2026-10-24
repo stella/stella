@@ -54,17 +54,31 @@ export const recordClientMetadataValidated = async ({
   });
 };
 
-const readClientMetadataValidatedAt = async (
+type StoredClient = NonNullable<Parameters<ClientDiscovery["resolve"]>[2]>;
+
+type StoredRegistration = { client: StoredClient; validatedAt: Date };
+
+/**
+ * The client's current registration together with its validation stamp, from
+ * one row read. Both must come from the same read: a refresh that lands
+ * between two reads would pair its new stamp with an older registration.
+ */
+const readStoredRegistration = async (
   ctx: GenericEndpointContext,
   clientId: string,
-): Promise<Date | undefined> => {
-  const row: unknown = await ctx.context.adapter.findOne({
+): Promise<StoredRegistration | undefined> => {
+  // The provider reads the `existing` client it hands to discoveries with this
+  // same adapter call; the declared field adds the stamp.
+  const client = await ctx.context.adapter.findOne<
+    StoredClient & { metadataValidatedAt?: unknown }
+  >({
     model: OAUTH_CLIENT_MODEL,
     where: [{ field: "clientId", value: clientId }],
-    select: ["metadataValidatedAt"],
   });
-  const validatedAt = isRecord(row) ? row["metadataValidatedAt"] : undefined;
-  return validatedAt instanceof Date ? validatedAt : undefined;
+  if (client === null || !(client.metadataValidatedAt instanceof Date)) {
+    return undefined;
+  }
+  return { client, validatedAt: client.metadataValidatedAt };
 };
 
 // The discovery answers a document it could not fetch or validate with
@@ -91,8 +105,8 @@ const isRevalidationRefusal = (error: unknown): boolean => {
  * window. The discovery caches documents per instance, so without this an
  * intermittently unavailable document makes instances answer the same client
  * differently. A client is never created, and never gains anything, from a
- * stale answer: only the last validated registration stands, and a stale
- * answer records no validation, so it cannot extend its own window.
+ * stale answer: only the stored registration stands, judged by its own stamp,
+ * and a stale answer records no validation, so it cannot extend its window.
  */
 export const withStaleIfError = (
   discovery: ClientDiscovery,
@@ -113,18 +127,22 @@ export const withStaleIfError = (
     ) {
       throw resolved.error;
     }
-    const validatedAt = await readClientMetadataValidatedAt(ctx, clientId);
+    const stored = await readStoredRegistration(ctx, clientId);
+    if (
+      stored === undefined ||
+      stored.client.clientDiscoveryId !== discovery.id
+    ) {
+      throw resolved.error;
+    }
     const ageMs =
-      validatedAt === undefined
-        ? undefined
-        : Temporal.Now.instant().epochMilliseconds - validatedAt.getTime();
-    if (ageMs === undefined || ageMs > CIMD_STALE_IF_ERROR_GRACE_MS) {
+      Temporal.Now.instant().epochMilliseconds - stored.validatedAt.getTime();
+    if (ageMs > CIMD_STALE_IF_ERROR_GRACE_MS) {
       throw resolved.error;
     }
     logger.warn("auth.client_metadata_stale_served", {
       "oauth.client_id": clientId,
       "oauth.client_metadata_age_seconds": Math.floor(ageMs / 1000),
     });
-    return existing;
+    return stored.client;
   },
 });
