@@ -253,6 +253,26 @@ const expectSubtotal = (name: string, amount: number) => {
   ).toBeDefined();
 };
 
+const expectRowNetAmount = (name: string, amount: number) => {
+  const section =
+    screen.getByRole("heading", { name }).closest("section") ??
+    panic("Missing matter section");
+  const table = within(section).getByRole("table");
+  const amountHeader = within(table).getByRole("columnheader", {
+    name: messages.billing.amount,
+  });
+  const amountColumn = within(table)
+    .getAllByRole("columnheader")
+    .indexOf(amountHeader);
+  const row =
+    within(table).getByText("Legal services").closest("tr") ??
+    panic("Missing entry row");
+  const amountCell =
+    within(row).getAllByRole("cell").at(amountColumn) ??
+    panic("Missing entry amount cell");
+  expect(amountCell.textContent).toBe(formatCurrencyAmount(amount, "EUR"));
+};
+
 test.each([
   {
     excludeLater: false,
@@ -274,6 +294,8 @@ test.each([
     // Even the earlier matter uses the combined supply date's rate.
     expectSubtotal(FIRST_NAME, 12_300);
     expectSubtotal(LATER_NAME, 12_300);
+    expectRowNetAmount(FIRST_NAME, 10_000);
+    expectRowNetAmount(LATER_NAME, 10_000);
     if (excludeLater) {
       await act(async () => {
         fireEvent.click(
@@ -288,6 +310,9 @@ test.each([
       expectSubtotal(FIRST_NAME, 12_000);
       expectSubtotal(LATER_NAME, 0);
     }
+    // Entry rows show recorded net amounts, including an excluded row.
+    expectRowNetAmount(FIRST_NAME, 10_000);
+    expectRowNetAmount(LATER_NAME, 10_000);
     await click(messages.billing.invoiceComposer.continueToDetails);
     expect(screen.getByText(dateLabel)).toBeDefined();
     await click(messages.billing.invoiceComposer.continueToIssue);
