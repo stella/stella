@@ -10,8 +10,13 @@ export type CorsPolicy = {
 };
 
 const appendVary = (headers: Headers, ...fields: readonly string[]): void => {
+  const vary = headers.get("vary");
+  if (vary === null) {
+    headers.set("vary", fields.join(", "));
+    return;
+  }
   const present = new Set(
-    (headers.get("vary") ?? "")
+    vary
       .split(",")
       .map((field) => field.trim().toLowerCase())
       .filter((field) => field !== ""),
@@ -37,7 +42,17 @@ export const cors = (policy: CorsPolicy): Middleware => {
   const allowMethods = policy.methods.join(", ");
   const allowHeaders = policy.allowedHeaders.join(", ");
   const exposedHeaders = policy.exposedHeaders.join(", ");
-  const maxAge = String(policy.maxAgeSeconds);
+  // A preflight's answer is the same for every allowed origin but the origin
+  // itself, so its headers are built once.
+  const preflightVary =
+    "Origin, Access-Control-Request-Method, Access-Control-Request-Headers";
+  const allowedPreflight: [string, string][] = [
+    ["vary", preflightVary],
+    ["access-control-allow-credentials", "true"],
+    ["access-control-allow-methods", allowMethods],
+    ["access-control-allow-headers", allowHeaders],
+    ["access-control-max-age", String(policy.maxAgeSeconds)],
+  ];
   return async (ctx, inner) => {
     if (ctx.routeEntry?.definition.cors === "own") {
       return await inner();
@@ -46,21 +61,12 @@ export const cors = (policy: CorsPolicy): Middleware => {
     const allowed = origin !== null && policy.isAllowedOrigin(origin);
 
     if (isPreflight(ctx.request)) {
-      const headers = new Headers();
-      appendVary(
-        headers,
-        "Origin",
-        "Access-Control-Request-Method",
-        "Access-Control-Request-Headers",
-      );
-      if (allowed) {
-        headers.set("access-control-allow-origin", origin);
-        headers.set("access-control-allow-credentials", "true");
-        headers.set("access-control-allow-methods", allowMethods);
-        headers.set("access-control-allow-headers", allowHeaders);
-        headers.set("access-control-max-age", maxAge);
-      }
-      return new Response(null, { status: 204, headers });
+      return new Response(null, {
+        status: 204,
+        headers: allowed
+          ? [...allowedPreflight, ["access-control-allow-origin", origin]]
+          : [["vary", preflightVary]],
+      });
     }
 
     // Edited in place, as every stage edits its answer (see

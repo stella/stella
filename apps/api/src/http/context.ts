@@ -56,8 +56,21 @@ export type HandlerContext<
 
 export const createResponseSet = (): ResponseSet => ({ headers: {} });
 
-export const requestHeaders = (request: Request): Record<string, string> =>
-  Object.fromEntries(request.headers.entries());
+/**
+ * The request's headers as a lower-cased record, repeated values joined as
+ * `entries()` joins them. Bun's native `toJSON` builds it in one call; only
+ * `set-cookie`, which it keeps as a list, is joined here.
+ */
+export const requestHeaders = (request: Request): Record<string, string> => {
+  const headers = request.headers.toJSON();
+  const setCookie: readonly string[] | undefined = headers["set-cookie"];
+  return setCookie === undefined
+    ? headers
+    : { ...headers, "set-cookie": setCookie.join(", ") };
+};
+
+const isSetCookie = (name: string): boolean =>
+  name.length === 10 && name.toLowerCase() === "set-cookie";
 
 /** Copy accumulated headers onto a `Headers`, keeping every `set-cookie`. */
 export const applyResponseHeaders = (
@@ -66,7 +79,7 @@ export const applyResponseHeaders = (
   { overwrite }: { overwrite: boolean },
 ): void => {
   for (const [name, value] of Object.entries(source)) {
-    if (name.toLowerCase() === "set-cookie") {
+    if (isSetCookie(name)) {
       for (const cookie of Array.isArray(value) ? value : [value]) {
         target.append("set-cookie", cookie);
       }

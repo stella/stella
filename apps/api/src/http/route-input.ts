@@ -30,12 +30,6 @@ export type RouteInput<TConfig extends RouteConfig> = {
   readonly headers: SlotOutput<TConfig["headers"], RawHeaders>;
 };
 
-const decodeSlot = async (
-  schema: AnySchema | undefined,
-  raw: unknown,
-): Promise<unknown> =>
-  schema === undefined ? raw : await decodeRequestInput(schema, raw);
-
 /**
  * Decode a matched request's path, query and already-read body by its config.
  * Overloaded: the output type follows each slot's schema, which TypeScript
@@ -51,14 +45,25 @@ export async function decodeRouteInput(
   request: RouteRequest,
   rawBody: unknown,
 ): Promise<RouteInput<RouteConfig>> {
+  const { ctx } = request;
+  const headers = requestHeaders(ctx.request);
   return {
-    params: await decodeSlot(config.params, request.ctx.params),
-    query: await decodeSlot(config.query, request.ctx.query),
-    body: await decodeSlot(config.body, rawBody),
-    headers: await decodeSlot(
-      config.headers,
-      requestHeaders(request.ctx.request),
-    ),
+    params:
+      config.params === undefined
+        ? ctx.params
+        : await decodeRequestInput(config.params, ctx.params),
+    query:
+      config.query === undefined
+        ? ctx.query
+        : await decodeRequestInput(config.query, ctx.query),
+    body:
+      config.body === undefined
+        ? rawBody
+        : await decodeRequestInput(config.body, rawBody),
+    headers:
+      config.headers === undefined
+        ? headers
+        : await decodeRequestInput(config.headers, headers),
   };
 }
 
