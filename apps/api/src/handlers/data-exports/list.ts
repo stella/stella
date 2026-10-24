@@ -95,8 +95,7 @@ const listDataExports = createSafeRootHandler(
     // Finished part metadata is available on the detail endpoint, keeping
     // list pages bounded independently of the number of export parts.
     type UnselectedDataExportColumn =
-      | (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number]
-      | "parts";
+      (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number] | "parts";
     type SelectedDataExportRow = Omit<(typeof rows)[number], "createdAtCursor">;
     true satisfies UnprojectedColumns<
       typeof organizationDataExports.$inferSelect,

@@ -29,7 +29,10 @@
               "type": "string"
             }
           },
-          "required": ["id", "name"],
+          "required": [
+            "id",
+            "name"
+          ],
           "additionalProperties": false
         },
         "createdAt": {
@@ -41,12 +44,17 @@
           "type": "object",
           "properties": {
             "versions": {
-              "enum": ["all", "current"],
+              "enum": [
+                "all",
+                "current"
+              ],
               "type": "string",
               "description": "`all`: every document version; `current`: only each document's current version."
             }
           },
-          "required": ["versions"],
+          "required": [
+            "versions"
+          ],
           "additionalProperties": false
         },
         "kind": {
@@ -64,7 +72,10 @@
               "minimum": 1
             }
           },
-          "required": ["index", "count"],
+          "required": [
+            "index",
+            "count"
+          ],
           "additionalProperties": false
         },
         "organizationRecords": {
@@ -99,7 +110,11 @@
                       "minimum": 0
                     }
                   },
-                  "required": ["json", "csv", "count"],
+                  "required": [
+                    "json",
+                    "csv",
+                    "count"
+                  ],
                   "additionalProperties": false
                 },
                 "contactRelationships": {
@@ -129,7 +144,11 @@
                       "minimum": 0
                     }
                   },
-                  "required": ["json", "csv", "count"],
+                  "required": [
+                    "json",
+                    "csv",
+                    "count"
+                  ],
                   "additionalProperties": false
                 },
                 "clauses": {
@@ -159,7 +178,11 @@
                       "minimum": 0
                     }
                   },
-                  "required": ["json", "csv", "count"],
+                  "required": [
+                    "json",
+                    "csv",
+                    "count"
+                  ],
                   "additionalProperties": false
                 },
                 "templates": {
@@ -189,7 +212,11 @@
                       "minimum": 0
                     }
                   },
-                  "required": ["json", "csv", "count"],
+                  "required": [
+                    "json",
+                    "csv",
+                    "count"
+                  ],
                   "additionalProperties": false
                 },
                 "unassignedTimeEntries": {
@@ -219,7 +246,11 @@
                       "minimum": 0
                     }
                   },
-                  "required": ["json", "csv", "count"],
+                  "required": [
+                    "json",
+                    "csv",
+                    "count"
+                  ],
                   "additionalProperties": false
                 },
                 "templateFiles": {
@@ -355,7 +386,11 @@
                         "minimum": 0
                       }
                     },
-                    "required": ["json", "csv", "count"],
+                    "required": [
+                      "json",
+                      "csv",
+                      "count"
+                    ],
                     "additionalProperties": false
                   },
                   "timeEntries": {
@@ -385,7 +420,11 @@
                         "minimum": 0
                       }
                     },
-                    "required": ["json", "csv", "count"],
+                    "required": [
+                      "json",
+                      "csv",
+                      "count"
+                    ],
                     "additionalProperties": false
                   },
                   "invoices": {
@@ -415,11 +454,20 @@
                         "minimum": 0
                       }
                     },
-                    "required": ["json", "csv", "count"],
+                    "required": [
+                      "json",
+                      "csv",
+                      "count"
+                    ],
                     "additionalProperties": false
                   }
                 },
-                "required": ["matter", "tasks", "timeEntries", "invoices"],
+                "required": [
+                  "matter",
+                  "tasks",
+                  "timeEntries",
+                  "invoices"
+                ],
                 "additionalProperties": false
               },
               "folders": {
@@ -454,7 +502,12 @@
                       "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
                     }
                   },
-                  "required": ["id", "parentId", "name", "path"],
+                  "required": [
+                    "id",
+                    "parentId",
+                    "name",
+                    "path"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -469,7 +522,10 @@
                       "maxLength": 255
                     },
                     "kind": {
-                      "enum": ["document", "message"],
+                      "enum": [
+                        "document",
+                        "message"
+                      ],
                       "type": "string"
                     },
                     "parentId": {
@@ -714,7 +770,10 @@
                 "type": "object",
                 "properties": {
                   "reason": {
-                    "enum": ["missing", "fetch_failed"],
+                    "enum": [
+                      "missing",
+                      "fetch_failed"
+                    ],
                     "type": "string"
                   },
                   "path": {
@@ -729,7 +788,11 @@
                     "maxLength": 255
                   }
                 },
-                "required": ["reason", "path", "fileId"],
+                "required": [
+                  "reason",
+                  "path",
+                  "fileId"
+                ],
                 "additionalProperties": false
               },
               {
@@ -755,7 +818,12 @@
                     "description": "Lowercase hex SHA-256 of the file bytes."
                   }
                 },
-                "required": ["reason", "path", "fileId", "recordedSha256"],
+                "required": [
+                  "reason",
+                  "path",
+                  "fileId",
+                  "recordedSha256"
+                ],
                 "additionalProperties": false
               },
               {
@@ -770,7 +838,10 @@
                     "maxLength": 255
                   }
                 },
-                "required": ["reason", "matterId"],
+                "required": [
+                  "reason",
+                  "matterId"
+                ],
                 "additionalProperties": false
               }
             ]
@@ -822,7 +893,10 @@
               "type": "string"
             }
           },
-          "required": ["id", "name"],
+          "required": [
+            "id",
+            "name"
+          ],
           "additionalProperties": false
         },
         "createdAt": {
@@ -834,12 +908,17 @@
           "type": "object",
           "properties": {
             "versions": {
-              "enum": ["all", "current"],
+              "enum": [
+                "all",
+                "current"
+              ],
               "type": "string",
               "description": "`all`: every document version; `current`: only each document's current version."
             }
           },
-          "required": ["versions"],
+          "required": [
+            "versions"
+          ],
           "additionalProperties": false
         },
         "kind": {
@@ -948,7 +1027,10 @@
                 "type": "object",
                 "properties": {
                   "reason": {
-                    "enum": ["missing", "fetch_failed"],
+                    "enum": [
+                      "missing",
+                      "fetch_failed"
+                    ],
                     "type": "string"
                   },
                   "path": {
@@ -963,7 +1045,11 @@
                     "maxLength": 255
                   }
                 },
-                "required": ["reason", "path", "fileId"],
+                "required": [
+                  "reason",
+                  "path",
+                  "fileId"
+                ],
                 "additionalProperties": false
               },
               {
@@ -989,7 +1075,12 @@
                     "description": "Lowercase hex SHA-256 of the file bytes."
                   }
                 },
-                "required": ["reason", "path", "fileId", "recordedSha256"],
+                "required": [
+                  "reason",
+                  "path",
+                  "fileId",
+                  "recordedSha256"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1004,7 +1095,10 @@
                     "maxLength": 255
                   }
                 },
-                "required": ["reason", "matterId"],
+                "required": [
+                  "reason",
+                  "matterId"
+                ],
                 "additionalProperties": false
               }
             ]
