@@ -114,9 +114,14 @@ export const VAT_RATE_PRESETS = {
   ],
 } as const satisfies Record<VatRatePresetCountry, readonly VatRatePreset[]>;
 
-const PRESET_CODE_PREFIXES = VAT_RATE_PRESET_COUNTRIES.map(
-  (country) => `${country.toLowerCase()}-`,
-);
+// Derived from the presets themselves, so a hand-entered code that merely
+// shares a country prefix (`sk-office`) is never mistaken for a preset.
+const PRESET_COUNTRY_BY_CODE: ReadonlyMap<string, VatRatePresetCountry> =
+  new Map(
+    VAT_RATE_PRESET_COUNTRIES.flatMap((country) =>
+      VAT_RATE_PRESETS[country].map(({ code }) => [code, country] as const),
+    ),
+  );
 
 /**
  * The rates that apply to a seller in `country`: rates entered by hand, plus
@@ -126,11 +131,8 @@ const PRESET_CODE_PREFIXES = VAT_RATE_PRESET_COUNTRIES.map(
 export const vatRatePeriodsForCountry = <Period extends { code: string }>(
   periods: readonly Period[],
   country: string,
-): Period[] => {
-  const own = `${country.toLowerCase()}-`;
-  return periods.filter(
-    ({ code }) =>
-      code.startsWith(own) ||
-      !PRESET_CODE_PREFIXES.some((prefix) => code.startsWith(prefix)),
-  );
-};
+): Period[] =>
+  periods.filter(({ code }) => {
+    const presetCountry = PRESET_COUNTRY_BY_CODE.get(code);
+    return presetCountry === undefined || presetCountry === country;
+  });

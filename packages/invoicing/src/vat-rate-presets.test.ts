@@ -70,4 +70,19 @@ describe("VAT rates for a seller's country", () => {
       custom,
     ]);
   });
+
+  test("a hand-entered rate with a country-like prefix is not a preset", () => {
+    const slovakLooking = { ...custom, code: "sk-office" };
+    const czechLooking = { ...custom, code: "cz-reduced-office" };
+    const periods = [...bothPresets, slovakLooking, czechLooking];
+    expect(vatRatePeriodsForCountry(periods, "CZ")).toEqual([
+      ...VAT_RATE_PRESETS.CZ,
+      slovakLooking,
+      czechLooking,
+    ]);
+    expect(vatRatePeriodsForCountry(periods, "EU")).toEqual([
+      slovakLooking,
+      czechLooking,
+    ]);
+  });
 });
