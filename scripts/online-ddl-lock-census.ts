@@ -280,7 +280,7 @@ const uniqueModuleConstant = (name: string, context: SourceContext) => {
   const list = declaration.parent;
   if (
     !ts.isVariableDeclarationList(list) ||
-    (list.flags & ts.NodeFlags.Const) === 0 ||
+    list.getFirstToken(context.source)?.kind !== ts.SyntaxKind.ConstKeyword ||
     !ts.isVariableStatement(list.parent) ||
     !ts.isSourceFile(list.parent.parent)
   ) {
@@ -291,16 +291,14 @@ const uniqueModuleConstant = (name: string, context: SourceContext) => {
 
 const readQueryConstant = (name: string, context: SourceContext) => {
   const value = uniqueModuleConstant(name, context);
-  const prefix =
-    value &&
-    (ts.isStringLiteralLike(value)
-      ? value.text
-      : ts.isTemplateExpression(value)
-        ? value.head.text
-        : undefined);
-  return prefix !== undefined && /^\s*(?:SELECT|WITH)\b/iu.test(prefix)
-    ? value
-    : undefined;
+  if (
+    value === undefined ||
+    (!ts.isStringLiteralLike(value) && !ts.isTemplateExpression(value))
+  ) {
+    return undefined;
+  }
+  const prefix = ts.isTemplateExpression(value) ? value.head.text : value.text;
+  return /^\s*(?:SELECT|WITH)\b/iu.test(prefix) ? value : undefined;
 };
 
 const provesQuotedLiteral = (context: SourceContext): boolean => {
@@ -862,7 +860,11 @@ const checkSql = ({
   for (const variant of variants) {
     const line =
       source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-    const statements = parseMigrationStatements(variant);
+    // censusSql recursively classifies each complete DO/routine body. Its
+    // surfaced statements are not independent top-level SQL commands.
+    const statements = parseMigrationStatements(variant).filter(
+      ({ enclosingLine }) => enclosingLine === undefined,
+    );
     if (statements.length === 0) {
       errors.push(`${description} at line ${line} has an empty SQL variant`);
       continue;

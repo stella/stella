@@ -74,6 +74,66 @@ describe("online DDL lock census", () => {
     );
   });
 
+  test("a gated atomic block classifies its complete conditional body", () => {
+    const text = `DO $probe$
+DECLARE state record;
+BEGIN
+  SELECT true AS ready INTO state;
+  IF state.ready THEN
+    ALTER TABLE public.probe ADD COLUMN value text;
+  END IF;
+END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source)).toEqual([]);
+  });
+
+  test.each([
+    "ALTER TABLE public.probe ADD COLUMN value text",
+    "CREATE INDEX probe_idx ON public.probe (id)",
+    "LOCK TABLE public.probe IN ACCESS EXCLUSIVE MODE",
+  ])("a nested block statement retains its writer-blocking gate: %s", (sql) => {
+    const text = `DO $probe$ BEGIN IF true THEN ${sql}; END IF; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "beside_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(
+      "must use blocks_writers",
+    );
+  });
+
+  test.each([
+    "CREATE MATERIALIZED VIEW probe_view AS SELECT 1",
+    "EXECUTE 'CREATE MATERIALIZED VIEW probe_view AS SELECT 1'",
+  ])("an unknown nested command remains visible: %s", (sql) => {
+    const text = `DO $probe$ BEGIN IF true THEN ${sql}; END IF; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unknown|unclassified|unsupported/iu,
+    );
+  });
+
+  test("an unresolved dynamic command inside a block retains the strongest gate", () => {
+    const text = `DO $probe$ DECLARE command text; BEGIN EXECUTE command; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "beside_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(
+      "must use blocks_writers for ACCESS EXCLUSIVE unresolved-execute",
+    );
+  });
+
+  test("a routine body cannot hide an unsupported statement", () => {
+    const text = `CREATE FUNCTION public.probe() RETURNS void LANGUAGE plpgsql AS $probe$ BEGIN CREATE MATERIALIZED VIEW probe_view AS SELECT 1; END $probe$`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /unknown|unclassified|unsupported/iu,
+    );
+  });
+
+  test("an atomic body cannot hide an unclassified sibling command", () => {
+    const text = `DO $probe$ BEGIN ALTER TABLE public.probe ADD COLUMN value text; END $probe$; UNKNOWN COMMAND`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: ${JSON.stringify(text)} });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(
+      "unclassified SQL statement: UNKNOWN COMMAND",
+    );
+  });
+
   test("unknown DDL in a gated SQL template fails the census", () => {
     const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`CREATE MATERIALIZED VIEW probe_view AS SELECT 1\` });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
@@ -127,9 +187,9 @@ describe("online DDL lock census", () => {
   test.each([
     'const CATALOG_READ = "SELECT 1 AS value";',
     "const CATALOG_READ = `SELECT 1 AS value`;",
-    'const CATALOG_READ = `SELECT ${quoteLiteral("quoted value")} AS value`;',
-    'const CATALOG_READ = `SELECT ${quoteLiteral("CREATE MATERIALIZED VIEW stored_text AS SELECT 1")} AS value`;',
-    'const INNER_READ = "SELECT 1 AS value"; const CATALOG_READ = `WITH source AS (${INNER_READ}) SELECT * FROM source`;',
+    `const CATALOG_READ = \`SELECT \${quoteLiteral("quoted value")} AS value\`;`,
+    `const CATALOG_READ = \`SELECT \${quoteLiteral("CREATE MATERIALIZED VIEW stored_text AS SELECT 1")} AS value\`;`,
+    `const INNER_READ = "SELECT 1 AS value"; const CATALOG_READ = \`WITH source AS (\${INNER_READ}) SELECT * FROM source\`;`,
   ])(
     "complete immutable read-query constants retain their SQL proof: %s",
     (declaration) => {
@@ -141,9 +201,9 @@ describe("online DDL lock census", () => {
   test.each([
     'let CATALOG_READ = "SELECT 1";',
     'var CATALOG_READ = "SELECT 1";',
-    "const CATALOG_READ = `SELECT ${suppliedSql}`;",
-    "const CATALOG_READ = `SELECT ${CATALOG_READ}`;",
-    "const FIRST_READ = `SELECT ${CATALOG_READ}`; const CATALOG_READ = `SELECT ${FIRST_READ}`;",
+    `const CATALOG_READ = \`SELECT \${suppliedSql}\`;`,
+    `const CATALOG_READ = \`SELECT \${CATALOG_READ}\`;`,
+    `const FIRST_READ = \`SELECT \${CATALOG_READ}\`; const CATALOG_READ = \`SELECT \${FIRST_READ}\`;`,
     'const CATALOG_READ = "WHERE condition";',
   ])(
     "unresolved read-query constants cannot supply a SQL proof: %s",

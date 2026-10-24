@@ -1673,6 +1673,46 @@ const hasLockIds = (expression: ts.Expression | undefined): boolean => {
   );
 };
 
+const hasWorkspaceParentBatch = (
+  call: ts.CallExpression,
+  access: SourceAccess,
+): boolean => {
+  if (!ts.isIdentifier(call.expression)) {
+    return false;
+  }
+  const options = call.arguments.at(0);
+  if (
+    !isTrustedImport({
+      identifier: call.expression,
+      access,
+      module: REGISTRY,
+      exported: ["withAggregateParentBatch"],
+    }) ||
+    options === undefined ||
+    !ts.isObjectLiteralExpression(options) ||
+    !options.properties.every(
+      (property) =>
+        (ts.isPropertyAssignment(property) ||
+          ts.isShorthandPropertyAssignment(property)) &&
+        !ts.isComputedPropertyName(property.name),
+    )
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (property) =>
+      ts.isPropertyAssignment(property) &&
+      staticPropertyKey(property) === "workspaceIds",
+  );
+  const field = workspaceIds.at(0);
+  return (
+    workspaceIds.length === 1 &&
+    field !== undefined &&
+    ts.isPropertyAssignment(field) &&
+    hasLockIds(field.initializer)
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
@@ -1738,36 +1778,8 @@ const awaitedAggregateNames = ({
       ) {
         names.add("workspace");
       }
-      if (
-        isTrustedImport({
-          identifier: node.expression.expression,
-          access,
-          module: REGISTRY,
-          exported: ["withAggregateParentBatch"],
-        }) &&
-        options !== undefined &&
-        ts.isObjectLiteralExpression(options) &&
-        options.properties.every(
-          (property) =>
-            (ts.isPropertyAssignment(property) ||
-              ts.isShorthandPropertyAssignment(property)) &&
-            !ts.isComputedPropertyName(property.name),
-        )
-      ) {
-        const workspaceIds = options.properties.filter(
-          (property) =>
-            ts.isPropertyAssignment(property) &&
-            staticPropertyKey(property) === "workspaceIds",
-        );
-        const field = workspaceIds.at(0);
-        if (
-          workspaceIds.length === 1 &&
-          field !== undefined &&
-          ts.isPropertyAssignment(field) &&
-          hasLockIds(field.initializer)
-        ) {
-          names.add("workspace");
-        }
+      if (hasWorkspaceParentBatch(node.expression, access)) {
+        names.add("workspace");
       }
       if (
         isTrustedImport({
