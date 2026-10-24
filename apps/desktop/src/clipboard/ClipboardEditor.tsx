@@ -976,7 +976,6 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           <Input
             className="h-10 min-w-0 flex-1 rounded-xl"
             data-clipboard-editor-name=""
-            dir="auto"
             disabled={state.save.type === "saving"}
             maxLength={MAX_CLIPBOARD_ITEM_NAME_CHARACTERS}
             onChange={(event) => {
