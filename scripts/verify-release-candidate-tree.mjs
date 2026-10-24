@@ -6,6 +6,8 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/u;
 const VERSION_PATTERN =
   /^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta|alpha)\.[0-9]+)?$/u;
 const PACKAGE_JSON_PATTERN = /^packages\/[^/]+\/package\.json$/u;
+const CLI_PACKAGE_PATH = "packages/cli/package.json";
+const CLI_VERSION_PATH = "packages/cli/src/generated/cli-version.ts";
 const DATA_PATH_PATTERNS = [
   /^\.changeset\/[^/]+\.md$/u,
   /^docs\/changelog\/v[^/]+\.md$/u,
@@ -86,9 +88,12 @@ try {
   refuse("candidate does not contain the current main commit");
 }
 
+// Rename detection would list only the new path, hiding the deleted one
+// from the allowlist.
 const changedPaths = git(
   "diff",
   "--name-only",
+  "--no-renames",
   "-z",
   mainSha.concat("..", candidateSha),
 )
@@ -105,6 +110,7 @@ for (const path of changedPaths) {
     packagePaths.push(path);
   } else if (
     path !== "bun.lock" &&
+    path !== CLI_VERSION_PATH &&
     !FIXED_DATA_PATHS.has(path) &&
     !DATA_PATH_PATTERNS.some((pattern) => pattern.test(path))
   ) {
@@ -141,6 +147,9 @@ for (const path of FIXED_DATA_PATHS) {
 }
 
 let expectedLock = show(mainSha, "bun.lock");
+const versionBumps = new Map(
+  /** @type {[string, { before: string; after: string }][]} */ ([]),
+);
 for (const path of packagePaths.toSorted(compareCodeUnit)) {
   const before = parseJson(show(mainSha, path), path.concat(" on main"));
   const after = parseJson(
@@ -171,6 +180,7 @@ for (const path of packagePaths.toSorted(compareCodeUnit)) {
   ) {
     refuse(path.concat(" changes fields other than version"));
   }
+  versionBumps.set(path, { before: beforeVersion, after: afterVersion });
 
   const workspacePath = path.slice(0, -"/package.json".length);
   const oldBlock =
@@ -193,4 +203,22 @@ if (show(candidateSha, "bun.lock") !== expectedLock) {
   refuse(
     "bun.lock changes are not exactly the validated workspace version bumps",
   );
+}
+
+// `changeset:version` regenerates the CLI's baked version; the only accepted
+// change is main's file with the version literal swapped for the bump.
+if (changedPaths.includes(CLI_VERSION_PATH)) {
+  const bump =
+    versionBumps.get(CLI_PACKAGE_PATH) ??
+    refuse(CLI_VERSION_PATH.concat(" changed without a CLI version bump"));
+  const literal = (/** @type {string} */ version) =>
+    `export const CLI_VERSION = ${JSON.stringify(version)};`;
+  const onMain = show(mainSha, CLI_VERSION_PATH);
+  if (
+    !onMain.includes(literal(bump.before)) ||
+    show(candidateSha, CLI_VERSION_PATH) !==
+      onMain.replace(literal(bump.before), () => literal(bump.after))
+  ) {
+    refuse(CLI_VERSION_PATH.concat(" changes more than the CLI version"));
+  }
 }
