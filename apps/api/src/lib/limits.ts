@@ -309,6 +309,10 @@ export const LIMITS = {
    *  after 60 s without a byte, so the interval leaves room for three writes
    *  inside one of their windows. */
   sseHeartbeatMs: 15_000,
+  /** How long an event stream may outlive the credential that opened it: the
+   *  interval of the sweep that ends every stream whose session or other
+   *  credential no longer holds. */
+  sseCredentialRecheckMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   /** OOXML numbering levels are zero-based and bounded to nine levels. */

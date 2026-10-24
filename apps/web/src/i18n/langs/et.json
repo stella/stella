@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "professionalUse": {
-      "description": "Teie konto loomisel seda kinnitust teile ei näidatud. Jätkamiseks nõustuge sellega.",
       "title": "Kinnitage kutsealane kasutus"
     },
     "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
@@ -3530,6 +3529,12 @@
       "unsupportedVisualContent": "See fail sisaldab pilte või vektorgraafikat, mida ei saa tundliku teksti suhtes kontrollida. Eksport pole saadaval.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
+      "unsupportedEncoding": "See dokument kasutab toetamata kodeeringut {encoding}, mistõttu ei saa seda teisendada.",
+      "unsupportedField": "See dokument sisaldab välja {fieldType}, mida ei saa teisendada.",
+      "unsupportedReference": "See dokument viitab välisele ressursile asukohas {element} {attribute}, mistõttu ei saa seda teisendada."
+    },
     "external": {
       "confirmDescription": "Oled avamas välist veebisaiti.",
       "confirmTitle": "Ava väline link?",
@@ -4229,6 +4234,22 @@
       "guestStorageUnavailable": "Esiletõstmisi ja märkusi ei õnnestunud sellel vahekaardil salvestada.",
       "highlight": "Tõsta esile",
       "highlightedPassage": "Esiletõstetud lõik",
+      "history": {
+        "colorRestored": "Värv taastatud",
+        "commentRemoved": "Kommentaar eemaldatud",
+        "commentRestored": "Kommentaar taastatud",
+        "highlightRemoved": "Esiletõst eemaldatud",
+        "highlightRestored": "Esiletõst taastatud",
+        "markChanged": "Seda esiletõstu või kommentaari on vahepeal mujal muudetud, seega jäeti see muutmata.",
+        "markGone": "Seda esiletõstu või kommentaari enam ei ole.",
+        "nothingToRedo": "Pole midagi uuesti teha",
+        "nothingToUndo": "Pole midagi tagasi võtta",
+        "redoShortcut": "Tee esiletõstu või kommentaari muudatus uuesti",
+        "styleRestored": "Stiil taastatud",
+        "textRestored": "Kommentaari tekst taastatud",
+        "undoShortcut": "Võta esiletõstu või kommentaari muudatus tagasi",
+        "visibilityRestored": "Jagamine taastatud"
+      },
       "removeHighlight": "Eemalda esiletõst",
       "sharedBadge": "Jagatud",
       "styleHighlight": "Esiletõst",
