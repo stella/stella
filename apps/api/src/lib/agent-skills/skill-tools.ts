@@ -18,9 +18,9 @@ import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveSkillContext,
-  type ChatSkillRef,
   chatSkillId,
   chatSkillOrigin,
+  type ChatSkillRef,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
   SKILL_RESOURCE_READ_STATUS,

@@ -23,13 +23,16 @@ export const timeApprovalQueueRoute = new Elysia({ prefix: "/v1/time-entries" })
   .guard({ validateAuth: true })
   .get("/approval-queue", listApprovalQueue.handler, {
     permissions: listApprovalQueue.config.permissions,
+    accountAccess: listApprovalQueue.config.accountAccess,
     query: listApprovalQueue.config.query,
   })
   .post("/approve", approveTimeEntries.handler, {
     permissions: approveTimeEntries.config.permissions,
+    accountAccess: approveTimeEntries.config.accountAccess,
     body: approveTimeEntries.config.body,
   })
   .post("/approval-queue/return", returnTimeEntry.handler, {
     permissions: returnTimeEntry.config.permissions,
+    accountAccess: returnTimeEntry.config.accountAccess,
     body: returnTimeEntry.config.body,
   });

@@ -1,23 +1,23 @@
 import {
-  ProtocolError,
-  ProtocolErrorCode,
   createMcpHandler,
   isInitializeRequest,
   isJsonContentType,
   isLegacyRequest,
+  ProtocolError,
+  ProtocolErrorCode,
   Server,
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import type {
   AuthInfo,
-  CallToolResult,
   CallToolRequest,
-  ServerContext,
+  CallToolResult,
   McpHttpHandler,
-  Tool as McpTool,
   ReadResourceResult,
-  Resource,
   RequestId,
+  Resource,
+  ServerContext,
+  Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { isTaggedError, panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -44,12 +44,14 @@ import {
 } from "@/api/lib/rate-limit/action-size-limits";
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
-  invokedCapabilityConsumesServices,
   featureOmittedCapabilityIds,
+  invokedCapabilityConsumesServices,
 } from "@/api/mcp/capability-tools";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
@@ -59,15 +61,16 @@ import {
   MCP_TOOL_OMISSION_REASONS,
   type McpMode,
   type McpToolOmissionReason,
+  STELLA_API_CONTRACT,
   STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
   STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
-  STELLA_API_CONTRACT,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   type McpAccessRefusalError,
+  McpAuthenticationError,
   McpGatewayLoadError,
 } from "@/api/mcp/errors";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -114,13 +117,17 @@ import type {
 import {
   closestToolNames,
   didYouMean,
-  MCP_INTERNAL_ERROR_HINT,
   MAX_TOOL_NAME_CHARS,
+  MCP_INTERNAL_ERROR_HINT,
   oauthScopeRecoveryHint,
   quoteToolName,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import {
+  MCP_WEB_HANDOFF_TOOL,
+  withWebHandoffLinks,
+} from "@/api/mcp/web-handoff-links";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
@@ -134,8 +141,7 @@ const toolResultDisposition = (annotations: McpTool["annotations"]) =>
   annotations?.readOnlyHint === true ? "read" : "mutation";
 
 type ByteStreamReadResult =
-  | { done: false; value: Uint8Array }
-  | { done: true; value?: undefined };
+  { done: false; value: Uint8Array } | { done: true; value?: undefined };
 
 const isByteStreamReadResult = (
   value: unknown,
@@ -190,9 +196,13 @@ type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
   chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
+  decorateToolResult?: typeof withWebHandoffLinks;
   authenticateMcpRequest: (
     token: string,
-    options: { mode: McpMode },
+    options: {
+      mode: McpMode;
+      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+    },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
@@ -315,11 +325,16 @@ export const mcpOmittedToolNamesByReason = ({
   return { feature: feature.toSorted(), scope: scope.toSorted() };
 };
 
+/** An accepted MCP credential: who it resolved to, and what an event-stream
+ *  answer to it stays bound to. */
+type McpAuthenticated = { session: McpSession; stream: SseStreamBinding };
+
 const withMcpCors = async (
   response: Response,
-  session?: McpSession,
+  authenticated?: McpAuthenticated,
   mode: McpMode = "default",
 ) => {
+  const session = authenticated?.session;
   const headers = new Headers(response.headers);
   for (const [key, value] of createMcpCorsHeaders()) {
     if (!headers.has(key)) {
@@ -354,8 +369,14 @@ const withMcpCors = async (
   });
   // Both transport legs exit here, so this is where an event-stream answer —
   // the notification channel, or a tool call whose work outlasts an
-  // intermediary's idle timeout — picks up the keep-alive.
-  return isEventStreamResponse(answer) ? withSseHeartbeat(answer) : answer;
+  // intermediary's idle timeout — picks up the keep-alive and its binding to
+  // the credential that asked for it.
+  if (!isEventStreamResponse(answer)) {
+    return answer;
+  }
+  return authenticated === undefined
+    ? panic("An MCP event stream must answer an accepted credential")
+    : withSseHeartbeat(answer, authenticated.stream);
 };
 
 /**
@@ -528,8 +549,7 @@ const withTransportAcceptHeader = (request: Request): Request => {
 };
 
 type McpRequestFrame =
-  | { request: Request; status: "within_limit" }
-  | { status: "too_large" };
+  { request: Request; status: "within_limit" } | { status: "too_large" };
 
 type DeclaredBodyLength = "undeclared" | "within_limit" | "too_large";
 
@@ -551,9 +571,9 @@ const declaredBodyLength = (request: Request): DeclaredBodyLength => {
 
 /**
  * Refuse an oversized JSON-RPC frame before anything parses it. A declared
- * length is checked without touching the body; a chunked upload declares none,
- * so its stream is metered and abandoned at the cap rather than buffered
- * wholesale, and the bytes already read are handed on as the request body.
+ * length is checked without touching the body. Every actual stream is metered,
+ * including one whose declared length is smaller: parsedBody bypasses the
+ * transports' own byte limit. Abandon at the cap and hand on only bounded bytes.
  */
 const withCappedRequestBody = async (
   request: Request,
@@ -562,7 +582,7 @@ const withCappedRequestBody = async (
   if (declared === "too_large") {
     return { status: "too_large" };
   }
-  if (declared === "within_limit" || request.body === null) {
+  if (request.body === null) {
     return { request, status: "within_limit" };
   }
 
@@ -839,6 +859,7 @@ export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
   chargeReadBytes = chargeMcpReadBytes,
   actionSizePolicy = getActionSizePolicy,
+  decorateToolResult = withWebHandoffLinks,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
@@ -979,8 +1000,12 @@ export const createMcpHttpRequestHandler = ({
             toolName,
           }),
       );
+      const decoratedResult =
+        toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
+          ? result
+          : await decorateToolResult(result, context);
       return await boundMcpToolResult({
-        result,
+        result: decoratedResult,
         requestId: mcpReq.id,
         definition,
         readClass,
@@ -1428,7 +1453,7 @@ export const createMcpHttpRequestHandler = ({
         const envelopeDisposition: { type: "read" | "tool" } = { type: "read" };
         const completeResponse = async (
           response: Response,
-          session?: McpSession,
+          accepted?: McpAuthenticated,
         ) => {
           const bounded =
             policy === undefined || envelopeDisposition.type === "tool"
@@ -1438,7 +1463,7 @@ export const createMcpHttpRequestHandler = ({
                   disposition: "refuse",
                   operation: "mcp",
                 });
-          return withMcpCors(bounded, session, mode);
+          return withMcpCors(bounded, accepted, mode);
         };
         let framedRequest = incomingRequest;
         if (policy !== undefined) {
@@ -1509,6 +1534,27 @@ export const createMcpHttpRequestHandler = ({
             return failureResponse(authenticated.error, requestId);
           }
           const session = authenticated.value;
+          // An event-stream answer holds while this token still authenticates:
+          // a genuine rejection ends it, a verification outage leaves it to
+          // the next sweep.
+          const accepted: McpAuthenticated = {
+            session,
+            stream: {
+              kind: "credential",
+              revalidate: async () => {
+                const again = await authenticateMcpRequest(token, {
+                  mode,
+                  resolveApiKeySession: revalidateMachineApiKeySession,
+                });
+                if (Result.isOk(again)) {
+                  return true;
+                }
+                return again.error instanceof McpAuthenticationError
+                  ? false
+                  : await Promise.reject(again.error);
+              },
+            },
+          };
 
           // Refuse session termination only after the token is accepted, so an
           // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
@@ -1516,26 +1562,23 @@ export const createMcpHttpRequestHandler = ({
           if (incomingRequest.method === "DELETE") {
             return await completeResponse(
               mcpMethodNotAllowedResponse(),
-              session,
+              accepted,
             );
           }
 
-          // A chunked body is metered only for an accepted token: a caller
+          // The transport cap is enforced only for an accepted token: a caller
           // without one is refused from the headers alone, so it cannot hold
           // connections and buffers open by streaming a body that is discarded
           // anyway.
-          const frame =
-            policy === undefined
-              ? await withCappedRequestBody(incomingRequest)
-              : { request: framedRequest, status: "within_limit" as const };
+          const frame = await withCappedRequestBody(framedRequest);
           if (frame.status === "too_large") {
-            return await completeResponse(payloadTooLargeResponse(), session);
+            return await completeResponse(payloadTooLargeResponse(), accepted);
           }
           const inbound = await readInboundMessage(
             withTransportAcceptHeader(frame.request),
           );
           if (inbound.status === "unreadable") {
-            return await completeResponse(unreadableBodyResponse(), session);
+            return await completeResponse(unreadableBodyResponse(), accepted);
           }
           const { parsedBody, request } = inbound;
           requestId = inbound.requestId;
@@ -1587,11 +1630,11 @@ export const createMcpHttpRequestHandler = ({
               ? retryableServerErrorResponse(requestId)
               : await completeResponse(
                   retryableServerErrorResponse(requestId),
-                  session,
+                  accepted,
                 );
           }
 
-          return await completeResponse(response, session);
+          return await completeResponse(response, accepted);
         } catch (error) {
           return failureResponse(error, requestId);
         }

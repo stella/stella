@@ -2,10 +2,10 @@ import { expect, test } from "bun:test";
 
 import {
   BYOK_MODEL_OPTIONS,
+  getModelImageInputCapability,
   IMAGE_INPUT_CAPABILITIES,
   MODEL_IMAGE_INPUT_CAPABILITIES,
   TANSTACK_AI_PROVIDERS,
-  getModelImageInputCapability,
 } from "./index";
 
 test("every offered provider model has explicit image-input evidence", () => {

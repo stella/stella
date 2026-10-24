@@ -13,6 +13,7 @@ import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedKeyForOrganization } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   createCursorPage,
@@ -197,6 +198,10 @@ export const getTemplateVersionHandler = async ({
     if (!version) {
       return { type: "version-not-found" as const };
     }
+    const s3Key = storedKeyForOrganization(version.s3Key, organizationId);
+    if (s3Key === null) {
+      return { type: "version-not-found" as const };
+    }
 
     const downloadUrl = await auditedPresignDownload({
       readSessionAuthority: ownerSyntheticSessionAuthorityReader,
@@ -206,7 +211,7 @@ export const getTemplateVersionHandler = async ({
       resourceId: templateId,
       userId,
       source,
-      s3Key: version.s3Key,
+      s3Key,
       expiresInSeconds: PRESIGN_EXPIRES_IN,
       fileName: template.fileName,
       organizationId,
@@ -247,7 +252,7 @@ export const getTemplateVersionHandler = async ({
 
 type TemplateVersionDiffSources =
   | { type: "not-found" }
-  | { type: "unreadable"; error: HandlerError<422 | 500 | 503> }
+  | { type: "unreadable"; error: HandlerError<404 | 422 | 500 | 503> }
   | { type: "ok"; prevText: string; currentText: string };
 
 type DiffSourcesProps = {

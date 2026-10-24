@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";

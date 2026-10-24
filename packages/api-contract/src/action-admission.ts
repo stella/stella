@@ -3,6 +3,7 @@ export const ACTION_ADMISSION_CODES = {
   concurrencyBusy: "action_concurrency_busy",
   notEnabled: "action_not_enabled",
   admissionUnavailable: "action_admission_unavailable",
+  featureDisabled: "action_feature_disabled",
 } as const;
 
 export type ActionAdmissionCode =
@@ -34,6 +35,13 @@ export const ACTION_ADMISSION_REFUSALS = {
     message: "This action is temporarily paused. Please try again shortly.",
     hint: "Wait for the service to recover, then retry this call.",
     retryable: true,
+  },
+  // An operator turned the feature off; nothing the caller does brings it back.
+  [ACTION_ADMISSION_CODES.featureDisabled]: {
+    status: 503,
+    message: "This feature is temporarily turned off.",
+    hint: "Do not retry this call until the feature is turned back on.",
+    retryable: false,
   },
 } as const satisfies Record<
   ActionAdmissionCode,

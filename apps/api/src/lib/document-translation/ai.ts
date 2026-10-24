@@ -3,8 +3,8 @@ import * as v from "valibot";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
-  translationLanguageInstruction,
   type BilingualAIContext,
+  translationLanguageInstruction,
   type TranslationLanguages,
 } from "@/api/lib/bilingual/ai";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";

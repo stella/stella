@@ -297,7 +297,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/VERSION",
-        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png",
+        "$TURBO_ROOT$/apps/landing/public/brand/stella-symbol.svg"
       ],
       "outputs": [".output/**"]
     },
@@ -610,15 +611,6 @@
       ],
       "cache": false
     },
-    "format": {
-      "dependsOn": ["transit"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.oxfmtrc.json",
-        "$TURBO_ROOT$/scripts/check-format-environment.ts",
-        "$TURBO_ROOT$/scripts/run-oxfmt.ts"
-      ]
-    },
     "i18n:check": {
       "dependsOn": ["transit"],
       "cache": false
@@ -800,7 +792,6 @@
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/types/**",
-        "$TURBO_ROOT$/.oxfmtrc.json",
         "!.env*",
         "!.turbo/**",
         "!.cache/**",
@@ -886,7 +877,7 @@
     "@stll/mcp-apps#build": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.oxfmtrc.json",
+        "$TURBO_ROOT$/bunfig.toml",
         "!.env*",
         "!.turbo/**",
         "!.cache/**",
@@ -1475,6 +1466,7 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/check-write-contracts.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
@@ -1570,7 +1562,7 @@
         "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.claude/mcp/package.json",
         "$TURBO_ROOT$/.github/workflows/**",
-        "$TURBO_ROOT$/.github/ci-job-classification-decisions.json",
+        "$TURBO_ROOT$/.github/ci-job-classification-decisions/**",
         "$TURBO_ROOT$/.github/ci-job-classification-sources.json",
         "$TURBO_ROOT$/.github/actions/**",
         "$TURBO_ROOT$/apps/**",

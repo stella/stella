@@ -1,7 +1,7 @@
 import {
   Client,
-  StreamableHTTPClientTransport,
   type FetchLike,
+  StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import {
   CLIENT_CAPABILITIES_META_KEY,
@@ -10,9 +10,9 @@ import {
 } from "@modelcontextprotocol/server";
 import type {
   CallToolResult,
-  Tool as McpTool,
   ReadResourceResult,
   Resource,
+  Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
@@ -43,6 +43,8 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
+import { sweepBoundStreams } from "@/api/lib/sse";
+import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -1380,6 +1382,59 @@ describe("handleMcpHttpRequest", () => {
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
+  test("stream sweeps select read-only key verification and preserve retryable failures", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        headers: { accept: "text/event-stream", authorization: "Bearer token" },
+        method: "GET",
+      }),
+    );
+    expect(response.status).toBe(200);
+    const reader =
+      response.body?.getReader() ??
+      expect.unreachable("An event stream has a body");
+    try {
+      expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {
+        mode: "default",
+      });
+      await sweepBoundStreams(async () => new Set());
+      expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {
+        mode: "default",
+        resolveApiKeySession: revalidateMachineApiKeySession,
+      });
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.err(
+          new McpTokenVerificationError({
+            message: "Credential store unavailable",
+          }),
+        ),
+      );
+      await sweepBoundStreams(async () => new Set());
+      // Another sweep reaches the same binding after the retryable failure.
+      authenticateMcpRequestMock.mockClear();
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.err(
+          new McpAuthenticationError({
+            message: "Invalid or expired API key",
+          }),
+        ),
+      );
+      await sweepBoundStreams(async () => new Set());
+      expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
+      expect((await reader.read()).done).toBe(true);
+    } finally {
+      await reader.cancel();
+    }
+  });
+
   test("refuses session termination with 405", async () => {
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
@@ -2452,6 +2507,92 @@ describe("MCP transport conformance", () => {
       expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
       expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
     }
+  });
+
+  test("meters UTF-8 frame bytes with a smaller declared length on both transports and size-policy branches", async () => {
+    authenticateSession();
+    const body = JSON.stringify({
+      id: 1,
+      jsonrpc: "2.0",
+      method: "tools/list",
+      params: { padding: "é".repeat(MCP_MAX_REQUEST_BODY_BYTES / 2) },
+    });
+    expect(body.length).toBeLessThan(MCP_MAX_REQUEST_BODY_BYTES);
+    expect(Buffer.byteLength(body, "utf-8")).toBeGreaterThan(
+      MCP_MAX_REQUEST_BODY_BYTES,
+    );
+    for (const policy of [
+      undefined,
+      {
+        pageSize: 10,
+        requestBytes: MCP_MAX_REQUEST_BODY_BYTES * 2,
+        responseBytes: 512,
+      },
+    ]) {
+      actionSizePolicyMock.mockReturnValue(Result.ok(policy));
+      for (const protocol of ["legacy", "modern"] as const) {
+        authenticateMcpRequestMock.mockClear();
+        const original =
+          protocol === "modern"
+            ? createModernMcpRequest({ id: 1, method: "tools/list" })
+            : toolsListRequest();
+        const headers = new Headers(original.headers);
+        headers.set("content-length", "1");
+        const response = await handleMcpHttpRequest(
+          new Request(original, { body, headers, method: "POST" }),
+        );
+        expect({ protocol, status: response.status }).toEqual({
+          protocol,
+          status: 413,
+        });
+        expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+          error: {
+            code: -32_000,
+            message: `Payload Too Large: a request body may not exceed ${MCP_MAX_REQUEST_BODY_BYTES} bytes.`,
+          },
+          id: null,
+          jsonrpc: "2.0",
+        });
+        expect(response.headers.get("access-control-allow-origin")).toBe("*");
+        expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
+        expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
+        expect(listMcpToolsMock).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  test("cancels an oversized declared-small stream without reading its remaining bytes", async () => {
+    authenticateSession();
+    let pulls = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull: (controller) => {
+          pulls += 1;
+          controller.enqueue(new Uint8Array(MCP_MAX_REQUEST_BODY_BYTES + 1));
+        },
+        cancel: () => {
+          cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        body,
+        duplex: "half",
+        headers: {
+          authorization: "Bearer token",
+          "content-length": "1",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    expect(response.status).toBe(413);
+    expect(pulls).toBe(1);
+    expect(cancelled).toBe(true);
+    expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
   });
 
   test("bounds serialized UTF-8 JSON-RPC envelopes on modern and legacy transports", async () => {

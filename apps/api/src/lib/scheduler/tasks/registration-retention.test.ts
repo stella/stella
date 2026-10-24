@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { eq, type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
@@ -9,17 +9,17 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import {
-  agentRegistration,
   agentAssertionReplay,
+  agentRegistration,
 } from "@/api/db/agent-auth-schema";
 import {
-  oauthClient,
-  oauthConsent,
   oauthAccessToken,
-  oauthRefreshToken,
+  oauthClient,
   oauthClientAssertion,
-  verification,
+  oauthConsent,
+  oauthRefreshToken,
   user,
+  verification,
 } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { envApiServerSchema } from "@/api/env-schema";
@@ -161,6 +161,7 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
   expect(await sweep()).toEqual({
     verificationsDeleted: 0,
     assertionsDeleted: 0,
+    handoffsDeleted: 0,
     replaysDeleted: 0,
     registrationsDeleted: 2,
     clientsDeleted: 5,
@@ -177,6 +178,7 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
   expect(await sweep()).toEqual({
     verificationsDeleted: 0,
     assertionsDeleted: 0,
+    handoffsDeleted: 0,
     replaysDeleted: 0,
     registrationsDeleted: 0,
     clientsDeleted: 0,

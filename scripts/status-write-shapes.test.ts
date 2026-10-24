@@ -18,8 +18,8 @@ import {
 } from "./ratchet";
 import {
   countUnmanagedTransitionSpecs,
-  unmanagedTransitionTables,
   statusWriteCalls,
+  unmanagedTransitionTables,
 } from "./status-write-shapes";
 
 const columns = STATUS_TRANSITION_OWNERSHIP.enforcement.columns;

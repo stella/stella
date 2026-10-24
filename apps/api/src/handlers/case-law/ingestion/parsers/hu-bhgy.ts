@@ -29,18 +29,19 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
-  TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
+  TrackedRunContent,
 } from "@stll/docx-core/model";
 import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
   ParagraphBlock,
@@ -62,8 +63,8 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import {
-  createParagraphLineReader,
   type BodyDocumentLine,
+  createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
@@ -1032,7 +1033,7 @@ export type ParseHuBhgyInput = {
 };
 
 export type ParseHuBhgyOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: DecisionSection[];
   /** Read off the document; the listing states only the year. */
@@ -1405,7 +1406,7 @@ export const parseHuBhgyDecision = (
 
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: HU_BHGY_SOURCE_SYSTEM,

@@ -1,10 +1,11 @@
-import type { EditorView } from "@tiptap/pm/view";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { panic } from "better-result";
 
 import type { AnonymizationTerm } from "@stll/folio-react";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
+import type { AnonymizationPipelineStatus } from "@/components/inspector/inspector-store-types";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 
 import {
   buildAnonymizationDetectionKey,
@@ -14,25 +15,110 @@ import {
 } from "./docx-edit-mode.logic";
 
 type StartAnonymizationDetectionOptions = {
+  detect: (input: {
+    text: string;
+    workspaceId: string;
+    excludedCanonicals: readonly string[];
+  }) => Promise<{ pairs: readonly { original: string; label: string }[] }>;
   fieldId: string;
   onDetected: (terms: AnonymizationTerm[]) => void;
   /** Read on every run so allowlist changes apply without a restart. */
   readExcludedCanonicals: () => readonly string[];
-  view: EditorView;
+  /** The live editor view; only its current document is read. */
+  view: { readonly state: { readonly doc: PMNode } };
   workspaceId: string;
 };
 
 type AnonymizationDetection = {
-  /** Kicks a detection run now instead of waiting for the heartbeat. */
+  /**
+   * Reports that the document may have changed. A new document schedules
+   * one detection run after edits settle; the same document is a no-op.
+   */
+  noteDocChanged: () => void;
+  /** Runs detection now, e.g. after the allowlist changed. */
   run: () => void;
   stop: () => void;
 };
 
 /**
- * Runs the wasm anonymization pipeline against the live doc text on a slow
- * heartbeat and reports each detected entity as a Folio decoration term.
+ * Fail-closed gate for every exit that relies on the live DOCX detection
+ * (today: the anonymized download in the inspector facet). Returns true only
+ * when each live detection for the field holds a result computed for exactly
+ * the current document text and allowlist. Otherwise it starts detection for
+ * the current version (the facet leaves its ready state) and returns false,
+ * so the caller refuses; this does not depend on Folio reporting the edit.
+ *
+ * A field without a live DOCX detection passes: those exits detect the exact
+ * text they send (the export detects the printed PDF it builds).
+ */
+export const confirmAnonymizationDetectionCurrent = (
+  fieldId: string,
+): boolean => {
+  const confirms =
+    useInspectorAnonymizationStore.getState().anonymizationDetectionsByFieldId[
+      fieldId
+    ];
+  if (confirms === undefined) {
+    return true;
+  }
+  let current = true;
+  for (const confirm of confirms) {
+    // Every detection is asked, so each stale one starts its own run.
+    current = confirm.confirm() && current;
+  }
+  return current;
+};
+
+/** Each editor owns its status; success never hides another editor's failure. */
+const publishDetectionStatus = (fieldId: string) => {
+  const state = useInspectorAnonymizationStore.getState();
+  const registrations = state.anonymizationDetectionsByFieldId[fieldId];
+  if (registrations === undefined || registrations.length === 0) {
+    return;
+  }
+  let running = false;
+  for (const registration of registrations) {
+    const status = registration.readStatus();
+    switch (status) {
+      case "error":
+        state.markAnonymizationPipelineFailed(fieldId);
+        return;
+      case "idle":
+      case "running":
+        running = true;
+        break;
+      case "ready":
+        break;
+      default:
+        status satisfies never;
+        panic("Unhandled anonymization detection status");
+    }
+  }
+  if (running) {
+    state.markAnonymizationPipelineStarted(fieldId);
+    return;
+  }
+  state.markAnonymizationPipelineRan(fieldId);
+};
+
+/**
+ * Quiet period after the last edit before the whole document is detected
+ * again, so a burst of keystrokes costs one worker run.
+ */
+const DETECTION_SETTLE_MS = 300;
+
+/**
+ * Runs the wasm anonymization pipeline against the live doc text and reports
+ * each detected entity as a Folio decoration term. Work is event-driven: one
+ * run at start, one per settled edit (`noteDocChanged`) or allowlist change
+ * (`run`), and nothing while the document stays unchanged.
+ *
+ * Every run covers the whole document because detection uses cross-paragraph
+ * context (coreference), and a result is only shown when it was computed for
+ * the current text and allowlist.
  */
 export const startAnonymizationDetection = ({
+  detect,
   fieldId,
   onDetected,
   readExcludedCanonicals,
@@ -41,22 +127,9 @@ export const startAnonymizationDetection = ({
 }: StartAnonymizationDetectionOptions): AnonymizationDetection => {
   let cancelled = false;
   let failedKey: string | null = null;
-  // Mark the pipeline as in-flight from mount so the
-  // inspector facet shows "Detecting entities…" right
-  // away instead of flashing "0 entities" during the
-  // 300ms gap before the first `run()` fires (and
-  // before that run can call `markAnonymizationPipelineStarted`
-  // itself). The first `run()` also calls it again
-  // (idempotent set-add); subsequent runs flip it on
-  // around each worker call.
-  useInspectorAnonymizationStore
-    .getState()
-    .markAnonymizationPipelineStarted(fieldId);
+  let status: AnonymizationPipelineStatus = "running";
   // Track the text+exclusions we received *results* for (not
-  // just dispatched). The worker can occasionally drop a
-  // request across dev HMR (the singleton's pending map loses
-  // entries when the client module re-evaluates); the next tick
-  // simply re-dispatches until results actually land.
+  // just dispatched).
   //
   // Exclusions are part of the cache key: when the user marks
   // a detected entity as a false positive, the doc text is
@@ -67,17 +140,31 @@ export const startAnonymizationDetection = ({
   // The worker client owns the deadline. Keep one request pending until
   // it settles so slow scans never accumulate duplicate document jobs.
   let requestStatus: "idle" | "running" = "idle";
-  const markRan = () =>
-    useInspectorAnonymizationStore
-      .getState()
-      .markAnonymizationPipelineRan(fieldId);
+  // ProseMirror documents are immutable, so the same node always has the
+  // same text: serialize each document once, however often it is checked.
+  let lastRead: { doc: PMNode; text: string } | null = null;
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearSettleTimer = () => {
+    if (settleTimer !== null) {
+      clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+  };
+  const markRan = () => {
+    status = "ready";
+    publishDetectionStatus(fieldId);
+  };
+  const readText = (): string => {
+    const { doc } = view.state;
+    if (lastRead?.doc === doc) {
+      return lastRead.text;
+    }
+    const text = doc.textBetween(0, doc.content.size, "\n", "\n");
+    lastRead = { doc, text };
+    return text;
+  };
   const readDetectionInput = () => {
-    const text = view.state.doc.textBetween(
-      0,
-      view.state.doc.content.size,
-      "\n",
-      "\n",
-    );
+    const text = readText();
     const excludedCanonicals = readExcludedCanonicals();
     return {
       text,
@@ -92,12 +179,13 @@ export const startAnonymizationDetection = ({
     if (cancelled) {
       return;
     }
-    // Cheap in-flight short-circuit before serializing the doc:
-    // `view.state.doc.textBetween` walks the whole ProseMirror
-    // tree, so on large DOCX files we must not pay it every 2s
-    // tick while a worker request is still pending. The decision
-    // helper repeats this guard for its own correctness, but the
-    // expensive read has to stay behind it.
+    // This run reads the latest document, so a pending settle run is
+    // redundant. While a request is in flight, its completion re-reads the
+    // document and reruns when the text moved on.
+    clearSettleTimer();
+    // Cheap in-flight short-circuit before serializing the doc. The
+    // decision helper repeats this guard for its own correctness, but the
+    // read has to stay behind it.
     if (requestStatus === "running") {
       return;
     }
@@ -132,10 +220,9 @@ export const startAnonymizationDetection = ({
     // (Re-)mark started: handles reruns triggered by
     // edits or allowlist changes after the first run
     // already called `markAnonymizationPipelineRan`.
-    useInspectorAnonymizationStore
-      .getState()
-      .markAnonymizationPipelineStarted(fieldId);
-    anonymizeChatTextInWorker({
+    status = "running";
+    publishDetectionStatus(fieldId);
+    detect({
       text,
       workspaceId,
       excludedCanonicals,
@@ -177,24 +264,55 @@ export const startAnonymizationDetection = ({
         }
         failedKey = cacheKey;
         getAnalytics().captureError(error);
-        useInspectorAnonymizationStore
-          .getState()
-          .markAnonymizationPipelineFailed(fieldId);
+        status = "error";
+        publishDetectionStatus(fieldId);
       });
   };
-  // The doc text isn't always populated when the view first
-  // captures (lazy DOCX load, async paged rendering). Slow
-  // heartbeat catches it shortly after, and also picks up
-  // edits without per-keystroke pipeline runs. The same-text
-  // guard above no-ops re-runs once the doc is steady.
-  const initialTimer = setTimeout(run, 300);
-  const heartbeat = setInterval(run, 2000);
+  const scheduleRun = () => {
+    clearSettleTimer();
+    settleTimer = setTimeout(run, DETECTION_SETTLE_MS);
+  };
+  const confirmCurrent = (): boolean => {
+    const { text, cacheKey } = readDetectionInput();
+    if (requestStatus === "idle" && text.length === 0) {
+      return true;
+    }
+    if (requestStatus === "idle" && cacheKey === lastDeliveredKey) {
+      return true;
+    }
+    run();
+    return false;
+  };
+  useInspectorAnonymizationStore
+    .getState()
+    .registerAnonymizationDetection(fieldId, {
+      confirm: confirmCurrent,
+      readStatus: () => status,
+      retry: () => {
+        failedKey = null;
+        run();
+      },
+    });
+  publishDetectionStatus(fieldId);
+  // The doc text isn't always populated when the view first captures (lazy
+  // DOCX load, async paged rendering); the load itself is a document change
+  // and reaches `noteDocChanged`.
+  scheduleRun();
   return {
+    noteDocChanged: () => {
+      if (cancelled || view.state.doc === lastRead?.doc) {
+        return;
+      }
+      scheduleRun();
+    },
     run,
     stop: () => {
       cancelled = true;
-      clearTimeout(initialTimer);
-      clearInterval(heartbeat);
+      clearSettleTimer();
+      useInspectorAnonymizationStore
+        .getState()
+        .unregisterAnonymizationDetection(fieldId, confirmCurrent);
+      publishDetectionStatus(fieldId);
     },
   };
 };

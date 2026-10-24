@@ -233,8 +233,7 @@ export const classifyMcpTokenVerificationError = (
  * then authorizes identically: same member lookup, same RLS identity.
  */
 export type McpAuthenticationFailure =
-  | McpAuthenticationError
-  | McpTokenVerificationError;
+  McpAuthenticationError | McpTokenVerificationError;
 
 type VerifyMcpAccessTokenOptions = {
   mode: McpMode;
@@ -265,8 +264,7 @@ export const authenticateMcpRequest = async (
     mode?: McpMode | undefined;
     reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
     resolveApiKeySession?:
-      | typeof defaultResolveMachineApiKeySession
-      | undefined;
+      typeof defaultResolveMachineApiKeySession | undefined;
     verifyToken?: ReturnType<typeof getVerifyBearerToken>;
   } = {},
 ): Promise<Result<McpSession, McpAuthenticationFailure>> => {

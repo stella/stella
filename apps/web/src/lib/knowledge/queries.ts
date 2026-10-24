@@ -1,7 +1,7 @@
 import {
   infiniteQueryOptions,
-  queryOptions,
   type QueryClient,
+  queryOptions,
 } from "@tanstack/react-query";
 import { panic } from "better-result";
 

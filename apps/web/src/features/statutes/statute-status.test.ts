@@ -1,8 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
+import {
+  resolveStatuteDisplayStatus,
+  STATUTE_STATUS_LABEL_KEYS,
+} from "@/features/statutes/statute-status";
 
 describe("statute display status", () => {
+  test("an unstated lifecycle remains visible as unclear when dates are absent", () => {
+    const status = resolveStatuteDisplayStatus({
+      status: "unknown",
+      today: "2026-10-16",
+      validFrom: null,
+    });
+
+    expect(status).toBe("unknown");
+    expect(status === null ? null : STATUTE_STATUS_LABEL_KEYS[status]).toBe(
+      "statutes.status.unknown",
+    );
+  });
+
   test("a consolidation that has not started is future, not superseded", () => {
     expect(
       resolveStatuteDisplayStatus({
