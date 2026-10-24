@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -210,10 +208,7 @@ export const useSetChatAnonymized = (threadRef: ChatThreadRef) => {
   const setThreadAnonymized = useChatAnonymizedStore(
     (state) => state.setThreadAnonymized,
   );
-  return useCallback(
-    (anonymized: boolean) => {
-      setThreadAnonymized(threadKey, anonymized);
-    },
-    [setThreadAnonymized, threadKey],
-  );
+  return (anonymized: boolean) => {
+    setThreadAnonymized(threadKey, anonymized);
+  };
 };

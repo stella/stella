@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 import {
   createOwnerScopedState,
@@ -18,23 +18,15 @@ export const useOwnerScopedState = <T>({
   write,
   getDefaultValue,
 }: OwnerScopedStateOptions<T>) => {
-  const state = useMemo(
-    () => createOwnerScopedState({ read, write, getDefaultValue }),
-    [read, write, getDefaultValue],
-  );
+  const state = createOwnerScopedState({ read, write, getDefaultValue });
   const { owner, value } = useSyncExternalStore(
     state.subscribe,
     state.getSnapshot,
     state.getServerSnapshot,
   );
-  const setValue = useCallback(
-    (next: T) => state.updateValue(owner, () => next),
-    [owner, state],
-  );
-  const updateValue = useCallback(
-    (update: (previous: T) => T) => state.updateValue(owner, update),
-    [owner, state],
-  );
-  const refresh = useCallback(() => state.refresh(owner), [owner, state]);
+  const setValue = (next: T) => state.updateValue(owner, () => next);
+  const updateValue = (update: (previous: T) => T) =>
+    state.updateValue(owner, update);
+  const refresh = () => state.refresh(owner);
   return { owner, value, setValue, updateValue, refresh };
 };

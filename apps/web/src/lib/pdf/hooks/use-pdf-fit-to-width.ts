@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import type { RefCallback, RefObject } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
@@ -51,49 +50,40 @@ export const usePDFFitToWidth = ({
     return undefined;
   }, [consumePendingScrollAnchor, containerRef, effectiveScale]);
 
-  return useCallback(
-    (container: HTMLDivElement | null) => {
-      if (!container || fitToWidth === undefined || scaleOffset !== 0) {
-        return undefined;
+  return (container: HTMLDivElement | null) => {
+    if (!container || fitToWidth === undefined || scaleOffset !== 0) {
+      return undefined;
+    }
+
+    // Observe the ScrollArea viewport (the visible area),
+    // not the content container. The content container's
+    // width is determined by the PDF pages themselves,
+    // creating a circular dependency.
+    const viewport = container.closest<HTMLElement>(
+      SCROLL_AREA_VIEWPORT_SELECTOR,
+    );
+    const observeTarget = viewport ?? container;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries.at(-1);
+      if (!entry) {
+        return;
       }
 
-      // Observe the ScrollArea viewport (the visible area),
-      // not the content container. The content container's
-      // width is determined by the PDF pages themselves,
-      // creating a circular dependency.
-      const viewport = container.closest<HTMLElement>(
-        SCROLL_AREA_VIEWPORT_SELECTOR,
-      );
-      const observeTarget = viewport ?? container;
+      const containerWidth = entry.contentRect.width;
+      if (containerWidth <= 0) {
+        return;
+      }
 
-      const observer = new ResizeObserver((entries) => {
-        const entry = entries.at(-1);
-        if (!entry) {
-          return;
-        }
+      updateContainerWidth(containerWidth, container);
+      debouncedRerender(effectiveScale);
+    });
 
-        const containerWidth = entry.contentRect.width;
-        if (containerWidth <= 0) {
-          return;
-        }
+    observer.observe(observeTarget);
 
-        updateContainerWidth(containerWidth, container);
-        debouncedRerender(effectiveScale);
-      });
-
-      observer.observe(observeTarget);
-
-      return () => {
-        observer.disconnect();
-        debouncedRerender.cancel();
-      };
-    },
-    [
-      fitToWidth,
-      scaleOffset,
-      effectiveScale,
-      updateContainerWidth,
-      debouncedRerender,
-    ],
-  );
+    return () => {
+      observer.disconnect();
+      debouncedRerender.cancel();
+    };
+  };
 };
