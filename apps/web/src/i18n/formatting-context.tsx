@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext } from "react";
 import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
@@ -26,10 +26,7 @@ export const FormattingProvider = ({
   // The formatter is a context value shared by every formatting hook. Stable
   // identity prevents unrelated consumers from rerendering between locale or
   // time-zone changes.
-  const formatter = useMemo(
-    () => createFormatter({ locale, timeZone }),
-    [locale, timeZone],
-  );
+  const formatter = createFormatter({ locale, timeZone });
 
   return (
     <FormattingLocaleContext value={locale}>
