@@ -12,6 +12,7 @@ import {
   agentSkillRevisions,
   agentSkills,
   aiMemories,
+  billingDraftUserSettings,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -482,6 +483,33 @@ const readSavedTimeNarrativesPage = async ({
     return projectRows(rows, projections.saved_time_narratives);
   });
 
+// One row per organization and user; the user id pages it like any other id.
+const readBillingDraftSettingsPage = async ({
+  projections,
+  scopedDb,
+  organizationId,
+  userId,
+  cursor,
+}: OrganizationPageQueryOptions) =>
+  await scopedDb(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(billingDraftUserSettings)
+      .where(
+        and(
+          eq(billingDraftUserSettings.organizationId, organizationId),
+          eq(billingDraftUserSettings.userId, userId),
+          stillMember(organizationId, userId),
+          after(billingDraftUserSettings.userId, cursor),
+        ),
+      )
+      .limit(1);
+    return rows.map((row) => ({
+      id: row.userId,
+      value: projections.billing_draft_user_settings(row),
+    }));
+  });
+
 const readTemplateDefaultsPage = async ({
   projections,
   scopedDb,
@@ -562,6 +590,8 @@ const readOrganizationPage = async ({
       return await readLegalReaderAnswersPage(options);
     case "saved_time_narratives":
       return await readSavedTimeNarrativesPage(options);
+    case "billing_draft_user_settings":
+      return await readBillingDraftSettingsPage(options);
     case "template_lookup_format_user_defaults":
       return await readTemplateDefaultsPage(options);
     case "workspace_view_templates":

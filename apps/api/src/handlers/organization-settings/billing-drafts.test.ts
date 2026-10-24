@@ -109,10 +109,6 @@ describe("billing draft configuration authorization", () => {
         resourceIds: [resourceId],
       }),
     ).toBe(false);
-    expect(updateBillingDraftConfiguration.config.contract).toBe("replace");
-    expect(updateBillingDraftConfiguration.config.precondition).toEqual({
-      type: "updatedAt",
-      field: "expectedUpdatedAt",
-    });
+    expect(updateBillingDraftConfiguration.config.contract).toBe("patch");
   });
 });

@@ -240,8 +240,9 @@ const billingDraftAuditChanges = ({
 
 export const updateBillingDraftConfiguration = createSafeRootHandler(
   {
-    contract: "replace",
-    precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
+    // Each field sent replaces only its own value (the mode, one client's
+    // guideline set, that client's format); absent fields stay unchanged.
+    contract: "patch",
     permissions,
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "auth_plumbing" },

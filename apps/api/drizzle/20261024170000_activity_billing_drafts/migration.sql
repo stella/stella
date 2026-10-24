@@ -1,9 +1,12 @@
-SET LOCAL lock_timeout = '1s';--> statement-breakpoint
-SET LOCAL statement_timeout = '5s';--> statement-breakpoint
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+
+-- Constant defaults take PostgreSQL's fast-default path; the checks are added
+-- NOT VALID and validated by the post-deploy online phase.
 ALTER TABLE organization_settings ADD COLUMN ai_billing_drafts_mode text NOT NULL DEFAULT 'disabled';--> statement-breakpoint
-ALTER TABLE organization_settings ADD CONSTRAINT organization_settings_ai_billing_drafts_mode_check CHECK (ai_billing_drafts_mode IN ('disabled', 'enabled'));--> statement-breakpoint
+ALTER TABLE organization_settings ADD CONSTRAINT organization_settings_ai_billing_drafts_mode_check CHECK (ai_billing_drafts_mode IN ('disabled', 'enabled')) NOT VALID;--> statement-breakpoint
 ALTER TABLE contacts ADD COLUMN time_billing_format text NOT NULL DEFAULT 'categories';--> statement-breakpoint
-ALTER TABLE contacts ADD CONSTRAINT contacts_time_billing_format_check CHECK (time_billing_format IN ('categories', 'ledes'));--> statement-breakpoint
+ALTER TABLE contacts ADD CONSTRAINT contacts_time_billing_format_check CHECK (time_billing_format IN ('categories', 'ledes')) NOT VALID;--> statement-breakpoint
 ALTER TABLE workspaces ADD COLUMN billing_narrative_language varchar(64);--> statement-breakpoint
 CREATE TABLE billing_draft_user_settings (
   organization_id varchar(128) NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
@@ -34,5 +37,6 @@ CREATE POLICY "admin_update" ON billing_guideline_files FOR UPDATE TO stella USI
 CREATE POLICY "admin_delete" ON billing_guideline_files FOR DELETE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND EXISTS (SELECT 1 FROM member m WHERE m.organization_id = (SELECT current_setting('app.organization_id', true)) AND m.user_id = (SELECT current_setting('app.user_id', true)) AND m.role IN ('owner', 'admin')));--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON billing_guideline_files TO stella;--> statement-breakpoint
 ALTER TABLE billing_draft_user_settings FORCE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE billing_guideline_files FORCE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE INDEX agent_skill_resources_path_billing_trgm_idx ON agent_skill_resources USING gin (path gin_trgm_ops);--> statement-breakpoint
+ALTER TABLE billing_guideline_files FORCE ROW LEVEL SECURITY;
+-- The knowledge-file path search index is built concurrently after deploy by
+-- ONLINE_MIGRATION_INDEXES in apps/api/src/db/online-migrations.ts.

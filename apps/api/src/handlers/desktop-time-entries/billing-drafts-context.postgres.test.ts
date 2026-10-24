@@ -87,12 +87,18 @@ if (!databaseUrl || !runPostgres) {
           organizationId,
           aiBillingDraftsMode: "enabled",
         });
-        await db.insert(billingDraftUserSettings).values({
-          organizationId,
-          userId,
-          consentAt: new Date("2026-10-01T12:00:00Z"),
-          preference: "Concise narratives",
-        });
+        // Both tables force row security, so fixtures write as the member.
+        const asCaller = createSafeDb(db, [], organizationId, userId);
+        (
+          await asCaller((tx) =>
+            tx.insert(billingDraftUserSettings).values({
+              organizationId,
+              userId,
+              consentAt: new Date("2026-10-01T12:00:00Z"),
+              preference: "Concise narratives",
+            }),
+          )
+        ).unwrap();
         await db.insert(workspaces).values([
           {
             id: workspaceId,
@@ -127,11 +133,15 @@ if (!databaseUrl || !runPostgres) {
           content: "# Billing\nDescribe the work",
           sizeBytes: 29,
         });
-        await db.insert(billingGuidelineFiles).values({
-          organizationId,
-          resourceId,
-          clientId: null,
-        });
+        (
+          await asCaller((tx) =>
+            tx.insert(billingGuidelineFiles).values({
+              organizationId,
+              resourceId,
+              clientId: null,
+            }),
+          )
+        ).unwrap();
         const history = [
           { id: currentId, userId, workspaceId, dateWorked: today.toString() },
           {
@@ -251,12 +261,16 @@ if (!databaseUrl || !runPostgres) {
           id: createSafeId<"organizationSettings">(),
           organizationId,
         });
-        await db.insert(billingDraftUserSettings).values({
-          organizationId,
-          userId,
-          consentAt: new Date("2026-10-01T12:00:00Z"),
-        });
         const safeDb = createSafeDb(db, [], organizationId, userId);
+        (
+          await safeDb((tx) =>
+            tx.insert(billingDraftUserSettings).values({
+              organizationId,
+              userId,
+              consentAt: new Date("2026-10-01T12:00:00Z"),
+            }),
+          )
+        ).unwrap();
         const disabled = await loadBillingDraftContext({
           safeDb,
           organizationId,
@@ -284,15 +298,19 @@ if (!databaseUrl || !runPostgres) {
           .update(organizationSettings)
           .set({ aiBillingDraftsMode: "enabled" })
           .where(eq(organizationSettings.organizationId, organizationId));
-        await db
-          .update(billingDraftUserSettings)
-          .set({ consentAt: null })
-          .where(
-            and(
-              eq(billingDraftUserSettings.organizationId, organizationId),
-              eq(billingDraftUserSettings.userId, userId),
-            ),
-          );
+        (
+          await safeDb((tx) =>
+            tx
+              .update(billingDraftUserSettings)
+              .set({ consentAt: null })
+              .where(
+                and(
+                  eq(billingDraftUserSettings.organizationId, organizationId),
+                  eq(billingDraftUserSettings.userId, userId),
+                ),
+              ),
+          )
+        ).unwrap();
         const revoked = await loadBillingDraftContext({
           safeDb,
           organizationId,
@@ -380,15 +398,29 @@ if (!databaseUrl || !runPostgres) {
             aiBillingDraftsMode: "enabled",
           },
         ]);
-        await db.insert(billingDraftUserSettings).values([
-          {
-            organizationId: organizationA,
-            userId,
-            consentAt: new Date("2026-10-01T12:00:00Z"),
-            preference: "Organization A preference",
-          },
-          { organizationId: organizationB, userId, consentAt: null },
-        ]);
+        const settingsA = createSafeDb(db, [], organizationA, userId);
+        const settingsB = createSafeDb(db, [], organizationB, userId);
+        (
+          await settingsA((tx) =>
+            tx.insert(billingDraftUserSettings).values({
+              organizationId: organizationA,
+              userId,
+              consentAt: new Date("2026-10-01T12:00:00Z"),
+              preference: "Organization A preference",
+            }),
+          )
+        ).unwrap();
+        (
+          await settingsB((tx) =>
+            tx
+              .insert(billingDraftUserSettings)
+              .values({
+                organizationId: organizationB,
+                userId,
+                consentAt: null,
+              }),
+          )
+        ).unwrap();
 
         const result = await loadBillingDraftContext({
           safeDb: createSafeDb(db, [], organizationB, userId),
@@ -412,8 +444,6 @@ if (!databaseUrl || !runPostgres) {
             "organization enablement and personal consent",
           );
         }
-        const settingsA = createSafeDb(db, [], organizationA, userId);
-        const settingsB = createSafeDb(db, [], organizationB, userId);
         const initialB = (
           await settingsB((tx) => tx.select().from(billingDraftUserSettings))
         ).unwrap();

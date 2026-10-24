@@ -5,7 +5,10 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
 
 import batch from "./batch";
 import batchStatus from "./batch-status";
-import billingDraftSettings from "./billing-draft-settings";
+import {
+  readBillingDraftSettings,
+  updateBillingDraftSettings,
+} from "./billing-draft-settings";
 import billingDrafts from "./billing-drafts";
 import candidates from "./candidates";
 import create from "./create";
@@ -15,12 +18,12 @@ export const desktopTimeEntriesRoute = new Elysia({
   prefix: "/v1/desktop",
 })
   .use(rateLimit(createStandardApiRateLimitOptions()))
-  .get("/billing-drafts/settings", billingDraftSettings.read.handler, {
-    response: billingDraftSettings.read.config.response,
+  .get("/billing-drafts/settings", readBillingDraftSettings.handler, {
+    response: readBillingDraftSettings.config.response,
   })
-  .put("/billing-drafts/settings", billingDraftSettings.update.handler, {
-    body: billingDraftSettings.update.config.body,
-    response: billingDraftSettings.update.config.response,
+  .put("/billing-drafts/settings", updateBillingDraftSettings.handler, {
+    body: updateBillingDraftSettings.config.body,
+    response: updateBillingDraftSettings.config.response,
   })
   .post("/billing-drafts", billingDrafts.handler, {
     body: billingDrafts.config.body,

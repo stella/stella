@@ -700,6 +700,36 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261024170000_activity_billing_drafts",
+    form: "add-column",
+    reason:
+      "Two constant text defaults take PostgreSQL's fast-default catalog path and the narrative language column is nullable without a default, so no table is rewritten; lock acquisition is bounded by 1s and each statement by 5s.",
+  },
+  {
+    migration: "20261024170000_activity_billing_drafts",
+    form: "add-constraint",
+    reason:
+      "Both value CHECKs are added NOT VALID without scanning existing rows; validation runs after COMMIT releases the schema locks.",
+  },
+  {
+    migration: "20261024170000_activity_billing_drafts",
+    form: "create-table-references",
+    reason:
+      "The two new tables reference organization, user, agent_skill_resources and contacts; the referenced tables are locked only to attach the foreign keys, under the 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261024170000_activity_billing_drafts",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS apply only to the two tables this migration creates empty.",
+  },
+  {
+    migration: "20261024170000_activity_billing_drafts",
+    form: "create-policy",
+    reason:
+      "Policies install the user-organization and organization-admin boundaries on the two tables this migration creates empty, without reading application rows.",
+  },
+  {
     migration: "20261020013635_case_law_source_hash_version",
     form: "add-column",
     reason:

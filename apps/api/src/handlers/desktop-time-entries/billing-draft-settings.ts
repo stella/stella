@@ -35,21 +35,21 @@ const billingDraftSettingsResponseSchema =
     ),
   );
 
-const settingsConfig = {
-  contract: "patch",
-  accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "auth_plumbing" },
-  cache: { kind: "none" },
-  response: safePublicHandlerResponseSchemasWithStatusText(
-    billingDraftSettingsResponseSchema,
-  ),
-} as const;
+const settingsResponse = safePublicHandlerResponseSchemasWithStatusText(
+  billingDraftSettingsResponseSchema,
+);
 
-export const createDesktopBillingDraftSettingsEndpoints = (
+export const createDesktopBillingDraftSettingsReadEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
-) => ({
-  read: createSafeBoundedPublicHandler(
-    settingsConfig,
+) =>
+  createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      response: settingsResponse,
+    },
     async function* ({ request }) {
       const account = yield* Result.await(
         authorizeDesktopTimeEntries(request, authorizeAccount),
@@ -90,9 +90,20 @@ export const createDesktopBillingDraftSettingsEndpoints = (
       );
       return Result.ok(settings);
     },
-  ),
-  update: createSafeBoundedPublicHandler(
-    { ...settingsConfig, body: desktopBillingDraftSettingsRequestSchema },
+  );
+
+export const createDesktopBillingDraftSettingsUpdateEndpoint = (
+  authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
+) =>
+  createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      body: desktopBillingDraftSettingsRequestSchema,
+      response: settingsResponse,
+    },
     async function* ({ request, body }) {
       const account = yield* Result.await(
         authorizeDesktopTimeEntries(request, authorizeAccount),
@@ -165,7 +176,9 @@ export const createDesktopBillingDraftSettingsEndpoints = (
       );
       return Result.ok(settings);
     },
-  ),
-});
+  );
 
-export default createDesktopBillingDraftSettingsEndpoints();
+export const readBillingDraftSettings =
+  createDesktopBillingDraftSettingsReadEndpoint();
+export const updateBillingDraftSettings =
+  createDesktopBillingDraftSettingsUpdateEndpoint();
