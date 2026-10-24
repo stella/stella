@@ -260,7 +260,12 @@ test("a version commit's push run and a release candidate dispatch PR depth for 
     panic("the PR-depth dispatch needs a condition");
   // GitHub reads an output a step did not write as an empty string.
   const none = { run: "", heavy_reused: "", depth_passed: "" };
-  const decide = (context: { steps: { reuse: { outputs: object } } }) =>
+  type DecideContext = {
+    github: object;
+    inputs?: object;
+    steps: { reuse: { outputs: object } };
+  };
+  const decide = (context: DecideContext) =>
     evaluate(
       condition,
       contextFromNested({
