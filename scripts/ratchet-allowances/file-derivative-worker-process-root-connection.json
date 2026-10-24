@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/scripts/file-derivative-worker.ts",
+  "delta": 1,
+  "reason": "The dedicated file-derivative process is a declared root-connection-worker-hosts composition root. It verifies database login posture before starting the host and passes the owner connection explicitly into the existing tenant-scoped derivative queue; workers and request handlers gain no connection imports or exported handle. The independent process cannot receive an in-memory database connection from the API process."
+}

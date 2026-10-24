@@ -639,6 +639,79 @@ export default eslintCompatPlugin({
           allowConverterRead?: boolean;
         };
 
+        const unmutatedMemberReference = (
+          expression: AstNode,
+        ): AstNode | null => {
+          let current = expression;
+          while (true) {
+            const member = current.parent;
+            if (
+              !isAstNode(member) ||
+              member.type !== "MemberExpression" ||
+              member.object !== current
+            ) {
+              break;
+            }
+            current = member;
+            const parent = current.parent;
+            if (
+              isAstNode(parent) &&
+              ((parent.type === "AssignmentExpression" &&
+                parent.left === current) ||
+                (parent.type === "UpdateExpression" &&
+                  parent.argument === current) ||
+                (parent.type === "UnaryExpression" &&
+                  parent.operator === "delete" &&
+                  parent.argument === current))
+            ) {
+              return null;
+            }
+            if (
+              isAstNode(parent) &&
+              parent.type === "CallExpression" &&
+              parent.callee === current
+            ) {
+              const methodName = memberPropertyName(member);
+              if (
+                methodName !== null &&
+                MUTATING_COLLECTION_METHODS.has(methodName)
+              ) {
+                return null;
+              }
+            }
+          }
+          return current;
+        };
+
+        const deepReferenceEscapes = (
+          current: AstNode,
+          allowConverterRead: boolean,
+        ): boolean => {
+          const parent = current.parent;
+          if (
+            allowConverterRead &&
+            isAstNode(parent) &&
+            ((parent.type === "Property" && parent.value === current) ||
+              parent.type === "SpreadElement" ||
+              parent.type === "ReturnStatement" ||
+              (parent.type === "ArrayExpression" &&
+                Array.isArray(parent.elements) &&
+                parent.elements.includes(current)) ||
+              (parent.type === "AssignmentExpression" &&
+                parent.right === current))
+          ) {
+            return true;
+          }
+          return (
+            isAstNode(parent) &&
+            (parent.type === "CallExpression" ||
+              parent.type === "NewExpression") &&
+            Array.isArray(parent.arguments) &&
+            parent.arguments.includes(current) &&
+            !(allowConverterRead && isConverterTargetCall(parent))
+          );
+        };
+
         const variableHasDeepMutation = (
           variable: Variable,
           {
@@ -656,43 +729,11 @@ export default eslintCompatPlugin({
             if (!isAstNode(identifier)) {
               return false;
             }
-            let current = outerTransparentExpression(identifier);
-            while (true) {
-              const member = current.parent;
-              if (
-                !isAstNode(member) ||
-                member.type !== "MemberExpression" ||
-                member.object !== current
-              ) {
-                break;
-              }
-              current = member;
-              const parent = current.parent;
-              if (
-                isAstNode(parent) &&
-                ((parent.type === "AssignmentExpression" &&
-                  parent.left === current) ||
-                  (parent.type === "UpdateExpression" &&
-                    parent.argument === current) ||
-                  (parent.type === "UnaryExpression" &&
-                    parent.operator === "delete" &&
-                    parent.argument === current))
-              ) {
-                return true;
-              }
-              if (
-                isAstNode(parent) &&
-                parent.type === "CallExpression" &&
-                parent.callee === current
-              ) {
-                const methodName = memberPropertyName(member);
-                if (
-                  methodName !== null &&
-                  MUTATING_COLLECTION_METHODS.has(methodName)
-                ) {
-                  return true;
-                }
-              }
+            const current = unmutatedMemberReference(
+              outerTransparentExpression(identifier),
+            );
+            if (current === null) {
+              return true;
             }
             if (
               allowConverterRead &&
@@ -732,29 +773,7 @@ export default eslintCompatPlugin({
             ) {
               return true;
             }
-            const parent = current.parent;
-            if (
-              allowConverterRead &&
-              isAstNode(parent) &&
-              ((parent.type === "Property" && parent.value === current) ||
-                parent.type === "SpreadElement" ||
-                parent.type === "ReturnStatement" ||
-                (parent.type === "ArrayExpression" &&
-                  Array.isArray(parent.elements) &&
-                  parent.elements.includes(current)) ||
-                (parent.type === "AssignmentExpression" &&
-                  parent.right === current))
-            ) {
-              return true;
-            }
-            return (
-              isAstNode(parent) &&
-              (parent.type === "CallExpression" ||
-                parent.type === "NewExpression") &&
-              Array.isArray(parent.arguments) &&
-              parent.arguments.includes(current) &&
-              !(allowConverterRead && isConverterTargetCall(parent))
-            );
+            return deepReferenceEscapes(current, allowConverterRead);
           });
         };
 
