@@ -40,19 +40,22 @@ test("heading accents preserve layout and numeric meaning", async () => {
     ],
     ['<h2>Items <span className="tabular-nums">٤٢</span></h2>', false],
   ] as const;
-  for (const reported of [true, false]) {
-    const cohort = cases.filter(([, expected]) => expected === reported);
-    const source = cohort
-      .map(
-        ([element], index) => `export const Case${index} = () => (${element});`,
-      )
-      .join("\n");
-    expect(
-      await lintSingleRule("no-decorative-heading-accent", source, {
-        sourcePath: "source.tsx",
-      }),
-    ).toEqual(
-      cohort.flatMap(([, expected], index) => (expected ? [index + 1] : [])),
-    );
-  }
+  await Promise.all(
+    [true, false].map(async (reported) => {
+      const cohort = cases.filter(([, expected]) => expected === reported);
+      const source = cohort
+        .map(
+          ([element], index) =>
+            `export const Case${index} = () => (${element});`,
+        )
+        .join("\n");
+      expect(
+        await lintSingleRule("no-decorative-heading-accent", source, {
+          sourcePath: "source.tsx",
+        }),
+      ).toEqual(
+        cohort.flatMap(([, expected], index) => (expected ? [index + 1] : [])),
+      );
+    }),
+  );
 });
