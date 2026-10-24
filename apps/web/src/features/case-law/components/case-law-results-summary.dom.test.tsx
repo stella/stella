@@ -10,31 +10,26 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { CaseLawResultsSummaryText } =
+const { CaseLawResultsSummary } =
   await import("@/features/case-law/components/case-law-results-summary");
 
 afterEach(cleanup);
 afterAll(async () => await unregisterDomEnvironment());
 
 const renderHeading = (
-  relaxedHitCount: number,
-  total?:
-    | { type: typeof SEARCH_TOTAL_TYPE.EXACT; count: number }
-    | { type: typeof SEARCH_TOTAL_TYPE.ESTIMATE; count: number },
+  props: Partial<Parameters<typeof CaseLawResultsSummary>[0]>,
 ) => {
-  const resultTotal = total ?? {
-    type: SEARCH_TOTAL_TYPE.EXACT,
-    count: 0,
-  };
   return render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        <CaseLawResultsSummaryText
+        <CaseLawResultsSummary
           exactCount={0}
           intent={{ type: "text", text: "employment dismissal" }}
+          isRefreshing={false}
           page={1}
-          relaxedHitCount={relaxedHitCount}
-          total={resultTotal}
+          relaxedHitCount={0}
+          total={{ type: SEARCH_TOTAL_TYPE.EXACT, count: 0 }}
+          {...props}
         />
       </FormattingProvider>
     </IntlProvider>,
@@ -42,16 +37,16 @@ const renderHeading = (
 };
 
 test("reports exact and appended partial matches separately", () => {
-  const view = renderHeading(3);
+  const view = renderHeading({ relaxedHitCount: 3 });
   expect(
     view.getByText("Page 1 · 0 exact matches · 3 partial matches"),
   ).toBeTruthy();
 });
 
 test("keeps an estimated exact-match total approximate beside partial matches", () => {
-  const view = renderHeading(3, {
-    type: SEARCH_TOTAL_TYPE.ESTIMATE,
-    count: 120,
+  const view = renderHeading({
+    relaxedHitCount: 3,
+    total: { type: SEARCH_TOTAL_TYPE.ESTIMATE, count: 120 },
   });
   expect(
     view.getByText("Page 1 · about 120 exact matches · 3 partial matches"),
@@ -59,6 +54,29 @@ test("keeps an estimated exact-match total approximate beside partial matches", 
 });
 
 test("keeps the ordinary result total when no partial matches were appended", () => {
-  const view = renderHeading(0);
+  const view = renderHeading({});
   expect(view.getByText("Page 1 · 0 results")).toBeTruthy();
+});
+
+test("keeps the displayed count busy while replacement results are pending", () => {
+  const view = renderHeading({ isRefreshing: true, relaxedHitCount: 3 });
+  const text = view.getByText("Page 1 · 0 exact matches · 3 partial matches");
+  expect(text.parentElement?.getAttribute("aria-busy")).toBe("true");
+});
+
+test("keeps the newest-list heading without a query", () => {
+  const view = renderHeading({ intent: { type: "empty" } });
+  expect(view.getByRole("heading").textContent).toBe(
+    messages.caseLaw.newestDecisions,
+  );
+});
+
+test("keeps the court choice for an identifier shared by several decisions", () => {
+  const view = renderHeading({
+    exactCount: 2,
+    intent: { type: "identifier", kind: "ecli", value: "ECLI:CZ:NS:2026:1" },
+  });
+  expect(
+    view.getByText("2 decisions share this case number. Pick the court."),
+  ).toBeTruthy();
 });

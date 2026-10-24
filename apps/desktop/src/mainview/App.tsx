@@ -50,6 +50,8 @@ import {
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { commandErrorMessage } from "./command-error";
+import { PermissionsSection } from "./PermissionsSection";
+import { ShortcutSetting } from "./ShortcutSetting";
 import stellaFavicon from "./stella-favicon.svg";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
@@ -207,43 +209,6 @@ const PanelGroup = ({
     </div>
   </section>
 );
-
-const AutoStartToggle = () => {
-  const t = useTranslations("settings");
-  const [enabled, setEnabled] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    invoke<boolean>("is_autostart_enabled")
-      .then(setEnabled)
-      .catch(() => setEnabled(null));
-  }, []);
-
-  if (enabled === null) {
-    return null;
-  }
-
-  return (
-    <div className="px-4 py-3">
-      <Label className="items-start gap-3" htmlFor="autostart-toggle">
-        <Checkbox
-          checked={enabled}
-          className="mt-0.5"
-          id="autostart-toggle"
-          onCheckedChange={(checked) => {
-            setEnabled(checked);
-            void invoke<boolean>("set_autostart", { enabled: checked });
-          }}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">{t("startOnLogin")}</span>
-          <span className="text-muted-foreground mt-1 block text-sm leading-relaxed">
-            {t("startOnLoginDescription")}
-          </span>
-        </span>
-      </Label>
-    </div>
-  );
-};
 
 type TelemetryPreferenceState =
   | { status: "loading" }
@@ -448,9 +413,13 @@ const GeneralPane = ({
           </Button>
         </div>
         <Separator />
-        <AutoStartToggle />
-        <Separator />
         <TelemetryToggle />
+      </PanelGroup>
+      <PanelGroup>
+        <ShortcutSetting />
+      </PanelGroup>
+      <PanelGroup title={t("permissions")}>
+        <PermissionsSection window={DESKTOP_TELEMETRY_WINDOWS.main} />
       </PanelGroup>
       <PanelGroup>
         <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -496,6 +465,52 @@ const GeneralPane = ({
           </Combobox>
         </div>
       </PanelGroup>
+      <PanelGroup>
+        <SetupGuideSetting />
+      </PanelGroup>
+    </div>
+  );
+};
+
+/** Starts the setup tour again in its own window. */
+const SetupGuideSetting = () => {
+  const t = useTranslations("settings");
+  const [failed, setFailed] = useState(false);
+  const restart = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_restart"),
+    );
+    if (Result.isError(result)) {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+        window: DESKTOP_TELEMETRY_WINDOWS.main,
+      });
+    }
+    setFailed(Result.isError(result));
+  };
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{t("setupGuide")}</p>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("setupGuideDescription")}
+        </p>
+        {failed ? (
+          <p className="text-destructive-foreground mt-1 text-sm" role="alert">
+            {t("errorSetupGuide")}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        onClick={() => {
+          void restart();
+        }}
+        size="sm"
+        variant="outline"
+      >
+        {t("setupGuideAction")}
+      </Button>
     </div>
   );
 };

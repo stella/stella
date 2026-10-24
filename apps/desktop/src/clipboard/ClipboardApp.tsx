@@ -3,8 +3,8 @@ import {
   useDeferredValue,
   useEffect,
   useEffectEvent,
-  useRef,
   useReducer,
+  useRef,
   useState,
 } from "react";
 import type {
@@ -39,10 +39,10 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -53,10 +53,10 @@ import {
   ArrowRightIcon,
   Building2Icon,
   ChevronsUpDownIcon,
-  ClipboardIcon,
   CircleHelpIcon,
-  CopyPlusIcon,
+  ClipboardIcon,
   ClockIcon,
+  CopyPlusIcon,
   EllipsisVerticalIcon,
   FileTextIcon,
   FolderInputIcon,
@@ -80,9 +80,9 @@ import type { LucideIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
+  type InlineDropPosition,
   reorderInlineIds,
   toInlineDropPosition,
-  type InlineDropPosition,
 } from "@stll/ui/inline-reorder";
 import {
   InputGroup,
@@ -110,17 +110,26 @@ import { cn } from "@stll/ui/utils";
 import { RegistrySearch } from "../registry/RegistrySearch";
 import type { DesktopConnectionStatus } from "../registry/RegistrySearch";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { formatShortcut } from "../shared/shortcut-keys";
 import {
+  DESKTOP_PLATFORM,
+  useClipboardShortcut,
+  useKeyboardLayout,
+} from "../shared/use-clipboard-shortcut";
+import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
+  adjacentClipboardScope,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  CLIPBOARD_SEARCH_SCOPES,
+  clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
@@ -128,20 +137,19 @@ import {
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
+  clipboardScopeKeyAction,
   clipboardSourceIdentity,
   clipboardSourceLabel,
   clipboardSourceTintIndex,
   clipboardSourceTitle,
-  CLIPBOARD_SEARCH_SCOPES,
-  adjacentClipboardScope,
-  clipboardControlsKeyAction,
-  clipboardScopeKeyAction,
   clipboardTimelineKeyAction,
+  clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
@@ -166,12 +174,12 @@ import {
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
-  ClipboardCopyFormat,
   ClipboardCopyErrorKind,
-  ClipboardRetention,
+  ClipboardCopyFormat,
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
+  ClipboardRetention,
   ClipboardSnapshot,
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
@@ -186,7 +194,6 @@ import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
-const MAX_ITEM_NAME_CHARACTERS = 80;
 const RETENTION_LABEL_KEYS = {
   week: "retentionWeek",
   month: "retentionMonth",
@@ -236,9 +243,6 @@ const CLIPBOARD_SCOPE_PRESENTATION = {
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
-const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
-  ? "⌘⇧V"
-  : "Ctrl+Shift+V";
 // Only macOS gives the window a native material; elsewhere the page paints the
 // surface its rounded corners clip.
 const CLIPBOARD_WINDOW_CLASS = navigator.userAgent.includes("Mac")
@@ -505,11 +509,10 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const link = clipboardItemLink(item);
-  const fallbackName =
-    item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
-  // An unnamed browser copy is named after the page it came from.
-  const untitledName =
-    item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
+  const untitledName = clipboardUntitledName(item, {
+    image: t("image"),
+    text: t("unnamedClip"),
+  });
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
@@ -691,7 +694,7 @@ const ClipboardCard = ({
             className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
             fill
-            maxLength={MAX_ITEM_NAME_CHARACTERS}
+            maxLength={MAX_CLIPBOARD_ITEM_NAME_CHARACTERS}
             onCancel={() => {
               setEditingName(false);
               setNameDraft(item.name ?? "");
@@ -1241,6 +1244,14 @@ const ClipboardContextMenu = ({
   );
 };
 
+function reportShortcutReadFailure() {
+  reportDesktopError({
+    code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+    operation: DESKTOP_TELEMETRY_OPERATIONS.shortcutUpdate,
+    window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+  });
+}
+
 type ClipboardWelcomeDialogProps = {
   onClose: () => void;
   connectionStatus: DesktopConnectionStatus;
@@ -1282,6 +1293,25 @@ const ClipboardWelcomeDialog = ({
   const [autostartChoice, setAutostartChoice] = useState<AutostartChoiceState>({
     status: "loading",
   });
+  const [shortcut] = useClipboardShortcut(reportShortcutReadFailure);
+  const locale = useLocale();
+  const layout = useKeyboardLayout();
+  const shortcutFeatures = shortcut
+    ? [
+        {
+          description: t("welcomeShortcutDescription", {
+            shortcut: formatShortcut({
+              keys: shortcut.keys,
+              layout,
+              locale,
+              platform: DESKTOP_PLATFORM,
+            }),
+          }),
+          icon: KeyboardIcon,
+          title: t("welcomeShortcutTitle"),
+        },
+      ]
+    : [];
   const features = [
     {
       description: t(
@@ -1292,13 +1322,7 @@ const ClipboardWelcomeDialog = ({
       icon: ClipboardIcon,
       title: t("welcomeCaptureTitle"),
     },
-    {
-      description: t("welcomeShortcutDescription", {
-        shortcut: CLIPBOARD_SHORTCUT_LABEL,
-      }),
-      icon: KeyboardIcon,
-      title: t("welcomeShortcutTitle"),
-    },
+    ...shortcutFeatures,
     {
       description: t("welcomeLocalDescription"),
       icon: LockKeyholeIcon,

@@ -7,8 +7,8 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
-  searchPageEnd,
   type SearchExcerpt,
+  searchPageEnd,
   type SearchSort,
 } from "@stll/api-contract/search";
 

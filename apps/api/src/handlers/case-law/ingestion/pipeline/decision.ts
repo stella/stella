@@ -1,9 +1,9 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  SUPPLEMENT_ABSORB_FAILED,
   absorbComposedSupplementRows,
+  SUPPLEMENT_ABSORB_FAILED,
 } from "@/api/handlers/case-law/ingestion/pipeline/composed-supplements";
 import { enqueueCorpusMirror } from "@/api/handlers/case-law/ingestion/pipeline/decision-corpus";
 import {
@@ -37,6 +37,7 @@ import {
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
+import { sourceFingerprintFromStoredRaw as readSourceFingerprintFromStoredRaw } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import {
   CONTENTION_RECONCILIATION,
   DECISION_REFRESH,
@@ -143,6 +144,8 @@ const runDecisionAttempt = async ({
   observedAt,
   observationOrder,
   refresh,
+  sourceFingerprintVersion,
+  sourceFingerprintFromStoredRaw,
   corpus,
   corpusBatch,
   polarityRules,
@@ -197,6 +200,8 @@ const runDecisionAttempt = async ({
     observedAt,
     observationOrder,
     refresh,
+    sourceFingerprintVersion,
+    sourceFingerprintFromStoredRaw,
   });
   if (existingPolicyOutcome !== null) {
     return existingPolicyOutcome;
@@ -259,6 +264,7 @@ const runDecisionAttempt = async ({
         composedSupplements,
         observedAt,
         observationOrder,
+        sourceFingerprintVersion,
         shape,
         plan,
         rawArtifact,
@@ -368,18 +374,21 @@ export const processDecision = async (
     refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
     corpus = CASE_LAW_CORPUS_DEPENDENCIES,
     judges = CASE_LAW_JUDGE_DEPENDENCIES,
+    sourceFingerprintFromStoredRaw:
+      readStoredFingerprint = readSourceFingerprintFromStoredRaw,
     ...options
   }: ProcessDecisionOptions,
   resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     options.scopedDb,
   ),
 ): Promise<ProcessResult> => {
-  const { metadataUrlSchema, statedEcliIdentity } = await resolveSourceContract(
-    options.sourceId,
-  );
+  const { metadataUrlSchema, sourceFingerprintVersion, statedEcliIdentity } =
+    await resolveSourceContract(options.sourceId);
   return await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
+    sourceFingerprintVersion,
+    sourceFingerprintFromStoredRaw: readStoredFingerprint,
     statedEcliIdentity,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,

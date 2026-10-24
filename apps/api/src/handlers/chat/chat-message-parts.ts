@@ -34,9 +34,9 @@ import type {
   ChatMessageRole,
   ChatPart,
   ChatTanStackPart,
-  PersistableChatPartType,
-  PersistableChatMessageCandidate,
   PersistableChatMessage,
+  PersistableChatMessageCandidate,
+  PersistableChatPartType,
   PersistableTerminalAssistantMessage,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
@@ -521,6 +521,7 @@ export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
  */
 const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
   "approval-requested": false,
+  // Only an approved client-executed call: `isApprovedClientCallAwaitingResult`.
   "approval-responded": false,
   // A terminal stream can end while the provider has only announced a call or
   // is still emitting its JSON arguments. Neither state carries usable input,
@@ -531,6 +532,28 @@ const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
   "input-complete": true,
   "input-streaming": false,
 } as const satisfies Record<TanStackToolCallState, boolean>;
+
+/** A tool call as stored, or as read back over the API. */
+type ApprovableToolCall = {
+  type: "tool-call";
+  state: TanStackToolCallState;
+  approval?: { approved?: boolean };
+  metadata?: unknown;
+  output?: unknown;
+};
+
+/**
+ * An approved client-executed call whose result has not arrived. Resuming the
+ * approval hands the call to the client, so it stays `approval-responded` with
+ * input only until the client posts its result.
+ */
+export const isApprovedClientCallAwaitingResult = (
+  part: ApprovableToolCall,
+): boolean =>
+  part.state === "approval-responded" &&
+  part.approval?.approved === true &&
+  part.output === undefined &&
+  chatToolExecutor(part) === "client";
 
 const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
   name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
@@ -659,8 +682,9 @@ export const getAwaitingUserInteractions = (
       continue;
     }
     if (
-      CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-      !isServerChatToolCall(part)
+      (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
+        !isServerChatToolCall(part)) ||
+      isApprovedClientCallAwaitingResult(part)
     ) {
       interactions.push({
         type: clientToolInteractionType(part.name),
@@ -669,6 +693,27 @@ export const getAwaitingUserInteractions = (
     }
   }
   return interactions;
+};
+
+/** The tools whose calls in `message` await an approval. */
+export const getAwaitedApprovalToolNames = (
+  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
+): ReadonlySet<string> => {
+  if (message === null) {
+    return new Set();
+  }
+  const awaitedCallIds = new Set(
+    getAwaitingUserInteractions(message).flatMap((interaction) =>
+      interaction.type === "approval" ? [interaction.toolCallId] : [],
+    ),
+  );
+  return new Set(
+    message.parts.flatMap((part) =>
+      part.type === "tool-call" && awaitedCallIds.has(part.id)
+        ? [part.name]
+        : [],
+    ),
+  );
 };
 
 export const getAwaitingUserInteraction = (
@@ -704,7 +749,8 @@ const CLIENT_INTERACTION_RESOLUTION = {
   },
   "client-tool": {
     "approval-requested": null,
-    "approval-responded": null,
+    // An approved call the client has not run yet.
+    "approval-responded": "unchanged",
     "awaiting-input": null,
     complete: "resolved",
     error: "resolved",
@@ -1185,8 +1231,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 type ChatPartPersistenceDecision =
-  | { type: "drop"; partType: string }
-  | { type: "persist"; part: ChatPart };
+  { type: "drop"; partType: string } | { type: "persist"; part: ChatPart };
 
 export const classifyChatPartForPersistence = (
   part: unknown,

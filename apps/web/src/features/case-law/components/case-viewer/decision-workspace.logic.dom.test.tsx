@@ -15,6 +15,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -249,17 +250,21 @@ const rangeDecision = {
   updatedAt: "2026-10-18T12:00:00Z",
 } satisfies ComponentProps<typeof DecisionWorkspace>["decision"];
 const rangeAnalysis = {
-  version: 3,
+  version: 4,
   generatedAt: rangeDecision.updatedAt,
   model: "test",
   inputFingerprint: "a".repeat(64),
   tree: [],
   holding: {
-    text: "The cited paragraphs establish the holding.",
+    spans: [
+      {
+        text: "The cited paragraphs establish the holding.",
+        anchors: [{ startAnchorId: "p-2", endAnchorId: "p-4" }],
+      },
+    ],
     language: "en",
-    anchors: [{ startAnchorId: "p-2", endAnchorId: "p-4" }],
   },
-  abstract: { text: "A summary.", language: "en" },
+  abstract: { spans: [{ text: "A summary.", anchors: [] }], language: "en" },
   topics: [],
 } satisfies DecisionAnalysis;
 
@@ -285,7 +290,7 @@ const installWorkspaceServer = () => {
         return Response.json({ items: [], nextCursor: null });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: true });
+        return Response.json(aiAvailableResponse());
       }
       if (path.endsWith("/workspaces/navigation")) {
         return Response.json({ items: [], nextCursor: null, workspaces: [] });

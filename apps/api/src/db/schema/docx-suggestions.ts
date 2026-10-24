@@ -19,9 +19,9 @@ import {
   pUuid,
   safeUuid,
   safeWorkspaceId,
+  timestamptz,
   user,
   wsDataScopePolicies,
-  timestamptz,
 } from "./common";
 import { documentReviewFindings } from "./document-reviews";
 import { entities } from "./entities";

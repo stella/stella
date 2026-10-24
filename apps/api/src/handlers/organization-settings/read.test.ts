@@ -11,15 +11,15 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
-  LIST_VERIFICATION_FEATURE_ID,
   LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

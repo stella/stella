@@ -19,6 +19,22 @@ const {
 
 const apiRoot = path.resolve(import.meta.dir, "../..");
 
+// Every Bun SQL client is built by this owner, so its factory is counted at
+// each call site and the owner's own `new SQL` is not a pool of its own.
+const SQL_CLIENT_OWNER = "src/db/sql-client";
+const SQL_CLIENT_FACTORY = "createSqlClient";
+
+// The apps/api-relative module a specifier names from `file`, without extension.
+const apiModule = (file: string, specifier: string): string => {
+  let resolved = specifier;
+  if (specifier.startsWith("@/api/")) {
+    resolved = `src/${specifier.slice("@/api/".length)}`;
+  } else if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    resolved = path.posix.join(path.posix.dirname(file), specifier);
+  }
+  return resolved.replace(/\.[cm]?[jt]sx?$/u, "");
+};
+
 const collectConstructors = (file: string, contents: string) => {
   const source = ts.createSourceFile(
     file,
@@ -36,6 +52,13 @@ const collectConstructors = (file: string, contents: string) => {
     ["pg", new Set(["Pool", "Client"])],
     ["postgres", new Set(["default"])],
   ]);
+  const ownsClients = (specifier: string): boolean => {
+    if (apiModule(file, specifier) !== SQL_CLIENT_OWNER) {
+      return false;
+    }
+    importedConstructors.set(specifier, new Set([SQL_CLIENT_FACTORY]));
+    return true;
+  };
   const clientModule = (expression: ts.Expression): string | undefined => {
     if (
       ts.isAwaitExpression(expression) ||
@@ -59,6 +82,7 @@ const collectConstructors = (file: string, contents: string) => {
     return name &&
       ts.isStringLiteral(name) &&
       (importedConstructors.has(name.text) ||
+        ownsClients(name.text) ||
         name.text.startsWith("drizzle-orm/"))
       ? name.text
       : undefined;
@@ -78,6 +102,7 @@ const collectConstructors = (file: string, contents: string) => {
       continue;
     }
     const module = statement.moduleSpecifier.text;
+    ownsClients(module);
     const names = importedConstructors.get(module);
     if (clause.name && names?.has("default")) {
       constructors.add(clause.name.text);
@@ -285,7 +310,9 @@ describe("database connection budget", () => {
       ...new Bun.Glob("{src,scripts}/**/*.{ts,tsx}").scanSync({ cwd: apiRoot }),
     ]
       .filter(
-        (file) => !/(?:\.test\.|(?:^|\/)(?:tests|__tests__)\/)/u.test(file),
+        (file) =>
+          !/(?:\.test\.|(?:^|\/)(?:tests|__tests__)\/)/u.test(file) &&
+          apiModule("", file) !== SQL_CLIENT_OWNER,
       )
       .toSorted()
       .flatMap((file) =>
@@ -338,6 +365,19 @@ describe("database connection budget", () => {
         'const {SQL: Client} = await import("bun"); new Client({max: 1});',
       ),
     ).toEqual([{ file: "hidden.ts", constructor: 1, maximum: "fixed:1" }]);
+    expect(
+      collectConstructors(
+        "src/lib/owned.ts",
+        [
+          'import { createSqlClient as make } from "@/api/db/sql-client";',
+          'import * as owner from "../db/sql-client.ts";',
+          "make({max: 7});",
+          "owner.createSqlClient({max: 8});",
+          'const { createSqlClient: hidden } = await import("../db/sql-client");',
+          "hidden({max: 9});",
+        ].join("\n"),
+      ).map(({ maximum }) => maximum),
+    ).toEqual(["fixed:7", "fixed:8", "fixed:9"]);
     expect(
       collectConstructors(
         "unrelated.ts",

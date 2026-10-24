@@ -32,7 +32,7 @@ export const CaseLawResultsSummary = ({
   </div>
 );
 
-export const CaseLawResultsSummaryText = ({
+const CaseLawResultsSummaryText = ({
   exactCount,
   intent,
   page,

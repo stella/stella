@@ -27,6 +27,7 @@ implicit_clone = "warn"
 inefficient_to_string = "warn"
 manual_is_variant_and = "warn"
 manual_let_else = "warn"
+map_err_ignore = "deny"
 match_wildcard_for_single_variants = "warn"
 needless_continue = "warn"
 needless_pass_by_ref_mut = "warn"
@@ -154,6 +155,7 @@ objc2-core-graphics = { version = "0.3", default-features = false, features = [
   "std",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSArray",
   "NSData",
   "NSGeometry",
   "NSString",
@@ -169,6 +171,7 @@ stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-windows-signing = { path = "crates/windows-signing", version = "0.0.1" }
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
+windows-registry = "0.6"
 winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
 [dev-dependencies]

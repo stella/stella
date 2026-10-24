@@ -4,8 +4,6 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 // The network these reads go to: the signed-in member (or nobody) answers.
 let signedIn: string | null = "member-a";
 const threadListRequests: (string | null)[] = [];
@@ -130,13 +128,19 @@ const nextNavigation = async (
       publicHref: `${location.pathname}${hash === "" ? "" : `#${hash}`}`,
     },
   });
-  return await Promise.race([
+  const pending = Promise.withResolvers<"pending">();
+  const timeout = setTimeout(() => {
+    pending.resolve("pending");
+  }, 20);
+  const result = await Promise.race([
     guard.then(
       () => "stay" as const,
       (error: unknown) => (isRedirect(error) ? ("redirect" as const) : error),
     ),
-    sleep(20).then(() => "pending" as const),
+    pending.promise,
   ]);
+  clearTimeout(timeout);
+  return result;
 };
 
 /** The client with member-a's reads cached. */

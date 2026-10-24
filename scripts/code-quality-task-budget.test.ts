@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtemp,
   mkdir,
+  mkdtemp,
   readFile,
-  writeFile,
   rm,
   symlink,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -25,6 +25,7 @@ import {
   ownedProcessTreeRows,
   parseTaskBudgets,
   parseTurboRunSummary,
+  processCpuSnapshot,
   runBudgetedCheck,
   TaskBudgetInputError,
 } from "./code-quality-task-budget";
@@ -1163,6 +1164,19 @@ test("termination diagnostics retain tree ancestry, group members and process st
     "102 101 102 S worker",
     "103 1 100 Z exited",
   ]);
+});
+
+test("a runnable owned process is progress between CPU clock ticks", () => {
+  const runnable = "100 1 100 R 00:00:01 compiler\n";
+  const waiting = "100 1 100 S 00:00:01 compiler\n";
+  expect(processCpuSnapshot(runnable, 100)).toEqual({
+    activity: "runnable",
+    cpu: "100:00:00:01",
+  });
+  expect(processCpuSnapshot(waiting, 100)).toEqual({
+    activity: "waiting",
+    cpu: "100:00:00:01",
+  });
 });
 
 test("owned process audits retain live descendants and ignore unrelated groups or exited zombies", () => {

@@ -8,9 +8,9 @@ import { sha256Hex as hashContent } from "@stll/sha256/node";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
-  caseLawDecisionSourceIdentities,
   caseLawDecisionAliases,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawSources,
 } from "@/api/db/schema";
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
@@ -22,10 +22,10 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
@@ -2192,7 +2192,7 @@ if (!databaseUrl || !runPostgresTests) {
       );
     });
 
-    test("Postgres aliases preserve identity across replay, flattening and retirement", async () => {
+    test("Postgres aliases preserve single-hop identity across replay and retirement", async () => {
       const first = createSafeId<"caseLawDecision">();
       const middle = createSafeId<"caseLawDecision">();
       const terminal = createSafeId<"caseLawDecision">();
@@ -2236,11 +2236,23 @@ if (!databaseUrl || !runPostgresTests) {
         await rejectionOf(
           db
             .insert(caseLawDecisionAliases)
-            .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+            .values({ retiredDecisionId: later, canonicalDecisionId: later })
             .execute(),
         ),
       ).toMatchObject({
         cause: { message: expect.stringContaining("Decision alias cycle") },
+      });
+      expect(
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: later, canonicalDecisionId: first })
+            .execute(),
+        ),
+      ).toMatchObject({
+        cause: {
+          message: expect.stringContaining("Decision alias target is retired"),
+        },
       });
       expect(
         await rejectionOf(
@@ -2287,9 +2299,7 @@ if (!databaseUrl || !runPostgresTests) {
         ).toMatchObject({
           cause: {
             message: expect.stringContaining(
-              "canonicalDecisionId" in patch
-                ? "Conflicting decision alias target"
-                : "Decision alias identity is immutable",
+              "Decision alias identity is immutable",
             ),
           },
         });
@@ -2310,13 +2320,7 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         },
       });
-      await db.insert(caseLawDecisionAliases).values({
-        retiredDecisionId: middle,
-        canonicalDecisionId: terminal,
-      });
-      await db
-        .delete(caseLawDecisions)
-        .where(inArray(caseLawDecisions.id, [first, middle]));
+      await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, first));
       await db
         .insert(caseLawDecisionAliases)
         .values(alias)
@@ -2324,43 +2328,24 @@ if (!databaseUrl || !runPostgresTests) {
           target: caseLawDecisionAliases.retiredDecisionId,
           set: { canonicalDecisionId: middle },
         });
-      await db.insert(caseLawDecisionAliases).values({
-        retiredDecisionId: later,
-        canonicalDecisionId: first,
-      });
-      const rows = await db
-        .select({
-          retired: caseLawDecisionAliases.retiredDecisionId,
-          target: caseLawDecisionAliases.canonicalDecisionId,
-        })
-        .from(caseLawDecisionAliases)
-        .where(
-          inArray(caseLawDecisionAliases.retiredDecisionId, [
-            first,
-            middle,
-            later,
-          ]),
-        );
-      expect(rows).toHaveLength(3);
-      for (const retired of [first, middle, later]) {
-        expect(rows).toContainEqual({ retired, target: terminal });
-      }
       expect(
         await rejectionOf(
           db
-            .delete(caseLawDecisions)
-            .where(eq(caseLawDecisions.id, terminal))
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: later, canonicalDecisionId: first })
             .execute(),
         ),
       ).toMatchObject({
         cause: {
-          code: "ERR_POSTGRES_SERVER_ERROR",
-          errno: "23001",
-          message: expect.stringContaining(
-            "case_law_decision_aliases_canonical_fk",
-          ),
+          message: expect.stringContaining("Decision alias target is retired"),
         },
       });
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisionAliases)
+          .where(eq(caseLawDecisionAliases.retiredDecisionId, first)),
+      ).toEqual(initial);
       expect(
         await rejectionOf(
           db
