@@ -41,6 +41,8 @@ export const BASELINE_PATHS = {
   offlineCheckImports: "scripts/offline-check-import-allowlist.json",
   /** scripts/check-ci-network-steps.ts */
   ciNetworkSteps: "scripts/ci-network-steps-allowlist.json",
+  /** scripts/check-tracked-file-sizes.ts */
+  trackedFileSizes: "scripts/tracked-file-size-baseline.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
