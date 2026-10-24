@@ -17,6 +17,7 @@ import {
   lockDraftInvoiceForLines,
   manualLineDraft,
   recalculateInvoiceTotals,
+  tExemptionReason,
   timeEntryLineDraft,
   tInvoiceLineQuantity,
   tLineDescription,
@@ -63,14 +64,20 @@ const createLineBodySchema = t.Object({
   ]),
   vatRateBps: tVatRateBps,
   vatTreatment: tVatTreatment,
+  exemptionReason: t.Optional(tExemptionReason),
 });
 
 const prepareLineInput = ({
   source,
   vatRateBps,
   vatTreatment,
+  exemptionReason,
 }: Static<typeof createLineBodySchema>) => {
-  const vat = { vatRateBps, vatTreatment };
+  const vat = {
+    vatRateBps,
+    vatTreatment,
+    exemptionReason: exemptionReason ?? null,
+  };
   if (source.type !== "manual") {
     return Result.ok({ manualDraft: null, vat });
   }
@@ -97,7 +104,10 @@ const lineCreationError = (error: HandlerError | SafeDbError) =>
 
 type ReadInvoiceLineDraftOptions = {
   source: Static<typeof createLineBodySchema>["source"];
-  vat: Pick<InvoiceLineDraft, "vatRateBps" | "vatTreatment">;
+  vat: Pick<
+    InvoiceLineDraft,
+    "vatRateBps" | "vatTreatment" | "exemptionReason"
+  >;
   manualDraft: InvoiceLineDraft | null;
   workspaceId: SafeId<"workspace">;
   currency: string;
