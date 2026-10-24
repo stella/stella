@@ -45,7 +45,11 @@ test("heading accents preserve layout and numeric meaning", async () => {
       ([element], index) => `export const Case${index} = () => (${element});`,
     )
     .join("\n");
-  expect(await lintSingleRule("no-decorative-heading-accent", source)).toEqual(
+  expect(
+    await lintSingleRule("no-decorative-heading-accent", source, {
+      sourcePath: "source.tsx",
+    }),
+  ).toEqual(
     cases.flatMap(([, reported], index) => (reported ? [index + 1] : [])),
   );
 });

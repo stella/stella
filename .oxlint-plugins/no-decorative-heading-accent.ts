@@ -41,18 +41,25 @@ const COUNTER_CLASSES = new Set([
 type CounterPart = "number" | "separator" | "other";
 
 const counterPart = (node: unknown): CounterPart => {
-  if (!isAstNode(node)) return "other";
-  if (node.type === "JSXEmptyExpression") return "separator";
-  if (node.type === "JSXExpressionContainer")
+  if (!isAstNode(node)) {
+    return "other";
+  }
+  if (node.type === "JSXEmptyExpression") {
+    return "separator";
+  }
+  if (node.type === "JSXExpressionContainer") {
     return counterPart(node.expression);
-  if (node.type === "Literal" && typeof node.value === "number")
+  }
+  if (node.type === "Literal" && typeof node.value === "number") {
     return "number";
+  }
   if (node.type === "JSXText" || node.type === "Literal") {
     if (
       typeof node.value !== "string" ||
       !/^[\p{N}\p{P}\p{Z}\s%+−]*$/u.test(node.value)
-    )
+    ) {
       return "other";
+    }
     return /\p{N}/u.test(node.value) ? "number" : "separator";
   }
   // The shared locale formatter renders numeric values through `.number()`.
@@ -65,7 +72,9 @@ const counterPart = (node: unknown): CounterPart => {
 };
 
 const hasNumericContent = (node: AstNode): boolean => {
-  if (!Array.isArray(node.children)) return false;
+  if (!Array.isArray(node.children)) {
+    return false;
+  }
   const parts = node.children.map(counterPart);
   return parts.includes("number") && !parts.includes("other");
 };
@@ -75,15 +84,21 @@ const hasNumericContent = (node: AstNode): boolean => {
 const hasDecorativeStyle = (node: AstNode): boolean =>
   attributesOf(node).some((attribute) => {
     const name = jsxName(attribute.name);
-    if (name === null || !STYLE_ATTRIBUTES.has(name)) return false;
-    if (name === "style") return true;
+    if (name === null || !STYLE_ATTRIBUTES.has(name)) {
+      return false;
+    }
+    if (name === "style") {
+      return true;
+    }
     const value =
       isAstNode(attribute.value) &&
       attribute.value.type === "JSXExpressionContainer"
         ? attribute.value.expression
         : attribute.value;
     const classes = staticStringValue(value);
-    if (classes === null) return true;
+    if (classes === null) {
+      return true;
+    }
     const tokens = classTokens(classes).map(classBaseName);
     return (
       !tokens.every((token) => LAYOUT_CLASSES.has(token)) &&
@@ -117,7 +132,7 @@ const hasAttribute = (node: unknown, names: ReadonlySet<string>): boolean =>
 
 const isHeading = (node: unknown): boolean => {
   const name = elementName(node);
-  return name !== null && (/^h[1-4]$/u.test(name) || /Heading$/u.test(name));
+  return name !== null && (/^h[1-4]$/u.test(name) || name.endsWith("Heading"));
 };
 
 const enclosingHeadingUnlessLinked = (node: AstNode): AstNode | null => {
@@ -150,6 +165,9 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           JSXElement(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
             const name = elementName(node);
             if (
               name === null ||
