@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -177,12 +177,7 @@ const listDocxSuggestions = createSafeHandler(
           docxSuggestionCursor.encode(boundary.createdAtCursor, cursor.id),
         );
         if (exactCursor === null) {
-          return Result.err(
-            new HandlerError({
-              status: 500,
-              message: "Could not resolve suggestion cursor boundary",
-            }),
-          );
+          return panic("Encoded suggestion cursor boundary did not decode");
         }
         cursor = exactCursor;
       }

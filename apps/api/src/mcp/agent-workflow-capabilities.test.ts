@@ -361,8 +361,9 @@ describe("agent workflow capability census", () => {
       expect(entry.confirmation, entry.id).toBe("required");
       expect(entry.destructive, entry.id).toBe(false);
       const capability = EXPOSED_IDS.find((id) => id === entry.id);
-      if (capability === undefined)
+      if (capability === undefined) {
         throw new TypeError("Unexercised guarded capability");
+      }
       const response = await invoke({
         capability,
         input: VALID_INPUT[capability],
@@ -594,11 +595,22 @@ describe("agent workflow capability refusals", () => {
   test.each(["memories.list", "memories.create", "memories.update"] as const)(
     "%s is unavailable while assistant memory is switched off",
     async (id) => {
+      const admittedContext = createContext();
       disabledFeatures.add(MEMORY_FEATURE_FLAG);
       const error = errorOf(
-        await invoke({ capability: id, input: VALID_INPUT[id] }),
+        await invoke({
+          capability: id,
+          input: VALID_INPUT[id],
+          context: admittedContext,
+        }),
       );
       expect(error.code).toBe("feature_disabled");
+      const unadmitted = await invoke({
+        capability: id,
+        input: VALID_INPUT[id],
+        context: createContext(),
+      });
+      expect(errorOf(unadmitted).code).toBe("not_found");
     },
   );
 });
