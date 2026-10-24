@@ -219,8 +219,14 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/mcp/server-core.ts",
   // Process startup consumes login refusals through Promise rejection before accepting work.
   "apps/api/src/lib/db/assert-database-login-posture.ts",
-  // Elysia consumes prevalidation feature denials through its error pipeline.
+  // The HTTP core turns thrown pipeline failures (a malformed body, an unknown
+  // route, a hidden feature) into sanitized answers at its error boundary.
+  "apps/api/src/http/**/*.ts",
+  "apps/api/src/lib/observability/request-lifecycle.ts",
+  // A rate-limit stage refunds its charges when a later stage throws.
+  "apps/api/src/lib/rate-limit/rate-limit.ts",
   "apps/api/src/lib/auth/feature-access/route.ts",
+  "apps/api/src/lib/deployment-feature-route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",

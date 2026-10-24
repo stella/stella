@@ -12,7 +12,7 @@ import { panic } from "better-result";
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 /** Poll cadence while a run is still queued or executing. */
@@ -38,7 +38,7 @@ export const prepareBilingualTranslation = async ({
   sourceLang,
   targetLang,
 }: PrepareBilingualTranslationArgs) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["bilingual-translations"].prepare.post({
@@ -78,7 +78,7 @@ export const createBilingualRun = async ({
   glossary,
   rows,
 }: CreateBilingualRunArgs) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["bilingual-translations"].runs.post({
@@ -108,7 +108,7 @@ const fetchBilingualRun = async (
   { workspaceId, runId }: BilingualRunRef,
   signal?: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["bilingual-translations"].runs({

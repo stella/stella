@@ -94,7 +94,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -136,9 +136,9 @@ const VERSION_CONFLICT_TOAST_TIMEOUT_MS = 10_000;
 const POSITION_REMOVED_TOAST_TIMEOUT_MS = 10_000;
 
 // A 409 the optimistic-concurrency guard raised, off either channel the
-// editor uses: Eden's error field on a direct call, or the `APIError`
-// `unwrapEden` throws inside a mutation.
-const isEdenVersionConflict = (error: ApiErrorInput): boolean =>
+// editor uses: the API client's error field on a direct call, or the `APIError`
+// `unwrapApiResponse` throws inside a mutation.
+const isApiVersionConflict = (error: ApiErrorInput): boolean =>
   normalizeApiError(error).code === API_VERSION_CONFLICT_ERROR_CODE;
 
 const isThrownVersionConflict = (error: unknown): boolean =>
@@ -1140,8 +1140,8 @@ const PlaybookEditorForm = ({
       draft: savedDraft,
       persistedIds: baseline.persistedIds,
     });
-    // Each branch awaits its own Eden call and inspects `.error` before
-    // touching `.data`: Eden resolves rather than throwing, so a failed
+    // Each branch awaits its own API call and inspects `.error` before
+    // touching `.data`: the client resolves rather than throwing, so a failed
     // request reads as success anywhere the response is not checked.
     const response =
       playbookId === null
@@ -1157,7 +1157,7 @@ const PlaybookEditorForm = ({
               ...(expectedUpdatedAt === null ? {} : { expectedUpdatedAt }),
             });
     if (response.error) {
-      return isEdenVersionConflict(response.error)
+      return isApiVersionConflict(response.error)
         ? { type: "conflict", error: response.error }
         : { type: "failed", error: response.error };
     }
@@ -1461,7 +1461,7 @@ const PlaybookEditorForm = ({
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(id) })
         .approve.post({ expectedUpdatedAt });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data) => {
       setStatus("approved");

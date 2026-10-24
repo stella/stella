@@ -1,5 +1,6 @@
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
@@ -8,15 +9,16 @@ import {
   hasSearchQueryOrSelectiveFilter,
   resolveSelectedWorkspaceIds,
 } from "@/api/handlers/search/search";
+import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { searchGlobalFacet } from "@/api/lib/search/index-global";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
-const isoDateTime = t.String({ format: "date-time" });
+const isoDateTime = apiDateTimeSchema;
 
 const FACET_NAMES = ["editor", "workspace", "mimeType"] as const;
 
@@ -24,33 +26,34 @@ const FACET_BUCKET_LIMIT_MAX = 50;
 const FACET_BUCKET_LIMIT_DEFAULT = 20;
 const FACET_SEARCH_MAX = 256;
 
-export const searchFacetsBodySchema = t.Object({
-  facet: t.UnionEnum(FACET_NAMES),
-  search: t.String({ maxLength: FACET_SEARCH_MAX, default: "" }),
-  query: t.String({
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
-  types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
-    maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
-  }),
-  kinds: t.Optional(
-    t.Array(entityKindSchema, { maxItems: ENTITY_KINDS.length }),
+export const searchFacetsBodySchema = v.object({
+  facet: v.picklist(FACET_NAMES),
+  search: v.optional(v.pipe(v.string(), v.maxLength(FACET_SEARCH_MAX)), ""),
+  query: v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
+  workspaceIds: v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(64)),
+  types: v.pipe(
+    v.array(v.picklist(GLOBAL_SEARCH_RESULT_TYPES)),
+    v.maxLength(GLOBAL_SEARCH_RESULT_TYPES.length),
   ),
-  editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
-  mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
-  updatedFrom: t.Optional(isoDateTime),
-  updatedTo: t.Optional(isoDateTime),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: FACET_BUCKET_LIMIT_MAX,
-      default: FACET_BUCKET_LIMIT_DEFAULT,
-    }),
+  kinds: v.optional(
+    v.pipe(v.array(entityKindSchema), v.maxLength(ENTITY_KINDS.length)),
+  ),
+  editedByUserIds: v.pipe(v.array(userIdSchema), v.maxLength(64)),
+  mimeTypes: v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  updatedFrom: v.optional(isoDateTime),
+  updatedTo: v.optional(isoDateTime),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(FACET_BUCKET_LIMIT_MAX),
+    ),
+    FACET_BUCKET_LIMIT_DEFAULT,
   ),
 });
 
-type SearchFacetsBody = Static<typeof searchFacetsBodySchema>;
+type SearchFacetsBody = v.InferOutput<typeof searchFacetsBodySchema>;
 
 type SearchFacetsHandlerProps = {
   scopedDb: ScopedDb;

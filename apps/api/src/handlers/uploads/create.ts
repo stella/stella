@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Generic presigned-upload entrypoint. The body's `purpose` field
  * picks the per-surface validation + future finalize callback;
@@ -5,11 +6,9 @@
  * shared.
  *
  * Phase 1 wires only `entity_create`. Phases 2–4 will extend the
- * `t.Union(...)` and add a `switch(body.purpose)` branch.
+ * `v.union(...)` and add a `switch(body.purpose)` branch.
  */
-import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { sha256HexToBase64 } from "@stll/sha256";
 
@@ -27,7 +26,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -42,7 +41,7 @@ import {
 } from "@/api/lib/uploads/entity-create";
 import {
   documentUploadFileFields,
-  tUploadFileSize,
+  uploadFileSizeSchema,
 } from "@/api/lib/uploads/file-metadata-schema";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
@@ -52,37 +51,35 @@ import {
 
 const skillPackFileMetadataSchema = {
   ...documentUploadFileFields,
-  size: tUploadFileSize(FILE_SIZE_LIMIT_BYTES.skillPack),
+  size: uploadFileSizeSchema(FILE_SIZE_LIMIT_BYTES.skillPack),
 } as const;
 
-const entityCreatePresignBodySchema = t.Object({
-  purpose: t.Literal("entity_create"),
-  propertyId: tSafeId("property"),
-  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+const entityCreatePresignBodySchema = v.object({
+  purpose: v.literal("entity_create"),
+  propertyId: resourceIdSchema("property"),
+  parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
   ...documentUploadFileFields,
 });
 
-const entityVersionPresignBodySchema = t.Object({
-  purpose: t.Literal("entity_version"),
-  entityId: tSafeId("entity"),
+const entityVersionPresignBodySchema = v.object({
+  purpose: v.literal("entity_version"),
+  entityId: resourceIdSchema("entity"),
   ...documentUploadFileFields,
 });
 
-const agentSkillPresignBodySchema = t.Object({
-  purpose: t.Literal("agent_skill"),
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  // Skill packs use the smaller `skillPack` budget enforced by the
-  // legacy upload, capped here too.
+const agentSkillPresignBodySchema = v.object({
+  purpose: v.literal("agent_skill"),
+  scope: v.picklist(AGENT_SKILL_SCOPES),
   ...skillPackFileMetadataSchema,
 });
 
-const presignBodySchema = t.Union([
+const presignBodySchema = v.union([
   entityCreatePresignBodySchema,
   entityVersionPresignBodySchema,
   agentSkillPresignBodySchema,
 ]);
 
-type PresignBody = Static<typeof presignBodySchema>;
+type PresignBody = v.InferOutput<typeof presignBodySchema>;
 
 type EntityCreatePurposeDataWithParent = Extract<
   PendingUploadPurposeData,
@@ -235,7 +232,8 @@ const presignUpload = createSafeHandler(
     }
 
     type PresignWriteResult =
-      { status: "ok" } | { status: EntityCreateWriteFailureStatus };
+      | { status: "ok" }
+      | { status: EntityCreateWriteFailureStatus };
 
     // Persist intent. RLS pins the row to this workspace, so even
     // a stolen URL can only be finalized by a request that

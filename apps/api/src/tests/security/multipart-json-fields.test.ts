@@ -1,23 +1,32 @@
-import { Kind, OptionalKind } from "@sinclair/typebox";
-import type { TObject, TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
-import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
+import { afterAll, describe, expect, test } from "bun:test";
+import type * as v from "valibot";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
-import { multipartFormParser } from "@/api/lib/multipart-form-parser";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import {
+  isValibotSchema,
+  toRouteJsonSchema,
+} from "@/api/lib/json-schema/valibot-to-json-schema";
+import type { JsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
 
-// Elysia's built-in multipart parser runs before route validation and turns
-// any form field whose value starts with `{` or `[` into a parsed object. A
-// body schema that types such a field as `t.String()` therefore rejects a
-// perfectly typed request with a 422, and neither TypeBox's static type nor
-// the Eden client can see it: both say `string`. `multipartFormParser` takes
-// that parser's place on the API app; this census mounts the real body schema
-// of every handler that accepts a multipart body behind the same plugin and
-// posts a JSON-shaped value into every free-text string field, so a handler
+// A multipart form carries every field as text. A body reader that turned a
+// field whose value starts with `{` or `[` into a parsed object would make a
+// body schema that reads that field as a string reject a perfectly typed
+// request with a 422, while the route's static type still says `string`. The
+// HTTP core reads multipart flat (`http/input.ts`): values pass through as
+// text and a field that carries a document says so in its schema
+// (`jsonFromString`). This census mounts the real body schema of every handler
+// that accepts a multipart body on the real `Bun.serve` core and posts a
+// JSON-shaped value into every free-text string field, so a reader or schema
 // that would regress fails here instead of in the browser.
 
 /** Endpoint ids are repo-relative; trim the tree prefix so an offender reads
@@ -31,127 +40,177 @@ const PLAIN_VALUE = "probe";
  *  and stops finding the handlers it is supposed to be probing. */
 const MIN_MULTIPART_HANDLERS = 16;
 
-const isObjectSchema = (schema: unknown): schema is TObject =>
-  typeof schema === "object" &&
-  schema !== null &&
-  Kind in schema &&
-  schema[Kind] === "Object";
+const probeFile = () =>
+  new File(["probe"], "probe.bin", { type: "application/octet-stream" });
 
-/** The schema's TypeBox kind, or `""` for a value carrying no kind symbol. */
-const kindOf = (schema: TSchema): string => {
-  const kind: unknown = schema[Kind];
-  return typeof kind === "string" ? kind : "";
-};
+/** Whether a schema accepts a value, sync or async alike. */
+const accepts = async (
+  schema: v.GenericSchema,
+  value: unknown,
+): Promise<boolean> =>
+  (await schema["~standard"].validate(value)).issues === undefined;
 
-const isFileSchema = (schema: TSchema): boolean => {
-  const kind = kindOf(schema);
-  return kind === "File" || kind === "Files";
-};
+const OBJECT_TYPES = new Set(["object", "loose_object", "strict_object"]);
+const FILE_TYPES = new Set(["file", "blob"]);
 
-/** TypeBox schemas carry their keywords as plain properties (`TSchema` has a
- *  string index signature), so read them without asserting a shape. */
-const stringKeyword = (schema: TSchema, key: string): string | undefined => {
-  const value: unknown = schema[key];
-  return typeof value === "string" ? value : undefined;
-};
-
-const numberKeyword = (schema: TSchema, key: string): number | undefined => {
-  const value: unknown = schema[key];
-  return typeof value === "number" ? value : undefined;
-};
-
-const unionMembers = (schema: TSchema): TSchema[] => {
-  const anyOf: unknown = schema["anyOf"];
-  return Array.isArray(anyOf) ? anyOf : [];
-};
-
-const stringMember = (schema: TSchema): TSchema | undefined => {
-  const kind = kindOf(schema);
-  if (kind === "String") {
-    return schema;
-  }
-  if (kind !== "Union") {
+/** The entries of a valibot object schema, or `undefined` for another schema. */
+const objectEntries = (
+  schema: v.GenericSchema,
+): [string, v.GenericSchema][] | undefined => {
+  if (!OBJECT_TYPES.has(schema.type) || !("entries" in schema)) {
     return undefined;
   }
-  return unionMembers(schema).find((member) => kindOf(member) === "String");
+  const { entries } = schema;
+  if (!isRecord(entries)) {
+    return undefined;
+  }
+  return Object.entries(entries).flatMap(
+    ([name, entry]): [string, v.GenericSchema][] =>
+      isValibotSchema(entry) ? [[name, entry]] : [],
+  );
+};
+
+/** A schema nested in a wrapper, a list or a union. */
+const innerSchemas = (schema: v.GenericSchema): v.GenericSchema[] => {
+  const inner: unknown[] = [];
+  if ("wrapped" in schema) {
+    inner.push(schema.wrapped);
+  }
+  if ("item" in schema) {
+    inner.push(schema.item);
+  }
+  if ("options" in schema && isUnknownArray(schema.options)) {
+    inner.push(...schema.options);
+  }
+  return inner.filter(isValibotSchema);
+};
+
+const declaresFile = (schema: v.GenericSchema): boolean =>
+  FILE_TYPES.has(schema.type) ||
+  (schema.type === "instance" &&
+    "class" in schema &&
+    (schema.class === File || schema.class === Blob)) ||
+  innerSchemas(schema).some(declaresFile);
+
+/**
+ * A file field: one that declares a file, or that takes an uploaded file and
+ * refuses text and a plain object in its place. The object probe matters: a
+ * valibot record or object accepts any non-array object, an uploaded `File`
+ * included, so without it a JSON body's `v.record(...)` field would make that
+ * JSON handler look like a multipart one.
+ */
+const isFileSchema = async (schema: v.GenericSchema): Promise<boolean> =>
+  declaresFile(schema) ||
+  ((await accepts(schema, probeFile())) &&
+    !(await accepts(schema, PLAIN_VALUE)) &&
+    !(await accepts(schema, {})));
+
+/** A rendered schema, or one of its members read back as plain data. */
+type JsonNode = JsonSchema | Record<string, unknown>;
+
+/** The string member of a field as clients see it, if it reads a string. */
+const stringMember = (rendered: JsonNode): JsonNode | undefined => {
+  const type = rendered["type"];
+  if (type === "string" || (isUnknownArray(type) && type.includes("string"))) {
+    return rendered;
+  }
+  const anyOf = rendered["anyOf"];
+  return isUnknownArray(anyOf)
+    ? anyOf.filter(isRecord).find((member) => member["type"] === "string")
+    : undefined;
 };
 
 /**
  * A string field that may legitimately carry free text. Identifier-shaped
- * strings (a format, a pattern, or a length window that excludes both probe
- * values) can never hold JSON-looking text, so the parser cannot change
- * their outcome; they are filled, not probed.
+ * strings (a closed set of values, a format, a pattern, or a length window
+ * that excludes both probe values) can never hold JSON-looking text, so the reader cannot change their
+ * outcome; they are filled, not probed. A field that declares a JSON document
+ * (`jsonFromString`) is shown as that document, not as a string, so it is
+ * never probed either: parsing it is its job.
  */
-const isFreeTextField = (schema: TSchema): boolean => {
-  const member = stringMember(schema);
-  if (!member) {
+const isFreeTextField = (schema: v.GenericSchema): boolean => {
+  const member = stringMember(toRouteJsonSchema(schema));
+  if (member === undefined) {
     return false;
   }
+  const minLength = member["minLength"];
+  const maxLength = member["maxLength"];
   return (
-    stringKeyword(member, "format") === undefined &&
-    stringKeyword(member, "pattern") === undefined &&
-    (numberKeyword(member, "minLength") ?? 0) <= PLAIN_VALUE.length &&
-    (numberKeyword(member, "maxLength") ?? Number.POSITIVE_INFINITY) >=
+    // A closed set (`picklist`, `literal`) is filled with one of its values.
+    closedValues(member).length === 0 &&
+    member["format"] === undefined &&
+    member["pattern"] === undefined &&
+    (typeof minLength === "number" ? minLength : 0) <= PLAIN_VALUE.length &&
+    (typeof maxLength === "number" ? maxLength : Number.POSITIVE_INFINITY) >=
       JSON_SHAPED_VALUE.length
   );
 };
 
-const isOptional = (schema: TSchema): boolean => OptionalKind in schema;
+/** A field the request may leave out. */
+const isOptional = async (schema: v.GenericSchema): Promise<boolean> =>
+  await accepts(schema, undefined);
 
 /**
- * Candidates for a required string-shaped field, offered in order. The field's
- * own schema decides which one it accepts, so a patterned id, a hash, or a
- * plain string all get filled without this test restating their rules. The
- * hash is computed, not pasted, so it is a real digest rather than a literal
- * that could drift out of the shape a `sha256` field demands.
+ * Wire values offered for a required non-file field, in order. The field's
+ * own schema decides which one it accepts, so a patterned id, a hash, a
+ * wire-read number or boolean, or a plain string all get filled without this
+ * test restating their rules. The hash is computed, not pasted, so it is a
+ * real digest rather than a literal that could drift out of the shape a
+ * `sha256` field demands.
  */
 const STRING_FILLERS = [
   PLAIN_VALUE,
+  "true",
+  "1",
   "00000000-0000-4000-8000-000000000000",
   hashSha256Hex(PLAIN_VALUE),
 ];
 
+/** The closed values a field shows clients (`const`, `enum`), as wire text. */
+const closedValues = (rendered: JsonNode): string[] => {
+  const values: unknown[] = [];
+  if ("const" in rendered) {
+    values.push(rendered["const"]);
+  }
+  const members = rendered["enum"];
+  if (isUnknownArray(members)) {
+    values.push(...members);
+  }
+  const anyOf = rendered["anyOf"];
+  if (isUnknownArray(anyOf)) {
+    values.push(...anyOf.filter(isRecord).flatMap(closedValues));
+  }
+  return values.map(String);
+};
+
 /**
- * A representative value for a required non-file field so the probe request is
- * valid apart from the JSON-shaped strings under test. Kinds Elysia coerces
- * from the wire (numbers, booleans, literals) get their coercible text; every
- * string-shaped kind is filled by asking the schema itself.
+ * A representative value for a required non-file field so the probe request
+ * is valid apart from the JSON-shaped strings under test.
  */
-const filler = (schema: TSchema): string | null => {
-  switch (kindOf(schema)) {
-    case "Literal":
-      return String(schema["const"]);
-    case "Boolean":
-      return "true";
-    case "Number":
-    case "Integer":
-      return "1";
-    case "Union": {
-      for (const member of unionMembers(schema)) {
-        const value = filler(member);
-        if (value !== null) {
-          return value;
-        }
-      }
-      return null;
-    }
-    default: {
-      // Closed value sets (`t.UnionEnum`) carry their members as `enum`.
-      const members: unknown = schema["enum"];
-      if (Array.isArray(members) && members.length > 0) {
-        return String(members[0]);
-      }
-      return (
-        STRING_FILLERS.find((candidate) => Value.Check(schema, candidate)) ??
-        null
-      );
+const filler = async (schema: v.GenericSchema): Promise<string | null> => {
+  for (const candidate of [
+    ...closedValues(toRouteJsonSchema(schema)),
+    ...STRING_FILLERS,
+  ]) {
+    if (await accepts(schema, candidate)) {
+      return candidate;
     }
   }
+  return null;
+};
+
+type BodyField = {
+  name: string;
+  schema: v.GenericSchema;
+  file: boolean;
+  freeText: boolean;
+  optional: boolean;
 };
 
 type MultipartHandler = {
   file: string;
-  body: TObject;
+  body: v.GenericSchema;
+  fields: BodyField[];
   stringFields: string[];
 };
 
@@ -174,11 +233,25 @@ const loadMultipartHandlers = async (): Promise<MultipartCensus> => {
 
   for (const { id, config } of endpoints) {
     const body = config["body"];
-    if (!isObjectSchema(body)) {
+    if (!isValibotSchema(body)) {
       continue;
     }
-    const properties = Object.entries(body.properties);
-    if (!properties.some(([, schema]) => isFileSchema(schema))) {
+    const entries = objectEntries(body);
+    if (entries === undefined) {
+      continue;
+    }
+    const fields: BodyField[] = [];
+    for (const [name, schema] of entries) {
+      const file = await isFileSchema(schema);
+      fields.push({
+        name,
+        schema,
+        file,
+        freeText: !file && isFreeTextField(schema),
+        optional: await isOptional(schema),
+      });
+    }
+    if (!fields.some(({ file }) => file)) {
       continue;
     }
     handlers.push({
@@ -186,33 +259,34 @@ const loadMultipartHandlers = async (): Promise<MultipartCensus> => {
         ? id.slice(HANDLERS_PREFIX.length)
         : id,
       body,
-      stringFields: properties
-        .filter(([, schema]) => isFreeTextField(schema))
-        .map(([name]) => name),
+      fields,
+      stringFields: fields
+        .filter(({ freeText }) => freeText)
+        .map(({ name }) => name),
     });
   }
 
   return { handlers, importErrors };
 };
 
-const buildForm = (body: TObject, stringValue: string): FormData => {
+const buildForm = async (
+  fields: readonly BodyField[],
+  stringValue: string,
+): Promise<FormData> => {
   const form = new FormData();
-  for (const [name, schema] of Object.entries(body.properties)) {
-    if (isFileSchema(schema)) {
-      form.append(
-        name,
-        new File(["probe"], "probe.bin", { type: "application/octet-stream" }),
-      );
+  for (const { name, schema, file, freeText, optional } of fields) {
+    if (file) {
+      form.append(name, probeFile());
       continue;
     }
-    if (isFreeTextField(schema)) {
+    if (freeText) {
       form.append(name, stringValue);
       continue;
     }
-    if (isOptional(schema)) {
+    if (optional) {
       continue;
     }
-    const value = filler(schema);
+    const value = await filler(schema);
     if (value !== null) {
       form.append(name, value);
     }
@@ -223,22 +297,35 @@ const buildForm = (body: TObject, stringValue: string): FormData => {
 type ProbeOutcome = { status: number; detail: string };
 
 /**
- * Mounts the schema behind the same parser the API app installs, so the probe
- * exercises the production request pipeline rather than a bare Elysia app.
+ * Serves the schema on the production HTTP core behind the production error
+ * boundary, so the probe exercises the real body reader, decoder and refusal
+ * rather than a stand-in.
  */
+const serveProbe = (body: v.GenericSchema): TestServer =>
+  serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        "/probe": { POST: defineEndpoint.public({ body }, () => "ok") },
+      }),
+    }),
+  );
+
 const postForm = async (
-  body: TObject,
+  server: TestServer,
   form: FormData,
 ): Promise<ProbeOutcome> => {
-  const app = new Elysia()
-    .use(multipartFormParser)
-    .post("/probe", () => "ok", { body });
-  const response = await app.handle(
+  const response = await server.fetch(
     new Request("http://localhost/probe", { method: "POST", body: form }),
   );
   const detail = response.status === 200 ? "" : await response.text();
   return { status: response.status, detail: detail.slice(0, 300) };
 };
+
+const servers: TestServer[] = [];
+afterAll(async () => {
+  await Promise.all(servers.map(async (server) => await server.stop()));
+});
 
 describe("multipart body string fields", () => {
   test(
@@ -261,18 +348,26 @@ describe("multipart body string fields", () => {
       );
 
       const offenders: string[] = [];
-      for (const { file, body, stringFields } of handlers) {
+      for (const { file, body, fields, stringFields } of handlers) {
         if (stringFields.length === 0) {
           continue;
         }
+        const server = serveProbe(body);
+        servers.push(server);
         // Baseline: the probe request itself must be valid with plain strings,
         // otherwise a failure below would say nothing about JSON parsing.
-        const baseline = await postForm(body, buildForm(body, PLAIN_VALUE));
+        const baseline = await postForm(
+          server,
+          await buildForm(fields, PLAIN_VALUE),
+        );
         expect(`${file}: baseline ${baseline.status} ${baseline.detail}`).toBe(
           `${file}: baseline 200 `,
         );
 
-        const probe = await postForm(body, buildForm(body, JSON_SHAPED_VALUE));
+        const probe = await postForm(
+          server,
+          await buildForm(fields, JSON_SHAPED_VALUE),
+        );
         if (probe.status !== 200) {
           offenders.push(
             `${file} (${stringFields.join(", ")}) -> ${probe.status} ${probe.detail}`,

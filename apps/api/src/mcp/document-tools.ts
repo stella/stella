@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
@@ -2298,7 +2298,7 @@ const setFieldValueContentSchema = v.variant("type", [
       v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
     ),
     value: v.pipe(
-      v.nullable(vApiDate),
+      v.nullable(apiDateSchema),
       v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
     ),
   }),

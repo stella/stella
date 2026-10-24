@@ -25,10 +25,12 @@ import {
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { createHttpApp } from "@/api/http/app";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -40,13 +42,15 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // A chat turn keeps running while the session of the device watching it ends:
-// another device signs it out, or it expires. The real chat routes and their
-// auth macro, the real revocation endpoint, and a run log written the way a
+// another device signs it out, or it expires. The real chat routes served over
+// HTTP with their member authentication, the real revocation endpoint, and a
+// run log written the way a
 // producing turn writes it. The ended session can neither probe nor rejoin
 // the turn, nobody else in the organization can either, and the turn still
 // runs to its settlement for the owner's live session.
@@ -59,7 +63,12 @@ beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
 });
 
+const server = serveForTest(
+  createHttpApp({ routes: chatRoute, middleware: [errorBoundary] }),
+);
+
 afterAll(async () => {
+  await server.stop();
   await releaseAgentAuthTestDb();
 });
 
@@ -94,7 +103,7 @@ const turnRequest = async (
   action: "join" | "resume",
   cookie: string,
 ): Promise<Response> =>
-  await chatRoute.handle(
+  await server.fetch(
     new Request(
       `${BASE}/chat/threads/${turn.threadId}/turns/${turn.turnId}/${action}?runId=${turn.runId}`,
       { headers: { cookie } },

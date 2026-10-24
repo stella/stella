@@ -56,13 +56,16 @@ const testState = createTestState({ file: import.meta.path, config: env });
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
 describe("createSafeHandler workspace audit binding", () => {
-  test("rebinds audit recording to the validated workspace", async () => {
+  // The caller binds the recorder to the matter it proved (REST in
+  // `authorizeWorkspace`, MCP in `capabilityHandlerContext`); the handler
+  // factory hands that recorder on and never builds or swaps its own.
+  test("hands the handler the recorder its caller bound to the matter", async () => {
     const workspaceId = toSafeId<"workspace">(
       "019e7000-0000-7000-8000-000000000003",
     );
-    const reboundRecorder: AuditRecorder = async () => undefined;
+    const boundRecorder: AuditRecorder = async () => undefined;
     let recorderSeenByHandler: AuditRecorder | undefined;
-    let recorderWorkspaceId: string | null | undefined;
+    let recorderFactoryCalled = false;
     const endpoint = createSafeHandler(
       {
         contract: "patch",
@@ -104,20 +107,18 @@ describe("createSafeHandler workspace audit binding", () => {
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
-      recordAuditEvent: noopAuditRecorder,
-      createAuditRecorder: (options?: {
-        workspaceId?: typeof workspaceId | null;
-      }) => {
-        recorderWorkspaceId = options?.workspaceId;
-        return reboundRecorder;
+      recordAuditEvent: boundRecorder,
+      createAuditRecorder: () => {
+        recorderFactoryCalled = true;
+        return noopAuditRecorder;
       },
     };
 
     const result = await endpoint.handler(asTestRaw(context));
 
     expect(result).toEqual({ ok: true });
-    expect(recorderWorkspaceId).toBe(workspaceId);
-    expect(recorderSeenByHandler).toBe(reboundRecorder);
+    expect(recorderSeenByHandler).toBe(boundRecorder);
+    expect(recorderFactoryCalled).toBe(false);
   });
 });
 
@@ -341,8 +342,8 @@ describe("createSafeRootHandler usage preflight", () => {
   });
 });
 
-const createContext = (
-  endpoint: ReturnType<typeof createSafeRootHandler>,
+const createContext = <TContext>(
+  _endpoint: { readonly handler: (ctx: TContext) => unknown },
   safeDb: SafeDb,
   {
     orgAIConfig = null,
@@ -353,7 +354,7 @@ const createContext = (
     orgAIConfigStatus?: OrgAIConfigStatus;
     role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
-): Parameters<typeof endpoint.handler>[0] =>
+): TContext =>
   ({
     request: new Request("https://example.test/usage-preflight"),
     route: "/usage-preflight",
@@ -380,7 +381,7 @@ const createContext = (
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
-  }) as unknown as Parameters<typeof endpoint.handler>[0];
+  }) as unknown as TContext;
 
 const createOrgAIConfig = (): OrgAIConfig => ({
   providers: [{ provider: "openai", apiKey: "test-api-key" }],

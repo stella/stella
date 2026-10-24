@@ -18,7 +18,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { withActiveUpload } from "@/lib/files/active-uploads";
@@ -165,7 +165,7 @@ const abortUpload = async (
     // SAFETY: best-effort abort; the bucket lifecycle rule and daily
     // prune already reclaim the tmp object and row within 24h, so a
     // failed abort here is not fatal and has no user-facing outcome.
-    // oxlint-disable-next-line require-eden-error-check/require-eden-error-check
+    // oxlint-disable-next-line require-api-error-check/require-api-error-check
     await api
       .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({
         uploadId,
@@ -700,7 +700,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
       name: t("common.documents"),
       contentType: "file",
     });
-    propertyId = unwrapEden(response).id;
+    propertyId = unwrapApiResponse(response).id;
     return propertyId;
   };
 

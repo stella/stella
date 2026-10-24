@@ -18,9 +18,10 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  *
  *  - Static curated tools (`handleMcpToolCall` -> per-tool arg parsing): Valibot
  *    `v.strictObject` schemas wrapped in `nullAsAbsent`.
- *  - The capability invoke path (`executeInvoke` -> `validatePart`): the
- *    Elysia-parity TypeBox chain Default -> Convert -> Clean -> Check over the
- *    live handler config schemas.
+ *  - The capability invoke path (`executeInvoke` -> `validatePart`): the agent
+ *    boundary repairs the input against the advertised JSON Schema rendering
+ *    (`normalizeInputAtBoundary`), then the live route's own valibot schema
+ *    decodes it exactly as it decodes a request.
  *
  * One rule, pinned identically on both:
  *  - null on a PLAIN optional field (no null in its type) is ABSENCE. The
@@ -29,7 +30,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  *    client must send every property a schema declares, so reading its null as
  *    a value would make those surfaces uncallable.
  *  - null on a NULLABLE field (declared `type: ["string","null"]` /
- *    `v.optional(v.nullable(...))` / a TypeBox null-union, the "pass null to
+ *    `v.optional(v.nullable(...))`, the "pass null to
  *    clear" convention) is ACCEPTED and passes through as a real null.
  *  - null never reaches a handler as the value of a plain optional field.
  *
@@ -288,7 +289,7 @@ describe("static tools accept explicit null on nullable ('pass null to clear') f
   });
 });
 
-// --- Path 2: capability invoke path (TypeBox Default->Convert->Clean->Check) --
+// --- Path 2: capability invoke path (advertised repair, then the route schema) --
 
 describe("capability executors read explicit null on plain optional fields as omission", () => {
   // A contact body with everything the schema requires, so each case below
@@ -400,8 +401,9 @@ describe("capability executors read explicit null on plain optional fields as om
 });
 
 describe("capability executors accept explicit null on nullable fields", () => {
-  // TypeBox null-union fields (catalog `nullable: true`) accept null: Check
-  // passes and validate_only reports valid, with the null carried through.
+  // Nullable fields (`v.nullable`, a null type in the advertised schema) accept
+  // null: the route schema passes it and validate_only reports valid, with the
+  // null carried through.
   const cases: {
     label: string;
     capability: string;

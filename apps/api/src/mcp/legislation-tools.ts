@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
@@ -169,7 +169,7 @@ const anchorInputSchema = v.pipe(
 );
 
 const asOfInputSchema = v.pipe(
-  vApiDate,
+  apiDateSchema,
   v.maxLength(10),
   v.description(
     "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it " +
@@ -225,7 +225,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Filter statutes effective from this ISO date (YYYY-MM-DD)",
@@ -234,7 +234,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
@@ -885,7 +885,8 @@ const provisionRequestKey = (item: ProvisionRequest): string =>
   ]);
 
 type ProvisionItemBuildResult =
-  { type: "item"; item: ProvisionItemResult } | { type: "invalid-cursor" };
+  | { type: "item"; item: ProvisionItemResult }
+  | { type: "invalid-cursor" };
 
 /**
  * The provision's printed citation (`§ 1729 89/2012 Sb.`), beside its reader

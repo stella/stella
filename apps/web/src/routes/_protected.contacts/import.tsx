@@ -56,7 +56,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
@@ -211,7 +211,7 @@ function ContactImportStudio() {
     setBusy("inspecting");
     const result = await Result.tryPromise(async () => {
       const response = await api.contacts.import.inspect.post({ file });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setBusy("idle");
 
@@ -251,7 +251,7 @@ function ContactImportStudio() {
         file: state.file,
         mapping: JSON.stringify(state.mapping),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setBusy("idle");
 

@@ -151,7 +151,7 @@ type ObserveFailureOptions = {
 
 const requestFields = (request: Request | undefined): LoggerAttributes => {
   const requestId =
-    request === undefined ? undefined : getRequestContext(request)?.requestId;
+    request === undefined ? undefined : getRequestContext()?.requestId;
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
@@ -177,7 +177,7 @@ const observe = (
   };
 
   if (request !== undefined) {
-    recordRequestFailure(request, {
+    recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,
       sink: sink.event,

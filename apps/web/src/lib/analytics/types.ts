@@ -36,19 +36,19 @@ export const WEB_ANALYTICS_EVENTS = {
 export type WebAnalyticsEvent =
   (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
 
-// An Eden treaty error envelope carries the API status and body unparsed;
+// An API client error envelope carries the API status and raw body;
 // captured raw, analytics loses both. Callers convert it with `toAPIError`.
-type EdenErrorEnvelope = { status: number; value: unknown };
+type ApiErrorEnvelope = { status: number; value: unknown };
 
-export type NotEdenErrorEnvelope<E> = E extends Error
+export type NotApiErrorEnvelope<E> = E extends Error
   ? E
-  : E extends EdenErrorEnvelope
+  : E extends ApiErrorEnvelope
     ? never
     : E;
 
 export type Analytics = {
   captureError: <E>(
-    error: E & NotEdenErrorEnvelope<E>,
+    error: E & NotApiErrorEnvelope<E>,
     context?: ErrorCaptureContext,
   ) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
@@ -78,7 +78,9 @@ export type Analytics = {
 };
 
 export type FollowupSurface =
-  "chat-thread" | "document-chat" | "inspector-chat";
+  | "chat-thread"
+  | "document-chat"
+  | "inspector-chat";
 
 // Click-through needs where and how a suggestion was used, never which
 // conversation it came from.

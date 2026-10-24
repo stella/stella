@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import {
@@ -11,14 +11,18 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const bodySchema = t.Object({
-  address: t.String({ format: "email", minLength: 3, maxLength: 320 }),
-  scope: t.Union([t.Literal("organization"), t.Literal("matters")]),
-  matterIds: t.Optional(
-    t.Array(tSafeId("workspace"), { maxItems: 200, uniqueItems: true }),
+const bodySchema = v.object({
+  address: v.pipe(v.string(), v.email(), v.minLength(3), v.maxLength(320)),
+  scope: v.picklist(["organization", "matters"]),
+  matterIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("workspace")),
+      v.maxLength(200),
+      uniqueItems(),
+    ),
   ),
 });
 

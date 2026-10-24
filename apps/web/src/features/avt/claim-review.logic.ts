@@ -9,6 +9,8 @@
 
 import { panic } from "better-result";
 
+import { toSafeId } from "@stll/api-contract/safe-id";
+
 import type {
   ClaimReview,
   ClaimReviewEvent,
@@ -90,7 +92,14 @@ export const predictClaimReview = (
       return {
         ...review,
         ...decided,
-        recordConflictResolution: event.resolution,
+        // The server answers the id it validated; the prediction brands it alike.
+        recordConflictResolution:
+          event.resolution?.kind === "governed"
+            ? {
+                kind: "governed",
+                factEntityId: toSafeId(event.resolution.factEntityId),
+              }
+            : event.resolution,
         status: null,
         statusOrigin: null,
         override: null,

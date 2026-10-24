@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, isNull, max, notExists } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import {
   INVOICE_LINE_SOURCE,
@@ -52,42 +52,44 @@ const QUANTITY_SCALE = 4;
 const QUANTITY_FACTOR = 10 ** QUANTITY_SCALE;
 const LINE_DESCRIPTION_MAX_CHARS = 10_000;
 
-export const tInvoiceLineQuantity = t.String({
-  pattern: `^(0|[1-9][0-9]{0,13})(\\.[0-9]{1,${QUANTITY_SCALE}})?$`,
-  description:
+export const tInvoiceLineQuantity = v.pipe(
+  v.string(),
+  v.regex(
+    new RegExp(`^(0|[1-9][0-9]{0,13})(\\.[0-9]{1,${QUANTITY_SCALE}})?$`, "u"),
+  ),
+  v.description(
     'Non-negative decimal quantity with a dot and at most four decimals, e.g. "1.5"',
-});
+  ),
+);
 
-export const tVatRateBps = t.Integer({
-  minimum: 0,
-  maximum: 10_000,
-  description: "VAT rate in basis points: 2100 is 21 %",
-});
+export const tVatRateBps = v.pipe(
+  v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(10_000)),
+  v.description("VAT rate in basis points: 2100 is 21 %"),
+);
 
-// A literal union, not `t.UnionEnum`: Elysia coerces an absent optional
-// UnionEnum field to its first member, so a line patch that omits the
-// treatment would reset it to `domestic_vat`. The members are a tuple, not a
-// `.map()` result: a union over a plain array has the static type `never`.
-export const tVatTreatment = t.Union([
-  t.Literal("domestic_vat"),
-  t.Literal("not_vat_payer"),
-  t.Literal("outside_scope"),
-  t.Literal("reverse_charge"),
-  t.Literal("exempt"),
+// No default: a line patch that omits the treatment leaves it as it is rather
+// than resetting it to `domestic_vat`.
+export const tVatTreatment = v.picklist([
+  "domestic_vat",
+  "not_vat_payer",
+  "outside_scope",
+  "reverse_charge",
+  "exempt",
 ]);
 
-true satisfies [VatTreatment] extends [Static<typeof tVatTreatment>]
-  ? [Static<typeof tVatTreatment>] extends [VatTreatment]
+true satisfies [VatTreatment] extends [v.InferOutput<typeof tVatTreatment>]
+  ? [v.InferOutput<typeof tVatTreatment>] extends [VatTreatment]
     ? true
     : never
   : never;
 
-export const tLineDescription = t.String({
-  minLength: 1,
-  maxLength: LINE_DESCRIPTION_MAX_CHARS,
-});
+export const tLineDescription = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LINE_DESCRIPTION_MAX_CHARS),
+);
 
-export const tLineUnit = t.String({ minLength: 1, maxLength: 32 });
+export const tLineUnit = v.pipe(v.string(), v.minLength(1), v.maxLength(32));
 
 export type LineVat = {
   vatRateBps: number;

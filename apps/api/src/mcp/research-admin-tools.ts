@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
@@ -779,7 +779,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       ),
       time_locked_through_month: v.optional(
         v.pipe(
-          v.nullable(vApiDate),
+          v.nullable(apiDateSchema),
           v.description("Locked month-end date; null unlocks"),
         ),
       ),

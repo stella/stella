@@ -240,7 +240,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment list",
     expectedRows: PAGE_SIZE,
-    handler: listClaimComments.handler,
+    definition: listClaimComments,
     measure: async ({ db, tenant }: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await listClaimComments.handler(
@@ -269,7 +269,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment create",
     expectedRows: 1,
-    handler: createClaimComment.handler,
+    definition: createClaimComment,
     measure: async ({ db, tenant }: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await createComment(db, tenant);
@@ -285,7 +285,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment update",
     expectedRows: 1,
-    handler: updateClaimComment.handler,
+    definition: updateClaimComment,
     measure: async (fixture: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await updateClaimComment.handler(
@@ -312,7 +312,7 @@ export const claimCommentScalingScenarios = [
   {
     name: "claim comment delete",
     expectedRows: 1,
-    handler: deleteClaimComment.handler,
+    definition: deleteClaimComment,
     measure: async (fixture: ClaimCommentScalingFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await deleteClaimComment.handler(

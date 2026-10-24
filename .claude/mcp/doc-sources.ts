@@ -36,10 +36,6 @@ export const DOC_SOURCES = {
     dependencies: ["@openrouter/sdk"],
     url: "https://openrouter.ai/docs/llms.txt",
   },
-  Elysia: {
-    dependencies: ["elysia", "@elysia/cors", "@elysia/eden"],
-    url: "https://elysiajs.com/llms.txt",
-  },
   Drizzle: {
     dependencies: ["drizzle-orm", "drizzle-kit"],
     url: "https://orm.drizzle.team/llms.txt",
@@ -312,7 +308,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "@resvg/resvg-js",
   "@shadcn/lint",
   "@silurus/ooxml",
-  "@sinclair/typebox",
   "@stricli/core",
   "@t3-oss/env-core",
   "@tailwindcss/vite",

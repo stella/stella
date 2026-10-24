@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -19,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -694,8 +694,8 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
           body: {},
         }),
       );
-      expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (result instanceof ElysiaCustomStatusResponse) {
+      expect(result).toBeInstanceOf(HttpStatusResponse);
+      if (result instanceof HttpStatusResponse) {
         expect(result.code).toBe(404);
       }
     });

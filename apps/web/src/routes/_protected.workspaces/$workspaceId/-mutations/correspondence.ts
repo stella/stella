@@ -5,8 +5,8 @@ import { useTranslations } from "use-intl";
 import type { CorrespondenceHandlingState } from "@stll/api-contract/correspondence";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { correspondenceApi } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { api } from "@/lib/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { correspondenceKeys } from "@/lib/workspaces/queries/correspondence";
@@ -30,17 +30,17 @@ export const useUpdateCorrespondence = () => {
       correspondenceId,
       ...body
     }: UpdateCorrespondenceVars): Promise<void> => {
-      const endpoint = correspondenceApi
+      const endpoint = api
         .workspaces({ workspaceId })
         .correspondence({ correspondenceId });
       switch (body.type) {
         case "set_handling":
-          unwrapEden(
+          unwrapApiResponse(
             await endpoint.patch({ handlingState: body.handlingState }),
           );
           return;
         case "assign":
-          unwrapEden(
+          unwrapApiResponse(
             await endpoint.patch({
               assigneeId:
                 body.assigneeId === null
@@ -78,10 +78,10 @@ export const useRotateCorrespondenceAddress = () => {
     }: {
       workspaceId: string;
     }): Promise<void> => {
-      const response = await correspondenceApi
+      const response = await api
         .workspaces({ workspaceId })
         .correspondence.address.post();
-      unwrapEden(response);
+      unwrapApiResponse(response);
     },
     onSuccess: async (_result, { workspaceId }) => {
       await queryClient.invalidateQueries({
@@ -106,10 +106,10 @@ export const useRevokeCorrespondenceAddress = () => {
     }: {
       workspaceId: string;
     }): Promise<void> => {
-      const response = await correspondenceApi
+      const response = await api
         .workspaces({ workspaceId })
         .correspondence.address.delete();
-      unwrapEden(response);
+      unwrapApiResponse(response);
     },
     onSuccess: async (_result, { workspaceId }) => {
       await queryClient.invalidateQueries({

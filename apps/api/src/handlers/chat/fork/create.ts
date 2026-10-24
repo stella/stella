@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -35,7 +35,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -83,13 +83,11 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-  }),
-  body: t.Object({
-    newThreadId: tSafeId("chatThread"),
-    upToMessageId: tSafeId("chatMessage"),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({
+    newThreadId: resourceIdSchema("chatThread"),
+    upToMessageId: resourceIdSchema("chatMessage"),
   }),
 } satisfies HandlerConfig;
 

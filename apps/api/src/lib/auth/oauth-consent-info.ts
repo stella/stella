@@ -6,10 +6,7 @@ import * as v from "valibot";
 
 import type { VerifiedOAuthClientBrand } from "@stll/api-contract";
 
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 
 type HttpsUrl = `https://${string}`;
 

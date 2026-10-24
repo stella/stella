@@ -17,7 +17,7 @@ import {
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -104,7 +104,7 @@ export const InvoiceExportMenu = ({
           { headers: { "Accept-Language": locale } },
         );
       // The presigned URL answers as an attachment under its file name.
-      const { downloadUrl } = unwrapEden(response);
+      const { downloadUrl } = unwrapApiResponse(response);
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.rel = "noopener";

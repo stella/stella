@@ -56,8 +56,6 @@ COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/font
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
 RUN bun apps/api/scripts/generate-capability-runtime.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
-# Build the server unminified: `bun build --minify` can break Elysia's AOT
-# handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --compile \

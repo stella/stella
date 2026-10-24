@@ -15,7 +15,7 @@ import { useWorkflowServiceTierPrompt } from "@/components/workspaces/workflow-s
 import { useWorkflowStartConfirmationPrompt } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -95,7 +95,7 @@ export const useStartWorkflow = (workspaceId: string) => {
           });
         },
         request: async () =>
-          unwrapEden(
+          unwrapApiResponse(
             await api
               .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .workflow.start.post({

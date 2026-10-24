@@ -12,7 +12,12 @@ const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
 
 type UploadState =
-  "idle" | "running" | "paused" | "rate-limited" | "cancelled" | "done";
+  | "idle"
+  | "running"
+  | "paused"
+  | "rate-limited"
+  | "cancelled"
+  | "done";
 
 type UploadFn<T> = (file: File, signal: AbortSignal) => Promise<T>;
 
@@ -473,8 +478,8 @@ export const uploadFailureDisposition = (
 
 /**
  * Extract `Retry-After` header value from an error that
- * carries a `headers` property (e.g., Eden treaty error
- * responses include a `response: Response` field).
+ * carries a `headers` property (e.g., an API client result
+ * includes a `response: Response` field).
  */
 const getRetryAfterSeconds = (error: unknown): number | null => {
   if (

@@ -11,7 +11,7 @@ import type { VerificationClaim } from "@/features/avt/types";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -83,7 +83,7 @@ export const useClaimComments = ({
       body: string;
       visibility: AnnotationVisibility;
     }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await commentRoutes().post({
           body,
           claimId: toSafeId<"legalListClaim">(claim.id),
@@ -105,9 +105,10 @@ export const useClaimComments = ({
       visibility,
     }),
     queryKey,
-    remove: async (id: string) => unwrapEden(await oneComment(id).delete()),
+    remove: async (id: string) =>
+      unwrapApiResponse(await oneComment(id).delete()),
     update: async ({ id, ...change }: ClaimCommentChange) =>
-      unwrapEden(await oneComment(id).patch(change)),
+      unwrapApiResponse(await oneComment(id).patch(change)),
   });
 
   return {

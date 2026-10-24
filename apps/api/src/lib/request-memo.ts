@@ -1,14 +1,12 @@
 /**
  * Per-request memoization keyed by the raw `Request` object.
  *
- * Elysia can invoke the same macro's `resolve` hook more than once per
- * request when the macro property is declared at multiple independent
- * call sites (`.guard()`, `.group()`, a per-route config) — each site
- * expands into its own hook function, and every one of them runs (see
- * `validateAuth` in `lib/auth.ts` for the concrete case that motivated
- * this). Wrapping an expensive resolve with {@link memoizePerRequest}
+ * More than one stage of a request can ask for the same resolution: the
+ * request's authorization (`resolveRequestAuth` in `lib/auth.ts`) is read
+ * by gates that run before validation as well as by the member
+ * authenticator. Wrapping an expensive resolve with {@link memoizePerRequest}
  * guarantees the underlying work runs exactly once per request no matter
- * how many times the macro fires.
+ * how many stages ask for it.
  *
  * Callers own the `WeakMap` (rather than this module holding a global
  * one) so each memoized computation gets its own cache and cannot

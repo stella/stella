@@ -30,7 +30,7 @@ import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 
 export type ChatTableChartProps = ComponentProps<"table"> & {
   node?: Element | undefined;
@@ -41,7 +41,7 @@ export type ChatTableChartProps = ComponentProps<"table"> & {
 const requestTableChart = async (table: TableChartRequest) =>
   v.parse(
     tableChartResponseSchema,
-    unwrapEden(await api.chat["table-chart"].post(table)),
+    unwrapApiResponse(await api.chat["table-chart"].post(table)),
   );
 
 export const ChatTableChart = ({

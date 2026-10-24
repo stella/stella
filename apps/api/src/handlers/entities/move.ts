@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -14,7 +13,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   isTreeParentGuardError,
   lockTree,
@@ -24,12 +23,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 
-const moveEntityBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  parentId: t.Nullable(tSafeId("entity")),
+const moveEntityBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  parentId: v.nullable(resourceIdSchema("entity")),
 });
 
-type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
+type MoveEntityBodySchema = v.InferOutput<typeof moveEntityBodySchema>;
 
 const DESCENDANT_MOVE_MESSAGE =
   "Cannot move a folder into one of its descendants";

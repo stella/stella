@@ -215,11 +215,13 @@ describe("invoice document export", () => {
       stored.push(object.data);
       return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
     });
-    const requestContext = context("own", []);
-    requestContext.request = new Request("https://example.test/invoice/pdf", {
-      method: "POST",
-      headers: { "Accept-Language": "sk" },
-    });
+    const requestContext = {
+      ...context("own", []),
+      request: new Request("https://example.test/invoice/pdf", {
+        method: "POST",
+        headers: { "Accept-Language": "sk" },
+      }),
+    };
     await handler.handler(requestContext);
     const pdf = stored.at(0);
     if (pdf === undefined) {

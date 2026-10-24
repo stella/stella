@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   beforeAll,
@@ -9,6 +8,7 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import * as v from "valibot";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
@@ -95,17 +95,13 @@ describe("guide progress request schema", () => {
   test("accepts only known tour and status pairs", () => {
     const schema = updateGuideProgress.config.body;
 
-    expect(Value.Check(schema, { tourId: "chat", status: "completed" })).toBe(
-      true,
-    );
-    expect(
-      Value.Check(schema, { tourId: "unknown", status: "completed" }),
-    ).toBe(false);
-    expect(Value.Check(schema, { tourId: "chat", status: "unknown" })).toBe(
+    expect(v.is(schema, { tourId: "chat", status: "completed" })).toBe(true);
+    expect(v.is(schema, { tourId: "unknown", status: "completed" })).toBe(
       false,
     );
+    expect(v.is(schema, { tourId: "chat", status: "unknown" })).toBe(false);
     expect(
-      Value.Check(schema, {
+      v.is(schema, {
         tourId: "chat",
         status: "completed",
         replacementMap: {},

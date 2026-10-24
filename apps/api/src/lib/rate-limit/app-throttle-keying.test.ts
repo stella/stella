@@ -117,7 +117,7 @@ const KEY_REGRESSIONS = {
       }),
     ).not.toBe(original);
   },
-  skillSourceRateLimitBinding: async () => {
+  skillSourceBudget: async () => {
     const readKey = async (userId: string) =>
       await createSkillSourceRateLimitGenerator(async () =>
         toSafeId<"user">(userId),
@@ -162,7 +162,7 @@ const limiterCensus = (sources: readonly string[]) => {
   const actual = new Set<string>();
   for (const source of sources) {
     for (const match of source.matchAll(
-      /\b(createMcp\w*(?:RateLimitOptions|Limiter)|consume\w*RateLimit|skillSourceRateLimitBinding)\b/gu,
+      /\b(createMcp\w*(?:RateLimitOptions|Limiter)|consume\w*RateLimit|skillSourceBudget)\b/gu,
     )) {
       actual.add(v.parse(v.string(), match.at(1)));
     }
@@ -309,13 +309,11 @@ describe("application throttle keying census", () => {
 
   test("every direct API middleware policy labels its configured budget", () => {
     const sources = [
-      "server.ts",
+      "api-routes.ts",
+      "lib/rate-limit/dedicated-budgets.ts",
       "handlers/me/routes.ts",
       "handlers/hosted-usage-webhook/routes.ts",
-      "handlers/document-translations/routes.ts",
       "handlers/uploads/routes.ts",
-      "handlers/entities/routes.ts",
-      "handlers/style-sets/routes.ts",
       "lib/rate-limit/standard-api.ts",
       "lib/rate-limit/public-corpus-rate-limit-composition.ts",
       "lib/rate-limit/public-corpus-rate-limits.ts",
@@ -332,7 +330,7 @@ describe("application throttle keying census", () => {
         );
       }
     }
-    expect(policies).toBe(14);
+    expect(policies).toBe(13);
   });
 
   test("every owned auth path replaces the framework IP rule and matches the provider hook", () => {
@@ -434,11 +432,11 @@ describe("application throttle keying census", () => {
       missing: [],
       uncovered: [],
     });
-    const server = readSource("server.ts");
-    expect(server).toMatch(
-      /\.use\(rateLimit\(createMcpTransportRateLimitOptions\(\)\)\)\s*\.use\(mcpRoute\)/u,
+    const mcpRoutes = readSource("handlers/mcp/routes.ts");
+    expect(mcpRoutes).toMatch(
+      /transportMiddleware: \[rateLimit\(createMcpTransportRateLimitOptions\(\)\)\]/u,
     );
-    expect(readSource("handlers/mcp/routes.ts")).toMatch(
+    expect(mcpRoutes).toMatch(
       /limitAuthenticationFailure:\s*createMcpAuthenticationFailureLimiter\(\)/u,
     );
     const transport = readSource("handlers/mcp/routes-core.ts");
@@ -462,8 +460,11 @@ describe("application throttle keying census", () => {
     expect(readSource("lib/auth.ts")).toMatch(
       /disableCookieCache: true, disableRefresh: true/u,
     );
-    expect(readSource("handlers/skills/routes.ts")).toMatch(
+    expect(readSource("handlers/skills/source-rate-limit.ts")).toMatch(
       /\.\.\.skillSourceRateLimitBinding,/u,
+    );
+    expect(readSource("handlers/skills/routes.ts")).toMatch(
+      /middleware: \[skillSourceBudget\]/u,
     );
     expect(readSource("mcp/gateway/external-tools.ts")).toMatch(
       /consumeMcpGatewayRateLimit\(\{\s*connectorSlug: resolved\.connectorSlug,\s*userId: context\.userId,/u,

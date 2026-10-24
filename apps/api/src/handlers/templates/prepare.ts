@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-template";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -9,14 +9,15 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { fileSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { suggestTemplateFieldsOrEmpty } from "@/api/lib/templates/suggest-template-fields";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const prepareBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+const prepareBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
 });
 
 const config = {
@@ -131,9 +132,8 @@ const prepareTemplate = createSafeRootHandler(
       }),
     );
 
-    // Return the prepared docx as base64 in JSON, NOT a binary Response: Eden
-    // parses binary responses as text and corrupts the zip (the same failure
-    // the save round-trip hit). The client decodes this back to bytes.
+    // Return the prepared docx as base64 in JSON rather than a binary
+    // Response. The client decodes this back to bytes.
     return Result.ok({
       docxBase64: Buffer.from(prepared.file.bytes).toString("base64"),
       fieldCount: prepared.fields.length,

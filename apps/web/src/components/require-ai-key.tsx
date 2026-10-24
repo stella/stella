@@ -49,7 +49,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
@@ -473,7 +473,7 @@ export const AIKeyRequiredDialog = ({
         overrideModels: serialized.overrides,
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (data) => {
       const savedProviders = providerDraftsFromStoredProviders(data.providers);

@@ -20,7 +20,8 @@ import {
 import {
   enrichRequestContext,
   getRequestFailure,
-  initRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 
@@ -368,10 +369,12 @@ describe("captureRequestError organization attribution", () => {
   test("attaches the organization group from the request context", () => {
     const organizationId = "3f6e0a7e-9f6f-4a53-9a3e-2b8f6f0c9d41";
     const request = new Request("https://api.test/internal");
-    initRequestContext(request);
-    enrichRequestContext(request, { organizationId });
+    runWithRequestIdScope(() => {
+      openRequestContext();
+      enrichRequestContext({ organizationId });
 
-    captureRequestError(new Error("boom"), { request });
+      captureRequestError(new Error("boom"), { request });
+    });
 
     // The group is what PostHog's organization breakdown reads; losing it
     // while organization_id survives as a plain property would go unnoticed.
@@ -380,9 +383,11 @@ describe("captureRequestError organization attribution", () => {
 
   test("stays ungrouped without an organization in the request context", () => {
     const request = new Request("https://api.test/internal");
-    initRequestContext(request);
+    runWithRequestIdScope(() => {
+      openRequestContext();
 
-    captureRequestError(new Error("boom"), { request });
+      captureRequestError(new Error("boom"), { request });
+    });
 
     expect(captured.at(0)?.groups).toBeUndefined();
   });
@@ -516,14 +521,17 @@ describe("captureError owned fields", () => {
 
   test("a request capture records its grade on the request", () => {
     const request = new Request("https://api.test/v1/items");
-    initRequestContext(request);
+    const failure = runWithRequestIdScope(() => {
+      openRequestContext();
 
-    captureRequestError(
-      Object.assign(new Error("reset"), { code: "ECONNRESET" }),
-      { request },
-    );
+      captureRequestError(
+        Object.assign(new Error("reset"), { code: "ECONNRESET" }),
+        { request },
+      );
+      return getRequestFailure();
+    });
 
-    expect(getRequestFailure(request)).toEqual({
+    expect(failure).toEqual({
       grade: "transient",
       reason: "network_reset",
       sink: "exception.captured",

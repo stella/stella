@@ -441,7 +441,7 @@ export const PlaybookFacet = ({
     if (result.ok) {
       return;
     }
-    // A thrown request (client timeout / network) carries no Eden error to
+    // A thrown request (client timeout / network) carries no API error to
     // capture; still surface the toast.
     if (result.error) {
       analytics.captureError(toAPIError(result.error));
@@ -1271,7 +1271,7 @@ const ReviewRunPanel = ({
         applyFindingDecision(previous, decided),
       );
     },
-    // `unwrapEden` already localized and tagged what the endpoint returned, so
+    // `unwrapApiResponse` already localized and tagged what the endpoint returned, so
     // the thrown error is what gets captured and shown.
     onError: (error) => {
       analytics.captureError(error);
@@ -2776,8 +2776,7 @@ type ResultsViewProps = {
  * Replace one finding's flag set.
  *
  * The decision travels with it unchanged: flags and dispositions are separate
- * axes, and the endpoint needs the decision on every write because an absent
- * optional `UnionEnum` would be coerced back to `open`.
+ * axes, and the endpoint's schema requires the decision on every write.
  */
 type SetReviewFindingFlags = (
   findingId: DocumentReviewFindingRow["id"],

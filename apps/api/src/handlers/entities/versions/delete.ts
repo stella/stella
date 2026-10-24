@@ -21,7 +21,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -34,8 +34,8 @@ import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flu
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const paramsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
-  versionId: tSafeId("entityVersion"),
+  entityId: resourceIdSchema("entity"),
+  versionId: resourceIdSchema("entityVersion"),
 });
 
 const config = {

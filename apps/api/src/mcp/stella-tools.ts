@@ -8,7 +8,7 @@ import {
   RESOURCE_TYPE,
   resourceRef,
 } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -822,14 +822,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     source_id: v.optional(uuidInputSchema("Filter by source ID")),
     date_from: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
       ),
     ),
     date_to: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
       ),
@@ -2146,7 +2146,8 @@ const facetValuesForFilters = ({
 
 /** One query's page, or the mark of a query whose page had already ended. */
 type CaseLawQueryOutcome =
-  { exhausted: true } | { exhausted: false; page: SearchCaseLawSuccess };
+  | { exhausted: true }
+  | { exhausted: false; page: SearchCaseLawSuccess };
 
 type CaseLawSearchAnswer =
   | { type: "page"; page: SearchCaseLawSuccess }
@@ -2493,7 +2494,10 @@ const caseLawSearchResult = ({
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
-          keywords: hit.keywords,
+          keywords:
+            hit.keywords === null
+              ? null
+              : { ...hit.keywords, items: [...hit.keywords.items] },
           headnote:
             hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
         }

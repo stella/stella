@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { parseTimeZoneId, Temporal } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
@@ -274,7 +274,7 @@ describe("organization time zone REST/MCP/CLI parity", () => {
 
     const long = `Europe/${"x".repeat(60)}`;
     for (const value of ["Europe/Prague", null, "", long]) {
-      const restAccepts = Value.Check(updateOrganizationSettings.config.body, {
+      const restAccepts = v.is(updateOrganizationSettings.config.body, {
         timeZone: value,
       });
       const mcp = await updateOverMcp({ args: { time_zone: value } });
