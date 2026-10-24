@@ -742,7 +742,7 @@ const protocolImports = ({
     const add = ({
       local,
       imported,
-      typeOnly = clause.isTypeOnly,
+      typeOnly = clause.phaseModifier === ts.SyntaxKind.TypeKeyword,
     }: {
       local: string;
       imported: string;
@@ -764,7 +764,9 @@ const protocolImports = ({
         add({
           local: element.name.text,
           imported: element.propertyName?.text ?? element.name.text,
-          typeOnly: clause.isTypeOnly || element.isTypeOnly,
+          typeOnly:
+            clause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+            element.isTypeOnly,
         });
       }
     }
@@ -1037,7 +1039,7 @@ const importEscapesConsumer = ({ node, file, boundary }: ModuleReference) => {
   if (
     !ts.isImportDeclaration(node) ||
     !ts.isStringLiteral(node.moduleSpecifier) ||
-    node.importClause?.isTypeOnly === true
+    node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
   ) {
     return false;
   }
@@ -1151,8 +1153,7 @@ const consumerClosureOwned = (
       ts.ScriptTarget.Latest,
       true,
     );
-    let valid = true;
-    const visit = (node: ts.Node): void => {
+    const visit = (node: ts.Node): boolean => {
       // This proof covers canonical static module syntax, not eval, VM code
       // or arbitrary global reflection. Escaping runtime loaders are unknown.
       const escapingRequire =
@@ -1166,12 +1167,11 @@ const consumerClosureOwned = (
         exportEscapesConsumer(reference) ||
         runtimeLoaderEscapesConsumer(reference)
       ) {
-        valid = false;
+        return true;
       }
-      ts.forEachChild(node, visit);
+      return ts.forEachChild(node, visit) === true;
     };
-    visit(parsed);
-    if (!valid) {
+    if (visit(parsed)) {
       return false;
     }
   }
@@ -1192,7 +1192,7 @@ const importedOwner = (
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.isTypeOnly === true
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
     ) {
       continue;
     }
@@ -1239,7 +1239,6 @@ const verifiedOwnedSites = (
     }
     if (
       "exclusiveConsumer" in protocol &&
-      protocol.exclusiveConsumer !== undefined &&
       !consumerClosureOwned(files, {
         owner,
         consumer: protocol.consumer,
@@ -1286,7 +1285,7 @@ const schemaNamespaces = (sourceFile: ts.SourceFile) => {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.isTypeOnly === true
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
     ) {
       continue;
     }
