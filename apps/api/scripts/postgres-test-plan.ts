@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -138,10 +139,84 @@ export const findSharedTableDdlViolations = ({
     })
     .toSorted((left, right) => compareCodeUnit(left.testPath, right.testPath));
 
-export const assertSharedTableDdlIsolated = async (
+const isMigrationRunnerModule = (testPath: string, specifier: string) => {
+  if (specifier === "@/api/db/migration-runner") {
+    return true;
+  }
+  return (
+    specifier.startsWith(".") &&
+    path.posix
+      .normalize(path.posix.join(path.posix.dirname(testPath), specifier))
+      .replace(/\.[cm]?[jt]sx?$/u, "") === "src/db/migration-runner"
+  );
+};
+
+/** Migration bundles can change roles shared by every database in the cluster. */
+export const clusterExclusiveMigrationTests = (
+  sources: ReadonlyMap<string, string>,
+): Set<string> => {
+  const paths = new Set<string>();
+  for (const [testPath, source] of sources) {
+    const file = ts.createSourceFile(
+      testPath,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const visit = (node: ts.Node) => {
+      if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        isMigrationRunnerModule(testPath, node.moduleSpecifier.text) &&
+        !node.importClause?.isTypeOnly
+      ) {
+        const bindings = node.importClause?.namedBindings;
+        if (
+          bindings === undefined ||
+          ts.isNamespaceImport(bindings) ||
+          node.importClause?.name !== undefined ||
+          bindings.elements.some((element) => !element.isTypeOnly)
+        ) {
+          paths.add(testPath);
+        }
+      }
+      if (
+        ts.isImportEqualsDeclaration(node) &&
+        !node.isTypeOnly &&
+        ts.isExternalModuleReference(node.moduleReference) &&
+        node.moduleReference.expression !== undefined &&
+        ts.isStringLiteral(node.moduleReference.expression) &&
+        isMigrationRunnerModule(testPath, node.moduleReference.expression.text)
+      ) {
+        paths.add(testPath);
+      }
+      if (
+        ts.isCallExpression(node) &&
+        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(node.expression) &&
+            node.expression.text === "require")) &&
+        node.arguments.length === 1
+      ) {
+        const specifier = node.arguments.at(0);
+        if (
+          specifier !== undefined &&
+          ts.isStringLiteral(specifier) &&
+          isMigrationRunnerModule(testPath, specifier.text)
+        ) {
+          paths.add(testPath);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(file);
+  }
+  return paths;
+};
+
+export const classifyPostgresTestIsolation = async (
   apiRoot: string,
   testPaths: readonly string[],
-): Promise<void> => {
+): Promise<Set<string>> => {
   const sources = new Map(
     await Promise.all(
       testPaths.map(
@@ -158,7 +233,7 @@ export const assertSharedTableDdlIsolated = async (
     sharedTables: readSharedTableNames(apiRoot),
   });
   if (violations.length === 0) {
-    return;
+    return clusterExclusiveMigrationTests(sources);
   }
   panic(
     `PostgreSQL tests that run DDL on shared tables require an exclusive test process:\n${violations
