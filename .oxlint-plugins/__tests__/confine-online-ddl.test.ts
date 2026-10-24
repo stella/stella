@@ -148,6 +148,14 @@ describe(RULE, () => {
     ).toEqual([2, 3, 4, 5]);
   });
 
+  test("a re-export cannot hand out a gate opener", async () => {
+    expect(
+      await lint(
+        'export { createOnlineIndexGate } from "./online-index-gate";',
+      ),
+    ).toEqual([1]);
+  });
+
   test("the owner, tests, fixtures and the schema phase are out of scope", async () => {
     const source = [
       'import { createOnlineIndexGate } from "./online-index-gate";',

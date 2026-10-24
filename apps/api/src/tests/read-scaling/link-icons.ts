@@ -24,7 +24,9 @@ export const exactIconScalingScenario = {
       createRedis: () => {
         const client = createRedisClient({ storeClass: "cache" });
         return {
-          connect: async () => await client.connect(),
+          connect: async () => {
+            await client.connect();
+          },
           send: async (command, args) => {
             redisRoundTrips += 1;
             return await client.send(command, args);

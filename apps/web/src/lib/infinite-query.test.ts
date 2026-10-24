@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { visitCursorPages } from "./infinite-query";
 
 describe("cursor page traversal", () => {
@@ -29,7 +31,7 @@ describe("cursor page traversal", () => {
       },
       visit: () => controller.abort(reason),
     });
-    await expect(traversal).rejects.toBe(reason);
+    expect(await rejectionOf(traversal)).toBe(reason);
     expect(cursors).toEqual([undefined, "next"]);
   });
 });

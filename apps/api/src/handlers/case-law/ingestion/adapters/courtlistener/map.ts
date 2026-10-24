@@ -33,7 +33,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 17;
+export const COURTLISTENER_PARSER_VERSION = 18;
 
 const textField = (value: string) =>
   hasVisibleText(value)

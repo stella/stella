@@ -7,7 +7,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import {
   ENTITY_LIST_TEXT_MAX_LENGTH,
   queryEntities,
-  queryEntityCursorPage,
+  queryMatterEntityCursorPage,
 } from "@/api/lib/entities/query-entities";
 import {
   entityQueryWindowBodySchema,
@@ -56,24 +56,15 @@ export const createReadEntitiesHandler = (
       user: currentUser,
     }) {
       const page = yield* Result.await(
-        queryEntityCursorPage({
-          cursor: body.cursor,
-          limit: body.limit,
+        queryMatterEntityCursorPage({
+          body,
+          workspaceId,
+          safeDb,
+          currentUserId: currentUser.id,
+          currentOrganizationId: session.activeOrganizationId,
           queryEntitiesImpl,
-          query: {
-            textMode: "preview",
-            safeDb,
-            scope: { type: "matter", workspaceId },
-            currentUserId: currentUser.id,
-            currentOrganizationId: session.activeOrganizationId,
-            filters: arrayOrEmpty(body.filters),
-            sorts: arrayOrEmpty(body.sorts),
-            ...(body.search !== undefined && { search: body.search }),
-            fieldMode: body.fieldMode ?? "visible",
-            fieldIds: arrayOrEmpty(body.fieldIds),
-            excludedKinds: arrayOrEmpty(body.excludedKinds),
-            previewableForAi: body.previewableForAi ?? false,
-          },
+          excludedKinds: arrayOrEmpty(body.excludedKinds),
+          previewableForAi: body.previewableForAi ?? false,
         }),
       );
 

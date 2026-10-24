@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { Static } from "elysia";
 
 import type {
   AgendaItemWireFields,
@@ -61,6 +62,7 @@ import {
   type EntityQueryScope,
   entityQueryScopeCondition,
 } from "@/api/lib/entities/query-scope";
+import type { entityReadPageBodySchema } from "@/api/lib/entities/query-window-schema";
 import {
   entityWindowUnionSource,
   windowRowKindColumn,
@@ -1405,7 +1407,7 @@ type QueryEntityCursorPageOptions = {
   queryEntitiesImpl: typeof queryEntities;
 };
 
-export const queryEntityCursorPage = async ({
+const queryEntityCursorPage = async ({
   cursor,
   limit: requestedLimit,
   query,
@@ -1437,4 +1439,48 @@ export const queryEntityCursorPage = async ({
           ),
       }),
     );
+  });
+
+type QueryMatterEntityCursorPageOptions = Pick<
+  QueryEntitiesProps,
+  | "safeDb"
+  | "currentUserId"
+  | "currentOrganizationId"
+  | "excludedKinds"
+  | "previewableForAi"
+> & {
+  workspaceId: SafeId<"workspace">;
+  body: Static<typeof entityReadPageBodySchema>;
+  queryEntitiesImpl: typeof queryEntities;
+};
+
+/** The shared read-page contract for matter listings and filesystem pages. */
+export const queryMatterEntityCursorPage = async ({
+  body,
+  workspaceId,
+  safeDb,
+  currentUserId,
+  currentOrganizationId,
+  excludedKinds,
+  previewableForAi,
+  queryEntitiesImpl,
+}: QueryMatterEntityCursorPageOptions) =>
+  await queryEntityCursorPage({
+    cursor: body.cursor,
+    limit: body.limit,
+    queryEntitiesImpl,
+    query: {
+      textMode: "preview",
+      safeDb,
+      scope: { type: "matter", workspaceId },
+      currentUserId,
+      currentOrganizationId,
+      filters: arrayOrEmpty(body.filters),
+      sorts: arrayOrEmpty(body.sorts),
+      ...(body.search !== undefined && { search: body.search }),
+      fieldMode: body.fieldMode ?? "visible",
+      fieldIds: arrayOrEmpty(body.fieldIds),
+      ...(excludedKinds === undefined ? {} : { excludedKinds }),
+      ...(previewableForAi === undefined ? {} : { previewableForAi }),
+    },
   });

@@ -4,10 +4,9 @@ import { sql } from "drizzle-orm";
 import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { arrayOrEmpty } from "@/api/lib/array";
 import {
   queryEntities,
-  queryEntityCursorPage,
+  queryMatterEntityCursorPage,
 } from "@/api/lib/entities/query-entities";
 import { entityReadPageBodySchema } from "@/api/lib/entities/query-window-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -45,24 +44,15 @@ export const createReadFilesystemTreeHandler = (
       user: currentUser,
     }) {
       const page = yield* Result.await(
-        queryEntityCursorPage({
-          cursor: body.cursor,
-          limit: body.limit,
+        queryMatterEntityCursorPage({
+          body,
+          workspaceId,
+          safeDb,
+          currentUserId: currentUser.id,
+          currentOrganizationId: session.activeOrganizationId,
           queryEntitiesImpl,
-          query: {
-            textMode: "preview",
-            safeDb,
-            scope: { type: "matter", workspaceId },
-            currentUserId: currentUser.id,
-            currentOrganizationId: session.activeOrganizationId,
-            filters: arrayOrEmpty(body.filters),
-            sorts: arrayOrEmpty(body.sorts),
-            ...(body.search !== undefined && { search: body.search }),
-            fieldMode: body.fieldMode ?? "visible",
-            fieldIds: arrayOrEmpty(body.fieldIds),
-            excludedKinds: ["task"],
-            previewableForAi: false,
-          },
+          excludedKinds: ["task"],
+          previewableForAi: false,
         }),
       );
 

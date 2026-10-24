@@ -9,6 +9,7 @@ import {
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership";
 import apiLedger from "./api-scaling-ledger.json";
+import { decisionSummaryScalingScenario } from "./decision-summary";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
@@ -24,6 +25,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   ...readScalingScenarios,
   exactIconScalingScenario,
+  decisionSummaryScalingScenario,
 ];
 const measuredApiReads = api.routes
   .filter(({ handler }) =>

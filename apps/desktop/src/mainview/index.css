@@ -35,6 +35,17 @@ body:has(.clipboard-window) {
   overflow: hidden;
 }
 
+/* The Accessibility guide is a borderless transparent window; its page
+ * paints the rounded surface. */
+body:has(.accessibility-guide-window) {
+  background: transparent;
+  overflow: hidden;
+}
+
+.accessibility-guide-window {
+  min-height: 100dvh;
+}
+
 body:has(.clipboard-editor-window) {
   overflow: hidden;
 }
