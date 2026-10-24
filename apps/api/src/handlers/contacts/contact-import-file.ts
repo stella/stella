@@ -19,7 +19,6 @@ import {
   type ContactType,
   parseContactImportMapping,
 } from "@stll/api-contract";
-import { validateVatFormat } from "@stll/business-registries/vies/validation";
 import { isCountryCode } from "@stll/country-codes";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -32,6 +31,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { classifyBrazilianTaxId } from "@/api/handlers/contacts/contact-import-receipt";
 import { isValidDateOfBirth } from "@/api/handlers/contacts/person-details";
+import { isWellFormedEuVatId } from "@/api/lib/billing/invoice-prefill.logic";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { CSV_DELIMITERS, CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import type { CSVDelimiter } from "@/api/lib/csv";
@@ -1170,14 +1170,14 @@ type ImportedTaxIdentifiers = {
 
 /**
  * An import's single tax column holds a national tax number or an EU VAT
- * number. A value in EU VAT format is stored as the VAT number, the same rule
- * the invoice party ID migration applied to existing contacts; Brazilian tax
+ * number. A value invoice prefill reads as an EU VAT number is stored as the
+ * VAT number, so an imported client keeps its reverse charge; Brazilian tax
  * ids stay tax ids.
  */
 export const importedTaxIdentifiers = (
   taxId: string | undefined,
   taxIdScheme: ContactImportTaxIdScheme,
 ): ImportedTaxIdentifiers =>
-  taxIdScheme === "none" && taxId !== undefined && validateVatFormat(taxId)
+  taxIdScheme === "none" && taxId !== undefined && isWellFormedEuVatId(taxId)
     ? { taxId: undefined, vatId: taxId }
     : { taxId, vatId: undefined };
