@@ -1,7 +1,7 @@
 {
   "extends": "@stll/typescript-config/react-library.json",
   "compilerOptions": {
-    "types": ["bun-types"],
+    "types": ["bun-types", "vite/client"],
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.test.json"
   },
   "include": [

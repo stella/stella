@@ -1552,6 +1552,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
@@ -1630,6 +1631,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
@@ -1649,6 +1651,7 @@ const CONTRACT_CORPUS = {
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
           caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          citationCount: 2,
           citationsFrom: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -2489,6 +2492,7 @@ describe("decision text in chat projection", () => {
       resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
       caseNumber: "22 Cdo 1000/2020",
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationCount: 0,
       citationsFrom: [],
       citationsTo: [],
       citationsNextCursor: null,

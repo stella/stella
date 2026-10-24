@@ -155,6 +155,7 @@ const decisionPath = createCaseLawDecisionPath(
 );
 const absentText = { type: "absent", reason: "not_published" } as const;
 const fullDecision = {
+  citationCount: 0,
   id: toSafeId<"caseLawDecision">(documentId),
   caseNumber: "26 Cdo 4249/2016",
   caseNumberType: "case-number",
@@ -841,6 +842,7 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
         anchorId={explicitAnchorId}
         interactive
         appearance="inline"
+        linkIconSource={{ kind: "tool-source" }}
       >
         {quotedPassage}
       </LegalCitationLink>,
@@ -997,6 +999,7 @@ test("an external tray label without a safe URL retains its compact presentation
     <LegalCitationLink
       appearance="tray"
       interactive={false}
+      linkIconSource={{ kind: "tool-source" }}
       source={{ title, url: "data:text/plain,unavailable" }}
     >
       {title}

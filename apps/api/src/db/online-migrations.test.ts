@@ -14,11 +14,13 @@ import { declaresOnlineBuild } from "./online-ddl";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
+  OnlineMigrationConnection,
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 import {
   assertOnlineMigrationsApplied,
+  ensureOnlineIndexValid,
   ONLINE_CONSTRAINT_VALIDATIONS,
   ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
@@ -63,6 +65,28 @@ const heldIndexGate = {
     }),
   },
 } satisfies OnlineIndexGateOptions;
+const reserveHealthyObserver =
+  async (): Promise<OnlineMigrationConnection> => ({
+    execute: async () => undefined,
+    query: async (query) => {
+      if (query.includes("pg_blocking_pids")) {
+        return [];
+      }
+      if (query.includes("pg_backend_pid() AS pid")) {
+        return [{ pid: 2, database: "test" }];
+      }
+      if (query.includes('"stateAgeMs"')) {
+        return [];
+      }
+      if (query.includes("ageMs")) {
+        return [{ ageMs: 0, observedAt: new Date(testClock()).toISOString() }];
+      }
+      return [
+        { active: false, observedAt: new Date(testClock()).toISOString() },
+      ];
+    },
+    release: () => undefined,
+  });
 const runOnlineMigrations = async (
   pool: Parameters<typeof runOnlineMigrationsWithGate>[0],
   options: Partial<OnlineRepairOptions> = {},
@@ -71,23 +95,7 @@ const runOnlineMigrations = async (
     indexGate: healthyIndexGate,
     timing: { clock: () => 0, emit: () => undefined },
     ...options,
-    reserveObserver: async () => ({
-      execute: async () => undefined,
-      query: async (query) => {
-        if (query.includes("pg_backend_pid() AS pid")) {
-          return [{ pid: 2, database: "test" }];
-        }
-        if (query.includes("ageMs")) {
-          return [
-            { ageMs: 0, observedAt: new Date(testClock()).toISOString() },
-          ];
-        }
-        return [
-          { active: false, observedAt: new Date(testClock()).toISOString() },
-        ];
-      },
-      release: () => undefined,
-    }),
+    reserveObserver: reserveHealthyObserver,
   });
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
@@ -276,6 +284,7 @@ describe("online migrations", () => {
     );
     for (const step of steps) {
       expect(step.durationMs, step.name).toBe(5);
+      expect(step.retriesSpent, step.name).toBe(0);
       expect(step.outcome, step.name).toBe("complete");
     }
   });
@@ -315,6 +324,7 @@ describe("online migrations", () => {
       kind: "index",
       name: REPORT_EXPORT_INDEX,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
   });
@@ -333,6 +343,41 @@ describe("online migrations", () => {
       ).toBeGreaterThan(-1);
       expect(harness.released()).toBe(true);
     }
+  });
+
+  test("refuses an online build without a declared create statement", async () => {
+    const declared = ONLINE_MIGRATION_INDEXES.find(
+      ({ name }) => name === REPORT_EXPORT_INDEX,
+    );
+    if (!declared) {
+      throw new TypeError("Expected the report export index declaration");
+    }
+    const index = {
+      definitionBody: declared.definitionBody,
+      isUnique: declared.isUnique,
+      name: declared.name,
+      tableName: declared.tableName,
+    };
+    const harness = createHarness({
+      indexStates: { [REPORT_EXPORT_INDEX]: [false, undefined] },
+    });
+    const connection = await harness.pool.reserve();
+
+    const rejection = await rejectionOf(
+      ensureOnlineIndexValid({
+        connection,
+        gate: healthyIndexGate,
+        index,
+        reserveObserver: reserveHealthyObserver,
+      }),
+    );
+
+    expect(String(rejection)).toContain(
+      `Required migration index ${REPORT_EXPORT_INDEX} is missing`,
+    );
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
   });
 
   /**
@@ -799,6 +844,7 @@ describe("online migrations", () => {
       kind: "replacement_drop",
       name: firstLegacy,
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "deferred",
     });
     expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
@@ -852,6 +898,7 @@ describe("online migrations", () => {
         kind: "repair",
         name,
         durationMs: 0,
+        retriesSpent: 0,
         outcome: "deferred",
       });
       expect(
@@ -1180,6 +1227,7 @@ describe("online migrations", () => {
       kind: "repair",
       name: "probe-repair",
       durationMs: 0,
+      retriesSpent: 0,
       outcome: "failed",
     });
   });
@@ -1509,6 +1557,11 @@ const createHarness = ({
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
+          // The contact VAT ID repair's movable-contact probe: none left, so
+          // its completion holds and the phase skips it.
+          if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+            return [];
+          }
           if (query.startsWith("SELECT 1 FROM public.")) {
             return emptyRepairTables ? [] : [{ present: 1 }];
           }
@@ -1519,7 +1572,7 @@ const createHarness = ({
           }
           if (
             query.trim() ===
-            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+            "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
           }

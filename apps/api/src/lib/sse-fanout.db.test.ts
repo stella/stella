@@ -349,12 +349,19 @@ const userAt = (target: Audience, index: number): SafeId<"user"> => {
   return userId;
 };
 
-const workspaceStreams = (
-  target: Audience,
-  count: number,
-  signal: AbortSignal,
+type WorkspaceStreamsOptions = {
+  target: Audience;
+  count: number;
+  signal: AbortSignal;
+  workspaceId?: SafeId<"workspace">;
+};
+
+const workspaceStreams = ({
+  target,
+  count,
+  signal,
   workspaceId = target.workspaceId,
-) =>
+}: WorkspaceStreamsOptions) =>
   Array.from({ length: count }, (_unused, index) =>
     subscribe({
       organizationId: target.organizationId,
@@ -365,12 +372,19 @@ const workspaceStreams = (
     }),
   );
 
-const userStreams = (
-  userId: SafeId<"user">,
-  organizationId: SafeId<"organization">,
-  count: number,
-  signal: AbortSignal,
-) =>
+type UserStreamsOptions = {
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+  count: number;
+  signal: AbortSignal;
+};
+
+const userStreams = ({
+  userId,
+  organizationId,
+  count,
+  signal,
+}: UserStreamsOptions) =>
   Array.from({ length: count }, () =>
     subscribeUser({
       organizationId,
@@ -458,16 +472,20 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
     statementsPerPublish: 1,
     delivery: () => "frame",
     open: async ({ entitled, excluded }, signal) => ({
-      entitled: workspaceStreams(audience, entitled, signal),
+      entitled: workspaceStreams({ target: audience, count: entitled, signal }),
       excluded: excluded
         ? [
-            ...workspaceStreams(otherOrganization, LARGE_AUDIENCE, signal),
-            ...workspaceStreams(
-              otherOrganization,
-              LARGE_AUDIENCE,
+            ...workspaceStreams({
+              target: otherOrganization,
+              count: LARGE_AUDIENCE,
               signal,
-              audience.workspaceId,
-            ),
+            }),
+            ...workspaceStreams({
+              target: otherOrganization,
+              count: LARGE_AUDIENCE,
+              signal,
+              workspaceId: audience.workspaceId,
+            }),
           ]
         : [],
     }),
@@ -481,9 +499,13 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
     statementsPerPublish: 0,
     delivery: () => "frame",
     open: async ({ entitled, excluded }, signal) => ({
-      entitled: workspaceStreams(audience, entitled, signal),
+      entitled: workspaceStreams({ target: audience, count: entitled, signal }),
       excluded: excluded
-        ? workspaceStreams(otherOrganization, LARGE_AUDIENCE, signal)
+        ? workspaceStreams({
+            target: otherOrganization,
+            count: LARGE_AUDIENCE,
+            signal,
+          })
         : [],
     }),
     publish: (event) => {
@@ -497,26 +519,26 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
     statementsPerPublish: 1,
     delivery: () => "frame",
     open: async ({ entitled, excluded }, signal) => ({
-      entitled: userStreams(
-        userAt(audience, 0),
-        audience.organizationId,
-        entitled,
+      entitled: userStreams({
+        userId: userAt(audience, 0),
+        organizationId: audience.organizationId,
+        count: entitled,
         signal,
-      ),
+      }),
       excluded: excluded
         ? [
-            ...userStreams(
-              userAt(audience, 0),
-              otherOrganization.organizationId,
-              LARGE_AUDIENCE,
+            ...userStreams({
+              userId: userAt(audience, 0),
+              organizationId: otherOrganization.organizationId,
+              count: LARGE_AUDIENCE,
               signal,
-            ),
-            ...userStreams(
-              userAt(audience, 1),
-              audience.organizationId,
-              LARGE_AUDIENCE,
+            }),
+            ...userStreams({
+              userId: userAt(audience, 1),
+              organizationId: audience.organizationId,
+              count: LARGE_AUDIENCE,
               signal,
-            ),
+            }),
           ]
         : [],
     }),
@@ -572,11 +594,17 @@ type FanoutMeasurement = {
   statements: number;
 };
 
-const measurePublish = async <C extends RealtimeChannel>(
-  channel: C,
-  event: ChannelEvent[C],
-  shape: { entitled: number; excluded: boolean },
-): Promise<FanoutMeasurement> => {
+type MeasurePublishOptions<C extends RealtimeChannel> = {
+  channel: C;
+  event: ChannelEvent[C];
+  shape: { entitled: number; excluded: boolean };
+};
+
+const measurePublish = async <C extends RealtimeChannel>({
+  channel,
+  event,
+  shape,
+}: MeasurePublishOptions<C>): Promise<FanoutMeasurement> => {
   const harness = harnessFor(channel);
   const controller = new AbortController();
   const subscribers = await harness.open(shape, controller.signal);
@@ -626,11 +654,17 @@ const fanoutCases = CHANNELS.flatMap((channel) => {
  * the kind's delivery: one encoded frame every stream shares, or the end of
  * every stream with nothing encoded.
  */
-const expectDeliveredOnce = (
-  measurement: FanoutMeasurement,
-  delivery: Exclude<Delivery, "silent">,
-  audienceSize: number,
-): void => {
+type ExpectDeliveredOnceOptions = {
+  measurement: FanoutMeasurement;
+  delivery: Exclude<Delivery, "silent">;
+  audienceSize: number;
+};
+
+const expectDeliveredOnce = ({
+  measurement,
+  delivery,
+  audienceSize,
+}: ExpectDeliveredOnceOptions): void => {
   expect(measurement.redisPublishes).toBe(1);
   expect(measurement.entitled).toEqual(
     Array.from({ length: audienceSize }, () => delivery),
@@ -647,19 +681,31 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
   test.each(fanoutCases)("$channel $event.type", async ({ channel, event }) => {
     const harness = harnessFor(channel);
     const delivery = harness.delivery(event);
-    const single = await measurePublish(channel, event, {
-      entitled: 1,
-      excluded: false,
+    const single = await measurePublish({
+      channel,
+      event,
+      shape: {
+        entitled: 1,
+        excluded: false,
+      },
     });
-    const many = await measurePublish(channel, event, {
-      entitled: LARGE_AUDIENCE,
-      excluded: false,
+    const many = await measurePublish({
+      channel,
+      event,
+      shape: {
+        entitled: LARGE_AUDIENCE,
+        excluded: false,
+      },
     });
 
     expect(single.statements).toBe(harness.statementsPerPublish);
     expect(many.statements).toBe(single.statements);
-    expectDeliveredOnce(single, delivery, 1);
-    expectDeliveredOnce(many, delivery, LARGE_AUDIENCE);
+    expectDeliveredOnce({ measurement: single, delivery, audienceSize: 1 });
+    expectDeliveredOnce({
+      measurement: many,
+      delivery,
+      audienceSize: LARGE_AUDIENCE,
+    });
     const frameBytes = single.frames.map((frame) => frame.byteLength);
     expect(frameBytes.every((bytes) => bytes > 0)).toBe(true);
     if (delivery === "closed") {
@@ -681,9 +727,13 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
     "$channel $event.type reaches no one outside its audience, at no extra statement",
     async ({ channel, event }) => {
       const harness = harnessFor(channel);
-      const measurement = await measurePublish(channel, event, {
-        entitled: 1,
-        excluded: true,
+      const measurement = await measurePublish({
+        channel,
+        event,
+        shape: {
+          entitled: 1,
+          excluded: true,
+        },
       });
 
       expect(measurement.excluded.length).toBeGreaterThanOrEqual(
@@ -693,7 +743,11 @@ describe("one live-update publish costs the same for 1 and for 50 subscribers", 
         measurement.excluded.filter((outcome) => outcome === "frame"),
       ).toEqual([]);
       expect(measurement.statements).toBe(harness.statementsPerPublish);
-      expectDeliveredOnce(measurement, harness.delivery(event), 1);
+      expectDeliveredOnce({
+        measurement,
+        delivery: harness.delivery(event),
+        audienceSize: 1,
+      });
     },
   );
 });

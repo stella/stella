@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Verifies contributor signatures and reports merge-gating CLA checks; no publication, tag creation, or deployment.",
+  "reviewedDigest": "aee04a7a331765542766591848ff412a540af66af7eee17a90bf1064f8f6c109"
+}

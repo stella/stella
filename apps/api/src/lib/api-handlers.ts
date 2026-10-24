@@ -5,6 +5,7 @@ import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -188,6 +189,11 @@ export type { McpToolName };
  * - `personal_history`: the caller's own search history (list, delete one,
  *   clear). Recording a use and the one-time browser import stay `internal`
  *   under `search_ui`.
+ * - `assistant_memory`: the assistant memory the caller may read and write
+ *   (list, create, update). Firm-wide memory writes stay `internal` under
+ *   `assistant_chat`.
+ * - `notification_inbox`: the caller's own notifications (list, mark one
+ *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -206,7 +212,9 @@ type McpCapabilityReason =
   | "file_transport"
   | "contact_extraction_ui"
   | "correspondence"
-  | "personal_history";
+  | "personal_history"
+  | "assistant_memory"
+  | "notification_inbox";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -305,6 +313,7 @@ export type McpExposure =
       type: "capability";
       reason: McpCapabilityReason;
       consumesServices: ServiceClassification;
+      confirmation?: "required";
       readClass?: McpReadClass;
     }
   | { type: "internal"; reason: McpInternalReason };
@@ -469,6 +478,39 @@ export type { AccountAccess } from "@/api/lib/auth/account-access";
 
 const requiresAccountCheck = (accountAccess: AccountAccess) =>
   accountAccess !== ACCOUNT_ACCESS.sandbox;
+
+export type HandlerConfigurationAdmission =
+  "allowed" | "permission_required" | "account_restricted";
+
+/**
+ * Projects the permission and restricted-account checks performed by safe
+ * handlers without running the handler. Capability endpoints use this to
+ * advertise the same admission decision as the operation they describe.
+ */
+export const checkHandlerConfigurationAdmission = ({
+  principal,
+  config,
+  checkAccountOperation = checkRestrictedAccountOperation,
+}: {
+  // The email is read only when an account check applies: a sandbox handler's
+  // context need not carry a user.
+  principal: { memberRole: AuthorizedMemberRole; readEmail: () => string };
+  config: Pick<HandlerConfig, "permissions" | "accountAccess">;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
+}): HandlerConfigurationAdmission => {
+  if (!hasMemberPermission(principal.memberRole, config.permissions)) {
+    return "permission_required";
+  }
+  if (
+    requiresAccountCheck(config.accountAccess) &&
+    Result.isError(
+      checkAccountOperation(principal.readEmail(), config.accountAccess),
+    )
+  ) {
+    return "account_restricted";
+  }
+  return "allowed";
+};
 
 type SandboxAccountAccess = {
   accountAccess: typeof ACCOUNT_ACCESS.sandbox;
@@ -955,7 +997,7 @@ const runSafeHandlerInDeliveryScope = async <
         route: ctx.route,
         error: handlerError,
         statusCode,
-        telemetry: safeErrorTelemetryDisposition(statusCode),
+        telemetry: safeErrorTelemetryDisposition(statusCode, handlerError.code),
       });
 
       return toErrorStatus(statusCode, safeErrorBody(handlerError));
@@ -1023,7 +1065,10 @@ const runSafeHandlerInDeliveryScope = async <
         route: ctx.route,
         error: handlerError,
         statusCode: handlerError.status,
-        telemetry: safeErrorTelemetryDisposition(handlerError.status),
+        telemetry: safeErrorTelemetryDisposition(
+          handlerError.status,
+          handlerError.code,
+        ),
       });
       return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
     }
@@ -1151,7 +1196,7 @@ const runAdmittedFiniteHandler = async function* <
                 }),
           );
         }
-        const outcome = await admitModelDispatch({
+        const dispatch = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
           userId: ctx.user.id,
           actionKind,
@@ -1166,6 +1211,9 @@ const runAdmittedFiniteHandler = async function* <
             return await Result.gen(() => handler(admitted));
           },
         });
+        const outcome = Result.isError(dispatch)
+          ? Result.err(dispatch.error)
+          : dispatch.value;
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();
@@ -1442,24 +1490,28 @@ const createSafeScopedHandler = <
     config,
     handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
       const memberRole = readAuthorizedMemberRole(ctx);
-      if (!memberRole || !hasMemberPermission(memberRole, config.permissions)) {
+      if (!memberRole) {
         return toSafeStatusResponse(403, {
           code: API_ERROR_CODE.forbidden,
           message: "Forbidden",
         });
       }
-
-      if (requiresAccountCheck(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(
-          ctx.user.email,
-          config.accountAccess,
-        );
-        if (Result.isError(accountAccess)) {
-          return toSafeStatusResponse(403, {
-            code: "account_access_unavailable",
-            message: "This operation is unavailable for this account.",
-          });
-        }
+      const configurationAdmission = checkHandlerConfigurationAdmission({
+        principal: { memberRole, readEmail: () => ctx.user.email },
+        config,
+        checkAccountOperation,
+      });
+      if (configurationAdmission === "permission_required") {
+        return toSafeStatusResponse(403, {
+          code: API_ERROR_CODE.forbidden,
+          message: "Forbidden",
+        });
+      }
+      if (configurationAdmission === "account_restricted") {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
       }
       const featureAccessResponse = await admitHandlerFeatureAccess({
         ctx,
@@ -2370,7 +2422,11 @@ type SafeErrorTelemetry = "capture" | "log-only";
 
 const safeErrorTelemetryDisposition = (
   statusCode: number,
-): SafeErrorTelemetry => (statusCode >= 500 ? "capture" : "log-only");
+  code?: string,
+): SafeErrorTelemetry =>
+  statusCode >= 500 && code !== ACTION_ADMISSION_CODES.featureDisabled
+    ? "capture"
+    : "log-only";
 
 type LogAndCaptureSafeErrorProps = {
   request: Request;
@@ -2407,7 +2463,14 @@ const logAndCaptureSafeError = ({
 }: LogAndCaptureSafeErrorProps) => {
   const reqCtx = getRequestContext(request);
   const evidence = readEvidence(error);
-  const severity = statusCode >= 500 ? "ERROR" : "WARN";
+  const severity =
+    statusCode >= 500 &&
+    !(
+      HandlerError.is(error) &&
+      error.code === ACTION_ADMISSION_CODES.featureDisabled
+    )
+      ? "ERROR"
+      : "WARN";
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.handler,
@@ -2466,10 +2529,8 @@ const logAndCaptureSafeError = ({
   // The owner's grade rides along in shadow; it decides nothing here yet.
   Object.assign(attributes, shadowFields(grading));
 
-  // Severity follows the status class, as it does at the request-level
-  // `onError` sink that emits this same `request.failed` event. A 5xx is a
-  // server fault; a 4xx is an answered client outcome, and an access denial
-  // graded ERROR would sit in the same class as a panic.
+  // Operator feature refusals retain 503 on the wire while remaining an
+  // expected warning. Other server failures keep their error severity.
   if (severity === "ERROR") {
     logger.error("request.failed", attributes);
   } else {
