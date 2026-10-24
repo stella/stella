@@ -29,6 +29,7 @@ import {
   lockInvoiceInStatus,
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   hasMemberPermission,
@@ -335,10 +336,10 @@ if (!databaseUrl || !runPostgres) {
           })),
         invariant: ({ outcomes, blocked, state }) => {
           expect(blocked).toContain("a.edit");
-          expect(outcomes.a).toMatchObject({
-            status: "app-error",
-            error: { status: 409 },
-          });
+          expect(outcomes.a.status).toBe("app-error");
+          if (outcomes.a.status === "app-error") {
+            expect(resolveHandlerError(outcomes.a.error)?.status).toBe(409);
+          }
           expect(outcomes.b.status).toBe("committed");
           expect(state.invoice?.notes).toBeNull();
           expect(
