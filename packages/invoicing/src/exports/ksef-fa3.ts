@@ -11,10 +11,10 @@ import {
   countryCodeOf,
   exportFileNamer,
   invoiceDescriptionOf,
-  quantityText,
-  streetOf,
   type InvoiceExportLine,
   type InvoiceExportRecord,
+  quantityText,
+  streetOf,
 } from "./record";
 import { el, text, XML_DECLARATION } from "./xml";
 
