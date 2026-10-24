@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { Transaction } from "@/api/db/root";
 import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -60,61 +61,78 @@ type UpdateReaderAnnotationProps = AnnotationAuthorScope & {
   reach: AnnotationReach;
 };
 
-export const updateReaderAnnotationHandler = async function* ({
+type UpdateReaderAnnotationRowsOptions = Omit<
+  UpdateReaderAnnotationProps,
+  "safeDb"
+> & {
+  tx: Transaction;
+};
+
+/**
+ * The locked change inside the caller's transaction, so a route that
+ * declares the annotation aggregate takes its lock where the rows change.
+ * No rows means the mark is not the caller's or not within reach.
+ */
+export const updateReaderAnnotationRows = async ({
+  tx,
   annotationId,
   change: body,
   organizationId,
   reach,
   recordAuditEvent,
-  safeDb,
   userId,
+}: UpdateReaderAnnotationRowsOptions) => {
+  await withAggregateLock({
+    aggregate: "readerAnnotation",
+    id: { id: annotationId, organizationId, userId },
+    tx,
+  });
+  const mutatedRows = await tx
+    .update(legalReaderAnnotations)
+    .set({ ...changesFor(body), updatedAt: new Date() })
+    .where(
+      wholeAnnotationSql({
+        annotationId,
+        organizationId,
+        reach,
+        userId,
+      }),
+    )
+    .returning({
+      id: legalReaderAnnotations.id,
+      targetType: legalReaderAnnotations.targetType,
+      verificationClaimId: legalReaderAnnotations.verificationClaimId,
+      verificationRunId: legalReaderAnnotations.verificationRunId,
+      workspaceId: legalReaderAnnotations.workspaceId,
+    });
+  const first = mutatedRows.at(0);
+  if (first !== undefined) {
+    const subject = annotationAuditSubject({
+      annotationId,
+      targetType: requireAnnotationTargetType(first.targetType),
+      verificationClaimId: first.verificationClaimId,
+      verificationRunId: first.verificationRunId,
+      workspaceId: first.workspaceId,
+    });
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: subject.resourceType,
+      resourceId: subject.resourceId,
+      ...(subject.workspaceId === undefined
+        ? {}
+        : { workspaceId: subject.workspaceId }),
+      metadata: { ...subject.metadata, change: body.change },
+    });
+  }
+  return mutatedRows;
+};
+
+export const updateReaderAnnotationHandler = async function* ({
+  safeDb,
+  ...props
 }: UpdateReaderAnnotationProps) {
   const rows = yield* Result.await(
-    safeDb(async (tx) => {
-      await withAggregateLock({
-        aggregate: "readerAnnotation",
-        id: { id: annotationId, organizationId, userId },
-        tx,
-      });
-      const mutatedRows = await tx
-        .update(legalReaderAnnotations)
-        .set({ ...changesFor(body), updatedAt: new Date() })
-        .where(
-          wholeAnnotationSql({
-            annotationId,
-            organizationId,
-            reach,
-            userId,
-          }),
-        )
-        .returning({
-          id: legalReaderAnnotations.id,
-          targetType: legalReaderAnnotations.targetType,
-          verificationClaimId: legalReaderAnnotations.verificationClaimId,
-          verificationRunId: legalReaderAnnotations.verificationRunId,
-          workspaceId: legalReaderAnnotations.workspaceId,
-        });
-      const first = mutatedRows.at(0);
-      if (first !== undefined) {
-        const subject = annotationAuditSubject({
-          annotationId,
-          targetType: requireAnnotationTargetType(first.targetType),
-          verificationClaimId: first.verificationClaimId,
-          verificationRunId: first.verificationRunId,
-          workspaceId: first.workspaceId,
-        });
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: subject.resourceType,
-          resourceId: subject.resourceId,
-          ...(subject.workspaceId === undefined
-            ? {}
-            : { workspaceId: subject.workspaceId }),
-          metadata: { ...subject.metadata, change: body.change },
-        });
-      }
-      return mutatedRows;
-    }),
+    safeDb(async (tx) => await updateReaderAnnotationRows({ ...props, tx })),
   );
 
   if (rows.length === 0) {

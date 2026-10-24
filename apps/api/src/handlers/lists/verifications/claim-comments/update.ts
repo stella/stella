@@ -10,14 +10,14 @@ import { t } from "elysia";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   annotationCommentTextSchema,
   annotationVisibilitySchema,
 } from "@/api/lib/legal-search/reader-annotations/schema";
-import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
+import { updateReaderAnnotationRows } from "@/api/lib/legal-search/reader-annotations/update";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 /** One named change per request, so an update cannot be empty or ambiguous. */
@@ -64,29 +64,27 @@ const updateClaimComment = createSafeHandler(
     user,
     workspaceId,
   }) {
-    yield* Result.await(
+    // The lock and the change share this transaction.
+    const rows = yield* Result.await(
       safeDb(
         async (tx) =>
-          await withAggregateLock({
-            aggregate: "readerAnnotation",
-            id: {
-              id: params.annotationId,
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-            },
+          await updateReaderAnnotationRows({
+            annotationId: params.annotationId,
+            change: body,
+            organizationId: session.activeOrganizationId,
+            reach: { type: "verification-claim", workspaceId },
+            recordAuditEvent,
             tx,
+            userId: user.id,
           }),
       ),
     );
-    return yield* updateReaderAnnotationHandler({
-      annotationId: params.annotationId,
-      change: body,
-      organizationId: session.activeOrganizationId,
-      reach: { type: "verification-claim", workspaceId },
-      recordAuditEvent,
-      safeDb,
-      userId: user.id,
-    });
+    if (rows.length === 0) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Annotation not found" }),
+      );
+    }
+    return Result.ok({ ok: true as const });
   },
 );
 

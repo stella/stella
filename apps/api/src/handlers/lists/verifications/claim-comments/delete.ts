@@ -8,10 +8,10 @@ import { Result } from "better-result";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import { deleteReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/delete";
+import { deleteReaderAnnotationRows } from "@/api/lib/legal-search/reader-annotations/delete";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
@@ -42,28 +42,26 @@ const deleteClaimComment = createSafeHandler(
     user,
     workspaceId,
   }) {
-    yield* Result.await(
+    // The lock and the change share this transaction.
+    const rows = yield* Result.await(
       safeDb(
         async (tx) =>
-          await withAggregateLock({
-            aggregate: "readerAnnotation",
-            id: {
-              id: params.annotationId,
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-            },
+          await deleteReaderAnnotationRows({
+            annotationId: params.annotationId,
+            organizationId: session.activeOrganizationId,
+            reach: { type: "verification-claim", workspaceId },
+            recordAuditEvent,
             tx,
+            userId: user.id,
           }),
       ),
     );
-    return yield* deleteReaderAnnotationHandler({
-      annotationId: params.annotationId,
-      organizationId: session.activeOrganizationId,
-      reach: { type: "verification-claim", workspaceId },
-      recordAuditEvent,
-      safeDb,
-      userId: user.id,
-    });
+    if (rows.length === 0) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Annotation not found" }),
+      );
+    }
+    return Result.ok({ ok: true as const });
   },
 );
 
