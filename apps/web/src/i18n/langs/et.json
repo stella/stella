@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "professionalUse": {
-      "description": "Teie konto loomisel seda kinnitust teile ei näidatud. Jätkamiseks nõustuge sellega.",
       "title": "Kinnitage kutsealane kasutus"
     },
     "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",

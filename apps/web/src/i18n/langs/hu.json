@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
     "professionalUse": {
-      "description": "Fiókja létrehozásakor ez a nyilatkozat nem jelent meg Önnek. A folytatáshoz fogadja el.",
       "title": "Szakmai célú használat megerősítése"
     },
     "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
