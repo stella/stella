@@ -21,7 +21,9 @@ import { createScalingTempTables } from "@/api/tests/read-scaling/entity-fixture
 
 // The audit recorder is stubbed: the measured statements are the write's own,
 // which are the ones that could grow with the data its scope already holds.
-const noopAuditRecorder: AuditRecorder = async () => Promise.resolve();
+const noopAuditRecorder: AuditRecorder = async () => {
+  await Promise.resolve();
+};
 
 const TIME_BILLING_FEATURE =
   "time-billing" satisfies keyof typeof FEATURE_REGISTRY;
