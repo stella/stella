@@ -5,7 +5,7 @@ import { cents, type CentsAmount } from "@stll/money";
 import type { InvoiceCountry } from "./profiles/country-profiles";
 import type { VatBreakdownLine } from "./types";
 
-export type VatRateCountry = Extract<InvoiceCountry, "CZ" | "SK"> | "PL";
+export type VatRateCountry = Extract<InvoiceCountry, "CZ" | "SK" | "PL">;
 
 type TaxPointInput = {
   country: VatRateCountry;

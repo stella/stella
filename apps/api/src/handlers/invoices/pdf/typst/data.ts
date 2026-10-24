@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { encode } from "uqr";
 
 import {
+  homeCurrencyVat,
   INVOICE_COUNTRY_PROFILES,
   INVOICE_PDF_LABELS,
   invoiceCountryOf,
@@ -11,6 +12,7 @@ import {
   legalNotesFor,
   type VatTreatment,
 } from "@stll/invoicing";
+import { formatMoneyCents } from "@stll/money";
 
 import {
   buildInvoicePaymentPayload,
@@ -54,6 +56,11 @@ type InvoiceTemplateData = {
     total: string;
     payment: string;
     notes: string;
+    vatHome: string;
+    vatHomeTotal: string;
+    exchangeRate: string;
+    rateSource: string;
+    rateDate: string;
   };
   lines: {
     description: string;
@@ -70,6 +77,13 @@ type InvoiceTemplateData = {
     gross: string;
     grossMinor: number;
     breakdown: { label: string; net: string; vat: string }[];
+    homeVat: {
+      total: string;
+      breakdown: { label: string; vat: string }[];
+      rate: string;
+      source: string;
+      date: string;
+    } | null;
   };
   payment: {
     fields: Field[];
@@ -175,10 +189,8 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
   const { invoice, seller, totals, originalNumber } = options;
   const lang = invoice.language;
   const l = INVOICE_PDF_LABELS[lang];
-  const profile =
-    INVOICE_COUNTRY_PROFILES[
-      invoiceCountryOf(seller ?? { country: null, vatId: null })
-    ];
+  const country = invoiceCountryOf(seller ?? { country: null, vatId: null });
+  const profile = INVOICE_COUNTRY_PROFILES[country];
   const { money, date, vatRate, quantity } = createInvoiceFormatters({
     currency: invoice.currency,
     locale: invoice.language,
@@ -195,6 +207,44 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     outside_scope: l.outsideScope,
     not_vat_payer: l.nonPayer,
   } satisfies Record<VatTreatment, string>;
+  const homeVat = (() => {
+    if (
+      invoice.vatExchangeRate === null ||
+      invoice.vatExchangeRate === undefined ||
+      invoice.vatExchangeRateSource === null ||
+      invoice.vatExchangeRateSource === undefined ||
+      invoice.vatExchangeRateDate === null ||
+      invoice.vatExchangeRateDate === undefined ||
+      profile.vatCurrency === null ||
+      (country !== "CZ" && country !== "SK" && country !== "PL")
+    ) {
+      return null;
+    }
+    const converted = homeCurrencyVat({
+      country,
+      rate: invoice.vatExchangeRate,
+      vatBreakdown: totals.vatBreakdown,
+    });
+    const homeMoney = (amountCents: number) =>
+      formatMoneyCents({
+        amountCents,
+        currency: profile.vatCurrency,
+        locale: lang,
+      });
+    const displayRate = new Intl.NumberFormat(lang, {
+      maximumFractionDigits: 12,
+    }).format(Number(invoice.vatExchangeRate));
+    return {
+      total: homeMoney(converted.totalVatAmountMinor),
+      breakdown: converted.byRate.map((row) => ({
+        label: `${treatments[row.vatTreatment]} ${vatRate(row.vatRateBps)}`,
+        vat: homeMoney(row.vatAmountMinor),
+      })),
+      rate: `1 ${invoice.currency} = ${displayRate} ${profile.vatCurrency}`,
+      source: invoice.vatExchangeRateSource,
+      date: date(invoice.vatExchangeRateDate),
+    };
+  })();
 
   let qr: string | null = null;
   let qrWidthMm = 32;
@@ -272,6 +322,11 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       total: l.total,
       payment: l.payment,
       notes: l.notes,
+      vatHome: l.vatHome,
+      vatHomeTotal: l.vatHomeTotal,
+      exchangeRate: l.exchangeRate,
+      rateSource: l.rateSource,
+      rateDate: l.rateDate,
     },
     lines: invoice.lines.map((line) => {
       const billed = line.quantity !== null && line.unitPrice !== null;
@@ -299,6 +354,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         net: money(row.netAmountMinor),
         vat: money(row.vatAmountMinor),
       })),
+      homeVat,
     },
     payment:
       seller === null

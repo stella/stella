@@ -124,6 +124,26 @@
       text(fill: muted, size: 8pt, [#b.net / #b.vat]),
     )).flatten(),
   )
+  if data.totals.homeVat != none {
+    v(8pt)
+    grid(
+      columns: (1fr, auto),
+      row-gutter: 5pt,
+      align: (start, end),
+      ..data.totals.homeVat.breakdown.map(b => (
+        text(fill: muted, size: 8pt, [#data.labels.vatHome — #b.label]),
+        text(fill: muted, size: 8pt, b.vat),
+      )).flatten(),
+      text(weight: "semibold", data.labels.vatHomeTotal),
+      text(weight: "semibold", data.totals.homeVat.total),
+    )
+    v(5pt)
+    text(fill: muted, size: 8pt, [
+      #data.labels.exchangeRate: #data.totals.homeVat.rate; \
+      #data.labels.rateSource: #data.totals.homeVat.source; \
+      #data.labels.rateDate: #data.totals.homeVat.date
+    ])
+  }
   v(8pt)
   block(fill: accent, inset: (x: 12pt, y: 10pt), radius: 5pt, width: 100%,
     grid(
