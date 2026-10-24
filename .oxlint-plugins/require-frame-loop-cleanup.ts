@@ -875,8 +875,7 @@ const hasAmbiguousHandleWrites = ({
       value === null ? null : unwrapExpression(callArguments(value).at(0));
     const startsLoop =
       frame &&
-      value !== null &&
-      value.type === "CallExpression" &&
+      value?.type === "CallExpression" &&
       isGlobalCall(context, value, START_NAMES.frame) &&
       loopBody !== null &&
       (functionFor(context, callback) === loopBody ||
