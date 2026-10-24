@@ -219,9 +219,9 @@ const SEARCH_RESULTS_MIN_WIDTH = 320;
 const observeSearchResultsRect: typeof observeElementRect = (
   instance,
   callback,
-) =>
-  observeElementRect(instance, (rect) => {
-    const element = instance.scrollElement;
+) => {
+  const element = instance.scrollElement;
+  return observeElementRect(instance, (rect) => {
     const offsetHeight =
       element instanceof HTMLElement ? element.offsetHeight : 0;
     const offsetWidth =
@@ -231,6 +231,7 @@ const observeSearchResultsRect: typeof observeElementRect = (
       width: rect.width === 0 ? offsetWidth : rect.width,
     });
   });
+};
 
 type SearchColumnsStyle = CSSProperties & {
   "--search-facets-w"?: string;
