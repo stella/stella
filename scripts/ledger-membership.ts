@@ -18,8 +18,7 @@ type ReadBaseLedgerOptions = {
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
   normalizeBaseEntries?:
-    | ((entries: string[], baseCommit: string) => string[])
-    | undefined;
+    ((entries: string[], baseCommit: string) => string[]) | undefined;
 };
 
 type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
@@ -27,8 +26,7 @@ type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
 };
 
 type CompareLedgerMembershipResult =
-  | { type: "unresolved-base" }
-  | { type: "compared"; added: string[] };
+  { type: "unresolved-base" } | { type: "compared"; added: string[] };
 
 const compareLedgerMembership = ({
   baseRef,
