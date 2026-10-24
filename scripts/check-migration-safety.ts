@@ -1106,7 +1106,12 @@ const surfaceQuotedBody = ({
     if (
       !deferred &&
       /\bEXECUTE\b/iu.test(statement.text) &&
-      statement.literals.some(({ value }) => isRefusedPreDeployCommand(value))
+      // Each literal alone, and all of them in order: a command assembled
+      // with `||` (`'UPDATE ' || quote_ident(t) || ' SET ...'`) reads as one.
+      [
+        ...statement.literals.map(({ value }) => value),
+        statement.literals.map(({ value }) => value).join(" x "),
+      ].some(isRefusedPreDeployCommand)
     ) {
       statement.executableRefusedOperation = true;
     }
