@@ -15,11 +15,11 @@ import {
   PUBLIC_LEGISLATION_PAGE_COUNTRIES,
 } from "./legislation-publication";
 import {
-  publicCountriesFor,
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
   PUBLIC_LAW_DOMAINS,
+  publicCountriesFor,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
@@ -30,8 +30,9 @@ describe("public country availability contract", () => {
     expect(Object.keys(PUBLIC_COUNTRY_CAPABILITIES)).toEqual(
       CASE_LAW_JURISDICTIONS,
     );
-    expect(publicCountriesFor("caseLaw", "search")).toEqual(
-      PUBLIC_CASE_LAW_COUNTRIES,
+    // The serving list carries branded codes; compare the codes themselves.
+    expect(PUBLIC_CASE_LAW_COUNTRIES.join(",")).toBe(
+      publicCountriesFor("caseLaw", "search").join(","),
     );
     expect(PUBLIC_LEGISLATION_COUNTRIES).toEqual(
       publicCountriesFor("legislation", "search"),

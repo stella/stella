@@ -7,10 +7,10 @@ import {
   PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE,
   PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE,
   PL_AUTHORITY_FILE_NUMBER_SOURCE,
-  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   PL_KIO_DOCKET_SOURCE,
   PL_TK_DISTINCTIVE_DOCKET_SOURCE,
   PL_TK_DOCKET_SOURCE,
+  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   polishAdministrativeDocketOf,
   polishConstitutionalDocketKey,
   polishKioDocketKey,
@@ -544,8 +544,7 @@ const hungarianConstitutionalDesignation = (value: string): string | null => {
  * opinion, a Constitutional Court decision). Null for text that is neither.
  */
 type HungarianCitationForm =
-  | { type: "docket"; registry: string }
-  | { type: "published" };
+  { type: "docket"; registry: string } | { type: "published" };
 
 export const hungarianCitationForm = (
   citationText: string,
@@ -588,11 +587,13 @@ const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s{0,3}(?::\s{0,3})?(?:[Aa]kt\.?:?\s{
 // PL_TK_PATTERN/PL_TK_BARE_PATTERN's phantom-duplicate lookbehind exactly,
 // or a whitespace run this pattern still combines into one citation but
 // the lookbehind no longer recognizes lets the Tribunal symbol at the
-// tail phantom-duplicate as a second, separate citation. Group
+// tail phantom-duplicate as a second, separate citation. A division
+// code may carry a trailing dot ("IV P. 498/99", "VIII Kz. 123/15"); the
+// dedup key drops it. Group
 // `caseNumber` captures the bare case number to deduplicate against the
 // unprefixed pattern below.
 const PL_PREFIXED_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}(?:[\s/]{1,3}[A-Za-z]{1,5})?\s*\d{1,6}\/\d{2,4})`,
+  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}\.?(?:[\s/]{1,3}[A-Za-z]{1,5}\.?)?\s*\d{1,6}\/\d{2,4})`,
   "gu",
 );
 
@@ -647,7 +648,7 @@ const PL_TK_PATTERN = new RegExp(
 // whitespace run: "I SK 12/20" is a Supreme Court docket, and its tail read
 // past a wide gap would key it as the Tribunal's.
 const PL_TK_BARE_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -657,7 +658,7 @@ const PL_TK_BARE_PATTERN = new RegExp(
 // ("sygn. akt II    K 12/20" -> "K 12/20") would otherwise pass the cue
 // gate as a different, Tribunal docket.
 const PL_TK_CUED_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -796,8 +797,11 @@ export const CUE_GATED_CITATION_PATTERNS = [
   },
   {
     id: "pl-uokik",
+    // The leading capital check runs the unbounded division lookbehind only
+    // where a number can start: tried at every position of a whitespace run,
+    // it rescans the run each time.
     pattern: new RegExp(
-      String.raw`(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
+      String.raw`(?=\p{Lu})(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
       "gu",
     ),
     cue: /\bUOKiK\b|Urz[ęe]d\p{L}*\s+Ochrony\s+Konkurencji|Ochrony\s+Konkurencji\s+i\s+Konsument/iu,
@@ -871,7 +875,7 @@ const PL_BARE_SYMBOL_PATTERN = new RegExp(
 // division, a ninth one ("IX SA/Wa") or one past a wide gap ("II      SA/Wa"),
 // rejects the match rather than leaving a docket with its division cut off.
 const PL_NSA_WSA_PATTERN = new RegExp(
-  String.raw`(?:${PL_SYGN_PREFIX})?(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -888,7 +892,7 @@ const PL_NSA_SEATLESS_PATTERN = new RegExp(
 // "OPS 3/98". The lookbehind leaves a divided mark ("I OPS 3/22") to the
 // bare Polish pattern, so its tail is not read as a second citation.
 const PL_NSA_PRE_REFORM_RESOLUTION_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -2185,8 +2189,7 @@ export type DecisionCitationExtraction = {
 };
 
 export type DecisionCitationRejection =
-  | CitationScopesRejectedError
-  | UsCitationRejection;
+  CitationScopesRejectedError | UsCitationRejection;
 
 /** A cited decision as the citation graph's row source reads it. */
 const extractedCitationOf = ({

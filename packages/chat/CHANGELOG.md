@@ -1,5 +1,36 @@
 # @stll/chat
 
+## 0.2.6
+
+### Patch Changes
+
+- [#6567](https://github.com/stella/stella/pull/6567) [`76bfdfd`](https://github.com/stella/stella/commit/76bfdfdbf1ede83c7d3dc1db8a8dcc919e479d2a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `getChatLinkSite`, which returns the registrable domain of a link hostname so link icons can be requested once per site.
+- Updated dependencies [[`c2289c3`](https://github.com/stella/stella/commit/c2289c387f5e59f6b5248a99325d69e5fd84b2cc)]:
+  - @stll/ui@0.50.1
+
+## 0.2.5
+
+### Patch Changes
+
+- [#6712](https://github.com/stella/stella/pull/6712) [`e4bf82f`](https://github.com/stella/stella/commit/e4bf82f52d7a36d63b9beb829861b47f3c2d11bc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `zod` 4.6.6 or later.
+- Updated dependencies [[`ab74b25`](https://github.com/stella/stella/commit/ab74b2560766d05d67c302c4b81639351ef33a64), [`17830cc`](https://github.com/stella/stella/commit/17830cc0f3578c1ad26acae77374ef9e959fa77f), [`8cb7fd4`](https://github.com/stella/stella/commit/8cb7fd43886be0ef8dc9be107eafac32613d504a), [`ae6605a`](https://github.com/stella/stella/commit/ae6605a93f22d05aab53205059032237f0e1cbd8), [`c48136a`](https://github.com/stella/stella/commit/c48136ad775ad38e1e7f4a9ca91caa485e827952)]:
+  - @stll/ui@0.50.0
+  - @stll/ai-catalog@0.8.2
+
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [[`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8), [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b)]:
+  - @stll/ui@0.49.0
+
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622)]:
+  - @stll/ui@0.48.0
+
 ## 0.2.2
 
 ### Patch Changes

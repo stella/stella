@@ -5,8 +5,8 @@ import type { Static } from "elysia";
 import * as v from "valibot";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
 
@@ -341,6 +341,7 @@ const generateRefinedSearchQuery = async ({
   await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",
@@ -540,6 +541,7 @@ export const summarizeSearchResults = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
         task: "short-text",
         serviceTier: "standard",

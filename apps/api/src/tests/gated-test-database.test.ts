@@ -1,17 +1,62 @@
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { forceClosePool, terminateReserved } from "@/api/db/sql-close";
+import {
+  currentQueryCount,
+  currentTransactionCount,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { PG_DRIVER_ERROR } from "@/api/lib/pg-error";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { withGatedTestClients } from "./gated-test-database";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const sessionSchema = v.object({ pid: v.number() });
+
+describe.skipIf(!runPostgresTests)("gated database instrumentation", () => {
+  test("counts Bun transaction start and settle round trips beside SQL statements", async () => {
+    const databaseUrl = v.parse(v.string(), process.env["DATABASE_URL"]);
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const result = await runWithQueryCounter(
+        async () => {
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`select 1`);
+          });
+          return {
+            statements: currentQueryCount(),
+            transactionRoundTrips: currentTransactionCount(),
+          };
+        },
+        { countTransactions: true },
+      );
+      expect(result).toEqual({ statements: 1, transactionRoundTrips: 2 });
+
+      const rollbackRoundTrips = await runWithQueryCounter(
+        async () => {
+          expect(
+            await rejectionOf(
+              db.transaction(async () => {
+                throw new Error("rollback this transaction");
+              }),
+            ),
+          ).toMatchObject({ message: "rollback this transaction" });
+          return currentTransactionCount();
+        },
+        { countTransactions: true },
+      );
+      expect(rollbackRoundTrips).toBe(2);
+    });
+  });
+});
 
 describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
   test("terminates an observed lock wait while the blocking session still holds its lock", async () => {
@@ -55,7 +100,7 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
           expect(
             await withTimeout(async () => await result.query, {
               label: "closed PostgreSQL query rejection",
-              timeoutMs: 2000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
           ).toMatchObject({
             status: "rejected",
@@ -109,12 +154,12 @@ describe.skipIf(!runPostgresTests)("forced PostgreSQL scope cleanup", () => {
           await waitForBlockedPid(observer, { waitingPid, holdingPid });
           await withTimeout(async () => await terminateReserved(reserved), {
             label: "reserved PostgreSQL termination",
-            timeoutMs: 2000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           });
           expect(
             await withTimeout(async () => await query, {
               label: "terminated reserved query rejection",
-              timeoutMs: 2000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
           ).toMatchObject({
             status: "rejected",

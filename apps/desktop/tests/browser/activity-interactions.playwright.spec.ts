@@ -5,6 +5,7 @@ import type {
   DesktopMatter,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import {
   ACTIVITY_CHANGED_EVENT,
@@ -29,6 +30,7 @@ const SNAPSHOT = {
   excludedApps: [],
   otherAccountHistoryDays: 0,
   captureDetails: false,
+  detectCalls: true,
   appNameOnlyApps: [],
   browserApps: [],
   sourceAppVisuals: [],
@@ -73,11 +75,7 @@ type InstallNativeBoundaryOptions = {
   batchValidation?: "accept" | "reject-first" | "hold-first";
   batchReceipt?: "save" | "fail-first" | "keep-pending";
   historyDeletion?:
-    | "available"
-    | "keyMissing"
-    | "unreadable"
-    | "mixed"
-    | "incompatible";
+    "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
 };
 
 const installNativeBoundary = async ({
@@ -90,18 +88,7 @@ const installNativeBoundary = async ({
   historyDeletion = "available",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
-  await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
-  await page.addInitScript(() => {
-    // Playwright's Date clock does not change native Temporal's clock.
-    const nativeTemporal: unknown = Reflect.get(window, "Temporal");
-    if (typeof nativeTemporal === "object" && nativeTemporal !== null) {
-      const now = Reflect.get(nativeTemporal, "Now");
-      const instant = Reflect.get(nativeTemporal, "Instant");
-      Reflect.set(now, "instant", () =>
-        Reflect.get(instant, "fromEpochMilliseconds")(Date.now()),
-      );
-    }
-  });
+  await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
   await installTauriIpc(page, {
     windowLabel: "activity",
     unhandled: "resolveUndefined",
@@ -203,6 +190,15 @@ const installNativeBoundary = async ({
             captureDetails: enabled,
             detailsAccess,
           };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_detect_calls: (args) => {
+          const enabled = args["enabled"];
+          if (typeof enabled !== "boolean") {
+            throw new TypeError("Call choice must be explicit");
+          }
+          activitySnapshot = { ...activitySnapshot, detectCalls: enabled };
           emitActivityChanged();
           return undefined;
         },
@@ -2344,4 +2340,78 @@ test("invalid range endpoints remain editable until their order is repaired", as
   await expect(
     page.getByRole("button", { name: enMessages.activity.assignRange }),
   ).toBeEnabled();
+});
+
+test("a call segment reads as a call in the timeline and its tooltip", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [
+        ...SNAPSHOT.segments,
+        {
+          appIdentifier: "com.microsoft.teams2",
+          appName: "Microsoft Teams",
+          call: true,
+          start: "2026-10-07T09:30:00Z",
+          end: "2026-10-07T10:00:00Z",
+        },
+      ],
+    },
+  });
+  const callLabel = enMessages.activity.callIn.replace(
+    "{app}",
+    "Microsoft Teams",
+  );
+  const call = page
+    .getByRole("button", { name: new RegExp(`${callLabel}$`, "u") })
+    .first();
+  const editor = page.getByRole("button", { name: /Example Editor$/u }).first();
+  await expect(call).toBeVisible();
+  await expect(call.locator("svg.lucide-phone")).toHaveCount(1);
+  await expect(editor.locator("svg.lucide-phone")).toHaveCount(0);
+  await call.hover();
+  const tooltip = page.locator('[data-slot="tooltip-popup"]');
+  await expect(tooltip).toContainText(callLabel);
+  await editor.hover();
+  await expect(tooltip).toContainText("Example Editor");
+  await expect(tooltip).not.toContainText(callLabel);
+});
+
+test("call recording is on by default and changes only on explicit choice", async ({
+  page,
+}) => {
+  // The boundary opens settings for a recording day.
+  await installNativeBoundary({ page });
+  const calls = page.getByRole("checkbox", {
+    name: enMessages.activity.detectCalls,
+  });
+  await expect(calls).toBeChecked();
+  await expect(
+    page.getByText(enMessages.activity.detectCallsDescription),
+  ).toBeVisible();
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_set_detect_calls" }),
+  );
+  await calls.uncheck();
+  await expect(calls).not.toBeChecked();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: false },
+  });
+  expect(await tauriInvocations(page)).not.toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: true },
+  });
+  await calls.check();
+  await expect(calls).toBeChecked();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_set_detect_calls",
+    args: { enabled: true },
+  });
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_set_capture_details" }),
+  );
 });

@@ -6,8 +6,8 @@ import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publi
 
 import {
   createProvisionCitationGrammar,
-  PROVISION_CITATION_GRAMMARS,
   locateGazetteCitations,
+  PROVISION_CITATION_GRAMMARS,
 } from "./provision-citation-grammars";
 
 type GrammarFixture = {
@@ -32,6 +32,7 @@ const FIXTURES = {
     gazette: [],
     text: "Article 6(1)(a) GDPR",
   },
+  GBR: null,
   HUN: null,
   POL: null,
   SVK: null,

@@ -1,5 +1,35 @@
 # @stll/cli
 
+## 5.2.1
+
+### Patch Changes
+
+- [#6696](https://github.com/stella/stella/pull/6696) [`87beaf6`](https://github.com/stella/stella/commit/87beaf6bb6cc7d709af9961acd3f78d841746e6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe why AI is unavailable and whether the caller may configure the organization's provider in the AI availability capability.
+
+- [#6348](https://github.com/stella/stella/pull/6348) [`0008522`](https://github.com/stella/stella/commit/0008522c9ba216c440fc08b81e6c5e7fa553ec0f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law coverage reports each source's held decision-year range and its completeness per calendar year.
+
+- [#5704](https://github.com/stella/stella/pull/5704) [`c57c0e8`](https://github.com/stella/stella/commit/c57c0e833228f6351c5f7c9a5519e4bbebcf980f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update connector tool metadata for app-only web link refresh.
+
+## 5.2.0
+
+### Minor Changes
+
+- [#5805](https://github.com/stella/stella/pull/5805) [`6ff1ef3`](https://github.com/stella/stella/commit/6ff1ef348f1fcd639ccfe85df8f6d31859a71474) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law search automatically tries partial matching when a question has no full matches, ranks partial hits by term coverage, and exposes match classifications and warnings in API, MCP, CLI and web results.
+
+### Patch Changes
+
+- [#6343](https://github.com/stella/stella/pull/6343) [`fd168ab`](https://github.com/stella/stella/commit/fd168abcc2dcb8de45b0764687149049163c42fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep published clients independent from private workspace packages while preserving supported-version requests.
+
+- [#6393](https://github.com/stella/stella/pull/6393) [`7ac81e4`](https://github.com/stella/stella/commit/7ac81e466061fa75b412e51f1a9faf7b7616c19c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `package.json` so consumers can read the installed package version.
+
+- [#6343](https://github.com/stella/stella/pull/6343) [`fd168ab`](https://github.com/stella/stella/commit/fd168abcc2dcb8de45b0764687149049163c42fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require supported local client versions, identify CLI and MCP kit requests, cache CLI update metadata, and turn incompatibilities into actionable update errors. Keep CLI version tests on the server metadata contract and scope the local-client CORS header to MCP transport requests.
+
+## 5.1.1
+
+### Patch Changes
+
+- [#6304](https://github.com/stella/stella/pull/6304) [`8554dd6`](https://github.com/stella/stella/commit/8554dd6fbe7ffbb9eb24f46859e4ba294e62df6b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add Poland to case-law search.
+
 ## 5.1.0
 
 ### Minor Changes

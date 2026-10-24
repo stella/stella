@@ -122,12 +122,7 @@ export class ProviderCallError extends HandlerError {
  */
 export type ModelRunFinish = {
   finish:
-    | "content_filter"
-    | "length"
-    | "none"
-    | "stop"
-    | "tool_calls"
-    | "unfinished";
+    "content_filter" | "length" | "none" | "stop" | "tool_calls" | "unfinished";
   providerStopReason?: string | undefined;
 };
 

@@ -470,12 +470,13 @@ describe("managed model tier", () => {
       // A minted proof carries the tier admission read for its organization.
       const modelTier = await admitModelDispatch({
         organizationId: expiredOrgId,
+        userId: null,
         actionKind: "chat.send",
         organizationStateDb: requestScope(expiredOrgId),
         signal: new AbortController().signal,
         run: async (admission) => await Promise.resolve(admission.modelTier),
       });
-      expect(modelTier).toBe(MANAGED_MODEL_TIER.fast);
+      expect(modelTier.unwrap()).toBe(MANAGED_MODEL_TIER.fast);
     });
   });
 

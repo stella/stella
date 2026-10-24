@@ -20,12 +20,12 @@ import { panic } from "better-result";
 import {
   type Dirent,
   existsSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   statSync,
 } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 

@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test, setDefaultTimeout } from "bun:test";
+import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -385,7 +385,7 @@ test("membership-removal.task-preservation", async () => {
         }
       },
     ),
-    { numRuns: 24 },
+    propertyConfig({ numRuns: 24 }),
   );
 });
 

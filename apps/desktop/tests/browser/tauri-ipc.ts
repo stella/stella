@@ -8,7 +8,7 @@ export type TauriInvocation = {
 };
 
 /** The page-side boundary a spec's command handlers can use. */
-export type TauriPageIpc = {
+type TauriPageIpc = {
   /** Every invoke in call order. */
   invocations: TauriInvocation[];
   /** Calls the handlers refused; `unexpectedTauriCalls` reads it back. */
@@ -184,7 +184,7 @@ const isInvocation = (value: unknown): value is TauriInvocation =>
 export const tauriInvocations = async (
   page: Page,
 ): Promise<TauriInvocation[]> => {
-  const invocations = await page.evaluate((global) => {
+  const invocations = await page.evaluate((global): unknown => {
     const ipc: unknown = Reflect.get(window, global);
     return typeof ipc === "object" && ipc !== null
       ? Reflect.get(ipc, "invocations")
@@ -198,7 +198,7 @@ export const tauriInvocations = async (
 
 /** Calls the handlers refused, for an `afterEach` to assert empty. */
 export const unexpectedTauriCalls = async (page: Page): Promise<string[]> => {
-  const unexpected = await page.evaluate((global) => {
+  const unexpected = await page.evaluate((global): unknown => {
     const ipc: unknown = Reflect.get(window, global);
     return typeof ipc === "object" && ipc !== null
       ? Reflect.get(ipc, "unexpected")
@@ -222,11 +222,13 @@ export const emitTauriEvent = async (
   await page.evaluate(
     ({ global, name, data }) => {
       const ipc: unknown = Reflect.get(window, global);
-      const emit =
+      const emit: unknown =
         typeof ipc === "object" && ipc !== null
           ? Reflect.get(ipc, "emit")
           : undefined;
-      if (typeof emit !== "function") {
+      const isEmitter = (value: unknown): value is TauriPageIpc["emit"] =>
+        typeof value === "function";
+      if (!isEmitter(emit)) {
         throw new TypeError("The Tauri IPC boundary is not installed");
       }
       emit(name, data);

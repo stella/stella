@@ -1,6 +1,9 @@
 import { createFormatter } from "use-intl/core";
 
-import type { CaseLawBrowserCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  CASE_LAW_REGION_BY_COUNTRY,
+  type CaseLawBrowserCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { US_ABBREVIATED_COURTS } from "@stll/api-contract/us-court-abbreviations";
 import type { UsAbbreviatedCourtId } from "@stll/api-contract/us-court-abbreviations";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -252,19 +255,43 @@ const hungarianCitation = (input: CitationInput): string => {
 const QUOTATION_MARKS = {
   CZE: ["„", "“"],
   EU: ["“", "”"],
+  GBR: ["“", "”"],
   HUN: ["„", "”"],
   POL: ["„", "”"],
   SVK: ["„", "“"],
-} as const satisfies Record<CaseLawBrowserCountry, readonly [string, string]>;
+} as const satisfies Record<
+  CaseLawBrowserCountry | "GBR",
+  readonly [string, string]
+>;
 
-export const formatDecisionQuotation = (
+const COUNTRY_BY_REGION = Object.fromEntries(
+  Object.entries(CASE_LAW_REGION_BY_COUNTRY).map(([country, region]) => [
+    region,
+    country,
+  ]),
+);
+const DEFAULT_QUOTATION_MARKS = QUOTATION_MARKS.EU;
+
+const quotationCountry = (
+  country: string,
+): CaseLawBrowserCountry | "GBR" | null => {
+  const normalized = fromCaseLawCountryParam(country);
+  if (normalized === "GBR" || normalized === "GB") {
+    return "GBR";
+  }
+  const corpusCountry = COUNTRY_BY_REGION[normalized] ?? normalized;
+  return isCaseLawBrowserCountry(corpusCountry) ? corpusCountry : null;
+};
+
+export const formatJurisdictionQuotation = (
   text: string,
   country: string,
 ): string => {
-  const normalizedCountry = fromCaseLawCountryParam(country);
-  const marks = isCaseLawBrowserCountry(normalizedCountry)
-    ? QUOTATION_MARKS[normalizedCountry]
-    : ["“", "”"];
+  const normalizedCountry = quotationCountry(country);
+  const marks =
+    normalizedCountry === null
+      ? DEFAULT_QUOTATION_MARKS
+      : QUOTATION_MARKS[normalizedCountry];
   return `${marks[0]}${text}${marks[1]}`;
 };
 
@@ -369,16 +396,23 @@ const genericCitation = (input: CitationInput): string => {
   return `${named}${input.court}, ${input.caseNumber}${dated}`;
 };
 
+const britishCitation = (input: CitationInput): string => {
+  const named = input.name === null ? "" : `${input.name} `;
+  const locator = input.pincite === null ? "" : ` [${input.pincite}]`;
+  return `${named}${input.caseNumber}${locator}`;
+};
+
 const CITATION_FORMATTERS = {
   AUT: austrianCitation,
   CZE: czechCitation,
   EU: euCitation,
+  GBR: britishCitation,
   HUN: hungarianCitation,
   POL: polishCitation,
   SVK: slovakCitation,
   USA: usCitation,
 } as const satisfies Record<
-  CaseLawBrowserCountry | "AUT" | "USA",
+  CaseLawBrowserCountry | "AUT" | "GBR" | "USA",
   (input: CitationInput) => string
 >;
 
@@ -388,7 +422,8 @@ const hasCitationFormatter = (
   Object.hasOwn(CITATION_FORMATTERS, country);
 
 export const formatDecisionCitation = (input: CitationInput): string => {
-  const country = fromCaseLawCountryParam(input.country);
+  const normalized = fromCaseLawCountryParam(input.country);
+  const country = normalized === "GB" ? "GBR" : normalized;
   return (
     hasCitationFormatter(country)
       ? CITATION_FORMATTERS[country]

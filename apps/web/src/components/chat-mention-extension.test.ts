@@ -2,9 +2,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  isBusinessRegistrySlug,
   parseChatCorpusId,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -65,6 +66,24 @@ const option = ({
         label,
         category,
         kind: "corpus",
+        mimeType: null,
+      };
+    case "registry":
+      return {
+        registry: isBusinessRegistrySlug(id)
+          ? id
+          : panic(`Not a registry slug: ${id}`),
+        label,
+        category,
+        kind: "registry",
+        mimeType: null,
+      };
+    case "connector":
+      return {
+        connector: id,
+        label,
+        category,
+        kind: "connector",
         mimeType: null,
       };
     default:

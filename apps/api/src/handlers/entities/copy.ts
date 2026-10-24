@@ -43,8 +43,8 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import {
   extractFieldFileRefs,
-  filterUnreferencedFieldFileRefs,
   type FieldFileRef,
+  filterUnreferencedFieldFileRefs,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -636,9 +636,12 @@ const copyToWorkspaceHandler = async function* ({
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
   dependencies
-    .flushEntitySearchRepairs(
-      txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-    )
+    .flushEntitySearchRepairs([
+      ...txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+      ...txResult.entityIdsBySearchIndexOwner[
+        SEARCH_INDEX_OWNER.durableExtraction
+      ],
+    ])
     .catch(captureError);
 
   // Acceleration only: each run already committed with its copied source.

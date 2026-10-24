@@ -14,9 +14,9 @@ import {
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import type {
   ChatMessageMetadata,
-  ChatTurnTiming,
   ChatMessageRole,
   ChatPart,
+  ChatTurnTiming,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";

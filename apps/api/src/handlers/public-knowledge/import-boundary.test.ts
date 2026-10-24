@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -53,6 +53,7 @@ const allowedModules = new Set([
   "lib/file-scan/attached-template.ts",
   "lib/file-scan/document-parsers.ts",
   "lib/file-scan/magic.ts",
+  "lib/file-scan/media-type.ts",
   "lib/file-scan/pipeline.ts",
   "lib/file-scan/rejection.ts",
   "lib/file-scan/scan-upload.ts",

@@ -110,21 +110,21 @@ import {
   CITATION_DECISION_TYPE_HINTS,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
 import {
+  type CitationGraphTransaction,
   runCitationGraphTransaction,
   tryCitationGraphTransaction,
-  type CitationGraphTransaction,
 } from "@/api/handlers/case-law/citation-graph-transaction";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
+  CITATION_CANDIDATE_SCAN_CAP,
   CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_SCOPE,
   CITATION_RESOLUTION_STATUS,
   CITATION_RESOLUTION_STATUSES,
+  citationReopenableByKeySql,
   type CitationResolutionRule,
   type CitationResolutionStatus,
-  CITATION_CANDIDATE_SCAN_CAP,
-  citationReopenableByKeySql,
   countsByRule,
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,

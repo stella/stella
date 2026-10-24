@@ -3,8 +3,8 @@ import { panic, Result } from "better-result";
 
 import {
   compactChatMessagesForModel,
-  compactModelMessagesForModel,
   COMPACTION_SUMMARY_MESSAGE_ID,
+  compactModelMessagesForModel,
   planChatCompaction,
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
@@ -73,6 +73,7 @@ const seamDriver = (
             serviceTier: "standard",
             task: "chat",
             tenantWorkspaceIds: [],
+            userId: null,
           }),
         catch: (error: unknown) => error,
       });

@@ -62,8 +62,8 @@ import {
   chatActivityByWorkspace,
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
-  resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
+  resolveEntityActivityDestination,
   resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
@@ -653,25 +653,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Tooltip
-            content={
+          <Button
+            className={SIDE_RAIL_ICON_BUTTON_SIZE}
+            disabled={!mounted}
+            onClick={toggleSidebar}
+            size="icon"
+            tooltip={
               isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
             }
-            render={
-              <Button
-                className={SIDE_RAIL_ICON_BUTTON_SIZE}
-                onClick={toggleSidebar}
-                size="icon"
-                variant="muted"
-              />
-            }
-            side="right"
+            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
             <span className="sr-only">
               {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
             </span>
-          </Tooltip>
+          </Button>
         </div>
       </SidebarHeader>
 
@@ -737,17 +733,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       })()}
                     </SidebarMenuItem>
                   </NavContextMenu>
-                  {item.id === "matters" && canCreateMatter ? (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        onClick={handleCreateWorkspace}
-                        tooltip={t("common.newMatter")}
-                      >
-                        <PlusIcon />
-                        <span>{t("common.newMatter")}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ) : null}
                 </Fragment>
               );
             })}
@@ -890,8 +875,7 @@ const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
 type MatterExpansion =
-  | { type: "automatic" }
-  | { type: "selected"; workspaceId: string | null };
+  { type: "automatic" } | { type: "selected"; workspaceId: string | null };
 
 // Pinned workspaces are local UI state until backend user preferences or a
 // workspace-member `pinned` flag exists.

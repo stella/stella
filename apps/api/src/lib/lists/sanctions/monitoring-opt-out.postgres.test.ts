@@ -8,17 +8,17 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  DOCUMENT_PROCESSING_MODE,
-  contacts,
   auditLogs,
-  sanctionsContactMarks,
-  sanctionsOrganizationMarks,
+  contacts,
+  DOCUMENT_PROCESSING_MODE,
   organizationSettings,
+  sanctionsContactMarks,
   sanctionsContactMatches,
   sanctionsContactScreenings,
   sanctionsEditions,
-  sanctionsSources,
+  sanctionsOrganizationMarks,
   sanctionsScreeningEvents,
+  sanctionsSources,
 } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
@@ -29,17 +29,18 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import { commitSanctionsMonitoringBatch } from "./monitoring-diff";
 import { monitoringFingerprint } from "./monitoring-input";
 import {
   disableSanctionsMonitoring,
+  enableSanctionsMonitoring,
   excludeSanctionsContact,
   includeSanctionsContact,
-  enableSanctionsMonitoring,
 } from "./monitoring-opt-out";
 import type { SanctionsPossibleMatch } from "./screening-service";
-import { sanctionsSourceIds, SANCTIONS_SOURCE_CONFIG } from "./source-config";
+import { SANCTIONS_SOURCE_CONFIG, sanctionsSourceIds } from "./source-config";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -163,7 +164,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
   test("general settings and monitoring preserve the first unique-key row in either order", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       for (const firstWriter of ["general", "monitoring"] as const) {
-        const admin = openClient().db;
+        const { db: admin, sql: observer } = openClient();
         const generalDb = openClient().db;
         const monitoringDb = openClient().db;
         const organizationId = mintAuthProviderId<"organization">();
@@ -318,21 +319,10 @@ if (!runPostgresTests || databaseUrl === undefined) {
           ]);
           const awaitedPid =
             secondPid ?? panic("Second settings writer PID missing");
-          let blockers: number[] = [];
-          for (let attempt = 0; attempt < 200; attempt += 1) {
-            blockers =
-              (
-                await admin.execute<{ blockers: number[] }>(
-                  sql`SELECT pg_blocking_pids(${awaitedPid}) AS blockers`,
-                )
-              ).at(0)?.blockers ?? [];
-            if (firstPid !== undefined && blockers.includes(firstPid)) {
-              break;
-            }
-          }
-          expect(blockers).toContain(
-            firstPid ?? panic("First settings writer PID missing"),
-          );
+          await waitForBlockedPid(observer, {
+            waitingPid: awaitedPid,
+            holdingPid: firstPid ?? panic("First settings writer PID missing"),
+          });
           releaseFirst.resolve(undefined);
           await Promise.all([first, second]);
 
@@ -411,7 +401,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
   ] as const) {
     test(`stored coverage and evidence survive ${operation}`, async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const admin = openClient().db;
+        const { db: admin, sql: observer } = openClient();
         const commitDb = openClient().db;
         const optOutDb = openClient().db;
         const organizationId = mintAuthProviderId<"organization">();
@@ -672,20 +662,10 @@ if (!runPostgresTests || databaseUrl === undefined) {
               second = commitFirst ? disable() : commit();
               const firstPid = commitFirst ? commitPid : disablePid;
               const secondPid = commitFirst ? disablePid : commitPid;
-              let blockers: number[] = [];
-              for (let attempt = 0; attempt < 200; attempt += 1) {
-                blockers =
-                  (
-                    await admin.execute<{ blockers: number[] }>(
-                      sql`SELECT pg_blocking_pids(${secondPid}) AS blockers`,
-                    )
-                  ).at(0)?.blockers ?? [];
-                if (blockers.includes(firstPid)) {
-                  break;
-                }
-                await Bun.sleep(10);
-              }
-              expect(blockers).toContain(firstPid);
+              await waitForBlockedPid(observer, {
+                waitingPid: secondPid,
+                holdingPid: firstPid,
+              });
             } finally {
               firstRelease.resolve(undefined);
               await Promise.all([first, second]);

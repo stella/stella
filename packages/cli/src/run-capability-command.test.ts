@@ -511,6 +511,38 @@ describe("runCapabilityCommand: compound scope preflight", () => {
 });
 
 describe("runCapabilityCommand: confirm gates", () => {
+  test("reversible confirmation-required capabilities need fresh approval", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({
+      capabilityId: "memories.create",
+      access: "write",
+      destructive: false,
+      confirmation: "required",
+    });
+    const denied = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: denied.context, flags: {}, spec });
+    expect(denied.exitCode()).toBe(EXIT_CODES.aborted);
+    expect(server.calls).toHaveLength(0);
+    expect(denied.stderrText()).toContain("requiring approval");
+    const allowed = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: allowed.context,
+      flags: { yes: true },
+      spec,
+    });
+    expect(allowed.exitCode()).toBeUndefined();
+    expect(lastInvoke(server.calls)["confirm"]).toBe(true);
+    server.stop();
+  });
+
   test("a read with --yes never sends confirmation arguments", async () => {
     const server = startServer({ kind: "echo" });
     const tty = makeTtyContext({
@@ -719,6 +751,34 @@ describe("runCapabilityCommand: reserved flag values", () => {
 });
 
 describe("runCapabilityCommand: output contract", () => {
+  test("JSON output preserves full and partial case-law matches and their warning", async () => {
+    const payload = {
+      results: [
+        { decisionId: "decision-1", match: "all_terms" },
+        { decisionId: "decision-2", match: "some_terms" },
+      ],
+      searches: [{ warnings: [{ code: "partial_matches_appended" }] }],
+      nextCursor: null,
+    };
+    const server = startServer({ kind: "pages", pages: [payload] });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { output: "json" },
+      spec: capSpec({
+        capabilityId: "case-law.decisions.search",
+        itemsKey: "results",
+      }),
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(JSON.parse(tty.stdoutText())).toEqual(payload);
+  });
+
   test("typed country unavailability preserves its domain and recovery guidance in machine and human output", async () => {
     const unavailable = {
       code: "public_country_unavailable",

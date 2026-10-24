@@ -1,12 +1,13 @@
-import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
-
 import { databaseRelations } from "@/api/db/database-relations";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
-import { queryCountLogger } from "@/api/lib/db-query-counter";
+import {
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
@@ -19,15 +20,21 @@ import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservati
 import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
 import { readOAuthClientBinding } from "@/api/lib/db/service-client-binding";
 import {
-  createServiceOAuthClientInTransaction,
   changeServiceOAuthClientInTransaction,
+  createServiceOAuthClientInTransaction,
 } from "@/api/lib/db/service-client-operator";
 import type {
-  CreateServiceOAuthClientOptions,
   ChangeServiceOAuthClientOptions,
+  CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
+import {
+  authorizeSyntheticSession,
+  readSyntheticSessionAuthority,
+} from "@/api/lib/synthetic-principal/session-authority";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
+import type { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the
@@ -49,7 +56,7 @@ const poolRecycling = {
 // its statements count toward that request's query budget, not a neighbour's.
 const rootPoolWindow = createRootPoolWindow();
 const rootPoolSettings = sharedPoolConnectionSettings("root");
-const nativeRootClient = new SQL({
+const nativeRootClient = createSqlClient({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_ROOT_POOL_MAX,
   ...poolRecycling,
@@ -74,12 +81,14 @@ export const readRootPoolReport = async () => {
   );
 };
 const rlsClient = runTransactionsInCallerContext(
-  new SQL({
-    url: envBase.DATABASE_URL,
-    max: envBase.DATABASE_RLS_POOL_MAX,
-    ...poolRecycling,
-    ...sharedPoolConnectionSettings("raw_rls"),
-  }),
+  instrumentSqlTransactionCounts(
+    createSqlClient({
+      url: envBase.DATABASE_URL,
+      max: envBase.DATABASE_RLS_POOL_MAX,
+      ...poolRecycling,
+      ...sharedPoolConnectionSettings("raw_rls"),
+    }),
+  ),
 );
 
 /**
@@ -88,13 +97,13 @@ const rlsClient = runTransactionsInCallerContext(
  * for internal infrastructure such as workspace resolution and
  * Better Auth.
  */
-export const rootDb = drizzle({
+export const rootDb = createDatabase({
   client: rootClient,
   relations: databaseRelations,
   logger: queryLogger,
 });
 
-const rawRlsDb = drizzle({
+const rawRlsDb = createDatabase({
   client: rlsClient,
   relations: databaseRelations,
   logger: queryLogger,
@@ -152,8 +161,30 @@ export const bindOwnerReviewAccountOrganizationStore = (
   createStore: typeof createReviewAccountOrganizationStore,
 ) => createStore(rootDb);
 
-type Database = typeof rootDb;
-export type Transaction = TransactionOf<Database>;
+/** The dedicated-session route receives its bounded store, never the owner handle. */
+export const bindOwnerSyntheticSessionStore = (
+  createStore: typeof createSyntheticSessionStore,
+) => createStore(rootDb);
+
+/** Dedicated-session validation receives one bounded owner operation. */
+export const bindOwnerSyntheticSessionAuthorityReader =
+  (
+    readAuthority: typeof readSyntheticSessionAuthority,
+  ): SyntheticSessionAuthorityReader =>
+  async (options) =>
+    await readAuthority(rootDb, options);
+
+/** Request handlers receive the bounded reader, never the owner database. */
+export const ownerSyntheticSessionAuthorityReader =
+  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
+
+/** Better Auth receives a bounded session decision, never the owner database. */
+export const authorizeOwnerSyntheticSession = async (
+  current: Parameters<typeof authorizeSyntheticSession>[1],
+) => await authorizeSyntheticSession(rootDb, current);
+
+export type RootDatabase = typeof rootDb;
+export type Transaction = TransactionOf<RootDatabase>;
 
 /** The deployment operator receives only audited activity aggregates. */
 export const readOperatorActivitySummary = async (now: number) =>

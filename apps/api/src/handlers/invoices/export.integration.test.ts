@@ -6,9 +6,9 @@ import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   featureEnrolments,
+  INVOICE_STATUS,
   invoiceLines,
   invoices,
-  INVOICE_STATUS,
   sellerProfiles,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
