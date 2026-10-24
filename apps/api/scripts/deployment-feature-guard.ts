@@ -73,6 +73,10 @@ const ALWAYS_ON_ROUTE_FILES: ReadonlyMap<string, string> = new Map([
     "A personal data export is available to every account on every deployment",
   ],
   [
+    "apps/api/src/handlers/data-exports/routes.ts",
+    "Organization data export (data portability) is available on every deployment",
+  ],
+  [
     "apps/api/src/handlers/desktop-feature-access/routes.ts",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],

@@ -31,6 +31,7 @@ import {
   entities,
   entityVersions,
   fields,
+  organizationDataExports,
   pdfSigningSessions,
   workspaceMembers,
   workspaces,
@@ -2267,6 +2268,39 @@ export const withDecisionCitationStatsLocks = async ({
       ORDER BY key
     ) anchors
   `);
+};
+
+type StaleDataExportRunLockOptions = {
+  tx: Transaction;
+  exportId: SafeId<"dataExport">;
+  organizationId: SafeId<"organization">;
+  attempt: number;
+  staleBefore: Date;
+};
+
+/** Recheck the heartbeat after the worker's competing row lock is released. */
+export const lockStaleDataExportRun = async ({
+  tx,
+  exportId,
+  organizationId,
+  attempt,
+  staleBefore,
+}: StaleDataExportRunLockOptions) => {
+  const [stale] = await tx
+    .select({ id: organizationDataExports.id })
+    .from(organizationDataExports)
+    .where(
+      and(
+        eq(organizationDataExports.id, exportId),
+        eq(organizationDataExports.organizationId, organizationId),
+        eq(organizationDataExports.status, "running"),
+        eq(organizationDataExports.attempt, attempt),
+        sql<boolean>`${organizationDataExports.heartbeatAt} < ${staleBefore.toISOString()}::timestamptz`,
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return stale !== undefined;
 };
 
 type MemberAccessRowLockOptions = {

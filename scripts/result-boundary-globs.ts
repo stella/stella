@@ -73,6 +73,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
+  "apps/api/src/handlers/data-exports/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
@@ -95,6 +96,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
+  "apps/api/src/lib/data-export/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
@@ -279,6 +281,12 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Result would commit their writes instead of preserving the original refusal.
   "apps/api/src/lib/db/transaction-abort.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Queue worker entry point: BullMQ consumes the job's rejection, and the
+  // run turns every failure into the export row's state.
+  "apps/api/src/handlers/data-exports/data-export-worker.ts",
+  // An async generator: its consumer learns that a streamed entry ended at
+  // the wrong length only from the iteration rejecting.
+  "apps/api/src/handlers/data-exports/zip-writer.ts",
   // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
   // reservation callbacks whose rejection rolls back the kickoff transaction.
   "apps/api/src/lib/rate-limit/queued-action-admission.ts",

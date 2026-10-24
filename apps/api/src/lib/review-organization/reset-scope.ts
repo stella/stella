@@ -142,6 +142,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "number_series_allocations",
   "number_series_counters",
   "office_file_evidence",
+  "organization_data_exports",
   "pending_uploads",
   "playbook_definition_versions",
   "playbook_definitions",

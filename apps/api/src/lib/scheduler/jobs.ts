@@ -47,6 +47,7 @@ import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-r
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
+import { MAINTAIN_DATA_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
@@ -629,6 +630,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_REPORT_EXPORTS_TASK,
+  },
+  {
+    description:
+      "Delete expired data export files, fail stalled export runs, and requeue lost export jobs",
+    id: "dataExports.maintain.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: MAINTAIN_DATA_EXPORTS_TASK,
   },
   {
     description: "Delete style set packages a replacement left behind",

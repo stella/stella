@@ -700,6 +700,24 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261014120000_organization_data_exports",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS target the empty export table created in the same transaction, before application traffic can reach it, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261014120000_organization_data_exports",
+    form: "add-foreign-key",
+    reason:
+      "Both foreign keys target the export table created empty in this transaction, so no existing export rows are scanned; locks on organization and user are bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  },
+  {
+    migration: "20261014120000_organization_data_exports",
+    form: "create-policy",
+    reason:
+      "The policies install tenant and table-owner boundaries on the new empty export table before publication, using session settings and table-ownership catalog reads only; lock acquisition is bounded by 1s and each statement by 5s.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:

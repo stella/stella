@@ -42,6 +42,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
+import { dataExportsRoute } from "@/api/handlers/data-exports/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
@@ -673,7 +674,7 @@ const api = new Elysia()
           .use(workObligationsRoute)
           .use(myWorkRoute),
       )
-      .use(accountExportsRoute)
+      .use(new Elysia().use(accountExportsRoute).use(dataExportsRoute))
       .use(meRoute)
       .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),

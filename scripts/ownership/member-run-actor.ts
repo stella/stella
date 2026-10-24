@@ -21,6 +21,7 @@ export default {
         "apps/api/src/lib/document-translation/run-queue.ts",
         "apps/api/src/lib/bilingual/run-queue.ts",
         "apps/api/src/handlers/reports/report-export-queue.ts",
+        "apps/api/src/handlers/data-exports/data-export-worker.ts",
         "apps/api/src/lib/lists/verification/run-queue.ts",
         "apps/api/src/lib/workflow-queue.ts",
       ].map((modulePath) => ({

@@ -352,6 +352,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   property: "other",
   rate_entry: "other",
   report_export: "other",
+  data_export: "other",
   rate_table: "other",
   saved_search: "other",
   search_history: "other",

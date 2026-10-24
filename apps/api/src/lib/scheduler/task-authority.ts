@@ -247,6 +247,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "review-organization-reset.ts",
     "Resets the configured restricted review organization; each run first proves its only member is the configured review account.",
   ),
+  "dataExports.maintain": platform(
+    "data-export-maintenance.ts",
+    "Marks exports past their expiry as expired (the bucket lifecycle deletes their files) and resumes or fails stalled runs; queued exports are handed back to their queue, whose worker reads as the requester's membership.",
+  ),
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",

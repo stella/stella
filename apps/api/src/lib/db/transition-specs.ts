@@ -17,6 +17,7 @@ import {
   syntheticSessionControl,
   workObligations,
 } from "@/api/db/schema";
+import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
   FLOW_RUN_STEP_TRANSITIONS_V1,
   FLOW_RUN_TRANSITIONS_V1,
@@ -376,6 +377,7 @@ export const TRANSITIONS = {
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
   organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationDataExports: DATA_EXPORT_TRANSITIONS,
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,

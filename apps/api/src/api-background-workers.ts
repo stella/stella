@@ -1,5 +1,6 @@
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { rootDb } from "@/api/db/root";
+import { initDataExportWorker } from "@/api/handlers/data-exports/data-export-worker";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { createAccountExportWorker } from "@/api/lib/account-export/queue";
@@ -31,6 +32,7 @@ export const initApiBackgroundWorkers = async (mode: BullMqWorkerHostMode) => {
     initAccountDeletionCleanupWorker,
     createAccountExportWorker(ACCOUNT_EXPORT_PROJECTIONS),
     initBilingualRunWorker,
+    initDataExportWorker,
     initDocumentDeadlineScoutWorker,
     initDocumentReviewRunWorker,
     initDocumentTranslationRunWorker,

@@ -1,0 +1,1036 @@
+{
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "const": "https://stll.app/schemas/stella-data-export.v1.schema.json"
+        },
+        "format": {
+          "const": "stella-data-export"
+        },
+        "formatVersion": {
+          "const": 1
+        },
+        "exportId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "organization": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["id", "name"],
+          "additionalProperties": false
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp in UTC."
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "versions": {
+              "enum": ["all", "current"],
+              "type": "string",
+              "description": "`all`: every document version; `current`: only each document's current version."
+            }
+          },
+          "required": ["versions"],
+          "additionalProperties": false
+        },
+        "kind": {
+          "const": "part"
+        },
+        "part": {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": ["index", "count"],
+          "additionalProperties": false
+        },
+        "organizationRecords": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "contacts": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
+                "contactRelationships": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
+                "clauses": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
+                "templates": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
+                "unassignedTimeEntries": {
+                  "type": "object",
+                  "properties": {
+                    "json": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    },
+                    "csv": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["json", "csv", "count"],
+                  "additionalProperties": false
+                },
+                "templateFiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "templateId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      "templateVersionId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      "version": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "fileName": {
+                        "type": "string"
+                      },
+                      "sizeBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "description": "Lowercase hex SHA-256 of the file bytes."
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      }
+                    },
+                    "required": [
+                      "templateId",
+                      "templateVersionId",
+                      "version",
+                      "fileName",
+                      "sizeBytes",
+                      "sha256",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "contacts",
+                "contactRelationships",
+                "clauses",
+                "templates",
+                "unassignedTimeEntries",
+                "templateFiles"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Organisation-wide records; present in part 1 only."
+        },
+        "matters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "name": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp in UTC."
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+              },
+              "records": {
+                "type": "object",
+                "properties": {
+                  "matter": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                  },
+                  "tasks": {
+                    "type": "object",
+                    "properties": {
+                      "json": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      },
+                      "csv": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": ["json", "csv", "count"],
+                    "additionalProperties": false
+                  },
+                  "timeEntries": {
+                    "type": "object",
+                    "properties": {
+                      "json": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      },
+                      "csv": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": ["json", "csv", "count"],
+                    "additionalProperties": false
+                  },
+                  "invoices": {
+                    "type": "object",
+                    "properties": {
+                      "json": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      },
+                      "csv": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": ["json", "csv", "count"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["matter", "tasks", "timeEntries", "invoices"],
+                "additionalProperties": false
+              },
+              "folders": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "parentId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    }
+                  },
+                  "required": ["id", "parentId", "name", "path"],
+                  "additionalProperties": false
+                }
+              },
+              "documents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "kind": {
+                      "enum": ["document", "message"],
+                      "type": "string"
+                    },
+                    "parentId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "docSequence": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "currentVersionId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "ISO 8601 timestamp in UTC."
+                    },
+                    "createdBy": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "updatedAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "ISO 8601 timestamp in UTC."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastEditedBy": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 255
+                          },
+                          "versionNumber": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "stamp": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "label": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "description": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "ISO 8601 timestamp in UTC."
+                          },
+                          "createdBy": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 255
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "files": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "fieldId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 255
+                                },
+                                "fileId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 255
+                                },
+                                "fileName": {
+                                  "type": "string"
+                                },
+                                "mimeType": {
+                                  "type": "string"
+                                },
+                                "sizeBytes": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "description": "Lowercase hex SHA-256 of the file bytes."
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 4096,
+                                  "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                                }
+                              },
+                              "required": [
+                                "fieldId",
+                                "fileId",
+                                "fileName",
+                                "mimeType",
+                                "sizeBytes",
+                                "sha256",
+                                "path"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "versionNumber",
+                          "stamp",
+                          "label",
+                          "description",
+                          "createdAt",
+                          "createdBy",
+                          "files"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "parentId",
+                    "name",
+                    "docSequence",
+                    "currentVersionId",
+                    "createdAt",
+                    "createdBy",
+                    "updatedAt",
+                    "lastEditedBy",
+                    "versions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "reference",
+              "status",
+              "createdAt",
+              "path",
+              "records",
+              "folders",
+              "documents"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "enum": ["missing", "fetch_failed"],
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                  },
+                  "fileId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "path", "fileId"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "checksum_mismatch"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                  },
+                  "fileId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "recordedSha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "Lowercase hex SHA-256 of the file bytes."
+                  }
+                },
+                "required": ["reason", "path", "fileId", "recordedSha256"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "matter_unavailable"
+                  },
+                  "matterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "matterId"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "$schema",
+        "format",
+        "formatVersion",
+        "exportId",
+        "organization",
+        "createdAt",
+        "scope",
+        "kind",
+        "part",
+        "organizationRecords",
+        "matters",
+        "problems"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "const": "https://stll.app/schemas/stella-data-export.v1.schema.json"
+        },
+        "format": {
+          "const": "stella-data-export"
+        },
+        "formatVersion": {
+          "const": 1
+        },
+        "exportId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "organization": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["id", "name"],
+          "additionalProperties": false
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp in UTC."
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "versions": {
+              "enum": ["all", "current"],
+              "type": "string",
+              "description": "`all`: every document version; `current`: only each document's current version."
+            }
+          },
+          "required": ["versions"],
+          "additionalProperties": false
+        },
+        "kind": {
+          "const": "export"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp in UTC."
+        },
+        "requestedBy": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "fileName": {
+                "type": "string"
+              },
+              "sizeBytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "Lowercase hex SHA-256 of the file bytes."
+              },
+              "matterIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                }
+              },
+              "fileCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "index",
+              "fileName",
+              "sizeBytes",
+              "sha256",
+              "matterIds",
+              "fileCount"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "totals": {
+          "type": "object",
+          "properties": {
+            "matters": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "documents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "versions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "files": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fileBytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "matters",
+            "documents",
+            "versions",
+            "files",
+            "fileBytes"
+          ],
+          "additionalProperties": false
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "enum": ["missing", "fetch_failed"],
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                  },
+                  "fileId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "path", "fileId"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "checksum_mismatch"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                  },
+                  "fileId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "recordedSha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "Lowercase hex SHA-256 of the file bytes."
+                  }
+                },
+                "required": ["reason", "path", "fileId", "recordedSha256"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "matter_unavailable"
+                  },
+                  "matterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "matterId"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "$schema",
+        "format",
+        "formatVersion",
+        "exportId",
+        "organization",
+        "createdAt",
+        "scope",
+        "kind",
+        "completedAt",
+        "requestedBy",
+        "parts",
+        "totals",
+        "problems"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "title": "stella data export manifest",
+  "description": "A `part` manifest is `manifest.json` at the root of every part ZIP; the `export` manifest (`export-manifest.json`) lists every part.",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stll.app/schemas/stella-data-export.v1.schema.json"
+}

@@ -90,6 +90,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "file-derivatives": "api",
   "flow-run": "api",
   "legal-list-verification-runs": "api",
+  "organization-data-exports": "api",
   "report-exports": "api",
   "style-set-package-cleanup": "api",
   "uploaded-mail-correspondence": "api",

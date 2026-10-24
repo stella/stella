@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/tasks/data-export-maintenance.ts",
+  "delta": 1,
+  "reason": "The maintenance handoff reads queued exports in keyset pages; each page starts after the previous page's last row, so the reads are sequential by construction and bounded by the page size."
+}

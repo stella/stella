@@ -164,6 +164,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "properties.content",
   "properties.tool",
   "property_dependencies.condition",
+  "organization_data_exports.parts",
+  "organization_data_exports.plan",
   "report_exports.template_ref",
   "report_exports.layout",
   "sanctions_contact_matches.match",
@@ -374,6 +376,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "rate_entries.user_id":
     "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
+  "organization_data_exports.requested_by":
+    "Retained attribution or request history; the export worker re-checks the requester's current permission before every part.",
   "report_exports.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "saved_searches.user_id":

@@ -15,6 +15,7 @@ const writeHelpers = new Set([
   "createMultipartUpload",
   "uploadPart",
   "completeMultipartUpload",
+  "openS3StreamingUpload",
 ]);
 const writeCommands = new Set([
   "PutObjectCommand",
@@ -47,6 +48,10 @@ const exemptions = {
   "src/handlers/reports/report-export-queue.ts:writeS3ObjectWithRetry:0":
     "export",
   "src/handlers/chat/export/create.ts:writeS3ObjectWithRetry:0": "export",
+  "src/handlers/data-exports/data-export-worker.ts:openS3StreamingUpload:0":
+    "export",
+  "src/handlers/data-exports/data-export-worker.ts:writeS3ObjectWithRetry:0":
+    "export",
   "src/lib/legal-search/raw-source-storage.ts:createS3ObjectIfAbsent:0":
     "public_corpus",
   "src/lib/legal-search/raw-source-storage.ts:createS3ObjectIfAbsent:1":
@@ -85,6 +90,7 @@ const expectedWriteCounts = {
   "src/handlers/chat/export/create.ts": 1,
   "src/handlers/chat/fork/create.ts": 1,
   "src/handlers/chat/upload-files.ts": 2,
+  "src/handlers/data-exports/data-export-worker.ts": 2,
   "src/handlers/entities/checkpoint-desktop-edit-session.ts": 2,
   "src/handlers/entities/checkpoint-folio-collab-room.ts": 2,
   "src/handlers/entities/copy-utils.ts": 1,

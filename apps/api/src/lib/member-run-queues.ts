@@ -27,6 +27,10 @@ export const MEMBER_RUN_QUEUES = [
     module: "apps/api/src/handlers/reports/report-export-queue.ts",
   },
   {
+    queue: "organization-data-exports",
+    module: "apps/api/src/handlers/data-exports/data-export-worker.ts",
+  },
+  {
     queue: "legal-list-verification-runs",
     module: "apps/api/src/lib/lists/verification/run-queue.ts",
   },
@@ -168,6 +172,14 @@ export const QUEUE_AUTHORITY = {
     revocationTest:
       "apps/api/src/lib/lists/verification/run-worker-inputs.integration.test.ts",
     reason: "A verification the requesting member started.",
+  },
+  "organization-data-exports": {
+    authority: "member-run",
+    worker: "apps/api/src/handlers/data-exports/data-export-worker.ts",
+    revocationTest:
+      "apps/api/src/handlers/data-exports/data-export-worker.integration.test.ts",
+    reason:
+      "An organization export the requesting owner or admin started; it reads under their current membership and permission.",
   },
   "report-exports": {
     authority: "member-run",

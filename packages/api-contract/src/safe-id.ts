@@ -163,6 +163,8 @@ export type SafeIdType =
   | "sellerProfile"
   | "numberSeries"
   | "reportExport"
+  // parser-output-unchanged: Adds the data export id kind; no parser reads or emits it.
+  | "dataExport"
   | "schedulerJobRun"
   | "sharepointConnection"
   | "sharepointOAuthState"

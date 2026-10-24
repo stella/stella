@@ -64,6 +64,31 @@ const MODEL_CATALOG_INPUTS = [
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "data-export-schema",
+    outputKind: "committed",
+    outputs: ["docs/data-export/stella-data-export.v1.schema.json"],
+    inputs: [
+      "apps/api/scripts/generate-data-export-schema.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "bunfig.toml",
+      "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
+      "apps/api/src/handlers/data-exports/manifest-schema.ts",
+      "apps/api/src/lib/data-export/version-scope.ts",
+      "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
+      "packages/api-contract/src/**",
+      "packages/legal-ast/src/**",
+    ],
+    write: ["bun", "apps/api/scripts/generate-data-export-schema.ts"],
+    check: [
+      "bun",
+      "apps/api/scripts/generate-data-export-schema.ts",
+      "--check",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "migration-lock-baseline",
     outputKind: "committed",
     outputs: ["scripts/migration-lock-baseline.ts"],
