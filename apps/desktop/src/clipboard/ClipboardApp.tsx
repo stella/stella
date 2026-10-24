@@ -167,6 +167,7 @@ import {
 import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
+  isClipboardCaptureRevision,
   isClipboardCaptureUpdate,
   isClipboardCopyError,
   isClipboardSnapshot,
@@ -1653,6 +1654,7 @@ const ClipboardApp = () => {
     markClipboardShellCommit();
     const stopObservingReopens = observeClipboardReopens();
     let disposed = false;
+    let notifiedRevision = 0;
     const readSnapshot = () => {
       captureUpdatesRef.current = [];
       snapshotPendingRef.current = true;
@@ -1697,7 +1699,10 @@ const ClipboardApp = () => {
             appliedRevisionRef.current = update.revision;
           }
           captureUpdatesRef.current = [];
-          if (refreshRequired) {
+          if (
+            refreshRequired ||
+            notifiedRevision > appliedRevisionRef.current
+          ) {
             readSnapshot();
           }
           setError((current) => (current?.source === "read" ? null : current));
@@ -1726,7 +1731,7 @@ const ClipboardApp = () => {
           readSnapshot();
           return;
         }
-        if (!isClipboardCaptureUpdate(payload)) {
+        if (!isClipboardCaptureRevision(payload)) {
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
@@ -1735,22 +1740,70 @@ const ClipboardApp = () => {
           setError({ message: errorReadHistory, source: "read" });
           return;
         }
-        if (payload.revision <= appliedRevisionRef.current) {
+        notifiedRevision = Math.max(notifiedRevision, payload.revision);
+        if (
+          payload.revision <= appliedRevisionRef.current ||
+          snapshotPendingRef.current
+        ) {
           return;
         }
-        // Preserve the baseline while its snapshot is in flight. Applying a
-        // delta to the empty shell would make that baseline appear stale.
-        if (snapshotPendingRef.current) {
-          captureUpdatesRef.current.push(payload);
-          return;
-        }
-        if (payload.revision !== appliedRevisionRef.current + 1) {
-          readSnapshot();
-          captureUpdatesRef.current.push(payload);
-          return;
-        }
-        dispatchClipboard({ type: "captureReceived", update: payload });
-        appliedRevisionRef.current = payload.revision;
+        void invoke<unknown>("clipboard_get_capture_update", {
+          revision: payload.revision,
+        })
+          .then((update) => {
+            if (disposed) {
+              return;
+            }
+            // Only the most recent capture is retained natively. A gap or a
+            // mutation invalidating it recovers through the authorized snapshot.
+            if (update === null) {
+              if (
+                !snapshotPendingRef.current &&
+                notifiedRevision > appliedRevisionRef.current
+              ) {
+                readSnapshot();
+              }
+              return;
+            }
+            if (
+              !isClipboardCaptureUpdate(update) ||
+              update.revision !== payload.revision
+            ) {
+              reportDesktopError({
+                code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+                operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+                window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+              });
+              setError({ message: errorReadHistory, source: "read" });
+              return;
+            }
+            if (update.revision <= appliedRevisionRef.current) {
+              return;
+            }
+            if (snapshotPendingRef.current) {
+              captureUpdatesRef.current.push(update);
+              return;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              readSnapshot();
+              captureUpdatesRef.current.push(update);
+              return;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+          })
+          .catch((error: unknown) => {
+            if (disposed) {
+              return;
+            }
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+              detail: describeError(error),
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+            });
+            setError({ message: errorReadHistory, source: "read" });
+          });
       },
       onError: () => {
         reportDesktopError({

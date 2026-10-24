@@ -886,6 +886,14 @@ pub struct ClipboardCaptureUpdate {
   source_app_visuals: Vec<ClipboardSourceAppVisual>,
 }
 
+/// Events are visible to catch-all webview listeners. Only a revision crosses
+/// that boundary; content is fetched through a verified clipboard caller.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardCaptureRevision {
+  revision: u32,
+}
+
 impl ClipboardSnapshot {
   /// Content bytes crossing IPC for the items, before JSON framing.
   pub fn history_bytes(&self) -> usize {
@@ -914,6 +922,7 @@ pub struct PersistedClipboardState {
 
 pub struct ClipboardManager {
   revision: u32,
+  latest_capture_update: Option<ClipboardCaptureUpdate>,
   capture_status: ClipboardCaptureStatus,
   pub(crate) preview_cache: Arc<Mutex<ClipboardPreviewCache>>,
   #[cfg(target_os = "macos")]
@@ -1390,6 +1399,7 @@ impl ClipboardManager {
   pub fn new() -> Self {
     Self {
       revision: 0,
+      latest_capture_update: None,
       capture_status: ClipboardCaptureStatus::Active,
       preview_cache: Arc::default(),
       #[cfg(target_os = "macos")]
@@ -1492,10 +1502,25 @@ impl ClipboardManager {
     }
   }
 
-  fn capture_update(&self, previous_ids: &[String]) -> Option<ClipboardCaptureUpdate> {
+  pub fn capture_update_for_revision(
+    &self,
+    _caller: &ClipboardCaller,
+    revision: u32,
+  ) -> Option<ClipboardCaptureUpdate> {
+    self
+      .latest_capture_update
+      .as_ref()
+      .filter(|update| update.revision == revision && revision == self.revision)
+      .cloned()
+  }
+
+  fn cache_capture_update(
+    &mut self,
+    previous_ids: &[String],
+  ) -> Option<ClipboardCaptureRevision> {
     let item = self.items.first()?;
     let current_ids: HashSet<_> = self.items.iter().map(ClipboardItem::id).collect();
-    Some(ClipboardCaptureUpdate {
+    self.latest_capture_update = Some(ClipboardCaptureUpdate {
       revision: self.revision,
       item: self.webview_item(item),
       removed_item_ids: previous_ids
@@ -1507,6 +1532,9 @@ impl ClipboardManager {
         .source_visual_keys()
         .filter_map(|key| self.source_app_visuals.get(key).cloned())
         .collect(),
+    });
+    Some(ClipboardCaptureRevision {
+      revision: self.revision,
     })
   }
 
@@ -2295,6 +2323,7 @@ impl ClipboardManager {
       }
       return Err(error);
     }
+    self.latest_capture_update = None;
     self.revision = self
       .revision
       .checked_add(1)
@@ -3339,7 +3368,7 @@ impl HistoryClipboardHandler {
         match manager.capture(capture) {
           Ok(outcome) => {
             let update = if outcome == ClipboardCaptureOutcome::Captured {
-              manager.capture_update(&previous_ids)
+              manager.cache_capture_update(&previous_ids)
             } else {
               None
             };
@@ -4016,7 +4045,16 @@ mod tests {
       let before = serde_json::to_vec(&manager.snapshot(&ClipboardCaller::for_test()))
         .unwrap()
         .len();
-      let update = manager.capture_update(&previous_ids).unwrap();
+      let notification = manager.cache_capture_update(&previous_ids).unwrap();
+      assert_eq!(
+        serde_json::to_value(notification).unwrap(),
+        serde_json::json!({ "revision": 1 })
+      );
+      let caller = ClipboardCaller::for_test();
+      assert!(manager.capture_update_for_revision(&caller, 0).is_none());
+      let update = manager
+        .capture_update_for_revision(&caller, notification.revision)
+        .unwrap();
       let after = serde_json::to_vec(&update).unwrap().len();
       tracing::debug!(
         "clipboard capture IPC at {count} items: before={before} after={after} bytes"
@@ -4035,6 +4073,11 @@ mod tests {
       assert_eq!(
         manager.snapshot(&ClipboardCaller::for_test()).revision,
         update.revision + 1
+      );
+      assert!(
+        manager
+          .capture_update_for_revision(&caller, update.revision)
+          .is_none()
       );
       sizes.push(after);
     }

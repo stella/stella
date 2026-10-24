@@ -4,9 +4,10 @@ use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
   clipboard::{
-    ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat, ClipboardGroup,
-    ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
-    ClipboardSnapshot, HISTORY_EVENT,
+    ClipboardAppState, ClipboardCaptureStatus, ClipboardCaptureUpdate,
+    ClipboardCopyFormat, ClipboardGroup, ClipboardGroupColor,
+    ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
+    HISTORY_EVENT,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{
@@ -70,6 +71,17 @@ pub fn clipboard_get_snapshot(
     }
   }
   Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_get_capture_update(
+  caller: ClipboardCaller,
+  revision: u32,
+  state: State<'_, ClipboardAppState>,
+) -> Result<Option<ClipboardCaptureUpdate>, String> {
+  let mut manager = state.lock().map_err(lock_error)?;
+  manager.prune_expired(chrono::Utc::now())?;
+  Ok(manager.capture_update_for_revision(&caller, revision))
 }
 
 #[tauri::command]

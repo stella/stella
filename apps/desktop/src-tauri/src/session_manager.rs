@@ -2378,6 +2378,9 @@ async fn handle_filesystem_event(
     };
 
     if is_relevant {
+      if is_managed {
+        session.last_observed_file = None;
+      }
       if session.pending_finalize && !session.finalize_in_flight {
         session.pending_finalize = false;
         session.local_open_seen = true;
@@ -3136,6 +3139,75 @@ mod tests {
     assert_eq!(fs.reads.load(Ordering::Relaxed), sessions.len());
     assert_eq!(costs.writes.load(Ordering::Relaxed), sessions.len());
     assert_eq!(costs.emits.load(Ordering::Relaxed), sessions.len());
+    server.abort();
+    std::fs::remove_file(&manager.lock().await.store_path).unwrap();
+  }
+
+  #[tokio::test]
+  async fn managed_file_events_checkpoint_changed_bytes_with_the_same_fingerprint() {
+    use axum::{Router, routing::post};
+    use std::sync::atomic::Ordering;
+    let (manager, fs, _) = idle_test_manager();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let requests = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let request_count = Arc::clone(&requests);
+    let router = Router::new().route(
+      "/v1/desktop-edit-sessions/{id}/checkpoint",
+      post(move || {
+        let requests = Arc::clone(&request_count);
+        async move {
+          requests.fetch_add(1, Ordering::Relaxed);
+          axum::Json(serde_json::json!({
+            "checkpointedAt": "2026-01-01T00:00:00Z",
+            "noop": false
+          }))
+        }
+      }),
+    );
+    let server = tokio::spawn(async move {
+      axum::serve(listener, router).await.unwrap();
+    });
+    let (id, path, name, previous_fingerprint) = {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut("idle-0").unwrap();
+      session.api_base_url = base_url;
+      (
+        session.id.clone(),
+        session.file_path.clone(),
+        session.file_name.clone(),
+        session.last_observed_file.clone().unwrap(),
+      )
+    };
+    let changed = b"modified! document";
+    assert_ne!(hash_bytes(changed), hash_bytes(b"unchanged document"));
+    assert_eq!(fs.put(&path, changed, 1), previous_fingerprint);
+    retry_session(Arc::clone(&manager), &id).await;
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 0);
+    assert_eq!(requests.load(Ordering::Relaxed), 0);
+
+    handle_filesystem_event(Arc::clone(&manager), &id, Some(&name), &name).await;
+    {
+      let mut mgr = manager.lock().await;
+      let session = mgr.sessions.get_mut(&id).unwrap();
+      assert!(session.last_observed_file.is_none());
+      // Drive the same retry boundary directly, without waiting on debounce
+      // or starting platform-specific open-file probes in this fixture.
+      if let Some(timer) = session.checkpoint_timer.take() {
+        timer.abort();
+      }
+      if let Some(timer) = session.open_probe_timer.take() {
+        timer.abort();
+      }
+    }
+    retry_session(Arc::clone(&manager), &id).await;
+    retry_session(Arc::clone(&manager), &id).await;
+    assert_eq!(fs.reads.load(Ordering::Relaxed), 1);
+    assert_eq!(requests.load(Ordering::Relaxed), 1);
+    let checkpoint = manager.lock().await.sessions[&id]
+      .last_checkpoint_sha
+      .clone();
+    assert_eq!(checkpoint, Some(hash_bytes(changed)));
     server.abort();
     std::fs::remove_file(&manager.lock().await.store_path).unwrap();
   }

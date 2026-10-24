@@ -269,6 +269,13 @@ const isClipboardRevision = (value: unknown): value is number =>
   value >= 0 &&
   value <= 0xff_ff_ff_ff;
 
+export const isClipboardCaptureRevision = (
+  value: unknown,
+): value is { revision: number } =>
+  isRecord(value) &&
+  Object.keys(value).length === 1 &&
+  isClipboardRevision(value["revision"]);
+
 export type ClipboardCaptureUpdate = {
   revision: number;
   item: ClipboardItem;
