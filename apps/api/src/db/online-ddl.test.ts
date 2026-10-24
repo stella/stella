@@ -36,6 +36,8 @@ import type {
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const INDEX = {
+  createSql:
+    'CREATE INDEX CONCURRENTLY "probe_idx" ON public."probe" USING btree (id)',
   name: "probe_idx",
   tableName: "probe",
   definitionBody: "ON public.probe USING btree (id)",
@@ -88,11 +90,16 @@ describe("online lock-taking statements", () => {
     const cases: [LockTakingStatement, string][] = [
       [
         createIndexConcurrently(INDEX),
-        'CREATE INDEX CONCURRENTLY "probe_idx" ON public.probe USING btree (id)',
+        'CREATE INDEX CONCURRENTLY "probe_idx" ON public."probe" USING btree (id)',
       ],
       [
-        createIndexConcurrently({ ...INDEX, isUnique: true }),
-        'CREATE UNIQUE INDEX CONCURRENTLY "probe_idx" ON public.probe USING btree (id)',
+        createIndexConcurrently({
+          ...INDEX,
+          createSql:
+            'CREATE UNIQUE INDEX CONCURRENTLY "probe_idx" ON public."probe" USING btree (id)',
+          isUnique: true,
+        }),
+        'CREATE UNIQUE INDEX CONCURRENTLY "probe_idx" ON public."probe" USING btree (id)',
       ],
       [
         dropIndexConcurrently(INDEX, { ifExists: true }),
@@ -130,8 +137,7 @@ describe("online lock-taking statements", () => {
   });
 
   test("a declared build must build the declared index on the declared table", () => {
-    const createSql =
-      'CREATE INDEX CONCURRENTLY "probe_idx" ON public."probe" USING btree (id)';
+    const { createSql } = INDEX;
     expect(() =>
       createIndexConcurrently({ ...INDEX, createSql }),
     ).not.toThrow();
@@ -144,6 +150,15 @@ describe("online lock-taking statements", () => {
         createIndexConcurrently({ ...INDEX, createSql: mismatched }),
       ).toThrow("must build it concurrently on public.probe");
     }
+  });
+
+  test("a declared concurrent build cannot append another statement", () => {
+    expect(() =>
+      createIndexConcurrently({
+        ...INDEX,
+        createSql: `${INDEX.createSql}; DROP TABLE public.probe`,
+      }),
+    ).toThrow("single statement or expression");
   });
 
   test("gated work locks only the table its gate watched", async () => {
