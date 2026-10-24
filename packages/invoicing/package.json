@@ -19,6 +19,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/invoicing"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/text-normalize": "workspace:*",

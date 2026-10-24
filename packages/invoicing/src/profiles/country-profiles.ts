@@ -1,3 +1,4 @@
+import { normalizeCountry } from "@stll/agent-input/country";
 import { INVOICE_LANGUAGES, type InvoiceLanguage } from "@stll/api-contract";
 
 import type { VatTreatment } from "../types";
@@ -222,16 +223,31 @@ export const INVOICE_COUNTRY_PROFILES = {
   },
 } as const satisfies Record<InvoiceCountry, InvoiceCountryProfile>;
 
-export const invoiceCountryOf = (seller: {
+type InvoiceSellerCountryInput = {
   country: string | null;
   vatId: string | null;
-}): InvoiceCountry => {
-  const country = seller.country?.trim().toUpperCase();
-  if (country === "SK" || country === "CZ") {
-    return country;
+};
+
+/** The seller's recognized address wins over a secondary VAT registration. */
+export const invoiceSellerCountryOf = (seller: InvoiceSellerCountryInput) => {
+  const address = normalizeCountry(seller.country ?? "", {
+    spelling: "alpha-2",
+  });
+  if (address.ok) {
+    return address.value.alpha2;
   }
-  const vatCountry = seller.vatId?.trim().slice(0, 2).toUpperCase();
-  return vatCountry === "SK" || vatCountry === "CZ" ? vatCountry : "EU";
+  const registration = normalizeCountry(
+    seller.vatId?.trim().slice(0, 2) ?? "",
+    { spelling: "alpha-2" },
+  );
+  return registration.ok ? registration.value.alpha2 : null;
+};
+
+export const invoiceCountryOf = (
+  seller: InvoiceSellerCountryInput,
+): InvoiceCountry => {
+  const country = invoiceSellerCountryOf(seller);
+  return country === "SK" || country === "CZ" ? country : "EU";
 };
 
 export const legalNotesFor = ({

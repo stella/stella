@@ -6,6 +6,7 @@ import {
   INVOICE_COUNTRY_PROFILES,
   INVOICE_LANGUAGES,
   invoiceCountryOf,
+  invoiceSellerCountryOf,
   legalNotesFor,
 } from "./country-profiles";
 
@@ -40,6 +41,21 @@ describe("invoice country profiles", () => {
     );
     expect(invoiceCountryOf({ country: "Austria", vatId: "AT123" })).toBe("EU");
   });
+
+  test.each([
+    ["DE", "SK1234567890", "DE", "EU"],
+    ["Germany", "SK1234567890", "DE", "EU"],
+    ["Slovakia", null, "SK", "SK"],
+    ["Slovensko", "CZ12345678", "SK", "SK"],
+    ["Czechia", "SK1234567890", "CZ", "CZ"],
+    ["unrecognized", "SK1234567890", "SK", "SK"],
+  ] as const)(
+    "address %s and registration %s share one country decision",
+    (country, vatId, resolved, profile) => {
+      expect(invoiceSellerCountryOf({ country, vatId })).toBe(resolved);
+      expect(invoiceCountryOf({ country, vatId })).toBe(profile);
+    },
+  );
 
   test("keeps mandated Slovak wording and appends translations and exemption reasons", () => {
     const profile = INVOICE_COUNTRY_PROFILES.SK;

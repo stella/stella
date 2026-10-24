@@ -3,6 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 import {
   invoiceCountryOf,
+  invoiceSellerCountryOf,
   standardVatRateOn,
   vatRatePeriodsForCountry,
 } from "@stll/invoicing";
@@ -21,7 +22,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 
 import {
-  addressCountry,
   buyerSnapshotFromContact,
   decideInvoiceVat,
   EMPTY_BUYER_SNAPSHOT,
@@ -48,9 +48,7 @@ export const invoiceLanguageForSeller = (
   } | null,
 ) =>
   invoiceLanguageForCountry(
-    addressCountry(seller?.country ?? null) ??
-      seller?.vatId?.trim().slice(0, 2).toUpperCase() ??
-      null,
+    invoiceSellerCountryOf(seller ?? { country: null, vatId: null }),
   );
 
 const SELLER_COLUMNS = {

@@ -62,6 +62,7 @@ export {
   INVOICE_COUNTRY_PROFILES,
   INVOICE_LANGUAGES,
   invoiceCountryOf,
+  invoiceSellerCountryOf,
   legalNotesFor,
   type InvoiceCountry,
   type InvoiceCountryProfile,
